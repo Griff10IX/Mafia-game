@@ -1,22 +1,29 @@
 /**
- * Remove nested ajv 8.x so only top-level ajv 6.12.6 is used (fixes ajv-keywords require('ajv/dist/compile/codegen')).
+ * Remove nested ajv 8.x and ensure top-level ajv is 6.12.6 (fixes ajv-keywords require('ajv/dist/compile/codegen')).
  * Run after npm install on Vercel.
  */
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
 
 const root = path.join(__dirname, '..', 'node_modules');
 const topLevelAjv = path.join(root, 'ajv');
 
-if (!fs.existsSync(topLevelAjv)) {
-  console.warn('postinstall-ajv: top-level ajv not found, skipping');
-  process.exit(0);
-}
-
-const topPkg = JSON.parse(fs.readFileSync(path.join(topLevelAjv, 'package.json'), 'utf8'));
-if (!topPkg.version.startsWith('6')) {
-  console.warn('postinstall-ajv: top-level ajv is not 6.x, skipping');
-  process.exit(0);
+function ensureTopLevelAjv6() {
+  if (!fs.existsSync(topLevelAjv)) return;
+  try {
+    const topPkg = JSON.parse(fs.readFileSync(path.join(topLevelAjv, 'package.json'), 'utf8'));
+    if (topPkg.version.startsWith('8')) {
+      console.log('postinstall-ajv: top-level ajv is 8.x, removing so override can apply');
+      fs.rmSync(topLevelAjv, { recursive: true, force: true });
+      execSync('npm install ajv@6.12.6 --no-save --legacy-peer-deps', {
+        cwd: path.join(__dirname, '..'),
+        stdio: 'inherit'
+      });
+    }
+  } catch (e) {
+    console.warn('postinstall-ajv:', e.message);
+  }
 }
 
 function findAndRemoveNestedAjv(dir, depth) {
@@ -51,5 +58,6 @@ function findAndRemoveNestedAjv(dir, depth) {
   }
 }
 
+ensureTopLevelAjv6();
 findAndRemoveNestedAjv(root, 0);
 console.log('postinstall-ajv: done');
