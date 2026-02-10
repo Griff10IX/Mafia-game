@@ -1,6 +1,6 @@
 /**
- * Fix ajv-keywords for ajv 6: it requires 'ajv/dist/compile/codegen' but ajv 6 uses 'lib/' not 'dist/'.
- * Also ensure top-level ajv is 6.x and remove nested ajv 8.
+ * Fix build: ajv-keywords requires 'ajv/dist/compile/codegen'. ajv 6 uses lib/, not dist/.
+ * Ensure top-level ajv is 6, remove nested ajv 8, then add dist/ shim so require('ajv/dist/compile/codegen') works.
  */
 const path = require('path');
 const fs = require('fs');
@@ -8,7 +8,6 @@ const { execSync } = require('child_process');
 
 const root = path.join(__dirname, '..', 'node_modules');
 const topLevelAjv = path.join(root, 'ajv');
-const ajvKeywords = path.join(root, 'ajv-keywords');
 
 function ensureTopLevelAjv6() {
   if (!fs.existsSync(topLevelAjv)) return;
@@ -53,35 +52,25 @@ function findAndRemoveNestedAjv(dir, depth) {
   } catch (_) {}
 }
 
-// ajv 6 has lib/compile/codegen, ajv-keywords requires dist/compile/codegen - patch it
-function patchAjvKeywords() {
-  if (!fs.existsSync(ajvKeywords)) return;
-  const distDir = path.join(ajvKeywords, 'dist');
-  if (!fs.existsSync(distDir)) return;
+// ajv 6 has lib/compile/codegen; ajv-keywords requires dist/compile/codegen. Add shim so dist path exists.
+function addDistShimToAjv6() {
+  if (!fs.existsSync(topLevelAjv)) return;
   try {
-    function scan(dir) {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
-      for (const e of entries) {
-        const full = path.join(dir, e.name);
-        if (e.isDirectory()) {
-          scan(full);
-          continue;
-        }
-        if (!e.name.endsWith('.js')) continue;
-        let content = fs.readFileSync(full, 'utf8');
-        if (!content.includes("ajv/dist/compile/codegen")) continue;
-        content = content.replace(/ajv\/dist\/compile\/codegen/g, 'ajv/lib/compile/codegen');
-        fs.writeFileSync(full, content);
-        console.log('postinstall-ajv: patched', path.relative(distDir, full));
-      }
-    }
-    scan(distDir);
+    const pkg = JSON.parse(fs.readFileSync(path.join(topLevelAjv, 'package.json'), 'utf8'));
+    if (!pkg.version.startsWith('6')) return;
+    const libCodegen = path.join(topLevelAjv, 'lib', 'compile', 'codegen.js');
+    if (!fs.existsSync(libCodegen)) return;
+    const distCompile = path.join(topLevelAjv, 'dist', 'compile');
+    fs.mkdirSync(distCompile, { recursive: true });
+    const shimPath = path.join(distCompile, 'codegen.js');
+    fs.writeFileSync(shimPath, "module.exports = require('../../lib/compile/codegen');\n");
+    console.log('postinstall-ajv: added dist/compile/codegen.js shim for ajv 6');
   } catch (e) {
-    console.warn('postinstall-ajv: patch', e.message);
+    console.warn('postinstall-ajv: shim', e.message);
   }
 }
 
 ensureTopLevelAjv6();
 findAndRemoveNestedAjv(root, 0);
-patchAjvKeywords();
+addDistShimToAjv6();
 console.log('postinstall-ajv: done');
