@@ -20,7 +20,12 @@ import math
 import time
 from urllib.parse import unquote
 import httpx
-from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+try:
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+    STRIPE_CHECKOUT_AVAILABLE = True
+except ImportError:
+    StripeCheckout = CheckoutSessionResponse = CheckoutStatusResponse = CheckoutSessionRequest = None
+    STRIPE_CHECKOUT_AVAILABLE = False
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -4786,6 +4791,8 @@ async def get_top_leaderboards(
 # Payment endpoints
 @api_router.post("/payments/checkout")
 async def create_checkout(request: CheckoutRequest, current_user: dict = Depends(get_current_user)):
+    if not STRIPE_CHECKOUT_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Stripe checkout not available on this deployment")
     if request.package_id not in POINT_PACKAGES:
         raise HTTPException(status_code=400, detail="Invalid package")
     
@@ -4839,6 +4846,8 @@ async def get_payment_status(session_id: str, current_user: dict = Depends(get_c
     if transaction["payment_status"] == "completed":
         return {"status": "completed", "payment_status": "paid", "points_added": transaction["points"]}
     
+    if not STRIPE_CHECKOUT_AVAILABLE:
+        return {"status": "unavailable", "payment_status": "unknown"}
     stripe_api_key = os.environ.get('STRIPE_API_KEY')
     stripe_checkout = StripeCheckout(api_key=stripe_api_key, webhook_url="")
     
@@ -4865,6 +4874,8 @@ async def get_payment_status(session_id: str, current_user: dict = Depends(get_c
 
 @api_router.post("/webhook/stripe")
 async def stripe_webhook(request: Request):
+    if not STRIPE_CHECKOUT_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Stripe webhook not available")
     body = await request.body()
     signature = request.headers.get("Stripe-Signature")
     
