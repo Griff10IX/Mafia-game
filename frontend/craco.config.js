@@ -47,6 +47,12 @@ const webpackConfig = {
       '@': path.resolve(__dirname, 'src'),
     },
     configure: (webpackConfig) => {
+      // Fix: Radix UI (and similar) .mjs → named exports from CJS interop
+      webpackConfig.module.rules.push({
+        test: /\.mjs$/,
+        include: /node_modules/,
+        type: 'javascript/auto',
+      });
 
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {
