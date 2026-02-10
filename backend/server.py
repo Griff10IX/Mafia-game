@@ -6727,12 +6727,19 @@ jail.register(api_router)
 
 app.include_router(api_router)
 
+# CORS: with credentials=True you must list explicit origins (not "*").
+# Set CORS_ORIGINS on Render to your Vercel URL, e.g. https://your-app.vercel.app
+_cors_origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', '*').split(',') if o.strip()]
+_allow_credentials = bool(_cors_origins) and '*' not in _cors_origins
+if not _cors_origins:
+    _cors_origins = ['*']
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_credentials=_allow_credentials,
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Configure logging
