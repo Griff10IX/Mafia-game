@@ -62,7 +62,8 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "postinstall": "node scripts/postinstall-ajv.js"
   },
   "browserslist": {
     "production": [
