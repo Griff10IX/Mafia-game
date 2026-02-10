@@ -18,6 +18,7 @@ venv/
 .eggs/
 
 # Build / IDE
+build/
 frontend/build/
 .DS_Store
 *.log

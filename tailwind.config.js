@@ -1,6 +1,6 @@
 const path = require('path');
 
-// Use forward slashes so glob works on Windows (path.join can produce backslashes)
+// Use forward slashes so glob works on Windows when config is loaded from different cwd
 const root = __dirname.split(path.sep).join('/');
 
 /** @type {import('tailwindcss').Config} */
