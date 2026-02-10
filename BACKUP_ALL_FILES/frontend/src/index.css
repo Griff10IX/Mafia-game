@@ -1,0 +1,175 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #050505;
+  color: #E5E5E5;
+}
+
+code {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer base {
+  [data-debug-wrapper="true"] {
+    display: contents !important;
+  }
+
+  [data-debug-wrapper="true"] > * {
+    margin-left: inherit;
+    margin-right: inherit;
+    margin-top: inherit;
+    margin-bottom: inherit;
+    padding-left: inherit;
+    padding-right: inherit;
+    padding-top: inherit;
+    padding-bottom: inherit;
+    column-gap: inherit;
+    row-gap: inherit;
+    gap: inherit;
+    border-left-width: inherit;
+    border-right-width: inherit;
+    border-top-width: inherit;
+    border-bottom-width: inherit;
+    border-left-style: inherit;
+    border-right-style: inherit;
+    border-top-style: inherit;
+    border-bottom-style: inherit;
+    border-left-color: inherit;
+    border-right-color: inherit;
+    border-top-color: inherit;
+    border-bottom-color: inherit;
+  }
+}
+
+.vintage-filter {
+  filter: sepia(0.2) contrast(1.1);
+}
+
+.glass-effect {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.gold-glow {
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.3);
+}
+
+.transition-smooth {
+  transition: all 0.3s ease;
+}
+
+/* Dice roll animation */
+@keyframes dice-roll {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(1.15); }
+  50% { transform: rotate(180deg) scale(0.95); }
+  75% { transform: rotate(270deg) scale(1.1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes dice-reveal {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes dice-number-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+.animate-dice-roll {
+  animation: dice-roll 0.6s ease-in-out infinite;
+}
+
+.animate-dice-reveal {
+  animation: dice-reveal 0.4s ease-out forwards;
+}
+
+.animate-dice-shake {
+  animation: dice-number-shake 0.5s ease-in-out;
+}
+
+/* Roulette wheel & ball */
+.roulette-wheel-track {
+  transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+}
+
+@keyframes roulette-reveal {
+  0% { transform: scale(0.3); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-roulette-reveal {
+  animation: roulette-reveal 0.5s ease-out forwards;
+}
+
+/* Blackjack cards */
+@keyframes card-deal {
+  0% { transform: translateY(-20px) scale(0.8); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes card-flip {
+  0% { transform: rotateY(0deg); }
+  50% { transform: rotateY(90deg); }
+  100% { transform: rotateY(0deg); }
+}
+
+.animate-card-deal {
+  animation: card-deal 0.35s ease-out forwards;
+}
+
+.animate-card-flip {
+  animation: card-flip 0.4s ease-out forwards;
+}
+
+/* Horse racing: bar fill animation */
+@keyframes horse-race-gallop {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.92; }
+}
+
+.animate-horse-race-bar {
+  animation: horse-race-gallop 0.2s ease-in-out infinite;
+}
+
+/* Hide Emergent hosting badge/overlays */
+#emergent-badge,
+a#emergent-badge,
+[href*="utm_source=emergent-badge"],
+[href*="emergent.sh"],
+[href*="app.emergent"],
+[id*="emergent"],
+[class*="emergent"],
+iframe[src*="emergent"],
+script[src*="emergent"],
+/* common injected badge shape */
+a[target="_blank"][style*="position: fixed"][style*="bottom"][style*="right"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

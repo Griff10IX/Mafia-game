@@ -1,0 +1,96 @@
+import { useState, useEffect } from 'react';
+import { Users, MapPin } from 'lucide-react';
+import api from '../utils/api';
+import { toast } from 'sonner';
+
+export default function UsersOnline() {
+  const [onlineData, setOnlineData] = useState({ total_online: 0, users: [] });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchOnlineUsers();
+    const interval = setInterval(fetchOnlineUsers, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const fetchOnlineUsers = async () => {
+    try {
+      const response = await api.get('/users/online');
+      setOnlineData(response.data);
+    } catch (error) {
+      toast.error('Failed to load online users');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-primary text-xl font-heading">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8" data-testid="users-online-page">
+      <div>
+        <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Users Online</h1>
+        <p className="text-mutedForeground">See who's currently active in the family</p>
+      </div>
+
+      <div className="bg-card border border-border rounded-sm p-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Users className="text-primary" size={32} />
+          <div>
+            <h2 className="text-2xl font-heading font-semibold text-foreground">{onlineData.total_online} Online</h2>
+            <p className="text-sm text-mutedForeground">Active in the last 5 minutes</p>
+          </div>
+        </div>
+
+        {onlineData.users.length === 0 ? (
+          <div className="text-center py-12 text-mutedForeground">
+            <p>No other users online right now</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {onlineData.users.map((user, index) => (
+              <div
+                key={index}
+                data-testid={`online-user-${index}`}
+                className="bg-secondary/50 border border-border rounded-sm p-4 hover:border-primary/50 transition-smooth"
+              >
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground mb-1">{user.username}</h3>
+                    <p className="text-sm text-mutedForeground">{user.rank_name}</p>
+                  </div>
+                  {user.in_jail && (
+                    <div className="bg-destructive/20 border border-destructive px-2 py-1 rounded-sm">
+                      <span className="text-xs text-destructive font-bold uppercase">Jailed</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 text-sm text-mutedForeground">
+                  <MapPin size={14} className="text-primary" />
+                  <span>{user.location}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-card border border-border rounded-sm p-6">
+        <h3 className="text-xl font-heading font-semibold text-primary mb-3">Quick Info</h3>
+        <ul className="space-y-2 text-sm text-mutedForeground">
+          <li>• Online status updates every 30 seconds</li>
+          <li>• Users inactive for 5+ minutes are considered offline</li>
+          <li>• Plan your attacks and rackets by monitoring player locations</li>
+          <li>• Jailed players can be busted out for rank points</li>
+        </ul>
+      </div>
+    </div>
+  );
+}

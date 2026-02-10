@@ -1,0 +1,267 @@
+import { useState, useEffect } from 'react';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter } from 'lucide-react';
+import api from '../utils/api';
+import { toast } from 'sonner';
+
+export default function Garage() {
+  const [cars, setCars] = useState([]);
+  const [selectedCars, setSelectedCars] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [sortBy, setSortBy] = useState('newest');
+  const [filterRarity, setFilterRarity] = useState('all');
+
+  useEffect(() => {
+    fetchGarage();
+  }, []);
+
+  const fetchGarage = async () => {
+    try {
+      const response = await api.get('/gta/garage');
+      setCars(response.data.cars);
+    } catch (error) {
+      toast.error('Failed to load garage');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSelect = (carId) => {
+    setSelectedCars(prev =>
+      prev.includes(carId) ? prev.filter(id => id !== carId) : [...prev, carId]
+    );
+  };
+
+  const meltCars = async () => {
+    if (selectedCars.length === 0) {
+      toast.error('No cars selected');
+      return;
+    }
+
+    try {
+      const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'bullets' });
+      toast.success(response.data.message);
+      setSelectedCars([]);
+      fetchGarage();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to melt cars');
+    }
+  };
+
+  const scrapCars = async () => {
+    if (selectedCars.length === 0) {
+      toast.error('No cars selected');
+      return;
+    }
+
+    try {
+      const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'cash' });
+      toast.success(response.data.message);
+      setSelectedCars([]);
+      fetchGarage();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to scrap cars');
+    }
+  };
+
+  const getRarityColor = (rarity) => {
+    const colors = {
+      common: 'text-gray-400',
+      uncommon: 'text-green-400',
+      rare: 'text-blue-400',
+      ultra_rare: 'text-purple-400',
+      legendary: 'text-yellow-400',
+      exclusive: 'text-red-400'
+    };
+    return colors[rarity] || 'text-foreground';
+  };
+
+  const getFilteredAndSortedCars = () => {
+    let filtered = [...cars];
+    
+    if (filterRarity !== 'all') {
+      filtered = filtered.filter(car => car.rarity === filterRarity);
+    }
+    
+    filtered.sort((a, b) => {
+      switch(sortBy) {
+        case 'newest':
+          return new Date(b.acquired_at) - new Date(a.acquired_at);
+        case 'oldest':
+          return new Date(a.acquired_at) - new Date(b.acquired_at);
+        case 'value-high':
+          return b.value - a.value;
+        case 'value-low':
+          return a.value - b.value;
+        case 'rarity':
+          const rarityOrder = { exclusive: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
+          return (rarityOrder[b.rarity] || 0) - (rarityOrder[a.rarity] || 0);
+        default:
+          return 0;
+      }
+    });
+    
+    return filtered;
+  };
+
+  const displayedCars = getFilteredAndSortedCars();
+  const displayedCarIds = displayedCars.map((c) => c.user_car_id);
+  const allDisplayedSelected =
+    displayedCarIds.length > 0 && displayedCarIds.every((id) => selectedCars.includes(id));
+
+  const toggleSelectAllDisplayed = () => {
+    setSelectedCars((prev) => {
+      if (allDisplayedSelected) {
+        // clear only displayed cars from selection
+        return prev.filter((id) => !displayedCarIds.includes(id));
+      }
+      // add displayed cars to selection (dedupe)
+      return [...new Set([...prev, ...displayedCarIds])];
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-primary text-xl font-heading">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-3xl md:text-4xl font-heading font-bold text-primary mb-2">Garage</h1>
+        <p className="text-sm text-mutedForeground">Manage your stolen vehicles</p>
+      </div>
+
+      {cars.length === 0 ? (
+        <div className="bg-card border border-border rounded-sm p-12 text-center">
+          <Car className="text-mutedForeground mx-auto mb-4" size={48} />
+          <h3 className="text-xl font-heading font-bold text-foreground mb-2">Empty Garage</h3>
+          <p className="text-mutedForeground">Steal some cars to see them here!</p>
+        </div>
+      ) : (
+        <>
+          {/* Filters and Sort */}
+          <div className="bg-card border border-border rounded-sm p-4">
+            <div className="flex flex-col sm:flex-row gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-mutedForeground mb-1">Sort By</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full bg-input border border-border rounded-sm h-9 px-3 text-sm text-foreground"
+                >
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                  <option value="value-high">Highest Value</option>
+                  <option value="value-low">Lowest Value</option>
+                  <option value="rarity">Rarity</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-mutedForeground mb-1">Filter Rarity</label>
+                <select
+                  value={filterRarity}
+                  onChange={(e) => setFilterRarity(e.target.value)}
+                  className="w-full bg-input border border-border rounded-sm h-9 px-3 text-sm text-foreground"
+                >
+                  <option value="all">All Rarities</option>
+                  <option value="common">Common</option>
+                  <option value="uncommon">Uncommon</option>
+                  <option value="rare">Rare</option>
+                  <option value="ultra_rare">Ultra Rare</option>
+                  <option value="legendary">Legendary</option>
+                  <option value="exclusive">Exclusive</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Actions Bar */}
+          <div className="bg-card border border-border rounded-sm p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <span className="text-foreground font-bold">{displayedCars.length}</span>
+              <span className="text-mutedForeground text-sm ml-2">Cars</span>
+              {selectedCars.length > 0 && (
+                <span className="text-primary text-sm ml-3">({selectedCars.length} selected)</span>
+              )}
+              {displayedCars.length > 0 && (
+                <button
+                  type="button"
+                  onClick={toggleSelectAllDisplayed}
+                  className="ml-4 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-mutedForeground hover:text-primary transition-smooth"
+                  data-testid="garage-select-all"
+                >
+                  {allDisplayedSelected ? (
+                    <CheckSquare size={14} className="text-primary" />
+                  ) : (
+                    <Square size={14} className="text-mutedForeground" />
+                  )}
+                  {allDisplayedSelected ? 'Clear selection' : 'Select all'}
+                </button>
+              )}
+            </div>
+            {selectedCars.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={meltCars}
+                  className="flex items-center gap-2 bg-primary text-primaryForeground hover:opacity-90 rounded-sm px-4 py-2 text-sm font-bold uppercase"
+                >
+                  <Flame size={16} />
+                  Melt for Bullets
+                </button>
+                <button
+                  onClick={scrapCars}
+                  className="flex items-center gap-2 bg-secondary border border-primary text-primary hover:bg-primary hover:text-primaryForeground rounded-sm px-4 py-2 text-sm font-bold uppercase"
+                >
+                  <DollarSign size={16} />
+                  Scrap for Cash
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Cars Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {displayedCars.map((car, index) => (
+              <div
+                key={index}
+                onClick={() => toggleSelect(car.user_car_id)}
+                className={`bg-card border rounded-sm p-3 cursor-pointer transition-smooth ${
+                  selectedCars.includes(car.user_car_id) ? 'border-primary' : 'border-border hover:border-primary/50'
+                }`}
+              >
+                <div className="w-full aspect-[4/3] rounded-sm overflow-hidden bg-secondary border border-border mb-2">
+                  {car.image ? (
+                    <img
+                      src={car.image}
+                      alt={car.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  ) : null}
+                </div>
+                <div className="flex items-start justify-between mb-2">
+                  <div className={`text-xs font-bold uppercase ${getRarityColor(car.rarity)}`}>
+                    {car.rarity.replace('_', ' ')}
+                  </div>
+                  {selectedCars.includes(car.user_car_id) ? (
+                    <CheckSquare size={16} className="text-primary" />
+                  ) : (
+                    <Square size={16} className="text-mutedForeground" />
+                  )}
+                </div>
+                <h3 className="text-sm font-bold text-foreground mb-1 line-clamp-2">{car.name}</h3>
+                <div className="text-xs text-mutedForeground space-y-0.5">
+                  <div>${car.value.toLocaleString()}</div>
+                  <div className="text-primary">+{car.travel_bonus}% travel</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,23 @@
+# Secrets - never commit
+.env
+*.env
+!*.env.example
+
+# Dependencies
+node_modules/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+
+# Build / IDE
+frontend/build/
+.DS_Store
+*.log
