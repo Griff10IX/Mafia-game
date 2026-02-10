@@ -41,6 +41,13 @@ security = HTTPBearer()
 # Create the main app without a prefix
 app = FastAPI()
 
+
+@app.get("/")
+def root():
+    """Root route so the service URL returns something instead of 404."""
+    return {"message": "Mafia API", "docs": "/docs", "api": "/api"}
+
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
