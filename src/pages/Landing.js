@@ -28,7 +28,8 @@ export default function Landing({ setIsAuthenticated }) {
     } catch (error) {
       let msg;
       if (error.code === 'ERR_NETWORK' || !error.response) {
-        msg = 'Cannot reach server. Is the backend running? Set REACT_APP_BACKEND_URL in .env (e.g. http://localhost:8000) or in Vercel env vars for production.';
+        const base = error.config?.baseURL || process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+        msg = `Cannot reach server. Backend URL: ${base}/api — Set REACT_APP_BACKEND_URL in Vercel (production) or .env (local).`;
       } else if (error.response?.data?.detail) {
         const d = error.response.data.detail;
         msg = Array.isArray(d) ? d.map((x) => x.msg || x).join(', ') : d;

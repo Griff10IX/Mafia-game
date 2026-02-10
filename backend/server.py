@@ -2,6 +2,8 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request,
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson.objectid import ObjectId
 import os
@@ -6733,6 +6735,25 @@ _cors_origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', '*').split(',
 _allow_credentials = bool(_cors_origins) and '*' not in _cors_origins
 if not _cors_origins:
     _cors_origins = ['*']
+
+class OPTIONSResponder(BaseHTTPMiddleware):
+    """Ensure OPTIONS (CORS preflight) always returns 200 so login from Vercel works."""
+    async def dispatch(self, request, call_next):
+        if request.method == "OPTIONS":
+            origin = request.headers.get("origin", "*")
+            allow_origin = origin if (_allow_credentials and origin in _cors_origins) else (_cors_origins[0] if _cors_origins and _cors_origins != ['*'] else "*")
+            headers = {
+                "Access-Control-Allow-Origin": allow_origin,
+                "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, Origin",
+                "Access-Control-Max-Age": "86400",
+            }
+            if _allow_credentials:
+                headers["Access-Control-Allow-Credentials"] = "true"
+            return Response(status_code=200, headers=headers)
+        return await call_next(request)
+
+app.add_middleware(OPTIONSResponder)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=_allow_credentials,
