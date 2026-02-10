@@ -1,5 +1,16 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
+@layer base {
+  :root {
+    --background: 0 0% 2%;
+    --foreground: 0 0% 92%;
+    --primary: 43 74% 49%;
+    --primary-foreground: 0 0% 100%;
+    --muted-foreground: 0 0% 58%;
+    --border: 43 30% 25%;
+  }
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
