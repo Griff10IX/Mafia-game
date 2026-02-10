@@ -20,13 +20,14 @@ import math
 import time
 from urllib.parse import unquote
 import httpx
+import certifi
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-# MongoDB connection
+# MongoDB connection (certifi CA bundle fixes SSL handshake with Atlas on Render)
 mongo_url = os.environ['MONGO_URL']
-client = AsyncIOMotorClient(mongo_url)
+client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
 db = client[os.environ['DB_NAME']]
 
 # Security
@@ -6737,7 +6738,7 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_db():
     await init_game_data()
-    from routes.jail import spawn_jail_npcs
+    from routers.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
 
 @app.on_event("shutdown")
