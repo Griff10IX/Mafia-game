@@ -35,6 +35,11 @@ code {
   body {
     @apply bg-background text-foreground;
   }
+  /* Links use inherited/theme color unless a class sets it (avoids browser purple) */
+  a {
+    color: inherit;
+    text-decoration: inherit;
+  }
 }
 
 @layer base {
