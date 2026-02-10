@@ -4,14 +4,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        border: 'hsl(var(--border))',
-        background: 'hsl(var(--background))',
-        foreground: 'hsl(var(--foreground))',
+        border: '#3d3520',
+        background: '#050505',
+        foreground: '#e5e5e5',
         primary: {
-          DEFAULT: 'hsl(var(--primary))',
-          foreground: 'hsl(var(--primary-foreground))',
+          DEFAULT: '#c9a227',
+          foreground: '#ffffff',
         },
-        mutedForeground: 'hsl(var(--muted-foreground))',
+        mutedForeground: '#949494',
       },
       fontFamily: {
         heading: ['"Playfair Display"', 'Georgia', 'serif'],
