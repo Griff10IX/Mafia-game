@@ -1,6 +1,6 @@
 /**
  * Fix build: ajv-keywords requires 'ajv/dist/compile/codegen'. ajv 6 uses lib/, not dist/.
- * Ensure top-level ajv is 6, remove nested ajv 8, then add dist/ shim so require('ajv/dist/compile/codegen') works.
+ * Ensure root has ajv 6, remove nested ajv 8, add dist/ shim to every ajv that has lib/compile/codegen.
  */
 const path = require('path');
 const fs = require('fs');
@@ -10,19 +10,24 @@ const root = path.join(__dirname, '..', 'node_modules');
 const topLevelAjv = path.join(root, 'ajv');
 
 function ensureTopLevelAjv6() {
-  if (!fs.existsSync(topLevelAjv)) return;
-  try {
-    const topPkg = JSON.parse(fs.readFileSync(path.join(topLevelAjv, 'package.json'), 'utf8'));
-    if (topPkg.version.startsWith('8')) {
-      console.log('postinstall-ajv: top-level ajv is 8.x, reinstalling 6.12.6');
-      fs.rmSync(topLevelAjv, { recursive: true, force: true });
-      execSync('npm install ajv@6.12.6 --no-save --legacy-peer-deps', {
-        cwd: path.join(__dirname, '..'),
-        stdio: 'inherit'
-      });
-    }
-  } catch (e) {
-    console.warn('postinstall-ajv:', e.message);
+  let needInstall = false;
+  if (!fs.existsSync(topLevelAjv)) {
+    needInstall = true;
+  } else {
+    try {
+      const topPkg = JSON.parse(fs.readFileSync(path.join(topLevelAjv, 'package.json'), 'utf8'));
+      if (topPkg.version.startsWith('8')) {
+        fs.rmSync(topLevelAjv, { recursive: true, force: true });
+        needInstall = true;
+      }
+    } catch (_) {}
+  }
+  if (needInstall) {
+    console.log('postinstall-ajv: installing ajv@6.12.6 at root');
+    execSync('npm install ajv@6.12.6 --no-save --legacy-peer-deps', {
+      cwd: path.join(__dirname, '..'),
+      stdio: 'inherit'
+    });
   }
 }
 
@@ -52,25 +57,47 @@ function findAndRemoveNestedAjv(dir, depth) {
   } catch (_) {}
 }
 
-// ajv 6 has lib/compile/codegen; ajv-keywords requires dist/compile/codegen. Add shim so dist path exists.
-function addDistShimToAjv6() {
-  if (!fs.existsSync(topLevelAjv)) return;
+function hasLibCodegen(ajvDir) {
+  const asFile = path.join(ajvDir, 'lib', 'compile', 'codegen.js');
+  const asDir = path.join(ajvDir, 'lib', 'compile', 'codegen', 'index.js');
+  return fs.existsSync(asFile) || fs.existsSync(asDir);
+}
+
+function addDistShim(ajvDir) {
+  if (!hasLibCodegen(ajvDir)) return;
+  const distCompile = path.join(ajvDir, 'dist', 'compile');
+  fs.mkdirSync(distCompile, { recursive: true });
+  const shimPath = path.join(distCompile, 'codegen.js');
+  fs.writeFileSync(shimPath, "module.exports = require('../../lib/compile/codegen');\n");
+}
+
+function addShimToAllAjv6(dir, depth) {
+  if (depth > 15) return;
   try {
-    const pkg = JSON.parse(fs.readFileSync(path.join(topLevelAjv, 'package.json'), 'utf8'));
-    if (!pkg.version.startsWith('6')) return;
-    const libCodegen = path.join(topLevelAjv, 'lib', 'compile', 'codegen.js');
-    if (!fs.existsSync(libCodegen)) return;
-    const distCompile = path.join(topLevelAjv, 'dist', 'compile');
-    fs.mkdirSync(distCompile, { recursive: true });
-    const shimPath = path.join(distCompile, 'codegen.js');
-    fs.writeFileSync(shimPath, "module.exports = require('../../lib/compile/codegen');\n");
-    console.log('postinstall-ajv: added dist/compile/codegen.js shim for ajv 6');
-  } catch (e) {
-    console.warn('postinstall-ajv: shim', e.message);
-  }
+    if (!fs.existsSync(dir)) return;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      const full = path.join(dir, e.name);
+      if (e.name === 'ajv') {
+        try {
+          const pkg = JSON.parse(fs.readFileSync(path.join(full, 'package.json'), 'utf8'));
+          if (pkg.version.startsWith('6') && hasLibCodegen(full)) {
+            const shimPath = path.join(full, 'dist', 'compile', 'codegen.js');
+            if (!fs.existsSync(shimPath)) {
+              addDistShim(full);
+              console.log('postinstall-ajv: added dist/compile/codegen.js shim');
+            }
+          }
+        } catch (_) {}
+        continue;
+      }
+      addShimToAllAjv6(full, depth + 1);
+    }
+  } catch (_) {}
 }
 
 ensureTopLevelAjv6();
 findAndRemoveNestedAjv(root, 0);
-addDistShimToAjv6();
+addShimToAllAjv6(root, 0);
 console.log('postinstall-ajv: done');
