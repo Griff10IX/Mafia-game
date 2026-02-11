@@ -387,7 +387,7 @@ export default function FamilyPage() {
   const family = myFamily?.family;
   const members = myFamily?.members || [];
   const rackets = myFamily?.rackets || [];
-  const myRole = myFamily?.my_role;
+  const myRole = (myFamily?.my_role && String(myFamily.my_role).toLowerCase()) || null;
   const canManage = myRole && ['boss', 'underboss'].includes(myRole);
   const canWithdraw = myRole && ['boss', 'underboss', 'consigliere'].includes(myRole);
   const canUpgradeRacket = myRole && ['boss', 'underboss', 'consigliere'].includes(myRole);

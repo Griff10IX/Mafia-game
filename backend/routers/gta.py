@@ -7,6 +7,17 @@ import sys
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
+
+def _parse_iso_datetime(val):
+    """Parse datetime from DB (string with optional Z, or datetime object). Avoids 500 on Python < 3.11."""
+    if val is None:
+        return None
+    if hasattr(val, "year"):
+        return val
+    s = str(val).strip().replace("Z", "+00:00")
+    return datetime.fromisoformat(s)
+
+
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
@@ -34,8 +45,8 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
     )
     global_cooldown_until = None
     if cooldown_doc:
-        until = datetime.fromisoformat(cooldown_doc["cooldown_until"])
-        if until > now:
+        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
+        if until and until > now:
             global_cooldown_until = cooldown_doc["cooldown_until"]
     result = []
     for opt in GTA_OPTIONS:
@@ -54,8 +65,8 @@ async def attempt_gta(
     request: GTAAttemptRequest, current_user: dict = Depends(get_current_user)
 ):
     if current_user.get("in_jail"):
-        jail_time = datetime.fromisoformat(current_user["jail_until"])
-        if jail_time > datetime.now(timezone.utc):
+        jail_time = _parse_iso_datetime(current_user.get("jail_until"))
+        if jail_time and jail_time > datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="You are in jail!")
         await db.users.update_one(
             {"id": current_user["id"]},
@@ -80,8 +91,8 @@ async def attempt_gta(
         {"_id": 0, "cooldown_until": 1},
     )
     if cooldown_doc:
-        until = datetime.fromisoformat(cooldown_doc["cooldown_until"])
-        if until > now:
+        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
+        if until and until > now:
             secs = int((until - now).total_seconds())
             raise HTTPException(
                 status_code=400, detail=f"GTA cooldown: try again in {secs}s"

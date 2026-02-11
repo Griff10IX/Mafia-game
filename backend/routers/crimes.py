@@ -6,6 +6,17 @@ import os
 import sys
 from fastapi import Depends, HTTPException
 
+
+def _parse_iso_datetime(val):
+    """Parse datetime from DB (string with optional Z, or datetime object). Avoids 500 on Python < 3.11."""
+    if val is None:
+        return None
+    if hasattr(val, "year"):
+        return val
+    s = str(val).strip().replace("Z", "+00:00")
+    return datetime.fromisoformat(s)
+
+
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
@@ -31,8 +42,8 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
         can_commit = crime["min_rank"] <= user_rank
         next_available = None
         if user_crime and "cooldown_until" in user_crime:
-            cooldown_time = datetime.fromisoformat(user_crime["cooldown_until"])
-            if cooldown_time > datetime.now(timezone.utc):
+            cooldown_time = _parse_iso_datetime(user_crime["cooldown_until"])
+            if cooldown_time and cooldown_time > datetime.now(timezone.utc):
                 can_commit = False
                 next_available = user_crime["cooldown_until"]
         result.append(
@@ -65,8 +76,8 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
     )
     now = datetime.now(timezone.utc)
     if user_crime and "cooldown_until" in user_crime:
-        cooldown_time = datetime.fromisoformat(user_crime["cooldown_until"])
-        if cooldown_time > now:
+        cooldown_time = _parse_iso_datetime(user_crime["cooldown_until"])
+        if cooldown_time and cooldown_time > now:
             raise HTTPException(
                 status_code=400,
                 detail=f"Crime on cooldown until {user_crime['cooldown_until']}",
@@ -106,9 +117,12 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
     else:
         reward = None
         message = "Crime failed! Better luck next time."
-    cooldown_seconds = crime.get(
-        "cooldown_seconds", crime.get("cooldown_minutes", 5) * 60
-    )
+    cooldown_min = crime.get("cooldown_minutes", 5)
+    cooldown_seconds = crime.get("cooldown_seconds")
+    if cooldown_seconds is None:
+        cooldown_seconds = int(float(cooldown_min) * 60) if cooldown_min else 300
+    else:
+        cooldown_seconds = int(float(cooldown_seconds))
     cooldown_until = (now + timedelta(seconds=cooldown_seconds)).isoformat()
     await db.user_crimes.update_one(
         {"user_id": current_user["id"], "crime_id": crime_id},

@@ -6171,6 +6171,13 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         return {"family": None, "members": [], "rackets": [], "my_role": None}
     members_cursor = db.family_members.find({"family_id": family_id}, {"_id": 0})
     members_docs = await members_cursor.to_list(100)
+    # Derive my_role from family_members if user's family_role is missing (e.g. old account or seed)
+    my_role = current_user.get("family_role")
+    my_member = next((m for m in members_docs if m["user_id"] == current_user["id"]), None)
+    if my_member and my_member.get("role"):
+        my_role = my_member["role"]
+        if current_user.get("family_role") != my_role:
+            await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_role": my_role}})
     ev = await get_effective_event()
     members = []
     for m in members_docs:
@@ -6220,7 +6227,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         "family": {"id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0)},
         "members": members,
         "rackets": rackets,
-        "my_role": current_user.get("family_role"),
+        "my_role": my_role,
     }
 
 
