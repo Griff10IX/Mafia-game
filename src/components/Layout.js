@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin } from 'lucide-react';
 import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import styles from '../styles/noir.module.css';
 
 export default function Layout({ children }) {
   const [user, setUser] = useState(null);
@@ -194,10 +195,10 @@ export default function Layout({ children }) {
   ] : [];
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen ${styles.page}`}>
       {/* Sidebar */}
       <div
-        className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-noir-panel via-noir-bg to-noir-bg border-r border-primary/30 z-50 transform transition-transform duration-300 ${
+        className={`fixed left-0 top-0 h-full w-64 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
       >
@@ -479,8 +480,8 @@ export default function Layout({ children }) {
 
           {/* User Info */}
           {user && (
-            <div className="p-3 border-t border-primary/30 bg-gradient-to-t from-noir-bg to-transparent">
-              <div className="bg-noir-surface border border-primary/20 p-3 rounded-sm">
+            <div className={`p-3 border-t ${styles.borderGoldLight} bg-gradient-to-t from-noir-bg to-transparent`}>
+              <div className={`${styles.userBox} p-3 rounded-sm`}>
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-primary/20">
                   <User size={14} className="text-primary" />
                   <span className="text-sm font-heading font-bold text-primary" data-testid="user-username">{user.username}</span>
@@ -497,7 +498,7 @@ export default function Layout({ children }) {
                         <TooltipTrigger asChild>
                           <span className="text-primary font-heading cursor-default underline decoration-dotted decoration-primary/30 underline-offset-1" data-testid="user-wealth-rank">{user.wealth_rank_name ?? '—'}</span>
                         </TooltipTrigger>
-                        <TooltipContent side="left" className="bg-noir-surface text-primary border border-primary/30 rounded-sm px-3 py-2 text-sm font-heading shadow-lg">
+                        <TooltipContent side="left" className={`${styles.surface} ${styles.textGold} ${styles.borderGold} rounded-sm px-3 py-2 text-sm font-heading shadow-lg`}>
                           {user.wealth_rank_range ?? '$0'}
                         </TooltipContent>
                       </Tooltip>
@@ -547,7 +548,7 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className="fixed top-0 right-0 left-0 md:left-64 h-12 bg-gradient-to-r from-noir-panel/95 via-noir-panel/90 to-noir-panel/95 backdrop-blur-md border-b border-primary/20 z-30 flex items-center px-4 gap-3">
+      <div className={`fixed top-0 right-0 left-0 md:left-64 h-12 ${styles.topBar} backdrop-blur-md z-30 flex items-center px-4 gap-3`}>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           data-testid="mobile-menu-toggle"

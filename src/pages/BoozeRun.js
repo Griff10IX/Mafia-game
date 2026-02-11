@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { MapPin, Package, Clock, Wine } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -39,7 +40,7 @@ function HistoryRow({ h }) {
   const at = h.at ? new Date(h.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—';
   const isSell = h.action === 'sell';
   return (
-    <tr className="border-b border-primary/10 last:border-0 hover:bg-noir-raised/50 transition-smooth">
+    <tr className={`border-b border-primary/10 last:border-0 ${styles.raisedHover} transition-smooth`}>
       <td className="py-1.5 px-2 text-mutedForeground font-heading text-xs">{at}</td>
       <td className="py-1.5 px-2">
         <span className={isSell ? 'text-emerald-400 font-heading font-bold' : 'text-foreground font-heading'}>{isSell ? 'Sell' : 'Buy'}</span>
@@ -59,7 +60,7 @@ function HistoryRow({ h }) {
 
 function BestRouteCard({ r }) {
   return (
-    <div className="bg-noir-surface/60 border border-primary/20 rounded-sm p-2.5">
+    <div className={`${styles.surfaceMuted} rounded-sm p-2.5`}>
       <span className="font-heading font-bold text-primary">{r.booze.name}</span>
       <div className="mt-0.5 text-mutedForeground font-heading text-xs">
         Buy in <span className="text-foreground font-bold">{r.bestBuyCity}</span> {formatMoney(r.bestBuyPrice)} → Sell in <span className="text-foreground font-bold">{r.bestSellCity}</span> {formatMoney(r.bestSellPrice)}
@@ -71,7 +72,7 @@ function BestRouteCard({ r }) {
 
 function CitySummaryRow({ c }) {
   return (
-    <tr className="border-b border-primary/10 last:border-0 hover:bg-noir-raised/50 transition-smooth">
+    <tr className={`border-b border-primary/10 last:border-0 ${styles.raisedHover} transition-smooth`}>
       <td className="py-1.5 px-2 font-heading font-bold text-foreground">{c.city}</td>
       <td className="py-1.5 px-2 text-right text-mutedForeground font-heading">{formatMoney(c.minBuy)} <span className="text-mutedForeground/80">({c.bestBuyBooze})</span></td>
       <td className="py-1.5 px-2 text-right text-mutedForeground font-heading">{formatMoney(c.maxSell)} <span className="text-mutedForeground/80">({c.bestSellBooze})</span></td>
@@ -81,7 +82,7 @@ function CitySummaryRow({ c }) {
 
 function SupplyRow({ row, buyAmounts, sellAmounts, setBuyAmount, setSellAmount, handleBuy, handleSell }) {
   return (
-    <tr className="border-b border-primary/10 last:border-0 hover:bg-noir-raised/50 transition-smooth">
+    <tr className={`border-b border-primary/10 last:border-0 ${styles.raisedHover} transition-smooth`}>
       <td className="py-1.5 px-2 font-heading font-bold text-foreground">{row.name}</td>
       <td className="py-1.5 px-2 text-right text-mutedForeground font-heading">{formatMoney(row.buy_price)}</td>
       <td className="py-1.5 px-2 text-right text-mutedForeground font-heading">{formatMoney(row.sell_price)}</td>
@@ -94,7 +95,7 @@ function SupplyRow({ row, buyAmounts, sellAmounts, setBuyAmount, setSellAmount, 
           placeholder="0"
           value={buyAmounts[row.booze_id] ?? ''}
           onChange={(e) => setBuyAmount(row.booze_id, e.target.value)}
-          className="w-12 text-right bg-noir-surface/90 border border-primary/20 rounded px-1 py-0.5 font-heading text-foreground inline focus:border-primary/50 focus:outline-none"
+          className={`w-12 text-right ${styles.input} rounded px-1 py-0.5 font-heading inline focus:border-primary/50 focus:outline-none`}
         />
         <span className="text-primary/80 ml-1 mr-1 font-heading text-[10px]">S</span>
         <input
@@ -103,7 +104,7 @@ function SupplyRow({ row, buyAmounts, sellAmounts, setBuyAmount, setSellAmount, 
           placeholder="0"
           value={sellAmounts[row.booze_id] ?? ''}
           onChange={(e) => setSellAmount(row.booze_id, e.target.value)}
-          className="w-12 text-right bg-noir-surface/90 border border-primary/20 rounded px-1 py-0.5 font-heading text-foreground inline focus:border-primary/50 focus:outline-none"
+          className={`w-12 text-right ${styles.input} rounded px-1 py-0.5 font-heading inline focus:border-primary/50 focus:outline-none`}
         />
       </td>
       <td className="py-1.5 px-2 text-right space-x-1">
@@ -116,7 +117,7 @@ function SupplyRow({ row, buyAmounts, sellAmounts, setBuyAmount, setSellAmount, 
         <button
           onClick={() => handleSell(row.booze_id)}
           disabled={!(row.carrying > 0)}
-          className="bg-noir-surface border border-primary/30 text-foreground hover:bg-noir-raised px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50"
+          className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-foreground px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`}
         >
           Sell
         </button>
@@ -277,7 +278,7 @@ export default function BoozeRun() {
   });
 
   return (
-    <div className="space-y-6" data-testid="booze-run-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="booze-run-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -293,7 +294,7 @@ export default function BoozeRun() {
       </div>
 
       {/* Timer + location + capacity + profit stats */}
-      <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm px-4 py-3">
+      <div className={`${styles.panel} rounded-sm px-4 py-3`}>
         <div className="flex flex-wrap items-center gap-4 text-xs font-heading">
           <div className="flex items-center gap-2">
             <Clock size={14} className="text-primary" />
@@ -325,7 +326,7 @@ export default function BoozeRun() {
       </div>
 
       {/* Best routes: buy where cheap, sell where high */}
-      <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+      <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
@@ -347,14 +348,14 @@ export default function BoozeRun() {
       </div>
 
       {/* City summary: min buy / max sell per city */}
-      <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden">
-        <div className="px-4 py-2 bg-noir-surface/60 border-b border-primary/20">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20`}>
           <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Prices by city</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-noir-surface/60 text-primary/80">
+              <tr className={`${styles.surfaceMuted} text-primary/80`}>
                 <th className="text-left py-1.5 px-2 font-heading font-bold uppercase tracking-wider">City</th>
                 <th className="text-right py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Lowest buy</th>
                 <th className="text-right py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Highest sell</th>
@@ -370,7 +371,7 @@ export default function BoozeRun() {
       </div>
 
       {/* Compact supplies table: buy/sell at current location */}
-      <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
@@ -381,7 +382,7 @@ export default function BoozeRun() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="bg-noir-surface/60 text-primary/80">
+              <tr className={`${styles.surfaceMuted} text-primary/80`}>
                 <th className="text-left py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Booze</th>
                 <th className="text-right py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Buy</th>
                 <th className="text-right py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Sell</th>
@@ -409,8 +410,8 @@ export default function BoozeRun() {
       </div>
 
       {/* Last 10 buy/sells */}
-      <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden">
-        <div className="px-4 py-2 bg-noir-surface/60 border-b border-primary/20">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20`}>
           <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Last 10 buy/sells</span>
         </div>
         <div className="p-3">
@@ -418,7 +419,7 @@ export default function BoozeRun() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="bg-noir-surface/60 text-primary/80">
+                  <tr className={`${styles.surfaceMuted} text-primary/80`}>
                     <th className="text-left py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Time</th>
                     <th className="text-left py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Action</th>
                     <th className="text-left py-1.5 px-2 font-heading font-bold uppercase tracking-wider">Booze</th>
@@ -439,7 +440,7 @@ export default function BoozeRun() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

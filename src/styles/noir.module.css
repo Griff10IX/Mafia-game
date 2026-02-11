@@ -1,0 +1,132 @@
+/* Noir 1920s–30s mafia theme – explicit values so Tailwind does not override */
+
+/* Palette (same as tailwind.config.js) */
+:root {
+  --noir-bg: #0a0806;
+  --noir-panel: #12100c;
+  --noir-surface: #1a1612;
+  --noir-raised: #252019;
+  --noir-primary: #c9a227;
+  --noir-primary-foreground: #ffffff;
+  --noir-foreground: #e8e4dc;
+  --noir-muted: #a89878;
+  --noir-border: #3d3520;
+  --noir-border-light: rgba(201, 162, 39, 0.2);
+  --noir-border-mid: rgba(201, 162, 39, 0.3);
+}
+
+/* Page wrapper – use on the root div of each page */
+.page {
+  background-color: #050505;
+  color: var(--noir-foreground);
+  min-height: 100%;
+}
+
+/* Main content area background (when you want page to own it) */
+.pageContent {
+  background-color: #050505;
+  color: var(--noir-foreground);
+}
+
+/* Card/panel: dark gradient */
+.panel {
+  background: linear-gradient(to bottom, var(--noir-panel), var(--noir-bg));
+  border: 1px solid var(--noir-border-mid);
+  border-radius: 2px;
+}
+
+/* Card header strip */
+.panelHeader {
+  background: rgba(201, 162, 39, 0.08);
+  border-bottom: 1px solid var(--noir-border-light);
+}
+
+/* Surface (inputs, table headers, secondary blocks) */
+.surface {
+  background-color: var(--noir-surface);
+  border-color: var(--noir-border-light);
+}
+
+.surfaceMuted {
+  background-color: rgba(26, 22, 18, 0.6);
+  border-color: var(--noir-border-light);
+}
+
+/* Raised (hover state, progress track) */
+.raised {
+  background-color: var(--noir-raised);
+}
+
+.raisedHover:hover {
+  background-color: rgba(37, 32, 25, 0.5);
+}
+
+/* Sidebar shell */
+.sidebar {
+  background: linear-gradient(to bottom, var(--noir-panel), var(--noir-bg));
+  border-right: 1px solid var(--noir-border-mid);
+}
+
+/* Top bar */
+.topBar {
+  background: linear-gradient(to right, rgba(18, 16, 12, 0.95), rgba(18, 16, 12, 0.9), rgba(18, 16, 12, 0.95));
+  border-bottom: 1px solid var(--noir-border-light);
+}
+
+/* User stats box in sidebar */
+.userBox {
+  background-color: var(--noir-surface);
+  border: 1px solid var(--noir-border-light);
+  border-radius: 2px;
+}
+
+/* Text – use with Tailwind for font-heading etc. */
+.textGold {
+  color: var(--noir-primary);
+}
+
+.textMuted {
+  color: var(--noir-muted);
+}
+
+.textForeground {
+  color: var(--noir-foreground);
+}
+
+/* Inputs */
+.input {
+  background-color: rgba(26, 22, 18, 0.9);
+  border: 1px solid var(--noir-border-light);
+  border-radius: 2px;
+  color: var(--noir-foreground);
+}
+
+.input:focus {
+  outline: none;
+  border-color: rgba(201, 162, 39, 0.5);
+}
+
+.input::placeholder {
+  color: rgba(168, 152, 120, 0.5);
+}
+
+/* Button primary (gold) */
+.btnPrimary {
+  background: linear-gradient(to bottom, var(--noir-primary), #b8860b);
+  color: var(--noir-primary-foreground);
+  border: 1px solid rgba(184, 134, 11, 0.5);
+  border-radius: 2px;
+}
+
+.btnPrimary:hover {
+  opacity: 0.9;
+}
+
+/* Border utility */
+.borderGold {
+  border-color: var(--noir-border-mid);
+}
+
+.borderGoldLight {
+  border-color: var(--noir-border-light);
+}

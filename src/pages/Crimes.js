@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { Flame, HelpCircle, Clock } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function getSuccessRate(crimeType) {
   if (crimeType === 'petty') return 0.7;
@@ -99,7 +100,7 @@ export default function Crimes() {
   }
 
   return (
-    <div className="space-y-6" data-testid="crimes-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="crimes-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -117,8 +118,8 @@ export default function Crimes() {
       )}
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
-          <div className="grid grid-cols-12 bg-noir-surface/60 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+          <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b ${styles.borderGoldLight}`}>
             <div className="col-span-6">Crime</div>
             <div className="col-span-2 text-right">Risk</div>
             <div className="col-span-2 text-right">Status</div>
@@ -133,7 +134,7 @@ export default function Crimes() {
             return (
               <div
                 key={crime.id}
-                className={`w-full text-left grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-noir-raised/50 ${!crime.can_commit ? 'opacity-90' : ''}`}
+                className={`w-full text-left grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent ${styles.raisedHover} ${!crime.can_commit ? 'opacity-90' : ''}`}
                 data-testid={`crime-row-${crime.id}`}
               >
                 <div className="col-span-6 min-w-0">
@@ -158,8 +159,8 @@ export default function Crimes() {
                       crime.can_commit
                         ? 'bg-primary/20 text-primary border border-primary/30'
                         : onCooldown
-                          ? 'bg-noir-surface text-mutedForeground border border-primary/10'
-                          : 'bg-noir-surface/90 text-mutedForeground border border-primary/10'
+                          ? `${styles.surface} text-mutedForeground border border-primary/10`
+                          : `${styles.surface} text-mutedForeground border border-primary/10 opacity-90`
                     }`}
                     data-testid={`crime-status-${crime.id}`}
                   >
@@ -196,7 +197,7 @@ export default function Crimes() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm px-4 py-3">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-sm px-4 py-3`}>
           <div className="text-xs font-heading text-mutedForeground flex items-center justify-center gap-6">
             <span><span className="text-primary font-bold">◆</span> Crimes: <span className="text-foreground font-bold">{user?.total_crimes ?? 0}</span></span>
             <span className="text-primary/50">|</span>
