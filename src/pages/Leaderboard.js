@@ -3,13 +3,14 @@ import { Link } from 'react-router-dom';
 import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 const TOP_OPTIONS = [5, 10, 20, 50, 100];
 
 function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
   const list = entries || [];
   return (
-    <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+    <section className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
       <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
         <Icon className="text-primary shrink-0" size={18} />
         <div>
@@ -27,7 +28,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
               className={`flex items-center gap-3 p-2 rounded-sm border transition-colors ${
                 entry.is_current_user
                   ? 'bg-primary/15 border-primary/40'
-                  : 'bg-zinc-800/50 border-primary/10 hover:border-primary/30'
+                  : `${styles.surfaceMuted} border-primary/10 hover:border-primary/30`
               }`}
               data-testid={`leaderboard-${title.toLowerCase().replace(/\s+/g, '-')}-${entry.rank}`}
             >
@@ -39,7 +40,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
                     ? 'bg-gradient-to-b from-zinc-400 to-zinc-600 text-zinc-900'
                     : entry.rank === 3
                     ? 'bg-gradient-to-b from-amber-600 to-amber-800 text-amber-100'
-                    : 'bg-zinc-800 text-mutedForeground border border-primary/20'
+                    : `${styles.surface} text-mutedForeground border border-primary/20`
                 }`}
               >
                 {entry.rank}
@@ -111,7 +112,7 @@ export default function Leaderboard() {
   }
 
   return (
-    <div className="space-y-5" data-testid="leaderboard-page">
+    <div className={`space-y-5 ${styles.pageContent}`} data-testid="leaderboard-page">
       {/* Art Deco Header */}
       <header>
         <div className="flex items-center gap-4 mb-3">
@@ -136,7 +137,7 @@ export default function Leaderboard() {
                 className={`px-2.5 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
                   topLimit === n
                     ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border border-yellow-600/50'
-                    : 'bg-zinc-800 text-foreground hover:bg-zinc-700 border border-primary/20'
+                    : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
                 }`}
               >
                 Top {n}
@@ -163,7 +164,7 @@ export default function Leaderboard() {
       </div>
 
       {/* Weekly Rewards */}
-      <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <section className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

@@ -3,6 +3,7 @@ import { Search, Plane, Crosshair, Clock, MapPin, Skull, Calculator } from 'luci
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatDateTime(iso) {
   if (!iso) return '-';
@@ -241,7 +242,7 @@ export default function Attack() {
   );
 
   return (
-    <div className="space-y-5" data-testid="attack-page">
+    <div className={`space-y-5 ${styles.pageContent}`} data-testid="attack-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -266,7 +267,7 @@ export default function Attack() {
         {/* Left Column */}
         <div className="space-y-6">
           {/* Kill User */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -290,7 +291,7 @@ export default function Attack() {
                   type="text"
                   value={killUsername}
                   onChange={(e) => setKillUsername(e.target.value)}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none"
+                  className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
                   placeholder="Enter username..."
                   list="found-users-inline"
                   data-testid="kill-username-inline"
@@ -306,12 +307,12 @@ export default function Attack() {
                 <textarea
                   value={deathMessage}
                   onChange={(e) => setDeathMessage(e.target.value)}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm min-h-20 p-3 text-sm text-foreground placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none"
+                  className={`w-full ${styles.input} min-h-20 p-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
                   placeholder="Death message (optional)..."
                   data-testid="kill-death-message-inline"
                 />
               </div>
-              <div className="flex items-center justify-between border border-primary/20 rounded-sm px-3 py-2 bg-zinc-800/50">
+              <div className={`flex items-center justify-between border border-primary/20 rounded-sm px-3 py-2 ${styles.surfaceMuted}`}>
                 <div className="text-xs text-mutedForeground font-heading">Inflation: {inflationPct}%</div>
                 <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading">
                   <span className="uppercase tracking-wider">Make Public</span>
@@ -332,7 +333,7 @@ export default function Attack() {
           </div>
 
           {/* Find User */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -349,7 +350,7 @@ export default function Attack() {
                   type="text"
                   value={targetUsername}
                   onChange={(e) => setTargetUsername(e.target.value)}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none"
+                  className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
                   placeholder="Enter username..."
                   required
                   data-testid="target-username-input"
@@ -361,7 +362,7 @@ export default function Attack() {
                   type="text"
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none"
+                  className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
                   placeholder="E.g. big spender, rival"
                   data-testid="target-note-input"
                 />
@@ -382,7 +383,7 @@ export default function Attack() {
         </div>
 
         {/* Right Column */}
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />
@@ -396,7 +397,7 @@ export default function Attack() {
               <select
                 value={show}
                 onChange={(e) => setShow(e.target.value)}
-                className="bg-zinc-800 border border-primary/20 rounded-sm h-8 px-2 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                className={`${styles.surface} border border-primary/20 rounded-sm h-8 px-2 text-xs focus:border-primary/50 focus:outline-none`}
                 data-testid="attack-show-filter"
               >
                 <option value="all">All</option>
@@ -411,7 +412,7 @@ export default function Attack() {
               type="text"
               value={filterText}
               onChange={(e) => setFilterText(e.target.value)}
-              className="flex-1 bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none"
+              className={`flex-1 ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
               placeholder="Filter by username / note"
               data-testid="attack-filter-input"
             />
@@ -440,7 +441,7 @@ export default function Attack() {
           </div>
 
           <div className="border border-primary/20 rounded-sm overflow-hidden">
-            <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-3 py-2 border-b border-primary/20">
+            <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-3 py-2 border-b border-primary/20`}>
               <div className="col-span-1"></div>
               <div className="col-span-4">User / Note</div>
               <div className="col-span-3">Location</div>
@@ -451,7 +452,7 @@ export default function Attack() {
               <div className="p-4 text-sm text-mutedForeground font-heading italic">You do not have any active searches.</div>
             ) : (
               filteredAttacks.map((a) => (
-                <div key={a.attack_id} className="grid grid-cols-12 px-3 py-2.5 border-b border-primary/10 items-start gap-2 hover:bg-zinc-800/30 transition-smooth">
+                <div key={a.attack_id} className={`grid grid-cols-12 px-3 py-2.5 border-b border-primary/10 items-start gap-2 ${styles.raisedHover} transition-smooth`}>
                   <div className="col-span-1 pt-1">
                     <input
                       type="checkbox"
@@ -473,7 +474,7 @@ export default function Attack() {
                     {a.note && <div className="text-xs text-mutedForeground truncate font-heading">{a.note}</div>}
                     <div className="mt-1 inline-flex items-center gap-2 text-[11px] text-mutedForeground font-heading flex-wrap">
                       <span className={`px-2 py-0.5 rounded-sm uppercase tracking-wider font-bold ${
-                        a.status === 'searching' ? 'bg-zinc-800 text-mutedForeground border border-primary/10' : 'bg-primary/20 text-primary border border-primary/30'
+                        a.status === 'searching' ? `${styles.surface} text-mutedForeground border border-primary/10` : 'bg-primary/20 text-primary border border-primary/30'
                       }`}>
                         {a.status}
                       </span>
@@ -540,7 +541,7 @@ export default function Attack() {
             onClick={() => setModalOpen(false)}
           />
           <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className="w-full max-w-xl bg-gradient-to-b from-zinc-900 to-black border border-primary/40 rounded-sm overflow-hidden shadow-2xl shadow-primary/20">
+            <div className={`w-full max-w-xl ${styles.panel} border border-primary/40 rounded-sm overflow-hidden shadow-2xl shadow-primary/20`}>
               <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
                 <div className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
                   {modalTab === 'kill' ? 'Kill User' : 'Bullet Calculator'}
@@ -584,7 +585,7 @@ export default function Attack() {
                         type="text"
                         value={killUsername}
                         onChange={(e) => setKillUsername(e.target.value)}
-                        className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                        className={`w-full ${styles.input} h-9 px-3 text-sm focus:border-primary/50 focus:outline-none`}
                         placeholder="Enter username..."
                         list="found-users"
                         data-testid="kill-username"
@@ -600,12 +601,12 @@ export default function Attack() {
                       <textarea
                         value={deathMessage}
                         onChange={(e) => setDeathMessage(e.target.value)}
-                        className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm min-h-20 p-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                        className={`w-full ${styles.input} min-h-20 p-3 text-sm focus:border-primary/50 focus:outline-none`}
                         placeholder="Death message (optional)..."
                         data-testid="kill-death-message"
                       />
                     </div>
-                    <div className="flex items-center justify-between border border-primary/20 rounded-sm px-3 py-2 bg-zinc-800/50">
+                    <div className={`flex items-center justify-between border border-primary/20 rounded-sm px-3 py-2 ${styles.surfaceMuted}`}>
                       <div className="text-xs text-mutedForeground font-heading">Inflation: {Number(calcResult?.inflation_pct ?? 0)}%</div>
                       <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading">
                         <span className="uppercase tracking-wider">Make Public</span>
@@ -630,7 +631,7 @@ export default function Attack() {
                         type="text"
                         value={calcTarget}
                         onChange={(e) => setCalcTarget(e.target.value)}
-                        className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                        className={`w-full ${styles.input} h-9 px-3 text-sm focus:border-primary/50 focus:outline-none`}
                         data-testid="bullet-calc-target"
                         placeholder="Enter username..."
                         list="calc-users"
@@ -653,8 +654,8 @@ export default function Attack() {
                     </button>
 
                     {calcResult ? (
-                      <div className="border border-primary/20 rounded-sm overflow-hidden bg-zinc-800/30">
-                        <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-3 py-2 border-b border-primary/20">
+                      <div className={`border border-primary/20 rounded-sm overflow-hidden ${styles.surfaceMuted}`}>
+                        <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-3 py-2 border-b border-primary/20`}>
                           <div className="col-span-6">Estimated</div>
                           <div className="col-span-6 text-right">Inflation</div>
                         </div>

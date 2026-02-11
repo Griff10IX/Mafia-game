@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Skull, Crosshair, ArrowUpRight, ArrowDownLeft, Clock } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatDateTime(iso) {
   if (!iso) return '-';
@@ -67,7 +68,7 @@ export default function Attemps() {
                 className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-heading font-bold ${
                   a.outcome === 'killed'
                     ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border border-primary/30'
-                    : 'bg-zinc-800/80 text-mutedForeground border border-primary/10'
+                    : `${styles.surface} text-mutedForeground border border-primary/10 opacity-90`
                 }`}
               >
                 <ResultIcon size={10} />
@@ -107,7 +108,7 @@ export default function Attemps() {
   }
 
   return (
-    <div className="space-y-5" data-testid="attempts-page">
+    <div className={`space-y-5 ${styles.pageContent}`} data-testid="attempts-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -124,7 +125,7 @@ export default function Attemps() {
       <div className="flex justify-center">
         <div className="w-full max-w-5xl">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+            <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
               <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-px bg-primary/50" />
@@ -140,7 +141,7 @@ export default function Attemps() {
               )}
             </div>
 
-            <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+            <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
               <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-px bg-primary/50" />

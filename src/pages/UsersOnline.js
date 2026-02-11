@@ -4,6 +4,7 @@ import { Users } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
+import styles from '../styles/noir.module.css';
 
 function formatDateTime(iso) {
   if (!iso) return '-';
@@ -18,7 +19,7 @@ function UserCard({ user, profileCache, profileLoading, ensureProfilePreview }) 
 
   return (
     <div
-      className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-2.5 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-smooth w-full sm:w-[190px] shrink-0"
+      className={`${styles.panel} rounded-sm p-2.5 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-smooth w-full sm:w-[190px] shrink-0`}
       data-testid="user-card"
     >
       <div className="flex items-start justify-between mb-0.5">
@@ -34,14 +35,14 @@ function UserCard({ user, profileCache, profileLoading, ensureProfilePreview }) 
                   {user.username}
                 </Link>
               </HoverCardTrigger>
-              <HoverCardContent align="start" sideOffset={8} className="w-64 bg-zinc-900 border border-primary/30 rounded-sm shadow-lg">
+              <HoverCardContent align="start" sideOffset={8} className={`w-64 ${styles.surface} ${styles.borderGold} rounded-sm shadow-lg`}>
                 {preview?.error ? (
                   <div className="text-sm text-mutedForeground font-heading">Failed to load preview</div>
                 ) : isLoading && !preview ? (
                   <div className="text-sm text-mutedForeground font-heading">Loading preview...</div>
                 ) : preview ? (
                   <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded-sm overflow-hidden border border-primary/20 bg-zinc-800 flex items-center justify-center shrink-0">
+                    <div className={`w-10 h-10 rounded-sm overflow-hidden border border-primary/20 ${styles.surface} flex items-center justify-center shrink-0`}>
                       {preview.avatar_url ? (
                         <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                       ) : (
@@ -132,7 +133,7 @@ export default function UsersOnline() {
   }
 
   return (
-    <div className="space-y-6" data-testid="users-online-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="users-online-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -142,7 +143,7 @@ export default function UsersOnline() {
         <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">See who&apos;s currently active</p>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4" data-testid="online-count">
+      <div className={`${styles.panel} rounded-sm overflow-hidden p-4`} data-testid="online-count">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-sm flex items-center justify-center bg-primary/20 border border-primary/30">
             <Users className="text-primary" size={24} />
@@ -155,7 +156,7 @@ export default function UsersOnline() {
       </div>
 
       {users.length === 0 ? (
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm py-12 text-center" data-testid="no-users">
+        <div className={`${styles.panel} rounded-sm py-12 text-center`} data-testid="no-users">
           <p className="text-sm text-mutedForeground font-heading">No other users online right now</p>
         </div>
       ) : (
@@ -172,7 +173,7 @@ export default function UsersOnline() {
         </div>
       )}
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden" data-testid="info-box">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`} data-testid="info-box">
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

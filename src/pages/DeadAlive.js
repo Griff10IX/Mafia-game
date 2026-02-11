@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Skull, KeyRound, AlertCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 export default function DeadAlive() {
   const [deadUsername, setDeadUsername] = useState('');
@@ -31,7 +32,7 @@ export default function DeadAlive() {
   };
 
   return (
-    <div className="space-y-6" data-testid="dead-alive-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="dead-alive-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -46,7 +47,7 @@ export default function DeadAlive() {
         </p>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden max-w-md shadow-lg shadow-primary/5">
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-md shadow-lg shadow-primary/5`}>
         <div className="px-4 py-3 bg-amber-500/20 border-b border-amber-500/40 flex items-center gap-2">
           <AlertCircle size={18} className="text-amber-400 shrink-0" />
           <span className="text-sm font-heading font-bold text-amber-200">You must be logged into your new account. Enter the credentials of the account that died.</span>
@@ -59,7 +60,7 @@ export default function DeadAlive() {
               value={deadUsername}
               onChange={(e) => setDeadUsername(e.target.value)}
               placeholder="Username of dead account"
-              className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm px-3 py-2 text-foreground font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+              className={`w-full ${styles.input} px-3 py-2 font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none`}
               data-testid="dead-username"
             />
           </div>
@@ -70,7 +71,7 @@ export default function DeadAlive() {
               value={deadPassword}
               onChange={(e) => setDeadPassword(e.target.value)}
               placeholder="Password of dead account"
-              className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm px-3 py-2 text-foreground font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+              className={`w-full ${styles.input} px-3 py-2 font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none`}
               data-testid="dead-password"
             />
           </div>
@@ -86,7 +87,7 @@ export default function DeadAlive() {
         </form>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden max-w-2xl">
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

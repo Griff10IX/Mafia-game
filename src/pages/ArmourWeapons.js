@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Shield, Sword, DollarSign, Gem, Lock } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatCost(opt, useEffective = true) {
   const money = useEffective && opt.effective_cost_money != null ? opt.effective_cost_money : opt.cost_money;
@@ -195,7 +196,7 @@ export default function ArmourWeapons() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto w-full space-y-5" data-testid="armour-weapons-page">
+    <div className={`max-w-4xl mx-auto w-full space-y-5 ${styles.pageContent}`} data-testid="armour-weapons-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -226,7 +227,7 @@ export default function ArmourWeapons() {
       )}
 
       {/* Armour section */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+      <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
@@ -238,7 +239,7 @@ export default function ArmourWeapons() {
         </div>
         <div className="overflow-x-auto">
           <div className="min-w-[32rem]">
-            <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
+            <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20`}>
               <div className="col-span-6">Set</div>
               <div className="col-span-2 text-right">Level</div>
               <div className="col-span-2 text-right">Cost</div>
@@ -249,7 +250,7 @@ export default function ArmourWeapons() {
               return (
                 <div
                   key={o.level}
-                  className="grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30"
+                  className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent ${styles.raisedHover}`}
                   data-testid={`armour-row-${o.level}`}
                 >
                   <div className="col-span-6 min-w-0">
@@ -274,7 +275,7 @@ export default function ArmourWeapons() {
                         type="button"
                         onClick={unequipArmour}
                         disabled={equippingLevel != null}
-                        className="bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700 rounded-sm px-2 py-1 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50"
+                        className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-2 py-1 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`}
                         data-testid={`armour-unequip-${o.level}`}
                       >
                         {equippingLevel === 0 ? '...' : 'Unequip'}
@@ -324,7 +325,7 @@ export default function ArmourWeapons() {
 
       {/* Weapons section */}
       <div className="space-y-3">
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+        <div className={`${styles.panel} rounded-sm overflow-hidden`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />
@@ -363,8 +364,8 @@ export default function ArmourWeapons() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
-          <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+          <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20`}>
             <div className="col-span-8">Weapon</div>
             <div className="col-span-4 text-right">Action</div>
           </div>
@@ -379,7 +380,7 @@ export default function ArmourWeapons() {
               <div
                 key={w.id}
                 data-testid={`weapon-row-${w.id}`}
-                className="grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30"
+                className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent ${styles.raisedHover}`}
               >
                 <div className="col-span-8 min-w-0">
                   <div className="flex items-start justify-between gap-3">
@@ -406,7 +407,7 @@ export default function ArmourWeapons() {
                           type="button"
                           onClick={unequipWeapon}
                           disabled={buyingId != null}
-                          className="bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700 rounded-sm px-2 py-1 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50"
+                          className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-2 py-1 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`}
                           data-testid={`unequip-weapon-${w.id}`}
                         >
                           {buyingId === 'unequip' ? '...' : 'Unequip'}
@@ -440,7 +441,7 @@ export default function ArmourWeapons() {
                       className={`rounded-sm px-2 py-1 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50 ${
                         usingPoints
                           ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50'
-                          : 'bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700'
+                          : `${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary`
                       }`}
                       data-testid={`buy-weapon-${w.id}`}
                     >
@@ -461,7 +462,7 @@ export default function ArmourWeapons() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

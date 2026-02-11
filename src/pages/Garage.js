@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Car, Flame, DollarSign, CheckSquare, Square, Filter } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 export default function Garage() {
   const [cars, setCars] = useState([]);
@@ -128,7 +129,7 @@ export default function Garage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${styles.pageContent}`}>
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -143,7 +144,7 @@ export default function Garage() {
       </div>
 
       {cars.length === 0 ? (
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-12 text-center">
+        <div className={`${styles.panel} rounded-sm overflow-hidden p-12 text-center`}>
           <Car className="text-primary/40 mx-auto mb-4" size={48} />
           <h3 className="text-lg font-heading font-bold text-primary uppercase tracking-wider mb-2">Empty Garage</h3>
           <p className="text-mutedForeground font-heading text-sm">Steal some cars to see them here.</p>
@@ -151,7 +152,7 @@ export default function Garage() {
       ) : (
         <>
           {/* Filters and Sort */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -168,7 +169,7 @@ export default function Garage() {
                   <select
                     value={sortBy}
                     onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none font-heading"
+                    className={`w-full ${styles.input} h-9 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
                   >
                     <option value="newest">Newest First</option>
                     <option value="oldest">Oldest First</option>
@@ -182,7 +183,7 @@ export default function Garage() {
                   <select
                     value={filterRarity}
                     onChange={(e) => setFilterRarity(e.target.value)}
-                    className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-9 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none font-heading"
+                    className={`w-full ${styles.input} h-9 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
                   >
                     <option value="all">All Rarities</option>
                     <option value="common">Common</option>
@@ -198,7 +199,7 @@ export default function Garage() {
           </div>
 
           {/* Actions Bar */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className={`${styles.panel} rounded-sm overflow-hidden p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3`}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-primary font-heading font-bold">{displayedCars.length}</span>
               <span className="text-mutedForeground text-sm font-heading">Cars</span>
@@ -232,7 +233,7 @@ export default function Garage() {
                 </button>
                 <button
                   onClick={scrapCars}
-                  className="flex items-center gap-2 bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700 rounded-sm px-4 py-2 text-xs font-heading font-bold uppercase tracking-wider"
+                  className={`flex items-center gap-2 ${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-4 py-2 text-xs font-heading font-bold uppercase tracking-wider`}
                 >
                   <DollarSign size={14} />
                   Scrap for Cash
@@ -247,13 +248,13 @@ export default function Garage() {
               <div
                 key={index}
                 onClick={() => toggleSelect(car.user_car_id)}
-                className={`bg-gradient-to-b from-zinc-900 to-black border rounded-sm p-3 cursor-pointer transition-smooth ${
+                className={`${styles.panel} border rounded-sm p-3 cursor-pointer transition-smooth ${
                   selectedCars.includes(car.user_car_id)
                     ? 'border-primary ring-1 ring-primary/30'
                     : 'border-primary/20 hover:border-primary/50'
                 }`}
               >
-                <div className="w-full aspect-[4/3] rounded-sm overflow-hidden bg-zinc-800 border border-primary/20 mb-2">
+                <div className={`w-full aspect-[4/3] rounded-sm overflow-hidden ${styles.surface} border border-primary/20 mb-2`}>
                   {car.image ? (
                     <img
                       src={car.image}

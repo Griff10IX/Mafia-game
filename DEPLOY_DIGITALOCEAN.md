@@ -253,15 +253,54 @@ systemctl restart mafia-backend
 
 ## 10. Updating the app
 
+**Option A: Use `origin` pointing at Mafia-Game-2 (one remote)**
+
+On the server, point `origin` at your Mafia-Game-2 repo (run once if you originally cloned a different repo):
+
 ```bash
 cd /opt/mafia-app
-git pull origin main
+git remote set-url origin https://github.com/Griff10IX/Mafia-Game-2.git
+```
+
+For private repos, use a **GitHub Personal Access Token** for auth. Prefer a credential helper instead of putting the token in the URL:
+
+```bash
+# Store credentials so you don't put the token in the URL
+git config --global credential.helper store
+# Next 'git pull' will prompt for username and token (use token as password)
+```
+
+Or, if you must use the token in the URL (avoid committing or sharing this URL):
+
+```bash
+git remote set-url origin https://YOUR_GITHUB_USERNAME:YOUR_TOKEN@github.com/Griff10IX/Mafia-Game-2.git
+```
+
+Then pull and build:
+
+```bash
+git fetch origin MAfiaGame2
+git checkout MAfiaGame2
+git pull origin MAfiaGame2
+
 cd backend && source venv/bin/activate && pip install -r requirements.txt
 systemctl restart mafia-backend
 cd ..
 npm run build
-# Nginx already points to build/; no restart needed
 ```
+
+**Option B: Keep a second remote `mafia2`**
+
+```bash
+cd /opt/mafia-app
+git remote add mafia2 https://github.com/Griff10IX/Mafia-Game-2.git   # only if missing
+git fetch mafia2 MAfiaGame2
+git checkout MAfiaGame2
+git pull mafia2 MAfiaGame2
+# ... then backend + npm run build as above
+```
+
+Nginx already serves `build/`; no Nginx restart needed after a new build.
 
 ---
 

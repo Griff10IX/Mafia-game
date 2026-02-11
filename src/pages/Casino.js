@@ -1,9 +1,10 @@
 import { Dice1, Spade, Hash, TrendingUp, Target } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import styles from '../styles/noir.module.css';
 
 export default function Casino() {
   return (
-    <div className="space-y-8" data-testid="casino-page">
+    <div className={`space-y-8 ${styles.pageContent}`} data-testid="casino-page">
       <div>
         <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Casino</h1>
         <p className="text-mutedForeground">Test your luck in the underground casino</p>

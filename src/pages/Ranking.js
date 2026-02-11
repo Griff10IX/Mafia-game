@@ -1,9 +1,10 @@
 import { Target, TrendingUp, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import styles from '../styles/noir.module.css';
 
 export default function Ranking() {
   return (
-    <div className="space-y-8" data-testid="ranking-page">
+    <div className={`space-y-8 ${styles.pageContent}`} data-testid="ranking-page">
       <div>
         <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Ranking</h1>
         <p className="text-mutedForeground">Choose how you earn rank points</p>

@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 const NOTIFICATION_ICONS = {
   rank_up: Trophy,
@@ -20,13 +21,13 @@ function NotificationItem({ notification, onMarkRead }) {
     <div
       className={`rounded-sm p-4 transition-smooth border ${
         notification.read
-          ? 'bg-zinc-900/50 border-primary/10 opacity-90'
-          : 'bg-gradient-to-b from-zinc-900 to-black border-primary/30'
+          ? `${styles.surfaceMuted} border-primary/10 opacity-90`
+          : `${styles.panel} border-primary/30`
       }`}
       data-testid={`notification-${notification.id}`}
     >
       <div className="flex items-start gap-3">
-        <div className={`p-2 rounded-sm shrink-0 ${notification.read ? 'bg-zinc-800 border border-primary/10' : 'bg-primary/20 border border-primary/30'}`}>
+        <div className={`p-2 rounded-sm shrink-0 ${notification.read ? `${styles.surface} border border-primary/10` : 'bg-primary/20 border border-primary/30'}`}>
           <Icon size={18} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
         </div>
         <div className="flex-1 min-w-0">
@@ -116,7 +117,7 @@ export default function Inbox() {
   }
 
   return (
-    <div className="space-y-6" data-testid="inbox-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="inbox-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -137,7 +138,7 @@ export default function Inbox() {
               className={`px-3 py-1.5 rounded-sm text-xs font-heading font-bold whitespace-nowrap transition-smooth border ${
                 filter === f
                   ? 'bg-primary/20 text-primary border-primary/50'
-                  : 'bg-zinc-800 text-mutedForeground border-primary/20 hover:bg-zinc-700 hover:text-foreground'
+                  : `${styles.surface} ${styles.raisedHover} text-mutedForeground border-primary/20`
               }`}
             >
               {f === 'rank_up' ? 'Rank Up' : f.charAt(0).toUpperCase() + f.slice(1)}
@@ -156,7 +157,7 @@ export default function Inbox() {
       </div>
 
       {filteredNotifications.length === 0 ? (
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm py-12 text-center" data-testid="no-notifications">
+        <div className={`${styles.panel} rounded-sm py-12 text-center`} data-testid="no-notifications">
           <MailOpen size={48} className="mx-auto text-primary/50 mb-4" />
           <p className="text-mutedForeground font-heading">No notifications yet</p>
           <p className="text-xs text-mutedForeground font-heading mt-1">Rank up, get attacked, or hire bodyguards to receive notifications</p>

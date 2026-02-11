@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../utils/api';
+import styles from '../styles/noir.module.css';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -171,7 +172,7 @@ export default function Bank() {
   const transfers = Array.isArray(overview?.transfers) ? overview.transfers : [];
 
   return (
-    <div className="space-y-6" data-testid="bank-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="bank-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -183,7 +184,7 @@ export default function Bank() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Interest Bank */}
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Landmark size={18} className="text-primary" />
@@ -200,7 +201,7 @@ export default function Bank() {
                   value={depositAmount}
                   onChange={(e) => setDepositAmount(e.target.value)}
                   placeholder="e.g. 250000"
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                  className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
                 />
               </div>
               <div className="sm:col-span-6">
@@ -208,7 +209,7 @@ export default function Bank() {
                 <select
                   value={String(durationHours)}
                   onChange={(e) => setDurationHours(parseInt(e.target.value, 10))}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                  className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
                 >
                   {(Array.isArray(meta?.interest_options) ? meta.interest_options : []).map((o) => (
                     <option key={o.hours} value={String(o.hours)}>
@@ -219,7 +220,7 @@ export default function Bank() {
               </div>
             </div>
 
-            <div className="border border-primary/20 rounded-sm p-3 bg-zinc-800/50">
+            <div className={`border border-primary/20 rounded-sm p-3 ${styles.surfaceMuted}`}>
               <div className="text-xs font-heading text-primary/80 flex items-center gap-2">
                 <Clock size={14} className="text-primary" />
                 Preview
@@ -245,7 +246,7 @@ export default function Bank() {
         </div>
 
         {/* Swiss Bank */}
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <ShieldCheck size={18} className="text-primary" />
@@ -255,7 +256,7 @@ export default function Bank() {
           </div>
 
           <div className="p-4 space-y-3">
-            <div className="border border-primary/20 rounded-sm p-3 bg-zinc-800/50">
+            <div className={`border border-primary/20 rounded-sm p-3 ${styles.surfaceMuted}`}>
               <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider">Swiss balance</div>
               <div className="text-lg font-heading font-bold text-primary">{formatMoney(overview?.swiss_balance)}</div>
             </div>
@@ -266,7 +267,7 @@ export default function Bank() {
                 value={swissAmount}
                 onChange={(e) => setSwissAmount(e.target.value)}
                 placeholder="e.g. 100000"
-                className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
               />
             </div>
 
@@ -281,7 +282,7 @@ export default function Bank() {
               <button
                 type="button"
                 onClick={swissWithdraw}
-                className="bg-zinc-800 border border-primary/30 text-foreground hover:bg-zinc-700 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth"
+                className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-foreground rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth`}
               >
                 Withdraw
               </button>
@@ -291,8 +292,8 @@ export default function Bank() {
       </div>
 
       {/* Active Deposits */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-        <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20 flex items-center justify-between">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between`}>
           <div className="flex items-center gap-2">
             <Coins size={18} className="text-primary" />
             <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Interest Deposits</span>
@@ -304,7 +305,7 @@ export default function Bank() {
           <div className="p-4 text-sm text-mutedForeground font-heading">No deposits yet.</div>
         ) : (
           <div>
-            <div className="grid grid-cols-12 bg-zinc-800/50 text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20">
+            <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
               <div className="col-span-3">Principal</div>
               <div className="col-span-2">Rate</div>
               <div className="col-span-3">Matures</div>
@@ -317,7 +318,7 @@ export default function Bank() {
               const claimed = !!d.claimed_at;
               const canClaim = matured && !claimed;
               return (
-                <div key={d.id} className="grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs items-center font-heading hover:bg-zinc-800/30 transition-smooth">
+                <div key={d.id} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs items-center font-heading ${styles.raisedHover} transition-smooth`}>
                   <div className="col-span-3 font-bold text-foreground">{formatMoney(d.principal)}</div>
                   <div className="col-span-2 text-mutedForeground">{(Number(d.interest_rate || 0) * 100).toFixed(2)}%</div>
                   <div className="col-span-3 text-mutedForeground">{formatDateTime(d.matures_at)}</div>
@@ -349,7 +350,7 @@ export default function Bank() {
 
       {/* Transfers */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
             <div className="flex items-center gap-2">
               <ArrowRightLeft size={18} className="text-primary" />
@@ -364,7 +365,7 @@ export default function Bank() {
                 value={transferTo}
                 onChange={(e) => setTransferTo(e.target.value)}
                 placeholder="username..."
-                className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
               />
             </div>
             <div>
@@ -373,7 +374,7 @@ export default function Bank() {
                 value={transferAmount}
                 onChange={(e) => setTransferAmount(e.target.value)}
                 placeholder="e.g. 50000"
-                className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
               />
               <div className="mt-1 text-xs text-mutedForeground font-heading">
                 You will send: <span className="font-bold text-foreground">{formatMoney(transferNum)}</span>
@@ -389,8 +390,8 @@ export default function Bank() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20 flex items-center justify-between">
+        <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+          <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between`}>
             <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Sent / Received</span>
             <span className="text-xs font-heading text-mutedForeground">{transfers.length} recent</span>
           </div>
@@ -399,14 +400,14 @@ export default function Bank() {
             <div className="p-4 text-sm text-mutedForeground font-heading">No transfers yet.</div>
           ) : (
             <div>
-              <div className="grid grid-cols-12 bg-zinc-800/50 text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20">
+              <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
                 <div className="col-span-4">Type</div>
                 <div className="col-span-4">User</div>
                 <div className="col-span-2 text-right">Amount</div>
                 <div className="col-span-2 text-right">Time</div>
               </div>
               {transfers.map((t) => (
-                <div key={t.id} className="grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs items-center font-heading hover:bg-zinc-800/30 transition-smooth">
+                <div key={t.id} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs items-center font-heading ${styles.raisedHover} transition-smooth`}>
                   <div className="col-span-4">
                     <span className={t.direction === 'sent' ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
                       {t.direction === 'sent' ? 'Sent' : 'Received'}

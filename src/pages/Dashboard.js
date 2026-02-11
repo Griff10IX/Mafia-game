@@ -20,6 +20,7 @@ import {
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import styles from '../styles/noir.module.css';
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -83,7 +84,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-8" data-testid="dashboard-page">
+    <div className={`space-y-8 ${styles.pageContent}`} data-testid="dashboard-page">
       {/* Header */}
       <header className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
@@ -100,7 +101,7 @@ export default function Dashboard() {
 
       {/* Rank progress */}
       {rankProgress && (
-        <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+        <section className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />
@@ -127,7 +128,7 @@ export default function Dashboard() {
                 )}
               </span>
             </div>
-            <div className="h-2.5 bg-zinc-800 rounded-full overflow-hidden border border-primary/20">
+            <div className={`h-2.5 ${styles.raised} rounded-full overflow-hidden border border-primary/20`}>
               <div
                 className="h-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-500 rounded-full"
                 style={{ width: `${rankProgress.rank_points_progress || 0}%` }}
@@ -153,7 +154,7 @@ export default function Dashboard() {
             return (
               <div
                 key={s.id}
-                className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-4 flex items-start gap-3 shadow-lg shadow-primary/5"
+                className={`${styles.panel} rounded-sm p-4 flex items-start gap-3 shadow-lg shadow-primary/5`}
                 data-testid={s.testId}
               >
                 <div className="p-1.5 rounded-sm bg-primary/20 border border-primary/30 shrink-0">
@@ -169,7 +170,7 @@ export default function Dashboard() {
                             {s.value}
                           </p>
                         </TooltipTrigger>
-                        <TooltipContent side="top" className="bg-zinc-900 text-white border border-primary/30 rounded-md px-3 py-2 text-sm font-heading">
+                        <TooltipContent side="top" className={`${styles.surface} ${styles.textForeground} ${styles.borderGold} rounded-md px-3 py-2 text-sm font-heading`}>
                           {s.tooltip}
                         </TooltipContent>
                       </Tooltip>
@@ -200,7 +201,7 @@ export default function Dashboard() {
                 key={a.id}
                 to={a.to}
                 data-testid={`quick-action-${a.id}`}
-                className="group bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-4 flex items-center gap-4 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-smooth"
+                className={`group ${styles.panel} rounded-sm p-4 flex items-center gap-4 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-smooth`}
               >
                 <div className="p-2 rounded-sm bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0">
                   <Icon className="text-primary shrink-0" size={22} />
@@ -217,7 +218,7 @@ export default function Dashboard() {
       </section>
 
       {/* Game systems (compact) */}
-      <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <section className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
           <Zap size={16} className="text-primary" />
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Game systems</span>

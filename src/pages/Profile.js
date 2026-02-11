@@ -4,6 +4,7 @@ import { User as UserIcon, Upload, Search } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import styles from '../styles/noir.module.css';
 
 function formatDateTime(iso) {
   if (!iso) return '-';
@@ -21,7 +22,7 @@ function WealthRankWithTooltip({ wealthRankName, wealthRankRange }) {
         <TooltipTrigger asChild>
           <span className="cursor-default underline decoration-dotted decoration-mutedForeground/50 underline-offset-2">{value}</span>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="bg-zinc-900 text-white border border-primary/30 rounded-md px-3 py-2 text-sm font-heading shadow-lg">
+        <TooltipContent side="bottom" className={`${styles.surface} ${styles.textForeground} ${styles.borderGold} rounded-md px-3 py-2 text-sm font-heading shadow-lg`}>
           {rangeStr}
         </TooltipContent>
       </Tooltip>
@@ -140,16 +141,21 @@ export default function Profile() {
   const base = (process.env.PUBLIC_URL || '').replace(/\/$/, '') || '';
   const robotAvatarSrc = isRobotBodyguard ? `${base}/robot-bodyguard-avatar.png` : null;
   const avatarSrc = preview || profile.avatar_url || robotAvatarSrc;
-  const status = profile.is_dead ? 'Dead (Offline)' : profile.online ? 'Alive (Online)' : 'Alive (Offline)';
-  const statusClass = profile.is_dead
-    ? 'bg-destructive/20 text-destructive border border-destructive/30'
-    : profile.online
-      ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
-      : 'bg-secondary text-mutedForeground border border-border';
+
+  const profileRows = [
+    { label: 'Username', value: profile.username, valueClass: 'text-foreground font-heading font-bold' },
+    { label: 'Crew', value: profile.family_name || '—', valueClass: 'text-foreground font-heading' },
+    { label: 'Rank', value: profile.rank_name, valueClass: 'text-primary font-heading font-bold underline decoration-dotted decoration-primary/50 underline-offset-2' },
+    { label: 'Wealth', value: null, valueClass: 'text-foreground font-heading', component: <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} /> },
+    { label: 'Status', isStatus: true, isDead: profile.is_dead, isOnline: profile.online },
+    { label: 'Messages', value: profile.messages_sent != null ? `${profile.messages_sent} sent / ${profile.messages_received ?? 0} received` : '—', valueClass: 'text-foreground font-heading' },
+    { label: 'Jailbusts', value: String(profile.jail_busts ?? 0), valueClass: 'text-foreground font-heading' },
+    { label: 'Kills', value: String(profile.kills ?? 0), valueClass: 'text-foreground font-heading font-bold' },
+  ];
 
   return (
-    <div className="space-y-6" data-testid="profile-page">
-      <div className="flex items-center justify-center flex-col gap-2 text-center mb-6">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="profile-page">
+      <div className="flex items-center justify-center flex-col gap-2 text-center mb-4">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
           <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Profile</h1>
@@ -157,51 +163,77 @@ export default function Profile() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-        <div className="flex items-start gap-4">
-          <div className="w-20 h-20 rounded-sm overflow-hidden border border-primary/30 bg-zinc-800 flex items-center justify-center shrink-0">
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
+        {/* Header: username in caps + optional avatar & attack */}
+        <div className={`px-4 py-3 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between gap-3`}>
+          <div className={`w-12 h-12 rounded-sm overflow-hidden border border-primary/20 flex items-center justify-center shrink-0 ${styles.surface}`}>
             {avatarSrc ? (
-              <img src={avatarSrc} alt="avatar" className="w-full h-full object-cover" />
+              <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
             ) : (
-              <UserIcon className="text-mutedForeground" size={28} />
+              <UserIcon className="text-mutedForeground" size={22} />
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <h2 className="text-2xl md:text-3xl font-heading font-bold text-primary truncate">{profile.username}</h2>
-              {!isMe && (
-                <button
-                  type="button"
-                  onClick={addToAttackSearches}
-                  className="inline-flex items-center justify-center h-9 w-9 rounded-sm border border-primary/30 bg-zinc-800 hover:bg-zinc-700 text-primary transition-smooth shrink-0"
-                  title="Add to Attack searches"
-                  aria-label="Add to Attack searches"
-                  data-testid="profile-add-to-search"
-                >
-                  <Search size={16} />
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2 mt-1">
-              <p className="text-mutedForeground font-heading text-sm">{profile.rank_name} (Rank {profile.rank})</p>
-              {profile.wealth_rank_name != null && (
-                <p className="text-mutedForeground font-heading text-sm"> · <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} /></p>
-              )}
-              {profile.is_npc ? (
-                <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-heading font-bold bg-zinc-800 border border-primary/10 text-mutedForeground">
-                  NPC
-                </span>
-              ) : null}
-              <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] uppercase tracking-wider font-heading font-bold border ${statusClass}`}>
-                Status: {status}
-              </span>
-            </div>
-          </div>
+          <h2 className="flex-1 text-lg md:text-xl font-heading font-bold text-foreground uppercase tracking-wider truncate text-center" data-testid="profile-username">
+            {profile.username}
+          </h2>
+          {!isMe ? (
+            <button
+              type="button"
+              onClick={addToAttackSearches}
+              className={`inline-flex items-center justify-center h-9 w-9 rounded-sm border border-primary/30 ${styles.surface} ${styles.raisedHover} text-primary transition-smooth shrink-0`}
+              title="Add to Attack searches"
+              aria-label="Add to Attack searches"
+              data-testid="profile-add-to-search"
+            >
+              <Search size={16} />
+            </button>
+          ) : (
+            <div className="w-9" />
+          )}
         </div>
+
+        {/* Rows: label left, value right */}
+        <div className="divide-y divide-primary/10">
+          {profileRows.map((row) => (
+            <div key={row.label} className="grid grid-cols-12 gap-3 px-4 py-3 items-center">
+              <div className="col-span-4 sm:col-span-3 text-left">
+                <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">{row.label}:</span>
+              </div>
+              <div className="col-span-8 sm:col-span-9 text-right">
+                {row.component != null ? (
+                  <span className={row.valueClass}>{row.component}</span>
+                ) : row.isStatus ? (
+                  <span className="font-heading">
+                    {row.isDead && <span className="text-destructive">Dead (Offline)</span>}
+                    {!row.isDead && row.isOnline && (
+                      <>
+                        <span className="text-foreground">Alive </span>
+                        <span className="text-emerald-400">(Online)</span>
+                      </>
+                    )}
+                    {!row.isDead && !row.isOnline && (
+                      <span className="text-foreground">Alive (Offline)</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className={row.valueClass}>{row.value}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {profile.is_npc && (
+          <div className="px-4 py-2 border-t border-primary/10">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-heading font-bold ${styles.surface} border border-primary/10 text-mutedForeground`}>
+              NPC
+            </span>
+          </div>
+        )}
       </div>
 
       {isMe && (
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden max-w-xl">
+        <div className={`${styles.panel} rounded-sm overflow-hidden max-w-xl mx-auto`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Avatar</span>
@@ -213,7 +245,7 @@ export default function Profile() {
                 type="file"
                 accept="image/*"
                 onChange={(e) => onPickFile(e.target.files?.[0])}
-                className="text-sm bg-zinc-800/80 border border-primary/20 rounded-sm px-2 py-1.5 focus:border-primary/50 focus:outline-none file:mr-2 file:bg-primary/20 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 file:text-xs file:font-heading"
+                className={`text-sm ${styles.input} border border-primary/20 rounded-sm px-2 py-1.5 focus:border-primary/50 focus:outline-none file:mr-2 file:bg-primary/20 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 file:text-xs file:font-heading`}
                 data-testid="avatar-file"
               />
               <button
@@ -231,45 +263,11 @@ export default function Profile() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-3 py-1.5 bg-zinc-800/50 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Name</span>
-          </div>
-          <div className="p-3 text-lg font-heading font-bold text-foreground">{profile.username}</div>
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20`}>
+          <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Account created</span>
         </div>
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-3 py-1.5 bg-zinc-800/50 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Rank</span>
-          </div>
-          <div className="p-3 text-lg font-heading font-bold text-foreground">{profile.rank_name}</div>
-        </div>
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-3 py-1.5 bg-zinc-800/50 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Wealth</span>
-          </div>
-          <div className="p-3 text-lg font-heading font-bold text-foreground">
-            <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} />
-          </div>
-        </div>
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-3 py-1.5 bg-zinc-800/50 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Kills</span>
-          </div>
-          <div className="p-3 text-lg font-heading font-bold text-foreground">{profile.kills}</div>
-        </div>
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-3 py-1.5 bg-zinc-800/50 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Jail Busts</span>
-          </div>
-          <div className="p-3 text-lg font-heading font-bold text-foreground">{profile.jail_busts}</div>
-        </div>
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden md:col-span-2">
-          <div className="px-3 py-1.5 bg-zinc-800/50 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Account created</span>
-          </div>
-          <div className="p-3 text-lg font-heading font-bold text-foreground">{formatDateTime(profile.created_at)}</div>
-        </div>
+        <div className="px-4 py-3 text-foreground font-heading">{formatDateTime(profile.created_at)}</div>
       </div>
     </div>
   );

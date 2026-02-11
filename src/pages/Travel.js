@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Plane, Car, Clock, MapPin, Zap } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 export default function Travel() {
   const [travelInfo, setTravelInfo] = useState(null);
@@ -87,7 +88,7 @@ export default function Travel() {
           <div className="h-px w-8 bg-primary/60" />
         </div>
         <div className="text-4xl font-heading font-bold text-foreground">{travelTime}s</div>
-        <div className="w-64 h-2 bg-zinc-800 rounded-full overflow-hidden border border-primary/20">
+        <div className={`w-64 h-2 ${styles.raised} rounded-full overflow-hidden border border-primary/20`}>
           <div className="h-full bg-gradient-to-r from-primary to-yellow-600 animate-pulse" style={{ width: '100%' }}></div>
         </div>
       </div>
@@ -95,7 +96,7 @@ export default function Travel() {
   }
 
   return (
-    <div className="space-y-6" data-testid="travel-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="travel-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -105,7 +106,7 @@ export default function Travel() {
         <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">Move between cities · find new opportunities</p>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
+      <div className={`${styles.panel} rounded-sm overflow-hidden p-4`}>
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-sm flex items-center justify-center bg-primary/20 border border-primary/30">
             <MapPin className="text-primary" size={24} />
@@ -127,7 +128,7 @@ export default function Travel() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {travelInfo?.destinations?.map(dest => (
-          <div key={dest} className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5" data-testid={`dest-${dest}`}>
+          <div key={dest} className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`} data-testid={`dest-${dest}`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -156,7 +157,7 @@ export default function Travel() {
               {travelInfo?.custom_car && (
                 <button
                   onClick={() => handleTravel(dest, 'custom')}
-                  className="w-full flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 border border-primary/30 px-3 py-2 rounded-sm transition-smooth"
+                  className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth`}
                 >
                   <span className="flex items-center gap-2">
                     <Zap size={16} className="text-primary" />
@@ -170,7 +171,7 @@ export default function Travel() {
                 <button
                   key={car.user_car_id}
                   onClick={() => handleTravel(dest, car.user_car_id)}
-                  className="w-full flex items-center justify-between bg-zinc-800 hover:bg-zinc-700 border border-primary/30 px-3 py-2 rounded-sm transition-smooth"
+                  className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth`}
                 >
                   <span className="flex items-center gap-2">
                     <Car size={16} className="text-primary" />
@@ -188,7 +189,7 @@ export default function Travel() {
         ))}
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

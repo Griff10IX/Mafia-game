@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Building, TrendingUp, DollarSign, Crosshair, Shield } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -89,7 +90,7 @@ export default function Properties() {
   }
 
   return (
-    <div className="space-y-6" data-testid="properties-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="properties-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -105,7 +106,7 @@ export default function Properties() {
           <div
             key={property.id}
             data-testid={`property-card-${property.id}`}
-            className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden hover:border-primary/60 transition-smooth shadow-lg shadow-primary/5"
+            className={`${styles.panel} rounded-sm overflow-hidden hover:border-primary/60 transition-smooth shadow-lg shadow-primary/5`}
           >
             {/* Card Header */}
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
@@ -170,7 +171,7 @@ export default function Properties() {
                       <button
                         onClick={() => buyProperty(property.id)}
                         data-testid={`upgrade-property-${property.id}`}
-                        className="w-full bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth"
+                        className={`w-full ${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth`}
                       >
                         <div className="flex items-center justify-center gap-2">
                           <TrendingUp size={14} />
@@ -195,7 +196,7 @@ export default function Properties() {
       </div>
 
       {/* Info Box */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

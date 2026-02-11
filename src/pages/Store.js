@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ShoppingBag, Zap, Check, Shield, Star } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 const PACKAGES = [
   { id: 'starter', name: 'Starter Pack', points: 100, price: 4.99, popular: false },
@@ -175,7 +176,7 @@ export default function Store() {
   }
 
   return (
-    <div className="space-y-8" data-testid="store-page">
+    <div className={`space-y-8 ${styles.pageContent}`} data-testid="store-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -193,7 +194,7 @@ export default function Store() {
       )}
 
       {user && (
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-6">
+        <div className={`${styles.panel} rounded-sm overflow-hidden p-6`}>
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-heading font-bold text-primary mb-1">Your Points</h3>
@@ -213,7 +214,7 @@ export default function Store() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Premium Rank Bar */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
               <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Premium Rank Bar</span>
               <Star className="text-primary" size={20} />
@@ -228,7 +229,7 @@ export default function Store() {
                 <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Shows amounts needed</div>
               </div>
               {user?.premium_rank_bar ? (
-                <div className="bg-zinc-800 border border-primary/20 rounded-sm py-3 text-center text-primary font-heading font-bold uppercase tracking-wider">
+                <div className={`${styles.surface} border border-primary/20 rounded-sm py-3 text-center text-primary font-heading font-bold uppercase tracking-wider`}>
                   Owned
                 </div>
               ) : (
@@ -243,7 +244,7 @@ export default function Store() {
           </div>
 
           {/* Garage Batch Limit */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
               <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Garage Batch Upgrade</span>
               <Zap className="text-primary" size={20} />
@@ -266,7 +267,7 @@ export default function Store() {
           </div>
 
           {/* Booze Run capacity */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
               <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Booze Run Capacity</span>
               <ShoppingBag className="text-primary" size={20} />
@@ -305,7 +306,7 @@ export default function Store() {
               <p className="text-xs text-mutedForeground font-heading mt-1">{event.message}</p>
             </div>
           )}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-6 mb-6">
+          <div className={`${styles.panel} rounded-sm overflow-hidden p-6 mb-6`}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-heading font-bold text-primary mb-1">Bodyguard Slots</h3>
@@ -329,7 +330,7 @@ export default function Store() {
             {bodyguards.map((bg) => (
               <div
                 key={bg.slot_number}
-                className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5"
+                className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}
               >
                 <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
                   <span className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Slot {bg.slot_number}</span>
@@ -340,7 +341,7 @@ export default function Store() {
                     <p className="text-sm font-heading text-mutedForeground mb-4">{bg.bodyguard_username}</p>
                   )}
                   {bg.bodyguard_username ? (
-                    <div className="bg-zinc-800/50 border border-primary/20 rounded-sm p-4">
+                    <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-4`}>
                       <div className="flex items-center gap-2 text-sm font-heading">
                         <Shield size={16} className="text-primary" />
                         <span className="text-foreground font-bold">
@@ -355,7 +356,7 @@ export default function Store() {
                     <div className="space-y-2">
                       <button
                         onClick={() => hireBodyguard(bg.slot_number, false)}
-                        className="w-full bg-zinc-800 border border-primary/30 text-foreground hover:bg-zinc-700 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-sm transition-smooth"
+                        className={`w-full ${styles.surface} ${styles.raisedHover} border border-primary/30 text-foreground rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-sm transition-smooth`}
                       >
                         Hire Human ({getHireCost(bg.slot_number, false)} pts)
                       </button>
@@ -390,7 +391,7 @@ export default function Store() {
             <div
               key={pkg.id}
               data-testid={`package-${pkg.id}`}
-              className={`relative bg-gradient-to-b from-zinc-900 to-black border rounded-sm overflow-hidden p-6 transition-smooth shadow-lg ${
+              className={`relative ${styles.panel} border rounded-sm overflow-hidden p-6 transition-smooth shadow-lg ${
                 pkg.popular
                   ? 'border-primary/50 shadow-primary/10'
                   : 'border-primary/30 hover:border-primary/50 hover:shadow-primary/5'
@@ -422,7 +423,7 @@ export default function Store() {
                 className={`w-full rounded-sm font-heading font-bold uppercase tracking-wider py-3 transition-smooth disabled:opacity-50 ${
                   pkg.popular
                     ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50'
-                    : 'bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700 hover:text-primaryForeground'
+                    : `${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary`
                 }`}
               >
                 {loading ? 'Processing...' : 'Purchase'}
@@ -432,7 +433,7 @@ export default function Store() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

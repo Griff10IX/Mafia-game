@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -39,7 +40,7 @@ function RaidTargetFamilyBlock({ target, attackLoading, onRaid }) {
   const rackets = target.rackets || [];
   const profileSlug = target.family_tag || target.family_id || '';
   return (
-    <div className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3">
+    <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
       <p className="font-heading font-medium text-foreground text-sm">
         {target.family_name} <span className="text-primary">[{target.family_tag}]</span> · Treasury {formatMoney(target.treasury)}
         {profileSlug && (
@@ -53,7 +54,7 @@ function RaidTargetFamilyBlock({ target, attackLoading, onRaid }) {
           const key = `${target.family_id}-${r.racket_id}`;
           const loading = attackLoading === key;
           return (
-            <div key={r.racket_id} className="inline-flex items-center gap-2 bg-zinc-900/80 border border-primary/10 rounded px-2 py-1.5">
+            <div key={r.racket_id} className={`inline-flex items-center gap-2 ${styles.surfaceMuted} border border-primary/10 rounded px-2 py-1.5`}>
               <span className="text-xs text-mutedForeground font-heading">{r.racket_name} Lv.{r.level}</span>
               <span className="text-xs font-heading text-primary">{formatMoney(r.potential_take)} · {r.success_chance_pct}%</span>
               <button
@@ -375,7 +376,7 @@ export default function FamilyPage() {
   const canUpgradeRacket = myRole && ['boss', 'underboss', 'consigliere'].includes(myRole);
 
   return (
-    <div className="space-y-5" data-testid="families-page">
+    <div className={`space-y-5 ${styles.pageContent}`} data-testid="families-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -402,7 +403,7 @@ export default function FamilyPage() {
             >
               <Swords className="text-red-500 shrink-0" size={24} />
               <div>
-                <p className="font-heading font-bold text-red-400 uppercase tracking-wider">Your Family Is At War</p>
+                <p className="font-heading font-bold text-red-400 uppercase tracking-wider`}>Your Family Is At War</p>
                 <p className="text-xs text-mutedForeground">
                   vs {entry.war?.other_family_name || 'Enemy'} [{entry.war?.other_family_tag || '?'}] — Click for details
                 </p>
@@ -411,22 +412,22 @@ export default function FamilyPage() {
           ))}
 
           {/* Family Info Card */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/40 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} border border-primary/40 rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
             <div className="px-4 py-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-heading font-bold text-primary tracking-wide">{family.name} <span className="text-primary/70">[{family.tag}]</span></h2>
-                  <p className="text-xs text-mutedForeground font-heading">Your role: <span className="text-primary font-bold uppercase tracking-wider">{ROLE_LABELS[myRole] || myRole}</span></p>
+                  <p className="text-xs text-mutedForeground font-heading">Your role: <span className="text-primary font-bold uppercase tracking-wider`}>{ROLE_LABELS[myRole] || myRole}</span></p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider">Treasury</p>
+                    <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider`}>Treasury</p>
                     <p className="text-lg font-heading font-bold text-primary">{formatMoney(family.treasury)}</p>
                   </div>
                   <button
                     type="button"
                     onClick={handleLeave}
-                    className="flex items-center gap-2 px-3 py-2 rounded-sm border border-primary/30 bg-zinc-800 text-mutedForeground hover:text-red-400 hover:border-red-500/50 transition-smooth text-xs font-heading uppercase tracking-wider"
+                    className={`flex items-center gap-2 px-3 py-2 rounded-sm border border-primary/30 ${styles.surface} text-mutedForeground hover:text-red-400 hover:border-red-500/50 transition-smooth text-xs font-heading uppercase tracking-wider`}
                   >
                     <LogOut size={14} /> Leave
                   </button>
@@ -436,7 +437,7 @@ export default function FamilyPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+            <div className={`${styles.panel} rounded-sm overflow-hidden`}>
               <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
                 <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
                   <DollarSign size={14} /> Treasury
@@ -449,7 +450,7 @@ export default function FamilyPage() {
                     placeholder="Amount"
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
-                    className="flex-1 bg-zinc-800/80 border border-primary/20 rounded-sm px-3 py-2 text-foreground font-heading text-sm focus:border-primary/50 focus:outline-none"
+                    className="flex-1 ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading text-sm focus:border-primary/50 focus:outline-none`}
                   />
                   <button type="submit" className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50">
                     Deposit
@@ -462,9 +463,9 @@ export default function FamilyPage() {
                       placeholder="Withdraw"
                       value={withdrawAmount}
                       onChange={(e) => setWithdrawAmount(e.target.value)}
-                      className="flex-1 bg-zinc-800/80 border border-primary/20 rounded-sm px-3 py-2 text-foreground font-heading text-sm focus:border-primary/50 focus:outline-none"
+                      className="flex-1 ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading text-sm focus:border-primary/50 focus:outline-none`}
                     />
-                    <button type="submit" className="bg-zinc-800 border border-primary/30 text-foreground px-3 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider hover:bg-zinc-700">
+                    <button type="submit" className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-foreground px-3 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider`}>
                       Withdraw
                     </button>
                   </form>
@@ -473,7 +474,7 @@ export default function FamilyPage() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -487,7 +488,7 @@ export default function FamilyPage() {
               <p className="text-xs text-mutedForeground mb-3 font-heading">Collect income on cooldown. Upgrade with family treasury.</p>
               {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
                 <div className="mb-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/40 rounded-sm p-2">
-                  <p className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Event: {event.name}</p>
+                  <p className="text-xs font-heading font-bold text-primary uppercase tracking-wider`}>Event: {event.name}</p>
                   <p className="text-xs text-mutedForeground mt-1">{event.message}</p>
                 </div>
               )}
@@ -498,7 +499,7 @@ export default function FamilyPage() {
                   const timeLeft = formatTimeLeft(r.next_collect_at);
                   const onCooldown = timeLeft && timeLeft !== 'Ready';
                   return (
-                    <div key={r.id} className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3">
+                    <div key={r.id} className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
                       <p className="font-heading font-bold text-foreground text-sm">{r.name}</p>
                       <p className="text-xs text-mutedForeground mb-1">{r.description}</p>
                       <p className="text-xs text-mutedForeground font-heading">
@@ -524,7 +525,7 @@ export default function FamilyPage() {
                           <button
                             type="button"
                             onClick={() => upgradeRacket(r.id)}
-                            className="bg-zinc-800 border border-primary/30 px-2 py-1 rounded text-xs font-heading font-bold uppercase tracking-wider text-foreground hover:bg-zinc-700"
+                            className={`${styles.surface} ${styles.raisedHover} border border-primary/30 px-2 py-1 rounded text-xs font-heading font-bold uppercase tracking-wider text-foreground`}
                           >
                             Upgrade
                           </button>
@@ -535,13 +536,13 @@ export default function FamilyPage() {
                 })}
               </div>
               <p className="text-xs text-mutedForeground mt-3 font-heading italic">Upgrades improve defense. Lose a war = lose your rackets.</p>
-              <a href="#raid-enemy-rackets" className="inline-flex items-center gap-1.5 mt-3 text-xs font-heading font-bold text-primary hover:underline uppercase tracking-wider">
+              <a href="#raid-enemy-rackets" className="inline-flex items-center gap-1.5 mt-3 text-xs font-heading font-bold text-primary hover:underline uppercase tracking-wider`}>
                 <Crosshair size={14} /> Raid Enemy Rackets →
               </a>
             </div>
           </div>
 
-          <div id="raid-enemy-rackets" className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden scroll-mt-4">
+          <div id="raid-enemy-rackets" className={`${styles.panel} rounded-sm overflow-hidden scroll-mt-4`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -588,7 +589,7 @@ export default function FamilyPage() {
                     Check database
                   </button>
                   {dbSnapshot && (
-                    <div className="mt-3 p-3 bg-zinc-800/50 rounded border border-primary/20 text-xs font-mono space-y-2">
+                    <div className={`mt-3 p-3 ${styles.surfaceMuted} rounded border border-primary/20 text-xs font-mono space-y-2`}>
                       <p className="text-foreground font-semibold">Why no targets? ({dbSnapshot.total_families} families)</p>
                       <p className="text-mutedForeground">Your family: {dbSnapshot.my_family_id || '—'}</p>
                       {(dbSnapshot.other_families || dbSnapshot.db_snapshot || []).map((f, i) => {
@@ -613,7 +614,7 @@ export default function FamilyPage() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -627,11 +628,11 @@ export default function FamilyPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-primary/20 bg-zinc-800/50">
-                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Member</th>
-                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Role</th>
-                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Rank</th>
-                      {canManage && <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Actions</th>}
+                    <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Member</th>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Role</th>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Rank</th>
+                      {canManage && <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -667,7 +668,7 @@ export default function FamilyPage() {
                   <select
                     value={assignRole}
                     onChange={(e) => setAssignRole(e.target.value)}
-                    className="bg-zinc-800 border border-primary/20 rounded px-2 py-1 text-sm font-heading focus:border-primary/50 focus:outline-none"
+                    className={`${styles.surface} border border-primary/20 rounded px-2 py-1 text-sm font-heading focus:border-primary/50 focus:outline-none`}
                   >
                     {(config?.roles || []).filter((r) => r !== 'boss').map((role) => (
                       <option key={role} value={role}>{ROLE_LABELS[role]}</option>
@@ -676,7 +677,7 @@ export default function FamilyPage() {
                   <select
                     value={assignUserId}
                     onChange={(e) => setAssignUserId(e.target.value)}
-                    className="bg-zinc-800 border border-primary/20 rounded px-2 py-1 text-sm font-heading focus:border-primary/50 focus:outline-none"
+                    className={`${styles.surface} border border-primary/20 rounded px-2 py-1 text-sm font-heading focus:border-primary/50 focus:outline-none`}
                   >
                     <option value="">Select member</option>
                     {members.filter((m) => m.role !== 'boss').map((m) => (
@@ -694,7 +695,7 @@ export default function FamilyPage() {
       ) : (
         <>
           {/* Create Family */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -705,25 +706,25 @@ export default function FamilyPage() {
             <div className="p-4">
               <form onSubmit={handleCreate} className="flex flex-wrap gap-3 items-end">
                 <div>
-                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider">Name (2–30)</label>
+                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider`}>Name (2–30)</label>
                   <input
                     type="text"
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
                     placeholder="Five Families"
                     maxLength={30}
-                    className="bg-zinc-800/80 border border-primary/20 rounded-sm px-3 py-2 text-foreground w-48 font-heading focus:border-primary/50 focus:outline-none"
+                    className={`${styles.input} border border-primary/20 rounded-sm px-3 py-2 w-48 font-heading focus:border-primary/50 focus:outline-none`}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider">Tag (2–4)</label>
+                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider`}>Tag (2–4)</label>
                   <input
                     type="text"
                     value={createTag}
                     onChange={(e) => setCreateTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
                     placeholder="FF"
                     maxLength={4}
-                    className="bg-zinc-800/80 border border-primary/20 rounded-sm px-3 py-2 text-foreground w-20 font-heading uppercase focus:border-primary/50 focus:outline-none"
+                    className={`${styles.input} border border-primary/20 rounded-sm px-3 py-2 w-20 font-heading uppercase focus:border-primary/50 focus:outline-none`}
                   />
                 </div>
                 <button type="submit" className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50">
@@ -735,7 +736,7 @@ export default function FamilyPage() {
           </div>
 
           {/* Join Family */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -746,11 +747,11 @@ export default function FamilyPage() {
             <div className="p-4">
               <form onSubmit={handleJoin} className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider">Family</label>
+                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider`}>Family</label>
                   <select
                     value={joinId}
                     onChange={(e) => setJoinId(e.target.value)}
-                    className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm px-3 py-2 text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                    className="w-full ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading focus:border-primary/50 focus:outline-none`}
                   >
                     <option value="">Select family</option>
                     {families.map((f) => (
@@ -758,7 +759,7 @@ export default function FamilyPage() {
                     ))}
                   </select>
                 </div>
-                <button type="submit" className="bg-zinc-800 border border-primary/30 text-primary px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider hover:bg-zinc-700 transition-smooth">
+                <button type="submit" className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider transition-smooth`}>
                   Join as Associate
                 </button>
               </form>
@@ -767,7 +768,7 @@ export default function FamilyPage() {
         </>
       )}
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
@@ -779,11 +780,11 @@ export default function FamilyPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-primary/20 bg-zinc-800/50">
-                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Name</th>
-                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Tag</th>
-                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Members</th>
-                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Treasury</th>
+                <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
+                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Name</th>
+                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Tag</th>
+                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Members</th>
+                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Treasury</th>
                 </tr>
               </thead>
               <tbody>
@@ -809,7 +810,7 @@ export default function FamilyPage() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
@@ -826,11 +827,11 @@ export default function FamilyPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-primary/20 bg-zinc-800/50">
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Sides</th>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Result</th>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Prize</th>
-                    <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Ended</th>
+                  <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
+                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Sides</th>
+                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Result</th>
+                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Prize</th>
+                    <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Ended</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -894,7 +895,7 @@ export default function FamilyPage() {
 
               {activeWars[selectedWarIndex].stats && (
                 <>
-                  <div className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3">
+                  <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
                     <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
                       <Shield size={14} /> Most Bodyguard Kills
                     </h3>
@@ -925,7 +926,7 @@ export default function FamilyPage() {
                     </div>
                   </div>
 
-                  <div className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3">
+                  <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
                     <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
                       <Skull size={14} /> Most Bodyguards Lost
                     </h3>
@@ -956,7 +957,7 @@ export default function FamilyPage() {
                     </div>
                   </div>
 
-                  <div className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3">
+                  <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
                     <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
                       <Trophy size={14} /> MVP (Impact Score)
                     </h3>

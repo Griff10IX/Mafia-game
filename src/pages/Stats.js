@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { TrendingUp } from 'lucide-react';
 import api from '../utils/api';
+import styles from '../styles/noir.module.css';
 
 function formatNumber(n) {
   if (n == null) return '—';
@@ -27,7 +28,7 @@ function formatDateTime(iso) {
 function StatCard({ title, rows }) {
   const safeRows = Array.isArray(rows) ? rows : [];
   return (
-    <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+    <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
       <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
         <div className="flex items-center gap-2">
           <div className="w-6 h-px bg-primary/50" />
@@ -37,7 +38,7 @@ function StatCard({ title, rows }) {
       </div>
       <div className="divide-y divide-primary/10">
         {safeRows.map((r) => (
-          <div key={r.label} className="grid grid-cols-12 px-4 py-2.5 text-xs font-heading hover:bg-zinc-800/30 transition-smooth">
+          <div key={r.label} className={`grid grid-cols-12 px-4 py-2.5 text-xs font-heading ${styles.raisedHover} transition-smooth`}>
             <div className="col-span-7 text-mutedForeground">{r.label}</div>
             <div className="col-span-5 text-right font-bold text-foreground">{r.value}</div>
           </div>
@@ -132,7 +133,7 @@ export default function Stats() {
   }
 
   return (
-    <div className="space-y-6" data-testid="stats-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="stats-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -156,7 +157,7 @@ export default function Stats() {
           <StatCard title="Vehicle Stats" rows={vehicleRows} />
         </div>
 
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />
@@ -166,7 +167,7 @@ export default function Stats() {
           </div>
           <div className="divide-y divide-primary/10">
             {rankStats.map((r) => (
-              <div key={r.rank_id} className="grid grid-cols-12 px-4 py-2.5 text-xs font-heading hover:bg-zinc-800/30 transition-smooth">
+              <div key={r.rank_id} className={`grid grid-cols-12 px-4 py-2.5 text-xs font-heading ${styles.raisedHover} transition-smooth`}>
                 <div className="col-span-6 text-foreground font-bold truncate">{r.rank_name}</div>
                 <div className="col-span-3 text-center text-emerald-400 font-bold">{formatNumber(r.alive)}</div>
                 <div className="col-span-3 text-right text-mutedForeground">{formatNumber(r.dead)}</div>
@@ -179,8 +180,8 @@ export default function Stats() {
         </div>
       </div>
 
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-        <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between flex-wrap gap-2`}>
           <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Last 15 Kills</span>
           <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading select-none">
             <input
@@ -194,7 +195,7 @@ export default function Stats() {
         </div>
 
         <div>
-          <div className="grid grid-cols-12 bg-zinc-800/50 text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20">
+          <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
             <div className="col-span-4">Victim</div>
             <div className="col-span-3">Rank</div>
             <div className="col-span-3">Killer</div>
@@ -205,7 +206,7 @@ export default function Stats() {
             <div className="px-4 py-4 text-sm text-mutedForeground font-heading">No kills yet.</div>
           ) : (
             recentKills.map((k) => (
-              <div key={k.id} className="grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs font-heading hover:bg-zinc-800/30 transition-smooth">
+              <div key={k.id} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs font-heading ${styles.raisedHover} transition-smooth`}>
                 <div className="col-span-4 text-foreground font-bold truncate">{k.victim_username}</div>
                 <div className="col-span-3 text-mutedForeground truncate">{k.victim_rank_name || '—'}</div>
                 <div className="col-span-3 text-mutedForeground truncate">

@@ -3,6 +3,7 @@ import { Shield, Plus, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function getRobotBodyguardImageUrl(slotNumber) {
   const base = (process.env.PUBLIC_URL || '').replace(/\/$/, '') || '';
@@ -91,7 +92,7 @@ export default function Bodyguards() {
   }
 
   return (
-    <div className="space-y-6" data-testid="bodyguards-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="bodyguards-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -110,7 +111,7 @@ export default function Bodyguards() {
       )}
 
       {/* Available Slots Card */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+      <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -148,13 +149,13 @@ export default function Bodyguards() {
           <div
             key={bg.slot_number}
             data-testid={`bodyguard-slot-${bg.slot_number}`}
-            className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5"
+            className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}
           >
             {/* Slot Header */}
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-start gap-3">
                 {bg.bodyguard_username && bg.is_robot ? (
-                  <div className="w-10 h-10 rounded-sm overflow-hidden border border-primary/30 bg-zinc-800 flex-shrink-0 relative">
+                  <div className={`w-10 h-10 rounded-sm overflow-hidden border border-primary/30 ${styles.surface} flex-shrink-0 relative`}>
                     <img
                       src={getRobotBodyguardImageUrl(bg.slot_number)}
                       alt="Robot bodyguard"
@@ -165,7 +166,7 @@ export default function Bodyguards() {
                         if (fallback) fallback.classList.remove('hidden');
                       }}
                     />
-                    <div className="absolute inset-0 hidden flex items-center justify-center bg-zinc-800 text-primary/60">
+                    <div className={`absolute inset-0 hidden flex items-center justify-center ${styles.surface} text-primary/60`}>
                       <Shield size={18} />
                     </div>
                   </div>
@@ -191,7 +192,7 @@ export default function Bodyguards() {
             {/* Slot Body */}
             <div className="p-4">
               {bg.bodyguard_username ? (
-                <div className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3">
+                <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
                   <div className="flex items-center gap-2 text-sm mb-2">
                     <Users size={14} className="text-primary" />
                     <span className="text-foreground font-heading font-medium">
@@ -219,7 +220,7 @@ export default function Bodyguards() {
                     <button
                       onClick={() => upgradeArmour(bg.slot_number)}
                       disabled={(bg.armour_level || 0) >= 5}
-                      className="w-full bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth disabled:opacity-50"
+                      className={`w-full ${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth disabled:opacity-50`}
                       data-testid={`upgrade-armour-${bg.slot_number}`}
                     >
                       Upgrade Armour
@@ -238,13 +239,13 @@ export default function Bodyguards() {
                   <button
                     onClick={() => hireBodyguard(bg.slot_number, true)}
                     data-testid={`hire-robot-${bg.slot_number}`}
-                    className="w-full bg-zinc-800 border border-primary/30 text-primary hover:bg-zinc-700 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth"
+                    className={`w-full ${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth`}
                   >
                     Hire Robot ({getHireCost(bg.slot_number, true)} pts)
                   </button>
                 </div>
               ) : (
-                <div className="bg-zinc-800/30 border border-primary/10 rounded-sm p-4 text-center">
+                <div className={`${styles.surfaceMuted} border border-primary/10 rounded-sm p-4 text-center`}>
                   <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider">Purchase this slot first</p>
                 </div>
               )}
@@ -254,7 +255,7 @@ export default function Bodyguards() {
       </div>
 
       {/* Info Box */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />

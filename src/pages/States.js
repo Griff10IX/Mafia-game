@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { MapPin, Dice5, Spade, Trophy, CircleDot } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatMaxBet(n) {
   if (n == null) return '—';
@@ -41,7 +42,7 @@ export default function States() {
   const { cities, games, dice_owners } = data;
 
   return (
-    <div className="max-w-5xl mx-auto w-full space-y-8" data-testid="states-page">
+    <div className={`max-w-5xl mx-auto w-full space-y-8 ${styles.pageContent}`} data-testid="states-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -55,7 +56,7 @@ export default function States() {
         {cities.map((city) => (
           <div
             key={city}
-            className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5"
+            className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}
             data-testid={`state-card-${city.replace(/\s+/g, '-').toLowerCase()}`}
           >
             {/* City header: name + optional residents + HOT/COLD event placeholder */}
@@ -75,7 +76,7 @@ export default function States() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80">
+                  <tr className={`${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80`}>
                     <th className="text-left py-2 px-3">Casino</th>
                     <th className="text-left py-2 px-3">Owner</th>
                     <th className="text-left py-2 px-3">Wealth</th>
