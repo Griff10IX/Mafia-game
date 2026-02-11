@@ -29,6 +29,7 @@ export default function Crimes() {
   const [tick, setTick] = useState(0);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
+  const [committingId, setCommittingId] = useState(null);
 
   const fetchCrimes = async () => {
     try {
@@ -59,20 +60,34 @@ export default function Crimes() {
     return () => clearInterval(id);
   }, [crimes]);
 
-  const commitCrime = async (crimeId) => {
+  const commitCrime = async (crimeId, isRetry = false) => {
+    if (committingId) return;
+    setCommittingId(crimeId);
+    let willRetry = false;
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
       if (response.data.success) {
         toast.success(response.data.message);
         refreshUser();
       } else {
-        toast.error(response.data.message);
+        toast(response.data.message, { description: 'Attempt was recorded — wait for cooldown to try again.' });
       }
       fetchCrimes();
     } catch (error) {
+      const status = error.response?.status;
       const d = error.response?.data?.detail;
-      const msg = Array.isArray(d) ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : (d || 'Failed to commit crime');
-      toast.error(msg);
+      const backendMsg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : null;
+      const reason = error.code === 'ECONNABORTED' ? 'Request timed out' : error.message === 'Network Error' ? 'Network error' : backendMsg || (status ? `${status} error` : 'Request failed');
+      toast.error(`Failed to commit crime: ${reason}`);
+      willRetry = !isRetry && (error.code === 'ECONNABORTED' || error.message === 'Network Error' || (status && status >= 500));
+      if (willRetry) {
+        await new Promise((r) => setTimeout(r, 800));
+        setCommittingId(null);
+        commitCrime(crimeId, true);
+        return;
+      }
+    } finally {
+      if (!willRetry) setCommittingId(null);
     }
   };
 
@@ -175,10 +190,11 @@ export default function Crimes() {
                     <button
                       type="button"
                       onClick={() => commitCrime(crime.id)}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth"
+                      disabled={committingId !== null}
+                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth disabled:opacity-60 disabled:cursor-not-allowed"
                       data-testid={`commit-crime-${crime.id}`}
                     >
-                      Commit
+                      {committingId === crime.id ? '...' : 'Commit'}
                     </button>
                   ) : onCooldown ? (
                     <span className="inline-flex items-center justify-end gap-1 text-xs text-mutedForeground font-heading">

@@ -18,7 +18,7 @@ function formatCooldown(isoUntil) {
 export default function GTA() {
   const [options, setOptions] = useState([]);
   const [garage, setGarage] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [attemptingOptionId, setAttemptingOptionId] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [, setTick] = useState(0);
@@ -58,11 +58,12 @@ export default function GTA() {
     }
   };
 
-  const attemptGTA = async (optionId) => {
-    setLoading(true);
+  const attemptGTA = async (optionId, isRetry = false) => {
+    if (attemptingOptionId) return;
+    setAttemptingOptionId(optionId);
+    let willRetry = false;
     try {
       const response = await api.post('/gta/attempt', { option_id: optionId });
-      
       if (response.data.success) {
         const car = response.data.car;
         const img = car?.image;
@@ -90,11 +91,20 @@ export default function GTA() {
       }
       fetchData();
     } catch (error) {
-      const detail = error.response?.data?.detail;
-      const msg = Array.isArray(detail) ? detail.map((x) => x.msg || x.loc?.join('.')).join('; ') : (detail || 'Failed to steal car');
-      toast.error(msg);
+      const status = error.response?.status;
+      const d = error.response?.data?.detail;
+      const backendMsg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : null;
+      const reason = error.code === 'ECONNABORTED' ? 'Request timed out' : error.message === 'Network Error' ? 'Network error' : backendMsg || (status ? `${status} error` : 'Request failed');
+      toast.error(`Failed to steal car: ${reason}`);
+      willRetry = !isRetry && (error.code === 'ECONNABORTED' || error.message === 'Network Error' || (status && status >= 500));
+      if (willRetry) {
+        await new Promise((r) => setTimeout(r, 800));
+        setAttemptingOptionId(null);
+        attemptGTA(optionId, true);
+        return;
+      }
     } finally {
-      setLoading(false);
+      if (!willRetry) setAttemptingOptionId(null);
     }
   };
 
@@ -216,10 +226,10 @@ export default function GTA() {
                         type="button"
                         onClick={() => attemptGTA(option.id)}
                         data-testid={`attempt-gta-${option.id}`}
-                        disabled={loading}
-                        className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 min-w-[66px] transition-smooth"
+                        disabled={attemptingOptionId !== null}
+                        className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-60 disabled:cursor-not-allowed min-w-[66px] transition-smooth"
                       >
-                        {loading ? '...' : 'Steal'}
+                        {attemptingOptionId === option.id ? '...' : 'Steal'}
                       </button>
                     )}
                   </div>

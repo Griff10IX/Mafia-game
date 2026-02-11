@@ -99,36 +99,39 @@ export default function FamilyPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [listRes, myRes, configRes, historyRes, eventsRes] = await Promise.all([
+      const [listRes, myRes, configRes, historyRes, eventsRes] = await Promise.allSettled([
         api.get('/families'),
         api.get('/families/my'),
         api.get('/families/config').catch(() => ({ data: {} })),
         api.get('/families/wars/history').catch(() => ({ data: { wars: [] } })),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
       ]);
-      setFamilies(listRes.data || []);
-      setMyFamily(myRes.data);
-      setConfig(configRes.data);
-      setWarHistory(historyRes.data?.wars || []);
-      setEvent(eventsRes.data?.event ?? null);
-      setEventsEnabled(!!eventsRes.data?.events_enabled);
-      if (myRes.data?.family) {
-        const [statsRes, targetsRes] = await Promise.all([
-          api.get('/families/war/stats').catch(() => ({ data: { wars: [] } })),
-          api.get('/families/racket-attack-targets', { params: { _: Date.now() } }).catch((err) => {
-            console.warn('Racket attack targets failed:', err?.response?.data || err.message);
-            return { data: { targets: [] } };
-          }),
-        ]);
-        setWarStats(statsRes.data);
-        const targets = targetsRes.data?.targets ?? [];
-        setRacketAttackTargets(targets);
-        if (targets.length === 0 && targetsRes.data?._debug) {
-          setDbSnapshot(targetsRes.data._debug);
+      if (listRes.status === 'fulfilled' && listRes.value?.data) setFamilies(listRes.value.data);
+      if (myRes.status === 'fulfilled' && myRes.value?.data) {
+        setMyFamily(myRes.value.data);
+        if (myRes.value.data?.family) {
+          const [statsRes, targetsRes] = await Promise.allSettled([
+            api.get('/families/war/stats'),
+            api.get('/families/racket-attack-targets', { params: { _: Date.now() } }),
+          ]);
+          if (statsRes.status === 'fulfilled' && statsRes.value?.data) setWarStats(statsRes.value.data);
+          const targets = (targetsRes.status === 'fulfilled' && targetsRes.value?.data?.targets) ?? [];
+          setRacketAttackTargets(targets);
+          if (targets.length === 0 && targetsRes.status === 'fulfilled' && targetsRes.value?.data?._debug) {
+            setDbSnapshot(targetsRes.value.data._debug);
+          }
+        } else {
+          setWarStats(null);
+          setRacketAttackTargets([]);
         }
-      } else {
-        setWarStats(null);
-        setRacketAttackTargets([]);
+      } else if (myRes.status === 'rejected') {
+        toast.error(apiDetail(myRes.reason) || 'Failed to load your family');
+      }
+      if (configRes.status === 'fulfilled' && configRes.value?.data) setConfig(configRes.value.data);
+      if (historyRes.status === 'fulfilled' && historyRes.value?.data?.wars) setWarHistory(historyRes.value.data.wars);
+      if (eventsRes.status === 'fulfilled' && eventsRes.value?.data) {
+        setEvent(eventsRes.value.data?.event ?? null);
+        setEventsEnabled(!!eventsRes.value.data?.events_enabled);
       }
     } catch (e) {
       toast.error(apiDetail(e));
@@ -219,7 +222,14 @@ export default function FamilyPage() {
       refreshUser();
       fetchData();
     } catch (e) {
-      toast.error(apiDetail(e));
+      const detail = apiDetail(e);
+      const isAlreadyInFamily = typeof detail === 'string' && detail.toLowerCase().includes('already in a family');
+      if (isAlreadyInFamily) {
+        toast.info('You\'re already in a family. Refreshing...');
+        await fetchData();
+      } else {
+        toast.error(detail);
+      }
     }
   };
 
@@ -236,7 +246,14 @@ export default function FamilyPage() {
       refreshUser();
       fetchData();
     } catch (e) {
-      toast.error(apiDetail(e));
+      const detail = apiDetail(e);
+      const isAlreadyInFamily = typeof detail === 'string' && detail.toLowerCase().includes('already in a family');
+      if (isAlreadyInFamily) {
+        toast.info('You\'re already in a family. Refreshing...');
+        await fetchData();
+      } else {
+        toast.error(detail);
+      }
     }
   };
 
@@ -694,6 +711,17 @@ export default function FamilyPage() {
         </>
       ) : (
         <>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => { setLoading(true); fetchData(); }}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 text-xs font-heading text-primary hover:underline uppercase tracking-wider disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              {loading ? 'Loading...' : 'Refresh my family status'}
+            </button>
+          </div>
           {/* Create Family */}
           <div className={`${styles.panel} rounded-sm overflow-hidden`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
