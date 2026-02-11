@@ -2,7 +2,6 @@ import { useMemo, useState, useEffect } from 'react';
 import { Flame, HelpCircle, Clock } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
-import styles from '../styles/noir.module.css';
 
 function getSuccessRate(crimeType) {
   if (crimeType === 'petty') return 0.7;
@@ -29,7 +28,6 @@ export default function Crimes() {
   const [tick, setTick] = useState(0);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
-  const [committingId, setCommittingId] = useState(null);
 
   const fetchCrimes = async () => {
     try {
@@ -60,34 +58,18 @@ export default function Crimes() {
     return () => clearInterval(id);
   }, [crimes]);
 
-  const commitCrime = async (crimeId, isRetry = false) => {
-    if (committingId) return;
-    setCommittingId(crimeId);
-    let willRetry = false;
+  const commitCrime = async (crimeId) => {
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
       if (response.data.success) {
         toast.success(response.data.message);
         refreshUser();
       } else {
-        toast(response.data.message, { description: 'Attempt was recorded — wait for cooldown to try again.' });
+        toast.error(response.data.message);
       }
       fetchCrimes();
     } catch (error) {
-      const status = error.response?.status;
-      const d = error.response?.data?.detail;
-      const backendMsg = typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : null;
-      const reason = error.code === 'ECONNABORTED' ? 'Request timed out' : error.message === 'Network Error' ? 'Network error' : backendMsg || (status ? `${status} error` : 'Request failed');
-      toast.error(`Failed to commit crime: ${reason}`);
-      willRetry = !isRetry && (error.code === 'ECONNABORTED' || error.message === 'Network Error' || (status && status >= 500));
-      if (willRetry) {
-        await new Promise((r) => setTimeout(r, 800));
-        setCommittingId(null);
-        commitCrime(crimeId, true);
-        return;
-      }
-    } finally {
-      if (!willRetry) setCommittingId(null);
+      toast.error(error.response?.data?.detail || 'Failed to commit crime');
     }
   };
 
@@ -117,7 +99,7 @@ export default function Crimes() {
   }
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="crimes-page">
+    <div className="space-y-6" data-testid="crimes-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -135,8 +117,8 @@ export default function Crimes() {
       )}
 
       <div className="flex justify-center">
-        <div className={`w-full max-w-3xl ${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-          <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b ${styles.borderGoldLight}`}>
+        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
             <div className="col-span-6">Crime</div>
             <div className="col-span-2 text-right">Risk</div>
             <div className="col-span-2 text-right">Status</div>
@@ -151,7 +133,7 @@ export default function Crimes() {
             return (
               <div
                 key={crime.id}
-                className={`w-full text-left grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent ${styles.raisedHover} ${!crime.can_commit ? 'opacity-90' : ''}`}
+                className={`w-full text-left grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!crime.can_commit ? 'opacity-90' : ''}`}
                 data-testid={`crime-row-${crime.id}`}
               >
                 <div className="col-span-6 min-w-0">
@@ -176,8 +158,8 @@ export default function Crimes() {
                       crime.can_commit
                         ? 'bg-primary/20 text-primary border border-primary/30'
                         : onCooldown
-                          ? `${styles.surface} text-mutedForeground border border-primary/10`
-                          : `${styles.surface} text-mutedForeground border border-primary/10 opacity-90`
+                          ? 'bg-zinc-800 text-mutedForeground border border-primary/10'
+                          : 'bg-zinc-800/80 text-mutedForeground border border-primary/10'
                     }`}
                     data-testid={`crime-status-${crime.id}`}
                   >
@@ -190,11 +172,10 @@ export default function Crimes() {
                     <button
                       type="button"
                       onClick={() => commitCrime(crime.id)}
-                      disabled={committingId !== null}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth"
                       data-testid={`commit-crime-${crime.id}`}
                     >
-                      {committingId === crime.id ? '...' : 'Commit'}
+                      Commit
                     </button>
                   ) : onCooldown ? (
                     <span className="inline-flex items-center justify-end gap-1 text-xs text-mutedForeground font-heading">
@@ -215,7 +196,7 @@ export default function Crimes() {
       </div>
 
       <div className="flex justify-center">
-        <div className={`w-full max-w-3xl ${styles.panel} rounded-sm px-4 py-3`}>
+        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm px-4 py-3">
           <div className="text-xs font-heading text-mutedForeground flex items-center justify-center gap-6">
             <span><span className="text-primary font-bold">◆</span> Crimes: <span className="text-foreground font-bold">{user?.total_crimes ?? 0}</span></span>
             <span className="text-primary/50">|</span>
