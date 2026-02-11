@@ -14,12 +14,19 @@ module.exports = {
       colors: {
         border: '#3d3520',
         background: '#050505',
-        foreground: '#e5e5e5',
+        foreground: '#e8e4dc',
         primary: {
           DEFAULT: '#c9a227',
           foreground: '#ffffff',
         },
-        mutedForeground: '#949494',
+        mutedForeground: '#a89878',
+        /* Noir 1920s–30s: warm brown-blacks for panels/sidebar */
+        noir: {
+          bg: '#0a0806',
+          panel: '#12100c',
+          surface: '#1a1612',
+          raised: '#252019',
+        },
       },
       fontFamily: {
         heading: ['"Playfair Display"', 'Georgia', 'serif'],

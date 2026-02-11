@@ -76,7 +76,7 @@ export default function Landing({ setIsAuthenticated }) {
           </div>
 
           {/* Auth Form */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-2xl shadow-primary/10">
+          <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden shadow-2xl shadow-primary/10">
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex gap-1">
               <button
                 onClick={() => setIsLogin(true)}
@@ -110,7 +110,7 @@ export default function Landing({ setIsAuthenticated }) {
                   data-testid="email-input"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-12 px-4 text-foreground font-heading placeholder:text-mutedForeground/50 focus:border-primary/50 focus:outline-none transition-smooth"
+                  className="w-full bg-noir-surface/90 border border-primary/20 rounded-sm h-12 px-4 text-foreground font-heading placeholder:text-mutedForeground/50 focus:border-primary/50 focus:outline-none transition-smooth"
                   placeholder="Enter your email"
                   required
                 />
@@ -124,7 +124,7 @@ export default function Landing({ setIsAuthenticated }) {
                     data-testid="username-input"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-12 px-4 text-foreground font-heading placeholder:text-mutedForeground/50 focus:border-primary/50 focus:outline-none transition-smooth"
+                    className="w-full bg-noir-surface/90 border border-primary/20 rounded-sm h-12 px-4 text-foreground font-heading placeholder:text-mutedForeground/50 focus:border-primary/50 focus:outline-none transition-smooth"
                     placeholder="Choose a username"
                     required={!isLogin}
                   />
@@ -138,7 +138,7 @@ export default function Landing({ setIsAuthenticated }) {
                   data-testid="password-input"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-12 px-4 text-foreground font-heading placeholder:text-mutedForeground/50 focus:border-primary/50 focus:outline-none transition-smooth"
+                  className="w-full bg-noir-surface/90 border border-primary/20 rounded-sm h-12 px-4 text-foreground font-heading placeholder:text-mutedForeground/50 focus:border-primary/50 focus:outline-none transition-smooth"
                   placeholder="Enter your password"
                   required
                 />
@@ -157,11 +157,11 @@ export default function Landing({ setIsAuthenticated }) {
 
           {/* Features */}
           <div className="mt-8 grid grid-cols-2 gap-4 text-center">
-            <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-4">
+            <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm p-4">
               <div className="text-primary text-2xl font-heading font-bold">11</div>
               <div className="text-xs font-heading text-mutedForeground uppercase tracking-widest mt-0.5">Ranks</div>
             </div>
-            <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-4">
+            <div className="bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm p-4">
               <div className="text-primary text-2xl font-heading font-bold">∞</div>
               <div className="text-xs font-heading text-mutedForeground uppercase tracking-widest mt-0.5">Opportunities</div>
             </div>

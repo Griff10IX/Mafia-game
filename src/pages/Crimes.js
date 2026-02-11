@@ -117,8 +117,8 @@ export default function Crimes() {
       )}
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
-          <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
+        <div className="w-full max-w-3xl bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className="grid grid-cols-12 bg-noir-surface/60 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
             <div className="col-span-6">Crime</div>
             <div className="col-span-2 text-right">Risk</div>
             <div className="col-span-2 text-right">Status</div>
@@ -133,7 +133,7 @@ export default function Crimes() {
             return (
               <div
                 key={crime.id}
-                className={`w-full text-left grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!crime.can_commit ? 'opacity-90' : ''}`}
+                className={`w-full text-left grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-noir-raised/50 ${!crime.can_commit ? 'opacity-90' : ''}`}
                 data-testid={`crime-row-${crime.id}`}
               >
                 <div className="col-span-6 min-w-0">
@@ -158,8 +158,8 @@ export default function Crimes() {
                       crime.can_commit
                         ? 'bg-primary/20 text-primary border border-primary/30'
                         : onCooldown
-                          ? 'bg-zinc-800 text-mutedForeground border border-primary/10'
-                          : 'bg-zinc-800/80 text-mutedForeground border border-primary/10'
+                          ? 'bg-noir-surface text-mutedForeground border border-primary/10'
+                          : 'bg-noir-surface/90 text-mutedForeground border border-primary/10'
                     }`}
                     data-testid={`crime-status-${crime.id}`}
                   >
@@ -196,7 +196,7 @@ export default function Crimes() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm px-4 py-3">
+        <div className="w-full max-w-3xl bg-gradient-to-b from-noir-panel to-noir-bg border border-primary/30 rounded-sm px-4 py-3">
           <div className="text-xs font-heading text-mutedForeground flex items-center justify-center gap-6">
             <span><span className="text-primary font-bold">◆</span> Crimes: <span className="text-foreground font-bold">{user?.total_crimes ?? 0}</span></span>
             <span className="text-primary/50">|</span>

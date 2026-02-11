@@ -197,7 +197,7 @@ export default function Layout({ children }) {
     <div className="min-h-screen bg-background">
       {/* Sidebar */}
       <div
-        className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-zinc-900 via-zinc-900 to-black border-r border-primary/30 z-50 transform transition-transform duration-300 ${
+        className={`fixed left-0 top-0 h-full w-64 bg-gradient-to-b from-noir-panel via-noir-bg to-noir-bg border-r border-primary/30 z-50 transform transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
       >
@@ -236,7 +236,7 @@ export default function Layout({ children }) {
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth ${
                           isAnyRankingActive
                             ? 'bg-primary/15 text-primary border-l-2 border-primary'
-                            : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                            : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                         }`}
                       >
                         <Icon size={16} className="text-primary/70" />
@@ -252,7 +252,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/crimes'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-crimes"
                           >
@@ -273,7 +273,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/gta'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-gta"
                           >
@@ -294,7 +294,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/jail'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-jail"
                           >
@@ -334,7 +334,7 @@ export default function Layout({ children }) {
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth ${
                           isAnyCasinoActive
                             ? 'bg-primary/15 text-primary border-l-2 border-primary'
-                            : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                            : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                         }`}
                       >
                         <Icon size={16} className="text-primary/70" />
@@ -350,7 +350,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-casino"
                           >
@@ -362,7 +362,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/dice'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-dice"
                           >
@@ -374,7 +374,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/rlt'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-roulette"
                           >
@@ -386,7 +386,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/blackjack'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-blackjack"
                           >
@@ -398,7 +398,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/horseracing'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-horseracing"
                           >
@@ -410,7 +410,7 @@ export default function Layout({ children }) {
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
                               location.pathname === '/sports-betting'
                                 ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                                : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                                : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-sports-betting"
                           >
@@ -436,7 +436,7 @@ export default function Layout({ children }) {
                           : 'text-red-400 hover:bg-red-500/10'
                         : isActive
                           ? 'bg-gradient-to-r from-primary/20 to-transparent text-primary border-l-2 border-primary'
-                          : 'text-foreground hover:bg-zinc-800 hover:text-primary'
+                          : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                     }`}
                     style={isFamiliesAtWar ? { color: '#f87171' } : undefined}
                     onClick={() => setSidebarOpen(false)}
@@ -479,8 +479,8 @@ export default function Layout({ children }) {
 
           {/* User Info */}
           {user && (
-            <div className="p-3 border-t border-primary/30 bg-gradient-to-t from-black to-transparent">
-              <div className="bg-zinc-800/80 border border-primary/20 p-3 rounded-sm">
+            <div className="p-3 border-t border-primary/30 bg-gradient-to-t from-noir-bg to-transparent">
+              <div className="bg-noir-surface border border-primary/20 p-3 rounded-sm">
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-primary/20">
                   <User size={14} className="text-primary" />
                   <span className="text-sm font-heading font-bold text-primary" data-testid="user-username">{user.username}</span>
@@ -497,7 +497,7 @@ export default function Layout({ children }) {
                         <TooltipTrigger asChild>
                           <span className="text-primary font-heading cursor-default underline decoration-dotted decoration-primary/30 underline-offset-1" data-testid="user-wealth-rank">{user.wealth_rank_name ?? '—'}</span>
                         </TooltipTrigger>
-                        <TooltipContent side="left" className="bg-zinc-800 text-white border border-primary/30 rounded-sm px-3 py-2 text-sm font-heading shadow-lg">
+                        <TooltipContent side="left" className="bg-noir-surface text-primary border border-primary/30 rounded-sm px-3 py-2 text-sm font-heading shadow-lg">
                           {user.wealth_rank_range ?? '$0'}
                         </TooltipContent>
                       </Tooltip>
@@ -547,7 +547,7 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className="fixed top-0 right-0 left-0 md:left-64 h-12 bg-gradient-to-r from-zinc-900/95 via-zinc-900/90 to-zinc-900/95 backdrop-blur-md border-b border-primary/20 z-30 flex items-center px-4 gap-3">
+      <div className="fixed top-0 right-0 left-0 md:left-64 h-12 bg-gradient-to-r from-noir-panel/95 via-noir-panel/90 to-noir-panel/95 backdrop-blur-md border-b border-primary/20 z-30 flex items-center px-4 gap-3">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           data-testid="mobile-menu-toggle"
@@ -578,13 +578,13 @@ export default function Layout({ children }) {
             {/* Rank Progress Mini Bar */}
             {rankProgress && (
               <div
-                className="hidden sm:flex items-center gap-2 bg-zinc-800/80 border border-primary/20 px-2 py-1 rounded-sm"
+                className="hidden sm:flex items-center gap-2 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm"
                 title={`Rank progress: ${(Number(rankProgress.rank_points_progress || 0)).toFixed(2)}%`}
               >
                 <TrendingUp size={12} className="text-primary" />
                 <div className="flex flex-col">
                   <span className="text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                  <div className="w-16 h-1 bg-zinc-700 rounded-full mt-0.5 overflow-hidden">
+                  <div className="w-16 h-1 bg-noir-raised rounded-full mt-0.5 overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300" 
                       style={{ width: `${rankProgress.rank_points_progress || 0}%` }}
@@ -598,25 +598,25 @@ export default function Layout({ children }) {
             )}
             
             {/* Bullets */}
-            <div className="hidden md:flex items-center gap-1 bg-zinc-800/80 border border-primary/20 px-2 py-1 rounded-sm" title="Bullets">
+            <div className="hidden md:flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Bullets">
               <Crosshair size={12} className="text-red-400" />
               <span className="font-heading text-xs text-foreground" data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
             </div>
             
             {/* Kills */}
-            <div className="hidden md:flex items-center gap-1 bg-zinc-800/80 border border-primary/20 px-2 py-1 rounded-sm" title="Kills">
+            <div className="hidden md:flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Kills">
               <Skull size={12} className="text-red-400" />
               <span className="font-heading text-xs text-foreground" data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
             </div>
             
             {/* Money */}
-            <div className="flex items-center gap-1 bg-zinc-800/80 border border-primary/20 px-2 py-1 rounded-sm" title="Cash">
+            <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Cash">
               <DollarSign size={12} className="text-primary" />
               <span className="font-heading text-xs text-primary" data-testid="topbar-money">{formatMoney(user.money)}</span>
             </div>
             
             {/* Points */}
-            <div className="flex items-center gap-1 bg-zinc-800/80 border border-primary/20 px-2 py-1 rounded-sm" title="Premium Points">
+            <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Premium Points">
               <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
               <span className="font-heading text-xs text-foreground" data-testid="topbar-points">{formatInt(user.points)}</span>
             </div>
