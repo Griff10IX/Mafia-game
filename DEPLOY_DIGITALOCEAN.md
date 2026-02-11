@@ -262,18 +262,33 @@ cd /opt/mafia-app
 git remote set-url origin https://github.com/Griff10IX/Mafia-Game-2.git
 ```
 
-For private repos, use a **GitHub Personal Access Token** for auth. Prefer a credential helper instead of putting the token in the URL:
+For private repos, use the **GitHub Personal Access Token (PAT)** you created — that’s the “key”. When Git asks for username and password, use your **GitHub username** and the **PAT as the password** (not your GitHub account password).
 
-```bash
-# Store credentials so you don't put the token in the URL
-git config --global credential.helper store
-# Next 'git pull' will prompt for username and token (use token as password)
+**To stop being asked every time** — embed the token in the remote URL (run this on the machine that’s prompting: your PC for push, or the server for pull). Don’t commit or share this URL.
+
+- **On your Windows PC** (so `git push mafia2 MAfiaGame2` doesn’t ask):
+
+```powershell
+cd "c:\Users\jakeg\Desktop\Game files mafia"
+git remote set-url mafia2 https://YOUR_GITHUB_USERNAME:YOUR_PAT@github.com/Griff10IX/Mafia-Game-2.git
 ```
 
-Or, if you must use the token in the URL (avoid committing or sharing this URL):
+- **On the server** (so `git pull` doesn’t ask):
 
 ```bash
-git remote set-url origin https://YOUR_GITHUB_USERNAME:YOUR_TOKEN@github.com/Griff10IX/Mafia-Game-2.git
+cd /opt/mafia-app
+git remote set-url origin https://YOUR_GITHUB_USERNAME:YOUR_PAT@github.com/Griff10IX/Mafia-Game-2.git
+# If you use mafia2 remote for pull:
+git remote set-url mafia2 https://YOUR_GITHUB_USERNAME:YOUR_PAT@github.com/Griff10IX/Mafia-Game-2.git
+```
+
+Replace `YOUR_GITHUB_USERNAME` (e.g. `Griff10IX`) and `YOUR_PAT` with your real token. After that, push and pull won’t prompt.
+
+Alternative (no token in URL): use a credential helper so Git remembers after one prompt:
+
+```bash
+git config --global credential.helper store
+# Next push/pull: enter username + PAT as password once; it’s saved.
 ```
 
 Then pull and build:
