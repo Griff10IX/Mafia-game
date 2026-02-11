@@ -450,7 +450,7 @@ export default function FamilyPage() {
                     placeholder="Amount"
                     value={depositAmount}
                     onChange={(e) => setDepositAmount(e.target.value)}
-                    className="flex-1 ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading text-sm focus:border-primary/50 focus:outline-none`}
+                    className={`flex-1 ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading text-sm focus:border-primary/50 focus:outline-none`}
                   />
                   <button type="submit" className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50">
                     Deposit
@@ -463,7 +463,7 @@ export default function FamilyPage() {
                       placeholder="Withdraw"
                       value={withdrawAmount}
                       onChange={(e) => setWithdrawAmount(e.target.value)}
-                      className="flex-1 ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading text-sm focus:border-primary/50 focus:outline-none`}
+                      className={`flex-1 ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading text-sm focus:border-primary/50 focus:outline-none`}
                     />
                     <button type="submit" className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-foreground px-3 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider`}>
                       Withdraw
@@ -751,7 +751,7 @@ export default function FamilyPage() {
                   <select
                     value={joinId}
                     onChange={(e) => setJoinId(e.target.value)}
-                    className="w-full ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading focus:border-primary/50 focus:outline-none`}
+                    className={`w-full ${styles.input} border border-primary/20 rounded-sm px-3 py-2 font-heading focus:border-primary/50 focus:outline-none`}
                   >
                     <option value="">Select family</option>
                     {families.map((f) => (
