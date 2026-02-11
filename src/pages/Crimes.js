@@ -70,7 +70,9 @@ export default function Crimes() {
       }
       fetchCrimes();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to commit crime');
+      const d = error.response?.data?.detail;
+      const msg = Array.isArray(d) ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : (d || 'Failed to commit crime');
+      toast.error(msg);
     }
   };
 

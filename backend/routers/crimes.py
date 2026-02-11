@@ -2,9 +2,14 @@
 from typing import List
 from datetime import datetime, timezone, timedelta
 import random
+import os
+import sys
 from fastapi import Depends, HTTPException
 
-import sys; sys.path.insert(0, "/app/backend"); from server import (
+_backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _backend not in sys.path:
+    sys.path.insert(0, _backend)
+from server import (
     db,
     get_current_user,
     get_rank_info,

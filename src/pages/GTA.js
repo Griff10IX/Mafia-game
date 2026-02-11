@@ -85,11 +85,14 @@ export default function GTA() {
         });
       } else if (response.data.jailed) {
         toast.error(response.data.message);
+      } else if (response.data.success === false && response.data.message) {
+        toast.error(response.data.message);
       }
-      
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to steal car');
+      const detail = error.response?.data?.detail;
+      const msg = Array.isArray(detail) ? detail.map((x) => x.msg || x.loc?.join('.')).join('; ') : (detail || 'Failed to steal car');
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

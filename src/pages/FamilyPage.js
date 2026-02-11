@@ -403,7 +403,7 @@ export default function FamilyPage() {
             >
               <Swords className="text-red-500 shrink-0" size={24} />
               <div>
-                <p className="font-heading font-bold text-red-400 uppercase tracking-wider`}>Your Family Is At War</p>
+                <p className="font-heading font-bold text-red-400 uppercase tracking-wider">Your Family Is At War</p>
                 <p className="text-xs text-mutedForeground">
                   vs {entry.war?.other_family_name || 'Enemy'} [{entry.war?.other_family_tag || '?'}] — Click for details
                 </p>
@@ -417,11 +417,11 @@ export default function FamilyPage() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-heading font-bold text-primary tracking-wide">{family.name} <span className="text-primary/70">[{family.tag}]</span></h2>
-                  <p className="text-xs text-mutedForeground font-heading">Your role: <span className="text-primary font-bold uppercase tracking-wider`}>{ROLE_LABELS[myRole] || myRole}</span></p>
+                  <p className="text-xs text-mutedForeground font-heading">Your role: <span className="text-primary font-bold uppercase tracking-wider">{ROLE_LABELS[myRole] || myRole}</span></p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="text-right">
-                    <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider`}>Treasury</p>
+                    <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider">Treasury</p>
                     <p className="text-lg font-heading font-bold text-primary">{formatMoney(family.treasury)}</p>
                   </div>
                   <button
@@ -488,7 +488,7 @@ export default function FamilyPage() {
               <p className="text-xs text-mutedForeground mb-3 font-heading">Collect income on cooldown. Upgrade with family treasury.</p>
               {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
                 <div className="mb-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/40 rounded-sm p-2">
-                  <p className="text-xs font-heading font-bold text-primary uppercase tracking-wider`}>Event: {event.name}</p>
+                  <p className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Event: {event.name}</p>
                   <p className="text-xs text-mutedForeground mt-1">{event.message}</p>
                 </div>
               )}
@@ -536,7 +536,7 @@ export default function FamilyPage() {
                 })}
               </div>
               <p className="text-xs text-mutedForeground mt-3 font-heading italic">Upgrades improve defense. Lose a war = lose your rackets.</p>
-              <a href="#raid-enemy-rackets" className="inline-flex items-center gap-1.5 mt-3 text-xs font-heading font-bold text-primary hover:underline uppercase tracking-wider`}>
+              <a href="#raid-enemy-rackets" className="inline-flex items-center gap-1.5 mt-3 text-xs font-heading font-bold text-primary hover:underline uppercase tracking-wider">
                 <Crosshair size={14} /> Raid Enemy Rackets →
               </a>
             </div>
@@ -629,10 +629,10 @@ export default function FamilyPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
-                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Member</th>
-                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Role</th>
-                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Rank</th>
-                      {canManage && <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Actions</th>}
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Member</th>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Role</th>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Rank</th>
+                      {canManage && <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -706,7 +706,7 @@ export default function FamilyPage() {
             <div className="p-4">
               <form onSubmit={handleCreate} className="flex flex-wrap gap-3 items-end">
                 <div>
-                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider`}>Name (2–30)</label>
+                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider">Name (2–30)</label>
                   <input
                     type="text"
                     value={createName}
@@ -717,7 +717,7 @@ export default function FamilyPage() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider`}>Tag (2–4)</label>
+                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider">Tag (2–4)</label>
                   <input
                     type="text"
                     value={createTag}
@@ -747,7 +747,7 @@ export default function FamilyPage() {
             <div className="p-4">
               <form onSubmit={handleJoin} className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider`}>Family</label>
+                  <label className="block text-xs text-mutedForeground mb-1 font-heading uppercase tracking-wider">Family</label>
                   <select
                     value={joinId}
                     onChange={(e) => setJoinId(e.target.value)}
@@ -781,10 +781,10 @@ export default function FamilyPage() {
             <table className="w-full text-xs">
               <thead>
                 <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
-                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Name</th>
-                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Tag</th>
-                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Members</th>
-                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Treasury</th>
+                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Name</th>
+                  <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Tag</th>
+                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Members</th>
+                  <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Treasury</th>
                 </tr>
               </thead>
               <tbody>
@@ -828,10 +828,10 @@ export default function FamilyPage() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Sides</th>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Result</th>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Prize</th>
-                    <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider`}>Ended</th>
+                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Sides</th>
+                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Result</th>
+                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Prize</th>
+                    <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Ended</th>
                   </tr>
                 </thead>
                 <tbody>
