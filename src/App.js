@@ -11,6 +11,7 @@ import Garage from "./pages/Garage";
 import Jail from "./pages/Jail";
 import Attack from "./pages/Attack";
 import Bodyguards from "./pages/Bodyguards";
+import HitlistPage from "./pages/HitlistPage";
 import FamilyPage from "./pages/FamilyPage.js";
 import FamilyProfilePage from "./pages/FamilyProfilePage.js";
 import Properties from "./pages/Properties";
@@ -208,6 +209,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Attemps />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/hitlist"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <HitlistPage />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

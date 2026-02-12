@@ -663,6 +663,13 @@ class AttackExecuteResponse(BaseModel):
     first_bodyguard: Optional[Dict] = None  # { display_name, search_username } when target has bodyguards
 
 
+class HitlistAddRequest(BaseModel):
+    target_username: str
+    target_type: str  # "user" | "bodyguards"
+    reward_type: str  # "cash" | "points"
+    reward_amount: int
+    hidden: bool = False
+
 class WarTruceRequest(BaseModel):
     war_id: str
 
@@ -4285,6 +4292,140 @@ async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depe
     res = await db.attacks.delete_many({"attacker_id": current_user["id"], "id": {"$in": ids}})
     return {"message": f"Deleted {res.deleted_count} search(es)", "deleted": res.deleted_count}
 
+
+# ============ Hitlist ============
+HITLIST_HIDDEN_MULTIPLIER = 1.5  # 50% extra for hidden
+HITLIST_BUY_OFF_COST_POINTS = 1000
+HITLIST_REVEAL_COST_POINTS = 5000
+
+@api_router.post("/hitlist/add")
+async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(get_current_user)):
+    """Place a bounty on a user or their bodyguards. Cash or points; optional hidden (+50% cost)."""
+    target_username = (request.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Target username required")
+    target_type = (request.target_type or "").strip().lower()
+    if target_type not in ("user", "bodyguards"):
+        raise HTTPException(status_code=400, detail="target_type must be 'user' or 'bodyguards'")
+    reward_type = (request.reward_type or "").strip().lower()
+    if reward_type not in ("cash", "points"):
+        raise HTTPException(status_code=400, detail="reward_type must be 'cash' or 'points'")
+    reward_amount = int(request.reward_amount or 0)
+    if reward_amount < 1:
+        raise HTTPException(status_code=400, detail="Reward amount must be at least 1")
+    hidden = bool(request.hidden)
+    cost = int(reward_amount * (HITLIST_HIDDEN_MULTIPLIER if hidden else 1.0))
+    if reward_type == "points":
+        if (current_user.get("points") or 0) < cost:
+            raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -cost}})
+    else:
+        if (current_user.get("money") or 0) < cost:
+            raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost:,})")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    if target.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Cannot place bounty on a dead account")
+    if target["id"] == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot place a bounty on yourself")
+    if target_type == "bodyguards":
+        bgs = await db.bodyguards.find({"user_id": target["id"]}, {"_id": 0}).to_list(10)
+        if not any(b.get("bodyguard_user_id") or b.get("is_robot") for b in bgs):
+            raise HTTPException(status_code=400, detail="Target has no bodyguards")
+    hitlist_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    await db.hitlist.insert_one({
+        "id": hitlist_id,
+        "target_id": target["id"],
+        "target_username": target["username"],
+        "target_type": target_type,
+        "placer_id": current_user["id"],
+        "placer_username": current_user.get("username") or "",
+        "reward_type": reward_type,
+        "reward_amount": reward_amount,
+        "hidden": hidden,
+        "created_at": now.isoformat(),
+    })
+    return {"message": f"Bounty placed on {target['username']} ({target_type}) for {reward_amount} {reward_type}" + (" (hidden)" if hidden else "")}
+
+
+@api_router.get("/hitlist/list")
+async def hitlist_list(current_user: dict = Depends(get_current_user)):
+    """List all public hitlist entries. Hidden bounties show placer as null."""
+    cursor = db.hitlist.find({}, {"_id": 0}).sort("created_at", -1)
+    items = []
+    async for doc in cursor:
+        items.append({
+            "id": doc["id"],
+            "target_username": doc["target_username"],
+            "target_type": doc.get("target_type") or "user",
+            "reward_type": doc["reward_type"],
+            "reward_amount": doc["reward_amount"],
+            "placer_username": None if doc.get("hidden") else (doc.get("placer_username") or "Unknown"),
+            "created_at": doc.get("created_at"),
+        })
+    return {"items": items}
+
+
+@api_router.get("/hitlist/me")
+async def hitlist_me(current_user: dict = Depends(get_current_user)):
+    """Whether current user is on the hitlist (count, total bounty); and if they paid to reveal, who placed them."""
+    user_id = current_user["id"]
+    entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
+    count = len(entries)
+    total_cash = sum(e["reward_amount"] for e in entries if e.get("reward_type") == "cash")
+    total_points = sum(e["reward_amount"] for e in entries if e.get("reward_type") == "points")
+    revealed = current_user.get("hitlist_revealed") is True
+    who = []
+    if revealed:
+        who = [
+            {"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
+            for e in entries
+        ]
+    return {
+        "on_hitlist": count > 0,
+        "count": count,
+        "total_cash": total_cash,
+        "total_points": total_points,
+        "revealed": revealed,
+        "who": who,
+    }
+
+
+@api_router.post("/hitlist/buy-off")
+async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
+    """Pay to remove all bounties on yourself (cost: 1000 points)."""
+    user_id = current_user["id"]
+    entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
+    if not entries:
+        raise HTTPException(status_code=400, detail="You are not on the hitlist")
+    cost = HITLIST_BUY_OFF_COST_POINTS
+    if (current_user.get("points") or 0) < cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
+    await db.users.update_one({"id": user_id}, {"$inc": {"points": -cost}})
+    res = await db.hitlist.delete_many({"target_id": user_id})
+    return {"message": f"Removed {res.deleted_count} bounty(ies) from the hitlist. Cost: {cost} points.", "deleted": res.deleted_count}
+
+
+@api_router.post("/hitlist/reveal")
+async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
+    """Pay 5000 points to see who placed bounties on you. One-time; stored on user."""
+    user_id = current_user["id"]
+    if current_user.get("hitlist_revealed") is True:
+        entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
+        who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+        return {"message": "Already revealed.", "who": who}
+    cost = HITLIST_REVEAL_COST_POINTS
+    if (current_user.get("points") or 0) < cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
+    await db.users.update_one({"id": user_id}, {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}})
+    entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
+    who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+    return {"message": f"Paid {cost} points. Here is who hitlisted you.", "who": who}
+
+
 @api_router.post("/attack/travel")
 async def travel_to_target(request: AttackIdRequest, current_user: dict = Depends(get_current_user)):
     attack = await db.attacks.find_one(
@@ -6030,6 +6171,97 @@ async def casino_blackjack_history(current_user: dict = Depends(get_current_user
     user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "blackjack_history": 1})
     history = (user.get("blackjack_history") or [])[:BLACKJACK_HISTORY_MAX]
     return {"history": history}
+
+
+# ============ Casino Horse Racing API ============
+# Races use animation on frontend: backend returns winner_id and horses list; frontend animates progress bars.
+HORSERACING_HISTORY_MAX = 20
+
+def _horseracing_pick_winner() -> dict:
+    """Pick a winner weighted by inverse odds (lower odds = favourite = higher win probability)."""
+    horses = list(HORSERACING_HORSES)
+    if not horses:
+        return horses[0] if horses else None
+    weights = [1.0 / max(1, h.get("odds") or 1) for h in horses]
+    total = sum(weights)
+    if total <= 0:
+        return random.choice(horses)
+    r = random.uniform(0, total)
+    acc = 0
+    for h, w in zip(horses, weights):
+        acc += w
+        if r <= acc:
+            return h
+    return horses[-1]
+
+
+@api_router.get("/casino/horseracing/config")
+async def casino_horseracing_config(current_user: dict = Depends(get_current_user)):
+    """Horse racing config: horses with odds, max bet, house edge. For race track animation."""
+    return {
+        "horses": list(HORSERACING_HORSES),
+        "max_bet": HORSERACING_MAX_BET,
+        "house_edge": HORSERACING_HOUSE_EDGE,
+    }
+
+
+@api_router.post("/casino/horseracing/race")
+async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: dict = Depends(get_current_user)):
+    """Place a bet on a horse. Backend picks winner (weighted by odds); frontend runs race animation."""
+    horse_id = int(request.horse_id)
+    bet = int(request.bet or 0)
+    if bet < 1:
+        raise HTTPException(status_code=400, detail="Bet must be at least 1")
+    if bet > HORSERACING_MAX_BET:
+        raise HTTPException(status_code=400, detail=f"Max bet is ${HORSERACING_MAX_BET:,}")
+    horse = next((h for h in HORSERACING_HORSES if h["id"] == horse_id), None)
+    if not horse:
+        raise HTTPException(status_code=400, detail="Invalid horse")
+    user_money = int(current_user.get("money") or 0)
+    if user_money < bet:
+        raise HTTPException(status_code=400, detail="Insufficient cash")
+    winner = _horseracing_pick_winner()
+    won = winner["id"] == horse_id
+    if won:
+        payout = int(bet * (1 + horse["odds"]) * (1.0 - HORSERACING_HOUSE_EDGE))
+        payout = max(payout, bet)
+        new_money = user_money - bet + payout
+    else:
+        payout = 0
+        new_money = user_money - bet
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"money": new_money}}
+    )
+    history_entry = {
+        "bet": bet,
+        "horse_id": horse_id,
+        "horse_name": horse["name"],
+        "won": won,
+        "payout": payout if won else 0,
+        "winner_name": winner["name"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$push": {"horseracing_history": {"$each": [history_entry], "$slice": -HORSERACING_HISTORY_MAX}}}
+    )
+    return {
+        "winner_id": winner["id"],
+        "horses": list(HORSERACING_HORSES),
+        "won": won,
+        "payout": payout,
+        "winner_name": winner["name"],
+        "new_balance": new_money,
+    }
+
+
+@api_router.get("/casino/horseracing/history")
+async def casino_horseracing_history(current_user: dict = Depends(get_current_user)):
+    """Last N horse racing bets for the current user (for display with race animation results)."""
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "horseracing_history": 1})
+    history = (user.get("horseracing_history") or [])[:HORSERACING_HISTORY_MAX]
+    return {"history": list(reversed(history))}
 
 
 @api_router.get("/travel/info")
