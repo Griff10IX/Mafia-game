@@ -581,24 +581,28 @@ export default function Layout({ children }) {
               const total = current + needed;
               const progress = (typeof pct === 'number' && !Number.isNaN(pct))
                 ? Math.min(100, Math.max(0, pct))
-                : (total > 0 ? Math.min(100, (current / total) * 100) : 0);
+                : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
               return (
                 <div
-                  className="hidden sm:flex items-center gap-2 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm"
+                  className="flex items-center gap-1.5 sm:gap-2 bg-noir-surface/90 border border-primary/20 px-1.5 py-1 sm:px-2 sm:py-1 rounded-sm min-w-0"
                   title={`Rank progress: ${progress.toFixed(2)}%`}
                 >
-                  <TrendingUp size={12} className="text-primary" />
-                  <div className="flex flex-col min-w-0">
-                    <span className="text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                    <div className="w-16 h-1.5 bg-noir-raised rounded-full mt-0.5 overflow-hidden">
+                  <TrendingUp size={12} className="text-primary shrink-0" />
+                  <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
+                    <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
+                    <div className="w-10 sm:w-16 h-1.5 bg-noir-raised rounded-full mt-0.5 overflow-hidden flex" style={{ minHeight: 6 }}>
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300"
-                        style={{ width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, display: 'block', boxSizing: 'border-box' }}
+                        className="h-full rounded-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300 flex-none"
+                        style={{ width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, boxSizing: 'border-box' }}
+                        role="progressbar"
+                        aria-valuenow={progress}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
                       />
                     </div>
                   </div>
                   <span className="text-[10px] text-primary font-heading shrink-0">
-                    {progress.toFixed(1)}%
+                    {progress.toFixed(0)}%
                   </span>
                 </div>
               );

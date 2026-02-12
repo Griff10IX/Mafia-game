@@ -111,9 +111,14 @@ export default function Crimes() {
       </div>
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
-        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/30 rounded-sm p-3 sm:p-4">
-          <p className="text-sm font-heading font-bold text-primary">Today&apos;s event: {event.name}</p>
-          <p className="text-xs text-mutedForeground font-heading mt-1">{event.message}</p>
+        <div className={`${styles.panel} rounded-md overflow-hidden`}>
+          <div className={`${styles.panelHeader} px-3 py-2 sm:px-4`}>
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Today&apos;s event</span>
+          </div>
+          <div className="p-3 sm:p-4">
+            <p className="text-sm font-heading font-bold text-primary">{event.name}</p>
+            <p className={`text-xs font-heading mt-1 ${styles.textMuted}`}>{event.message}</p>
+          </div>
         </div>
       )}
 

@@ -124,10 +124,15 @@ export default function GTA() {
         <p className="text-center text-sm text-mutedForeground font-heading tracking-wide">Grand Theft Auto — steal prohibition-era vehicles</p>
       </div>
 
-      {(eventsEnabled && event && (event.gta_success !== 1 || event.rank_points !== 1)) && (
-        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/50 rounded-sm p-3">
-          <p className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Event: {event.name}</p>
-          <p className="text-xs text-mutedForeground mt-1">{event.message}</p>
+      {(eventsEnabled && event && (event.gta_success !== 1 || event.rank_points !== 1)) && event?.name && (
+        <div className={`${styles.panel} rounded-md overflow-hidden`}>
+          <div className={`${styles.panelHeader} px-3 py-2 sm:px-4`}>
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Today&apos;s event</span>
+          </div>
+          <div className="p-3 sm:p-4">
+            <p className="text-sm font-heading font-bold text-primary">{event.name}</p>
+            <p className={`text-xs font-heading mt-1 ${styles.textMuted}`}>{event.message}</p>
+          </div>
         </div>
       )}
 

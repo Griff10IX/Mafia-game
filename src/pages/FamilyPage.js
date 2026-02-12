@@ -550,9 +550,14 @@ export default function FamilyPage() {
             <div className="p-4">
               <p className="text-xs text-mutedForeground mb-3 font-heading">Collect income on cooldown. Upgrade with family treasury.</p>
               {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
-                <div className="mb-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/40 rounded-sm p-2">
-                  <p className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Event: {event.name}</p>
-                  <p className="text-xs text-mutedForeground mt-1">{event.message}</p>
+                <div className={`mb-3 ${styles.panel} rounded-md overflow-hidden`}>
+                  <div className={`${styles.panelHeader} px-3 py-2`}>
+                    <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Today&apos;s event</span>
+                  </div>
+                  <div className="p-3">
+                    <p className="text-sm font-heading font-bold text-primary">{event.name}</p>
+                    <p className={`text-xs font-heading mt-1 ${styles.textMuted}`}>{event.message}</p>
+                  </div>
                 </div>
               )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

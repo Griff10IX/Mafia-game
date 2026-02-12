@@ -135,17 +135,22 @@ export default function Dashboard() {
               const pctFromApi = Number(rankProgress.rank_points_progress);
               const progressPct = (typeof pctFromApi === 'number' && !Number.isNaN(pctFromApi))
                 ? Math.min(100, Math.max(0, pctFromApi))
-                : (total > 0 ? Math.min(100, (current / total) * 100) : 0);
+                : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
               return (
-                <div className={`h-2.5 ${styles.raised} rounded-full overflow-hidden border border-primary/20`}>
+                <div className={`h-2.5 w-full ${styles.raised} rounded-full overflow-hidden border border-primary/20`} style={{ minHeight: 10 }}>
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-500"
                     style={{
                       width: `${progressPct}%`,
-                      minWidth: progressPct > 0 ? 6 : 0,
+                      minWidth: progressPct > 0 ? 8 : 0,
+                      height: '100%',
                       display: 'block',
                       boxSizing: 'border-box'
                     }}
+                    role="progressbar"
+                    aria-valuenow={progressPct}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
                   />
                 </div>
               );
