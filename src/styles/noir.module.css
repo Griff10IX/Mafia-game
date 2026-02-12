@@ -85,6 +85,18 @@
   border-radius: 2px;
 }
 
+/* Sidebar active nav item – solid gold background, dark text (match reference) */
+.navItemActive {
+  background: linear-gradient(to bottom, var(--noir-primary-bright), var(--noir-primary-dark)) !important;
+  color: #1a1a1a !important;
+  border: none !important;
+}
+
+.navItemActive:hover {
+  opacity: 0.95;
+  color: #1a1a1a !important;
+}
+
 /* Text – use with Tailwind for font-heading etc. */
 .textGold {
   color: var(--noir-primary);

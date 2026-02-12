@@ -289,7 +289,7 @@ export default function BoozeRun() {
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/60" />
         </div>
         <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest max-w-xl">
-          Prohibition-era supply runs. Buy here, travel by car, sell for profit. Routes change every {config.rotation_hours ?? 3} hours.
+          Prohibition-era supply runs, buy here, travel by car, sell for profit. Routes change every {config.rotation_hours ?? 3} hours.
         </p>
       </div>
 
