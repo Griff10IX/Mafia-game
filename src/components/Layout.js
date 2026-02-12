@@ -214,7 +214,7 @@ export default function Layout({ children }) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 overflow-y-auto p-3">
+          <nav className={`flex-1 overflow-y-auto p-3 ${styles.sidebarNav}`}>
             <div className="space-y-0.5">
               {navItems.map((item) => {
                 const Icon = item.icon;
@@ -238,9 +238,9 @@ export default function Layout({ children }) {
                           isAnyRankingActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                       >
-                        <Icon size={16} className={isAnyRankingActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyRankingActive ? { color: 'var(--gm-gold)' } : undefined} />
+                        <Icon size={16} style={{ color: 'var(--gm-gold)' }} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {rankingOpen ? <ChevronDown size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} />}
+                        {rankingOpen ? <ChevronDown size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} />}
                       </button>
 
                       {rankingOpen && (
@@ -328,9 +328,9 @@ export default function Layout({ children }) {
                           isAnyCasinoActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                       >
-                        <Icon size={16} className={isAnyCasinoActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyCasinoActive ? { color: 'var(--gm-gold)' } : undefined} />
+                        <Icon size={16} style={{ color: 'var(--gm-gold)' }} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {casinoOpen ? <ChevronDown size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} />}
+                        {casinoOpen ? <ChevronDown size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} />}
                       </button>
 
                       {casinoOpen && (
@@ -420,7 +420,7 @@ export default function Layout({ children }) {
                     style={isFamiliesAtWar ? { color: '#f87171' } : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? { color: 'var(--gm-text)' } : { color: 'var(--gm-gold)' }} />
+                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--gm-gold)' }} />
                     <span className="uppercase tracking-widest text-xs font-heading flex-1">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
