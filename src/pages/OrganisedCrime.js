@@ -189,15 +189,15 @@ export default function OrganisedCrime() {
         </div>
       </div>
 
-      <div className={`${styles.panel} rounded-md overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Team (4 slots)</span>
-          <Users className="text-primary" size={18} />
+      <div className="rounded-md overflow-hidden max-w-2xl mx-auto border border-primary/30" style={{ backgroundColor: 'var(--gm-bg-top)' }}>
+        <div className="px-4 py-2 border-b flex items-center justify-between" style={{ borderColor: 'var(--gm-border)', color: 'var(--gm-gold)' }}>
+          <span className="text-xs font-heading font-bold uppercase tracking-widest">Team (4 slots)</span>
+          <Users size={18} style={{ color: 'var(--gm-gold)' }} />
         </div>
         <div className="p-4 space-y-3">
           {ROLE_IDS.map((roleId) => (
             <div key={roleId} className="flex flex-wrap items-center gap-2">
-              <span className="w-24 text-xs font-heading font-bold text-foreground capitalize shrink-0">{roleId}</span>
+              <span className="w-24 text-xs font-heading font-bold capitalize shrink-0" style={{ color: 'var(--gm-text)' }}>{roleId}</span>
               <div className="flex flex-wrap items-center gap-2">
                 {['self', 'npc', 'invite'].map((opt) => (
                   <label key={opt} className="flex items-center gap-1.5 cursor-pointer">
@@ -206,9 +206,9 @@ export default function OrganisedCrime() {
                       name={`slot-${roleId}`}
                       checked={slots[roleId] === opt}
                       onChange={() => setSlot(roleId, opt)}
-                      className="text-primary"
+                      className="accent-[var(--gm-gold)]"
                     />
-                    <span className="text-xs font-heading">
+                    <span className="text-xs font-heading" style={{ color: 'var(--gm-gold)' }}>
                       {opt === 'self' ? 'You' : opt === 'npc' ? 'NPC' : 'Invite'}
                     </span>
                   </label>
@@ -219,7 +219,8 @@ export default function OrganisedCrime() {
                     placeholder="Username"
                     value={inviteInputs[roleId]}
                     onChange={(e) => setInviteInputs((p) => ({ ...p, [roleId]: e.target.value }))}
-                    className="bg-background border border-primary/30 rounded px-2 py-1 text-xs font-heading w-32"
+                    className="rounded px-2 py-1 text-xs font-heading w-32"
+                    style={{ backgroundColor: 'var(--gm-card)', border: '1px solid var(--gm-border)', color: 'var(--gm-text)' }}
                   />
                 )}
               </div>

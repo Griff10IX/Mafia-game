@@ -58,11 +58,12 @@ export default function Dice() {
   useEffect(() => {
     const n = parseInt(String(chosenNumber || ''), 10);
     if (chosenNumber === '' || Number.isNaN(n)) return;
-    const actual = Math.ceil((Math.max(diceConfig.sides_min || 2, Math.min(diceConfig.sides_max || 5000, parseInt(String(sides || ''), 10) || 6)) * 1.05));
+    const cfg = diceConfig && typeof diceConfig === 'object' ? diceConfig : { sides_min: 2, sides_max: 5000 };
+    const actual = Math.max(2, Math.ceil((Math.max(cfg.sides_min || 2, Math.min(cfg.sides_max || 5000, parseInt(String(sides || ''), 10) || 6)) * 1.05));
     if (n < 1) setChosenNumber('1');
     else if (n > actual) setChosenNumber(String(actual));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only clamp when sides/actual sides change
-  }, [sidesNum]);
+  }, [sides, diceConfig?.sides_min, diceConfig?.sides_max]);
 
   // Keep state in sync with displayed (clamped) value so we never show one number and bet another
   useEffect(() => {
@@ -93,12 +94,13 @@ export default function Dice() {
     return () => clearInterval(t);
   }, [buyBackOffer]);
 
+  const config = diceConfig && typeof diceConfig === 'object' ? diceConfig : { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 };
   const stakeNum = parseInt(String(stake || '').replace(/[^\d]/g, ''), 10) || 0;
-  const sidesNum = Math.max(diceConfig.sides_min || 2, Math.min(diceConfig.sides_max || 5000, parseInt(String(sides || ''), 10) || 6));
-  const actualSidesNum = Math.ceil(sidesNum * 1.05);  // 5% extra sides per game rules (e.g. 1000 -> 1050)
+  const sidesNum = Math.max(config.sides_min || 2, Math.min(config.sides_max || 5000, parseInt(String(sides || ''), 10) || 6));
+  const actualSidesNum = Math.max(2, Math.ceil(sidesNum * 1.05));  // 5% extra sides per game rules (e.g. 1000 -> 1050)
   const chosenNum = Math.max(1, Math.min(actualSidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
-  const canBet = stakeNum > 0 && stakeNum <= (diceConfig.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= actualSidesNum;
+  const canBet = stakeNum > 0 && stakeNum <= (config.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= actualSidesNum;
 
   useEffect(() => {
     if (!diceLoading || actualSidesNum < 2) return;

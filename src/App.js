@@ -36,6 +36,7 @@ import DeadAlive from "./pages/DeadAlive";
 import Profile from "./pages/Profile";
 import Stats from "./pages/Stats";
 import Layout from "./components/Layout";
+import ErrorBoundary from "./components/ErrorBoundary";
 import "@/App.css";
 
 function App() {
@@ -317,7 +318,9 @@ function App() {
             element={
               isAuthenticated ? (
                 <Layout>
-                  <Dice />
+                  <ErrorBoundary>
+                    <Dice />
+                  </ErrorBoundary>
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
