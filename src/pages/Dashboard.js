@@ -133,19 +133,32 @@ export default function Dashboard() {
               const needed = Number(rankProgress.rank_points_needed) || 0;
               const total = current + needed;
               const pctFromApi = Number(rankProgress.rank_points_progress);
-              const progressPct = (typeof pctFromApi === 'number' && !Number.isNaN(pctFromApi))
+              const progressPct = (typeof pctFromApi === 'number' && !Number.isNaN(pctFromApi) && pctFromApi > 0)
                 ? Math.min(100, Math.max(0, pctFromApi))
                 : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
               return (
-                <div className={`h-2.5 w-full ${styles.raised} rounded-full overflow-hidden border border-primary/20`} style={{ minHeight: 10 }}>
+                <div
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: 10,
+                    backgroundColor: '#333333',
+                    borderRadius: 9999,
+                    overflow: 'hidden',
+                    border: '1px solid rgba(212,175,55,0.2)'
+                  }}
+                >
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-500"
                     style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      bottom: 0,
                       width: `${progressPct}%`,
                       minWidth: progressPct > 0 ? 8 : 0,
-                      height: '100%',
-                      display: 'block',
-                      boxSizing: 'border-box'
+                      background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+                      borderRadius: 9999,
+                      transition: 'width 0.5s ease'
                     }}
                     role="progressbar"
                     aria-valuenow={progressPct}

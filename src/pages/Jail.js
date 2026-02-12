@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Lock, Users, AlertCircle, Zap } from 'lucide-react';
+import { Lock, Users, AlertCircle, Zap, DoorOpen } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -42,6 +42,26 @@ export default function Jail() {
       }
     } catch (error) {
       console.error('Failed to check jail status');
+    }
+  };
+
+  const [leavingJail, setLeavingJail] = useState(false);
+
+  const leaveJail = async () => {
+    setLeavingJail(true);
+    try {
+      const response = await api.post('/jail/leave');
+      if (response.data.success) {
+        toast.success(response.data.message);
+        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      } else {
+        toast.error(response.data.message || 'Failed to leave jail');
+      }
+      fetchJailData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to leave jail');
+    } finally {
+      setLeavingJail(false);
     }
   };
 
@@ -91,7 +111,16 @@ export default function Jail() {
                 <div className="text-2xl sm:text-3xl font-heading font-bold text-red-400 mb-2 sm:mb-3 tabular-nums">
                   {jailStatus.seconds_remaining}s
                 </div>
-                <p className="text-[11px] sm:text-xs text-mutedForeground font-heading">Wait for release or ask another player to bust you out</p>
+                <p className="text-[11px] sm:text-xs text-mutedForeground font-heading mb-3">Wait for release or ask another player to bust you out</p>
+                <button
+                  type="button"
+                  onClick={leaveJail}
+                  disabled={leavingJail}
+                  className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-4 py-2 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 transition-smooth touch-manipulation inline-flex items-center gap-2"
+                >
+                  <DoorOpen size={14} />
+                  {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
+                </button>
               </div>
             </div>
           ) : (

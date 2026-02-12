@@ -243,18 +243,18 @@ export default function Garage() {
           </div>
 
           {/* Cars Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
             {displayedCars.map((car, index) => (
               <div
                 key={index}
                 onClick={() => toggleSelect(car.user_car_id)}
-                className={`${styles.panel} border rounded-sm p-3 cursor-pointer transition-smooth ${
+                className={`${styles.panel} border rounded-sm p-1.5 sm:p-2 cursor-pointer transition-smooth ${
                   selectedCars.includes(car.user_car_id)
                     ? 'border-primary ring-1 ring-primary/30'
                     : 'border-primary/20 hover:border-primary/50'
                 }`}
               >
-                <div className={`w-full aspect-[4/3] rounded-sm overflow-hidden ${styles.surface} border border-primary/20 mb-2`}>
+                <div className={`w-full aspect-square rounded-sm overflow-hidden ${styles.surface} border border-primary/20 mb-1 relative`}>
                   {car.image ? (
                     <img
                       src={car.image}
@@ -262,23 +262,24 @@ export default function Garage() {
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />
-                  ) : null}
-                </div>
-                <div className="flex items-start justify-between mb-2">
-                  <div className={`text-[10px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)}`}>
-                    {car.rarity.replace('_', ' ')}
-                  </div>
-                  {selectedCars.includes(car.user_car_id) ? (
-                    <CheckSquare size={14} className="text-primary" />
                   ) : (
-                    <Square size={14} className="text-mutedForeground" />
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Car size={20} className="text-primary/30" />
+                    </div>
                   )}
+                  <div className="absolute top-0.5 right-0.5">
+                    {selectedCars.includes(car.user_car_id) ? (
+                      <CheckSquare size={12} className="text-primary drop-shadow" />
+                    ) : (
+                      <Square size={12} className="text-mutedForeground/60 drop-shadow" />
+                    )}
+                  </div>
                 </div>
-                <h3 className="text-sm font-heading font-bold text-foreground mb-1 line-clamp-2">{car.name}</h3>
-                <div className="text-xs text-mutedForeground font-heading space-y-0.5">
-                  <div className="text-primary font-bold">${car.value.toLocaleString()}</div>
-                  <div className="text-primary/80">+{car.travel_bonus}% travel</div>
+                <div className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} leading-tight`}>
+                  {car.rarity.replace('_', ' ')}
                 </div>
+                <h3 className="text-[10px] sm:text-xs font-heading font-bold text-foreground truncate leading-tight">{car.name}</h3>
+                <div className="text-[9px] sm:text-[10px] text-primary font-heading font-bold">${car.value.toLocaleString()}</div>
               </div>
             ))}
           </div>

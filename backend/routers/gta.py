@@ -202,15 +202,13 @@ async def melt_cars(
     if not request.car_ids:
         raise HTTPException(status_code=400, detail="No cars selected")
     limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
-    if len(request.car_ids) > limit:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You can only melt/scrap {limit} cars at a time. Upgrade your limit in the Store.",
-        )
+    # Process up to the limit, leave the rest
+    car_ids_to_process = request.car_ids[:limit]
+    skipped = len(request.car_ids) - len(car_ids_to_process)
     total_value = 0
     total_bullets = 0
     deleted_count = 0
-    for car_id in request.car_ids:
+    for car_id in car_ids_to_process:
         user_car = await db.user_cars.find_one(
             {"user_id": current_user["id"], "id": car_id}
         )
@@ -248,6 +246,7 @@ async def melt_cars(
                         }
                     )
                 deleted_count += 1
+    skip_note = f" ({skipped} left over — limit is {limit})" if skipped > 0 else ""
     if deleted_count > 0:
         if request.action == "bullets":
             await db.users.update_one(
@@ -258,7 +257,8 @@ async def melt_cars(
                 "success": True,
                 "melted_count": deleted_count,
                 "total_bullets": total_bullets,
-                "message": f"Melted {deleted_count} car(s) for {total_bullets} bullets",
+                "skipped": skipped,
+                "message": f"Melted {deleted_count} car(s) for {total_bullets} bullets{skip_note}",
             }
         await db.users.update_one(
             {"id": current_user["id"]}, {"$inc": {"money": total_value}}
@@ -267,7 +267,8 @@ async def melt_cars(
             "success": True,
             "scrapped_count": deleted_count,
             "total_value": total_value,
-            "message": f"Scrapped {deleted_count} car(s) for ${total_value:,}",
+            "skipped": skipped,
+            "message": f"Scrapped {deleted_count} car(s) for ${total_value:,}{skip_note}",
         }
     return {"success": False, "message": "No cars were processed"}
 

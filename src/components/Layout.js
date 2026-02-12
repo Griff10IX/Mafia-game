@@ -579,7 +579,7 @@ export default function Layout({ children }) {
               const current = Number(rankProgress.rank_points_current) || 0;
               const needed = Number(rankProgress.rank_points_needed) || 0;
               const total = current + needed;
-              const progress = (typeof pct === 'number' && !Number.isNaN(pct))
+              const progress = (typeof pct === 'number' && !Number.isNaN(pct) && pct > 0)
                 ? Math.min(100, Math.max(0, pct))
                 : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
               return (
@@ -590,10 +590,29 @@ export default function Layout({ children }) {
                   <TrendingUp size={12} className="text-primary shrink-0" />
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                    <div className="w-10 sm:w-16 h-1.5 bg-noir-raised rounded-full mt-0.5 overflow-hidden flex" style={{ minHeight: 6 }}>
+                    <div
+                      style={{
+                        position: 'relative',
+                        width: 64,
+                        height: 6,
+                        backgroundColor: '#333333',
+                        borderRadius: 9999,
+                        overflow: 'hidden',
+                        marginTop: 2
+                      }}
+                    >
                       <div
-                        className="h-full rounded-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300 flex-none"
-                        style={{ width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, boxSizing: 'border-box' }}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          bottom: 0,
+                          width: `${progress}%`,
+                          minWidth: progress > 0 ? 4 : 0,
+                          background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+                          borderRadius: 9999,
+                          transition: 'width 0.3s ease'
+                        }}
                         role="progressbar"
                         aria-valuenow={progress}
                         aria-valuemin={0}

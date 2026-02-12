@@ -153,17 +153,17 @@ export default function GTA() {
         </div>
       </div>
 
-      <div className="flex justify-center overflow-x-auto">
-        <div className={`w-full max-w-3xl min-w-0 ${styles.panel} rounded-md overflow-hidden min-w-[300px]`}>
-          <div className="grid grid-cols-12 gap-1 sm:gap-0 bg-zinc-800/50 text-[10px] sm:text-xs uppercase tracking-widest font-heading text-primary/80 px-2 sm:px-4 py-2 border-b border-primary/20">
+      <div className="flex justify-center min-w-0">
+        <div className={`w-full max-w-3xl min-w-0 ${styles.panel} rounded-md overflow-hidden`}>
+          <div className="grid grid-cols-12 gap-1 bg-zinc-800/50 text-[10px] sm:text-xs uppercase tracking-widest font-heading text-primary/80 px-2 sm:px-4 py-2 border-b border-primary/20">
             <div className="col-span-4 sm:col-span-5 min-w-0">Option</div>
             <div className="col-span-2 text-right">Success</div>
             <div className="col-span-1 text-right">Jail</div>
             <div className="col-span-1 text-right hidden sm:block">CD</div>
-            <div className="col-span-4 sm:col-span-3">
-              <div className="flex items-center justify-end gap-1 sm:gap-2 flex-wrap">
+            <div className="col-span-5 sm:col-span-3">
+              <div className="flex items-center justify-end gap-1">
                 <span>Status</span>
-                <span className="min-w-[66px] text-right">Action</span>
+                <span className="text-right">Action</span>
               </div>
             </div>
           </div>
@@ -178,31 +178,31 @@ export default function GTA() {
               <div
                 key={option.id}
                 data-testid={`gta-option-${option.id}`}
-                className={`grid grid-cols-12 gap-1 sm:gap-0 px-2 sm:px-4 py-2.5 sm:py-2 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 min-w-[300px] ${!unlocked ? 'opacity-90' : ''}`}
+                className={`grid grid-cols-12 gap-1 px-2 sm:px-4 py-2 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!unlocked ? 'opacity-90' : ''}`}
               >
                 <div className="col-span-4 sm:col-span-5 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start justify-between gap-1">
                     <div className="min-w-0">
-                      <div className="text-xs sm:text-sm font-heading font-bold text-foreground truncate">{option.name}</div>
+                      <div className="text-[11px] sm:text-sm font-heading font-bold text-foreground truncate">{option.name}</div>
                       <div className="text-[10px] sm:text-xs text-mutedForeground font-heading">
                         {option.difficulty}/5
                         {!unlocked ? ` · ${option.min_rank_name}` : ''}
                       </div>
                     </div>
-                    {unlocked ? <Car className="text-primary shrink-0" size={14} /> : <Lock className="text-mutedForeground shrink-0" size={14} />}
+                    {unlocked ? <Car className="text-primary shrink-0 hidden sm:block" size={14} /> : <Lock className="text-mutedForeground shrink-0 hidden sm:block" size={14} />}
                   </div>
                 </div>
 
-                <div className="col-span-2 text-right text-xs sm:text-sm font-heading text-primary font-bold shrink-0">
+                <div className="col-span-2 text-right text-[11px] sm:text-sm font-heading text-primary font-bold shrink-0">
                   {eventsEnabled && event?.gta_success
                     ? `${Math.min(100, Math.round(option.success_rate * (event.gta_success ?? 1) * 100))}%`
                     : `${(option.success_rate * 100).toFixed(0)}%`}
                   {eventsEnabled && event?.gta_success && event.gta_success !== 1 && (
-                    <span className="block text-[9px] sm:text-[10px] text-mutedForeground font-normal">event</span>
+                    <span className="block text-[9px] text-mutedForeground font-normal">event</span>
                   )}
                 </div>
 
-                <div className="col-span-1 text-right text-xs font-heading text-red-400 shrink-0">
+                <div className="col-span-1 text-right text-[11px] sm:text-xs font-heading text-red-400 shrink-0">
                   {option.jail_time}s
                 </div>
 
@@ -210,9 +210,9 @@ export default function GTA() {
                   {onCooldown ? formatCooldown(option.cooldown_until) : defaultCooldown}
                 </div>
 
-                <div className="col-span-4 sm:col-span-3 flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1 sm:gap-2 min-w-[120px] shrink-0">
+                <div className="col-span-5 sm:col-span-3 flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1">
                   <span
-                    className={`inline-flex items-center justify-center px-2 py-0.5 rounded-sm text-[9px] sm:text-[10px] uppercase tracking-wider font-heading font-bold min-w-[70px] sm:min-w-[92px] ${
+                    className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm text-[9px] sm:text-[10px] uppercase tracking-wider font-heading font-bold ${
                       statusText === 'Available'
                         ? 'bg-primary/20 text-primary border border-primary/30'
                         : statusText === 'Cooldown'
@@ -223,15 +223,13 @@ export default function GTA() {
                   >
                     {statusText}
                   </span>
-                  {onCooldown || !unlocked ? (
-                    <span className="text-[10px] text-mutedForeground font-heading sm:hidden">—</span>
-                  ) : (
+                  {onCooldown || !unlocked ? null : (
                     <button
                       type="button"
                       onClick={() => attemptGTA(option.id)}
                       data-testid={`attempt-gta-${option.id}`}
                       disabled={attemptingOptionId !== null}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 sm:py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-60 disabled:cursor-not-allowed min-w-[66px] min-h-[44px] touch-manipulation transition-smooth"
+                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-60 disabled:cursor-not-allowed touch-manipulation transition-smooth"
                     >
                       {attemptingOptionId === option.id ? '...' : 'Steal'}
                     </button>
@@ -254,35 +252,35 @@ export default function GTA() {
               </div>
               <span className="text-xs text-primary font-heading font-bold">{garage.length} cars</span>
             </div>
-            <div className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                {garage.slice(0, 12).map((car, index) => (
+            <div className="p-2 sm:p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                {garage.slice(0, 20).map((car, index) => (
                   <div
                     key={index}
                     data-testid={`garage-car-${index}`}
-                    className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3"
+                    className="bg-zinc-800/50 border border-primary/20 rounded-sm p-2 flex flex-col items-center text-center"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-sm overflow-hidden bg-zinc-800 border border-primary/20 shrink-0">
-                        {car.image ? (
-                          <img
-                            src={car.image}
-                            alt={car.car_name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : null}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-heading font-bold text-foreground truncate">{car.car_name}</div>
-                        <div className="text-xs text-mutedForeground font-heading">{new Date(car.acquired_at).toLocaleDateString()}</div>
-                      </div>
+                    <div className="w-12 h-12 rounded-sm overflow-hidden bg-zinc-800 border border-primary/20 shrink-0 mb-1">
+                      {car.image ? (
+                        <img
+                          src={car.image}
+                          alt={car.car_name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Car size={16} className="text-primary/40" />
+                        </div>
+                      )}
                     </div>
+                    <div className="text-[10px] sm:text-xs font-heading font-bold text-foreground truncate w-full">{car.car_name}</div>
+                    <div className="text-[9px] sm:text-[10px] text-mutedForeground font-heading">{new Date(car.acquired_at).toLocaleDateString()}</div>
                   </div>
                 ))}
               </div>
-              {garage.length > 12 && (
-                <p className="text-xs text-mutedForeground font-heading mt-3">+ {garage.length - 12} more in Garage</p>
+              {garage.length > 20 && (
+                <p className="text-[10px] sm:text-xs text-mutedForeground font-heading mt-2 text-center">+ {garage.length - 20} more in Garage</p>
               )}
             </div>
           </div>

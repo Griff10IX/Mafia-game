@@ -188,6 +188,27 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
     }
 
 
+async def leave_jail(current_user: dict = Depends(get_current_user)):
+    """Pay 3 points to leave jail immediately."""
+    if not current_user.get("in_jail"):
+        raise HTTPException(status_code=400, detail="You are not in jail")
+    current_pts = int(current_user.get("points", 0) or 0)
+    if current_pts < 3:
+        raise HTTPException(status_code=400, detail="You need at least 3 points to leave jail")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {
+            "$set": {"in_jail": False, "jail_until": None},
+            "$inc": {"points": -3},
+        },
+    )
+    return {
+        "success": True,
+        "message": "You paid 3 points and left jail!",
+        "points_spent": 3,
+    }
+
+
 async def get_admin_npcs(current_user: dict = Depends(get_current_user)):
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -282,6 +303,7 @@ def register(router):
     router.add_api_route("/jail/players", get_jailed_players, methods=["GET"])
     router.add_api_route("/jail/bust", bust_out_of_jail, methods=["POST"])
     router.add_api_route("/jail/status", get_jail_status, methods=["GET"])
+    router.add_api_route("/jail/leave", leave_jail, methods=["POST"])
     router.add_api_route("/admin/npcs", get_admin_npcs, methods=["GET"])
     router.add_api_route("/admin/npcs/toggle", toggle_npcs, methods=["POST"])
     router.add_api_route("/npcs/list", list_npcs_for_attack, methods=["GET"])
