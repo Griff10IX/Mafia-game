@@ -764,6 +764,11 @@ class BulletCalcRequest(BaseModel):
 class BustOutRequest(BaseModel):
     target_username: str
 
+
+class JailSetBustRewardRequest(BaseModel):
+    amount: int  # $ reward for whoever busts you out (0 to clear)
+
+
 class ProtectionRacketRequest(BaseModel):
     target_username: str
     property_id: str
@@ -1028,26 +1033,13 @@ def get_wealth_rank_range(money: int | float) -> str:
             return f"${min_m:,}+"
     return "$0"
 
-# Bullet rewards per rank
-RANK_BULLET_REWARDS = {
-    2: 50,    # Hustler
-    3: 100,   # Goon
-    4: 200,   # Made Man
-    5: 350,   # Capo
-    6: 500,   # Underboss
-    7: 750,   # Consigliere
-    8: 1000,  # Boss
-    9: 1500,  # Don
-    10: 2000, # Godfather
-    11: 3000  # The Commission
-}
+# Bullet reward per rank up (flat 5000 bullets each time you rank up)
+RANK_UP_BULLET_REWARD = 5000
 
 async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, username: str = ""):
-    """Process rank up rewards (bullets) and send notification"""
+    """Process rank up: give bullets, send inbox notification."""
     if new_rank > old_rank:
-        total_bullets = 0
-        for rank in range(old_rank + 1, new_rank + 1):
-            total_bullets += RANK_BULLET_REWARDS.get(rank, 0)
+        total_bullets = RANK_UP_BULLET_REWARD * (new_rank - old_rank)
         
         if total_bullets > 0:
             await db.users.update_one(
@@ -1477,6 +1469,20 @@ async def get_stats_overview(
         if len(recent_kills) >= 15:
             break
 
+    top_dead = await db.users.find(
+        {"is_dead": True},
+        {"_id": 0, "username": 1, "total_kills": 1, "rank_points": 1, "dead_at": 1}
+    ).sort("total_kills", -1).limit(20).to_list(20)
+    top_dead_users = []
+    for u in top_dead:
+        rid, rname = get_rank_info(int(u.get("rank_points", 0) or 0))
+        top_dead_users.append({
+            "username": u.get("username"),
+            "total_kills": int(u.get("total_kills", 0) or 0),
+            "rank_name": rname,
+            "dead_at": u.get("dead_at"),
+        })
+
     return {
         "generated_at": now.isoformat(),
         "game_capital": {
@@ -1501,6 +1507,7 @@ async def get_stats_overview(
         },
         "rank_stats": rank_stats,
         "recent_kills": recent_kills,
+        "top_dead_users": top_dead_users,
     }
 
 @api_router.get("/meta/ranks")
@@ -2923,6 +2930,16 @@ async def admin_clear_bodyguards(target_username: str, current_user: dict = Depe
         "deleted_robot_users": res_robots.deleted_count,
     }
 
+
+@api_router.post("/admin/bodyguards/drop-all-human")
+async def admin_drop_all_human_bodyguards(current_user: dict = Depends(get_current_user)):
+    """Remove every bodyguard slot that is filled by a human (not robot). Robot bodyguards are left in place."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    res = await db.bodyguards.delete_many({"is_robot": {"$ne": True}})
+    return {"message": f"Dropped all human bodyguards ({res.deleted_count} slot(s) cleared)", "deleted_count": res.deleted_count}
+
+
 @api_router.post("/admin/bodyguards/generate")
 async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, current_user: dict = Depends(get_current_user)):
     """Generate 1–4 robot bodyguards for a user (testing)."""
@@ -3038,15 +3055,21 @@ async def admin_kill_player(target_username: str, current_user: dict = Depends(g
     target = await db.users.find_one({"username": target_username}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
+    if target.get("is_dead"):
+        raise HTTPException(status_code=400, detail="That account is already dead")
     
-    penalty = int(target["money"] * 0.2)
-    
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
         {"id": target["id"]},
-        {"$inc": {"money": -penalty, "total_deaths": 1}}
+        {"$set": {
+            "is_dead": True,
+            "dead_at": now_iso,
+            "points_at_death": int(target.get("points", 0) or 0),
+            "money": 0,
+            "health": 0,
+        }, "$inc": {"total_deaths": 1}}
     )
-    
-    return {"message": f"Killed {target_username}, took ${penalty:,}"}
+    return {"message": f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."}
 
 @api_router.post("/admin/set-search-time")
 async def admin_set_search_time(target_username: str, search_minutes: int, current_user: dict = Depends(get_current_user)):
@@ -3085,12 +3108,17 @@ async def admin_set_all_search_time(search_minutes: int = 5, current_user: dict 
         {},
         {"$set": {"search_minutes_override": int(search_minutes)}}
     )
+    await db.game_config.update_one(
+        {"id": "main"},
+        {"$set": {"default_search_minutes": int(search_minutes)}},
+        upsert=True
+    )
     new_found_time = datetime.now(timezone.utc) + timedelta(minutes=int(search_minutes))
     await db.attacks.update_many(
         {"status": "searching"},
         {"$set": {"found_at": new_found_time.isoformat()}}
     )
-    return {"message": f"Set all users' search time to {search_minutes} minutes ({res.modified_count} users updated)"}
+    return {"message": f"Set all users' search time to {search_minutes} minutes, persistent for everyone including new users ({res.modified_count} users updated)"}
 
 
 @api_router.post("/admin/clear-all-searches")
@@ -3958,6 +3986,8 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
 async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
     slot = request.slot
     is_robot = request.is_robot
+    if not is_robot:
+        raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
     if slot < 1 or slot > current_user["bodyguard_slots"]:
         raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
     
@@ -4157,6 +4187,14 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
             override_minutes = int(override_minutes)
         except Exception:
             override_minutes = None
+    if override_minutes is None or override_minutes <= 0:
+        config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "default_search_minutes": 1})
+        default_mins = config and config.get("default_search_minutes")
+        if default_mins is not None:
+            try:
+                override_minutes = int(default_mins)
+            except Exception:
+                override_minutes = None
     search_duration = int(override_minutes) if override_minutes and override_minutes > 0 else random.randint(120, 180)
     found_at = now + timedelta(minutes=search_duration)
     expires_at = now + timedelta(hours=24)
@@ -4299,11 +4337,11 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
             "can_attack": can_attack,
             "message": msg
         }
-        # For found attacks, include first bodyguard so UI can show "has bodyguard X, kill them first" + search link
+        # For found attacks, include first bodyguard so UI can show "has bodyguard in slot N, kill them first"
         if attack["status"] == "found" and attack.get("target_id"):
             target_bgs = await db.bodyguards.find({"user_id": attack["target_id"]}, {"_id": 0}).to_list(10)
             if target_bgs:
-                first_bg = target_bgs[0]
+                first_bg = max(target_bgs, key=lambda b: b.get("slot_number", 0))
                 search_username = None
                 display_name = first_bg.get("robot_name") or "bodyguard"
                 if first_bg.get("bodyguard_user_id"):
@@ -4312,9 +4350,9 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
                         search_username = bg_user.get("username")
                         if not first_bg.get("robot_name"):
                             display_name = search_username
-                if search_username:
-                    item["first_bodyguard"] = {"display_name": display_name, "search_username": search_username}
-                    item["bodyguard_count"] = len(target_bgs)
+                slot_n = first_bg.get("slot_number")
+                item["first_bodyguard"] = {"display_name": display_name, "search_username": search_username, "slot_number": slot_n}
+                item["bodyguard_count"] = len(target_bgs)
         items.append(item)
 
     return {"attacks": items}
@@ -4720,9 +4758,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
 
     # If target has bodyguards, do not execute — tell frontend to show message and offer search for bodyguard
+    # Use highest slot first (4 → 3 → 2 → 1) so attacker must kill slot 4, then 3, then 2, then 1
     target_bodyguards = await db.bodyguards.find({"user_id": target["id"]}, {"_id": 0}).to_list(10)
     if target_bodyguards:
-        first_bg = target_bodyguards[0]
+        first_bg = max(target_bodyguards, key=lambda b: b.get("slot_number", 0))
         display_name = first_bg.get("robot_name") or "bodyguard"
         search_username = None
         if first_bg.get("bodyguard_user_id"):
@@ -4731,20 +4770,22 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 search_username = bg_user.get("username")
                 if not first_bg.get("robot_name"):
                     display_name = search_username
+        slot_n = first_bg.get("slot_number")
+        target_name = target["username"]
+        slot_msg = f" in slot {slot_n}" if slot_n else ""
         if search_username:
-            target_name = target["username"]
             return AttackExecuteResponse(
                 success=False,
-                message=f"{target_name} has a bodyguard called {display_name}. You need to kill them first.",
+                message=f"{target_name} has a bodyguard{slot_msg} called {display_name}. You need to kill them first.",
                 rewards=None,
-                first_bodyguard={"display_name": display_name, "search_username": search_username},
+                first_bodyguard={"display_name": display_name, "search_username": search_username, "slot_number": slot_n},
             )
         # fallback if no linked user
-        target_name = target["username"]
         return AttackExecuteResponse(
             success=False,
-            message=f"{target_name} has a bodyguard. You need to kill them first.",
+            message=f"{target_name} has a bodyguard{slot_msg}. You need to kill them first.",
             rewards=None,
+            first_bodyguard={"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n},
         )
     
     target_name = target["username"]
@@ -4831,19 +4872,17 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 "health": 0
             }, "$inc": {"total_deaths": 1}}
         )
-        # If the victim was someone's bodyguard, remove them and the owner permanently loses that slot
+        # If the victim was someone's bodyguard: owner loses both the bodyguard and the slot (delete bodyguard, decrement slots; must buy that slot again). Remaining BGs renumber 1..n. Applies for any slot count.
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
         bodyguard_owner_username = None
         for bg in victim_as_bodyguard:
             owner_id = bg["user_id"]
-            # Lookup owner username for attempt history
             owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
             if owner_doc:
                 bodyguard_owner_username = owner_doc.get("username")
-            await db.bodyguards.delete_one({"id": bg["id"]})
-            await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
+            await db.bodyguards.delete_one({"id": bg["id"]})  # lose the bodyguard
+            await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})  # lose the slot
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
-            # Record war stats for bodyguard kill
             try:
                 owner_family_id = (owner_doc or {}).get("family_id")
                 if owner_family_id and killer_family_id:
@@ -4852,7 +4891,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
             except Exception as e:
                 logging.exception("War stats bodyguard kill: %s", e)
-            # Renumber owner's remaining bodyguards so slot_numbers are 1..n
+            # Renumber remaining bodyguards so slot_numbers are 1..n (e.g. had 1,2,4 left → become 1,2,3)
             remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
             for i, b in enumerate(remaining, 1):
                 if b["slot_number"] != i:
@@ -5133,11 +5172,12 @@ BOOZE_TYPES = [
     {"id": "jamaica_ginger", "name": "Jamaica Ginger"},
 ]
 # Base capacity: 50 at rank 1, then +5% to +10% per rank (we use 7.5% so each rank increases limit).
-# Store upgrade adds +1000 units (one-time or repeatable).
+# Store upgrade: +100 per purchase for 30 points, bonus capped at 1000 total.
 BOOZE_CAPACITY_BASE_RANK1 = 50
 BOOZE_CAPACITY_PCT_PER_RANK = 0.075  # 7.5% more per rank (in 5–10% range)
-BOOZE_CAPACITY_UPGRADE_COST = 30   # points per store purchase
-BOOZE_CAPACITY_UPGRADE_AMOUNT = 1000  # +1000 units from store
+BOOZE_CAPACITY_UPGRADE_COST = 30   # points per +100 capacity
+BOOZE_CAPACITY_UPGRADE_AMOUNT = 100  # +100 units per store purchase
+BOOZE_CAPACITY_BONUS_MAX = 1000  # cap on booze_capacity_bonus from store
 BOOZE_RUN_HISTORY_MAX = 10
 # Jail chance on buy/sell: random between 2% and 6% per action
 BOOZE_RUN_JAIL_CHANCE_MIN = 0.02
@@ -5267,12 +5307,14 @@ async def casino_dice_ownership(current_user: dict = Depends(get_current_user)):
         if u:
             _, wealth_rank_name = get_wealth_rank(int((u.get("money") or 0) or 0))
             owner = {"user_id": owner_id, "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name}
+    profit = int((doc.get("profit") or 0) or 0)
     return {
         "current_city": city,
         "owner": owner,
         "is_owner": is_owner,
         "max_bet": max_bet,
         "buy_back_reward": buy_back_reward,
+        "profit": profit if is_owner else None,
     }
 
 
@@ -5307,6 +5349,7 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
+            await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake}})
         return {"roll": roll, "win": False, "payout": 0, "actual_payout": 0, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
     if not owner_id:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout_full - stake}})
@@ -5341,6 +5384,7 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
         buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
     else:
         await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
+        await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
     return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer}
 
 
@@ -5361,7 +5405,7 @@ async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depe
         raise HTTPException(status_code=400, detail="Not enough points to claim")
     await db.dice_ownership.update_one(
         {"city": city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": DICE_MAX_BET, "buy_back_reward": 0}},
+        {"$set": {"owner_id": current_user["id"], "max_bet": DICE_MAX_BET, "buy_back_reward": 0, "profit": 0}},
         upsert=True,
     )
     if DICE_CLAIM_COST_POINTS > 0:
@@ -5586,7 +5630,7 @@ async def casino_roulette_ownership(current_user: dict = Depends(get_current_use
     is_owner = owner_id == current_user["id"]
     max_bet = doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET)
     total_earnings = doc.get("total_earnings", 0)
-    
+    profit = int((doc.get("profit") or total_earnings or 0) or 0)
     return {
         "current_city": display_city,
         "owner_id": owner_id,
@@ -5595,7 +5639,8 @@ async def casino_roulette_ownership(current_user: dict = Depends(get_current_use
         "is_unclaimed": owner_id is None,
         "claim_cost": ROULETTE_CLAIM_COST,
         "max_bet": max_bet,
-        "total_earnings": total_earnings if is_owner else None
+        "total_earnings": total_earnings if is_owner else None,
+        "profit": profit if is_owner else None
     }
 
 
@@ -5857,6 +5902,7 @@ async def casino_blackjack_ownership(current_user: dict = Depends(get_current_us
     is_owner = owner_id == current_user["id"]
     max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET)
     total_earnings = doc.get("total_earnings", 0)
+    profit = int((doc.get("profit") or 0) or 0)
     return {
         "current_city": display_city,
         "owner_id": owner_id,
@@ -5866,6 +5912,7 @@ async def casino_blackjack_ownership(current_user: dict = Depends(get_current_us
         "claim_cost": BLACKJACK_CLAIM_COST,
         "max_bet": max_bet,
         "total_earnings": total_earnings if is_owner else None,
+        "profit": profit if is_owner else None,
     }
 
 
@@ -5883,7 +5930,7 @@ async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: di
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -BLACKJACK_CLAIM_COST}})
     await db.blackjack_ownership.update_one(
         {"city": stored_city or city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0}},
+        {"$set": {"owner_id": current_user["id"], "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
         upsert=True,
     )
     return {"message": f"You now own the blackjack table in {city}!"}
@@ -6020,6 +6067,7 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": -int(bet * 3 / 2)}})
+            await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -int(bet * 3 / 2)}})
         await _blackjack_settle_and_save_history(
             current_user["id"], city, bet, "blackjack", payout, player_hand, dealer_hand, player_total, dealer_total
         )
@@ -6042,7 +6090,7 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": 0}})
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-            await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet}})
+            await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet, "profit": bet}})
         await _blackjack_settle_and_save_history(
             current_user["id"], city, bet, "lose", 0, player_hand, dealer_hand, player_total, dealer_total
         )
@@ -6106,7 +6154,7 @@ async def casino_blackjack_hit(current_user: dict = Depends(get_current_user)):
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
             await db.blackjack_ownership.update_one(
                 {"city": game.get("city")},
-                {"$inc": {"total_earnings": bet}}
+                {"$inc": {"total_earnings": bet, "profit": bet}}
             )
         await _blackjack_settle_and_save_history(
             current_user["id"], game.get("city"), bet, "bust", 0, player_hand, game.get("dealer_hand", []), player_total, _blackjack_hand_total(game.get("dealer_hand", []))
@@ -6171,7 +6219,7 @@ async def casino_blackjack_stand(current_user: dict = Depends(get_current_user))
         payout = 0
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-            await db.blackjack_ownership.update_one({"city": game.get("city")}, {"$inc": {"total_earnings": bet}})
+            await db.blackjack_ownership.update_one({"city": game.get("city")}, {"$inc": {"total_earnings": bet, "profit": bet}})
     else:
         result = "push"
         payout = bet
@@ -6179,6 +6227,7 @@ async def casino_blackjack_stand(current_user: dict = Depends(get_current_user))
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
         if owner_id and result in ("win", "dealer_bust"):
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
+            await db.blackjack_ownership.update_one({"city": game.get("city")}, {"$inc": {"profit": -bet}})
     user = await db.users.find_one({"id": current_user["id"]})
     new_balance = (user.get("money", 0) or 0)
     await _blackjack_settle_and_save_history(
@@ -6290,6 +6339,7 @@ async def casino_horseracing_ownership(current_user: dict = Depends(get_current_
     is_owner = owner_id == current_user["id"]
     max_bet = doc.get("max_bet", HORSERACING_MAX_BET)
     total_earnings = doc.get("total_earnings", 0)
+    profit = int((doc.get("profit") or 0) or 0)
     return {
         "current_city": display_city,
         "owner_id": owner_id,
@@ -6299,6 +6349,7 @@ async def casino_horseracing_ownership(current_user: dict = Depends(get_current_
         "claim_cost": HORSERACING_CLAIM_COST,
         "max_bet": max_bet,
         "total_earnings": total_earnings if is_owner else None,
+        "profit": profit if is_owner else None,
     }
 
 
@@ -6316,7 +6367,7 @@ async def casino_horseracing_claim(request: RouletteClaimRequest, current_user: 
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
     await db.horseracing_ownership.update_one(
         {"city": stored_city or city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": HORSERACING_MAX_BET, "total_earnings": 0}},
+        {"$set": {"owner_id": current_user["id"], "max_bet": HORSERACING_MAX_BET, "total_earnings": 0, "profit": 0}},
         upsert=True,
     )
     return {"message": f"You now own the race track in {city}!"}
@@ -6405,6 +6456,10 @@ async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: 
             shortfall = payout - actual_payout
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
+            await db.horseracing_ownership.update_one(
+                {"city": stored_city or city},
+                {"$inc": {"profit": -actual_payout}}
+            )
             new_money = user_money - bet + actual_payout
             if shortfall > 0:
                 await db.horseracing_ownership.update_one(
@@ -6415,7 +6470,7 @@ async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: 
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
             await db.horseracing_ownership.update_one(
                 {"city": stored_city or city},
-                {"$inc": {"total_earnings": bet}}
+                {"$inc": {"total_earnings": bet, "profit": bet}}
             )
     history_entry = {
         "bet": bet,
@@ -6606,7 +6661,7 @@ def _booze_user_capacity(current_user: dict) -> int:
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     # Base capacity scales 5–10% per rank (use 7.5%): rank 1 = 50, each rank multiplies by 1.075
     base = int(round(BOOZE_CAPACITY_BASE_RANK1 * ((1 + BOOZE_CAPACITY_PCT_PER_RANK) ** (rank_id - 1))))
-    bonus = current_user.get("booze_capacity_bonus", 0)
+    bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     return base + bonus
 
 
@@ -6650,6 +6705,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     runs_count = current_user.get("booze_runs_count", 0)
     history = (current_user.get("booze_run_history") or [])[:BOOZE_RUN_HISTORY_MAX]
 
+    capacity_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     return {
         "locations": list(STATES),
         "booze_types": list(BOOZE_TYPES),
@@ -6658,6 +6714,8 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "all_prices_by_location": all_prices,
         "carrying": carrying,
         "capacity": capacity,
+        "capacity_bonus": capacity_bonus,
+        "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX,
         "carrying_total": _booze_user_carrying_total(carrying),
         "rotation_ends_at": _booze_rotation_ends_at(),
         "rotation_hours": BOOZE_ROTATION_HOURS,
@@ -6823,15 +6881,19 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
 
 @api_router.post("/store/buy-booze-capacity")
 async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
-    """Spend points to increase booze carry capacity (+1000 units). Rank also adds 5–10% more per rank."""
+    """Spend points to increase booze carry capacity (+100 per purchase, bonus capped at 1000)."""
     if current_user["points"] < BOOZE_CAPACITY_UPGRADE_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
+    if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
+        raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
+    add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": BOOZE_CAPACITY_UPGRADE_AMOUNT}}
+        {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": add_bonus}}
     )
-    new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_user.get("booze_capacity_bonus", 0) + BOOZE_CAPACITY_UPGRADE_AMOUNT})
-    return {"message": f"+{BOOZE_CAPACITY_UPGRADE_AMOUNT} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity}
+    new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
+    return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 
 
 BULLET_PACKS = {

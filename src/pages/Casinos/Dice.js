@@ -311,7 +311,12 @@ export default function Dice() {
         {ownership?.current_city && (
           <div className={`mt-4 p-3 ${styles.panel} rounded-md text-sm`}>
             {isOwner ? (
-              <p className="text-primary font-heading">You own this table — you profit when players lose and pay when they win.</p>
+              <>
+                <p className="text-primary font-heading">You own this table — you profit when players lose and pay when they win.</p>
+                {ownership?.profit != null && (
+                  <p className="text-sm font-heading mt-1 font-bold text-primary/90">Profit/Loss: {formatMoney(ownership.profit)}</p>
+                )}
+              </>
             ) : ownership?.owner ? (
               <p className="text-mutedForeground">Owned by <span className="text-primary font-medium">{ownership.owner.username}</span>{ownership.owner.wealth_rank_name ? ` (${ownership.owner.wealth_rank_name})` : ''}. The house pays wins; losses go to the owner.</p>
             ) : (
@@ -375,6 +380,9 @@ export default function Dice() {
                 <h3 className="text-base font-heading font-bold text-primary uppercase tracking-widest">Owner Controls</h3>
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
+              {ownership?.profit != null && (
+                <p className="text-sm font-heading font-bold text-primary/90 mt-1">Profit/Loss: {formatMoney(ownership.profit)}</p>
+              )}
               <p className="text-xs text-mutedForeground mt-1">You cannot play at your own table</p>
             </div>
             <div className="p-4 space-y-3">

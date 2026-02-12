@@ -39,6 +39,7 @@ export default function Admin() {
   const [dbLoading, setDbLoading] = useState(false);
   const [giveAllPoints, setGiveAllPoints] = useState(100);
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
+  const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
 
   const checkAdmin = async () => {
     try {
@@ -232,6 +233,19 @@ export default function Admin() {
       toast.success(res.data?.message || 'Cleared bodyguards');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const handleDropAllHumanBodyguards = async () => {
+    if (!window.confirm('Remove all human bodyguard slots from every user? Robot bodyguards will be kept.')) return;
+    setDropHumanBgLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/drop-all-human');
+      toast.success(res.data?.message || 'Dropped all human bodyguards');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setDropHumanBgLoading(false);
     }
   };
 
@@ -651,9 +665,14 @@ export default function Admin() {
                   <label className={`block text-xs font-heading uppercase tracking-wider mb-2 ${styles.textMuted}`}>Generate count (1–4)</label>
                   <input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} className={inputClass} />
                 </div>
-                <div className="md:col-span-8 flex flex-col sm:flex-row gap-2">
-                  <button onClick={handleGenerateBodyguards} className={`flex-1 ${btnPrimary}`}>Generate Robot Bodyguards</button>
-                  <button onClick={handleClearBodyguards} className={`flex-1 ${btnDanger}`}>Drop All Bodyguards</button>
+                <div className="md:col-span-8 flex flex-col gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <button onClick={handleGenerateBodyguards} className={`flex-1 ${btnPrimary}`}>Generate Robot Bodyguards</button>
+                    <button onClick={handleClearBodyguards} className={`flex-1 ${btnDanger}`}>Drop All Bodyguards</button>
+                  </div>
+                  <button onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading} className={`w-full ${btnDanger} disabled:opacity-50`}>
+                    {dropHumanBgLoading ? 'Dropping...' : 'Drop All Human Bodyguards'}
+                  </button>
                 </div>
               </div>
             </div>

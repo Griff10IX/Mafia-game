@@ -97,8 +97,10 @@ export default function Stats() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [usersOnlyKills, setUsersOnlyKills] = useState(true);
+  const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'dead'
   const rankStats = Array.isArray(data?.rank_stats) ? data.rank_stats : [];
   const recentKills = Array.isArray(data?.recent_kills) ? data.recent_kills : [];
+  const topDeadUsers = Array.isArray(data?.top_dead_users) ? data.top_dead_users : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -182,39 +184,81 @@ export default function Stats() {
 
       <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between flex-wrap gap-2`}>
-          <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Last 15 Kills</span>
-          <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading select-none">
-            <input
-              type="checkbox"
-              className="h-4 w-4 accent-primary rounded border-primary/30"
-              checked={usersOnlyKills}
-              onChange={(e) => setUsersOnlyKills(e.target.checked)}
-            />
-            show users only
-          </label>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setStatsListTab('kills')}
+              className={`text-xs font-heading font-bold uppercase tracking-widest px-3 py-1.5 rounded-sm transition-smooth ${statsListTab === 'kills' ? 'bg-primary/20 text-primary' : 'text-mutedForeground hover:text-foreground'}`}
+            >
+              Last 15 Kills
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatsListTab('dead')}
+              className={`text-xs font-heading font-bold uppercase tracking-widest px-3 py-1.5 rounded-sm transition-smooth ${statsListTab === 'dead' ? 'bg-primary/20 text-primary' : 'text-mutedForeground hover:text-foreground'}`}
+            >
+              Top Dead Users
+            </button>
+          </div>
+          {statsListTab === 'kills' && (
+            <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading select-none">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-primary rounded border-primary/30"
+                checked={usersOnlyKills}
+                onChange={(e) => setUsersOnlyKills(e.target.checked)}
+              />
+              show users only
+            </label>
+          )}
         </div>
 
         <div>
-          <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
-            <div className="col-span-4">Victim</div>
-            <div className="col-span-3">Rank</div>
-            <div className="col-span-3">Killer</div>
-            <div className="col-span-2 text-right">Time</div>
-          </div>
-
-          {recentKills.length === 0 ? (
-            <div className="px-4 py-4 text-sm text-mutedForeground font-heading">No kills yet.</div>
-          ) : (
-            recentKills.map((k) => (
-              <div key={k.id} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs font-heading ${styles.raisedHover} transition-smooth`}>
-                <div className="col-span-4 text-foreground font-bold truncate">{k.victim_username}</div>
-                <div className="col-span-3 text-mutedForeground truncate">{k.victim_rank_name || '—'}</div>
-                <div className="col-span-3 text-mutedForeground truncate">
-                  {k.killer_username ? `Killed by ${k.killer_username}` : 'Killed by (private)'}
-                </div>
-                <div className="col-span-2 text-right text-mutedForeground">{formatDateTime(k.created_at)}</div>
+          {statsListTab === 'kills' && (
+            <>
+              <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
+                <div className="col-span-4">Victim</div>
+                <div className="col-span-3">Rank</div>
+                <div className="col-span-3">Killer</div>
+                <div className="col-span-2 text-right">Time</div>
               </div>
-            ))
+              {recentKills.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-mutedForeground font-heading">No kills yet.</div>
+              ) : (
+                recentKills.map((k) => (
+                  <div key={k.id} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs font-heading ${styles.raisedHover} transition-smooth`}>
+                    <div className="col-span-4 text-foreground font-bold truncate">{k.victim_username}</div>
+                    <div className="col-span-3 text-mutedForeground truncate">{k.victim_rank_name || '—'}</div>
+                    <div className="col-span-3 text-mutedForeground truncate">
+                      {k.killer_username ? `Killed by ${k.killer_username}` : 'Killed by (private)'}
+                    </div>
+                    <div className="col-span-2 text-right text-mutedForeground">{formatDateTime(k.created_at)}</div>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+          {statsListTab === 'dead' && (
+            <>
+              <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
+                <div className="col-span-5">Username</div>
+                <div className="col-span-2 text-center">Kills</div>
+                <div className="col-span-3">Rank</div>
+                <div className="col-span-2 text-right">Died</div>
+              </div>
+              {topDeadUsers.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-mutedForeground font-heading">No dead users yet.</div>
+              ) : (
+                topDeadUsers.map((u, i) => (
+                  <div key={u.username + (u.dead_at || '')} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs font-heading ${styles.raisedHover} transition-smooth`}>
+                    <div className="col-span-5 text-foreground font-bold truncate">{u.username}</div>
+                    <div className="col-span-2 text-center text-mutedForeground">{formatNumber(u.total_kills)}</div>
+                    <div className="col-span-3 text-mutedForeground truncate">{u.rank_name || '—'}</div>
+                    <div className="col-span-2 text-right text-mutedForeground">{formatDateTime(u.dead_at)}</div>
+                  </div>
+                ))
+              )}
+            </>
           )}
         </div>
       </div>

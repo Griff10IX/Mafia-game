@@ -14,6 +14,7 @@ from server import (
     get_current_user,
     get_rank_info,
     BustOutRequest,
+    JailSetBustRewardRequest,
     ADMIN_EMAILS,
     NPCToggleRequest,
     RANKS,
@@ -46,7 +47,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     real_players_raw = await db.users.find(
         {"in_jail": True},
-        {"_id": 0, "username": 1, "id": 1, "rank_points": 1, "jail_until": 1},
+        {"_id": 0, "username": 1, "id": 1, "rank_points": 1, "jail_until": 1, "bust_reward_cash": 1},
     ).to_list(50)
     real_players = []
     for p in real_players_raw:
@@ -74,6 +75,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     players_data = []
     for player in real_players:
         rank_id, rank_name = get_rank_info(player.get("rank_points", 0))
+        reward_cash = int((player.get("bust_reward_cash") or 0) or 0)
         players_data.append(
             {
                 "username": player["username"],
@@ -82,6 +84,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
                 "is_self": player["id"] == current_user["id"],
                 "bust_success_rate": 70,
                 "rp_reward": 15,
+                "bust_reward_cash": reward_cash,
             }
         )
     for npc in npcs:
@@ -93,6 +96,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
                 "is_npc": True,
                 "bust_success_rate": int(round(npc_rate * 100)),
                 "rp_reward": 25,
+                "bust_reward_cash": 0,
             }
         )
     return {"players": players_data}
@@ -109,9 +113,11 @@ async def bust_out_of_jail(
         success = random.random() < success_rate
         rank_points = 25
         if success:
+            new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
+            record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": {"rank_points": rank_points, "jail_busts": 1}},
+                {"$inc": {"rank_points": rank_points, "jail_busts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
             )
             await db.jail_npcs.delete_one({"username": request.target_username})
             return {
@@ -122,7 +128,7 @@ async def bust_out_of_jail(
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}},
+            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
         )
         return {
             "success": False,
@@ -148,19 +154,28 @@ async def bust_out_of_jail(
             {"id": target["id"]},
             {"$set": {"in_jail": False, "jail_until": None}},
         )
+        reward_cash = int((target.get("bust_reward_cash") or 0) or 0)
+        target_money = int((target.get("money") or 0) or 0)
+        cash_to_pay = min(reward_cash, target_money) if reward_cash > 0 else 0
+        if cash_to_pay > 0:
+            await db.users.update_one({"id": target["id"]}, {"$inc": {"money": -cash_to_pay}})
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash_to_pay}})
+        new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
+        record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"rank_points": rank_points, "jail_busts": 1}},
+            {"$inc": {"rank_points": rank_points, "jail_busts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
         )
         return {
             "success": True,
             "message": f"Successfully busted out {target['username']}!",
             "rank_points_earned": rank_points,
+            "cash_reward": cash_to_pay,
         }
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}},
+        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
     )
     return {
         "success": False,
@@ -170,8 +185,18 @@ async def bust_out_of_jail(
 
 
 async def get_jail_status(current_user: dict = Depends(get_current_user)):
+    jail_busts = int((current_user.get("jail_busts") or 0) or 0)
+    bust_reward_cash = int((current_user.get("bust_reward_cash") or 0) or 0)
+    current_consecutive_busts = int((current_user.get("current_consecutive_busts") or 0) or 0)
+    consecutive_busts_record = int((current_user.get("consecutive_busts_record") or 0) or 0)
+    base = {
+        "jail_busts": jail_busts,
+        "bust_reward_cash": bust_reward_cash,
+        "current_consecutive_busts": current_consecutive_busts,
+        "consecutive_busts_record": consecutive_busts_record,
+    }
     if not current_user.get("in_jail"):
-        return {"in_jail": False}
+        return {"in_jail": False, **base}
     jail_until = datetime.fromisoformat(current_user["jail_until"])
     now = datetime.now(timezone.utc)
     if jail_until <= now:
@@ -179,13 +204,24 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
             {"id": current_user["id"]},
             {"$set": {"in_jail": False, "jail_until": None}},
         )
-        return {"in_jail": False}
+        return {"in_jail": False, **base}
     seconds_remaining = int((jail_until - now).total_seconds())
     return {
         "in_jail": True,
         "jail_until": current_user["jail_until"],
         "seconds_remaining": seconds_remaining,
+        **base,
     }
+
+
+async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict = Depends(get_current_user)):
+    """Set the $ reward offered to whoever busts you out. 0 to clear."""
+    amount = max(0, int(request.amount))
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"bust_reward_cash": amount}},
+    )
+    return {"message": f"Bust reward set to ${amount:,}" if amount else "Bust reward cleared.", "bust_reward_cash": amount}
 
 
 async def leave_jail(current_user: dict = Depends(get_current_user)):
@@ -303,6 +339,7 @@ def register(router):
     router.add_api_route("/jail/players", get_jailed_players, methods=["GET"])
     router.add_api_route("/jail/bust", bust_out_of_jail, methods=["POST"])
     router.add_api_route("/jail/status", get_jail_status, methods=["GET"])
+    router.add_api_route("/jail/set-bust-reward", set_bust_reward, methods=["POST"])
     router.add_api_route("/jail/leave", leave_jail, methods=["POST"])
     router.add_api_route("/admin/npcs", get_admin_npcs, methods=["GET"])
     router.add_api_route("/admin/npcs/toggle", toggle_npcs, methods=["POST"])

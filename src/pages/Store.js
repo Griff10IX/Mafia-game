@@ -316,16 +316,21 @@ export default function Store() {
               <p className="text-xs font-heading text-mutedForeground mb-4">
                 Carry more units on supply runs. Higher rank also increases base capacity.
               </p>
-              <div className="flex items-center justify-between text-sm font-heading mb-6">
+              <div className="flex items-center justify-between text-sm font-heading mb-2">
                 <span className="text-mutedForeground">Current capacity:</span>
                 <span className="text-primary font-bold">{boozeConfig?.capacity ?? '—'} units</span>
               </div>
+              {(boozeConfig?.capacity_bonus_max != null) && (
+                <div className="text-xs text-mutedForeground font-heading mb-4">
+                  Bonus from store: {boozeConfig.capacity_bonus ?? 0} / {boozeConfig.capacity_bonus_max} (max)
+                </div>
+              )}
               <button
                 onClick={buyBoozeCapacity}
-                disabled={!user || user.points < 30}
+                disabled={!user || user.points < 30 || (boozeConfig?.capacity_bonus_max != null && (boozeConfig?.capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max)}
                 className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
               >
-                +1000 capacity for 30 Points
+                +100 capacity for 30 Points (up to 1000)
               </button>
             </div>
           </div>

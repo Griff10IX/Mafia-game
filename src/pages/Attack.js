@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Search, Plane, Crosshair, Clock, MapPin, Skull, Calculator } from 'lucide-react';
+import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -33,6 +33,9 @@ export default function Attack() {
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [userBullets, setUserBullets] = useState(0);
+  const [travelModalDestination, setTravelModalDestination] = useState(null);
+  const [travelInfo, setTravelInfo] = useState(null);
+  const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
 
   useEffect(() => {
     refreshAttacks();
@@ -125,17 +128,27 @@ export default function Attack() {
     }
   };
 
-  const travelToTarget = async (attackId) => {
-    setLoading(true);
+  const openTravelModal = (locationState) => {
+    setTravelModalDestination(locationState || null);
+    setTravelInfo(null);
+    if (locationState) {
+      api.get('/travel/info').then((r) => setTravelInfo(r.data)).catch(() => setTravelInfo(null));
+    }
+  };
+
+  const handleTravelFromModal = async (method) => {
+    if (!travelModalDestination) return;
+    setTravelSubmitLoading(true);
     try {
-      const response = await api.post('/attack/travel', { attack_id: attackId });
-      toast.success(response.data.message);
+      const response = await api.post('/travel', { destination: travelModalDestination, travel_method: method });
+      toast.success(response.data?.message || `Traveling to ${travelModalDestination}`);
+      setTravelModalDestination(null);
       refreshUser();
       await refreshAttacks();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to travel');
+      toast.error(error.response?.data?.detail || 'Travel failed');
     } finally {
-      setLoading(false);
+      setTravelSubmitLoading(false);
     }
   };
 
@@ -518,7 +531,7 @@ export default function Attack() {
                         <button
                           type="button"
                           disabled={loading}
-                          onClick={() => travelToTarget(a.attack_id)}
+                          onClick={() => openTravelModal(a.location_state)}
                           className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
                           data-testid={`attack-travel-${a.attack_id}`}
                         >
@@ -725,6 +738,71 @@ export default function Attack() {
                       </div>
                     ) : (
                       <div className="text-xs text-mutedForeground font-heading italic">Pick a target and calculate bullets needed.</div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {travelModalDestination && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/80" onClick={() => setTravelModalDestination(null)} />
+          <div className="absolute inset-0 flex items-center justify-center p-4">
+            <div className={`w-full max-w-md ${styles.panel} border border-primary/40 rounded-sm overflow-hidden shadow-2xl shadow-primary/20`} onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+                <div className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Travel to {travelModalDestination}</div>
+                <button type="button" onClick={() => setTravelModalDestination(null)} className="text-mutedForeground hover:text-primary font-heading" aria-label="Close">✕</button>
+              </div>
+              <div className="p-4 space-y-2">
+                {!travelInfo ? (
+                  <div className="text-sm text-mutedForeground font-heading py-4 text-center">Loading travel options…</div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => handleTravelFromModal('airport')}
+                      disabled={travelSubmitLoading || travelInfo.carrying_booze || (travelInfo.user_points ?? 0) < (travelInfo.airport_cost ?? 10)}
+                      className="w-full flex items-center justify-between bg-gradient-to-b from-primary/30 to-primary/10 hover:from-primary/40 hover:to-primary/20 border border-primary/50 px-3 py-2.5 rounded-sm transition-smooth disabled:opacity-50 text-left"
+                      data-testid="travel-modal-airport"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Plane size={16} className="text-primary" />
+                        <span className="text-sm font-heading font-bold text-primary">Airport</span>
+                      </span>
+                      <span className="text-xs text-primary/90 font-heading">{(travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant')} · {travelInfo.airport_cost ?? 10} pts</span>
+                    </button>
+                    {travelInfo.carrying_booze && <p className="text-xs text-amber-400 font-heading">Car only while carrying booze</p>}
+                    {travelInfo?.custom_car && (
+                      <button
+                        onClick={() => handleTravelFromModal('custom')}
+                        disabled={travelSubmitLoading}
+                        className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth text-left disabled:opacity-50`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Zap size={16} className="text-primary" />
+                          <span className="text-sm font-heading font-bold text-foreground">{travelInfo.custom_car.name}</span>
+                        </span>
+                        <span className="text-xs text-mutedForeground font-heading">{travelInfo.custom_car.travel_time}s</span>
+                      </button>
+                    )}
+                    {(travelInfo?.cars || []).slice(0, 3).map((car) => (
+                      <button
+                        key={car.user_car_id}
+                        onClick={() => handleTravelFromModal(car.user_car_id)}
+                        disabled={travelSubmitLoading}
+                        className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth text-left disabled:opacity-50`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Car size={16} className="text-primary" />
+                          <span className="text-sm font-heading truncate max-w-[140px] text-foreground">{car.name}</span>
+                        </span>
+                        <span className="text-xs text-mutedForeground font-heading">{car.travel_time}s</span>
+                      </button>
+                    ))}
+                    {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
+                      <p className="text-xs text-mutedForeground font-heading text-center py-2">No cars. Use airport or steal a car.</p>
                     )}
                   </>
                 )}

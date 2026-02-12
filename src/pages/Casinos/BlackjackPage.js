@@ -296,8 +296,8 @@ export default function Blackjack() {
           <div className="p-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-secondary/30 rounded-sm p-3">
-                <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Total Earnings</p>
-                <p className="text-xl font-heading font-bold text-primary">{formatMoney(ownership?.total_earnings || 0)}</p>
+                <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Profit / Loss</p>
+                <p className={`text-xl font-heading font-bold ${(ownership?.profit ?? ownership?.total_earnings ?? 0) >= 0 ? 'text-primary' : 'text-red-400'}`}>{formatMoney(ownership?.profit ?? ownership?.total_earnings ?? 0)}</p>
               </div>
               <div className="bg-secondary/30 rounded-sm p-3">
                 <p className="text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Current Max Bet</p>

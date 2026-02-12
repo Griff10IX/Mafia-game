@@ -12,12 +12,20 @@ export default function Jail() {
   const [jailStatus, setJailStatus] = useState({ in_jail: false });
   const [jailedPlayers, setJailedPlayers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [bustRewardInput, setBustRewardInput] = useState('');
+  const [setRewardLoading, setSetRewardLoading] = useState(false);
 
   useEffect(() => {
     fetchJailData();
     const interval = setInterval(fetchJailStatus, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (jailStatus.in_jail && bustRewardInput === '' && (jailStatus.bust_reward_cash ?? 0) > 0) {
+      setBustRewardInput(String(jailStatus.bust_reward_cash));
+    }
+  }, [jailStatus.in_jail, jailStatus.bust_reward_cash]);
 
   const fetchJailData = async () => {
     try {
@@ -70,7 +78,9 @@ export default function Jail() {
     try {
       const response = await api.post('/jail/bust', { target_username: username });
       if (response.data.success) {
-        toast.success(`${response.data.message} (+${response.data.rank_points_earned} RP)`);
+        let msg = `${response.data.message} (+${response.data.rank_points_earned} RP)`;
+        if (response.data.cash_reward > 0) msg += ` +$${Number(response.data.cash_reward).toLocaleString()}`;
+        toast.success(msg);
       } else {
         toast.error(response.data.message);
       }
@@ -79,6 +89,20 @@ export default function Jail() {
       toast.error(error.response?.data?.detail || 'Failed to bust out');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const setBustReward = async () => {
+    const amount = Math.max(0, parseInt(String(bustRewardInput).replace(/\D/g, ''), 10) || 0);
+    setSetRewardLoading(true);
+    try {
+      const res = await api.post('/jail/set-bust-reward', { amount });
+      toast.success(res.data?.message || 'Reward set');
+      setJailStatus((s) => ({ ...s, bust_reward_cash: res.data?.bust_reward_cash ?? amount }));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set reward');
+    } finally {
+      setSetRewardLoading(false);
     }
   };
 
@@ -96,6 +120,11 @@ export default function Jail() {
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
         </div>
         <p className="text-center text-xs sm:text-sm text-mutedForeground font-heading tracking-wide">Bust out players for rank points</p>
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-4 mt-2 text-xs sm:text-sm font-heading">
+          <span className="text-primary/90">Your busts: <strong>{jailStatus.jail_busts ?? 0}</strong></span>
+          <span className="text-mutedForeground">Streak: <strong>{jailStatus.current_consecutive_busts ?? 0}</strong></span>
+          <span className="text-primary/80">Record: <strong>{jailStatus.consecutive_busts_record ?? 0}</strong></span>
+        </div>
       </div>
 
       <div className="flex justify-center">
@@ -113,6 +142,27 @@ export default function Jail() {
                   {jailStatus.seconds_remaining}s
                 </div>
                 <p className="text-[11px] sm:text-xs text-zinc-300 font-heading mb-3">Wait for release or ask another player to bust you out</p>
+                {jailStatus.in_jail && (
+                  <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
+                    <label className="text-xs font-heading text-zinc-300">$ reward for busting you out:</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={bustRewardInput}
+                      onChange={(e) => setBustRewardInput(e.target.value)}
+                      className="w-24 h-8 px-2 rounded border border-primary/30 bg-black/40 text-white text-sm font-heading"
+                      placeholder="0"
+                    />
+                    <button
+                      type="button"
+                      onClick={setBustReward}
+                      disabled={setRewardLoading}
+                      className="h-8 px-3 rounded bg-primary/20 text-primary font-heading text-xs uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                    >
+                      {setRewardLoading ? '...' : 'Set'}
+                    </button>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={leaveJail}
@@ -156,9 +206,10 @@ export default function Jail() {
           ) : (
             <>
               <div className="hidden md:grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
-                <div className="col-span-5">Player</div>
-                <div className="col-span-3">Bust</div>
-                <div className="col-span-2 text-right">Reward</div>
+                <div className="col-span-4">Player</div>
+                <div className="col-span-2">Bust</div>
+                <div className="col-span-2 text-right">RP</div>
+                <div className="col-span-2 text-right">$ Reward</div>
                 <div className="col-span-2 text-right">Action</div>
               </div>
 
@@ -171,7 +222,7 @@ export default function Jail() {
                     className="grid grid-cols-1 md:grid-cols-12 gap-1.5 md:gap-0 px-3 py-2 sm:px-4 sm:py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 min-w-0"
                     data-testid={`jailed-player-${index}`}
                   >
-                    <div className="md:col-span-5 min-w-0">
+                    <div className="md:col-span-4 min-w-0">
                       <div className="flex items-center justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
                           <div className="text-xs sm:text-sm font-heading font-bold text-foreground truncate">{player.username}</div>
@@ -189,19 +240,23 @@ export default function Jail() {
                       </div>
                     </div>
 
-                    <div className="md:col-span-3 text-[11px] sm:text-xs text-mutedForeground font-heading">
+                    <div className="md:col-span-2 text-[11px] sm:text-xs text-mutedForeground font-heading">
                       {player.is_npc ? (
                         <span className="inline-flex items-center gap-1">
                           <Zap size={11} className="text-amber-400 sm:w-3 sm:h-3" />
-                          Harder ({successRate}%)
+                          {successRate}%
                         </span>
                       ) : (
-                        <span>Normal ({successRate}%)</span>
+                        <span>{successRate}%</span>
                       )}
                     </div>
 
-                    <div className="md:col-span-2 text-xs sm:text-sm font-heading text-primary font-bold">
+                    <div className="md:col-span-2 text-xs font-heading text-primary font-bold">
                       +{rp} RP
+                    </div>
+
+                    <div className="md:col-span-2 text-xs font-heading text-mutedForeground text-right">
+                      {player.bust_reward_cash > 0 ? `$${Number(player.bust_reward_cash).toLocaleString()}` : '—'}
                     </div>
 
                     <div className="md:col-span-2 flex justify-end">

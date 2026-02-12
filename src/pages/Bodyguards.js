@@ -211,13 +211,7 @@ export default function Bodyguards() {
                 </div>
               ) : bg.slot_number <= (user?.bodyguard_slots || 0) ? (
                 <div className="space-y-2">
-                  <button
-                    onClick={() => hireBodyguard(bg.slot_number, false)}
-                    data-testid={`hire-human-${bg.slot_number}`}
-                    className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth border border-yellow-600/50"
-                  >
-                    Hire Human ({getHireCost(bg.slot_number, false)} pts)
-                  </button>
+                  <p className="text-[11px] text-mutedForeground font-heading italic">Human bodyguards temporarily disabled.</p>
                   <button
                     onClick={() => hireBodyguard(bg.slot_number, true)}
                     data-testid={`hire-robot-${bg.slot_number}`}
