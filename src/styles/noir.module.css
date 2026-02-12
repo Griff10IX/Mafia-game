@@ -210,3 +210,92 @@
 .borderGoldLight {
   border-color: var(--noir-border-light);
 }
+
+/* ========== OLD SCHOOL GANGSTER + MODERN TWIST (Booze Run preview) ========== */
+.themeGangsterModern {
+  /* Warm vintage darks, brass gold, modern crisp edges */
+  --gm-bg: #0c0b09;
+  --gm-bg-top: #12100d;
+  --gm-card: #1a1814;
+  --gm-card-hover: #221f1a;
+  --gm-border: #3d3528;
+  --gm-gold: #c9a227;
+  --gm-gold-light: #e5c35a;
+  --gm-gold-dim: rgba(201, 162, 39, 0.4);
+  --gm-profit: #4ade80;
+  --gm-text: #f0ebe0;
+  --gm-muted: #9c9588;
+  background: linear-gradient(180deg, var(--gm-bg-top) 0%, var(--gm-bg) 100%);
+  color: var(--gm-text);
+  letter-spacing: 0.02em;
+}
+
+.themeGangsterModern .panel {
+  background-color: var(--gm-card);
+  border: 1px solid var(--gm-border);
+  border-radius: 6px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.themeGangsterModern .surface,
+.themeGangsterModern .surfaceMuted {
+  background-color: var(--gm-card-hover);
+  border-color: var(--gm-border);
+}
+
+.themeGangsterModern .raisedHover:hover {
+  background-color: rgba(34, 31, 26, 0.9);
+}
+
+.themeGangsterModern .input {
+  background-color: rgba(12, 11, 9, 0.9);
+  border-color: var(--gm-border);
+  color: var(--gm-text);
+}
+
+.themeGangsterModern .input:focus {
+  border-color: var(--gm-gold);
+  box-shadow: 0 0 0 1px var(--gm-gold-dim);
+}
+
+.themeGangsterModern .btnGoldDarkText {
+  background: linear-gradient(180deg, var(--gm-gold-light), var(--gm-gold));
+  color: #1a1814;
+  border-color: var(--gm-border);
+}
+
+.themeGangsterModern .textProfit {
+  color: var(--gm-profit);
+}
+
+/* Section headers: thick gold underline (old-school) + clean type (modern) */
+.themeGangsterModern .gmSectionHead {
+  border-bottom: 2px solid var(--gm-gold);
+  padding-bottom: 0.25rem;
+  margin-bottom: 0;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  color: var(--gm-gold);
+}
+
+.themeGangsterModern .gmTitle {
+  color: var(--gm-gold);
+  letter-spacing: 0.12em;
+  text-shadow: 0 0 20px rgba(201, 162, 39, 0.15);
+}
+
+.themeGangsterModern .gmMuted {
+  color: var(--gm-muted);
+}
+
+.themeGangsterModern .gmStatLabel {
+  color: var(--gm-muted);
+}
+
+.themeGangsterModern .gmStatValue {
+  color: var(--gm-text);
+}
+
+.themeGangsterModern .gmStatGold {
+  color: var(--gm-gold);
+}

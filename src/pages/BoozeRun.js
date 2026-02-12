@@ -278,61 +278,57 @@ export default function BoozeRun() {
   });
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="booze-run-page">
+    <div className={`space-y-6 ${styles.pageContent} ${styles.themeGangsterModern}`} data-testid="booze-run-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-primary/40" />
+          <h1 className={`text-2xl md:text-3xl font-heading font-bold uppercase tracking-wider flex items-center gap-2 ${styles.gmTitle}`}>
             <Wine size={28} />
             Booze Run
           </h1>
-          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/60" />
+          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-primary/40" />
         </div>
-        <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest max-w-xl">
+        <p className={`text-xs font-heading uppercase tracking-widest max-w-xl ${styles.gmMuted}`}>
           Prohibition-era supply runs, buy here, travel by car, sell for profit. Routes change every {config.rotation_hours ?? 3} hours.
         </p>
       </div>
 
       {/* Timer + location + capacity + profit stats */}
-      <div className={`${styles.panel} rounded-sm px-4 py-3`}>
+      <div className={`${styles.panel} rounded-md px-4 py-3`}>
         <div className="flex flex-wrap items-center gap-4 text-xs font-heading">
           <div className="flex items-center gap-2">
-            <Clock size={14} className="text-primary" />
-            <span className="text-mutedForeground">Rotation:</span>
-            <span className="font-bold text-foreground">{timer}</span>
+            <Clock size={14} style={{ color: 'var(--gm-gold)' }} />
+            <span className={styles.gmStatLabel}>Rotation:</span>
+            <span className={`font-bold ${styles.gmStatValue}`}>{timer}</span>
           </div>
           <div className="flex items-center gap-2">
-            <MapPin size={14} className="text-primary" />
-            <span className="font-bold text-primary">{config.current_location}</span>
+            <MapPin size={14} style={{ color: 'var(--gm-gold)' }} />
+            <span className={`font-bold ${styles.gmStatGold}`}>{config.current_location}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Package size={14} className="text-primary" />
-            <span className="font-bold text-foreground">{carryingTotal} / {capacity}</span>
-            <span className="text-mutedForeground">units</span>
+            <Package size={14} style={{ color: 'var(--gm-gold)' }} />
+            <span className={`font-bold ${styles.gmStatValue}`}>{carryingTotal} / {capacity}</span>
+            <span className={styles.gmStatLabel}>units</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-mutedForeground">Today:</span>
+            <span className={styles.gmStatLabel}>Today:</span>
             <span className={`font-bold ${(config.profit_today ?? 0) >= 0 ? styles.textProfit : 'text-red-400'}`}>{formatMoney(config.profit_today)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-mutedForeground">Overall:</span>
+            <span className={styles.gmStatLabel}>Overall:</span>
             <span className={`font-bold ${(config.profit_total ?? 0) >= 0 ? styles.textProfit : 'text-red-400'}`}>{formatMoney(config.profit_total)}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-mutedForeground">Runs:</span>
-            <span className="font-bold text-foreground">{config.runs_count ?? 0}</span>
+            <span className={styles.gmStatLabel}>Runs:</span>
+            <span className={`font-bold ${styles.gmStatValue}`}>{config.runs_count ?? 0}</span>
           </div>
         </div>
       </div>
 
       {/* Best routes: buy where cheap, sell where high */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Best routes (buy low → sell high)</h3>
-            <div className="flex-1 h-px bg-primary/50" />
-          </div>
+      <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        <div className="px-4 py-2 border-b" style={{ borderColor: 'var(--gm-border)' }}>
+          <h3 className={`text-xs font-heading font-bold uppercase tracking-widest ${styles.gmSectionHead}`}>Best routes (buy low → sell high)</h3>
         </div>
         <div className="p-3">
           {bestRoutes.length > 0 ? (
@@ -348,9 +344,9 @@ export default function BoozeRun() {
       </div>
 
       {/* City summary: min buy / max sell per city */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20`}>
-          <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Prices by city</span>
+      <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b`} style={{ borderColor: 'var(--gm-border)' }}>
+          <span className={`text-xs font-heading font-bold uppercase tracking-widest ${styles.gmSectionHead}`}>Prices by city</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -371,13 +367,9 @@ export default function BoozeRun() {
       </div>
 
       {/* Compact supplies table: buy/sell at current location */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Supplies here ({config.current_location})</h3>
-            <div className="flex-1 h-px bg-primary/50" />
-          </div>
+      <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        <div className="px-4 py-2 border-b" style={{ borderColor: 'var(--gm-border)' }}>
+          <h3 className={`text-xs font-heading font-bold uppercase tracking-widest ${styles.gmSectionHead}`}>Supplies here ({config.current_location})</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -410,9 +402,9 @@ export default function BoozeRun() {
       </div>
 
       {/* Last 10 buy/sells */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20`}>
-          <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Last 10 buy/sells</span>
+      <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b`} style={{ borderColor: 'var(--gm-border)' }}>
+          <span className={`text-xs font-heading font-bold uppercase tracking-widest ${styles.gmSectionHead}`}>Last 10 buy/sells</span>
         </div>
         <div className="p-3">
           {historyList.length > 0 ? (
@@ -440,17 +432,13 @@ export default function BoozeRun() {
         </div>
       </div>
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Quick tip</span>
-            <div className="flex-1 h-px bg-primary/50" />
-          </div>
+      <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        <div className="px-4 py-2 border-b" style={{ borderColor: 'var(--gm-border)' }}>
+          <span className={`text-xs font-heading font-bold uppercase tracking-widest ${styles.gmSectionHead}`}>Quick tip</span>
         </div>
         <div className="p-4">
-          <p className="text-xs text-mutedForeground font-heading flex items-center gap-2">
-            <span className="text-primary">◆</span> Travel via <strong className="text-foreground">Travel</strong> (car only while carrying booze). Upgrade capacity on the <strong className="text-foreground">Points Store</strong>.
+          <p className={`text-xs font-heading flex items-center gap-2 ${styles.gmMuted}`}>
+            <span style={{ color: 'var(--gm-gold)' }}>◆</span> Travel via <strong className={styles.gmStatValue}>Travel</strong> (car only while carrying booze). Upgrade capacity on the <strong className={styles.gmStatValue}>Points Store</strong>.
           </p>
         </div>
       </div>
