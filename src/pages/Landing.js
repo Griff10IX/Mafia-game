@@ -83,9 +83,7 @@ export default function Landing({ setIsAuthenticated }) {
                 onClick={() => setIsLogin(true)}
                 data-testid="login-tab"
                 className={`flex-1 py-2.5 rounded-sm uppercase tracking-wider text-xs font-heading font-bold transition-smooth border ${
-                  isLogin
-                    ? 'bg-primary/30 text-primary border-primary/50'
-                    : 'bg-transparent text-mutedForeground border-transparent hover:text-foreground hover:border-primary/20'
+                  isLogin ? `${styles.tabActive}` : 'bg-transparent text-mutedForeground border-transparent hover:text-foreground hover:border-primary/20'
                 }`}
               >
                 Login
@@ -94,9 +92,7 @@ export default function Landing({ setIsAuthenticated }) {
                 onClick={() => setIsLogin(false)}
                 data-testid="register-tab"
                 className={`flex-1 py-2.5 rounded-sm uppercase tracking-wider text-xs font-heading font-bold transition-smooth border ${
-                  !isLogin
-                    ? 'bg-primary/30 text-primary border-primary/50'
-                    : 'bg-transparent text-mutedForeground border-transparent hover:text-foreground hover:border-primary/20'
+                  !isLogin ? `${styles.tabActive}` : 'bg-transparent text-mutedForeground border-transparent hover:text-foreground hover:border-primary/20'
                 }`}
               >
                 Register
@@ -149,7 +145,7 @@ export default function Landing({ setIsAuthenticated }) {
                 type="submit"
                 data-testid="submit-button"
                 disabled={loading}
-                className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
+                className={`w-full ${styles.btnPrimary} hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 transition-smooth disabled:opacity-50`}
               >
                 {loading ? 'Processing...' : isLogin ? 'Enter the Family' : 'Join the Family'}
               </button>

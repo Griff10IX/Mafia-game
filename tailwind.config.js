@@ -13,19 +13,21 @@ module.exports = {
     extend: {
       colors: {
         border: '#2d2d2d',
-        background: '#050505',
+        background: '#1a1a1a',
         foreground: '#f5f5f5',
         primary: {
           DEFAULT: '#d4af37',
           foreground: '#ffffff',
         },
         mutedForeground: '#a1a1aa',
-        /* Noir: rich gold on neutral black (no brown) */
+        profit: '#5cb85c',
+        /* Noir: match reference – layered blacks, gold */
         noir: {
-          bg: '#050505',
+          bg: '#000000',
           panel: '#0d0d0d',
-          surface: '#1a1a1a',
-          raised: '#262626',
+          content: '#1a1a1a',
+          surface: '#282828',
+          raised: '#333333',
         },
       },
       fontFamily: {

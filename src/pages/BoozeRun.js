@@ -51,7 +51,7 @@ function HistoryRow({ h }) {
       <td className="py-1.5 px-2 text-right font-heading font-bold text-foreground">{formatMoney(h.total)}</td>
       <td className="py-1.5 px-2 text-right">
         {isSell && h.profit != null ? (
-          <span className={h.profit >= 0 ? 'text-emerald-400 font-heading font-bold' : 'text-red-400 font-heading font-bold'}>{formatMoney(h.profit)}</span>
+          <span className={`font-heading font-bold ${h.profit >= 0 ? styles.textProfit : 'text-red-400'}`}>{formatMoney(h.profit)}</span>
         ) : '—'}
       </td>
     </tr>
@@ -65,7 +65,7 @@ function BestRouteCard({ r }) {
       <div className="mt-0.5 text-mutedForeground font-heading text-xs">
         Buy in <span className="text-foreground font-bold">{r.bestBuyCity}</span> {formatMoney(r.bestBuyPrice)} → Sell in <span className="text-foreground font-bold">{r.bestSellCity}</span> {formatMoney(r.bestSellPrice)}
       </div>
-      <div className="mt-0.5 font-heading font-bold text-emerald-400">+{formatMoney(r.profit)}/unit</div>
+      <div className={`mt-0.5 font-heading font-bold ${styles.textProfit}`}>+{formatMoney(r.profit)}/unit</div>
     </div>
   );
 }
@@ -110,14 +110,14 @@ function SupplyRow({ row, buyAmounts, sellAmounts, setBuyAmount, setSellAmount, 
       <td className="py-1.5 px-2 text-right space-x-1">
         <button
           onClick={() => handleBuy(row.booze_id)}
-          className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth"
+          className={`${styles.btnGoldDarkText} px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wider transition-smooth`}
         >
           Buy
         </button>
         <button
           onClick={() => handleSell(row.booze_id)}
           disabled={!(row.carrying > 0)}
-          className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-foreground px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`}
+          className={`${styles.btnGoldDarkText} px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`}
         >
           Sell
         </button>
@@ -312,11 +312,11 @@ export default function BoozeRun() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-mutedForeground">Today:</span>
-            <span className={`font-bold ${(config.profit_today ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(config.profit_today)}</span>
+            <span className={`font-bold ${(config.profit_today ?? 0) >= 0 ? styles.textProfit : 'text-red-400'}`}>{formatMoney(config.profit_today)}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-mutedForeground">Overall:</span>
-            <span className={`font-bold ${(config.profit_total ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>{formatMoney(config.profit_total)}</span>
+            <span className={`font-bold ${(config.profit_total ?? 0) >= 0 ? styles.textProfit : 'text-red-400'}`}>{formatMoney(config.profit_total)}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-mutedForeground">Runs:</span>
