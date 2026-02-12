@@ -211,7 +211,7 @@
   border-color: var(--noir-border-light);
 }
 
-/* ========== OLD SCHOOL GANGSTER + MODERN TWIST (app-wide main content) ========== */
+/* ========== OLD SCHOOL GANGSTER + MODERN TWIST (app-wide: sidebar + main) ========== */
 .themeGangsterModern {
   /* Neutral charcoal + reflective gold (no brown) */
   --gm-bg: #0a0a0a;
@@ -225,9 +225,65 @@
   --gm-profit: #5cb85c;
   --gm-text: #f5f5f5;
   --gm-muted: #a1a1aa;
-  background: linear-gradient(180deg, var(--gm-bg-top) 0%, var(--gm-bg) 100%);
   color: var(--gm-text);
   letter-spacing: 0.02em;
+}
+
+/* Sidebar + top bar use gm palette when theme is on */
+.themeGangsterModern .sidebar {
+  background-color: var(--gm-bg) !important;
+  border-right-color: var(--gm-border);
+  color: var(--gm-gold);
+}
+
+.themeGangsterModern .sidebarNavLink {
+  color: var(--gm-gold) !important;
+}
+
+.themeGangsterModern .sidebarNavLink:hover {
+  background-color: var(--gm-card-hover) !important;
+  color: var(--gm-gold) !important;
+}
+
+.themeGangsterModern .sidebarHeaderTitle {
+  color: var(--gm-gold);
+}
+
+.themeGangsterModern .sidebarHeaderSub {
+  color: var(--gm-muted);
+}
+
+.themeGangsterModern .sidebar .borderGoldLight {
+  border-color: var(--gm-border);
+}
+
+.themeGangsterModern .sidebarSubmenuBorder {
+  border-left-color: var(--gm-border);
+}
+
+.themeGangsterModern .userBox {
+  background-color: var(--gm-card);
+  border-color: var(--gm-border);
+}
+
+.themeGangsterModern .navItemActive {
+  background: linear-gradient(to bottom, var(--gm-gold-light), #b8860b) !important;
+  color: #1a1a1a !important;
+}
+
+.themeGangsterModern .navItemActivePage {
+  background: linear-gradient(to bottom, var(--gm-gold-light), #b8860b) !important;
+  color: var(--gm-text) !important;
+}
+
+.themeGangsterModern .topBar {
+  background-color: var(--gm-bg-top);
+  border-bottom-color: var(--gm-border);
+}
+
+/* Main content area background */
+.themeGangsterModern main {
+  background: linear-gradient(180deg, var(--gm-bg-top) 0%, var(--gm-bg) 100%);
 }
 
 .themeGangsterModern .panel {

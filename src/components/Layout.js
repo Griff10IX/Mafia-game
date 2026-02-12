@@ -195,7 +195,7 @@ export default function Layout({ children }) {
   ] : [];
 
   return (
-    <div className={`min-h-screen ${styles.page}`}>
+    <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
       {/* Sidebar */}
       <div
         className={`fixed left-0 top-0 h-full w-64 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
@@ -206,9 +206,9 @@ export default function Layout({ children }) {
           {/* Logo – thin gold line under header (match reference) */}
           <div className={`p-4 border-b ${styles.borderGoldLight}`}>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-px" style={{ backgroundColor: 'var(--noir-primary)', opacity: 0.5 }} />
+              <div className="w-6 h-px" style={{ backgroundColor: 'var(--gm-gold)', opacity: 0.5 }} />
               <h1 className={`text-xl font-heading font-bold tracking-widest ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
-              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-primary)', opacity: 0.5 }} />
+              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--gm-gold)', opacity: 0.5 }} />
             </div>
             <p className={`text-xs mt-1 font-heading tracking-wider text-center ${styles.sidebarHeaderSub}`}>Chicago, 1927</p>
           </div>
@@ -238,9 +238,9 @@ export default function Layout({ children }) {
                           isAnyRankingActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                       >
-                        <Icon size={16} className={isAnyRankingActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyRankingActive ? { color: 'var(--noir-primary)' } : undefined} />
+                        <Icon size={16} className={isAnyRankingActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyRankingActive ? { color: 'var(--gm-gold)' } : undefined} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {rankingOpen ? <ChevronDown size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} />}
+                        {rankingOpen ? <ChevronDown size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} />}
                       </button>
 
                       {rankingOpen && (
@@ -328,9 +328,9 @@ export default function Layout({ children }) {
                           isAnyCasinoActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                       >
-                        <Icon size={16} className={isAnyCasinoActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyCasinoActive ? { color: 'var(--noir-primary)' } : undefined} />
+                        <Icon size={16} className={isAnyCasinoActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyCasinoActive ? { color: 'var(--gm-gold)' } : undefined} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {casinoOpen ? <ChevronDown size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} />}
+                        {casinoOpen ? <ChevronDown size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--gm-gold)', opacity: 0.7 }} />}
                       </button>
 
                       {casinoOpen && (
@@ -420,7 +420,7 @@ export default function Layout({ children }) {
                     style={isFamiliesAtWar ? { color: '#f87171' } : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? { color: 'var(--noir-primary-foreground)' } : { color: 'var(--noir-primary)' }} />
+                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? { color: 'var(--gm-text)' } : { color: 'var(--gm-gold)' }} />
                     <span className="uppercase tracking-widest text-xs font-heading flex-1">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
@@ -461,7 +461,7 @@ export default function Layout({ children }) {
             <div className={`p-3 border-t ${styles.borderGoldLight} bg-gradient-to-t from-noir-bg to-transparent`}>
               <div className={`${styles.userBox} p-3 rounded-sm`}>
                 <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${styles.borderGoldLight}`}>
-                  <User size={14} style={{ color: 'var(--noir-primary)' }} />
+                  <User size={14} style={{ color: 'var(--gm-gold)' }} />
                   <span className={`text-sm font-heading font-bold ${styles.sidebarHeaderTitle}`} data-testid="user-username">{user.username}</span>
                 </div>
                 <div className="text-xs space-y-1">
@@ -474,7 +474,7 @@ export default function Layout({ children }) {
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className={`${styles.sidebarHeaderTitle} font-heading cursor-default underline decoration-dotted underline-offset-1`} style={{ textDecorationColor: 'var(--noir-primary)' }} data-testid="user-wealth-rank">{user.wealth_rank_name ?? '—'}</span>
+                          <span className={`${styles.sidebarHeaderTitle} font-heading cursor-default underline decoration-dotted underline-offset-1`} style={{ textDecorationColor: 'var(--gm-gold)' }} data-testid="user-wealth-rank">{user.wealth_rank_name ?? '—'}</span>
                         </TooltipTrigger>
                         <TooltipContent side="left" className={`${styles.surface} ${styles.textGold} ${styles.borderGold} rounded-sm px-3 py-2 text-sm font-heading shadow-lg`}>
                           {user.wealth_rank_range ?? '$0'}
@@ -531,7 +531,7 @@ export default function Layout({ children }) {
           onClick={() => setSidebarOpen(!sidebarOpen)}
           data-testid="mobile-menu-toggle"
           className="md:hidden shrink-0"
-          style={{ color: 'var(--noir-primary)' }}
+          style={{ color: 'var(--gm-gold)' }}
         >
           {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
@@ -605,7 +605,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className={`md:ml-64 mt-12 min-h-screen p-4 md:p-6 ${styles.themeGangsterModern}`}>
+      <main className="md:ml-64 mt-12 min-h-screen p-4 md:p-6">
         {children}
       </main>
     </div>
