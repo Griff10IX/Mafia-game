@@ -204,6 +204,14 @@ code {
   animation: horse-race-gallop 0.2s ease-in-out infinite;
 }
 
+/* Horse race track: stagger lane animation for a more dynamic feel */
+.horse-race-lane {
+  transition: width 3.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+.horse-race-lane.winner {
+  transition: width 3.2s cubic-bezier(0.2, 0, 0.2, 1);
+}
+
 /* Hide Emergent hosting badge/overlays */
 #emergent-badge,
 a#emergent-badge,

@@ -189,7 +189,7 @@ export default function Attack() {
     }
 
     // Prefer a found attack that can attack, else any found attack.
-    const found = attacks.filter((a) => (a.target_username || '') === username && a.status === 'found');
+    const found = attacks.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
     const best = found.find((a) => a.can_attack) || found[0];
 
     if (!best) {
@@ -631,6 +631,20 @@ export default function Attack() {
                           <option key={a.attack_id} value={a.target_username} />
                         ))}
                       </datalist>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                        Bullets <span className="text-primary/60">(you have {Number(userBullets).toLocaleString()})</span>
+                      </label>
+                      <input
+                        type="number"
+                        value={bulletsToUse}
+                        onChange={(e) => setBulletsToUse(e.target.value)}
+                        className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
+                        placeholder="Enter amount (min 1)"
+                        min="1"
+                        data-testid="kill-bullets-modal"
+                      />
                     </div>
                     <div>
                       <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Death Message (Optional)</label>

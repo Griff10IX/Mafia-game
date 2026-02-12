@@ -35,38 +35,51 @@ function UserCard({ user, profileCache, profileLoading, ensureProfilePreview }) 
                   {user.username}
                 </Link>
               </HoverCardTrigger>
-              <HoverCardContent align="start" sideOffset={8} className={`w-64 ${styles.surface} ${styles.borderGold} rounded-sm shadow-lg`}>
+              <HoverCardContent align="start" sideOffset={8} className={`w-72 max-w-[90vw] ${styles.surface} ${styles.borderGold} rounded-sm shadow-lg`}>
                 {preview?.error ? (
                   <div className="text-sm text-mutedForeground font-heading">Failed to load preview</div>
                 ) : isLoading && !preview ? (
                   <div className="text-sm text-mutedForeground font-heading">Loading preview...</div>
                 ) : preview ? (
-                  <div className="flex gap-3">
-                    <div className={`w-10 h-10 rounded-sm overflow-hidden border border-primary/20 ${styles.surface} flex items-center justify-center shrink-0`}>
-                      {preview.avatar_url ? (
-                        <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="text-xs text-mutedForeground font-heading">No avatar</div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-heading font-bold text-primary truncate">{preview.username}</div>
-                      <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-heading">
-                        <div className="flex justify-between">
-                          <span className="text-mutedForeground">Kills</span>
-                          <span className="text-foreground font-bold">{preview.kills}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-mutedForeground">Jail busts</span>
-                          <span className="text-foreground font-bold">{preview.jail_busts}</span>
-                        </div>
-                        <div className="col-span-2 flex justify-between">
-                          <span className="text-mutedForeground">Created</span>
-                          <span className="text-foreground">{formatDateTime(preview.created_at)}</span>
+                  <div className="space-y-3">
+                    <div className="flex gap-3">
+                      <div className={`w-10 h-10 rounded-sm overflow-hidden border border-primary/20 ${styles.surface} flex items-center justify-center shrink-0`}>
+                        {preview.avatar_url ? (
+                          <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="text-xs text-mutedForeground font-heading">No avatar</div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-heading font-bold text-primary truncate">{preview.username}</div>
+                        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs font-heading">
+                          <div className="flex justify-between">
+                            <span className="text-mutedForeground">Kills</span>
+                            <span className="text-foreground font-bold">{preview.kills}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-mutedForeground">Jail busts</span>
+                            <span className="text-foreground font-bold">{preview.jail_busts}</span>
+                          </div>
+                          <div className="col-span-2 flex justify-between">
+                            <span className="text-mutedForeground">Created</span>
+                            <span className="text-foreground">{formatDateTime(preview.created_at)}</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-2 text-xs text-mutedForeground font-heading">Click to open full profile</div>
                     </div>
+                    {preview.admin_stats && (
+                      <div className="pt-2 border-t border-primary/20 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs font-heading">
+                        <div className="flex justify-between"><span className="text-mutedForeground">Cash</span><span className="text-primary font-bold">${Number(preview.admin_stats.money ?? 0).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-mutedForeground">Points</span><span className="text-primary font-bold">{Number(preview.admin_stats.points ?? 0).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-mutedForeground">Bullets</span><span className="text-primary font-bold">{Number(preview.admin_stats.bullets ?? 0).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-mutedForeground">Booze today</span><span className="text-primary font-bold">${Number(preview.admin_stats.booze_profit_today ?? 0).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-mutedForeground">Booze total</span><span className="text-primary font-bold">${Number(preview.admin_stats.booze_profit_total ?? 0).toLocaleString()}</span></div>
+                        <div className="flex justify-between"><span className="text-mutedForeground">Location</span><span className="text-foreground truncate">{preview.admin_stats.current_state ?? '—'}</span></div>
+                        {preview.admin_stats.in_jail && <div className="col-span-2 text-red-400 font-bold">In jail</div>}
+                      </div>
+                    )}
+                    <div className="text-xs text-mutedForeground font-heading">Click to open full profile</div>
                   </div>
                 ) : (
                   <div className="text-sm text-mutedForeground font-heading">Hover to preview profile</div>

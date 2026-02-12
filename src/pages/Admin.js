@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -38,6 +38,7 @@ export default function Admin() {
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [dbLoading, setDbLoading] = useState(false);
   const [giveAllPoints, setGiveAllPoints] = useState(100);
+  const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
 
   const checkAdmin = async () => {
     try {
@@ -199,6 +200,19 @@ export default function Admin() {
       toast.success(res.data?.message || 'All search timers set to 5 minutes');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const handleClearAllSearches = async () => {
+    if (!window.confirm('Delete ALL attack searches for every user? This cannot be undone.')) return;
+    setClearSearchesLoading(true);
+    try {
+      const res = await api.post('/admin/clear-all-searches');
+      toast.success(res.data?.message || 'All searches cleared');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setClearSearchesLoading(false);
     }
   };
 
@@ -613,6 +627,17 @@ export default function Admin() {
               <button onClick={handleSetSearchTime} className={`w-full ${btnPrimary}`}>Set Search Time (Persistent)</button>
               <p className={`text-xs font-heading mt-2 ${styles.textMuted}`}>Set to 0 to clear override.</p>
               <button onClick={handleSetAllSearchTime5} className={`w-full mt-3 ${btnPrimary}`}>Set Everyone to 5 mins</button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Trash2 className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Clear All Searches</h3>
+              </div>
+              <p className={`text-xs font-heading mb-3 ${styles.textMuted}`}>Remove every attack/search from the database (all users).</p>
+              <button onClick={handleClearAllSearches} disabled={clearSearchesLoading} className={`w-full ${btnDanger} disabled:opacity-50`}>
+                {clearSearchesLoading ? 'Clearing...' : 'Clear All Searches'}
+              </button>
             </div>
 
             <div className={`${styles.panel} rounded-md overflow-hidden p-4 md:col-span-2`}>

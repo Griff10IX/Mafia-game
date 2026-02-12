@@ -230,6 +230,48 @@ export default function Profile() {
         )}
       </div>
 
+      {!isMe && profile.admin_stats && (
+        <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto border-2 border-primary/40`}>
+          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Admin info</span>
+          </div>
+          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm font-heading">
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Cash</span>
+              <span className="text-primary font-bold">${Number(profile.admin_stats.money ?? 0).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Points</span>
+              <span className="text-primary font-bold">{Number(profile.admin_stats.points ?? 0).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Bullets</span>
+              <span className="text-primary font-bold">{Number(profile.admin_stats.bullets ?? 0).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Booze profit today</span>
+              <span className="text-primary font-bold">${Number(profile.admin_stats.booze_profit_today ?? 0).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Booze profit total</span>
+              <span className="text-primary font-bold">${Number(profile.admin_stats.booze_profit_total ?? 0).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Rank points</span>
+              <span className="text-primary font-bold">{Number(profile.admin_stats.rank_points ?? 0).toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Location</span>
+              <span className="text-foreground">{profile.admin_stats.current_state ?? '—'}</span>
+            </div>
+            <div>
+              <span className="text-mutedForeground uppercase tracking-wider text-xs block">In jail</span>
+              <span className={profile.admin_stats.in_jail ? 'text-red-400 font-bold' : 'text-foreground'}>{profile.admin_stats.in_jail ? 'Yes' : 'No'}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isMe && (
         <div className={`${styles.panel} rounded-sm overflow-hidden max-w-xl mx-auto`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
