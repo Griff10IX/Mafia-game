@@ -54,14 +54,14 @@ function RaidTargetFamilyBlock({ target, attackLoading, onRaid }) {
           const key = `${target.family_id}-${r.racket_id}`;
           const loading = attackLoading === key;
           return (
-            <div key={r.racket_id} className={`inline-flex items-center gap-2 ${styles.surfaceMuted} border border-primary/10 rounded px-2 py-1.5`}>
+            <div key={r.racket_id} className={`inline-flex flex-wrap items-center gap-2 ${styles.surfaceMuted} border border-primary/10 rounded px-2 py-1.5`}>
               <span className="text-xs text-mutedForeground font-heading">{r.racket_name} Lv.{r.level}</span>
               <span className="text-xs font-heading text-primary">{formatMoney(r.potential_take)} · {r.success_chance_pct}%</span>
               <button
                 type="button"
                 onClick={() => onRaid(target.family_id, r.racket_id)}
                 disabled={loading}
-                className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-2 py-1 rounded text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 border border-yellow-600/50"
+                className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-2 min-h-[44px] rounded text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 border border-yellow-600/50 touch-manipulation shrink-0"
               >
                 {loading ? '...' : 'Raid'}
               </button>
@@ -527,13 +527,13 @@ export default function FamilyPage() {
                           {onCooldown ? `${timeLeft}` : 'Ready'}
                         </p>
                       )}
-                      <div className="mt-2 flex gap-2">
+                      <div className="mt-2 flex flex-wrap gap-2">
                         {r.level > 0 && (
                           <button
                             type="button"
                             onClick={() => collectRacket(r.id)}
                             disabled={onCooldown}
-                            className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-2 py-1 rounded text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed border border-yellow-600/50"
+                            className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-2 min-h-[44px] rounded text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed border border-yellow-600/50 touch-manipulation"
                           >
                             Collect
                           </button>
@@ -542,7 +542,7 @@ export default function FamilyPage() {
                           <button
                             type="button"
                             onClick={() => upgradeRacket(r.id)}
-                            className={`${styles.surface} ${styles.raisedHover} border border-primary/30 px-2 py-1 rounded text-xs font-heading font-bold uppercase tracking-wider text-foreground`}
+                            className={`${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 min-h-[44px] rounded text-xs font-heading font-bold uppercase tracking-wider text-foreground touch-manipulation`}
                           >
                             Upgrade
                           </button>

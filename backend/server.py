@@ -282,7 +282,7 @@ CARS = [
     {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 600, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
     {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 700, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1577423704717-d48ffcb561e3?auto=format&fit=crop&w=600&q=80"},
     {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 650, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1747401648939-41e148128f8b?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 550, "travel_bonus": 0, "image": "https://images.unsplash.com/photo-1552072805-2a9039d00e57?auto=format&fit=crop&w=600&q=80"},
+    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 550, "travel_bonus": 0, "image": None},
     {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 600, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
     
     # Uncommon (difficulty 2) - 4 cars

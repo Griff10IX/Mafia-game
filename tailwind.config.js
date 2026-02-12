@@ -12,20 +12,20 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        border: '#3d3520',
+        border: '#2d2d2d',
         background: '#050505',
-        foreground: '#e8e4dc',
+        foreground: '#f5f5f5',
         primary: {
-          DEFAULT: '#c9a227',
+          DEFAULT: '#d4af37',
           foreground: '#ffffff',
         },
-        mutedForeground: '#a89878',
-        /* Noir 1920s–30s: warm brown-blacks for panels/sidebar */
+        mutedForeground: '#a1a1aa',
+        /* Noir: rich gold on neutral black (no brown) */
         noir: {
-          bg: '#0a0806',
-          panel: '#12100c',
-          surface: '#1a1612',
-          raised: '#252019',
+          bg: '#050505',
+          panel: '#0d0d0d',
+          surface: '#1a1a1a',
+          raised: '#262626',
         },
       },
       fontFamily: {

@@ -147,17 +147,17 @@ export default function GTA() {
         </div>
       </div>
 
-      <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
-          <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
-            <div className="col-span-5">Option</div>
+      <div className="flex justify-center overflow-x-auto">
+        <div className="w-full max-w-3xl min-w-0 bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5 min-w-[300px]">
+          <div className="grid grid-cols-12 gap-1 sm:gap-0 bg-zinc-800/50 text-[10px] sm:text-xs uppercase tracking-widest font-heading text-primary/80 px-2 sm:px-4 py-2 border-b border-primary/20">
+            <div className="col-span-4 sm:col-span-5 min-w-0">Option</div>
             <div className="col-span-2 text-right">Success</div>
             <div className="col-span-1 text-right">Jail</div>
-            <div className="col-span-1 text-right">CD</div>
-            <div className="col-span-3">
-              <div className="flex items-center justify-end gap-6">
+            <div className="col-span-1 text-right hidden sm:block">CD</div>
+            <div className="col-span-4 sm:col-span-3">
+              <div className="flex items-center justify-end gap-1 sm:gap-2 flex-wrap">
                 <span>Status</span>
-                <span>Action</span>
+                <span className="min-w-[66px] text-right">Action</span>
               </div>
             </div>
           </div>
@@ -172,67 +172,64 @@ export default function GTA() {
               <div
                 key={option.id}
                 data-testid={`gta-option-${option.id}`}
-                className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!unlocked ? 'opacity-90' : ''}`}
+                className={`grid grid-cols-12 gap-1 sm:gap-0 px-2 sm:px-4 py-2.5 sm:py-2 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 min-w-[300px] ${!unlocked ? 'opacity-90' : ''}`}
               >
-                <div className="col-span-5 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
+                <div className="col-span-4 sm:col-span-5 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <div className="text-sm font-heading font-bold text-foreground truncate">{option.name}</div>
-                      <div className="text-xs text-mutedForeground font-heading">
-                        Difficulty: {option.difficulty}/5
-                        {!unlocked ? ` · ${option.min_rank_name} (Rank ${option.min_rank})` : ''}
+                      <div className="text-xs sm:text-sm font-heading font-bold text-foreground truncate">{option.name}</div>
+                      <div className="text-[10px] sm:text-xs text-mutedForeground font-heading">
+                        {option.difficulty}/5
+                        {!unlocked ? ` · ${option.min_rank_name}` : ''}
                       </div>
                     </div>
-                    {unlocked ? <Car className="text-primary shrink-0" size={16} /> : <Lock className="text-mutedForeground shrink-0" size={16} />}
+                    {unlocked ? <Car className="text-primary shrink-0" size={14} /> : <Lock className="text-mutedForeground shrink-0" size={14} />}
                   </div>
                 </div>
 
-                <div className="col-span-2 text-right text-sm font-heading text-primary font-bold">
+                <div className="col-span-2 text-right text-xs sm:text-sm font-heading text-primary font-bold shrink-0">
                   {eventsEnabled && event?.gta_success
                     ? `${Math.min(100, Math.round(option.success_rate * (event.gta_success ?? 1) * 100))}%`
                     : `${(option.success_rate * 100).toFixed(0)}%`}
                   {eventsEnabled && event?.gta_success && event.gta_success !== 1 && (
-                    <span className="block text-[10px] text-mutedForeground font-normal">event</span>
+                    <span className="block text-[9px] sm:text-[10px] text-mutedForeground font-normal">event</span>
                   )}
                 </div>
 
-                <div className="col-span-1 text-right text-sm font-heading text-red-400">
+                <div className="col-span-1 text-right text-xs font-heading text-red-400 shrink-0">
                   {option.jail_time}s
                 </div>
 
-                <div className="col-span-1 text-right text-sm font-heading text-mutedForeground">
+                <div className="col-span-1 text-right text-xs font-heading text-mutedForeground shrink-0 hidden sm:block">
                   {onCooldown ? formatCooldown(option.cooldown_until) : defaultCooldown}
                 </div>
 
-                <div className="col-span-3">
-                  <div className="flex items-center justify-end gap-2">
-                    <span
-                      className={`inline-flex items-center justify-center px-2 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-heading font-bold min-w-[92px] ${
-                        statusText === 'Available'
-                          ? 'bg-primary/20 text-primary border border-primary/30'
-                          : statusText === 'Cooldown'
-                            ? 'bg-zinc-800 text-mutedForeground border border-primary/10'
-                            : 'bg-zinc-800/80 text-mutedForeground border border-primary/10'
-                      }`}
-                      data-testid={`gta-status-${option.id}`}
+                <div className="col-span-4 sm:col-span-3 flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1 sm:gap-2 min-w-[120px] shrink-0">
+                  <span
+                    className={`inline-flex items-center justify-center px-2 py-0.5 rounded-sm text-[9px] sm:text-[10px] uppercase tracking-wider font-heading font-bold min-w-[70px] sm:min-w-[92px] ${
+                      statusText === 'Available'
+                        ? 'bg-primary/20 text-primary border border-primary/30'
+                        : statusText === 'Cooldown'
+                          ? 'bg-zinc-800 text-mutedForeground border border-primary/10'
+                          : 'bg-zinc-800/80 text-mutedForeground border border-primary/10'
+                    }`}
+                    data-testid={`gta-status-${option.id}`}
+                  >
+                    {statusText}
+                  </span>
+                  {onCooldown || !unlocked ? (
+                    <span className="text-[10px] text-mutedForeground font-heading sm:hidden">—</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => attemptGTA(option.id)}
+                      data-testid={`attempt-gta-${option.id}`}
+                      disabled={attemptingOptionId !== null}
+                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 sm:py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-60 disabled:cursor-not-allowed min-w-[66px] min-h-[44px] touch-manipulation transition-smooth"
                     >
-                      {statusText}
-                    </span>
-
-                    {onCooldown || !unlocked ? (
-                      <span className="text-xs text-mutedForeground font-heading min-w-[66px] text-right">—</span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => attemptGTA(option.id)}
-                        data-testid={`attempt-gta-${option.id}`}
-                        disabled={attemptingOptionId !== null}
-                        className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-60 disabled:cursor-not-allowed min-w-[66px] transition-smooth"
-                      >
-                        {attemptingOptionId === option.id ? '...' : 'Steal'}
-                      </button>
-                    )}
-                  </div>
+                      {attemptingOptionId === option.id ? '...' : 'Steal'}
+                    </button>
+                  )}
                 </div>
               </div>
             );

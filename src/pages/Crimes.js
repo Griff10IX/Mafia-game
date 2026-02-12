@@ -116,13 +116,13 @@ export default function Crimes() {
         </div>
       )}
 
-      <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
-          <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
-            <div className="col-span-6">Crime</div>
+      <div className="flex justify-center overflow-x-auto">
+        <div className="w-full max-w-3xl min-w-0 bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className="grid grid-cols-12 gap-1 sm:gap-2 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-3 sm:px-4 py-2 border-b border-primary/20 min-w-[280px]">
+            <div className="col-span-5 sm:col-span-6 min-w-0">Crime</div>
             <div className="col-span-2 text-right">Risk</div>
             <div className="col-span-2 text-right">Status</div>
-            <div className="col-span-2 text-right">Action</div>
+            <div className="col-span-3 sm:col-span-2 text-right min-w-[88px]">Action</div>
           </div>
 
           {rows.map((crime) => {
@@ -133,15 +133,15 @@ export default function Crimes() {
             return (
               <div
                 key={crime.id}
-                className={`w-full text-left grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!crime.can_commit ? 'opacity-90' : ''}`}
+                className={`w-full text-left grid grid-cols-12 gap-1 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-2 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 min-w-[280px] ${!crime.can_commit ? 'opacity-90' : ''}`}
                 data-testid={`crime-row-${crime.id}`}
               >
-                <div className="col-span-6 min-w-0">
+                <div className="col-span-5 sm:col-span-6 min-w-0">
                   <div className="text-sm font-heading font-bold text-foreground truncate">{crime.name}</div>
                   <div className="text-xs text-mutedForeground font-heading truncate">{crime.description}</div>
                 </div>
 
-                <div className={`col-span-2 text-right text-sm font-heading ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
+                <div className={`col-span-2 text-right text-sm font-heading shrink-0 ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
                   {unavailable ? (
                     <span className="inline-flex items-center justify-end gap-1">
                       <span>—</span>
@@ -152,9 +152,9 @@ export default function Crimes() {
                   )}
                 </div>
 
-                <div className="col-span-2 text-right">
+                <div className="col-span-2 text-right shrink-0">
                   <span
-                    className={`inline-flex items-center justify-center px-2 py-0.5 rounded-sm text-[11px] uppercase tracking-wider font-heading font-bold ${
+                    className={`inline-flex items-center justify-center px-2 py-0.5 rounded-sm text-[10px] sm:text-[11px] uppercase tracking-wider font-heading font-bold ${
                       crime.can_commit
                         ? 'bg-primary/20 text-primary border border-primary/30'
                         : onCooldown
@@ -167,24 +167,24 @@ export default function Crimes() {
                   </span>
                 </div>
 
-                <div className="col-span-2 text-right">
+                <div className="col-span-3 sm:col-span-2 text-right min-w-[88px] shrink-0">
                   {crime.can_commit ? (
                     <button
                       type="button"
                       onClick={() => commitCrime(crime.id)}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth"
+                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 sm:py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth min-h-[44px] touch-manipulation"
                       data-testid={`commit-crime-${crime.id}`}
                     >
                       Commit
                     </button>
                   ) : onCooldown ? (
                     <span className="inline-flex items-center justify-end gap-1 text-xs text-mutedForeground font-heading">
-                      <Clock size={14} className="text-primary" />
-                      {crime.wait}
+                      <Clock size={14} className="text-primary shrink-0" />
+                      <span className="truncate">{crime.wait}</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center justify-end gap-1 text-xs text-mutedForeground font-heading">
-                      <HelpCircle size={14} className="text-mutedForeground" />
+                      <HelpCircle size={14} className="text-mutedForeground shrink-0" />
                       Locked
                     </span>
                   )}

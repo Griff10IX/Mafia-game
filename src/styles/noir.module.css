@@ -1,43 +1,45 @@
-/* Noir 1920s–30s mafia theme – explicit values so Tailwind does not override */
+/* Noir 1920s–30s mafia theme – rich gold on black (no brown) */
 
-/* Palette (same as tailwind.config.js) */
+/* Palette: reflective gold accent, neutral blacks/charcoal, white/light grey text */
 :root {
-  --noir-bg: #0a0806;
-  --noir-panel: #12100c;
-  --noir-surface: #1a1612;
-  --noir-raised: #252019;
-  --noir-primary: #c9a227;
+  --noir-bg: #050505;
+  --noir-panel: #0d0d0d;
+  --noir-surface: #1a1a1a;
+  --noir-raised: #262626;
+  --noir-primary: #d4af37;
+  --noir-primary-bright: #e6c229;
+  --noir-primary-dark: #b8860b;
   --noir-primary-foreground: #ffffff;
-  --noir-foreground: #e8e4dc;
-  --noir-muted: #a89878;
-  --noir-border: #3d3520;
-  --noir-border-light: rgba(201, 162, 39, 0.2);
-  --noir-border-mid: rgba(201, 162, 39, 0.3);
+  --noir-foreground: #f5f5f5;
+  --noir-muted: #a1a1aa;
+  --noir-border: #2d2d2d;
+  --noir-border-light: rgba(212, 175, 55, 0.2);
+  --noir-border-mid: rgba(212, 175, 55, 0.35);
 }
 
 /* Page wrapper – use on the root div of each page */
 .page {
-  background-color: #050505;
+  background-color: var(--noir-bg);
   color: var(--noir-foreground);
   min-height: 100%;
 }
 
 /* Main content area background (when you want page to own it) */
 .pageContent {
-  background-color: #050505;
+  background-color: var(--noir-bg);
   color: var(--noir-foreground);
 }
 
-/* Card/panel: dark gradient */
+/* Card/panel: neutral dark */
 .panel {
-  background: linear-gradient(to bottom, var(--noir-panel), var(--noir-bg));
+  background: linear-gradient(to bottom, var(--noir-surface), var(--noir-panel));
   border: 1px solid var(--noir-border-mid);
   border-radius: 2px;
 }
 
 /* Card header strip */
 .panelHeader {
-  background: rgba(201, 162, 39, 0.08);
+  background: rgba(212, 175, 55, 0.08);
   border-bottom: 1px solid var(--noir-border-light);
 }
 
@@ -48,7 +50,7 @@
 }
 
 .surfaceMuted {
-  background-color: rgba(26, 22, 18, 0.6);
+  background-color: rgba(26, 26, 26, 0.8);
   border-color: var(--noir-border-light);
 }
 
@@ -58,10 +60,10 @@
 }
 
 .raisedHover:hover {
-  background-color: rgba(37, 32, 25, 0.5);
+  background-color: rgba(38, 38, 38, 0.9);
 }
 
-/* Sidebar shell */
+/* Sidebar shell – darkest black */
 .sidebar {
   background: linear-gradient(to bottom, var(--noir-panel), var(--noir-bg));
   border-right: 1px solid var(--noir-border-mid);
@@ -69,7 +71,7 @@
 
 /* Top bar */
 .topBar {
-  background: linear-gradient(to right, rgba(18, 16, 12, 0.95), rgba(18, 16, 12, 0.9), rgba(18, 16, 12, 0.95));
+  background: linear-gradient(to right, rgba(13, 13, 13, 0.98), rgba(26, 26, 26, 0.95), rgba(13, 13, 13, 0.98));
   border-bottom: 1px solid var(--noir-border-light);
 }
 
@@ -93,28 +95,29 @@
   color: var(--noir-foreground);
 }
 
-/* Inputs */
+/* Inputs – dark with crisp border */
 .input {
-  background-color: rgba(26, 22, 18, 0.9);
-  border: 1px solid var(--noir-border-light);
+  background-color: rgba(26, 26, 26, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 2px;
   color: var(--noir-foreground);
 }
 
 .input:focus {
   outline: none;
-  border-color: rgba(201, 162, 39, 0.5);
+  border-color: var(--noir-primary);
+  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25);
 }
 
 .input::placeholder {
-  color: rgba(168, 152, 120, 0.5);
+  color: rgba(161, 161, 170, 0.6);
 }
 
-/* Button primary (gold) */
+/* Button primary – reflective gold gradient (like reference) */
 .btnPrimary {
-  background: linear-gradient(to bottom, var(--noir-primary), #b8860b);
+  background: linear-gradient(to bottom, var(--noir-primary-bright), var(--noir-primary-dark));
   color: var(--noir-primary-foreground);
-  border: 1px solid rgba(184, 134, 11, 0.5);
+  border: 1px solid rgba(212, 175, 55, 0.5);
   border-radius: 2px;
 }
 

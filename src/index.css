@@ -3,11 +3,11 @@
 @layer base {
   :root {
     --background: 0 0% 2%;
-    --foreground: 0 8% 91%;
-    --primary: 43 74% 49%;
+    --foreground: 0 0% 96%;
+    --primary: 43 74% 52%;
     --primary-foreground: 0 0% 100%;
-    --muted-foreground: 38 20% 55%;
-    --border: 43 30% 25%;
+    --muted-foreground: 240 5% 65%;
+    --border: 0 0% 18%;
   }
 }
 
@@ -21,7 +21,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #050505;
-  color: #e8e4dc;
+  color: #f5f5f5;
 }
 
 code {
