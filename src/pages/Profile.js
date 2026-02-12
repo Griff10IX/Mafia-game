@@ -138,9 +138,7 @@ export default function Profile() {
   }
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
-  const base = (process.env.PUBLIC_URL || '').replace(/\/$/, '') || '';
-  const robotAvatarSrc = isRobotBodyguard ? `${base}/robot-bodyguard-avatar.png` : null;
-  const avatarSrc = preview || profile.avatar_url || robotAvatarSrc;
+  const avatarSrc = isRobotBodyguard ? null : (preview || profile.avatar_url || null);
 
   const profileRows = [
     { label: 'Username', value: profile.username, valueClass: 'text-foreground font-heading font-bold' },

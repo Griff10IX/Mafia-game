@@ -5,12 +5,6 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
-function getRobotBodyguardImageUrl(slotNumber) {
-  const base = (process.env.PUBLIC_URL || '').replace(/\/$/, '') || '';
-  const name = slotNumber === 1 ? 'avatar' : String(Math.min(slotNumber, 4));
-  return `${base}/robot-bodyguard-${name}.png`;
-}
-
 const BODYGUARD_SLOT_COSTS = [100, 200, 300, 400];
 
 export default function Bodyguards() {
@@ -159,23 +153,6 @@ export default function Bodyguards() {
             {/* Slot Header */}
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-start gap-3">
-                {bg.bodyguard_username && bg.is_robot ? (
-                  <div className={`w-10 h-10 rounded-sm overflow-hidden border border-primary/30 ${styles.surface} flex-shrink-0 relative`}>
-                    <img
-                      src={getRobotBodyguardImageUrl(bg.slot_number)}
-                      alt="Robot bodyguard"
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        const fallback = e.target.nextElementSibling;
-                        if (fallback) fallback.classList.remove('hidden');
-                      }}
-                    />
-                    <div className={`absolute inset-0 hidden flex items-center justify-center ${styles.surface} text-primary/60`}>
-                      <Shield size={18} />
-                    </div>
-                  </div>
-                ) : null}
                 <div className="flex-1 min-w-0">
                   <h3 className="text-base font-heading font-bold text-primary tracking-wide">
                     Slot {bg.slot_number}
