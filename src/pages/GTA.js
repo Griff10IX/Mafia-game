@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Car, Lock, Star, TrendingUp } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatCooldown(isoUntil) {
   if (!isoUntil) return null;
@@ -109,7 +110,7 @@ export default function GTA() {
   };
 
   return (
-    <div className="space-y-5" data-testid="gta-page">
+    <div className={`space-y-5 ${styles.pageContent}`} data-testid="gta-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -148,7 +149,7 @@ export default function GTA() {
       </div>
 
       <div className="flex justify-center overflow-x-auto">
-        <div className="w-full max-w-3xl min-w-0 bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5 min-w-[300px]">
+        <div className={`w-full max-w-3xl min-w-0 ${styles.panel} rounded-md overflow-hidden min-w-[300px]`}>
           <div className="grid grid-cols-12 gap-1 sm:gap-0 bg-zinc-800/50 text-[10px] sm:text-xs uppercase tracking-widest font-heading text-primary/80 px-2 sm:px-4 py-2 border-b border-primary/20">
             <div className="col-span-4 sm:col-span-5 min-w-0">Option</div>
             <div className="col-span-2 text-right">Success</div>
@@ -239,7 +240,7 @@ export default function GTA() {
 
       {garage.length > 0 && (
         <div className="flex justify-center">
-          <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+          <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
@@ -284,7 +285,7 @@ export default function GTA() {
       )}
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />

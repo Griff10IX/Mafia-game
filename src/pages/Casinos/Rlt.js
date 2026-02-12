@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import styles from '../../styles/noir.module.css';
 
 const SPIN_DURATION_MS = 4000;
 
@@ -288,7 +289,7 @@ export default function Rlt() {
   const canClaim = ownership?.is_unclaimed && !ownership?.owner_id;
 
   return (
-    <div className="space-y-8" data-testid="roulette-page">
+    <div className={`space-y-8 ${styles.pageContent}`} data-testid="roulette-page">
       <div>
         <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Roulette</h1>
         <p className="text-mutedForeground">Place your bets. Playing in {currentCity}.</p>
@@ -319,7 +320,7 @@ export default function Rlt() {
 
       {/* Owner Panel */}
       {isOwner && (
-        <div className="bg-card border-2 border-primary rounded-sm overflow-hidden">
+        <div className={`${styles.panel} border-2 border-primary rounded-md overflow-hidden`}>
           <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
             <h3 className="text-lg font-heading font-semibold text-primary">Owner Controls</h3>
             <p className="text-sm text-mutedForeground">Manage your roulette table in {currentCity}</p>
@@ -383,7 +384,7 @@ export default function Rlt() {
       {!isOwner && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Betting grid - 1920s Art Deco Style */}
-        <div className="bg-gradient-to-b from-zinc-900 to-zinc-950 border border-primary/30 rounded-sm overflow-hidden shadow-xl">
+        <div className={`${styles.panel} rounded-md overflow-hidden`}>
           {/* Art Deco Header */}
           <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/40">
             <div className="flex items-center justify-center gap-2">

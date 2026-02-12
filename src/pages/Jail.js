@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Lock, Users, AlertCircle, Zap } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 // Card background (jail cell). Override: REACT_APP_JAIL_BACKGROUND_IMAGE in .env
 const JAIL_BACKGROUND_IMAGE =
@@ -62,7 +63,7 @@ export default function Jail() {
   };
 
   return (
-    <div className="min-h-full bg-black rounded-sm" data-testid="jail-page">
+    <div className={`min-h-full ${styles.pageContent}`} data-testid="jail-page">
       <div className="space-y-5 p-4 md:p-6">
       {/* Art Deco Header */}
       <div>
@@ -108,7 +109,7 @@ export default function Jail() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />
@@ -197,7 +198,7 @@ export default function Jail() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />

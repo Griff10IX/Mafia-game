@@ -28,7 +28,7 @@ export default function Casino() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link
           to="/casino/rlt"
-          className="bg-card border border-border rounded-sm p-6 hover:border-primary/50 transition-smooth group block"
+          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
           data-testid="play-roulette"
         >
           <div className="flex items-start justify-between mb-4">
@@ -38,14 +38,14 @@ export default function Casino() {
             </div>
             <Dice1 className="text-primary group-hover:rotate-180 transition-transform duration-500" size={32} />
           </div>
-          <span className="block w-full bg-primary text-primaryForeground text-center rounded-sm font-bold uppercase tracking-widest py-3 transition-smooth">
+          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
             Play Roulette
           </span>
         </Link>
 
         <Link
           to="/casino/blackjack"
-          className="bg-card border border-border rounded-sm p-6 hover:border-primary/50 transition-smooth group block"
+          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
           data-testid="play-blackjack"
         >
           <div className="flex items-start justify-between mb-4">
@@ -55,14 +55,14 @@ export default function Casino() {
             </div>
             <Spade className="text-primary group-hover:scale-110 transition-transform" size={32} />
           </div>
-          <span className="block w-full bg-primary text-primaryForeground text-center rounded-sm font-bold uppercase tracking-widest py-3 transition-smooth">
+          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
             Play Blackjack
           </span>
         </Link>
 
         <Link
           to="/casino/dice"
-          className="bg-card border border-border rounded-sm p-6 hover:border-primary/50 transition-smooth group block"
+          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
           data-testid="play-dice"
         >
           <div className="flex items-start justify-between mb-4">
@@ -72,14 +72,14 @@ export default function Casino() {
             </div>
             <Hash className="text-primary group-hover:rotate-45 transition-transform" size={32} />
           </div>
-          <span className="block w-full bg-primary text-primaryForeground text-center rounded-sm font-bold uppercase tracking-widest py-3 transition-smooth">
+          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
             Play Dice
           </span>
         </Link>
 
         <Link
           to="/casino/horseracing"
-          className="bg-card border border-border rounded-sm p-6 hover:border-primary/50 transition-smooth group block"
+          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
           data-testid="play-horse-racing"
         >
           <div className="flex items-start justify-between mb-4">
@@ -89,14 +89,14 @@ export default function Casino() {
             </div>
             <TrendingUp className="text-primary group-hover:translate-x-2 transition-transform" size={32} />
           </div>
-          <span className="block w-full bg-primary text-primaryForeground text-center rounded-sm font-bold uppercase tracking-widest py-3 transition-smooth">
+          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
             Play Horse Racing
           </span>
         </Link>
 
         <Link
           to="/sports-betting"
-          className="bg-card border border-border rounded-sm p-6 hover:border-primary/50 transition-smooth group block"
+          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
           data-testid="sports-betting"
         >
           <div className="flex items-start justify-between mb-4">
@@ -106,13 +106,13 @@ export default function Casino() {
             </div>
             <Target className="text-primary group-hover:scale-110 transition-transform" size={32} />
           </div>
-          <span className="block w-full bg-primary text-primaryForeground text-center rounded-sm font-bold uppercase tracking-widest py-3 transition-smooth">
+          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
             Place Bets
           </span>
         </Link>
       </div>
 
-      <div className="bg-card border border-border rounded-sm p-6">
+      <div className={`${styles.panel} rounded-md p-6`}>
         <h3 className="text-xl font-heading font-semibold text-primary mb-3">Casino Games</h3>
         <p className="text-sm text-mutedForeground">
           The casino is under construction. Classic prohibition-era games coming soon, including Roulette, 

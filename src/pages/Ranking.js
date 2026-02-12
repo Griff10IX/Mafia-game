@@ -14,10 +14,10 @@ export default function Ranking() {
         <Link
           to="/crimes"
           data-testid="goto-crimes"
-          className="bg-card border border-border hover:border-primary rounded-sm p-6 transition-smooth group"
+          className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 bg-primary/20 rounded-md flex items-center justify-center group-hover:scale-110 transition-transform">
               <TrendingUp className="text-primary" size={24} />
             </div>
             <div>
@@ -30,10 +30,10 @@ export default function Ranking() {
         <Link
           to="/gta"
           data-testid="goto-gta"
-          className="bg-card border border-border hover:border-primary rounded-sm p-6 transition-smooth group"
+          className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 bg-primary/20 rounded-md flex items-center justify-center group-hover:scale-110 transition-transform">
               <Target className="text-primary" size={24} />
             </div>
             <div>
@@ -46,10 +46,10 @@ export default function Ranking() {
         <Link
           to="/jail"
           data-testid="goto-jail"
-          className="bg-card border border-border hover:border-primary rounded-sm p-6 transition-smooth group md:col-span-2"
+          className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50 md:col-span-2`}
         >
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-primary/20 rounded-sm flex items-center justify-center group-hover:scale-110 transition-transform">
+            <div className="w-12 h-12 bg-primary/20 rounded-md flex items-center justify-center group-hover:scale-110 transition-transform">
               <Lock className="text-primary" size={24} />
             </div>
             <div>
@@ -60,7 +60,7 @@ export default function Ranking() {
         </Link>
       </div>
 
-      <div className="bg-card border border-border rounded-sm p-6">
+      <div className={`${styles.panel} rounded-md p-6`}>
         <h3 className="text-xl font-heading font-semibold text-primary mb-3">Rank Points System</h3>
         <ul className="space-y-2 text-sm text-mutedForeground">
           <li>• Earn rank points from crimes, GTA, killing players, and busting jailed players</li>

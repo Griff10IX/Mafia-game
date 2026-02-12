@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import styles from '../../styles/noir.module.css';
 
 const SUITS = { H: { sym: '♥', red: true }, D: { sym: '♦', red: true }, C: { sym: '♣', red: false }, S: { sym: '♠', red: false } };
 
@@ -168,14 +169,14 @@ export default function Blackjack() {
   const dealerTotal = showDealerTotal ? (game?.dealer_total ?? '?') : (game?.dealer_visible_total != null ? game.dealer_visible_total : '??');
 
   return (
-    <div className="space-y-8" data-testid="blackjack-page">
+    <div className={`space-y-8 ${styles.pageContent}`} data-testid="blackjack-page">
       <div>
         <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Blackjack</h1>
         <p className="text-mutedForeground">Enter your bet</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-card border border-border rounded-sm overflow-hidden">
+        <div className={`${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-3 bg-secondary/40 border-b border-border">
             <h3 className="text-lg font-heading font-semibold text-foreground">Blackjack</h3>
             <p className="text-sm text-mutedForeground">Beat the dealer to 21</p>
@@ -269,7 +270,7 @@ export default function Blackjack() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-card border border-border rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
             <div className="px-3 py-2 bg-secondary/40 border-b border-border">
               <h3 className="text-base font-heading font-semibold text-foreground">Information</h3>
               <p className="text-xs text-mutedForeground">See information about this casino.</p>
@@ -280,7 +281,7 @@ export default function Blackjack() {
               <p>Get closer to 21 than the dealer without going over.</p>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
             <div className="px-3 py-2 bg-secondary/40 border-b border-border">
               <h3 className="text-base font-heading font-semibold text-foreground">Last 10 results</h3>
               <p className="text-xs text-mutedForeground">Your most recent bets and outcomes.</p>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import styles from '../../styles/noir.module.css';
 
 const RACE_DURATION_MS = 3500;
 
@@ -114,14 +115,14 @@ export default function HorseRacingPage() {
     : [];
 
   return (
-    <div className="space-y-8" data-testid="horse-racing-page">
+    <div className={`space-y-8 ${styles.pageContent}`} data-testid="horse-racing-page">
       <div>
         <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Horse Racing</h1>
         <p className="text-mutedForeground">Pick a horse and place your bet</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-card border border-border rounded-sm overflow-hidden">
+        <div className={`${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-3 bg-secondary/40 border-b border-border">
             <h3 className="text-lg font-heading font-semibold text-foreground">Horse Racing</h3>
             <p className="text-sm text-mutedForeground">Bet on the fastest horse</p>
@@ -226,7 +227,7 @@ export default function HorseRacingPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="bg-card border border-border rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
             <div className="px-4 py-3 bg-secondary/40 border-b border-border">
               <h3 className="text-lg font-heading font-semibold text-foreground">Information</h3>
               <p className="text-sm text-mutedForeground">Rules and payouts</p>
@@ -237,7 +238,7 @@ export default function HorseRacingPage() {
               <p>Lower odds = favourite = more likely to win. Higher odds = bigger payout.</p>
             </div>
           </div>
-          <div className="bg-card border border-border rounded-sm overflow-hidden">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
             <div className="px-3 py-2 bg-secondary/40 border-b border-border">
               <h3 className="text-base font-heading font-semibold text-foreground">Last 10 results</h3>
               <p className="text-xs text-mutedForeground">Your most recent bets and outcomes.</p>

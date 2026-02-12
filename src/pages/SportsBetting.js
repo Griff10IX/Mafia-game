@@ -3,6 +3,7 @@ import { Trophy, Target, TrendingUp, Clock, Shield, Plus, Circle, CheckCircle, C
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { refreshUser } from '../utils/api';
+import styles from '../styles/noir.module.css';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -328,7 +329,7 @@ export default function SportsBetting() {
   const STAKE_PRESETS = [10, 50, 100, 250, 500];
 
   return (
-    <div className="space-y-6" data-testid="sports-betting-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="sports-betting-page">
       <header>
         <div className="flex items-center justify-center flex-col gap-2 text-center mb-4">
           <div className="flex items-center gap-3 w-full justify-center">
@@ -373,7 +374,7 @@ export default function SportsBetting() {
       {isAdmin && (
         <>
           {adminPanelHidden ? (
-            <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden" data-testid="sports-betting-admin">
+            <div className={`${styles.panel} rounded-md overflow-hidden`} data-testid="sports-betting-admin">
               <button
                 type="button"
                 onClick={() => toggleAdminPanel(false)}
@@ -385,7 +386,7 @@ export default function SportsBetting() {
               </button>
             </div>
           ) : (
-            <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5" data-testid="sports-betting-admin">
+            <section className={`${styles.panel} rounded-md overflow-hidden`} data-testid="sports-betting-admin">
               <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Shield size={18} className="text-primary" />
@@ -485,7 +486,7 @@ export default function SportsBetting() {
       )}
 
       {/* Open events */}
-      <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+      <section className={`${styles.panel} rounded-md overflow-hidden`}>
         <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20">
           <h2 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Open events</h2>
           <p className="text-xs text-mutedForeground font-heading mt-0.5">
@@ -544,7 +545,7 @@ export default function SportsBetting() {
       {/* Admin: Settle event modal */}
       {settleEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => { setSettleEvent(null); setSettleWinningId(''); }}>
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className={`${styles.panel} rounded-md p-6 w-full max-w-sm shadow-xl`} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Settle event</h3>
             <p className="text-sm text-mutedForeground font-heading mt-1">{settleEvent.name}</p>
             <p className="text-xs text-mutedForeground font-heading mt-2">Select winning outcome (winners paid automatically):</p>
@@ -594,7 +595,7 @@ export default function SportsBetting() {
       {/* Place bet modal */}
       {selectedEvent && selectedOption && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setSelectedEvent(null)}>
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-6 w-full max-w-sm shadow-xl" onClick={(e) => e.stopPropagation()}>
+          <div className={`${styles.panel} rounded-md p-6 w-full max-w-sm shadow-xl`} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Place bet</h3>
             <p className="text-sm text-mutedForeground font-heading mt-1">{selectedEvent.name} · {selectedOption.name} @ {Number(selectedOption.odds)}</p>
             <div className="mt-4">
@@ -650,7 +651,7 @@ export default function SportsBetting() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Open bets */}
-        <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+        <section className={`${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Open bets</h2>
@@ -713,7 +714,7 @@ export default function SportsBetting() {
         </section>
 
         {/* Closed bets */}
-        <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+        <section className={`${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20">
             <h2 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Closed bets</h2>
             <p className="text-xs text-mutedForeground font-heading mt-0.5">Your settled bets.</p>
@@ -751,7 +752,7 @@ export default function SportsBetting() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Stats */}
-        <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+        <section className={`${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
             <TrendingUp size={16} className="text-primary" />
             <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Betting statistics</h2>
@@ -781,7 +782,7 @@ export default function SportsBetting() {
         </section>
 
         {/* Recent results */}
-        <section className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+        <section className={`${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20 flex items-center gap-2">
             <Clock size={16} className="text-primary" />
             <h2 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Recent results</h2>

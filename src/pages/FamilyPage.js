@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -96,6 +96,30 @@ export default function FamilyPage() {
   const [racketAttackLoading, setRacketAttackLoading] = useState(null); // 'familyId-racketId'
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
   const [dbSnapshot, setDbSnapshot] = useState(null);
+
+  const COLLAPSED_KEY = 'mafia_families_collapsed';
+  const [collapsedSections, setCollapsedSections] = useState(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (_) {}
+    return {};
+  });
+
+  const toggleSection = (id) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+
+  const isCollapsed = (id) => !!collapsedSections[id];
 
   const fetchData = useCallback(async () => {
     try {
@@ -411,27 +435,43 @@ export default function FamilyPage() {
 
       {family ? (
         <>
-          {activeWars.length > 0 && activeWars.map((entry, i) => (
-            <button
-              key={entry.war?.id}
-              type="button"
-              onClick={() => { setSelectedWarIndex(i); setShowWarModal(true); }}
-              className="w-full bg-gradient-to-r from-red-900/30 via-red-800/20 to-red-900/30 border-2 border-red-600/60 rounded-sm p-3 text-left hover:border-red-500 transition-colors flex items-center gap-3"
-            >
-              <Swords className="text-red-500 shrink-0" size={24} />
-              <div>
-                <p className="font-heading font-bold text-red-400 uppercase tracking-wider">Your Family Is At War</p>
-                <p className="text-xs text-mutedForeground">
-                  vs {entry.war?.other_family_name || 'Enemy'} [{entry.war?.other_family_tag || '?'}] — Click for details
-                </p>
-              </div>
-            </button>
-          ))}
+          {activeWars.length > 0 && (
+            <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-red-600/40`}>
+              <button type="button" onClick={() => toggleSection('warAlerts')} className="w-full px-4 py-3 bg-gradient-to-r from-red-900/30 via-red-800/20 to-red-900/30 border-b border-red-600/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
+                <div className="flex items-center gap-3">
+                  <Swords className="text-red-500 shrink-0" size={24} />
+                  <div>
+                    <p className="font-heading font-bold text-red-400 uppercase tracking-wider">Your Family Is At War</p>
+                    <p className="text-xs text-mutedForeground">{activeWars.length} active war(s) — Click to expand</p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-red-400/80">{isCollapsed('warAlerts') ? <ChevronRight size={20} /> : <ChevronDown size={20} />}</span>
+              </button>
+              {!isCollapsed('warAlerts') && (
+                <div className="p-2 space-y-2">
+                  {activeWars.map((entry, i) => (
+                    <button
+                      key={entry.war?.id}
+                      type="button"
+                      onClick={() => { setSelectedWarIndex(i); setShowWarModal(true); }}
+                      className="w-full bg-gradient-to-r from-red-900/20 via-red-800/15 to-red-900/20 border border-red-600/50 rounded-sm p-3 text-left hover:border-red-500 transition-colors flex items-center gap-3"
+                    >
+                      <Swords className="text-red-500 shrink-0" size={20} />
+                      <div>
+                        <p className="font-heading font-bold text-red-400 uppercase tracking-wider text-sm">vs {entry.war?.other_family_name || 'Enemy'} [{entry.war?.other_family_tag || '?'}]</p>
+                        <p className="text-xs text-mutedForeground">Click for details</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Family Info Card */}
-          <div className={`${styles.panel} border border-primary/40 rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-            <div className="px-4 py-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className={`${styles.panel} border border-primary/40 rounded-md overflow-hidden shadow-lg shadow-primary/5`}>
+            <button type="button" onClick={() => toggleSection('familyInfo')} className="w-full px-4 py-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex flex-wrap items-center justify-between gap-4 hover:opacity-95 transition-opacity">
+              <div className="flex flex-wrap items-center justify-between gap-4 flex-1 min-w-0">
                 <div>
                   <h2 className="text-lg font-heading font-bold text-primary tracking-wide">{family.name} <span className="text-primary/70">[{family.tag}]</span></h2>
                   <p className="text-xs text-mutedForeground font-heading">Your role: <span className="text-primary font-bold uppercase tracking-wider">{ROLE_LABELS[myRole] || myRole}</span></p>
@@ -443,23 +483,26 @@ export default function FamilyPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={handleLeave}
+                    onClick={(e) => { e.stopPropagation(); handleLeave(); }}
                     className={`flex items-center gap-2 px-3 py-2 rounded-sm border border-primary/30 ${styles.surface} text-mutedForeground hover:text-red-400 hover:border-red-500/50 transition-smooth text-xs font-heading uppercase tracking-wider`}
                   >
                     <LogOut size={14} /> Leave
                   </button>
                 </div>
               </div>
-            </div>
+              <span className="shrink-0 text-primary/80">{isCollapsed('familyInfo') ? <ChevronRight size={20} /> : <ChevronDown size={20} />}</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-              <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+            <div className={`${styles.panel} rounded-md overflow-hidden`}>
+              <button type="button" onClick={() => toggleSection('treasury')} className="w-full px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
                 <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
                   <DollarSign size={14} /> Treasury
                 </h3>
-              </div>
+                <span className="shrink-0 text-primary/80">{isCollapsed('treasury') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+              </button>
+              {!isCollapsed('treasury') && (
               <div className="p-3 space-y-2">
                 <form onSubmit={handleDeposit} className="flex gap-2">
                   <input
@@ -488,11 +531,12 @@ export default function FamilyPage() {
                   </form>
                 )}
               </div>
+              )}
             </div>
           </div>
 
-          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
+            <button type="button" onClick={() => toggleSection('rackets')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
                 <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
@@ -500,7 +544,9 @@ export default function FamilyPage() {
                 </h3>
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
-            </div>
+              <span className="shrink-0 text-primary/80">{isCollapsed('rackets') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            </button>
+            {!isCollapsed('rackets') && (
             <div className="p-4">
               <p className="text-xs text-mutedForeground mb-3 font-heading">Collect income on cooldown. Upgrade with family treasury.</p>
               {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
@@ -557,29 +603,30 @@ export default function FamilyPage() {
                 <Crosshair size={14} /> Raid Enemy Rackets →
               </a>
             </div>
+            )}
           </div>
 
-          <div id="raid-enemy-rackets" className={`${styles.panel} rounded-sm overflow-hidden scroll-mt-4`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-px bg-primary/50" />
-                  <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                    <Crosshair size={16} /> Raid Enemy Rackets
-                  </h3>
-                  <div className="w-6 h-px bg-primary/50" />
-                </div>
-                <button
-                  type="button"
-                  onClick={fetchRacketAttackTargets}
-                  disabled={targetsRefreshing}
-                  className="text-xs text-mutedForeground hover:text-primary flex items-center gap-1 disabled:opacity-50 font-heading"
-                  title="Refresh list"
-                >
-                  <RefreshCw size={12} className={targetsRefreshing ? 'animate-spin' : ''} /> Refresh
-                </button>
-              </div>
+          <div id="raid-enemy-rackets" className={`${styles.panel} rounded-md overflow-hidden scroll-mt-4`}>
+            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between gap-2">
+              <button type="button" onClick={() => toggleSection('raidEnemy')} className="flex items-center gap-2 flex-1 min-w-0 text-left hover:opacity-95 transition-opacity">
+                <div className="w-6 h-px bg-primary/50" />
+                <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+                  <Crosshair size={16} /> Raid Enemy Rackets
+                </h3>
+                <div className="flex-1 h-px bg-primary/50" />
+              </button>
+              <span className="shrink-0 text-primary/80">{isCollapsed('raidEnemy') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); fetchRacketAttackTargets(); }}
+                disabled={targetsRefreshing}
+                className="text-xs text-mutedForeground hover:text-primary flex items-center gap-1 disabled:opacity-50 font-heading shrink-0"
+                title="Refresh list"
+              >
+                <RefreshCw size={12} className={targetsRefreshing ? 'animate-spin' : ''} /> Refresh
+              </button>
             </div>
+            {!isCollapsed('raidEnemy') && (
             <div className="p-4">
               <p className="text-xs text-mutedForeground mb-3 font-heading">
                 Click <span className="text-primary font-bold">Raid</span> to take 25% of one collect from their treasury. Success drops as level goes up. 2h cooldown.
@@ -629,10 +676,11 @@ export default function FamilyPage() {
                 </div>
               )}
             </div>
+            )}
           </div>
 
-          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
+            <button type="button" onClick={() => toggleSection('roster')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
                 <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
@@ -640,7 +688,9 @@ export default function FamilyPage() {
                 </h3>
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
-            </div>
+              <span className="shrink-0 text-primary/80">{isCollapsed('roster') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            </button>
+            {!isCollapsed('roster') && (
             <div className="p-4">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
@@ -707,6 +757,7 @@ export default function FamilyPage() {
                 </form>
               )}
             </div>
+            )}
           </div>
         </>
       ) : (
@@ -723,14 +774,16 @@ export default function FamilyPage() {
             </button>
           </div>
           {/* Create Family */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
+            <button type="button" onClick={() => toggleSection('createFamily')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
                 <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Create A Family</h3>
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
-            </div>
+              <span className="shrink-0 text-primary/80">{isCollapsed('createFamily') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            </button>
+            {!isCollapsed('createFamily') && (
             <div className="p-4">
               <form onSubmit={handleCreate} className="flex flex-wrap gap-3 items-end">
                 <div>
@@ -761,17 +814,20 @@ export default function FamilyPage() {
               </form>
               <p className="text-xs text-mutedForeground mt-2 font-heading">Max {config?.max_families ?? 10} families. You become Boss.</p>
             </div>
+            )}
           </div>
 
           {/* Join Family */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
+            <button type="button" onClick={() => toggleSection('joinFamily')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-px bg-primary/50" />
                 <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Join A Family</h3>
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
-            </div>
+              <span className="shrink-0 text-primary/80">{isCollapsed('joinFamily') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            </button>
+            {!isCollapsed('joinFamily') && (
             <div className="p-4">
               <form onSubmit={handleJoin} className="flex flex-wrap gap-3 items-end">
                 <div className="flex-1 min-w-[200px]">
@@ -792,18 +848,21 @@ export default function FamilyPage() {
                 </button>
               </form>
             </div>
+            )}
           </div>
         </>
       )}
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+      <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        <button type="button" onClick={() => toggleSection('allFamilies')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
             <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">All Families</h3>
             <div className="flex-1 h-px bg-primary/50" />
           </div>
-        </div>
+          <span className="shrink-0 text-primary/80">{isCollapsed('allFamilies') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+        </button>
+        {!isCollapsed('allFamilies') && (
         <div className="p-4">
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
@@ -836,10 +895,11 @@ export default function FamilyPage() {
             </table>
           </div>
         </div>
+        )}
       </div>
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+      <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        <button type="button" onClick={() => toggleSection('warHistory')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
             <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
@@ -847,7 +907,9 @@ export default function FamilyPage() {
             </h3>
             <div className="flex-1 h-px bg-primary/50" />
           </div>
-        </div>
+          <span className="shrink-0 text-primary/80">{isCollapsed('warHistory') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+        </button>
+        {!isCollapsed('warHistory') && (
         <div className="p-4">
           {warHistory.length === 0 ? (
             <p className="text-xs text-mutedForeground font-heading italic">No war history yet.</p>
@@ -901,6 +963,7 @@ export default function FamilyPage() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {showWarModal && activeWars[selectedWarIndex] && (

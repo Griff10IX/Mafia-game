@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Dices } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import styles from '../../styles/noir.module.css';
 
 const DICE_HOUSE_EDGE = 0.05;
 const ROLL_DURATION_MS = 3000;
@@ -297,7 +298,7 @@ export default function Dice() {
   const canClaim = ownership?.current_city && !ownership?.owner;
 
   return (
-    <div className="space-y-6" data-testid="dice-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="dice-page">
       {/* Art Deco Header */}
       <div>
         <div className="flex items-center gap-4 mb-3">
@@ -308,7 +309,7 @@ export default function Dice() {
         <p className="text-center text-mutedForeground font-heading tracking-wide">Playing in <span className="text-primary">{ownership?.current_city ?? '—'}</span></p>
         
         {ownership?.current_city && (
-          <div className="mt-4 p-3 bg-gradient-to-r from-zinc-900 via-zinc-900/95 to-zinc-900 border border-primary/30 rounded-sm text-sm">
+          <div className={`mt-4 p-3 ${styles.panel} rounded-md text-sm`}>
             {isOwner ? (
               <p className="text-primary font-heading">You own this table — you profit when players lose and pay when they win.</p>
             ) : ownership?.owner ? (
@@ -366,7 +367,7 @@ export default function Dice() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
         {isOwner ? (
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
             {/* Header with Art Deco decorations */}
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
@@ -432,7 +433,7 @@ export default function Dice() {
             </div>
           </div>
         ) : (
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+          <div className={`${styles.panel} rounded-md overflow-hidden`}>
             {/* Header with Art Deco decorations */}
             <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
@@ -500,8 +501,7 @@ export default function Dice() {
             </div>
           </div>
         )}
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
-          {/* Header with Art Deco decorations */}
+        <div className={`${styles.panel} rounded-md overflow-hidden`}>
           <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
             <div className="flex items-center gap-2">
               <div className="w-8 h-px bg-primary/50" />
