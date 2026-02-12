@@ -314,6 +314,17 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
+                          <Link
+                            to="/organised-crime"
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                              location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink
+                            }`}
+                            style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined}
+                            data-testid="nav-organised-crime"
+                          >
+                            <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
+                          </Link>
                         </div>
                       )}
                     </div>
