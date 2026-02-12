@@ -85,7 +85,7 @@
   border-radius: 2px;
 }
 
-/* Sidebar active nav item – solid gold background, dark text (match reference) */
+/* Sidebar: expanded group header (e.g. RANKING when open) – solid gold, dark text */
 .navItemActive {
   background: linear-gradient(to bottom, var(--noir-primary-bright), var(--noir-primary-dark)) !important;
   color: #1a1a1a !important;
@@ -95,6 +95,18 @@
 .navItemActive:hover {
   opacity: 0.95;
   color: #1a1a1a !important;
+}
+
+/* Sidebar: current page link – slightly lighter dark background, gold text (match reference) */
+.navItemActivePage {
+  background-color: var(--noir-raised) !important;
+  color: var(--noir-primary) !important;
+  border: none !important;
+}
+
+.navItemActivePage:hover {
+  background-color: rgba(51, 51, 51, 0.95) !important;
+  color: var(--noir-primary) !important;
 }
 
 /* Text – use with Tailwind for font-heading etc. */

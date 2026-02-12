@@ -203,8 +203,8 @@ export default function Layout({ children }) {
         } md:translate-x-0`}
       >
         <div className="flex flex-col h-full">
-          {/* Logo */}
-          <div className="p-4 border-b border-primary/30 bg-gradient-to-r from-primary/10 via-transparent to-primary/10">
+          {/* Logo – thin gold line under header (match reference) */}
+          <div className="p-4 border-b border-primary/40">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />
               <h1 className="text-xl font-heading font-bold text-primary tracking-widest" data-testid="app-logo">MAFIA WARS</h1>
@@ -249,7 +249,7 @@ export default function Layout({ children }) {
                             to="/crimes"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/crimes' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/crimes' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-crimes"
                           >
@@ -268,7 +268,7 @@ export default function Layout({ children }) {
                             to="/gta"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/gta' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/gta' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-gta"
                           >
@@ -287,7 +287,7 @@ export default function Layout({ children }) {
                             to="/jail"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/jail' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/jail' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-jail"
                           >
@@ -339,7 +339,7 @@ export default function Layout({ children }) {
                             to="/casino"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-casino"
                           >
@@ -349,7 +349,7 @@ export default function Layout({ children }) {
                             to="/casino/dice"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/dice' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/dice' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-dice"
                           >
@@ -359,7 +359,7 @@ export default function Layout({ children }) {
                             to="/casino/rlt"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/rlt' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/rlt' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-roulette"
                           >
@@ -369,7 +369,7 @@ export default function Layout({ children }) {
                             to="/casino/blackjack"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/blackjack' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/blackjack' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-blackjack"
                           >
@@ -379,7 +379,7 @@ export default function Layout({ children }) {
                             to="/casino/horseracing"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/horseracing' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/horseracing' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-horseracing"
                           >
@@ -389,7 +389,7 @@ export default function Layout({ children }) {
                             to="/sports-betting"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/sports-betting' ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/sports-betting' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                             }`}
                             data-testid="nav-sports-betting"
                           >
@@ -414,13 +414,13 @@ export default function Layout({ children }) {
                           ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500'
                           : 'text-red-400 hover:bg-red-500/10'
                         : isActive
-                          ? styles.navItemActive
+                          ? styles.navItemActivePage
                           : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
                     }`}
                     style={isFamiliesAtWar ? { color: '#f87171' } : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={16} className={isFamiliesAtWar ? '' : isActive ? 'text-[#1a1a1a]' : 'text-primary/70'} style={isFamiliesAtWar ? { color: '#f87171' } : undefined} />
+                    <Icon size={16} className={isFamiliesAtWar ? '' : 'text-primary/70'} style={isFamiliesAtWar ? { color: '#f87171' } : undefined} />
                     <span className="uppercase tracking-widest text-xs font-heading flex-1">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
