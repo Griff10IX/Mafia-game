@@ -4,8 +4,11 @@ import random
 import uuid
 import os
 import sys
+import logging
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_iso_datetime(val):
@@ -64,6 +67,16 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
 async def attempt_gta(
     request: GTAAttemptRequest, current_user: dict = Depends(get_current_user)
 ):
+    try:
+        return await _attempt_gta_impl(request, current_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("attempt_gta failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Server error: {e!s}")
+
+
+async def _attempt_gta_impl(request: GTAAttemptRequest, current_user: dict):
     if current_user.get("in_jail"):
         jail_time = _parse_iso_datetime(current_user.get("jail_until"))
         if jail_time and jail_time > datetime.now(timezone.utc):
@@ -133,9 +146,10 @@ async def attempt_gta(
                 "acquired_at": datetime.now(timezone.utc).isoformat(),
             }
         )
+        car_value = int(car.get("value", 0))
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"money": car["value"], "rank_points": rank_points, "total_gta": 1}},
+            {"$inc": {"money": car_value, "rank_points": rank_points, "total_gta": 1}},
         )
         return GTAAttemptResponse(
             success=True,

@@ -188,12 +188,15 @@ async def get_all_events_for_testing() -> bool:
     return bool(doc.get("all_events_for_testing", False))
 
 async def get_effective_event():
-    """Current event multipliers if events enabled, else NO_EVENT. When all_events_for_testing, returns combined event."""
-    if not await get_events_enabled():
+    """Current event multipliers if events enabled, else NO_EVENT. When all_events_for_testing, returns combined event. Never raises."""
+    try:
+        if not await get_events_enabled():
+            return NO_EVENT.copy()
+        if await get_all_events_for_testing():
+            return get_combined_event()
+        return get_active_game_event()
+    except Exception:
         return NO_EVENT.copy()
-    if await get_all_events_for_testing():
-        return get_combined_event()
-    return get_active_game_event()
 
 # Armour shop (5 tiers): first 3 cash, top 2 points
 ARMOUR_SETS = [
@@ -6175,9 +6178,11 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     my_role = current_user.get("family_role")
     my_member = next((m for m in members_docs if m["user_id"] == current_user["id"]), None)
     if my_member and my_member.get("role"):
-        my_role = my_member["role"]
-        if current_user.get("family_role") != my_role:
+        my_role = str(my_member["role"]).strip().lower() or my_role
+        if my_role and current_user.get("family_role") != my_role:
             await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_role": my_role}})
+    if my_role:
+        my_role = str(my_role).strip().lower()
     ev = await get_effective_event()
     members = []
     for m in members_docs:
@@ -6190,39 +6195,42 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         members.append({
             "user_id": m["user_id"],
             "username": (u or {}).get("username", "?"),
-            "role": m["role"],
+            "role": str(m.get("role", "")).strip().lower() or "associate",
             "rank_name": rank_name,
         })
     rackets_raw = fam.get("rackets") or {}
     rackets = []
     now = datetime.now(timezone.utc)
     for r in FAMILY_RACKETS:
-        rid = r["id"]
-        state = rackets_raw.get(rid) or {}
-        level = state.get("level", 0)
-        last_at = state.get("last_collected_at")
-        income_per, cooldown_h = _racket_income_and_cooldown(rid, level, ev)
-        next_collect_at = None
-        if last_at and level > 0 and cooldown_h > 0:
-            try:
-                last_dt = datetime.fromisoformat(last_at.replace("Z", "+00:00"))
-                next_dt = last_dt + timedelta(hours=cooldown_h)
-                next_collect_at = next_dt.isoformat() if next_dt > now else None
-            except Exception:
-                next_collect_at = None
-        if next_collect_at is None and level > 0:
-            next_collect_at = now.isoformat()
-        rackets.append({
-            "id": rid,
-            "name": r["name"],
-            "description": r.get("description", ""),
-            "level": level,
-            "cooldown_hours": r["cooldown_hours"],
-            "effective_cooldown_hours": cooldown_h,
-            "income_per_collect": income_per,
-            "effective_income_per_collect": income_per,
-            "next_collect_at": next_collect_at,
-        })
+        try:
+            rid = r["id"]
+            state = rackets_raw.get(rid) or {}
+            level = int(state.get("level", 0) or 0)
+            last_at = state.get("last_collected_at")
+            income_per, cooldown_h = _racket_income_and_cooldown(rid, level, ev)
+            next_collect_at = None
+            if last_at and level > 0 and cooldown_h > 0:
+                try:
+                    last_dt = datetime.fromisoformat(str(last_at).replace("Z", "+00:00"))
+                    next_dt = last_dt + timedelta(hours=cooldown_h)
+                    next_collect_at = next_dt.isoformat() if next_dt > now else None
+                except Exception:
+                    next_collect_at = None
+            if next_collect_at is None and level > 0:
+                next_collect_at = now.isoformat()
+            rackets.append({
+                "id": rid,
+                "name": r["name"],
+                "description": r.get("description", ""),
+                "level": level,
+                "cooldown_hours": r["cooldown_hours"],
+                "effective_cooldown_hours": cooldown_h,
+                "income_per_collect": income_per,
+                "effective_income_per_collect": income_per,
+                "next_collect_at": next_collect_at,
+            })
+        except Exception:
+            continue
     return {
         "family": {"id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0)},
         "members": members,

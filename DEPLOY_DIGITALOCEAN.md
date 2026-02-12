@@ -299,9 +299,9 @@ git checkout MAfiaGame2
 git pull origin MAfiaGame2
 
 cd backend && source venv/bin/activate && pip install -r requirements.txt
-systemctl restart mafia-backend
 cd ..
 npm run build
+systemctl restart mafia-backend   # required: new backend code only loads after restart
 ```
 
 **Option B: Keep a second remote `mafia2`**
@@ -315,7 +315,7 @@ git pull mafia2 MAfiaGame2
 # ... then backend + npm run build as above
 ```
 
-Nginx already serves `build/`; no Nginx restart needed after a new build.
+Nginx already serves `build/`; no Nginx restart needed after a new build. **You must run `systemctl restart mafia-backend`** after pulling backend changes or the server will keep running the old Python code.
 
 ---
 

@@ -4,7 +4,10 @@ from datetime import datetime, timezone, timedelta
 import random
 import os
 import sys
+import logging
 from fastapi import Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_iso_datetime(val):
@@ -64,6 +67,16 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
 
 
 async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        return await _commit_crime_impl(crime_id, current_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("commit_crime failed: %s", e)
+        raise HTTPException(status_code=500, detail=f"Server error: {e!s}")
+
+
+async def _commit_crime_impl(crime_id: str, current_user: dict):
     crime = await db.crimes.find_one({"id": crime_id}, {"_id": 0})
     if not crime:
         raise HTTPException(status_code=404, detail="Crime not found")
@@ -91,7 +104,11 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
     )
     success = random.random() < success_rate
     if success:
-        reward = random.randint(crime["reward_min"], crime["reward_max"])
+        r_min = int(crime.get("reward_min", 0))
+        r_max = int(crime.get("reward_max", 100))
+        if r_max < r_min:
+            r_max = r_min
+        reward = random.randint(r_min, r_max)
         rank_points = (
             3
             if crime["crime_type"] == "petty"
