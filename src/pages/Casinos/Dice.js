@@ -298,15 +298,15 @@ export default function Dice() {
   const canClaim = ownership?.current_city && !ownership?.owner;
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="dice-page">
+    <div className={`space-y-4 md:space-y-5 ${styles.pageContent}`} data-testid="dice-page">
       {/* Art Deco Header */}
       <div>
-        <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2 sm:gap-4 mb-2 sm:mb-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/40 to-primary/60" />
-          <h1 className="text-3xl md:text-4xl font-heading font-bold text-primary tracking-wider uppercase">The Dice Table</h1>
+          <h1 className="text-xl sm:text-3xl md:text-4xl font-heading font-bold text-primary tracking-wider uppercase">The Dice Table</h1>
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
         </div>
-        <p className="text-center text-mutedForeground font-heading tracking-wide">Playing in <span className="text-primary">{ownership?.current_city ?? '—'}</span></p>
+        <p className="text-center text-sm text-mutedForeground font-heading tracking-wide">Playing in <span className="text-primary">{ownership?.current_city ?? '—'}</span></p>
         
         {ownership?.current_city && (
           <div className={`mt-4 p-3 ${styles.panel} rounded-md text-sm`}>
@@ -365,7 +365,7 @@ export default function Dice() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {isOwner ? (
           <div className={`${styles.panel} rounded-md overflow-hidden`}>
             {/* Header with Art Deco decorations */}
@@ -434,17 +434,16 @@ export default function Dice() {
           </div>
         ) : (
           <div className={`${styles.panel} rounded-md overflow-hidden`}>
-            {/* Header with Art Deco decorations */}
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+            <div className="px-3 py-1.5 sm:py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-px bg-primary/50" />
-                <h3 className="text-base font-heading font-bold text-primary uppercase tracking-widest">Place Your Bet</h3>
+                <div className="w-6 sm:w-8 h-px bg-primary/50" />
+                <h3 className="text-sm sm:text-base font-heading font-bold text-primary uppercase tracking-widest">Place Your Bet</h3>
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
               <div>
-                <label className="block text-xs font-heading font-medium text-primary/80 uppercase tracking-wider mb-1">Stake</label>
+                <label className="block text-[10px] sm:text-xs font-heading font-medium text-primary/80 uppercase tracking-wider mb-1">Stake</label>
                 <div className="flex items-center gap-2">
                   <span className="text-primary text-sm">$</span>
                   <input
@@ -502,29 +501,29 @@ export default function Dice() {
           </div>
         )}
         <div className={`${styles.panel} rounded-md overflow-hidden`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+          <div className="px-3 py-1.5 sm:py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-px bg-primary/50" />
-              <h3 className="text-base font-heading font-bold text-primary uppercase tracking-widest">The Roll</h3>
+              <div className="w-6 sm:w-8 h-px bg-primary/50" />
+              <h3 className="text-sm sm:text-base font-heading font-bold text-primary uppercase tracking-widest">The Roll</h3>
               <div className="flex-1 h-px bg-primary/50" />
             </div>
           </div>
-          <div className="p-4 space-y-4">
-            {/* Dice roll display */}
-            <div className="flex flex-col items-center justify-center py-6 px-4 rounded-sm bg-gradient-to-b from-zinc-800/50 to-zinc-900/80 border border-primary/20">
+          <div className="p-3 sm:p-4 space-y-3">
+            {/* Dice roll display - compact, result clear on mobile */}
+            <div className="flex flex-col items-center justify-center py-4 sm:py-5 px-3 rounded-sm bg-gradient-to-b from-zinc-800/50 to-zinc-900/80 border border-primary/20 min-h-[120px] sm:min-h-[140px]">
               {diceLoading ? (
                 <>
-                  <Dices className="text-primary animate-dice-roll w-12 h-12 mb-3" aria-hidden />
-                  <p className="text-xs text-primary/80 uppercase tracking-widest font-heading">
+                  <Dices className="text-primary animate-dice-roll w-10 h-10 sm:w-12 sm:h-12 mb-2" aria-hidden />
+                  <p className="text-[10px] sm:text-xs text-primary/80 uppercase tracking-widest font-heading">
                     Rolling{!skipAnimation && ' (~3s)'}
                   </p>
-                  <p className="text-3xl font-heading font-bold text-primary mt-2 tabular-nums">{rollingNumber ?? '…'}</p>
+                  <p className="text-2xl sm:text-3xl font-heading font-bold text-primary mt-1 tabular-nums">{rollingNumber ?? '…'}</p>
                 </>
               ) : lastResult ? (
                 <>
-                  <p className="text-xs text-mutedForeground uppercase tracking-widest font-heading mb-2">You rolled</p>
+                  <p className="text-[10px] sm:text-xs text-mutedForeground uppercase tracking-widest font-heading mb-1 sm:mb-2">You rolled</p>
                   <div
-                    className={`flex items-center justify-center w-16 h-16 rounded-sm font-heading font-bold text-2xl tabular-nums animate-dice-reveal border-2 ${
+                    className={`flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-sm font-heading font-bold text-2xl sm:text-3xl tabular-nums animate-dice-reveal border-2 ${
                       lastResult.win 
                         ? 'bg-gradient-to-b from-emerald-600/30 to-emerald-900/30 text-emerald-400 border-emerald-500/60 shadow-lg shadow-emerald-500/20' 
                         : 'bg-gradient-to-b from-red-600/30 to-red-900/30 text-red-400 border-red-500/60 shadow-lg shadow-red-500/20'
@@ -532,19 +531,19 @@ export default function Dice() {
                   >
                     {lastResult.roll}
                   </div>
-                  <p className={`text-sm mt-3 font-heading font-bold uppercase tracking-widest ${lastResult.win ? 'text-emerald-400' : 'text-red-400'}`}>
+                  <p className={`text-xs sm:text-sm mt-2 font-heading font-bold uppercase tracking-widest ${lastResult.win ? 'text-emerald-400' : 'text-red-400'}`}>
                     {lastResult.win ? 'Winner!' : 'Busted'}
                   </p>
                 </>
               ) : (
                 <>
-                  <Dices className="text-primary/40 w-12 h-12 mb-3" aria-hidden />
-                  <p className="text-xs text-mutedForeground uppercase tracking-widest font-heading">Place a bet to roll</p>
+                  <Dices className="text-primary/40 w-10 h-10 sm:w-12 sm:h-12 mb-2" aria-hidden />
+                  <p className="text-[10px] sm:text-xs text-mutedForeground uppercase tracking-widest font-heading text-center">Place a bet to roll</p>
                 </>
               )}
             </div>
-            {/* Info */}
-            <div className="space-y-2 text-xs">
+            {/* Info - compact */}
+            <div className="space-y-1.5 text-[10px] sm:text-xs">
               <div className="flex justify-between items-center py-1 border-b border-primary/10">
                 <span className="text-mutedForeground font-heading uppercase tracking-wider">Max Bet</span>
                 <span className="text-primary font-heading font-bold">{formatMoney(diceConfig.max_bet)}</span>
@@ -558,7 +557,7 @@ export default function Dice() {
                 <span className="text-foreground">sides × 0.95</span>
               </div>
             </div>
-            <p className="text-xs text-center text-mutedForeground italic">Pick 1–{sidesNum}. Match the roll to win.</p>
+            <p className="text-[10px] sm:text-xs text-center text-mutedForeground italic">Pick 1–{sidesNum}. Match the roll to win.</p>
           </div>
         </div>
       </div>

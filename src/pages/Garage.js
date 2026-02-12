@@ -14,6 +14,9 @@ export default function Garage() {
   const [sortBy, setSortBy] = useState('rarity');
   const [filterRarity, setFilterRarity] = useState('all');
   const [showAll, setShowAll] = useState(false);
+  const [customCarModal, setCustomCarModal] = useState(null);
+  const [customCarImageUrl, setCustomCarImageUrl] = useState('');
+  const [savingCustomImage, setSavingCustomImage] = useState(false);
 
   useEffect(() => {
     fetchGarage();
@@ -34,6 +37,28 @@ export default function Garage() {
     setSelectedCars(prev =>
       prev.includes(carId) ? prev.filter(id => id !== carId) : [...prev, carId]
     );
+  };
+
+  const openCustomCarModal = (car) => {
+    setCustomCarModal(car);
+    setCustomCarImageUrl(car.image || '');
+  };
+
+  const saveCustomCarImage = async () => {
+    if (!customCarModal) return;
+    setSavingCustomImage(true);
+    try {
+      await api.patch(`/gta/custom-car/${customCarModal.user_car_id}`, {
+        image_url: customCarImageUrl.trim() || null,
+      });
+      toast.success('Picture updated');
+      setCustomCarModal(null);
+      fetchGarage();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update picture');
+    } finally {
+      setSavingCustomImage(false);
+    }
   };
 
   const meltCars = async () => {
@@ -258,7 +283,7 @@ export default function Garage() {
             {displayedCars.map((car, index) => (
               <div
                 key={index}
-                onClick={() => toggleSelect(car.user_car_id)}
+                onClick={() => (car.car_id === 'car_custom' ? openCustomCarModal(car) : toggleSelect(car.user_car_id))}
                 className={`${styles.panel} border rounded-sm p-1.5 sm:p-2 cursor-pointer transition-smooth ${
                   selectedCars.includes(car.user_car_id)
                     ? 'border-primary ring-1 ring-primary/30'
@@ -278,13 +303,15 @@ export default function Garage() {
                       <Car size={20} className="text-primary/30" />
                     </div>
                   )}
-                  <div className="absolute top-0.5 right-0.5">
-                    {selectedCars.includes(car.user_car_id) ? (
-                      <CheckSquare size={12} className="text-primary drop-shadow" />
-                    ) : (
-                      <Square size={12} className="text-mutedForeground/60 drop-shadow" />
-                    )}
-                  </div>
+                  {car.car_id !== 'car_custom' && (
+                    <div className="absolute top-0.5 right-0.5">
+                      {selectedCars.includes(car.user_car_id) ? (
+                        <CheckSquare size={12} className="text-primary drop-shadow" />
+                      ) : (
+                        <Square size={12} className="text-mutedForeground/60 drop-shadow" />
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} leading-tight`}>
                   {car.rarity.replace('_', ' ')}
@@ -294,6 +321,38 @@ export default function Garage() {
               </div>
             ))}
           </div>
+
+          {/* Custom car picture modal */}
+          {customCarModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setCustomCarModal(null)}>
+              <div className={`${styles.panel} border border-primary/30 rounded-sm shadow-xl max-w-md w-full p-4`} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Custom car — change picture</h3>
+                  <button type="button" onClick={() => setCustomCarModal(null)} className="text-mutedForeground hover:text-foreground">✕</button>
+                </div>
+                <p className="text-xs text-mutedForeground font-heading mb-2">{customCarModal.name}</p>
+                <div className="aspect-video rounded-sm overflow-hidden bg-muted border border-primary/20 mb-3">
+                  {customCarImageUrl ? (
+                    <img src={customCarImageUrl} alt={customCarModal.name} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><Car size={32} className="text-primary/30" /></div>
+                  )}
+                </div>
+                <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Image URL</label>
+                <input
+                  type="url"
+                  value={customCarImageUrl}
+                  onChange={(e) => setCustomCarImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className={`${styles.input} w-full h-9 px-3 text-sm mb-3`}
+                />
+                <div className="flex gap-2">
+                  <button type="button" onClick={saveCustomCarImage} disabled={savingCustomImage} className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground font-heading font-bold uppercase tracking-wider py-2 rounded-sm border border-yellow-600/50 disabled:opacity-50">Save</button>
+                  <button type="button" onClick={() => setCustomCarModal(null)} className="px-4 border border-primary/30 font-heading text-sm rounded-sm hover:bg-primary/10">Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* View All / Show Less */}
           {totalCount > DEFAULT_VISIBLE && (

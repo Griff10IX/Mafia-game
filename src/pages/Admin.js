@@ -192,6 +192,16 @@ export default function Admin() {
     }
   };
 
+  const handleSetAllSearchTime5 = async () => {
+    if (!window.confirm('Set every user\'s search timer to 5 minutes? (Affects all users and any active searches.)')) return;
+    try {
+      const res = await api.post('/admin/set-all-search-time?search_minutes=5');
+      toast.success(res.data?.message || 'All search timers set to 5 minutes');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   const handleForceOnline = async () => {
     try {
       const res = await api.post('/admin/force-online');
@@ -602,6 +612,7 @@ export default function Admin() {
               <input type="number" value={formData.searchMinutes} onChange={(e) => setFormData({ ...formData, searchMinutes: parseInt(e.target.value) })} className={`${inputClass} mb-3`} placeholder="Minutes" />
               <button onClick={handleSetSearchTime} className={`w-full ${btnPrimary}`}>Set Search Time (Persistent)</button>
               <p className={`text-xs font-heading mt-2 ${styles.textMuted}`}>Set to 0 to clear override.</p>
+              <button onClick={handleSetAllSearchTime5} className={`w-full mt-3 ${btnPrimary}`}>Set Everyone to 5 mins</button>
             </div>
 
             <div className={`${styles.panel} rounded-md overflow-hidden p-4 md:col-span-2`}>

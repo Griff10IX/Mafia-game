@@ -289,10 +289,10 @@ export default function Rlt() {
   const canClaim = ownership?.is_unclaimed && !ownership?.owner_id;
 
   return (
-    <div className={`space-y-8 ${styles.pageContent}`} data-testid="roulette-page">
+    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="roulette-page">
       <div>
-        <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Roulette</h1>
-        <p className="text-mutedForeground">Place your bets. Playing in {currentCity}.</p>
+        <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2">Roulette</h1>
+        <p className="text-sm text-mutedForeground">Place your bets. Playing in {currentCity}.</p>
         {ownership && (
           <div className="mt-3 p-3 bg-card border border-border rounded-sm text-sm">
             {isOwner ? (
@@ -380,220 +380,110 @@ export default function Rlt() {
         </div>
       )}
 
-      {/* Betting Grid - only show if not owner */}
+      {/* Bet controls at top + result + table (only when not owner) */}
       {!isOwner && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Betting grid - 1920s Art Deco Style */}
-        <div className={`${styles.panel} rounded-md overflow-hidden`}>
-          {/* Art Deco Header */}
-          <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/40">
-            <div className="flex items-center justify-center gap-2">
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
-              <h3 className="text-sm font-heading font-bold text-primary tracking-widest uppercase">The Table</h3>
-              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
-            </div>
+      <>
+        {/* TOP: Chips, animation, spin, current bets — so no scrolling to place bet */}
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+          <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+            <h3 className="text-xs sm:text-sm font-heading font-bold text-primary tracking-widest uppercase">Chips &amp; Spin</h3>
           </div>
-          
           <div className="p-3 space-y-2">
-            {/* Main Number Grid */}
-            <div className="border border-primary/40 rounded-sm overflow-hidden shadow-inner">
-              {/* Zero */}
-              <button
-                type="button"
-                onClick={() => addBet('straight', 0)}
-                className="w-full h-8 bg-gradient-to-b from-emerald-800 to-emerald-900 hover:from-emerald-700 hover:to-emerald-800 text-white font-heading font-bold text-base tracking-wider border-b border-primary/30 transition-all"
-              >
-                0
-              </button>
-              
-              {/* Numbers Grid - 12 rows x 3 columns */}
-              <div className="grid grid-cols-3">
-                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36].map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => addBet('straight', n)}
-                    className={`h-6 font-heading font-bold text-xs border-b border-r border-zinc-800/80 transition-all hover:brightness-125 ${
-                      isRed(n) 
-                        ? 'bg-red-800 hover:bg-red-700 text-white' 
-                        : 'bg-zinc-900 hover:bg-zinc-800 text-white'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              
-              {/* Column Bets */}
-              <div className="grid grid-cols-3 border-t border-primary/30">
-                {[1, 2, 3].map((col) => (
-                  <button 
-                    key={col}
-                    type="button" 
-                    onClick={() => addBet('column', col)} 
-                    className="py-1 bg-zinc-900/80 hover:bg-zinc-800 text-primary/80 hover:text-primary text-[10px] font-heading tracking-wider border-r border-zinc-800 last:border-r-0 transition-colors"
-                  >
-                    2:1
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Outside Bets - Compact rows */}
-            <div className="grid grid-cols-6 gap-1">
-              <button type="button" onClick={() => addBet('dozen', 1)} className="col-span-2 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 hover:text-foreground text-[10px] font-heading tracking-wide border border-primary/20 hover:border-primary/40 transition-all">
-                1st 12
-              </button>
-              <button type="button" onClick={() => addBet('dozen', 2)} className="col-span-2 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 hover:text-foreground text-[10px] font-heading tracking-wide border border-primary/20 hover:border-primary/40 transition-all">
-                2nd 12
-              </button>
-              <button type="button" onClick={() => addBet('dozen', 3)} className="col-span-2 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 hover:text-foreground text-[10px] font-heading tracking-wide border border-primary/20 hover:border-primary/40 transition-all">
-                3rd 12
-              </button>
-              <button type="button" onClick={() => addBet('low', 'low')} className="py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 hover:text-foreground text-[10px] font-heading border border-primary/20 hover:border-primary/40 transition-all">
-                1-18
-              </button>
-              <button type="button" onClick={() => addBet('even', 'even')} className="py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 hover:text-foreground text-[10px] font-heading border border-primary/20 hover:border-primary/40 transition-all">
-                Even
-              </button>
-              <button type="button" onClick={() => addBet('red', 'red')} className="py-1.5 bg-gradient-to-b from-red-800 to-red-900 hover:from-red-700 hover:to-red-800 text-white text-[10px] font-heading font-bold border border-red-700/50 transition-all">
-                Red
-              </button>
-              <button type="button" onClick={() => addBet('black', 'black')} className="py-1.5 bg-gradient-to-b from-zinc-800 to-zinc-900 hover:from-zinc-700 hover:to-zinc-800 text-white text-[10px] font-heading font-bold border border-zinc-600/50 transition-all">
-                Black
-              </button>
-              <button type="button" onClick={() => addBet('odd', 'odd')} className="py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 hover:text-foreground text-[10px] font-heading border border-primary/20 hover:border-primary/40 transition-all">
-                Odd
-              </button>
-              <button type="button" onClick={() => addBet('high', 'high')} className="py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 hover:text-foreground text-[10px] font-heading border border-primary/20 hover:border-primary/40 transition-all">
-                19-36
-              </button>
-            </div>
-
-            {/* Chip Selection - Compact */}
-            <div className="pt-2 border-t border-primary/20">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-px flex-1 bg-gradient-to-r from-transparent to-primary/30" />
-                <p className="text-[10px] font-heading text-primary/70 uppercase tracking-widest">Chips</p>
-                <div className="h-px flex-1 bg-gradient-to-l from-transparent to-primary/30" />
-              </div>
-              <div className="flex flex-wrap justify-center gap-1.5">
-                {CHIPS.map((c) => (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => { setSelectedChip(c.value); setCustomChip(''); }}
-                    className={`w-10 h-10 rounded-full text-[10px] font-heading font-bold transition-all border-2 ${
-                      selectedChip === c.value && !customChip
-                        ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-500 shadow-lg shadow-primary/30 scale-110' 
-                        : 'bg-gradient-to-b from-zinc-700 to-zinc-800 text-zinc-300 border-zinc-600 hover:border-primary/50 hover:scale-105'
-                    }`}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-2 flex items-center justify-center gap-2">
-                <span className="text-[10px] text-primary/60 font-heading">Custom:</span>
-                <div className="relative">
-                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-primary/60 text-xs font-heading">$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Amount"
-                    value={customChip}
-                    onChange={(e) => setCustomChip(e.target.value)}
-                    className="w-24 bg-zinc-900 border border-primary/30 rounded-sm h-7 pl-5 pr-2 text-xs text-foreground font-heading focus:border-primary/60 transition-colors"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Current bets + spin + result */}
-        <div className="space-y-6">
-          <div className="bg-card border border-border rounded-sm overflow-hidden">
-            <div className="px-4 py-3 bg-secondary/40 border-b border-border">
-              <h3 className="text-lg font-heading font-semibold text-foreground">Current Bets</h3>
-              <p className="text-sm text-mutedForeground">Review your bets & place them</p>
-            </div>
-            <div className="p-4 space-y-3">
-              {bets.length === 0 ? (
-                <p className="text-sm text-mutedForeground py-4">No bets yet. Select a chip and click the grid.</p>
-              ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {bets.map((b) => (
-                    <div key={b.id} className="flex items-center justify-between gap-2 py-2 border-b border-border text-sm last:border-0">
-                      <span className="font-medium text-foreground">{betLabel(b.type, b.selection)}</span>
-                      <span className="text-mutedForeground">{formatMoney(b.amount)}</span>
-                      <span className="text-primary font-mono">{formatMoney(getPayout(b.type, b.selection, b.amount))}</span>
-                      <button type="button" onClick={() => removeBet(b.id)} className="text-destructive hover:underline text-xs">
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {bets.length > 0 && (
-                <button type="button" onClick={clearBets} className="w-full text-sm text-mutedForeground hover:text-foreground border border-border rounded-sm py-1.5">
-                  Clear Bets
+            {/* Chips row */}
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              {CHIPS.map((c) => (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => { setSelectedChip(c.value); setCustomChip(''); }}
+                  className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full text-[9px] sm:text-[10px] font-heading font-bold transition-all border-2 ${
+                    selectedChip === c.value && !customChip
+                      ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-500 shadow-lg scale-110'
+                      : 'bg-gradient-to-b from-zinc-700 to-zinc-800 text-zinc-300 border-zinc-600 hover:border-primary/50'
+                  }`}
+                >
+                  {c.label}
                 </button>
-              )}
-              <div className="flex justify-between text-sm pt-2">
-                <span className="text-mutedForeground">Total Bet:</span>
-                <span className="font-medium">{formatMoney(totalBet)}</span>
+              ))}
+              <span className="text-[9px] text-primary/60 font-heading mx-1">Custom:</span>
+              <div className="relative">
+                <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-primary/60 text-[10px] font-heading">$</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Amt"
+                  value={customChip}
+                  onChange={(e) => setCustomChip(e.target.value)}
+                  className="w-16 sm:w-20 bg-zinc-900 border border-primary/30 rounded h-6 sm:h-7 pl-4 pr-1 text-[10px] sm:text-xs text-foreground font-heading focus:border-primary/60"
+                />
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-mutedForeground">Total Returns:</span>
-                <span className="font-medium text-primary">{formatMoney(totalReturns)}</span>
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer text-sm text-mutedForeground mt-2">
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs sm:text-sm">
+              <span className="text-mutedForeground">Bet: <span className="font-medium text-foreground">{formatMoney(totalBet)}</span></span>
+              <span className="text-mutedForeground">Returns: <span className="font-medium text-primary">{formatMoney(totalReturns)}</span></span>
+              <label className="flex items-center gap-1.5 cursor-pointer text-mutedForeground">
                 <input type="checkbox" checked={useAnimation} onChange={(e) => setUseAnimation(e.target.checked)} className="rounded border-border bg-input text-primary" />
                 Use animation?
               </label>
-              <button
-                type="button"
-                onClick={spin}
-                disabled={!canSpin}
-                className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-sm font-bold uppercase tracking-widest py-3 transition-smooth disabled:opacity-50 mt-2"
-              >
-                Spin Wheel
-              </button>
             </div>
+            <button
+              type="button"
+              onClick={spin}
+              disabled={!canSpin}
+              className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-sm font-bold uppercase tracking-widest py-2 sm:py-2.5 text-sm transition-smooth disabled:opacity-50"
+            >
+              Spin Wheel
+            </button>
+            {bets.length > 0 && (
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-primary/10">
+                <div className="flex flex-wrap gap-1.5 min-w-0 flex-1">
+                  {bets.slice(0, 6).map((b) => (
+                    <span key={b.id} className="inline-flex items-center gap-0.5 text-[10px] bg-secondary/50 px-1.5 py-0.5 rounded">
+                      {betLabel(b.type, b.selection)} {formatMoney(b.amount)}
+                      <button type="button" onClick={() => removeBet(b.id)} className="text-destructive hover:underline ml-0.5">×</button>
+                    </span>
+                  ))}
+                  {bets.length > 6 && <span className="text-[10px] text-mutedForeground">+{bets.length - 6}</span>}
+                </div>
+                <button type="button" onClick={clearBets} className="text-[10px] text-mutedForeground hover:text-foreground shrink-0">Clear all</button>
+              </div>
+            )}
           </div>
+        </div>
 
-          <div className="bg-card border border-border rounded-sm overflow-hidden">
-            <div className="px-4 py-3 bg-secondary/40 border-b border-border">
-              <h3 className="text-lg font-heading font-semibold text-foreground">Roulette Info</h3>
-              <p className="text-sm text-mutedForeground">European single zero</p>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Result first on mobile so it's visible without scrolling */}
+          <div className="bg-card border border-border rounded-sm overflow-hidden order-2 lg:order-1">
+            <div className="px-3 py-2 bg-secondary/40 border-b border-border">
+              <h3 className="text-sm font-heading font-semibold text-foreground">Result</h3>
+              <p className="text-xs text-mutedForeground">European single zero · Max {formatMoney(config.max_bet)}</p>
             </div>
-            <div className="p-4 space-y-4">
-              <div className="flex flex-col items-center justify-center py-6 px-4 rounded-sm bg-secondary/20 border border-border min-h-[260px]">
+            <div className="p-3 space-y-2">
+              <div className="flex flex-col items-center justify-center py-4 sm:py-5 px-3 rounded-sm bg-secondary/20 border border-border min-h-[140px] sm:min-h-[180px]">
                 {wheelTargetResult !== null ? (
                   <>
-                    <p className="text-xs text-mutedForeground uppercase tracking-wider mb-3">Spinning…</p>
-                    <RouletteWheel rotationDeg={wheelRotation} size={220} />
+                    <p className="text-[10px] sm:text-xs text-mutedForeground uppercase tracking-wider mb-2">Spinning…</p>
+                    <RouletteWheel rotationDeg={wheelRotation} size={160} />
                   </>
                 ) : lastResult !== null ? (
                   <>
-                    <p className="text-xs text-mutedForeground uppercase tracking-wider mb-2">Landed on</p>
+                    <p className="text-[10px] sm:text-xs text-mutedForeground uppercase tracking-wider mb-1 sm:mb-2">Landed on</p>
                     <div
-                      className={`inline-flex items-center justify-center w-16 h-16 rounded-full text-3xl font-heading font-bold tabular-nums animate-roulette-reveal ${
-                        lastResult === 0 ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : isRed(lastResult) ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-zinc-500/20 text-zinc-300 border border-zinc-500/40'
+                      className={`inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-full text-2xl sm:text-3xl font-heading font-bold tabular-nums animate-roulette-reveal ${
+                        lastResult === 0 ? 'bg-emerald-500/20 text-emerald-400 border-2 border-emerald-500/40' : isRed(lastResult) ? 'bg-red-500/20 text-red-400 border-2 border-red-500/40' : 'bg-zinc-500/20 text-zinc-300 border-2 border-zinc-500/40'
                       }`}
                     >
                       {lastResult}
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-mutedForeground">Place bets and spin. Result will appear here.</p>
+                  <p className="text-xs sm:text-sm text-mutedForeground text-center">Place bets and spin. Result appears here.</p>
                 )}
               </div>
               {recentNumbers.length > 0 && (
-                <div className="text-sm">
+                <div className="text-[10px] sm:text-xs">
                   <span className="text-mutedForeground">Recent: </span>
-                  <span className="font-mono">
+                  <span className="font-mono break-all">
                     {recentNumbers.map((n, i) => (
                       <span key={`${n}-${i}`} className={n === 0 ? 'text-emerald-400' : isRed(n) ? 'text-red-400' : 'text-zinc-400'}>
                         {n}{i < recentNumbers.length - 1 ? ', ' : ''}
@@ -602,11 +492,60 @@ export default function Rlt() {
                   </span>
                 </div>
               )}
-              <p className="text-mutedForeground text-sm"><span className="text-foreground font-medium">Max bet:</span> {formatMoney(config.max_bet)}</p>
+            </div>
+          </div>
+
+          {/* The Table - betting grid */}
+          <div className={`${styles.panel} rounded-md overflow-hidden order-1 lg:order-2`}>
+            <div className="px-2 sm:px-3 py-1.5 sm:py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/40">
+              <h3 className="text-xs sm:text-sm font-heading font-bold text-primary tracking-widest uppercase">The Table</h3>
+            </div>
+            <div className="p-2 sm:p-3 space-y-1.5">
+              <div className="border border-primary/40 rounded-sm overflow-hidden shadow-inner">
+                <button
+                  type="button"
+                  onClick={() => addBet('straight', 0)}
+                  className="w-full h-6 sm:h-7 bg-gradient-to-b from-emerald-800 to-emerald-900 hover:from-emerald-700 text-white font-heading font-bold text-sm tracking-wider border-b border-primary/30"
+                >
+                  0
+                </button>
+                <div className="grid grid-cols-3">
+                  {[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36].map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => addBet('straight', n)}
+                      className={`h-5 sm:h-6 font-heading font-bold text-[10px] sm:text-xs border-b border-r border-zinc-800/80 hover:brightness-125 ${
+                        isRed(n) ? 'bg-red-800 hover:bg-red-700 text-white' : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 border-t border-primary/30">
+                  {[1, 2, 3].map((col) => (
+                    <button key={col} type="button" onClick={() => addBet('column', col)} className="py-0.5 bg-zinc-900/80 hover:bg-zinc-800 text-primary/80 text-[9px] font-heading border-r border-zinc-800 last:border-r-0">
+                      2:1
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-6 gap-0.5 sm:gap-1">
+                <button type="button" onClick={() => addBet('dozen', 1)} className="col-span-2 py-1 sm:py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 text-[8px] sm:text-[10px] font-heading border border-primary/20 hover:border-primary/40">1st 12</button>
+                <button type="button" onClick={() => addBet('dozen', 2)} className="col-span-2 py-1 sm:py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 text-[8px] sm:text-[10px] font-heading border border-primary/20 hover:border-primary/40">2nd 12</button>
+                <button type="button" onClick={() => addBet('dozen', 3)} className="col-span-2 py-1 sm:py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 text-[8px] sm:text-[10px] font-heading border border-primary/20 hover:border-primary/40">3rd 12</button>
+                <button type="button" onClick={() => addBet('low', 'low')} className="py-1 sm:py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 text-[8px] sm:text-[10px] font-heading border border-primary/20 hover:border-primary/40">1-18</button>
+                <button type="button" onClick={() => addBet('even', 'even')} className="py-1 sm:py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 text-[8px] sm:text-[10px] font-heading border border-primary/20 hover:border-primary/40">Even</button>
+                <button type="button" onClick={() => addBet('red', 'red')} className="py-1 sm:py-1.5 bg-gradient-to-b from-red-800 to-red-900 hover:from-red-700 text-white text-[8px] sm:text-[10px] font-heading font-bold border border-red-700/50">Red</button>
+                <button type="button" onClick={() => addBet('black', 'black')} className="py-1 sm:py-1.5 bg-gradient-to-b from-zinc-800 to-zinc-900 hover:from-zinc-700 text-white text-[8px] sm:text-[10px] font-heading font-bold border border-zinc-600/50">Black</button>
+                <button type="button" onClick={() => addBet('odd', 'odd')} className="py-1 sm:py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 text-[8px] sm:text-[10px] font-heading border border-primary/20 hover:border-primary/40">Odd</button>
+                <button type="button" onClick={() => addBet('high', 'high')} className="py-1 sm:py-1.5 bg-zinc-900 hover:bg-zinc-800 text-foreground/80 text-[8px] sm:text-[10px] font-heading border border-primary/20 hover:border-primary/40">19-36</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </>
       )}
     </div>
   );

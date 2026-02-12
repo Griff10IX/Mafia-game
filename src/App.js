@@ -458,7 +458,7 @@ function App() {
           />
         </Routes>
       </BrowserRouter>
-      <Toaster position="top-center" />
+      <Toaster position="top-center" offset="max(12px, env(safe-area-inset-top, 12px))" />
     </div>
   );
 }

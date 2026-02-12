@@ -638,6 +638,23 @@ class AttackExecuteRequest(BaseModel):
     attack_id: str
     death_message: Optional[str] = None
     make_public: bool = False
+    bullets_to_use: Optional[int] = None
+
+    @field_validator("bullets_to_use", mode="before")
+    @classmethod
+    def coerce_bullets_to_use(cls, v):
+        """Treat empty, zero, or invalid as None so we use default (as many as needed)."""
+        if v is None or v == "":
+            return None
+        if isinstance(v, (int, float)):
+            return int(v) if v > 0 else None
+        if isinstance(v, str):
+            try:
+                n = int(v)
+                return n if n > 0 else None
+            except (ValueError, TypeError):
+                return None
+        return None
 
 class AttackExecuteResponse(BaseModel):
     success: bool
@@ -715,6 +732,11 @@ class GTAAttemptRequest(BaseModel):
 class GTAMeltRequest(BaseModel):
     car_ids: List[str]
     action: str  # "bullets" or "cash"
+
+
+class CustomCarImageUpdate(BaseModel):
+    image_url: Optional[str] = None  # URL for picture; empty or null to clear
+
 
 class GTAAttemptResponse(BaseModel):
     success: bool
@@ -3028,6 +3050,26 @@ async def admin_set_search_time(target_username: str, search_minutes: int, curre
 
     return {"message": f"Set {target_username}'s search time to {search_minutes} minutes (persistent)"}
 
+
+@api_router.post("/admin/set-all-search-time")
+async def admin_set_all_search_time(search_minutes: int = 5, current_user: dict = Depends(get_current_user)):
+    """Set every user's search timer to the given minutes (e.g. 5). Affects all future searches and any currently searching."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if search_minutes <= 0:
+        raise HTTPException(status_code=400, detail="search_minutes must be positive")
+    res = await db.users.update_many(
+        {},
+        {"$set": {"search_minutes_override": int(search_minutes)}}
+    )
+    new_found_time = datetime.now(timezone.utc) + timedelta(minutes=int(search_minutes))
+    await db.attacks.update_many(
+        {"status": "searching"},
+        {"$set": {"found_at": new_found_time.isoformat()}}
+    )
+    return {"message": f"Set all users' search time to {search_minutes} minutes ({res.modified_count} users updated)"}
+
+
 @api_router.get("/admin/check")
 async def admin_check(current_user: dict = Depends(get_current_user)):
     is_admin = current_user["email"] in ADMIN_EMAILS
@@ -4530,7 +4572,11 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     
     target_name = target["username"]
     target_health = float(target.get("health", DEFAULT_HEALTH))
-    bullets_used = min(attacker_bullets, bullets_required)
+    # If player specified how many bullets to use, cap it to what they have
+    if request.bullets_to_use and request.bullets_to_use > 0:
+        bullets_used = min(request.bullets_to_use, attacker_bullets, bullets_required)
+    else:
+        bullets_used = min(attacker_bullets, bullets_required)
     health_dealt_pct = (bullets_used / bullets_required) * 100.0
     killed = health_dealt_pct >= target_health
     
@@ -5563,21 +5609,30 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         if car_info:
             travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
             user_car_id = uc.get("id") or str(uc["_id"])
+            name = car_info["name"]
+            image = car_info.get("image", "")
+            if uc.get("car_id") == "car_custom":
+                if uc.get("custom_name"):
+                    name = uc["custom_name"]
+                if uc.get("custom_image_url"):
+                    image = uc["custom_image_url"]
             cars_with_travel_times.append({
                 "user_car_id": user_car_id,
                 "car_id": car_info["id"],
-                "name": car_info["name"],
+                "name": name,
                 "rarity": car_info["rarity"],
                 "travel_time": travel_time,
-                "image": car_info.get("image", "")
+                "image": image
             })
     
-    # Check for custom car
+    # Custom car: use first from garage (so image and name come from garage)
     custom_car = None
-    if current_user.get("custom_car_name"):
+    first_custom = next((uc for uc in user_cars if uc.get("car_id") == "car_custom"), None)
+    if first_custom:
         custom_car = {
-            "name": current_user["custom_car_name"],
-            "travel_time": TRAVEL_TIMES["custom"]
+            "name": first_custom.get("custom_name") or "Custom Car",
+            "travel_time": TRAVEL_TIMES["custom"],
+            "image": first_custom.get("custom_image_url") or ""
         }
     
     max_travels = MAX_TRAVELS_PER_HOUR + current_user.get("extra_airmiles", 0)
@@ -5626,10 +5681,14 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
             {"$inc": {"points": -AIRPORT_COST}}
         )
     elif request.travel_method == "custom":
-        if not current_user.get("custom_car_name"):
+        first_custom = await db.user_cars.find_one(
+            {"user_id": current_user["id"], "car_id": "car_custom"},
+            sort=[("acquired_at", 1)]
+        )
+        if not first_custom:
             raise HTTPException(status_code=400, detail="You don't own a custom car")
         travel_time = TRAVEL_TIMES["custom"]
-        method_name = current_user["custom_car_name"]
+        method_name = first_custom.get("custom_name") or "Custom Car"
     else:
         # It's a car ID (or MongoDB _id for older docs without "id")
         user_car = await db.user_cars.find_one(
@@ -5935,9 +5994,7 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
 @api_router.post("/store/buy-custom-car")
 async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
     CUSTOM_CAR_COST = 500  # Points
-    
-    if current_user.get("custom_car_name"):
-        raise HTTPException(status_code=400, detail="You already own a custom car")
+    # Allow multiple custom cars; no "already own" check
     
     if current_user["points"] < CUSTOM_CAR_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -5947,15 +6004,20 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
     
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -CUSTOM_CAR_COST}, "$set": {"custom_car_name": request.car_name}}
+        {"$inc": {"points": -CUSTOM_CAR_COST}}
     )
-    
-    # Also add to garage as a car entity
+    # Keep custom_car_name for backward compat (last bought); travel uses first from garage
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"custom_car_name": request.car_name}}
+    )
+    # Also add to garage as a car entity (supports custom_image_url for picture)
     await db.user_cars.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": current_user["id"],
         "car_id": "car_custom",
         "custom_name": request.car_name,
+        "custom_image_url": None,
         "acquired_at": datetime.now(timezone.utc).isoformat(),
     })
     

@@ -345,30 +345,26 @@ export default function Store() {
                 <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> 20s travel time</div>
                 <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Value: $40,000</div>
               </div>
-              {user?.custom_car_name ? (
-                <div className={`${styles.surface} border border-primary/20 rounded-sm py-3 text-center font-heading`}>
+              {user?.custom_car_name && (
+                <div className={`${styles.surface} border border-primary/20 rounded-sm py-2 text-center font-heading mb-3`}>
                   <span className="text-primary font-bold uppercase tracking-wider">Owned</span>
-                  <p className="text-xs text-mutedForeground mt-1">{user.custom_car_name}</p>
                 </div>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Name your car (2-30 chars)"
-                    value={customCarName}
-                    onChange={(e) => setCustomCarName(e.target.value)}
-                    maxLength={30}
-                    className={`${styles.input} w-full h-10 px-3 text-sm font-heading mb-3`}
-                  />
-                  <button
-                    onClick={buyCustomCar}
-                    disabled={!user || user.points < 500 || !customCarName.trim()}
-                    className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
-                  >
-                    Buy for 500 Points
-                  </button>
-                </>
               )}
+              <input
+                type="text"
+                placeholder="Name your car (2-30 chars)"
+                value={customCarName}
+                onChange={(e) => setCustomCarName(e.target.value)}
+                maxLength={30}
+                className={`${styles.input} w-full h-10 px-3 text-sm font-heading mb-3`}
+              />
+              <button
+                onClick={buyCustomCar}
+                disabled={!user || user.points < 500 || !customCarName.trim()}
+                className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
+              >
+                Buy for 500 Points
+              </button>
             </div>
           </div>
         </div>

@@ -36,6 +36,7 @@ from server import (
     GTAAttemptRequest,
     GTAAttemptResponse,
     GTAMeltRequest,
+    CustomCarImageUpdate,
 )
 
 
@@ -191,9 +192,12 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
                 "acquired_at": user_car.get("acquired_at"),
                 **car_info,
             }
-            # Override name for custom cars
-            if car_id == "car_custom" and user_car.get("custom_name"):
-                entry["name"] = user_car["custom_name"]
+            # Override name and image for custom cars
+            if car_id == "car_custom":
+                if user_car.get("custom_name"):
+                    entry["name"] = user_car["custom_name"]
+                if user_car.get("custom_image_url"):
+                    entry["image"] = user_car["custom_image_url"]
             car_details.append(entry)
     return {"cars": car_details}
 
@@ -275,6 +279,38 @@ async def melt_cars(
     return {"success": False, "message": "No cars were processed"}
 
 
+async def update_custom_car_image(
+    user_car_id: str,
+    request: CustomCarImageUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Update a custom car's picture (only for car_id car_custom)."""
+    user_car = await db.user_cars.find_one(
+        {"user_id": current_user["id"], "id": user_car_id}
+    )
+    if not user_car:
+        try:
+            user_car = await db.user_cars.find_one(
+                {"user_id": current_user["id"], "_id": ObjectId(user_car_id)}
+            )
+        except Exception:
+            user_car = None
+    if not user_car or user_car.get("car_id") != "car_custom":
+        raise HTTPException(status_code=404, detail="Custom car not found")
+    image_url = (request.image_url or "").strip() or None
+    if user_car.get("_id") is not None:
+        await db.user_cars.update_one(
+            {"_id": user_car["_id"]},
+            {"$set": {"custom_image_url": image_url}}
+        )
+    else:
+        await db.user_cars.update_one(
+            {"user_id": current_user["id"], "id": user_car.get("id") or user_car_id},
+            {"$set": {"custom_image_url": image_url}}
+        )
+    return {"message": "Custom car picture updated", "image_url": image_url}
+
+
 def register(router):
     router.add_api_route("/gta/options", get_gta_options, methods=["GET"])
     router.add_api_route(
@@ -285,3 +321,8 @@ def register(router):
     )
     router.add_api_route("/gta/garage", get_garage, methods=["GET"])
     router.add_api_route("/gta/melt", melt_cars, methods=["POST"])
+    router.add_api_route(
+        "/gta/custom-car/{user_car_id}",
+        update_custom_car_image,
+        methods=["PATCH"],
+    )
