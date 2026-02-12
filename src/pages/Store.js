@@ -325,7 +325,7 @@ export default function Store() {
                 disabled={!user || user.points < 30}
                 className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
               >
-                +50 capacity for 30 Points
+                +1000 capacity for 30 Points
               </button>
             </div>
           </div>

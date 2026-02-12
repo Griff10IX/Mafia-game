@@ -212,11 +212,12 @@ export default function Attack() {
       return;
     }
 
-    const extra = { death_message: deathMessage, make_public: makePublic };
     const bulletNum = bulletsToUse !== "" && bulletsToUse != null ? parseInt(bulletsToUse, 10) : NaN;
-    if (!Number.isNaN(bulletNum) && bulletNum > 0) {
-      extra.bullets_to_use = bulletNum;
+    if (Number.isNaN(bulletNum) || bulletNum < 1) {
+      toast.error('Enter how many bullets to use (at least 1).');
+      return;
     }
+    const extra = { death_message: deathMessage, make_public: makePublic, bullets_to_use: bulletNum };
     await executeAttack(best.attack_id, extra);
     await fetchInflation();
   };
@@ -332,7 +333,7 @@ export default function Attack() {
                   value={bulletsToUse}
                   onChange={(e) => setBulletsToUse(e.target.value)}
                   className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-                  placeholder="Leave empty to use all needed"
+                  placeholder="Enter amount (min 1)"
                   min="1"
                   data-testid="kill-bullets-inline"
                 />
@@ -356,7 +357,7 @@ export default function Attack() {
               </div>
               <button
                 type="button"
-                disabled={loading || !killUsername.trim()}
+                disabled={loading || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
                 onClick={killByUsername}
                 className="w-full bg-gradient-to-r from-red-700 to-red-900 text-white hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2.5 text-sm border border-red-600/50 disabled:opacity-50 transition-smooth"
                 data-testid="kill-inline-button"
@@ -650,13 +651,13 @@ export default function Attack() {
                     </div>
                     <button
                       type="button"
-                      disabled={loading || !killUsername.trim()}
+                      disabled={loading || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
                       onClick={killByUsername}
                       className="w-full bg-gradient-to-r from-red-700 to-red-900 text-white hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2.5 text-sm border border-red-600/50 disabled:opacity-50"
                     >
                       {loading ? 'Killing...' : 'Kill'}
                     </button>
-                    <div className="text-xs text-mutedForeground font-heading italic">Tip: Starts a search if not found. Travel required before kill.</div>
+                    <div className="text-xs text-mutedForeground font-heading italic">Tip: Enter bullets (min 1). Starts a search if not found. Travel required before kill.</div>
                   </>
                 ) : (
                   <>

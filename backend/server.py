@@ -643,7 +643,7 @@ class AttackExecuteRequest(BaseModel):
     @field_validator("bullets_to_use", mode="before")
     @classmethod
     def coerce_bullets_to_use(cls, v):
-        """Treat empty, zero, or invalid as None so we use default (as many as needed)."""
+        """Coerce empty/invalid to None; execute endpoint requires at least 1."""
         if v is None or v == "":
             return None
         if isinstance(v, (int, float)):
@@ -4572,11 +4572,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     
     target_name = target["username"]
     target_health = float(target.get("health", DEFAULT_HEALTH))
-    # If player specified how many bullets to use, cap it to what they have
-    if request.bullets_to_use and request.bullets_to_use > 0:
-        bullets_used = min(request.bullets_to_use, attacker_bullets, bullets_required)
-    else:
-        bullets_used = min(attacker_bullets, bullets_required)
+    # Require player to specify how many bullets to use (at least 1)
+    if not request.bullets_to_use or request.bullets_to_use < 1:
+        raise HTTPException(status_code=400, detail="You must enter how many bullets to use (at least 1).")
+    bullets_used = min(request.bullets_to_use, attacker_bullets, bullets_required)
     health_dealt_pct = (bullets_used / bullets_required) * 100.0
     killed = health_dealt_pct >= target_health
     
@@ -4956,13 +4955,17 @@ BOOZE_TYPES = [
     {"id": "needle_beer", "name": "Needle Beer"},
     {"id": "jamaica_ginger", "name": "Jamaica Ginger"},
 ]
-# Base capacity (units) by rank index 1..11. Upgrade available on points store.
-BOOZE_CAPACITY_BY_RANK = [50, 75, 100, 150, 200, 280, 360, 450, 550, 700, 900]
-BOOZE_CAPACITY_UPGRADE_COST = 30  # points per +50 capacity
-BOOZE_CAPACITY_UPGRADE_AMOUNT = 50
+# Base capacity: 50 at rank 1, then +5% to +10% per rank (we use 7.5% so each rank increases limit).
+# Store upgrade adds +1000 units (one-time or repeatable).
+BOOZE_CAPACITY_BASE_RANK1 = 50
+BOOZE_CAPACITY_PCT_PER_RANK = 0.075  # 7.5% more per rank (in 5–10% range)
+BOOZE_CAPACITY_UPGRADE_COST = 30   # points per store purchase
+BOOZE_CAPACITY_UPGRADE_AMOUNT = 1000  # +1000 units from store
 BOOZE_RUN_HISTORY_MAX = 10
-BOOZE_RUN_CAUGHT_CHANCE = 1.0   # 100% for testing; set to 0.05 for production
-BOOZE_RUN_JAIL_SECONDS = 20     # seconds in jail when caught
+# Jail chance on buy/sell: random between 2% and 6% per action
+BOOZE_RUN_JAIL_CHANCE_MIN = 0.02
+BOOZE_RUN_JAIL_CHANCE_MAX = 0.06
+BOOZE_RUN_JAIL_SECONDS = 20
 
 
 def _booze_rotation_index():
@@ -5587,6 +5590,448 @@ async def casino_roulette_spin(request: RouletteSpinRequest, current_user: dict 
     }
 
 
+# ============ BLACKJACK (city-based like roulette/dice) ============
+BLACKJACK_DEFAULT_MAX_BET = 50_000_000
+BLACKJACK_ABSOLUTE_MAX_BET = 500_000_000
+BLACKJACK_CLAIM_COST = 500_000_000  # $500M to claim table
+BLACKJACK_HOUSE_EDGE = 0.02  # 2% of bet to owner when player loses
+BLACKJACK_HISTORY_MAX = 10
+
+BLACKJACK_SUITS = ["H", "D", "C", "S"]
+BLACKJACK_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
+
+
+def _blackjack_make_deck():
+    return [{"suit": s, "value": v} for s in BLACKJACK_SUITS for v in BLACKJACK_VALUES]
+
+
+def _blackjack_hand_total(hand):
+    total = 0
+    aces = 0
+    for c in hand:
+        v = c.get("value")
+        if v == "A":
+            aces += 1
+            total += 11
+        elif v in ("K", "Q", "J"):
+            total += 10
+        else:
+            total += int(v) if v else 0
+    while total > 21 and aces:
+        total -= 10
+        aces -= 1
+    return total
+
+
+def _blackjack_is_blackjack(hand):
+    return len(hand) == 2 and _blackjack_hand_total(hand) == 21
+
+
+def _normalize_city_for_blackjack(city_raw: str) -> str:
+    if not city_raw:
+        return ""
+    city_lower = city_raw.strip().lower()
+    for state in STATES:
+        if state.lower() == city_lower:
+            return state
+    return ""
+
+
+async def _get_blackjack_ownership_doc(city: str):
+    if not city:
+        return city, None
+    pattern = re.compile(f"^{re.escape(city)}$", re.IGNORECASE)
+    doc = await db.blackjack_ownership.find_one({"city": pattern})
+    if doc:
+        return doc.get("city", city), doc
+    return city, None
+
+
+@api_router.get("/casino/blackjack/config")
+async def casino_blackjack_config(current_user: dict = Depends(get_current_user)):
+    raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
+    city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
+    _, doc = await _get_blackjack_ownership_doc(city) if city else (None, None)
+    max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET) if doc else BLACKJACK_DEFAULT_MAX_BET
+    return {"max_bet": max_bet, "claim_cost": BLACKJACK_CLAIM_COST}
+
+
+@api_router.get("/casino/blackjack/ownership")
+async def casino_blackjack_ownership(current_user: dict = Depends(get_current_user)):
+    raw = (current_user.get("current_state") or "").strip()
+    city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "Chicago")
+    display_city = city or raw or "Chicago"
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    if not doc:
+        return {
+            "current_city": display_city,
+            "owner_id": None,
+            "owner_name": None,
+            "is_owner": False,
+            "is_unclaimed": True,
+            "claim_cost": BLACKJACK_CLAIM_COST,
+            "max_bet": BLACKJACK_DEFAULT_MAX_BET,
+        }
+    owner_id = doc.get("owner_id")
+    owner_name = None
+    if owner_id:
+        u = await db.users.find_one({"id": owner_id}, {"username": 1})
+        owner_name = u.get("username") if u else None
+    is_owner = owner_id == current_user["id"]
+    max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET)
+    total_earnings = doc.get("total_earnings", 0)
+    return {
+        "current_city": display_city,
+        "owner_id": owner_id,
+        "owner_name": owner_name,
+        "is_owner": is_owner,
+        "is_unclaimed": owner_id is None,
+        "claim_cost": BLACKJACK_CLAIM_COST,
+        "max_bet": max_bet,
+        "total_earnings": total_earnings if is_owner else None,
+    }
+
+
+@api_router.post("/casino/blackjack/claim")
+async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    city = _normalize_city_for_blackjack((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    if doc and doc.get("owner_id"):
+        raise HTTPException(status_code=400, detail="This table already has an owner")
+    user = await db.users.find_one({"id": current_user["id"]})
+    if not user or user.get("money", 0) < BLACKJACK_CLAIM_COST:
+        raise HTTPException(status_code=400, detail=f"You need ${BLACKJACK_CLAIM_COST:,} to claim")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -BLACKJACK_CLAIM_COST}})
+    await db.blackjack_ownership.update_one(
+        {"city": stored_city or city},
+        {"$set": {"owner_id": current_user["id"], "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0}},
+        upsert=True,
+    )
+    return {"message": f"You now own the blackjack table in {city}!"}
+
+
+@api_router.post("/casino/blackjack/relinquish")
+async def casino_blackjack_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    city = _normalize_city_for_blackjack((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None}})
+    return {"message": "Ownership relinquished."}
+
+
+@api_router.post("/casino/blackjack/set-max-bet")
+async def casino_blackjack_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
+    city = _normalize_city_for_blackjack((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    new_max = max(1_000_000, min(request.max_bet, BLACKJACK_ABSOLUTE_MAX_BET))
+    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
+    return {"message": f"Max bet set to ${new_max:,}"}
+
+
+@api_router.post("/casino/blackjack/send-to-user")
+async def casino_blackjack_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user)):
+    city = _normalize_city_for_blackjack((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
+    return {"message": "Ownership transferred."}
+
+
+def _blackjack_dealer_visible_total(hand):
+    if not hand or len(hand) < 2:
+        return None
+    first = hand[0]
+    v = first.get("value")
+    if v == "A":
+        return 11
+    if v in ("K", "Q", "J"):
+        return 10
+    return int(v) if v else 0
+
+
+async def _blackjack_settle_and_save_history(user_id: str, city: str, bet: int, result: str, payout: int, player_hand: list, dealer_hand: list, player_total: int, dealer_total: int):
+    await db.blackjack_games.delete_many({"user_id": user_id})
+    history_entry = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "bet": bet,
+        "result": result,
+        "payout": payout,
+        "player_hand": player_hand,
+        "dealer_hand": dealer_hand,
+        "player_total": player_total,
+        "dealer_total": dealer_total,
+    }
+    await db.users.update_one(
+        {"id": user_id},
+        {"$push": {"blackjack_history": {"$each": [history_entry], "$position": 0, "$slice": BLACKJACK_HISTORY_MAX}}}
+    )
+
+
+@api_router.post("/casino/blackjack/start")
+async def casino_blackjack_start(request: BlackjackStartRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("in_jail"):
+        raise HTTPException(status_code=400, detail="You are in jail!")
+    raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
+    city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
+    if not city:
+        raise HTTPException(status_code=400, detail="No current city")
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET) if doc else BLACKJACK_DEFAULT_MAX_BET
+    owner_id = doc.get("owner_id") if doc else None
+    if owner_id and owner_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot play at your own table")
+    bet = max(0, int(request.bet))
+    if bet <= 0:
+        raise HTTPException(status_code=400, detail="Bet must be positive")
+    if bet > max_bet:
+        raise HTTPException(status_code=400, detail=f"Bet exceeds max ${max_bet:,}")
+    user = await db.users.find_one({"id": current_user["id"]})
+    if not user or user.get("money", 0) < bet:
+        raise HTTPException(status_code=400, detail="Not enough money")
+    existing = await db.blackjack_games.find_one({"user_id": current_user["id"]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Finish your current game first")
+    deck = _blackjack_make_deck()
+    random.shuffle(deck)
+    player_hand = [deck.pop(), deck.pop()]
+    dealer_hand = [deck.pop(), deck.pop()]
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -bet}})
+    player_total = _blackjack_hand_total(player_hand)
+    dealer_total = _blackjack_hand_total(dealer_hand)
+    dealer_hidden = 1
+    status = "playing"
+    can_hit = True
+    can_stand = True
+    if _blackjack_is_blackjack(player_hand):
+        if _blackjack_is_blackjack(dealer_hand):
+            payout = bet
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
+            await _blackjack_settle_and_save_history(
+                current_user["id"], city, bet, "push", payout, player_hand, dealer_hand, player_total, dealer_total
+            )
+            return {
+                "status": "done",
+                "bet": bet,
+                "player_hand": player_hand,
+                "dealer_hand": dealer_hand,
+                "player_total": player_total,
+                "dealer_total": dealer_total,
+                "result": "push",
+                "payout": payout,
+                "new_balance": user.get("money", 0) - bet + payout,
+                "can_hit": False,
+                "can_stand": False,
+                "dealer_hidden_count": 0,
+                "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+            }
+        payout = bet + int(bet * 3 / 2)
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
+        if owner_id:
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -int(bet * 3 / 2)}})
+        await _blackjack_settle_and_save_history(
+            current_user["id"], city, bet, "blackjack", payout, player_hand, dealer_hand, player_total, dealer_total
+        )
+        return {
+            "status": "done",
+            "bet": bet,
+            "player_hand": player_hand,
+            "dealer_hand": dealer_hand,
+            "player_total": player_total,
+            "dealer_total": dealer_total,
+            "result": "blackjack",
+            "payout": payout,
+            "new_balance": user.get("money", 0) - bet + payout,
+            "can_hit": False,
+            "can_stand": False,
+            "dealer_hidden_count": 0,
+            "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+        }
+    if _blackjack_is_blackjack(dealer_hand):
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": 0}})
+        if owner_id:
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+            await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet}})
+        await _blackjack_settle_and_save_history(
+            current_user["id"], city, bet, "lose", 0, player_hand, dealer_hand, player_total, dealer_total
+        )
+        return {
+            "status": "done",
+            "bet": bet,
+            "player_hand": player_hand,
+            "dealer_hand": dealer_hand,
+            "player_total": player_total,
+            "dealer_total": dealer_total,
+            "result": "lose",
+            "payout": 0,
+            "new_balance": user.get("money", 0) - bet,
+            "can_hit": False,
+            "can_stand": False,
+            "dealer_hidden_count": 0,
+            "dealer_visible_total": 10,
+        }
+    await db.blackjack_games.insert_one({
+        "user_id": current_user["id"],
+        "city": stored_city or city,
+        "bet": bet,
+        "player_hand": player_hand,
+        "dealer_hand": dealer_hand,
+        "deck": deck,
+        "status": status,
+        "owner_id": owner_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {
+        "status": status,
+        "bet": bet,
+        "player_hand": player_hand,
+        "dealer_hand": dealer_hand,
+        "player_total": player_total,
+        "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+        "dealer_hidden_count": dealer_hidden,
+        "can_hit": can_hit,
+        "can_stand": can_stand,
+    }
+
+
+@api_router.post("/casino/blackjack/hit")
+async def casino_blackjack_hit(current_user: dict = Depends(get_current_user)):
+    game = await db.blackjack_games.find_one({"user_id": current_user["id"]})
+    if not game:
+        raise HTTPException(status_code=400, detail="No active game")
+    deck = game.get("deck") or []
+    player_hand = list(game.get("player_hand") or [])
+    if not deck:
+        raise HTTPException(status_code=400, detail="Invalid game state")
+    card = deck.pop()
+    player_hand.append(card)
+    player_total = _blackjack_hand_total(player_hand)
+    if player_total > 21:
+        bet = game.get("bet", 0)
+        owner_id = game.get("owner_id")
+        user = await db.users.find_one({"id": current_user["id"]})
+        new_balance = (user.get("money", 0) or 0)
+        if owner_id:
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+            await db.blackjack_ownership.update_one(
+                {"city": game.get("city")},
+                {"$inc": {"total_earnings": bet}}
+            )
+        await _blackjack_settle_and_save_history(
+            current_user["id"], game.get("city"), bet, "bust", 0, player_hand, game.get("dealer_hand", []), player_total, _blackjack_hand_total(game.get("dealer_hand", []))
+        )
+        await db.blackjack_games.delete_one({"user_id": current_user["id"]})
+        return {
+            "status": "player_bust",
+            "bet": bet,
+            "player_hand": player_hand,
+            "dealer_hand": game.get("dealer_hand", []),
+            "player_total": player_total,
+            "dealer_total": _blackjack_hand_total(game.get("dealer_hand", [])),
+            "result": "bust",
+            "payout": 0,
+            "new_balance": new_balance,
+            "can_hit": False,
+            "can_stand": False,
+            "dealer_hidden_count": game.get("dealer_hidden_count", 1),
+            "dealer_visible_total": _blackjack_dealer_visible_total(game.get("dealer_hand", [])),
+        }
+    await db.blackjack_games.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {"player_hand": player_hand, "deck": deck}}
+    )
+    return {
+        "status": "playing",
+        "bet": game.get("bet"),
+        "player_hand": player_hand,
+        "dealer_hand": game.get("dealer_hand", []),
+        "player_total": player_total,
+        "dealer_visible_total": _blackjack_dealer_visible_total(game.get("dealer_hand", [])),
+        "dealer_hidden_count": 1,
+        "can_hit": True,
+        "can_stand": True,
+    }
+
+
+@api_router.post("/casino/blackjack/stand")
+async def casino_blackjack_stand(current_user: dict = Depends(get_current_user)):
+    game = await db.blackjack_games.find_one({"user_id": current_user["id"]})
+    if not game:
+        raise HTTPException(status_code=400, detail="No active game")
+    deck = list(game.get("deck") or [])
+    player_hand = list(game.get("player_hand") or [])
+    dealer_hand = list(game.get("dealer_hand") or [])
+    bet = game.get("bet", 0)
+    owner_id = game.get("owner_id")
+    dealer_total = _blackjack_hand_total(dealer_hand)
+    while dealer_total < 17 and deck:
+        card = deck.pop()
+        dealer_hand.append(card)
+        dealer_total = _blackjack_hand_total(dealer_hand)
+    player_total = _blackjack_hand_total(player_hand)
+    if dealer_total > 21:
+        result = "dealer_bust"
+        payout = bet * 2
+    elif player_total > dealer_total:
+        result = "win"
+        payout = bet * 2
+    elif player_total < dealer_total:
+        result = "lose"
+        payout = 0
+        if owner_id:
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+            await db.blackjack_ownership.update_one({"city": game.get("city")}, {"$inc": {"total_earnings": bet}})
+    else:
+        result = "push"
+        payout = bet
+    if payout > 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
+        if owner_id and result in ("win", "dealer_bust"):
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
+    user = await db.users.find_one({"id": current_user["id"]})
+    new_balance = (user.get("money", 0) or 0)
+    await _blackjack_settle_and_save_history(
+        current_user["id"], game.get("city"), bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
+    )
+    await db.blackjack_games.delete_one({"user_id": current_user["id"]})
+    return {
+        "status": "done",
+        "bet": bet,
+        "player_hand": player_hand,
+        "dealer_hand": dealer_hand,
+        "player_total": player_total,
+        "dealer_total": dealer_total,
+        "result": result,
+        "payout": payout,
+        "new_balance": new_balance,
+        "can_hit": False,
+        "can_stand": False,
+        "dealer_hidden_count": 0,
+        "dealer_visible_total": dealer_total,
+    }
+
+
+@api_router.get("/casino/blackjack/history")
+async def casino_blackjack_history(current_user: dict = Depends(get_current_user)):
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "blackjack_history": 1})
+    history = (user.get("blackjack_history") or [])[:BLACKJACK_HISTORY_MAX]
+    return {"history": history}
+
+
 @api_router.get("/travel/info")
 async def get_travel_info(current_user: dict = Depends(get_current_user)):
     # Reset travels if hour has passed
@@ -5743,7 +6188,8 @@ async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):
 
 def _booze_user_capacity(current_user: dict) -> int:
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    base = BOOZE_CAPACITY_BY_RANK[min(rank_id, len(BOOZE_CAPACITY_BY_RANK)) - 1]
+    # Base capacity scales 5–10% per rank (use 7.5%): rank 1 = 50, each rank multiplies by 1.075
+    base = int(round(BOOZE_CAPACITY_BASE_RANK1 * ((1 + BOOZE_CAPACITY_PCT_PER_RANK) ** (rank_id - 1))))
     bonus = current_user.get("booze_capacity_bonus", 0)
     return base + bonus
 
@@ -5842,8 +6288,9 @@ async def booze_run_buy(request: BoozeBuyRequest, current_user: dict = Depends(g
     current_carry = _booze_user_carrying_total(carrying)
     if current_carry + request.amount > capacity:
         raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
-    # Roll for caught by prohibition agents (before any purchase)
-    if random.random() < BOOZE_RUN_CAUGHT_CHANCE:
+    # Roll for caught by prohibition agents: random chance between 2% and 6%
+    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
+    if random.random() < jail_chance:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
         await db.users.update_one(
             {"id": current_user["id"]},
@@ -5898,8 +6345,9 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
     have = int(carrying.get(request.booze_id, 0))
     if have < request.amount:
         raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
-    # Roll for caught by prohibition agents (before any sell)
-    if random.random() < BOOZE_RUN_CAUGHT_CHANCE:
+    # Roll for caught by prohibition agents: random chance between 2% and 6%
+    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
+    if random.random() < jail_chance:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
         await db.users.update_one(
             {"id": current_user["id"]},
@@ -5959,7 +6407,7 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
 
 @api_router.post("/store/buy-booze-capacity")
 async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
-    """Spend points to increase booze carry capacity (+50 units)."""
+    """Spend points to increase booze carry capacity (+1000 units). Rank also adds 5–10% more per rank."""
     if current_user["points"] < BOOZE_CAPACITY_UPGRADE_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one(

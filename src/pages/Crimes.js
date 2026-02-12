@@ -85,21 +85,22 @@ export default function Crimes() {
   const rows = useMemo(() => {
     // touch tick so countdown updates
     void tick;
+    const inJail = !!user?.in_jail;
     return crimes.map((crime) => {
       const successRate = getSuccessRate(crime.crime_type);
       const risk = Math.round((1 - successRate) * 100);
       const remaining = crime.next_available ? secondsUntil(crime.next_available) : null;
-      // Treat crime as available if cooldown has expired (no refresh needed)
-      const canCommit = crime.can_commit || (crime.next_available && (remaining === null || remaining <= 0));
+      // Treat crime as available if cooldown has expired (no refresh needed); block if in jail
+      const canCommit = !inJail && (crime.can_commit || (crime.next_available && (remaining === null || remaining <= 0)));
       const wait =
         canCommit
           ? formatWaitFromMinutes(crime.cooldown_minutes)
           : remaining && remaining > 0
             ? `${remaining} seconds`
             : 'Unavailable';
-      return { ...crime, can_commit: canCommit, risk, wait, remaining };
+      return { ...crime, can_commit: canCommit, risk, wait, remaining, in_jail: inJail };
     });
-  }, [crimes, tick]);
+  }, [crimes, tick, user?.in_jail]);
 
   if (loading) {
     return (
@@ -119,6 +120,12 @@ export default function Crimes() {
         </div>
         <p className="text-[11px] sm:text-xs font-heading text-mutedForeground uppercase tracking-widest">Commit Crimes</p>
       </div>
+
+      {user?.in_jail && (
+        <div className="rounded-sm border border-amber-500/50 bg-amber-950/30 px-4 py-2 text-center text-sm font-heading text-amber-200">
+          You can't commit crimes while in jail. Go to Jail to serve your time or bust out.
+        </div>
+      )}
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
         <div className="flex justify-center">
@@ -151,7 +158,7 @@ export default function Crimes() {
           {rows.map((crime) => {
             const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
             const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
-            const statusText = crime.can_commit ? 'Available' : onCooldown ? 'Cooldown' : 'Unavailable';
+            const statusText = crime.in_jail ? 'In jail' : crime.can_commit ? 'Available' : onCooldown ? 'Cooldown' : 'Unavailable';
 
             return (
               <div

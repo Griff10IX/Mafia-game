@@ -80,6 +80,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     crime = await db.crimes.find_one({"id": crime_id}, {"_id": 0})
     if not crime:
         raise HTTPException(status_code=404, detail="Crime not found")
+    if current_user.get("in_jail"):
+        raise HTTPException(status_code=400, detail="You can't commit crimes while in jail.")
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
     if crime["min_rank"] > user_rank:
         raise HTTPException(status_code=403, detail="Rank too low for this crime")
