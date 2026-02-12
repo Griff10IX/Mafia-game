@@ -1041,7 +1041,17 @@ async def register(user_data: UserRegister):
     try:
         existing = await db.users.find_one({"$or": [{"email": user_data.email}, {"username": user_data.username}]}, {"_id": 0})
         if existing:
-            raise HTTPException(status_code=400, detail="Email or username already registered")
+            if existing.get("is_dead"):
+                # Dead account — free up the email/username so they can re-register
+                await db.users.update_one(
+                    {"id": existing["id"]},
+                    {"$set": {
+                        "email": f"dead_{existing['id']}@deleted",
+                        "username": f"dead_{existing['id'][:8]}",
+                    }}
+                )
+            else:
+                raise HTTPException(status_code=400, detail="Email or username already registered")
         
         user_id = str(uuid.uuid4())
         user_doc = {
