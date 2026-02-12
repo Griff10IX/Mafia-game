@@ -64,44 +64,44 @@ export default function Jail() {
 
   return (
     <div className={`min-h-full ${styles.pageContent}`} data-testid="jail-page">
-      <div className="space-y-5 p-4 md:p-6">
+      <div className="space-y-4 sm:space-y-5 p-3 sm:p-4 md:p-6">
       {/* Art Deco Header */}
       <div>
-        <div className="flex items-center gap-4 mb-3">
+        <div className="flex items-center gap-2 sm:gap-4 mb-2 sm:mb-3">
           <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/40 to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-3">
-            <Lock size={24} className="text-primary/80" />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2 sm:gap-3">
+            <Lock size={20} className="text-primary/80 sm:w-6 sm:h-6" />
             Jail
           </h1>
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
         </div>
-        <p className="text-center text-sm text-mutedForeground font-heading tracking-wide">Bust out players for rank points</p>
+        <p className="text-center text-xs sm:text-sm text-mutedForeground font-heading tracking-wide">Bust out players for rank points</p>
       </div>
 
       <div className="flex justify-center">
         <div className="w-full max-w-3xl">
           {jailStatus.in_jail ? (
-            <div className="relative border-2 border-red-600/60 rounded-sm overflow-hidden min-h-[200px]">
+            <div className="relative border-2 border-red-600/60 rounded-sm overflow-hidden min-h-[160px] sm:min-h-[200px]">
               <img src={JAIL_BACKGROUND_IMAGE} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-0 bg-red-950/50" aria-hidden />
-              <div className="relative z-10 p-6 text-center">
-                <Lock className="text-red-400 mx-auto mb-4" size={40} />
-                <h2 className="text-lg font-heading font-bold text-red-400 uppercase tracking-wider mb-2">You Are In Jail</h2>
-                <p className="text-foreground font-heading mb-3">Time remaining:</p>
-                <div className="text-3xl font-heading font-bold text-red-400 mb-3 tabular-nums">
+              <div className="relative z-10 p-4 sm:p-6 text-center">
+                <Lock className="text-red-400 mx-auto mb-2 sm:mb-4" size={32} />
+                <h2 className="text-base sm:text-lg font-heading font-bold text-red-400 uppercase tracking-wider mb-1 sm:mb-2">You Are In Jail</h2>
+                <p className="text-foreground font-heading mb-2 sm:mb-3 text-xs sm:text-sm">Time remaining:</p>
+                <div className="text-2xl sm:text-3xl font-heading font-bold text-red-400 mb-2 sm:mb-3 tabular-nums">
                   {jailStatus.seconds_remaining}s
                 </div>
-                <p className="text-xs text-mutedForeground font-heading">Wait for release or ask another player to bust you out</p>
+                <p className="text-[11px] sm:text-xs text-mutedForeground font-heading">Wait for release or ask another player to bust you out</p>
               </div>
             </div>
           ) : (
-            <div className="relative border border-primary/30 rounded-sm overflow-hidden min-h-[160px] shadow-lg shadow-primary/5">
+            <div className="relative border border-primary/30 rounded-sm overflow-hidden min-h-[120px] sm:min-h-[160px] shadow-lg shadow-primary/5">
               <img src={JAIL_BACKGROUND_IMAGE} alt="" className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-0 bg-black/30" aria-hidden />
-              <div className="relative z-10 p-6 text-center">
-                <AlertCircle className="text-primary/80 mx-auto mb-3" size={40} />
-                <h2 className="text-lg font-heading font-bold text-primary uppercase tracking-wider mb-2">You Are Free</h2>
-                <p className="text-sm text-mutedForeground font-heading">Bust out jailed players for rank points</p>
+              <div className="relative z-10 p-4 sm:p-6 text-center">
+                <AlertCircle className="text-primary/80 mx-auto mb-2 sm:mb-3" size={32} />
+                <h2 className="text-base sm:text-lg font-heading font-bold text-primary uppercase tracking-wider mb-1 sm:mb-2">You Are Free</h2>
+                <p className="text-xs sm:text-sm text-mutedForeground font-heading">Bust out jailed players for rank points</p>
               </div>
             </div>
           )}
@@ -110,19 +110,19 @@ export default function Jail() {
 
       <div className="flex justify-center">
         <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-px bg-primary/50" />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                <Users size={14} /> Jailed Players
+          <div className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-4 sm:w-6 h-px bg-primary/50" />
+              <span className="text-[11px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5 sm:gap-2">
+                <Users size={12} className="sm:w-[14px] sm:h-[14px]" /> Jailed Players
               </span>
-              <div className="w-6 h-px bg-primary/50" />
+              <div className="w-4 sm:w-6 h-px bg-primary/50" />
             </div>
-            <span className="text-xs text-primary font-heading font-bold">{jailedPlayers.length}</span>
+            <span className="text-[11px] sm:text-xs text-primary font-heading font-bold">{jailedPlayers.length}</span>
           </div>
 
           {jailedPlayers.length === 0 ? (
-            <div className="px-4 py-10 text-center text-mutedForeground text-sm font-heading italic">No players currently in jail</div>
+            <div className="px-3 py-6 sm:px-4 sm:py-10 text-center text-mutedForeground text-xs sm:text-sm font-heading italic">No players currently in jail</div>
           ) : (
             <>
               <div className="hidden md:grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
@@ -138,31 +138,31 @@ export default function Jail() {
                 return (
                   <div
                     key={`${player.username}-${index}`}
-                    className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-0 px-4 py-3 md:py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 min-w-0"
+                    className="grid grid-cols-1 md:grid-cols-12 gap-1.5 md:gap-0 px-3 py-2 sm:px-4 sm:py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 min-w-0"
                     data-testid={`jailed-player-${index}`}
                   >
                     <div className="md:col-span-5 min-w-0">
-                      <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center justify-between gap-2 sm:gap-3">
                         <div className="min-w-0">
-                          <div className="text-sm font-heading font-bold text-foreground truncate">{player.username}</div>
-                          <div className="text-xs text-mutedForeground truncate font-heading">{player.rank_name}</div>
+                          <div className="text-xs sm:text-sm font-heading font-bold text-foreground truncate">{player.username}</div>
+                          <div className="text-[11px] sm:text-xs text-mutedForeground truncate font-heading">{player.rank_name}</div>
                         </div>
                         {player.is_self ? (
-                          <span className="shrink-0 text-[10px] uppercase tracking-wider font-heading font-bold bg-red-600/20 text-red-400 px-2 py-0.5 rounded-sm border border-red-500/30">
+                          <span className="shrink-0 text-[10px] uppercase tracking-wider font-heading font-bold bg-red-600/20 text-red-400 px-1.5 py-0.5 rounded-sm border border-red-500/30">
                             You
                           </span>
                         ) : player.is_npc ? (
-                          <span className="shrink-0 text-[10px] uppercase tracking-wider font-heading font-bold bg-zinc-800 text-mutedForeground px-2 py-0.5 rounded-sm border border-primary/20">
+                          <span className="shrink-0 text-[10px] uppercase tracking-wider font-heading font-bold bg-zinc-800 text-mutedForeground px-1.5 py-0.5 rounded-sm border border-primary/20">
                             NPC
                           </span>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="md:col-span-3 text-xs text-mutedForeground font-heading">
+                    <div className="md:col-span-3 text-[11px] sm:text-xs text-mutedForeground font-heading">
                       {player.is_npc ? (
                         <span className="inline-flex items-center gap-1">
-                          <Zap size={12} className="text-amber-400" />
+                          <Zap size={11} className="text-amber-400 sm:w-3 sm:h-3" />
                           Harder ({successRate}%)
                         </span>
                       ) : (
@@ -170,19 +170,19 @@ export default function Jail() {
                       )}
                     </div>
 
-                    <div className="md:col-span-2 text-sm font-heading text-primary font-bold">
+                    <div className="md:col-span-2 text-xs sm:text-sm font-heading text-primary font-bold">
                       +{rp} RP
                     </div>
 
                     <div className="md:col-span-2 flex justify-end">
                       {player.is_self ? (
-                        <span className="text-xs text-mutedForeground font-heading">—</span>
+                        <span className="text-[11px] sm:text-xs text-mutedForeground font-heading">—</span>
                       ) : (
                         <button
                           type="button"
                           onClick={() => bustOut(player.username, player.is_npc)}
                           disabled={loading || jailStatus.in_jail}
-                          className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 transition-smooth min-h-[44px] touch-manipulation"
+                          className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 transition-smooth min-h-[36px] sm:min-h-[44px] touch-manipulation"
                           data-testid={`bust-out-${index}`}
                         >
                           {loading ? '...' : 'Bust'}
@@ -199,15 +199,15 @@ export default function Jail() {
 
       <div className="flex justify-center">
         <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-px bg-primary/50" />
-              <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Jail System</h3>
+          <div className="px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-4 sm:w-6 h-px bg-primary/50" />
+              <h3 className="text-xs sm:text-sm font-heading font-bold text-primary uppercase tracking-widest">Jail System</h3>
               <div className="flex-1 h-px bg-primary/50" />
             </div>
           </div>
-          <div className="p-4">
-            <ul className="space-y-1 text-xs text-mutedForeground font-heading">
+          <div className="p-3 sm:p-4">
+            <ul className="space-y-0.5 sm:space-y-1 text-[11px] sm:text-xs text-mutedForeground font-heading">
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> Failed crimes/GTA send you to jail (15–60s)</li>
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> NPCs appear every 1–2 min, harder bust (50% vs 70%)</li>
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> 15 RP regular bust, 25 RP NPC bust</li>

@@ -576,7 +576,12 @@ export default function Layout({ children }) {
             {/* Rank Progress Mini Bar */}
             {rankProgress && (() => {
               const pct = Number(rankProgress.rank_points_progress);
-              const progress = (typeof pct === 'number' && !Number.isNaN(pct)) ? Math.min(100, Math.max(0, pct)) : 0;
+              const current = Number(rankProgress.rank_points_current) || 0;
+              const needed = Number(rankProgress.rank_points_needed) || 0;
+              const total = current + needed;
+              const progress = (typeof pct === 'number' && !Number.isNaN(pct))
+                ? Math.min(100, Math.max(0, pct))
+                : (total > 0 ? Math.min(100, (current / total) * 100) : 0);
               return (
                 <div
                   className="hidden sm:flex items-center gap-2 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm"
@@ -585,10 +590,10 @@ export default function Layout({ children }) {
                   <TrendingUp size={12} className="text-primary" />
                   <div className="flex flex-col min-w-0">
                     <span className="text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                    <div className="w-16 h-1.5 bg-noir-raised rounded-full mt-0.5 overflow-hidden flex">
+                    <div className="w-16 h-1.5 bg-noir-raised rounded-full mt-0.5 overflow-hidden">
                       <div
-                        className="h-full flex-none bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300 rounded-full"
-                        style={{ width: `${progress}%`, minWidth: progress > 0 ? 2 : 0 }}
+                        className="h-full rounded-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300"
+                        style={{ width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, display: 'block', boxSizing: 'border-box' }}
                       />
                     </div>
                   </div>

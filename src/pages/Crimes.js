@@ -100,18 +100,18 @@ export default function Crimes() {
   }
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="crimes-page">
-      <div className="flex items-center justify-center flex-col gap-2 text-center">
-        <div className="flex items-center gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Crimes</h1>
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
+    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent}`} data-testid="crimes-page">
+      <div className="flex items-center justify-center flex-col gap-1 sm:gap-2 text-center">
+        <div className="flex items-center gap-2 sm:gap-3 w-full justify-center">
+          <div className="h-px flex-1 max-w-[60px] sm:max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Crimes</h1>
+          <div className="h-px flex-1 max-w-[60px] sm:max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
         </div>
-        <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">Commit Crimes</p>
+        <p className="text-[11px] sm:text-xs font-heading text-mutedForeground uppercase tracking-widest">Commit Crimes</p>
       </div>
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
-        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/30 rounded-sm p-4">
+        <div className="bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border border-primary/30 rounded-sm p-3 sm:p-4">
           <p className="text-sm font-heading font-bold text-primary">Today&apos;s event: {event.name}</p>
           <p className="text-xs text-mutedForeground font-heading mt-1">{event.message}</p>
         </div>
@@ -120,7 +120,7 @@ export default function Crimes() {
       <div className="flex justify-center overflow-x-auto min-w-0">
         <div className={`w-full max-w-3xl min-w-0 ${styles.panel} rounded-md overflow-hidden`}>
           {/* Header: on mobile use shorter labels so Status + Action don't overlap */}
-          <div className="grid grid-cols-12 gap-1 sm:gap-2 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-3 sm:px-4 py-2 border-b border-primary/20">
+          <div className="grid grid-cols-12 gap-1 sm:gap-2 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-2 sm:px-4 py-1.5 sm:py-2 border-b border-primary/20">
             <div className="col-span-5 sm:col-span-6 min-w-0">Crime</div>
             <div className="col-span-2 text-right">Risk</div>
             <div className="col-span-2 text-right hidden sm:block">Status</div>
@@ -135,19 +135,19 @@ export default function Crimes() {
             return (
               <div
                 key={crime.id}
-                className={`w-full text-left grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-1 px-3 sm:px-4 py-3 sm:py-2 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!crime.can_commit ? 'opacity-90' : ''}`}
+                className={`w-full text-left grid grid-cols-1 sm:grid-cols-12 gap-1.5 sm:gap-1 px-2 sm:px-4 py-2 sm:py-2 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!crime.can_commit ? 'opacity-90' : ''}`}
                 data-testid={`crime-row-${crime.id}`}
               >
                 <div className="sm:col-span-6 min-w-0 order-1">
-                  <div className="text-sm font-heading font-bold text-foreground truncate">{crime.name}</div>
-                  <div className="text-xs text-mutedForeground font-heading truncate">{crime.description}</div>
+                  <div className="text-xs sm:text-sm font-heading font-bold text-foreground truncate">{crime.name}</div>
+                  <div className="text-[11px] sm:text-xs text-mutedForeground font-heading truncate">{crime.description}</div>
                 </div>
 
-                <div className={`sm:col-span-2 text-right text-sm font-heading shrink-0 order-2 ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
+                <div className={`sm:col-span-2 text-right text-xs sm:text-sm font-heading shrink-0 order-2 ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
                   {unavailable ? (
                     <span className="inline-flex items-center justify-end gap-1">
                       <span>—</span>
-                      <HelpCircle size={14} className="text-mutedForeground" />
+                      <HelpCircle size={12} className="text-mutedForeground sm:w-[14px] sm:h-[14px]" />
                     </span>
                   ) : (
                     `${crime.risk}%`
@@ -169,7 +169,7 @@ export default function Crimes() {
                   </span>
                 </div>
 
-                <div className="sm:col-span-2 order-4 flex flex-col sm:block gap-1 sm:gap-0">
+                <div className="sm:col-span-2 order-4 flex flex-col sm:block gap-0.5 sm:gap-0">
                   <span className="sm:hidden text-[10px] uppercase tracking-wider font-heading text-mutedForeground">
                     {statusText}
                   </span>
@@ -177,19 +177,19 @@ export default function Crimes() {
                     <button
                       type="button"
                       onClick={() => commitCrime(crime.id)}
-                      className="w-full sm:w-auto bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth min-h-[44px] touch-manipulation"
+                      className="w-full sm:w-auto bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth min-h-[36px] sm:min-h-[44px] touch-manipulation"
                       data-testid={`commit-crime-${crime.id}`}
                     >
                       Commit
                     </button>
                   ) : onCooldown ? (
-                    <span className="inline-flex items-center justify-end gap-1 text-xs text-mutedForeground font-heading">
-                      <Clock size={14} className="text-primary shrink-0" />
+                    <span className="inline-flex items-center justify-end gap-1 text-[11px] sm:text-xs text-mutedForeground font-heading">
+                      <Clock size={12} className="text-primary shrink-0 sm:w-[14px] sm:h-[14px]" />
                       <span className="truncate">{crime.wait}</span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center justify-end gap-1 text-xs text-mutedForeground font-heading sm:inline-flex">
-                      <HelpCircle size={14} className="text-mutedForeground shrink-0" />
+                    <span className="inline-flex items-center justify-end gap-1 text-[11px] sm:text-xs text-mutedForeground font-heading sm:inline-flex">
+                      <HelpCircle size={12} className="text-mutedForeground shrink-0 sm:w-[14px] sm:h-[14px]" />
                       Locked
                     </span>
                   )}
@@ -201,8 +201,8 @@ export default function Crimes() {
       </div>
 
       <div className="flex justify-center">
-        <div className={`w-full max-w-3xl ${styles.panel} rounded-md px-4 py-3`}>
-          <div className="text-xs font-heading text-mutedForeground flex items-center justify-center gap-6">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md px-3 py-2 sm:px-4 sm:py-3`}>
+          <div className="text-[11px] sm:text-xs font-heading text-mutedForeground flex items-center justify-center gap-3 sm:gap-6">
             <span><span className="text-primary font-bold">◆</span> Crimes: <span className="text-foreground font-bold">{user?.total_crimes ?? 0}</span></span>
             <span className="text-primary/50">|</span>
             <span><span className="text-primary font-bold">◆</span> Profit: <span className="text-foreground font-bold">${Number(user?.crime_profit ?? 0).toLocaleString()}</span></span>

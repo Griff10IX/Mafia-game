@@ -128,18 +128,28 @@ export default function Dashboard() {
                 )}
               </span>
             </div>
-            <div className={`h-2.5 ${styles.raised} rounded-full overflow-hidden border border-primary/20 flex`}>
-              <div
-                className="h-full flex-none bg-gradient-to-r from-primary to-yellow-600 transition-all duration-500 rounded-full"
-                style={{
-                  width: `${(function () {
-                    const pct = Number(rankProgress.rank_points_progress);
-                    return (typeof pct === 'number' && !Number.isNaN(pct)) ? Math.min(100, Math.max(0, pct)) : 0;
-                  })()}%`,
-                  minWidth: (Number(rankProgress.rank_points_progress) || 0) > 0 ? 4 : 0
-                }}
-              />
-            </div>
+            {(() => {
+              const current = Number(rankProgress.rank_points_current) || 0;
+              const needed = Number(rankProgress.rank_points_needed) || 0;
+              const total = current + needed;
+              const pctFromApi = Number(rankProgress.rank_points_progress);
+              const progressPct = (typeof pctFromApi === 'number' && !Number.isNaN(pctFromApi))
+                ? Math.min(100, Math.max(0, pctFromApi))
+                : (total > 0 ? Math.min(100, (current / total) * 100) : 0);
+              return (
+                <div className={`h-2.5 ${styles.raised} rounded-full overflow-hidden border border-primary/20`}>
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-500"
+                    style={{
+                      width: `${progressPct}%`,
+                      minWidth: progressPct > 0 ? 6 : 0,
+                      display: 'block',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+              );
+            })()}
             {user?.premium_rank_bar && rankProgress.rank_points_needed > 0 && (
               <p className="text-xs font-heading text-mutedForeground">{rankProgress.rank_points_needed.toLocaleString()} RP to next rank</p>
             )}
