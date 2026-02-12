@@ -289,23 +289,29 @@
   border-color: var(--gm-border);
 }
 
-/* Sidebar: active = dark panel + gold accent (inline with page theme, not bright block) */
+/* Sidebar: active = dark panel + gold accent (no bright gold block; override base gradient) */
+.themeGangsterModern .sidebar .navItemActive,
 .themeGangsterModern .navItemActive {
-  background-color: var(--gm-card) !important;
+  background: var(--gm-card) !important;
+  background-image: none !important;
   color: var(--gm-gold) !important;
   border-left: 3px solid var(--gm-gold) !important;
   border-radius: 2px;
 }
 
+.themeGangsterModern .sidebar .navItemActivePage,
 .themeGangsterModern .navItemActivePage {
-  background-color: var(--gm-card-hover) !important;
+  background: var(--gm-card-hover) !important;
+  background-image: none !important;
   color: var(--gm-gold) !important;
   border-left: 3px solid var(--gm-gold) !important;
   border-radius: 2px;
 }
 
+.themeGangsterModern .sidebar .navItemActivePage:hover,
 .themeGangsterModern .navItemActivePage:hover {
-  background-color: var(--gm-card-hover) !important;
+  background: var(--gm-card-hover) !important;
+  background-image: none !important;
   color: var(--gm-gold) !important;
 }
 
