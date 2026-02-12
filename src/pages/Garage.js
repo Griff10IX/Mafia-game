@@ -4,7 +4,7 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
-const RARITY_ORDER = { exclusive: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
+const RARITY_ORDER = { exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 12;
 
 export default function Garage() {
@@ -75,6 +75,7 @@ export default function Garage() {
       rare: 'text-blue-400',
       ultra_rare: 'text-purple-400',
       legendary: 'text-yellow-400',
+      custom: 'text-orange-400',
       exclusive: 'text-red-400'
     };
     return colors[rarity] || 'text-foreground';
@@ -197,6 +198,7 @@ export default function Garage() {
                     <option value="rare">Rare</option>
                     <option value="ultra_rare">Ultra Rare</option>
                     <option value="legendary">Legendary</option>
+                    <option value="custom">Custom</option>
                     <option value="exclusive">Exclusive</option>
                   </select>
                 </div>

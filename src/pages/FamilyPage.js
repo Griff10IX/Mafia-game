@@ -1010,143 +1010,118 @@ export default function FamilyPage() {
         )}
       </div>
 
-      {showWarModal && activeWars[selectedWarIndex] && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={() => setShowWarModal(false)}>
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-red-600/50 rounded-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl shadow-red-900/20" onClick={(e) => e.stopPropagation()}>
-            <div className="p-4 border-b border-red-600/30 bg-gradient-to-r from-red-900/30 via-red-800/20 to-red-900/30 flex items-center justify-between">
-              <h2 className="text-lg font-heading font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
-                <Swords size={20} /> War: vs {activeWars[selectedWarIndex].war.other_family_name} [{activeWars[selectedWarIndex].war.other_family_tag}]
-              </h2>
-              <button type="button" onClick={() => setShowWarModal(false)} className="p-1 rounded hover:bg-zinc-800 text-mutedForeground hover:text-foreground">
-                <X size={18} />
-              </button>
+      {showWarModal && activeWars[selectedWarIndex] && (() => {
+        const warEntry = activeWars[selectedWarIndex];
+        const warData = warEntry.war;
+        const warStats_ = warEntry.stats;
+        const WarTable = ({ title, icon, rows, valueKey, valueColor }) => (
+          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+            <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+              {icon}
+              <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">{title}</span>
             </div>
-            <div className="p-4 space-y-4">
-              {activeWars[selectedWarIndex].war.status === 'truce_offered' && (
-                <p className="text-xs text-primary bg-primary/10 border border-primary/30 rounded-sm p-2 font-heading">
-                  A truce has been offered. Boss or Underboss can accept.
-                </p>
-              )}
-
-              {activeWars[selectedWarIndex].stats && (
-                <>
-                  <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
-                    <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
-                      <Shield size={14} /> Most Bodyguard Kills
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-primary/20">
-                            <th className="text-left py-1 px-2 font-heading text-primary">#</th>
-                            <th className="text-left py-1 px-2 font-heading text-primary">Player</th>
-                            <th className="text-left py-1 px-2 font-heading text-primary">Family</th>
-                            <th className="text-right py-1 px-2 font-heading text-primary">Kills</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(activeWars[selectedWarIndex].stats.top_bodyguard_killers || []).map((e, i) => (
-                            <tr key={e.user_id} className="border-b border-primary/10">
-                              <td className="py-1 px-2 text-mutedForeground font-heading">{i + 1}</td>
-                              <td className="py-1 px-2 font-heading font-medium text-foreground">{e.username}</td>
-                              <td className="py-1 px-2 text-mutedForeground font-heading">{e.family_name} <span className="text-primary">[{e.family_tag}]</span></td>
-                              <td className="py-1 px-2 text-right font-heading font-bold text-primary">{e.bodyguard_kills}</td>
-                            </tr>
-                          ))}
-                          {(!activeWars[selectedWarIndex].stats.top_bodyguard_killers || !activeWars[selectedWarIndex].stats.top_bodyguard_killers.length) && (
-                            <tr><td colSpan={4} className="py-2 text-center text-mutedForeground font-heading italic">No data yet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+            {(!rows || rows.length === 0) ? (
+              <div className="px-3 py-4 text-center text-[11px] text-mutedForeground font-heading italic">No data yet.</div>
+            ) : (
+              <div className="divide-y divide-primary/10">
+                {rows.map((e, i) => (
+                  <div key={e.user_id} className="grid grid-cols-12 gap-1 px-3 py-1.5 items-center hover:bg-zinc-800/30 transition-smooth">
+                    <div className="col-span-1 text-[10px] text-mutedForeground font-heading">{i + 1}</div>
+                    <div className="col-span-4 text-xs font-heading font-bold text-foreground truncate">{e.username}</div>
+                    <div className="col-span-4 text-[10px] text-mutedForeground font-heading truncate">{e.family_name} <span className="text-primary">[{e.family_tag}]</span></div>
+                    <div className={`col-span-3 text-right text-xs font-heading font-bold ${valueColor}`}>{e[valueKey]}</div>
                   </div>
-
-                  <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
-                    <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
-                      <Skull size={14} /> Most Bodyguards Lost
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-primary/20">
-                            <th className="text-left py-1 px-2 font-heading text-primary">#</th>
-                            <th className="text-left py-1 px-2 font-heading text-primary">Player</th>
-                            <th className="text-left py-1 px-2 font-heading text-primary">Family</th>
-                            <th className="text-right py-1 px-2 font-heading text-primary">Lost</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(activeWars[selectedWarIndex].stats.top_bodyguards_lost || []).map((e, i) => (
-                            <tr key={e.user_id} className="border-b border-primary/10">
-                              <td className="py-1 px-2 text-mutedForeground font-heading">{i + 1}</td>
-                              <td className="py-1 px-2 font-heading font-medium text-foreground">{e.username}</td>
-                              <td className="py-1 px-2 text-mutedForeground font-heading">{e.family_name} <span className="text-primary">[{e.family_tag}]</span></td>
-                              <td className="py-1 px-2 text-right font-heading font-bold text-red-400">{e.bodyguards_lost}</td>
-                            </tr>
-                          ))}
-                          {(!activeWars[selectedWarIndex].stats.top_bodyguards_lost || !activeWars[selectedWarIndex].stats.top_bodyguards_lost.length) && (
-                            <tr><td colSpan={4} className="py-2 text-center text-mutedForeground font-heading italic">No data yet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80" onClick={() => setShowWarModal(false)}>
+            <div className={`${styles.panel} border border-primary/30 rounded-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-3 bg-gradient-to-r from-red-900/30 via-red-800/20 to-red-900/30 border-b border-red-600/30 flex items-center justify-between">
+                <h2 className="text-sm sm:text-lg font-heading font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+                  <Swords size={18} /> War: vs {warData.other_family_name} [{warData.other_family_tag}]
+                </h2>
+                <button type="button" onClick={() => setShowWarModal(false)} className="p-1 rounded hover:bg-zinc-800 text-mutedForeground hover:text-foreground transition-smooth">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-3 sm:p-4 space-y-3">
+                {warData.status === 'truce_offered' && (
+                  <div className="text-xs text-primary bg-primary/10 border border-primary/30 rounded-sm p-2 font-heading">
+                    A truce has been offered. Boss or Underboss can accept.
                   </div>
+                )}
 
-                  <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
-                    <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2 flex items-center gap-2">
-                      <Trophy size={14} /> MVP (Impact Score)
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-primary/20">
-                            <th className="text-left py-1 px-2 font-heading text-primary">#</th>
-                            <th className="text-left py-1 px-2 font-heading text-primary">Player</th>
-                            <th className="text-left py-1 px-2 font-heading text-primary">Family</th>
-                            <th className="text-right py-1 px-2 font-heading text-primary">Kills</th>
-                            <th className="text-right py-1 px-2 font-heading text-primary">BG</th>
-                            <th className="text-right py-1 px-2 font-heading text-primary">Impact</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(activeWars[selectedWarIndex].stats.mvp || []).map((e, i) => (
-                            <tr key={e.user_id} className="border-b border-primary/10">
-                              <td className="py-1 px-2 text-mutedForeground font-heading">{i + 1}</td>
-                              <td className="py-1 px-2 font-heading font-medium text-foreground">{e.username}</td>
-                              <td className="py-1 px-2 text-mutedForeground font-heading">{e.family_name} <span className="text-primary">[{e.family_tag}]</span></td>
-                              <td className="py-1 px-2 text-right font-heading">{e.kills}</td>
-                              <td className="py-1 px-2 text-right font-heading">{e.bodyguard_kills}</td>
-                              <td className="py-1 px-2 text-right font-heading font-bold text-primary">{e.impact}</td>
-                            </tr>
+                {warStats_ && (
+                  <>
+                    <WarTable
+                      title="Most Bodyguard Kills"
+                      icon={<Shield size={14} className="text-primary" />}
+                      rows={warStats_.top_bodyguard_killers}
+                      valueKey="bodyguard_kills"
+                      valueColor="text-primary"
+                    />
+                    <WarTable
+                      title="Most Bodyguards Lost"
+                      icon={<Skull size={14} className="text-red-400" />}
+                      rows={warStats_.top_bodyguards_lost}
+                      valueKey="bodyguards_lost"
+                      valueColor="text-red-400"
+                    />
+                    <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+                      <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+                        <Trophy size={14} className="text-primary" />
+                        <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">MVP (Impact Score)</span>
+                      </div>
+                      {(!warStats_.mvp || warStats_.mvp.length === 0) ? (
+                        <div className="px-3 py-4 text-center text-[11px] text-mutedForeground font-heading italic">No data yet.</div>
+                      ) : (
+                        <div className="divide-y divide-primary/10">
+                          {warStats_.mvp.map((e, i) => (
+                            <div key={e.user_id} className="grid grid-cols-12 gap-1 px-3 py-1.5 items-center hover:bg-zinc-800/30 transition-smooth">
+                              <div className="col-span-1 text-[10px] text-mutedForeground font-heading">{i + 1}</div>
+                              <div className="col-span-3 text-xs font-heading font-bold text-foreground truncate">{e.username}</div>
+                              <div className="col-span-3 text-[10px] text-mutedForeground font-heading truncate">{e.family_name} <span className="text-primary">[{e.family_tag}]</span></div>
+                              <div className="col-span-2 text-right text-[10px] font-heading text-foreground">{e.kills}</div>
+                              <div className="col-span-1 text-right text-[10px] font-heading text-foreground">{e.bodyguard_kills}</div>
+                              <div className="col-span-2 text-right text-xs font-heading font-bold text-primary">{e.impact}</div>
+                            </div>
                           ))}
-                          {(!activeWars[selectedWarIndex].stats.mvp || !activeWars[selectedWarIndex].stats.mvp.length) && (
-                            <tr><td colSpan={6} className="py-2 text-center text-mutedForeground font-heading italic">No data yet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
+                          <div className="grid grid-cols-12 gap-1 px-3 py-1 bg-zinc-800/30 text-[9px] uppercase tracking-wider font-heading text-mutedForeground">
+                            <div className="col-span-1">#</div>
+                            <div className="col-span-3">Player</div>
+                            <div className="col-span-3">Family</div>
+                            <div className="col-span-2 text-right">Kills</div>
+                            <div className="col-span-1 text-right">BG</div>
+                            <div className="col-span-2 text-right">Impact</div>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </>
-              )}
+                  </>
+                )}
 
-              {canManage && (
-                <div className="flex gap-2 pt-3 border-t border-primary/20">
-                  {activeWars[selectedWarIndex].war.status === 'active' && (
-                    <button type="button" onClick={handleOfferTruce} className="bg-zinc-800 border border-primary/30 px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider hover:bg-zinc-700">
-                      Offer Truce
-                    </button>
-                  )}
-                  {activeWars[selectedWarIndex].war.status === 'truce_offered' && activeWars[selectedWarIndex].war.truce_offered_by_family_id !== family?.id && (
-                    <button type="button" onClick={handleAcceptTruce} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50">
-                      Accept Truce
-                    </button>
-                  )}
-                </div>
-              )}
+                {canManage && (
+                  <div className="flex gap-2 pt-3 border-t border-primary/20">
+                    {warData.status === 'active' && (
+                      <button type="button" onClick={handleOfferTruce} className={`${styles.surface} border border-primary/30 px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider hover:bg-zinc-700 transition-smooth`}>
+                        Offer Truce
+                      </button>
+                    )}
+                    {warData.status === 'truce_offered' && warData.truce_offered_by_family_id !== family?.id && (
+                      <button type="button" onClick={handleAcceptTruce} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50 transition-smooth">
+                        Accept Truce
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

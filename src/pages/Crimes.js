@@ -121,13 +121,15 @@ export default function Crimes() {
       </div>
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
-        <div className={`${styles.panel} rounded-md overflow-hidden`}>
-          <div className={`${styles.panelHeader} px-3 py-2 sm:px-4`}>
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Today&apos;s event</span>
-          </div>
-          <div className="p-3 sm:p-4">
-            <p className="text-sm font-heading font-bold text-primary">{event.name}</p>
-            <p className={`text-xs font-heading mt-1 ${styles.textMuted}`}>{event.message}</p>
+        <div className="flex justify-center">
+          <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
+            <div className={`${styles.panelHeader} px-3 py-1.5 sm:px-4`}>
+              <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">Today&apos;s event</span>
+            </div>
+            <div className="px-3 py-2 sm:px-4">
+              <p className="text-xs sm:text-sm font-heading font-bold text-primary">{event.name}</p>
+              <p className={`text-[10px] sm:text-xs font-heading mt-0.5 ${styles.textMuted}`}>{event.message}</p>
+            </div>
           </div>
         </div>
       )}

@@ -123,7 +123,7 @@ async def _attempt_gta_impl(request: GTAAttemptRequest, current_user: dict):
             c
             for c in CARS
             if c["min_difficulty"] <= option["difficulty"]
-            and c["rarity"] != "exclusive"
+            and c["rarity"] not in ("exclusive", "custom")
         ]
         if not available_cars:
             available_cars = [c for c in CARS if c["min_difficulty"] == 1]
@@ -184,15 +184,17 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
         car_info = next((c for c in CARS if c["id"] == car_id), None)
         if car_info:
             user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
-            car_details.append(
-                {
-                    "user_car_id": user_car_id,
-                    "car_id": car_id,
-                    "car_name": user_car.get("car_name"),
-                    "acquired_at": user_car.get("acquired_at"),
-                    **car_info,
-                }
-            )
+            entry = {
+                "user_car_id": user_car_id,
+                "car_id": car_id,
+                "car_name": user_car.get("car_name"),
+                "acquired_at": user_car.get("acquired_at"),
+                **car_info,
+            }
+            # Override name for custom cars
+            if car_id == "car_custom" and user_car.get("custom_name"):
+                entry["name"] = user_car["custom_name"]
+            car_details.append(entry)
     return {"cars": car_details}
 
 

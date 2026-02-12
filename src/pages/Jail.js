@@ -103,20 +103,21 @@ export default function Jail() {
           {jailStatus.in_jail ? (
             <div className="relative border-2 border-red-600/60 rounded-sm overflow-hidden min-h-[160px] sm:min-h-[200px]">
               <img src={JAIL_BACKGROUND_IMAGE} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-red-950/50" aria-hidden />
-              <div className="relative z-10 p-4 sm:p-6 text-center">
-                <Lock className="text-red-400 mx-auto mb-2 sm:mb-4" size={32} />
+              <div className="absolute inset-0 bg-black/70" aria-hidden />
+              <div className="absolute inset-0 bg-red-950/30" aria-hidden />
+              <div className="relative z-10 p-4 sm:p-6 text-center" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
+                <Lock className="text-red-400 mx-auto mb-2 sm:mb-4 drop-shadow-lg" size={32} />
                 <h2 className="text-base sm:text-lg font-heading font-bold text-red-400 uppercase tracking-wider mb-1 sm:mb-2">You Are In Jail</h2>
-                <p className="text-foreground font-heading mb-2 sm:mb-3 text-xs sm:text-sm">Time remaining:</p>
+                <p className="text-white font-heading mb-2 sm:mb-3 text-xs sm:text-sm">Time remaining:</p>
                 <div className="text-2xl sm:text-3xl font-heading font-bold text-red-400 mb-2 sm:mb-3 tabular-nums">
                   {jailStatus.seconds_remaining}s
                 </div>
-                <p className="text-[11px] sm:text-xs text-mutedForeground font-heading mb-3">Wait for release or ask another player to bust you out</p>
+                <p className="text-[11px] sm:text-xs text-zinc-300 font-heading mb-3">Wait for release or ask another player to bust you out</p>
                 <button
                   type="button"
                   onClick={leaveJail}
                   disabled={leavingJail}
-                  className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-4 py-2 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 transition-smooth touch-manipulation inline-flex items-center gap-2"
+                  className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-4 py-2 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 transition-smooth touch-manipulation inline-flex items-center gap-2 shadow-lg"
                 >
                   <DoorOpen size={14} />
                   {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
@@ -126,11 +127,11 @@ export default function Jail() {
           ) : (
             <div className="relative border border-primary/30 rounded-sm overflow-hidden min-h-[120px] sm:min-h-[160px] shadow-lg shadow-primary/5">
               <img src={JAIL_BACKGROUND_IMAGE} alt="" className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-black/30" aria-hidden />
-              <div className="relative z-10 p-4 sm:p-6 text-center">
-                <AlertCircle className="text-primary/80 mx-auto mb-2 sm:mb-3" size={32} />
+              <div className="absolute inset-0 bg-black/60" aria-hidden />
+              <div className="relative z-10 p-4 sm:p-6 text-center" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
+                <AlertCircle className="text-primary/80 mx-auto mb-2 sm:mb-3 drop-shadow-lg" size={32} />
                 <h2 className="text-base sm:text-lg font-heading font-bold text-primary uppercase tracking-wider mb-1 sm:mb-2">You Are Free</h2>
-                <p className="text-xs sm:text-sm text-mutedForeground font-heading">Bust out jailed players for rank points</p>
+                <p className="text-xs sm:text-sm text-zinc-300 font-heading">Bust out jailed players for rank points</p>
               </div>
             </div>
           )}

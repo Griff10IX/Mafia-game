@@ -272,7 +272,7 @@ TRAVEL_TIMES = {
     "uncommon": 35,
     "common": 45,
     "custom": 20,  # Custom car from points
-    "airport": 5   # Airport (points fee)
+    "airport": 0   # Airport (instant)
 }
 
 AIRPORT_COST = 10  # Points per airport travel
@@ -309,6 +309,9 @@ CARS = [
     {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 25000, "travel_bonus": 50, "image": "https://images.unsplash.com/photo-1552072805-2a9039d00e57?auto=format&fit=crop&w=600&q=80"},
     {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 30000, "travel_bonus": 55, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
     
+    # Custom (store only) - just below exclusive
+    {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 40000, "travel_bonus": 55, "image": None},
+
     # Exclusive (admin only)
     {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 50000, "travel_bonus": 60, "image": "https://images.unsplash.com/photo-1577423704717-d48ffcb561e3?auto=format&fit=crop&w=600&q=80"}
 ]
@@ -2799,6 +2802,19 @@ async def admin_add_points(target_username: str, points: int, current_user: dict
     
     return {"message": f"Added {points} points to {target_username}"}
 
+@api_router.post("/admin/give-all-points")
+async def admin_give_all_points(points: int, current_user: dict = Depends(get_current_user)):
+    """Give points to every alive (non-dead, non-NPC) account."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if points < 1:
+        raise HTTPException(status_code=400, detail="Points must be at least 1")
+    result = await db.users.update_many(
+        {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}},
+        {"$inc": {"points": points}}
+    )
+    return {"message": f"Gave {points} points to {result.modified_count} accounts", "updated": result.modified_count}
+
 @api_router.post("/admin/add-bullets")
 async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(get_current_user)):
     if current_user["email"] not in ADMIN_EMAILS:
@@ -4595,16 +4611,35 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         )
         # If the victim was someone's bodyguard, remove them and the owner permanently loses that slot
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
+        bodyguard_owner_username = None
         for bg in victim_as_bodyguard:
             owner_id = bg["user_id"]
+            # Lookup owner username for attempt history
+            owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
+            if owner_doc:
+                bodyguard_owner_username = owner_doc.get("username")
             await db.bodyguards.delete_one({"id": bg["id"]})
             await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
+            # Record war stats for bodyguard kill
+            try:
+                owner_family_id = (owner_doc or {}).get("family_id")
+                if owner_family_id and killer_family_id:
+                    bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
+                    if bg_war and bg_war.get("id"):
+                        await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
+            except Exception as e:
+                logging.exception("War stats bodyguard kill: %s", e)
             # Renumber owner's remaining bodyguards so slot_numbers are 1..n
             remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
             for i, b in enumerate(remaining, 1):
                 if b["slot_number"] != i:
                     await db.bodyguards.update_one({"id": b["id"]}, {"$set": {"slot_number": i}})
+        # Store bodyguard info in attempt_base for history
+        is_victim_bodyguard = bool(target.get("is_bodyguard"))
+        attempt_base["is_bodyguard_kill"] = is_victim_bodyguard
+        if is_victim_bodyguard and bodyguard_owner_username:
+            attempt_base["bodyguard_owner_username"] = bodyguard_owner_username
 
         success_message = f"You killed {target_name}! You got ${cash_loot:,}"
         extras = []
@@ -4748,9 +4783,16 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
         {"$or": [{"attacker_id": current_user["id"]}, {"target_id": current_user["id"]}]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(200)
-    # Add a direction field for UI
+    # Add a direction field for UI and resolve bodyguard owner for older records
     for d in docs:
         d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
+        # For older records missing bodyguard info, check if target was a bodyguard
+        if d.get("is_bodyguard_kill") and not d.get("bodyguard_owner_username"):
+            target_user = await db.users.find_one({"id": d.get("target_id")}, {"_id": 0, "is_bodyguard": 1, "bodyguard_owner_id": 1})
+            if target_user and target_user.get("bodyguard_owner_id"):
+                owner = await db.users.find_one({"id": target_user["bodyguard_owner_id"]}, {"_id": 0, "username": 1})
+                if owner:
+                    d["bodyguard_owner_username"] = owner.get("username")
     return {"attempts": docs}
 
 # Leaderboard endpoints
@@ -5869,6 +5911,27 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     return {"message": f"+{BOOZE_CAPACITY_UPGRADE_AMOUNT} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity}
 
 
+BULLET_PACKS = {
+    5000: 500,
+    10000: 1000,
+    50000: 5000,
+    100000: 10000,
+}
+
+@api_router.post("/store/buy-bullets")
+async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
+    """Buy bullets with points."""
+    cost = BULLET_PACKS.get(bullets)
+    if cost is None:
+        raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
+    if current_user["points"] < cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost}, have {current_user['points']}")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -cost, "bullets": bullets}}
+    )
+    return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
+
 @api_router.post("/store/buy-custom-car")
 async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
     CUSTOM_CAR_COST = 500  # Points
@@ -5886,6 +5949,15 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
         {"id": current_user["id"]},
         {"$inc": {"points": -CUSTOM_CAR_COST}, "$set": {"custom_car_name": request.car_name}}
     )
+    
+    # Also add to garage as a car entity
+    await db.user_cars.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "car_id": "car_custom",
+        "custom_name": request.car_name,
+        "acquired_at": datetime.now(timezone.utc).isoformat(),
+    })
     
     await send_notification(
         current_user["id"],

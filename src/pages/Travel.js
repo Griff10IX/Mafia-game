@@ -52,8 +52,15 @@ export default function Travel() {
         destination,
         travel_method: method
       });
-      setTravelTime(response.data.travel_time);
-      toast.info(response.data.message);
+      const tt = response.data.travel_time;
+      if (tt <= 0) {
+        setTraveling(false);
+        fetchTravelInfo();
+        toast.success(`Arrived at ${destination}!`);
+      } else {
+        setTravelTime(tt);
+        toast.info(response.data.message);
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Travel failed');
       setTraveling(false);
@@ -148,7 +155,7 @@ export default function Travel() {
                   <Plane size={16} className="text-primary" />
                   <span className="text-sm font-heading font-bold text-primary">Airport</span>
                 </span>
-                <span className="text-xs text-primary/90 font-heading">{travelInfo.airport_time}s · {travelInfo.airport_cost}pts</span>
+                <span className="text-xs text-primary/90 font-heading">{travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost}pts</span>
               </button>
               {travelInfo.carrying_booze && (
                 <p className="text-xs text-amber-400 font-heading">Car only while carrying booze</p>
@@ -202,6 +209,7 @@ export default function Travel() {
             <h4 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest mb-2">Car speed by rarity</h4>
             <ul className="space-y-1 text-xs text-mutedForeground font-heading">
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> Exclusive: 7s</li>
+              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Custom: 20s</li>
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> Legendary: 12s</li>
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> Ultra Rare: 18s</li>
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> Rare: 25s</li>
@@ -213,7 +221,7 @@ export default function Travel() {
             <h4 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest mb-2">Extras</h4>
             <ul className="space-y-1 text-xs text-mutedForeground font-heading mb-3">
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> Custom Car (Store): 20s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Airport: 5s ({travelInfo?.airport_cost} pts)</li>
+              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Airport: Instant ({travelInfo?.airport_cost} pts)</li>
               <li className="flex items-center gap-2"><span className="text-primary">◆</span> Max {MAX_TRAVELS_PER_HOUR || 15} travels/hour</li>
             </ul>
             <button

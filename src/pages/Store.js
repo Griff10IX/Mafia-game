@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingBag, Zap, Check, Shield, Star } from 'lucide-react';
+import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -14,6 +14,13 @@ const PACKAGES = [
 
 const BODYGUARD_SLOT_COSTS = [100, 200, 300, 400];
 
+const BULLET_PACKS = [
+  { bullets: 5000, cost: 500 },
+  { bullets: 10000, cost: 1000 },
+  { bullets: 50000, cost: 5000 },
+  { bullets: 100000, cost: 10000 },
+];
+
 export default function Store() {
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
@@ -22,6 +29,7 @@ export default function Store() {
   const [boozeConfig, setBoozeConfig] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
+  const [customCarName, setCustomCarName] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -150,6 +158,33 @@ export default function Store() {
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to buy booze capacity');
+    }
+  };
+
+  const buyBullets = async (bullets) => {
+    try {
+      const response = await api.post(`/store/buy-bullets?bullets=${bullets}`);
+      toast.success(response.data.message);
+      refreshUser();
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to buy bullets');
+    }
+  };
+
+  const buyCustomCar = async () => {
+    if (!customCarName.trim() || customCarName.trim().length < 2) {
+      toast.error('Car name must be at least 2 characters');
+      return;
+    }
+    try {
+      const response = await api.post('/store/buy-custom-car', { car_name: customCarName.trim() });
+      toast.success(response.data.message);
+      setCustomCarName('');
+      refreshUser();
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to buy custom car');
     }
   };
 
@@ -294,6 +329,78 @@ export default function Store() {
               </button>
             </div>
           </div>
+          {/* Custom Car */}
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Custom Car</span>
+              <Car className="text-primary" size={20} />
+            </div>
+            <div className="p-6">
+              <p className="text-xs font-heading text-mutedForeground mb-4">
+                Buy a custom-named car. Sits just below Exclusive rarity. Travels in 20s. Appears in your Garage.
+              </p>
+              <div className="space-y-2 mb-4 font-heading text-xs text-mutedForeground">
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Name your own car</div>
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Custom rarity (below Exclusive)</div>
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> 20s travel time</div>
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Value: $40,000</div>
+              </div>
+              {user?.custom_car_name ? (
+                <div className={`${styles.surface} border border-primary/20 rounded-sm py-3 text-center font-heading`}>
+                  <span className="text-primary font-bold uppercase tracking-wider">Owned</span>
+                  <p className="text-xs text-mutedForeground mt-1">{user.custom_car_name}</p>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    placeholder="Name your car (2-30 chars)"
+                    value={customCarName}
+                    onChange={(e) => setCustomCarName(e.target.value)}
+                    maxLength={30}
+                    className={`${styles.input} w-full h-10 px-3 text-sm font-heading mb-3`}
+                  />
+                  <button
+                    onClick={buyCustomCar}
+                    disabled={!user || user.points < 500 || !customCarName.trim()}
+                    className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
+                  >
+                    Buy for 500 Points
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Buy Bullets */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <div className="w-6 h-px bg-primary/50" />
+          <h2 className="text-sm font-heading font-bold text-primary/80 uppercase tracking-widest">Buy Bullets</h2>
+          <div className="flex-1 h-px bg-primary/30" />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {BULLET_PACKS.map((pack) => (
+            <div key={pack.bullets} className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+              <div className="px-3 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
+                <Crosshair className="text-primary" size={14} />
+                <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">{(pack.bullets / 1000).toFixed(0)}k Bullets</span>
+              </div>
+              <div className="p-4 text-center">
+                <div className="text-2xl font-heading font-bold text-foreground mb-1">{pack.bullets.toLocaleString()}</div>
+                <div className="text-xs text-mutedForeground font-heading mb-4">{pack.cost.toLocaleString()} points</div>
+                <button
+                  onClick={() => buyBullets(pack.bullets)}
+                  disabled={!user || user.points < pack.cost}
+                  className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs border border-yellow-600/50 transition-smooth disabled:opacity-50"
+                >
+                  Buy
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
 

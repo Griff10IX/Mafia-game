@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -37,6 +37,7 @@ export default function Admin() {
   const [deleteUserId, setDeleteUserId] = useState('');
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [dbLoading, setDbLoading] = useState(false);
+  const [giveAllPoints, setGiveAllPoints] = useState(100);
 
   const checkAdmin = async () => {
     try {
@@ -292,6 +293,16 @@ export default function Admin() {
     }
   };
 
+  const handleGiveAllPoints = async () => {
+    if (!window.confirm(`Give ${giveAllPoints} points to ALL alive accounts?`)) return;
+    try {
+      const res = await api.post(`/admin/give-all-points?points=${giveAllPoints}`);
+      toast.success(res.data?.message || 'Points given to all');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -485,6 +496,32 @@ export default function Admin() {
                   Updated: <span className={`font-bold ${styles.textForeground}`}>{forceOnlineInfo.updated}</span>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Give All Points */}
+      <div className="flex justify-center">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
+          <div className={panelHeader}>
+            <div className="flex items-center gap-2">
+              <Gift className={styles.textGold} size={18} />
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Give All Points</span>
+            </div>
+          </div>
+          <div className="p-4">
+            <p className={`text-sm font-heading mb-3 ${styles.textMuted}`}>
+              Give points to <span className={`font-bold ${styles.textForeground}`}>every alive account</span> (excludes dead, NPCs, and bodyguards).
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-6">
+                <label className={`block text-xs font-heading mb-1 uppercase tracking-wider ${styles.textMuted}`}>Points to give each player</label>
+                <input type="number" min="1" value={giveAllPoints} onChange={(e) => setGiveAllPoints(parseInt(e.target.value) || 1)} className={inputClass} />
+              </div>
+              <div className="sm:col-span-6">
+                <button onClick={handleGiveAllPoints} className={`w-full ${btnPrimary}`}>Give Points to All</button>
+              </div>
             </div>
           </div>
         </div>
