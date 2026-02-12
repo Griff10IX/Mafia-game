@@ -237,7 +237,7 @@ export default function GTA() {
                       onClick={() => attemptGTA(option.id)}
                       data-testid={`attempt-gta-${option.id}`}
                       disabled={attemptingOptionId !== null}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-60 disabled:cursor-not-allowed touch-manipulation transition-smooth"
+                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-0.5 text-[10px] uppercase tracking-wider font-heading font-bold border border-yellow-600/50 disabled:opacity-60 disabled:cursor-not-allowed touch-manipulation transition-smooth"
                     >
                       {attemptingOptionId === option.id ? '...' : 'Steal'}
                     </button>

@@ -7,7 +7,7 @@ import styles from '../styles/noir.module.css';
 // Card background (jail cell). Override: REACT_APP_JAIL_BACKGROUND_IMAGE in .env
 const JAIL_BACKGROUND_IMAGE =
   process.env.REACT_APP_JAIL_BACKGROUND_IMAGE ||
-  'https://tse4.mm.bing.net/th/id/OIP.FfNCHmXmT0T5oZ424A8VbgHaLE?pid=Api&P=0&h=180';
+  `${(process.env.PUBLIC_URL || '')}/jail-background.png`;
 export default function Jail() {
   const [jailStatus, setJailStatus] = useState({ in_jail: false });
   const [jailedPlayers, setJailedPlayers] = useState([]);
