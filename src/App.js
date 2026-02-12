@@ -9,6 +9,7 @@ import Crimes from "./pages/Crimes";
 import GTA from "./pages/GTA";
 import Garage from "./pages/Garage";
 import Jail from "./pages/Jail";
+import OrganisedCrime from "./pages/OrganisedCrime";
 import Attack from "./pages/Attack";
 import Bodyguards from "./pages/Bodyguards";
 import HitlistPage from "./pages/HitlistPage";
@@ -125,6 +126,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Jail />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/organised-crime"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <OrganisedCrime />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

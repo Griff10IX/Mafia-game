@@ -233,7 +233,8 @@ export default function Layout({ children }) {
                     location.pathname === '/ranking' ||
                     location.pathname === '/crimes' ||
                     location.pathname === '/gta' ||
-                    location.pathname === '/jail';
+                    location.pathname === '/jail' ||
+                    location.pathname === '/organised-crime';
 
                   return (
                     <div key="nav-ranking-group" className="space-y-0.5">

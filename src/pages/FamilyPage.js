@@ -37,56 +37,68 @@ function apiDetail(e) {
 const ROLE_LABELS = { boss: 'Boss', underboss: 'Underboss', consigliere: 'Consigliere', capo: 'Capo', soldier: 'Soldier', associate: 'Associate' };
 
 function RaidTargetFamilyBlock({ target, attackLoading, onRaid }) {
+  const [collapsed, setCollapsed] = useState(false);
   const rackets = target.rackets || [];
   const profileSlug = target.family_tag || target.family_id || '';
+  const raidsRemaining = target.raids_remaining ?? 2;
+  const raidsUsed = target.raids_used ?? 0;
+  const canRaid = raidsRemaining > 0;
   return (
     <div className={`${styles.surfaceMuted} border border-primary/20 rounded-sm overflow-hidden`}>
-      <div className="px-3 py-2 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <button
+        type="button"
+        onClick={() => setCollapsed((c) => !c)}
+        className="w-full px-3 py-2 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1 text-left hover:bg-primary/5 transition-colors"
+      >
+        <span className="shrink-0 text-primary/80">{collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}</span>
         <span className="font-heading font-medium text-foreground text-sm">
           {target.family_name} <span className="text-primary">[{target.family_tag}]</span>
         </span>
         <span className="text-xs text-primary font-heading font-semibold">{formatMoney(target.treasury)}</span>
+        <span className="text-xs text-mutedForeground font-heading">Raids: {raidsUsed}/2 (every 3h)</span>
         {profileSlug && (
-          <Link to={`/families/${encodeURIComponent(profileSlug)}`} className="text-xs text-primary hover:underline font-heading">
+          <Link to={`/families/${encodeURIComponent(profileSlug)}`} onClick={(e) => e.stopPropagation()} className="text-xs text-primary hover:underline font-heading">
             View crew
           </Link>
         )}
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs font-heading min-w-[320px]">
-          <thead>
-            <tr className="border-b border-primary/15">
-              <th className="text-left py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider">Operation</th>
-              <th className="text-right py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider">Value</th>
-              <th className="text-right py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider">Chance</th>
-              <th className="text-right py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider w-20">Raid</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rackets.map((r) => {
-              const key = `${target.family_id}-${r.racket_id}`;
-              const loading = attackLoading === key;
-              return (
-                <tr key={r.racket_id} className="border-b border-primary/10 last:border-0 hover:bg-primary/5">
-                  <td className="py-1.5 px-2 text-foreground">{r.racket_name} <span className="text-mutedForeground">Lv.{r.level}</span></td>
-                  <td className="py-1.5 px-2 text-right text-primary font-medium">{formatMoney(r.potential_take)}</td>
-                  <td className="py-1.5 px-2 text-right text-primary">{r.success_chance_pct}%</td>
-                  <td className="py-1.5 px-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => onRaid(target.family_id, r.racket_id)}
-                      disabled={loading}
-                      className="bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50 touch-manipulation"
-                    >
-                      {loading ? '…' : 'Raid'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      </button>
+      {!collapsed && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs font-heading min-w-[320px]">
+            <thead>
+              <tr className="border-b border-primary/15">
+                <th className="text-left py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider">Operation</th>
+                <th className="text-right py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider">Value</th>
+                <th className="text-right py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider">Chance</th>
+                <th className="text-right py-1.5 px-2 text-mutedForeground font-bold uppercase tracking-wider w-20">Raid</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rackets.map((r) => {
+                const key = `${target.family_id}-${r.racket_id}`;
+                const loading = attackLoading === key;
+                return (
+                  <tr key={r.racket_id} className="border-b border-primary/10 last:border-0 hover:bg-primary/5">
+                    <td className="py-1.5 px-2 text-foreground">{r.racket_name} <span className="text-mutedForeground">Lv.{r.level}</span></td>
+                    <td className="py-1.5 px-2 text-right text-primary font-medium">{formatMoney(r.potential_take)}</td>
+                    <td className="py-1.5 px-2 text-right text-primary">{r.success_chance_pct}%</td>
+                    <td className="py-1.5 px-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => onRaid(target.family_id, r.racket_id)}
+                        disabled={loading || !canRaid}
+                        className="bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 px-2 py-1 rounded text-xs font-bold uppercase tracking-wider disabled:opacity-50 touch-manipulation"
+                      >
+                        {loading ? '…' : canRaid ? 'Raid' : '0 left'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -691,7 +703,7 @@ export default function FamilyPage() {
             {!isCollapsed('raidEnemy') && (
             <div className="p-4">
               <p className="text-xs text-mutedForeground mb-3 font-heading">
-                Click <span className="text-primary font-bold">Raid</span> to take 25% of one collect from their treasury. Success drops as level goes up. 2h cooldown.
+                Click <span className="text-primary font-bold">Raid</span> to take 25% of one collect from their treasury. Success drops as level goes up. 2 raids per crew every 3 hours.
               </p>
               {racketAttackTargets.length > 0 ? (
                 <div className="space-y-3">

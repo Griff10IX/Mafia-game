@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap } from 'lucide-react';
+import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -36,6 +36,7 @@ export default function Attack() {
   const [travelModalDestination, setTravelModalDestination] = useState(null);
   const [travelInfo, setTravelInfo] = useState(null);
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
+  const [travelCountdown, setTravelCountdown] = useState(null);
 
   useEffect(() => {
     refreshAttacks();
@@ -54,6 +55,23 @@ export default function Attack() {
       setEventsEnabled(!!r.data?.events_enabled);
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (travelCountdown == null || travelCountdown <= 0) return;
+    const t = setInterval(() => {
+      setTravelCountdown((c) => {
+        if (c <= 1) {
+          clearInterval(t);
+          refreshUser();
+          refreshAttacks();
+          setTravelModalDestination(null);
+          return null;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [travelCountdown]);
 
   const fetchBullets = async () => {
     try {
@@ -141,10 +159,16 @@ export default function Attack() {
     setTravelSubmitLoading(true);
     try {
       const response = await api.post('/travel', { destination: travelModalDestination, travel_method: method });
-      toast.success(response.data?.message || `Traveling to ${travelModalDestination}`);
-      setTravelModalDestination(null);
-      refreshUser();
-      await refreshAttacks();
+      const travelTime = response.data?.travel_time ?? 0;
+      if (travelTime <= 0) {
+        toast.success(response.data?.message || `Traveled to ${travelModalDestination}`);
+        setTravelModalDestination(null);
+        refreshUser();
+        await refreshAttacks();
+      } else {
+        toast.success(response.data?.message || `Traveling to ${travelModalDestination}`);
+        setTravelCountdown(travelTime);
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Travel failed');
     } finally {
@@ -614,6 +638,14 @@ export default function Attack() {
                   >
                     Calculator
                   </button>
+                  <Link
+                    to="/inbox?filter=attack"
+                    className="flex items-center gap-1 px-2 py-1 rounded-sm text-xs font-heading font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-smooth"
+                    data-testid="view-witness-statements"
+                  >
+                    <FileText size={12} />
+                    View witness statements
+                  </Link>
                   <button
                     type="button"
                     onClick={() => setModalOpen(false)}
@@ -757,7 +789,12 @@ export default function Attack() {
                 <button type="button" onClick={() => setTravelModalDestination(null)} className="text-mutedForeground hover:text-primary font-heading" aria-label="Close">✕</button>
               </div>
               <div className="p-4 space-y-2">
-                {!travelInfo ? (
+                {travelCountdown != null && travelCountdown > 0 ? (
+                  <div className="text-center py-6">
+                    <p className="text-sm font-heading text-primary font-bold">Traveling to {travelModalDestination}…</p>
+                    <p className="text-2xl font-heading font-bold text-foreground mt-2 tabular-nums">{travelCountdown}s</p>
+                  </div>
+                ) : !travelInfo ? (
                   <div className="text-sm text-mutedForeground font-heading py-4 text-center">Loading travel options…</div>
                 ) : (
                   <>

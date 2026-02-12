@@ -251,7 +251,7 @@ export default function Jail() {
                       )}
                     </div>
 
-                    <div className="md:col-span-2 text-xs font-heading text-primary font-bold">
+                    <div className="md:col-span-2 text-xs font-heading text-primary font-bold text-right tabular-nums">
                       +{rp} RP
                     </div>
 

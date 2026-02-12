@@ -146,15 +146,23 @@ export default function HitlistPage() {
               </p>
             )}
             <div className="flex flex-wrap gap-2">
-              {onHitlist && (
-                <button
-                  onClick={handleBuyOff}
-                  disabled={submitting || (user?.points ?? 0) < 1000}
-                  className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest px-4 py-2 text-sm border border-yellow-600/50 disabled:opacity-50"
-                >
-                  <span className="flex items-center gap-2"><ShieldOff size={16} /> Buy yourself off (1,000 pts)</span>
-                </button>
-              )}
+              {onHitlist && (() => {
+                const needCash = me?.buy_off_cash ?? 0;
+                const needPoints = me?.buy_off_points ?? 0;
+                const haveCash = Number(user?.money ?? 0);
+                const havePoints = Number(user?.points ?? 0);
+                const canAfford = (needCash === 0 || haveCash >= needCash) && (needPoints === 0 || havePoints >= needPoints);
+                const costLabel = [needCash > 0 && `$${Number(needCash).toLocaleString()}`, needPoints > 0 && `${Number(needPoints).toLocaleString()} pts`].filter(Boolean).join(' + ');
+                return (
+                  <button
+                    onClick={handleBuyOff}
+                    disabled={submitting || !canAfford}
+                    className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest px-4 py-2 text-sm border border-yellow-600/50 disabled:opacity-50"
+                  >
+                    <span className="flex items-center gap-2"><ShieldOff size={16} /> Buy yourself off ({costLabel})</span>
+                  </button>
+                );
+              })()}
               {!revealed && (
                 <button
                   onClick={handleReveal}
@@ -299,7 +307,7 @@ export default function HitlistPage() {
           <ul className="space-y-1 text-xs text-mutedForeground font-heading">
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Place a bounty on a user or their bodyguards for cash or points.</li>
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Hidden bounties cost 50% extra; your name won&apos;t appear as the placer.</li>
-            <li className="flex items-center gap-2"><span className="text-primary">◆</span> Pay 1,000 points to buy yourself off the hitlist (removes all bounties on you).</li>
+            <li className="flex items-center gap-2"><span className="text-primary">◆</span> Buy yourself off at each bounty&apos;s amount + 50% (same currency: e.g. $1M bounty = $1.5M to buy off; 1,000 pts = 1,500 pts).</li>
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Pay 5,000 points once to see who placed bounties on you.</li>
           </ul>
         </div>

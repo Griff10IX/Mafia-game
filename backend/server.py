@@ -350,6 +350,7 @@ class UserResponse(BaseModel):
     in_jail: bool
     jail_until: Optional[str]
     premium_rank_bar: bool
+    has_silencer: bool = False
     custom_car_name: Optional[str]
     travels_this_hour: int
     extra_airmiles: int
@@ -359,6 +360,7 @@ class UserResponse(BaseModel):
     created_at: str
     swiss_balance: int = 0
     swiss_limit: int = SWISS_BANK_LIMIT_START
+    oc_timer_reduced: bool = False
 
 # Notification/Inbox models
 class NotificationCreate(BaseModel):
@@ -479,6 +481,18 @@ class HorseRacingBetRequest(BaseModel):
     bet: int
 
 
+class BlackjackSetBuyBackRequest(BaseModel):
+    amount: int  # points offered when owner cannot pay (buy-back)
+
+
+class BlackjackBuyBackAcceptRequest(BaseModel):
+    offer_id: str
+
+
+class BlackjackBuyBackRejectRequest(BaseModel):
+    offer_id: str
+
+
 class BlackjackStartRequest(BaseModel):
     bet: int
 
@@ -573,7 +587,8 @@ FAMILY_RACKET_ATTACK_BASE_SUCCESS = 0.70
 FAMILY_RACKET_ATTACK_LEVEL_PENALTY = 0.10
 FAMILY_RACKET_ATTACK_MIN_SUCCESS = 0.10
 FAMILY_RACKET_ATTACK_REVENUE_PCT = 0.25
-FAMILY_RACKET_ATTACK_COOLDOWN_HOURS = 2
+FAMILY_RACKET_ATTACK_MAX_PER_CREW = 2
+FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
 
 class FamilyCreateRequest(BaseModel):
     name: str
@@ -671,6 +686,11 @@ class HitlistAddRequest(BaseModel):
     reward_type: str  # "cash" | "points"
     reward_amount: int
     hidden: bool = False
+
+
+class HitlistAttemptNpcRequest(BaseModel):
+    hitlist_id: str
+    bullets_to_use: int
 
 class WarTruceRequest(BaseModel):
     war_id: str
@@ -809,6 +829,21 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             status_code=403,
             detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to retrieve points."
         )
+    # If car travel has arrived, apply location and clear traveling state
+    arrives_at = user.get("travel_arrives_at")
+    if arrives_at:
+        try:
+            arrives_dt = datetime.fromisoformat(arrives_at.replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) >= arrives_dt:
+                destination = user.get("traveling_to")
+                if destination:
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"current_state": destination}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}}
+                    )
+                    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        except Exception:
+            pass
     return user
 
 async def send_notification(user_id: str, title: str, message: str, notification_type: str):
@@ -1097,6 +1132,8 @@ async def register(user_data: UserRegister):
             "total_crimes": 0,
             "crime_profit": 0,
             "total_gta": 0,
+            "total_oc_heists": 0,
+            "oc_timer_reduced": False,
             "current_state": "Chicago",
             "swiss_balance": 0,
             "swiss_limit": SWISS_BANK_LIMIT_START,
@@ -1105,6 +1142,7 @@ async def register(user_data: UserRegister):
             "in_jail": False,
             "jail_until": None,
             "premium_rank_bar": False,
+            "has_silencer": False,
             "custom_car_name": None,
             "travels_this_hour": 0,
             "travel_reset_time": datetime.now(timezone.utc).isoformat(),
@@ -1195,6 +1233,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         in_jail=current_user.get("in_jail", False),
         jail_until=current_user.get("jail_until"),
         premium_rank_bar=current_user.get("premium_rank_bar", False),
+        has_silencer=current_user.get("has_silencer", False),
         custom_car_name=current_user.get("custom_car_name"),
         travels_this_hour=current_user.get("travels_this_hour", 0),
         extra_airmiles=current_user.get("extra_airmiles", 0),
@@ -1204,6 +1243,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         created_at=current_user["created_at"],
         swiss_balance=int(current_user.get("swiss_balance", 0) or 0),
         swiss_limit=int(current_user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START),
+        oc_timer_reduced=bool(current_user.get("oc_timer_reduced", False)),
     )
 
 @api_router.get("/users/{username}/profile")
@@ -2672,6 +2712,39 @@ async def buy_premium_rank_bar(current_user: dict = Depends(get_current_user)):
     
     return {"message": "Premium rank bar purchased!", "cost": cost}
 
+SILENCER_COST_POINTS = 150
+
+@api_router.post("/store/buy-silencer")
+async def buy_silencer(current_user: dict = Depends(get_current_user)):
+    """Buy a silencer (reduces witness statements when you kill). Requires owning at least one weapon."""
+    if current_user.get("has_silencer", False):
+        raise HTTPException(status_code=400, detail="You already own a silencer")
+    if (current_user.get("points") or 0) < SILENCER_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {SILENCER_COST_POINTS})")
+    owned = await db.user_weapons.find_one({"user_id": current_user["id"], "quantity": {"$gt": 0}}, {"_id": 0})
+    if not owned:
+        raise HTTPException(status_code=400, detail="You need at least one weapon to use a silencer")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -SILENCER_COST_POINTS}, "$set": {"has_silencer": True}}
+    )
+    return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": SILENCER_COST_POINTS}
+
+OC_TIMER_COST_POINTS = 300
+
+@api_router.post("/store/buy-oc-timer")
+async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
+    """Reduce Organised Crime cooldown from 6 hours to 4 hours. One-time purchase."""
+    if current_user.get("oc_timer_reduced", False):
+        raise HTTPException(status_code=400, detail="You already have the reduced OC timer (4h)")
+    if (current_user.get("points") or 0) < OC_TIMER_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}}
+    )
+    return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
+
 @api_router.post("/store/upgrade-garage-batch")
 async def upgrade_garage_batch_limit(current_user: dict = Depends(get_current_user)):
     """Increase garage melt/scrap batch limit using points."""
@@ -2866,6 +2939,34 @@ async def admin_give_all_points(points: int, current_user: dict = Depends(get_cu
         {"$inc": {"points": points}}
     )
     return {"message": f"Gave {points} points to {result.modified_count} accounts", "updated": result.modified_count}
+
+
+@api_router.post("/admin/give-all-money")
+async def admin_give_all_money(amount: int, current_user: dict = Depends(get_current_user)):
+    """Give money to every alive (non-dead, non-NPC) account."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if amount < 1:
+        raise HTTPException(status_code=400, detail="Amount must be at least 1")
+    result = await db.users.update_many(
+        {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}},
+        {"$inc": {"money": amount}}
+    )
+    return {"message": f"Gave ${amount:,} to {result.modified_count} accounts", "updated": result.modified_count}
+
+
+@api_router.post("/admin/give-all-money")
+async def admin_give_all_money(amount: int, current_user: dict = Depends(get_current_user)):
+    """Give money to every alive (non-dead, non-NPC) account."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if amount < 1:
+        raise HTTPException(status_code=400, detail="Amount must be at least 1")
+    result = await db.users.update_many(
+        {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}},
+        {"$inc": {"money": amount}}
+    )
+    return {"message": f"Gave ${amount:,} to {result.modified_count} accounts", "updated": result.modified_count}
 
 @api_router.post("/admin/add-bullets")
 async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(get_current_user)):
@@ -3352,6 +3453,8 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
                 "total_crimes": 0,
                 "crime_profit": 0,
                 "total_gta": 0,
+                "total_oc_heists": 0,
+                "oc_timer_reduced": False,
                 "current_state": "Chicago",
                 "swiss_balance": 0,
                 "swiss_limit": SWISS_BANK_LIMIT_START,
@@ -3857,6 +3960,8 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "total_crimes": 0,
         "crime_profit": 0,
         "total_gta": 0,
+        "total_oc_heists": 0,
+        "oc_timer_reduced": False,
         "current_state": owner_user.get("current_state", "Chicago"),
         "total_kills": 0,
         "total_deaths": 0,
@@ -4373,8 +4478,30 @@ async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depe
 
 # ============ Hitlist ============
 HITLIST_HIDDEN_MULTIPLIER = 1.5  # 50% extra for hidden
-HITLIST_BUY_OFF_COST_POINTS = 1000
+HITLIST_BUY_OFF_MULTIPLIER = 1.5  # pay bounty amount + 50% per entry (cash or points, same as placed)
 HITLIST_REVEAL_COST_POINTS = 5000
+HITLIST_NPC_COOLDOWN_HOURS = 3
+HITLIST_NPC_MAX_PER_WINDOW = 3
+
+# Hitlist NPCs: jail-style names (same as jail page), RANKS for rank, rewards like booze run (booze_id from BOOZE_TYPES)
+HITLIST_NPC_NAMES = [
+    "Tony the Rat", "Vinny the Snake", "Lucky Lou", "Mad Dog Mike",
+    "Scarface Sam", "Big Al", "Johnny Two-Times", "Knuckles McGee",
+    "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
+]
+# Templates: rank 1-11 (RANKS id), rewards: cash, points, rank_points, bullets, car_id, booze={booze_id: amount} (booze_run ids)
+HITLIST_NPC_TEMPLATES = [
+    {"id": "npc_1", "rank": 2, "rewards": {"cash": 50_000, "booze": {"bathtub_gin": 15}}},
+    {"id": "npc_2", "rank": 4, "rewards": {"points": 300, "car_id": "car2"}},
+    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 40, "bullets": 2000}},
+    {"id": "npc_4", "rank": 3, "rewards": {"cash": 80_000, "booze": {"moonshine": 25}}},
+    {"id": "npc_5", "rank": 6, "rewards": {"points": 600, "rank_points": 30}},
+    {"id": "npc_6", "rank": 6, "rewards": {"cash": 120_000, "bullets": 1500, "booze": {"rum_runners": 20}, "points": 200}},
+    {"id": "npc_7", "rank": 5, "rewards": {"cash": 150_000, "points": 400, "car_id": "car7"}},
+    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 75, "bullets": 3000, "points": 500}},
+    {"id": "npc_9", "rank": 3, "rewards": {"cash": 40_000, "booze": {"speakeasy_whiskey": 10, "needle_beer": 10}}},
+    {"id": "npc_10", "rank": 7, "rewards": {"cash": 200_000, "booze": {"jamaica_ginger": 30}, "points": 250}},
+]
 
 @api_router.post("/hitlist/add")
 async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(get_current_user)):
@@ -4429,21 +4556,118 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
     return {"message": f"Bounty placed on {target['username']} ({target_type}) for {reward_amount} {reward_type}" + (" (hidden)" if hidden else "")}
 
 
+@api_router.get("/hitlist/npc-status")
+async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
+    """Whether user can add an NPC to the hitlist (max 3 per 3 hours)."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
+    timestamps = (current_user.get("hitlist_npc_add_timestamps") or [])[:]
+    timestamps = [t for t in timestamps if t and (datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t) > window_start]
+    adds_in_window = len(timestamps)
+    can_add = adds_in_window < HITLIST_NPC_MAX_PER_WINDOW
+    next_add_at = None
+    if not can_add and timestamps:
+        oldest = min(timestamps, key=lambda t: datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t)
+        try:
+            oldest_dt = datetime.fromisoformat(oldest.replace("Z", "+00:00"))
+            next_add_at = (oldest_dt + timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)).isoformat()
+        except Exception:
+            pass
+    return {
+        "can_add": can_add,
+        "adds_used_in_window": adds_in_window,
+        "max_per_window": HITLIST_NPC_MAX_PER_WINDOW,
+        "window_hours": HITLIST_NPC_COOLDOWN_HOURS,
+        "next_add_at": next_add_at,
+    }
+
+
+@api_router.post("/hitlist/add-npc")
+async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
+    """Add a random NPC to the hitlist. Max 3 per 3 hours. NPC is attackable like any other target on the attack page."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
+    timestamps = list(current_user.get("hitlist_npc_add_timestamps") or [])
+    timestamps = [t for t in timestamps if t and (datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t) > window_start]
+    if len(timestamps) >= HITLIST_NPC_MAX_PER_WINDOW:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can add at most {HITLIST_NPC_MAX_PER_WINDOW} NPCs per {HITLIST_NPC_COOLDOWN_HOURS} hours. Try again later."
+        )
+    template = random.choice(HITLIST_NPC_TEMPLATES)
+    hitlist_id = str(uuid.uuid4())
+    npc_user_id = str(uuid.uuid4())
+    now_iso = now.isoformat()
+    rewards = template.get("rewards") or {}
+    rank_id = max(1, min(template.get("rank", 1), len(RANKS)))
+    rank_points = RANKS[rank_id - 1]["required_points"]
+    rank_name = RANKS[rank_id - 1]["name"]
+    base_name = random.choice(HITLIST_NPC_NAMES)
+    npc_username = f"{base_name} (NPC) #{hitlist_id[:8]}"
+    # Create NPC as a user so they can be searched and attacked like anyone else
+    await db.users.insert_one({
+        "id": npc_user_id,
+        "username": npc_username,
+        "email": f"npc.{npc_user_id}@hitlist.local",
+        "password_hash": "",
+        "is_npc": True,
+        "is_dead": False,
+        "rank_points": rank_points,
+        "money": 0,
+        "points": 0,
+        "bullets": 0,
+        "health": DEFAULT_HEALTH,
+        "armour_level": 0,
+        "current_state": random.choice(STATES),
+        "total_kills": 0,
+        "total_deaths": 0,
+        "created_at": now_iso,
+    })
+    await db.hitlist.insert_one({
+        "id": hitlist_id,
+        "target_id": npc_user_id,
+        "target_username": npc_username,
+        "target_type": "npc",
+        "placer_id": current_user["id"],
+        "placer_username": current_user.get("username") or "",
+        "reward_type": "npc",
+        "reward_amount": 0,
+        "hidden": False,
+        "npc_rank": rank_id,
+        "npc_template_id": template.get("id", ""),
+        "npc_rewards": dict(rewards),
+        "created_at": now_iso,
+    })
+    timestamps.append(now_iso)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"hitlist_npc_add_timestamps": timestamps[-10:]}}
+    )
+    reward_desc = ", ".join(f"{k}: {v}" for k, v in rewards.items() if v and k != "booze") or "various"
+    if isinstance(rewards.get("booze"), dict) and rewards["booze"]:
+        reward_desc += ", booze"
+    return {"message": f"Added {base_name} (NPC) — {rank_name}. Rewards: {reward_desc}. Attack them from the Attack page.", "hitlist_id": hitlist_id}
+
+
 @api_router.get("/hitlist/list")
 async def hitlist_list(current_user: dict = Depends(get_current_user)):
-    """List all public hitlist entries. Hidden bounties show placer as null."""
+    """List all public hitlist entries. Hidden bounties show placer as null. NPCs include npc_rank and npc_rewards."""
     cursor = db.hitlist.find({}, {"_id": 0}).sort("created_at", -1)
     items = []
     async for doc in cursor:
-        items.append({
+        item = {
             "id": doc["id"],
             "target_username": doc["target_username"],
             "target_type": doc.get("target_type") or "user",
-            "reward_type": doc["reward_type"],
-            "reward_amount": doc["reward_amount"],
+            "reward_type": doc.get("reward_type") or "cash",
+            "reward_amount": doc.get("reward_amount", 0),
             "placer_username": None if doc.get("hidden") else (doc.get("placer_username") or "Unknown"),
             "created_at": doc.get("created_at"),
-        })
+        }
+        if doc.get("target_type") == "npc":
+            item["npc_rank"] = doc.get("npc_rank", 1)
+            item["npc_rewards"] = doc.get("npc_rewards") or {}
+        items.append(item)
     return {"items": items}
 
 
@@ -4455,6 +4679,8 @@ async def hitlist_me(current_user: dict = Depends(get_current_user)):
     count = len(entries)
     total_cash = sum(e["reward_amount"] for e in entries if e.get("reward_type") == "cash")
     total_points = sum(e["reward_amount"] for e in entries if e.get("reward_type") == "points")
+    buy_off_cash = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
+    buy_off_points = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
     revealed = current_user.get("hitlist_revealed") is True
     who = []
     if revealed:
@@ -4467,6 +4693,8 @@ async def hitlist_me(current_user: dict = Depends(get_current_user)):
         "count": count,
         "total_cash": total_cash,
         "total_points": total_points,
+        "buy_off_cash": buy_off_cash,
+        "buy_off_points": buy_off_points,
         "revealed": revealed,
         "who": who,
     }
@@ -4474,17 +4702,35 @@ async def hitlist_me(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/hitlist/buy-off")
 async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
-    """Pay to remove all bounties on yourself (cost: 1000 points)."""
+    """Pay to remove all bounties on yourself. Cost = (each bounty amount + 50%) in the same currency (cash or points)."""
     user_id = current_user["id"]
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     if not entries:
         raise HTTPException(status_code=400, detail="You are not on the hitlist")
-    cost = HITLIST_BUY_OFF_COST_POINTS
-    if (current_user.get("points") or 0) < cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
-    await db.users.update_one({"id": user_id}, {"$inc": {"points": -cost}})
+    cost_cash = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
+    cost_points = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
+    user_cash = int((current_user.get("money") or 0) or 0)
+    user_points = int((current_user.get("points") or 0) or 0)
+    if cost_cash > 0 and user_cash < cost_cash:
+        raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
+    if cost_points > 0 and user_points < cost_points:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
+    updates = {}
+    if cost_cash > 0:
+        updates["$inc"] = updates.get("$inc") or {}
+        updates["$inc"]["money"] = -cost_cash
+    if cost_points > 0:
+        updates["$inc"] = updates.get("$inc") or {}
+        updates["$inc"]["points"] = -cost_points
+    if updates:
+        await db.users.update_one({"id": user_id}, updates)
     res = await db.hitlist.delete_many({"target_id": user_id})
-    return {"message": f"Removed {res.deleted_count} bounty(ies) from the hitlist. Cost: {cost} points.", "deleted": res.deleted_count}
+    cost_parts = []
+    if cost_cash > 0:
+        cost_parts.append(f"${cost_cash:,} cash")
+    if cost_points > 0:
+        cost_parts.append(f"{cost_points:,} pts")
+    return {"message": f"Removed {res.deleted_count} bounty(ies). Cost: {', '.join(cost_parts)}.", "deleted": res.deleted_count}
 
 
 @api_router.post("/hitlist/reveal")
@@ -4749,7 +4995,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     attacker_bullets = current_user.get("bullets", 0)
     
     # Best weapon attacker has (by damage)
-    best_damage, _ = await _best_weapon_for_user(
+    best_damage, best_weapon_name = await _best_weapon_for_user(
         current_user["id"],
         current_user.get("equipped_weapon_id")
     )
@@ -4833,6 +5079,52 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         await _increase_kill_inflation_on_kill(current_user["id"])
         killer_id = current_user["id"]
         victim_id = target["id"]
+
+        # NPC hitlist target: grant npc_rewards from hitlist entry, then remove entry and mark NPC dead
+        if target.get("is_npc"):
+            hitlist_entry = await db.hitlist.find_one({"target_id": victim_id, "target_type": "npc"}, {"_id": 0, "npc_rewards": 1})
+            if hitlist_entry:
+                rewards = hitlist_entry.get("npc_rewards") or {}
+                inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": int(rewards.get("rank_points", 0) or 0), "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1}
+                booze = rewards.get("booze")
+                if isinstance(booze, dict) and booze:
+                    booze_ids = [b["id"] for b in BOOZE_TYPES]
+                    for bid, amt in booze.items():
+                        if bid in booze_ids and amt and int(amt) > 0:
+                            inc[f"booze_carrying.{bid}"] = int(amt)
+                            inc[f"booze_carrying_cost.{bid}"] = 0
+                if inc:
+                    await db.users.update_one({"id": killer_id}, {"$inc": inc})
+                car_id = (rewards.get("car_id") or "").strip()
+                if car_id and next((c for c in CARS if c.get("id") == car_id), None):
+                    await db.user_cars.insert_one({"id": str(uuid.uuid4()), "user_id": killer_id, "car_id": car_id, "acquired_at": datetime.now(timezone.utc).isoformat()})
+                await db.hitlist.delete_one({"target_id": victim_id, "target_type": "npc"})
+                now_iso = datetime.now(timezone.utc).isoformat()
+                await db.users.update_one({"id": victim_id}, {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0}, "$inc": {"total_deaths": 1}})
+                await db.attacks.update_one({"id": attack["id"]}, {"$set": {"status": "completed", "result": "success", "rewards": rewards}})
+                reward_parts = []
+                if inc.get("money"): reward_parts.append(f"${inc['money']:,} cash")
+                if inc.get("points"): reward_parts.append(f"{inc['points']} pts")
+                if inc.get("rank_points"): reward_parts.append(f"{inc['rank_points']} RP")
+                if inc.get("bullets"): reward_parts.append(f"{inc['bullets']} bullets")
+                if car_id: reward_parts.append("a car")
+                if isinstance(booze, dict) and booze: reward_parts.append("booze")
+                success_message = f"You killed {target_name}! (NPC) You got: " + ", ".join(reward_parts) + "."
+                try:
+                    await db.attack_attempts.insert_one({
+                        **attempt_base,
+                        "outcome": "killed",
+                        "death_message": death_message or None,
+                        "make_public": False,
+                        "rewards": rewards,
+                        "target_health_before": target_health,
+                        "target_health_after": 0.0,
+                        "is_npc_kill": True,
+                    })
+                except Exception:
+                    pass
+                return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
+
         victim_money = int(target.get("money", 0))
         cash_loot = int(victim_money * KILL_CASH_PERCENT)
         rank_points = 25
@@ -4957,6 +5249,26 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             }}
         )
         await send_notification(killer_id, "Kill", success_message, "attack")
+
+        # Witness statements: how many go out depends on weapon (worse gun = more) and silencer (reduces). Sent to random users (victim may or may not get one).
+        max_statements = max(0, min(6, 7 - (best_damage // 20)))
+        if current_user.get("has_silencer"):
+            max_statements = max(0, max_statements - 2)
+        number_to_send = random.randint(0, max_statements)
+        if number_to_send > 0:
+            location = attack.get("location_state") or "Unknown"
+            time_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            victim_label = f"bodyguard {target_name}" if target.get("is_bodyguard") else target_name
+            witness_msg = f"{current_user.get('username') or 'Someone'} killed {victim_label}. Weapon: {best_weapon_name}. Bullets used: {bullets_used:,}. Location: {location}. Time: {time_str}."
+            all_user_ids = await db.users.find(
+                {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}, "id": {"$ne": killer_id}},
+                {"_id": 0, "id": 1}
+            ).to_list(5000)
+            recipient_ids = [u["id"] for u in all_user_ids]
+            if recipient_ids:
+                to_send = min(number_to_send, len(recipient_ids))
+                for uid in random.sample(recipient_ids, to_send):
+                    await send_notification(uid, "Witness statement", witness_msg, "attack")
 
         victim_family_id = target.get("family_id")
         killer_family_id = current_user.get("family_id")
@@ -5163,6 +5475,25 @@ async def mark_all_notifications_read(current_user: dict = Depends(get_current_u
     )
     return {"message": "All notifications marked as read"}
 
+
+@api_router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a single message from the current user's inbox."""
+    result = await db.notifications.delete_one(
+        {"id": notification_id, "user_id": current_user["id"]}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    return {"message": "Message deleted"}
+
+
+@api_router.delete("/notifications")
+async def delete_all_notifications(current_user: dict = Depends(get_current_user)):
+    """Delete all messages in the current user's inbox."""
+    result = await db.notifications.delete_many({"user_id": current_user["id"]})
+    return {"message": "All messages deleted", "deleted_count": result.deleted_count}
+
+
 # ============ BOOZE RUN (Supply Run / Prohibition) ============
 # 6 historically accurate prohibition-era booze types. Prices rotate every 3 hours per location.
 BOOZE_ROTATION_HOURS = 3
@@ -5290,14 +5621,35 @@ async def _get_dice_ownership_doc(city: str):
 
 @api_router.get("/casino/dice/ownership")
 async def casino_dice_ownership(current_user: dict = Depends(get_current_user)):
-    """Current city's dice ownership and effective max_bet (owner's or default)."""
+    """Current city's dice ownership and effective max_bet (owner's or default). Processes expired buy-back offers as auto-accept."""
+    now = datetime.now(timezone.utc)
+    expired = await db.dice_buy_back_offers.find_one({
+        "to_user_id": current_user["id"],
+        "expires_at": {"$lt": now.isoformat()},
+    }, {"_id": 0})
+    while expired:
+        city_offer = expired.get("city")
+        from_owner_id = expired.get("from_owner_id")
+        points_offered = int(expired.get("points_offered") or 0)
+        if city_offer and from_owner_id:
+            from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1})
+            from_points = int((from_user.get("points") or 0) or 0)
+            if points_offered > 0 and from_points >= points_offered:
+                await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
+                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
+            await db.dice_ownership.update_one({"city": city_offer}, {"$set": {"owner_id": from_owner_id}})
+        await db.dice_buy_back_offers.delete_one({"id": expired["id"]})
+        expired = await db.dice_buy_back_offers.find_one({
+            "to_user_id": current_user["id"],
+            "expires_at": {"$lt": now.isoformat()},
+        }, {"_id": 0})
     raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
     city = _normalize_city_for_dice(raw) if raw else (STATES[0] if STATES else "")
     if not city:
-        return {"current_city": None, "owner": None, "is_owner": False, "max_bet": DICE_MAX_BET, "buy_back_reward": None}
+        return {"current_city": None, "owner": None, "is_owner": False, "max_bet": DICE_MAX_BET, "buy_back_reward": None, "buy_back_offer": None}
     _, doc = await _get_dice_ownership_doc(city)
     if not doc:
-        return {"current_city": city, "owner": None, "is_owner": False, "max_bet": DICE_MAX_BET, "buy_back_reward": None}
+        return {"current_city": city, "owner": None, "is_owner": False, "max_bet": DICE_MAX_BET, "buy_back_reward": None, "buy_back_offer": None}
     owner_id = doc.get("owner_id")
     max_bet = doc.get("max_bet")
     if max_bet is None:
@@ -5311,6 +5663,24 @@ async def casino_dice_ownership(current_user: dict = Depends(get_current_user)):
             _, wealth_rank_name = get_wealth_rank(int((u.get("money") or 0) or 0))
             owner = {"user_id": owner_id, "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name}
     profit = int((doc.get("profit") or 0) or 0)
+    active_offer = await db.dice_buy_back_offers.find_one(
+        {"to_user_id": current_user["id"]},
+        {"_id": 0, "id": 1, "points_offered": 1, "amount_shortfall": 1, "owner_paid": 1, "expires_at": 1}
+    )
+    buy_back_offer = None
+    if active_offer:
+        try:
+            exp_dt = datetime.fromisoformat((active_offer.get("expires_at") or "").replace("Z", "+00:00"))
+            if exp_dt > now:
+                buy_back_offer = {
+                    "offer_id": active_offer["id"],
+                    "points_offered": int(active_offer.get("points_offered") or 0),
+                    "amount_shortfall": int(active_offer.get("amount_shortfall") or 0),
+                    "owner_paid": int(active_offer.get("owner_paid") or 0),
+                    "expires_at": active_offer.get("expires_at"),
+                }
+        except Exception:
+            pass
     return {
         "current_city": city,
         "owner": owner,
@@ -5318,6 +5688,7 @@ async def casino_dice_ownership(current_user: dict = Depends(get_current_user)):
         "max_bet": max_bet,
         "buy_back_reward": buy_back_reward,
         "profit": profit if is_owner else None,
+        "buy_back_offer": buy_back_offer,
     }
 
 
@@ -5330,9 +5701,10 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
         raise HTTPException(status_code=400, detail="No current city")
     stake = max(0, int(request.stake))
     sides = max(DICE_SIDES_MIN, min(DICE_SIDES_MAX, int(request.sides)))
+    actual_sides = math.ceil(sides * 1.05)  # 5% extra sides per game rules (e.g. 1000 -> 1050)
     chosen_raw = int(request.chosen_number)
-    if chosen_raw < 1 or chosen_raw > sides:
-        raise HTTPException(status_code=400, detail=f"Chosen number must be between 1 and {sides} (sides)")
+    if chosen_raw < 1 or chosen_raw > actual_sides:
+        raise HTTPException(status_code=400, detail=f"Chosen number must be between 1 and {actual_sides} (actual sides)")
     chosen = chosen_raw
     if stake <= 0:
         raise HTTPException(status_code=400, detail="Stake must be positive")
@@ -5348,8 +5720,8 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
     player_money = int((current_user.get("money") or 0) or 0)
     if player_money < stake:
         raise HTTPException(status_code=400, detail="Not enough cash")
-    payout_full = int(stake * sides * (1 - DICE_HOUSE_EDGE))
-    roll = random.randint(1, sides)
+    payout_full = int(stake * sides * (1 - DICE_HOUSE_EDGE))  # payout = sides entered x money bet (5% edge)
+    roll = random.randint(1, actual_sides)
     win = roll == chosen
     if not win:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
@@ -5368,26 +5740,31 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
     await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
     ownership_transferred = False
     buy_back_offer = None
+    points_offered = int((doc or {}).get("buy_back_reward") or 0)
     if shortfall > 0:
-        ownership_transferred = True
-        await db.dice_ownership.update_one({"city": db_city}, {"$set": {"owner_id": current_user["id"]}})
-        expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
-        offer_id = str(uuid.uuid4())
-        buy_back_doc = {
-            "id": offer_id,
-            "city": db_city,
-            "from_owner_id": owner_id,
-            "to_user_id": current_user["id"],
-            "points_offered": 0,
-            "amount_shortfall": shortfall,
-            "owner_paid": actual_payout,
-            "expires_at": expires_at,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        }
-        points_offered = int((doc or {}).get("buy_back_reward") or 0)
-        buy_back_doc["points_offered"] = points_offered
-        await db.dice_buy_back_offers.insert_one(buy_back_doc)
-        buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
+        if points_offered <= 0:
+            # No buy-back: owner keeps the casino; winner just gets whatever cash was available
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
+            await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
+        else:
+            # Buy-back set: transfer ownership to winner, create 2-min offer; accept = return to owner, reject = keep
+            ownership_transferred = True
+            await db.dice_ownership.update_one({"city": db_city}, {"$set": {"owner_id": current_user["id"]}})
+            expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+            offer_id = str(uuid.uuid4())
+            buy_back_doc = {
+                "id": offer_id,
+                "city": db_city,
+                "from_owner_id": owner_id,
+                "to_user_id": current_user["id"],
+                "points_offered": points_offered,
+                "amount_shortfall": shortfall,
+                "owner_paid": actual_payout,
+                "expires_at": expires_at,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            await db.dice_buy_back_offers.insert_one(buy_back_doc)
+            buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
     else:
         await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
         await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
@@ -5458,6 +5835,19 @@ async def casino_dice_set_buy_back_reward(request: DiceSetBuyBackRequest, curren
     amount = max(0, int(request.amount))
     await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
     return {"message": "Buy-back reward updated."}
+
+
+@api_router.post("/casino/dice/reset-profit")
+async def casino_dice_reset_profit(request: DiceClaimRequest, current_user: dict = Depends(get_current_user)):
+    """Reset profit/loss for your dice table to zero (owner only)."""
+    city = _normalize_city_for_dice((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    stored_city, doc = await _get_dice_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"profit": 0}})
+    return {"message": "Profit reset to zero."}
 
 
 @api_router.post("/casino/dice/buy-back/accept")
@@ -5886,6 +6276,28 @@ async def casino_blackjack_config(current_user: dict = Depends(get_current_user)
 
 @api_router.get("/casino/blackjack/ownership")
 async def casino_blackjack_ownership(current_user: dict = Depends(get_current_user)):
+    """Current city's blackjack ownership. Processes expired buy-back offers as auto-accept (2 min expiry)."""
+    now = datetime.now(timezone.utc)
+    expired = await db.blackjack_buy_back_offers.find_one({
+        "to_user_id": current_user["id"],
+        "expires_at": {"$lt": now.isoformat()},
+    }, {"_id": 0})
+    while expired:
+        city_offer = expired.get("city")
+        from_owner_id = expired.get("from_owner_id")
+        points_offered = int(expired.get("points_offered") or 0)
+        if city_offer and from_owner_id:
+            from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1})
+            from_points = int((from_user.get("points") or 0) or 0)
+            if points_offered > 0 and from_points >= points_offered:
+                await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
+                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
+            await db.blackjack_ownership.update_one({"city": city_offer}, {"$set": {"owner_id": from_owner_id}})
+        await db.blackjack_buy_back_offers.delete_one({"id": expired["id"]})
+        expired = await db.blackjack_buy_back_offers.find_one({
+            "to_user_id": current_user["id"],
+            "expires_at": {"$lt": now.isoformat()},
+        }, {"_id": 0})
     raw = (current_user.get("current_state") or "").strip()
     city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "Chicago")
     display_city = city or raw or "Chicago"
@@ -5899,6 +6311,8 @@ async def casino_blackjack_ownership(current_user: dict = Depends(get_current_us
             "is_unclaimed": True,
             "claim_cost": BLACKJACK_CLAIM_COST,
             "max_bet": BLACKJACK_DEFAULT_MAX_BET,
+            "buy_back_reward": None,
+            "buy_back_offer": None,
         }
     owner_id = doc.get("owner_id")
     owner_name = None
@@ -5909,6 +6323,25 @@ async def casino_blackjack_ownership(current_user: dict = Depends(get_current_us
     max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET)
     total_earnings = doc.get("total_earnings", 0)
     profit = int((doc.get("profit") or 0) or 0)
+    buy_back_reward = doc.get("buy_back_reward")
+    active_offer = await db.blackjack_buy_back_offers.find_one(
+        {"to_user_id": current_user["id"]},
+        {"_id": 0, "id": 1, "points_offered": 1, "amount_shortfall": 1, "owner_paid": 1, "expires_at": 1}
+    )
+    buy_back_offer = None
+    if active_offer:
+        try:
+            exp_dt = datetime.fromisoformat((active_offer.get("expires_at") or "").replace("Z", "+00:00"))
+            if exp_dt > now:
+                buy_back_offer = {
+                    "offer_id": active_offer["id"],
+                    "points_offered": int(active_offer.get("points_offered") or 0),
+                    "amount_shortfall": int(active_offer.get("amount_shortfall") or 0),
+                    "owner_paid": int(active_offer.get("owner_paid") or 0),
+                    "expires_at": active_offer.get("expires_at"),
+                }
+        except Exception:
+            pass
     return {
         "current_city": display_city,
         "owner_id": owner_id,
@@ -5919,6 +6352,8 @@ async def casino_blackjack_ownership(current_user: dict = Depends(get_current_us
         "max_bet": max_bet,
         "total_earnings": total_earnings if is_owner else None,
         "profit": profit if is_owner else None,
+        "buy_back_reward": buy_back_reward if is_owner else None,
+        "buy_back_offer": buy_back_offer,
     }
 
 
@@ -5936,7 +6371,7 @@ async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: di
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -BLACKJACK_CLAIM_COST}})
     await db.blackjack_ownership.update_one(
         {"city": stored_city or city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0}},
+        {"$set": {"owner_id": current_user["id"], "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0, "buy_back_reward": 0}},
         upsert=True,
     )
     return {"message": f"You now own the blackjack table in {city}!"}
@@ -5965,6 +6400,62 @@ async def casino_blackjack_set_max_bet(request: RouletteSetMaxBetRequest, curren
     new_max = max(1_000_000, min(request.max_bet, BLACKJACK_ABSOLUTE_MAX_BET))
     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
     return {"message": f"Max bet set to ${new_max:,}"}
+
+
+@api_router.post("/casino/blackjack/set-buy-back-reward")
+async def casino_blackjack_set_buy_back_reward(request: BlackjackSetBuyBackRequest, current_user: dict = Depends(get_current_user)):
+    """Set buy-back reward (points) offered when you cannot pay a win (owner only)."""
+    raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
+    city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    amount = max(0, int(request.amount))
+    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
+    return {"message": "Buy-back reward updated."}
+
+
+@api_router.post("/casino/blackjack/buy-back/accept")
+async def casino_blackjack_buy_back_accept(request: BlackjackBuyBackAcceptRequest, current_user: dict = Depends(get_current_user)):
+    """Accept a buy-back offer: receive points and transfer ownership back to previous owner."""
+    offer = await db.blackjack_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    if offer.get("to_user_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your offer")
+    expires = offer.get("expires_at")
+    if expires:
+        try:
+            if datetime.fromisoformat(expires.replace("Z", "+00:00")) < datetime.now(timezone.utc):
+                raise HTTPException(status_code=400, detail="Offer expired")
+        except Exception:
+            pass
+    city = offer.get("city")
+    from_owner_id = offer.get("from_owner_id")
+    points_offered = int(offer.get("points_offered") or 0)
+    if not city or not from_owner_id:
+        raise HTTPException(status_code=400, detail="Invalid offer")
+    from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1})
+    from_points = int((from_user.get("points") or 0) or 0)
+    if from_points < points_offered:
+        raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+    await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
+    await db.blackjack_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id}})
+    await db.blackjack_buy_back_offers.delete_one({"id": request.offer_id})
+    return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
+
+
+@api_router.post("/casino/blackjack/buy-back/reject")
+async def casino_blackjack_buy_back_reject(request: BlackjackBuyBackRejectRequest, current_user: dict = Depends(get_current_user)):
+    """Reject a buy-back offer: keep ownership."""
+    offer = await db.blackjack_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
+    if not offer or offer.get("to_user_id") != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    await db.blackjack_buy_back_offers.delete_one({"id": request.offer_id})
+    return {"message": "Rejected. You keep the casino."}
 
 
 @api_router.post("/casino/blackjack/send-to-user")
@@ -6069,14 +6560,49 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
                 "dealer_hidden_count": 0,
                 "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
             }
-        payout = bet + int(bet * 3 / 2)
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
+        owner_pay = int(bet * 3 / 2)
+        payout_full = bet + owner_pay
+        actual_payout = payout_full
+        shortfall = 0
+        buy_back_offer = None
+        ownership_transferred = False
         if owner_id:
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -int(bet * 3 / 2)}})
-            await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -int(bet * 3 / 2)}})
+            owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+            owner_money = int((owner.get("money") or 0) or 0)
+            actual_owner_pay = min(owner_pay, owner_money)
+            actual_payout = bet + actual_owner_pay
+            shortfall = owner_pay - actual_owner_pay
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
+            buy_back_reward = int((doc or {}).get("buy_back_reward") or 0)
+            if shortfall > 0:
+                if buy_back_reward <= 0:
+                    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -actual_owner_pay}})
+                else:
+                    ownership_transferred = True
+                    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": current_user["id"]}})
+                    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+                    offer_id = str(uuid.uuid4())
+                    await db.blackjack_buy_back_offers.insert_one({
+                        "id": offer_id,
+                        "city": stored_city or city,
+                        "from_owner_id": owner_id,
+                        "to_user_id": current_user["id"],
+                        "points_offered": buy_back_reward,
+                        "amount_shortfall": shortfall,
+                        "owner_paid": actual_owner_pay,
+                        "expires_at": expires_at,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_owner_pay, "expires_at": expires_at}
+            else:
+                await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -owner_pay}})
+        else:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
         await _blackjack_settle_and_save_history(
-            current_user["id"], city, bet, "blackjack", payout, player_hand, dealer_hand, player_total, dealer_total
+            current_user["id"], city, bet, "blackjack", actual_payout, player_hand, dealer_hand, player_total, dealer_total
         )
+        new_balance = (user.get("money", 0) or 0) - bet + actual_payout
         return {
             "status": "done",
             "bet": bet,
@@ -6085,12 +6611,15 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
             "player_total": player_total,
             "dealer_total": dealer_total,
             "result": "blackjack",
-            "payout": payout,
-            "new_balance": user.get("money", 0) - bet + payout,
+            "payout": actual_payout,
+            "new_balance": new_balance,
             "can_hit": False,
             "can_stand": False,
             "dealer_hidden_count": 0,
             "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
+            "shortfall": shortfall,
+            "buy_back_offer": buy_back_offer,
+            "ownership_transferred": ownership_transferred,
         }
     if _blackjack_is_blackjack(dealer_hand):
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": 0}})
@@ -6229,15 +6758,49 @@ async def casino_blackjack_stand(current_user: dict = Depends(get_current_user))
     else:
         result = "push"
         payout = bet
+    bj_city = game.get("city")
+    shortfall = 0
+    buy_back_offer = None
+    ownership_transferred = False
     if payout > 0:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
         if owner_id and result in ("win", "dealer_bust"):
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -bet}})
-            await db.blackjack_ownership.update_one({"city": game.get("city")}, {"$inc": {"profit": -bet}})
+            owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+            owner_money = int((owner.get("money") or 0) or 0)
+            actual_owner_pay = min(bet, owner_money)
+            shortfall = bet - actual_owner_pay
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": bet + actual_owner_pay}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
+            stored_city_bj, doc_bj = await _get_blackjack_ownership_doc(bj_city)
+            buy_back_reward = int((doc_bj or {}).get("buy_back_reward") or 0)
+            if shortfall > 0:
+                if buy_back_reward <= 0:
+                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
+                else:
+                    ownership_transferred = True
+                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": {"owner_id": current_user["id"]}})
+                    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+                    offer_id = str(uuid.uuid4())
+                    await db.blackjack_buy_back_offers.insert_one({
+                        "id": offer_id,
+                        "city": stored_city_bj or bj_city,
+                        "from_owner_id": owner_id,
+                        "to_user_id": current_user["id"],
+                        "points_offered": buy_back_reward,
+                        "amount_shortfall": shortfall,
+                        "owner_paid": actual_owner_pay,
+                        "expires_at": expires_at,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_owner_pay, "expires_at": expires_at}
+            else:
+                await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -bet}})
+            payout = bet + actual_owner_pay
+        else:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
     user = await db.users.find_one({"id": current_user["id"]})
     new_balance = (user.get("money", 0) or 0)
     await _blackjack_settle_and_save_history(
-        current_user["id"], game.get("city"), bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
+        current_user["id"], bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
     )
     await db.blackjack_games.delete_one({"user_id": current_user["id"]})
     return {
@@ -6254,6 +6817,9 @@ async def casino_blackjack_stand(current_user: dict = Depends(get_current_user))
         "can_stand": False,
         "dealer_hidden_count": 0,
         "dealer_visible_total": dealer_total,
+        "shortfall": shortfall,
+        "buy_back_offer": buy_back_offer,
+        "ownership_transferred": ownership_transferred,
     }
 
 
@@ -6560,9 +7126,21 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     max_travels = MAX_TRAVELS_PER_HOUR + current_user.get("extra_airmiles", 0)
     
     current_state = current_user.get("current_state", STATES[0])
+    traveling_to = current_user.get("traveling_to")
+    travel_arrives_at = current_user.get("travel_arrives_at")
+    seconds_remaining = None
+    if travel_arrives_at and traveling_to:
+        try:
+            arrives_dt = datetime.fromisoformat(travel_arrives_at.replace("Z", "+00:00"))
+            secs = max(0, int((arrives_dt - datetime.now(timezone.utc)).total_seconds()))
+            seconds_remaining = secs if secs > 0 else None
+        except Exception:
+            pass
     carrying_booze = _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0
     return {
         "current_location": current_state,
+        "traveling_to": traveling_to if seconds_remaining is not None and seconds_remaining > 0 else None,
+        "travel_seconds_remaining": seconds_remaining,
         "destinations": [s for s in STATES if s != current_state],
         "travels_this_hour": current_user.get("travels_this_hour", 0),
         "max_travels": max_travels,
@@ -6580,8 +7158,19 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
     if request.destination not in STATES:
         raise HTTPException(status_code=400, detail="Invalid destination")
     
-    if request.destination == current_user["current_state"]:
+    # Resolve any in-progress travel so we have current location
+    current_location = current_user.get("current_state")
+    if current_user.get("travel_arrives_at"):
+        try:
+            arrives_dt = datetime.fromisoformat(current_user["travel_arrives_at"].replace("Z", "+00:00"))
+            if datetime.now(timezone.utc) >= arrives_dt:
+                current_location = current_user.get("traveling_to") or current_location
+        except Exception:
+            pass
+    if request.destination == current_location:
         raise HTTPException(status_code=400, detail="Already at this location")
+    if current_user.get("travel_arrives_at"):
+        raise HTTPException(status_code=400, detail="You are already traveling. Wait for arrival.")
     
     # Check travel limit
     max_travels = MAX_TRAVELS_PER_HOUR + current_user.get("extra_airmiles", 0)
@@ -6633,14 +7222,23 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
             travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
             method_name = car_info["name"]
     
-    # Update location and increment travel count
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {
-            "$set": {"current_state": request.destination},
-            "$inc": {"travels_this_hour": 1}
-        }
-    )
+    now = datetime.now(timezone.utc)
+    if travel_time <= 0:
+        # Instant (airport): update location immediately
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"current_state": request.destination}, "$inc": {"travels_this_hour": 1}}
+        )
+    else:
+        # Car: set traveling_to and travel_arrives_at; location updates when time elapses
+        arrives_at = (now + timedelta(seconds=travel_time)).isoformat()
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {
+                "$set": {"traveling_to": request.destination, "travel_arrives_at": arrives_at},
+                "$inc": {"travels_this_hour": 1}
+            }
+        )
     
     return {
         "message": f"Traveling to {request.destination} via {method_name}",
@@ -7614,19 +8212,29 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
                 "success_chance_pct": success_chance_pct,
             })
         if racket_list:
+            window_start = datetime.now(timezone.utc) - timedelta(hours=FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS)
+            raids_on_crew = await db.family_racket_attacks.count_documents({
+                "attacker_family_id": my_family_id,
+                "target_family_id": fam["id"],
+                "last_at": {"$gte": window_start.isoformat()},
+            })
+            raids_used = min(raids_on_crew, FAMILY_RACKET_ATTACK_MAX_PER_CREW)
+            raids_remaining = max(0, FAMILY_RACKET_ATTACK_MAX_PER_CREW - raids_used)
             targets.append({
                 "family_id": fam["id"],
                 "family_name": fam["name"],
                 "family_tag": fam["tag"],
                 "treasury": fam.get("treasury", 0),
                 "rackets": racket_list,
+                "raids_used": raids_used,
+                "raids_remaining": raids_remaining,
             })
     return {"targets": targets}
 
 
 @api_router.post("/families/attack-racket")
 async def families_attack_racket(request: FamilyAttackRacketRequest, current_user: dict = Depends(get_current_user)):
-    """Raid an enemy family racket. 2h cooldown per target racket."""
+    """Raid an enemy family racket. Max 2 raids per crew every 3 hours."""
     my_family_id = current_user.get("family_id")
     if not my_family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
@@ -7637,19 +8245,14 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
     level = state.get("level", 0)
     if level < 1:
         raise HTTPException(status_code=400, detail="Racket not active")
-    cooldown_end = datetime.now(timezone.utc) - timedelta(hours=FAMILY_RACKET_ATTACK_COOLDOWN_HOURS)
-    last = await db.family_racket_attacks.find_one({
+    window_start = datetime.now(timezone.utc) - timedelta(hours=FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS)
+    raids_on_crew = await db.family_racket_attacks.count_documents({
         "attacker_family_id": my_family_id,
         "target_family_id": request.family_id,
-        "target_racket_id": request.racket_id,
-    }, {"_id": 0, "last_at": 1})
-    if last and last.get("last_at"):
-        try:
-            last_dt = datetime.fromisoformat(last["last_at"].replace("Z", "+00:00"))
-            if last_dt > cooldown_end:
-                raise HTTPException(status_code=400, detail="Racket attack on cooldown (2h)")
-        except HTTPException:
-            raise
+        "last_at": {"$gte": window_start.isoformat()},
+    })
+    if raids_on_crew >= FAMILY_RACKET_ATTACK_MAX_PER_CREW:
+        raise HTTPException(status_code=400, detail=f"You can only raid this crew {FAMILY_RACKET_ATTACK_MAX_PER_CREW} times every {FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS}h")
     ev = await get_effective_event()
     income_per, _ = _racket_income_and_cooldown(request.racket_id, level, ev)
     take = int(income_per * FAMILY_RACKET_ATTACK_REVENUE_PCT)
@@ -7818,10 +8421,11 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail)
-from routers import crimes, gta, jail
+from routers import crimes, gta, jail, oc
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
+oc.register(api_router)
 
 app.include_router(api_router)
 

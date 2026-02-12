@@ -39,8 +39,10 @@ export default function Dice() {
   const fetchConfigAndOwnership = () => {
     api.get('/casino/dice/config').then((r) => setDiceConfig(r.data || { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 })).catch(() => {});
     api.get('/casino/dice/ownership').then((r) => {
-      const data = r.data || { current_city: null, owner: null, max_bet: null, buy_back_reward: null };
+      const data = r.data || { current_city: null, owner: null, max_bet: null, buy_back_reward: null, buy_back_offer: null };
       setOwnership(data);
+      if (data.buy_back_offer) setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
+      else setBuyBackOffer(null);
       if (data.is_owner) {
         setOwnerMaxBet(data.max_bet != null ? String(data.max_bet) : '');
         setOwnerBuyBack(data.buy_back_reward != null ? String(data.buy_back_reward) : '');
@@ -52,14 +54,22 @@ export default function Dice() {
     fetchConfigAndOwnership();
   }, []);
 
-  // When sides change, clamp chosen number to 1..sidesNum so it's never out of range
+  // When sides change, clamp chosen number to 1..actualSidesNum so it's never out of range
   useEffect(() => {
     const n = parseInt(String(chosenNumber || ''), 10);
     if (chosenNumber === '' || Number.isNaN(n)) return;
+    const actual = Math.ceil((Math.max(diceConfig.sides_min || 2, Math.min(diceConfig.sides_max || 5000, parseInt(String(sides || ''), 10) || 6)) * 1.05));
     if (n < 1) setChosenNumber('1');
-    else if (n > sidesNum) setChosenNumber(String(sidesNum));
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- only clamp when sidesNum changes
+    else if (n > actual) setChosenNumber(String(actual));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only clamp when sides/actual sides change
   }, [sidesNum]);
+
+  // Keep state in sync with displayed (clamped) value so we never show one number and bet another
+  useEffect(() => {
+    if (chosenNumber === '') return;
+    const parsed = parseInt(chosenNumber, 10);
+    if (Number.isNaN(parsed) || parsed < 1 || parsed > actualSidesNum) setChosenNumber(String(chosenNum));
+  }, [chosenNumber, chosenNum, actualSidesNum]);
 
   useEffect(() => {
     return () => {
@@ -85,21 +95,22 @@ export default function Dice() {
 
   const stakeNum = parseInt(String(stake || '').replace(/[^\d]/g, ''), 10) || 0;
   const sidesNum = Math.max(diceConfig.sides_min || 2, Math.min(diceConfig.sides_max || 5000, parseInt(String(sides || ''), 10) || 6));
-  const chosenNum = Math.max(1, Math.min(sidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
+  const actualSidesNum = Math.ceil(sidesNum * 1.05);  // 5% extra sides per game rules (e.g. 1000 -> 1050)
+  const chosenNum = Math.max(1, Math.min(actualSidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
-  const canBet = stakeNum > 0 && stakeNum <= (diceConfig.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= sidesNum;
+  const canBet = stakeNum > 0 && stakeNum <= (diceConfig.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= actualSidesNum;
 
   useEffect(() => {
-    if (!diceLoading || sidesNum < 2) return;
+    if (!diceLoading || actualSidesNum < 2) return;
     setLastResult(null);
     rollIntervalRef.current = setInterval(() => {
-      setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
+      setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
     }, 80);
     return () => {
       if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
       rollIntervalRef.current = null;
     };
-  }, [diceLoading, sidesNum]);
+  }, [diceLoading, actualSidesNum]);
 
   const applyRollResult = (data) => {
     if (rollIntervalRef.current) {
@@ -243,12 +254,29 @@ export default function Dice() {
     }
   };
 
+  const resetDiceProfit = async () => {
+    const city = ownership?.current_city;
+    if (!city || claimLoading) return;
+    if (!window.confirm('Reset this table\'s profit/loss to zero?')) return;
+    setClaimLoading(true);
+    try {
+      await api.post('/casino/dice/reset-profit', { city });
+      toast.success('Profit reset to zero.');
+      fetchConfigAndOwnership();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Reset failed');
+    } finally {
+      setClaimLoading(false);
+    }
+  };
+
   const placeDiceBet = async () => {
     if (!canBet || playing) return;
+    setChosenNumber(String(chosenNum));
     setPlaying(true);
     setDiceLoading(true);
     setLastResult(null);
-    setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
+    setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
     rollStartTimeRef.current = Date.now();
     if (rollTimeoutRef.current) {
       clearTimeout(rollTimeoutRef.current);
@@ -320,12 +348,7 @@ export default function Dice() {
         {ownership?.current_city && (
           <div className={`mt-4 p-3 ${styles.panel} rounded-md text-sm`}>
             {isOwner ? (
-              <>
-                <p className="text-primary font-heading">You own this table — you profit when players lose and pay when they win.</p>
-                {ownership?.profit != null && (
-                  <p className="text-sm font-heading mt-1 font-bold text-primary/90">Profit/Loss: {formatMoney(ownership.profit)}</p>
-                )}
-              </>
+              <p className="text-primary font-heading">You own this table — you profit when players lose and pay when they win.</p>
             ) : ownership?.owner ? (
               <p className="text-mutedForeground">Owned by <span className="text-primary font-medium">{ownership.owner.username}</span>{ownership.owner.wealth_rank_name ? ` (${ownership.owner.wealth_rank_name})` : ''}. The house pays wins; losses go to the owner.</p>
             ) : (
@@ -390,7 +413,9 @@ export default function Dice() {
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
               {ownership?.profit != null && (
-                <p className="text-sm font-heading font-bold text-primary/90 mt-1">Profit/Loss: {formatMoney(ownership.profit)}</p>
+                <p className={`text-sm font-heading font-bold mt-1 ${(ownership.profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {(ownership.profit || 0) >= 0 ? 'Profit' : 'Loss'}: {formatMoney(Math.abs(ownership.profit))}
+                </p>
               )}
               <p className="text-xs text-mutedForeground mt-1">You cannot play at your own table</p>
             </div>
@@ -444,6 +469,9 @@ export default function Dice() {
                   </button>
                 </div>
               </div>
+              <button type="button" onClick={resetDiceProfit} disabled={claimLoading} className="w-full bg-zinc-800 border border-primary/30 text-foreground hover:bg-zinc-700 rounded-sm font-heading font-bold uppercase tracking-widest py-2 text-sm transition-smooth disabled:opacity-50">
+                {claimLoading ? '...' : 'Reset Profit'}
+              </button>
               <button type="button" onClick={relinquishDice} disabled={claimLoading} className="w-full bg-zinc-800 border border-primary/30 text-foreground hover:bg-zinc-700 rounded-sm font-heading font-bold uppercase tracking-widest py-2 text-sm transition-smooth disabled:opacity-50">
                 {claimLoading ? '...' : 'Relinquish Table'}
               </button>
@@ -474,7 +502,7 @@ export default function Dice() {
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-heading font-medium text-primary/80 uppercase tracking-wider mb-1">Number of Sides <span className="text-mutedForeground">(5% edge)</span></label>
+                <label className="block text-xs font-heading font-medium text-primary/80 uppercase tracking-wider mb-1">Number of Sides</label>
                 <input
                   type="number"
                   min={diceConfig.sides_min}
@@ -484,15 +512,18 @@ export default function Dice() {
                   onChange={(e) => setSides(e.target.value)}
                   className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-8 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                 />
+                {actualSidesNum > sidesNum && (
+                  <p className="text-[10px] text-mutedForeground mt-0.5">5% extra sides → Actual: {actualSidesNum}</p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-heading font-medium text-primary/80 uppercase tracking-wider mb-1">Your Number</label>
                 <input
                   type="number"
                   min={1}
-                  max={sidesNum}
-                  placeholder={`1–${sidesNum}`}
-                  value={chosenNumber}
+                  max={actualSidesNum}
+                  placeholder={`1–${actualSidesNum}`}
+                  value={chosenNumber === '' ? '' : String(chosenNum)}
                   onChange={(e) => {
                     const v = e.target.value;
                     if (v === '') {
@@ -501,13 +532,13 @@ export default function Dice() {
                     }
                     const n = parseInt(v, 10);
                     if (Number.isNaN(n)) return;
-                    const clamped = Math.max(1, Math.min(sidesNum, n));
+                    const clamped = Math.max(1, Math.min(actualSidesNum, n));
                     setChosenNumber(String(clamped));
                   }}
                   onBlur={() => {
                     const n = parseInt(String(chosenNumber || ''), 10);
                     if (Number.isNaN(n) || n < 1) setChosenNumber('1');
-                    else if (n > sidesNum) setChosenNumber(String(sidesNum));
+                    else if (n > actualSidesNum) setChosenNumber(String(actualSidesNum));
                   }}
                   className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-8 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                 />
@@ -589,7 +620,7 @@ export default function Dice() {
                 <span className="text-foreground">sides × 0.95</span>
               </div>
             </div>
-            <p className="text-[10px] sm:text-xs text-center text-mutedForeground italic">Pick 1–{sidesNum}. Match the roll to win.</p>
+            <p className="text-[10px] sm:text-xs text-center text-mutedForeground italic">Pick 1–{actualSidesNum}. Match the roll to win. Payout = sides entered × stake (5% house edge).</p>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { Target, TrendingUp, Lock } from 'lucide-react';
+import { Target, TrendingUp, Lock, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../styles/noir.module.css';
 
@@ -46,7 +46,7 @@ export default function Ranking() {
         <Link
           to="/jail"
           data-testid="goto-jail"
-          className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50 md:col-span-2`}
+          className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50`}
         >
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-primary/20 rounded-md flex items-center justify-center group-hover:scale-110 transition-transform">
@@ -58,12 +58,28 @@ export default function Ranking() {
             </div>
           </div>
         </Link>
+
+        <Link
+          to="/organised-crime"
+          data-testid="goto-organised-crime"
+          className={`${styles.panel} rounded-md p-6 transition-smooth group block border border-transparent hover:border-primary/50`}
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-primary/20 rounded-md flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Users className="text-primary" size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-heading font-bold text-foreground">Organised Crime</h3>
+              <p className="text-sm text-mutedForeground">Team heists: Driver, Weapons, Explosives, Hacker — high RP & cash</p>
+            </div>
+          </div>
+        </Link>
       </div>
 
       <div className={`${styles.panel} rounded-md p-6`}>
         <h3 className="text-xl font-heading font-semibold text-primary mb-3">Rank Points System</h3>
         <ul className="space-y-2 text-sm text-mutedForeground">
-          <li>• Earn rank points from crimes, GTA, killing players, and busting jailed players</li>
+          <li>• Earn rank points from crimes, GTA, jail busts, organised crime heists, and killing players</li>
           <li>• Rank up requires both money AND rank points</li>
           <li>• Higher ranks unlock better crimes and exclusive features</li>
           <li>• Check your rank progress in the Dashboard</li>

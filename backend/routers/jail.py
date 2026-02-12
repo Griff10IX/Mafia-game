@@ -89,6 +89,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         )
     for npc in npcs:
         npc_rate = _npc_bust_success_rate(npc.get("rank_name"))
+        bust_reward_cash = int((npc.get("bust_reward_cash") or 0) or 0)
         players_data.append(
             {
                 "username": npc["username"],
@@ -96,7 +97,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
                 "is_npc": True,
                 "bust_success_rate": int(round(npc_rate * 100)),
                 "rp_reward": 25,
-                "bust_reward_cash": 0,
+                "bust_reward_cash": bust_reward_cash,
             }
         )
     return {"players": players_data}
@@ -112,18 +113,23 @@ async def bust_out_of_jail(
         success_rate = _npc_bust_success_rate(npc.get("rank_name"))
         success = random.random() < success_rate
         rank_points = 25
+        bust_reward_cash = int((npc.get("bust_reward_cash") or 0) or 0)
         if success:
             new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
             record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
+            updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
+            if bust_reward_cash > 0:
+                updates["$inc"]["money"] = bust_reward_cash
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": {"rank_points": rank_points, "jail_busts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
+                updates,
             )
             await db.jail_npcs.delete_one({"username": request.target_username})
             return {
                 "success": True,
                 "message": f"Successfully busted out {request.target_username}!",
                 "rank_points_earned": rank_points,
+                "cash_reward": bust_reward_cash,
             }
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         await db.users.update_one(
@@ -325,9 +331,16 @@ async def spawn_jail_npcs():
                 weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1]
                 existing = await db.jail_npcs.find_one({"username": npc_name})
                 if not existing:
+                    rank_name = random.choices(rank_names, weights=weights, k=1)[0]
+                    # Cash reward scales with rank (higher rank = more cash)
+                    rank_index = rank_names.index(rank_name) if rank_name in rank_names else 0
+                    cash_min = 10_000 + rank_index * 15_000
+                    cash_max = 50_000 + rank_index * 25_000
+                    bust_reward_cash = random.randint(cash_min, cash_max)
                     await db.jail_npcs.insert_one({
                         "username": npc_name,
-                        "rank_name": random.choices(rank_names, weights=weights, k=1)[0],
+                        "rank_name": rank_name,
+                        "bust_reward_cash": bust_reward_cash,
                         "spawned_at": datetime.now(timezone.utc).isoformat(),
                     })
         except Exception as e:

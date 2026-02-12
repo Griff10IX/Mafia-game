@@ -38,6 +38,7 @@ export default function Admin() {
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [dbLoading, setDbLoading] = useState(false);
   const [giveAllPoints, setGiveAllPoints] = useState(100);
+  const [giveAllMoney, setGiveAllMoney] = useState(10000);
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
 
@@ -341,6 +342,16 @@ export default function Admin() {
     }
   };
 
+  const handleGiveAllMoney = async () => {
+    if (!window.confirm(`Give $${giveAllMoney.toLocaleString()} to ALL alive accounts?`)) return;
+    try {
+      const res = await api.post(`/admin/give-all-money?amount=${giveAllMoney}`);
+      toast.success(res.data?.message || 'Money given to all');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -539,26 +550,35 @@ export default function Admin() {
         </div>
       </div>
 
-      {/* Give All Points */}
+      {/* Give All Points / Give All Money */}
       <div className="flex justify-center">
         <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
           <div className={panelHeader}>
             <div className="flex items-center gap-2">
               <Gift className={styles.textGold} size={18} />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Give All Points</span>
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Give to All</span>
             </div>
           </div>
-          <div className="p-4">
-            <p className={`text-sm font-heading mb-3 ${styles.textMuted}`}>
-              Give points to <span className={`font-bold ${styles.textForeground}`}>every alive account</span> (excludes dead, NPCs, and bodyguards).
+          <div className="p-4 space-y-4">
+            <p className={`text-sm font-heading ${styles.textMuted}`}>
+              Give points or money to <span className={`font-bold ${styles.textForeground}`}>every alive account</span> (excludes dead, NPCs, and bodyguards).
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-              <div className="sm:col-span-6">
-                <label className={`block text-xs font-heading mb-1 uppercase tracking-wider ${styles.textMuted}`}>Points to give each player</label>
+              <div className="sm:col-span-5">
+                <label className={`block text-xs font-heading mb-1 uppercase tracking-wider ${styles.textMuted}`}>Points each</label>
                 <input type="number" min="1" value={giveAllPoints} onChange={(e) => setGiveAllPoints(parseInt(e.target.value) || 1)} className={inputClass} />
               </div>
-              <div className="sm:col-span-6">
+              <div className="sm:col-span-4">
                 <button onClick={handleGiveAllPoints} className={`w-full ${btnPrimary}`}>Give Points to All</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div className="sm:col-span-5">
+                <label className={`block text-xs font-heading mb-1 uppercase tracking-wider ${styles.textMuted}`}>Money each ($)</label>
+                <input type="number" min="1" value={giveAllMoney} onChange={(e) => setGiveAllMoney(parseInt(e.target.value) || 10000)} className={inputClass} />
+              </div>
+              <div className="sm:col-span-4">
+                <button onClick={handleGiveAllMoney} className={`w-full ${btnPrimary}`}>Give Money to All</button>
               </div>
             </div>
           </div>

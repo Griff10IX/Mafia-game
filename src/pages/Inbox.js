@@ -1,6 +1,7 @@
 // Inbox page - notifications list
 import { useState, useEffect, useCallback } from 'react';
-import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -13,7 +14,7 @@ const NOTIFICATION_ICONS = {
   system: Bell
 };
 
-function NotificationItem({ notification, onMarkRead }) {
+function NotificationItem({ notification, onMarkRead, onDelete }) {
   const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
 
@@ -37,14 +38,24 @@ function NotificationItem({ notification, onMarkRead }) {
           </div>
           <p className="text-xs text-mutedForeground font-heading">{notification.message}</p>
         </div>
-        {!notification.read && (
+        <div className="flex items-center gap-2 shrink-0">
+          {!notification.read && (
+            <button
+              onClick={() => onMarkRead(notification.id)}
+              className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wider"
+            >
+              Mark read
+            </button>
+          )}
           <button
-            onClick={() => onMarkRead(notification.id)}
-            className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wider shrink-0"
+            onClick={() => onDelete(notification.id)}
+            className="p-1.5 rounded text-mutedForeground hover:text-destructive hover:bg-destructive/10 transition-smooth"
+            title="Delete"
+            aria-label="Delete message"
           >
-            Mark read
+            <Trash2 size={14} />
           </button>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -61,11 +72,16 @@ function getTimeAgo(dateString) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+const VALID_FILTERS = ['all', 'unread', 'rank_up', 'reward', 'bodyguard', 'attack', 'system'];
+
 export default function Inbox() {
+  const [searchParams] = useSearchParams();
+  const filterParam = searchParams.get('filter');
+  const initialFilter = VALID_FILTERS.includes(filterParam) ? filterParam : 'all';
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState(initialFilter);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -83,6 +99,10 @@ export default function Inbox() {
     fetchNotifications();
   }, [fetchNotifications]);
 
+  useEffect(() => {
+    if (VALID_FILTERS.includes(filterParam)) setFilter(filterParam);
+  }, [filterParam]);
+
   const markAsRead = async (notificationId) => {
     try {
       await api.post(`/notifications/${notificationId}/read`);
@@ -99,6 +119,27 @@ export default function Inbox() {
       toast.success('All notifications marked as read');
     } catch (error) {
       toast.error('Failed to mark all as read');
+    }
+  };
+
+  const deleteMessage = async (notificationId) => {
+    try {
+      await api.delete(`/notifications/${notificationId}`);
+      fetchNotifications();
+      toast.success('Message deleted');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete message');
+    }
+  };
+
+  const deleteAllMessages = async () => {
+    if (!window.confirm('Delete all messages in your inbox?')) return;
+    try {
+      const res = await api.delete('/notifications');
+      fetchNotifications();
+      toast.success(res.data?.message || 'All messages deleted');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete all');
     }
   };
 
@@ -145,15 +186,26 @@ export default function Inbox() {
             </button>
           ))}
         </div>
-        {unreadCount > 0 && (
-          <button
-            onClick={markAllAsRead}
-            className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth shrink-0"
-            data-testid="mark-all-read"
-          >
-            Mark All Read
-          </button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {unreadCount > 0 && (
+            <button
+              onClick={markAllAsRead}
+              className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth"
+              data-testid="mark-all-read"
+            >
+              Mark All Read
+            </button>
+          )}
+          {notifications.length > 0 && (
+            <button
+              onClick={deleteAllMessages}
+              className="px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider border border-primary/30 text-mutedForeground hover:text-destructive hover:border-destructive/50 transition-smooth"
+              data-testid="delete-all"
+            >
+              Delete All
+            </button>
+          )}
+        </div>
       </div>
 
       {filteredNotifications.length === 0 ? (
@@ -169,6 +221,7 @@ export default function Inbox() {
               key={notification.id}
               notification={notification}
               onMarkRead={markAsRead}
+              onDelete={deleteMessage}
             />
           ))}
         </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair } from 'lucide-react';
+import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair, VolumeX, Clock } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -128,6 +128,17 @@ export default function Store() {
     }
   };
 
+  const buySilencer = async () => {
+    try {
+      await api.post('/store/buy-silencer');
+      toast.success('Silencer purchased! Fewer witness statements when you kill.');
+      refreshUser();
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to buy silencer');
+    }
+  };
+
   const buyPremiumRankBar = async () => {
     try {
       const response = await api.post('/store/buy-rank-bar');
@@ -136,6 +147,17 @@ export default function Store() {
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to buy premium rank bar');
+    }
+  };
+
+  const buyOcTimer = async () => {
+    try {
+      await api.post('/store/buy-oc-timer');
+      toast.success('OC timer reduced! Heist cooldown is now 4 hours.');
+      refreshUser();
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to buy OC timer');
     }
   };
 
@@ -278,6 +300,66 @@ export default function Store() {
                   className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth"
                 >
                   Buy for 50 Points
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Silencer */}
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Silencer</span>
+              <VolumeX className="text-primary" size={20} />
+            </div>
+            <div className="p-6">
+              <p className="text-xs font-heading text-mutedForeground mb-4">
+                Reduces witness statements sent to inbox when you kill. Better weapons already attract fewer witnesses; silencer cuts the chance further.
+              </p>
+              <div className="space-y-2 mb-6 font-heading text-xs text-mutedForeground">
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Requires at least one weapon</div>
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Witness statements go to victim (or bodyguard owner) inbox</div>
+              </div>
+              {user?.has_silencer ? (
+                <div className={`${styles.surface} border border-primary/20 rounded-sm py-3 text-center text-primary font-heading font-bold uppercase tracking-wider`}>
+                  Owned
+                </div>
+              ) : (
+                <button
+                  onClick={buySilencer}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
+                >
+                  Buy for 150 Points
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Reduce OC Timer */}
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Reduce OC Timer</span>
+              <Clock className="text-primary" size={20} />
+            </div>
+            <div className="p-6">
+              <p className="text-xs font-heading text-mutedForeground mb-4">
+                Organised Crime heist cooldown drops from 6 hours to 4 hours. One-time purchase.
+              </p>
+              <div className="space-y-2 mb-6 font-heading text-xs text-mutedForeground">
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> 4h cooldown instead of 6h</div>
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Use from Ranking → Organised Crime</div>
+              </div>
+              {user?.oc_timer_reduced ? (
+                <div className={`${styles.surface} border border-primary/20 rounded-sm py-3 text-center text-primary font-heading font-bold uppercase tracking-wider`}>
+                  Owned
+                </div>
+              ) : (
+                <button
+                  onClick={buyOcTimer}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
+                >
+                  Buy for 300 Points
                 </button>
               )}
             </div>
