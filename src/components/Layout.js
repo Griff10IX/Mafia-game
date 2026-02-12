@@ -204,13 +204,13 @@ export default function Layout({ children }) {
       >
         <div className="flex flex-col h-full">
           {/* Logo – thin gold line under header (match reference) */}
-          <div className="p-4 border-b border-primary/40">
+          <div className={`p-4 border-b ${styles.borderGoldLight}`}>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-px bg-primary/50" />
-              <h1 className="text-xl font-heading font-bold text-primary tracking-widest" data-testid="app-logo">MAFIA WARS</h1>
-              <div className="flex-1 h-px bg-primary/50" />
+              <div className="w-6 h-px" style={{ backgroundColor: 'var(--noir-primary)', opacity: 0.5 }} />
+              <h1 className={`text-xl font-heading font-bold tracking-widest ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
+              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-primary)', opacity: 0.5 }} />
             </div>
-            <p className="text-xs text-mutedForeground mt-1 font-heading tracking-wider text-center">Chicago, 1927</p>
+            <p className={`text-xs mt-1 font-heading tracking-wider text-center ${styles.sidebarHeaderSub}`}>Chicago, 1927</p>
           </div>
 
           {/* Navigation */}
@@ -235,21 +235,21 @@ export default function Layout({ children }) {
                         data-testid="nav-ranking-group"
                         onClick={() => setRankingOpen((v) => !v)}
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth ${
-                          isAnyRankingActive ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                          isAnyRankingActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                       >
-                        <Icon size={16} className={isAnyRankingActive ? 'text-[#1a1a1a]' : 'text-primary/70'} />
+                        <Icon size={16} className={isAnyRankingActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyRankingActive ? { color: 'var(--noir-primary)' } : undefined} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {rankingOpen ? <ChevronDown size={14} className={isAnyRankingActive ? 'text-[#1a1a1a]' : 'text-primary/50'} /> : <ChevronRight size={14} className={isAnyRankingActive ? 'text-[#1a1a1a]' : 'text-primary/50'} />}
+                        {rankingOpen ? <ChevronDown size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyRankingActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} />}
                       </button>
 
                       {rankingOpen && (
-                        <div className="ml-4 pl-2 border-l border-primary/20 space-y-0.5">
+                        <div className={`ml-4 pl-2 space-y-0.5 ${styles.sidebarSubmenuBorder}`}>
                           <Link
                             to="/crimes"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/crimes' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-crimes"
                           >
@@ -268,7 +268,7 @@ export default function Layout({ children }) {
                             to="/gta"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/gta' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-gta"
                           >
@@ -287,7 +287,7 @@ export default function Layout({ children }) {
                             to="/jail"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/jail' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-jail"
                           >
@@ -325,21 +325,21 @@ export default function Layout({ children }) {
                         data-testid="nav-casino-group"
                         onClick={() => setCasinoOpen((v) => !v)}
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth ${
-                          isAnyCasinoActive ? styles.navItemActive : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                          isAnyCasinoActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                       >
-                        <Icon size={16} className={isAnyCasinoActive ? 'text-[#1a1a1a]' : 'text-primary/70'} />
+                        <Icon size={16} className={isAnyCasinoActive ? 'text-[#1a1a1a]' : undefined} style={!isAnyCasinoActive ? { color: 'var(--noir-primary)' } : undefined} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {casinoOpen ? <ChevronDown size={14} className={isAnyCasinoActive ? 'text-[#1a1a1a]' : 'text-primary/50'} /> : <ChevronRight size={14} className={isAnyCasinoActive ? 'text-[#1a1a1a]' : 'text-primary/50'} />}
+                        {casinoOpen ? <ChevronDown size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} /> : <ChevronRight size={14} style={isAnyCasinoActive ? { color: '#1a1a1a' } : { color: 'var(--noir-primary)', opacity: 0.7 }} />}
                       </button>
 
                       {casinoOpen && (
-                        <div className="ml-4 pl-2 border-l border-primary/20 space-y-0.5">
+                        <div className={`ml-4 pl-2 space-y-0.5 ${styles.sidebarSubmenuBorder}`}>
                           <Link
                             to="/casino"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-casino"
                           >
@@ -349,7 +349,7 @@ export default function Layout({ children }) {
                             to="/casino/dice"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/dice' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/dice' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-dice"
                           >
@@ -359,7 +359,7 @@ export default function Layout({ children }) {
                             to="/casino/rlt"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/rlt' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/rlt' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-roulette"
                           >
@@ -369,7 +369,7 @@ export default function Layout({ children }) {
                             to="/casino/blackjack"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/blackjack' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/blackjack' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-blackjack"
                           >
@@ -379,7 +379,7 @@ export default function Layout({ children }) {
                             to="/casino/horseracing"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/casino/horseracing' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/casino/horseracing' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-horseracing"
                           >
@@ -389,7 +389,7 @@ export default function Layout({ children }) {
                             to="/sports-betting"
                             onClick={() => setSidebarOpen(false)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
-                              location.pathname === '/sports-betting' ? styles.navItemActivePage : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                              location.pathname === '/sports-betting' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             data-testid="nav-sports-betting"
                           >
@@ -415,12 +415,12 @@ export default function Layout({ children }) {
                           : 'text-red-400 hover:bg-red-500/10'
                         : isActive
                           ? styles.navItemActivePage
-                          : 'text-primary/90 hover:bg-noir-raised hover:text-primary'
+                          : styles.sidebarNavLink
                     }`}
                     style={isFamiliesAtWar ? { color: '#f87171' } : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={16} className={isFamiliesAtWar ? '' : 'text-primary/70'} style={isFamiliesAtWar ? { color: '#f87171' } : undefined} />
+                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : !isActive ? { color: 'var(--noir-primary)' } : undefined} />
                     <span className="uppercase tracking-widest text-xs font-heading flex-1">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
@@ -460,21 +460,21 @@ export default function Layout({ children }) {
           {user && (
             <div className={`p-3 border-t ${styles.borderGoldLight} bg-gradient-to-t from-noir-bg to-transparent`}>
               <div className={`${styles.userBox} p-3 rounded-sm`}>
-                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-primary/20">
-                  <User size={14} className="text-primary" />
-                  <span className="text-sm font-heading font-bold text-primary" data-testid="user-username">{user.username}</span>
+                <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${styles.borderGoldLight}`}>
+                  <User size={14} style={{ color: 'var(--noir-primary)' }} />
+                  <span className={`text-sm font-heading font-bold ${styles.sidebarHeaderTitle}`} data-testid="user-username">{user.username}</span>
                 </div>
                 <div className="text-xs space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-mutedForeground font-heading">Rank:</span>
-                    <span className="text-primary font-heading font-bold" data-testid="user-rank">{user.rank_name}</span>
+                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Rank:</span>
+                    <span className={`${styles.sidebarHeaderTitle} font-heading font-bold`} data-testid="user-rank">{user.rank_name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-mutedForeground font-heading">Wealth:</span>
+                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Wealth:</span>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <span className="text-primary font-heading cursor-default underline decoration-dotted decoration-primary/30 underline-offset-1" data-testid="user-wealth-rank">{user.wealth_rank_name ?? '—'}</span>
+                          <span className={`${styles.sidebarHeaderTitle} font-heading cursor-default underline decoration-dotted underline-offset-1`} style={{ textDecorationColor: 'var(--noir-primary)' }} data-testid="user-wealth-rank">{user.wealth_rank_name ?? '—'}</span>
                         </TooltipTrigger>
                         <TooltipContent side="left" className={`${styles.surface} ${styles.textGold} ${styles.borderGold} rounded-sm px-3 py-2 text-sm font-heading shadow-lg`}>
                           {user.wealth_rank_range ?? '$0'}
@@ -483,24 +483,24 @@ export default function Layout({ children }) {
                     </TooltipProvider>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-mutedForeground font-heading">Money:</span>
-                    <span className="text-primary font-heading" data-testid="user-money">${user.money.toLocaleString()}</span>
+                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Money:</span>
+                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-money">${user.money.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-mutedForeground font-heading">Points:</span>
-                    <span className="text-primary font-heading" data-testid="user-points">{user.points}</span>
+                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Points:</span>
+                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-points">{user.points}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-mutedForeground font-heading">Health:</span>
-                    <span className="text-primary font-heading" data-testid="user-health">{user.health ?? 100}%</span>
+                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Health:</span>
+                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-health">{user.health ?? 100}%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-mutedForeground font-heading">Armour:</span>
-                    <span className="text-primary font-heading" data-testid="user-armour">Lv.{user.armour_level ?? 0}</span>
+                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Armour:</span>
+                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-armour">Lv.{user.armour_level ?? 0}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-mutedForeground font-heading">Bullets:</span>
-                    <span className="text-primary font-heading" data-testid="user-bullets">{user.bullets ?? 0}</span>
+                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Bullets:</span>
+                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-bullets">{user.bullets ?? 0}</span>
                   </div>
                 </div>
               </div>
@@ -530,7 +530,8 @@ export default function Layout({ children }) {
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           data-testid="mobile-menu-toggle"
-          className="md:hidden shrink-0 text-primary"
+          className="md:hidden shrink-0"
+          style={{ color: 'var(--noir-primary)' }}
         >
           {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
         </button>

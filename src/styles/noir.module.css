@@ -70,6 +70,31 @@
 .sidebar {
   background-color: var(--noir-bg);
   border-right: 1px solid var(--noir-border-mid);
+  color: var(--noir-primary);
+}
+
+/* Sidebar nav: default link state – gold text on black */
+.sidebarNavLink {
+  color: var(--noir-primary) !important;
+  background-color: transparent !important;
+}
+
+.sidebarNavLink:hover {
+  background-color: var(--noir-raised) !important;
+  color: var(--noir-primary) !important;
+}
+
+/* Sidebar header text uses theme gold/muted */
+.sidebarHeaderTitle {
+  color: var(--noir-primary);
+}
+
+.sidebarHeaderSub {
+  color: var(--noir-muted);
+}
+
+.sidebarSubmenuBorder {
+  border-left: 1px solid var(--noir-border-light);
 }
 
 /* Top bar – dark charcoal to match content */
