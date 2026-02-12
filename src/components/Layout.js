@@ -420,7 +420,7 @@ export default function Layout({ children }) {
                     style={isFamiliesAtWar ? { color: '#f87171' } : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : !isActive ? { color: 'var(--noir-primary)' } : undefined} />
+                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? { color: 'var(--noir-primary-foreground)' } : { color: 'var(--noir-primary)' }} />
                     <span className="uppercase tracking-widest text-xs font-heading flex-1">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
