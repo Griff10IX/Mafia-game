@@ -33,7 +33,7 @@ echo      - Fetching latest code
 echo      - Building frontend
 echo      - Restarting backend
 echo      - Disabling maintenance page
-ssh root@178.128.38.68 "cd /opt/mafia-app && cp public/maintenance.html /var/www/html/maintenance.html 2>/dev/null; touch /tmp/mafia-maintenance && sudo systemctl reload nginx 2>/dev/null; git fetch mafia2 && git reset --hard mafia2/MAfiaGame2 && npm run build && sudo systemctl restart mafia-backend && sleep 2 && rm -f /tmp/mafia-maintenance && sudo systemctl reload nginx 2>/dev/null"
+ssh root@178.128.38.68 "cd /opt/mafia-app && cp backend/.env /tmp/env-backup 2>/dev/null; cp public/maintenance.html /var/www/html/maintenance.html 2>/dev/null; touch /tmp/mafia-maintenance && sudo systemctl reload nginx 2>/dev/null; git fetch mafia2 && git reset --hard mafia2/MAfiaGame2 && cp /tmp/env-backup backend/.env 2>/dev/null; npm run build && sudo systemctl restart mafia-backend && sleep 2 && rm -f /tmp/mafia-maintenance && sudo systemctl reload nginx 2>/dev/null"
 echo.
 
 echo ============================================
