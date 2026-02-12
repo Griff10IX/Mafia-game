@@ -194,6 +194,11 @@ export default function Layout({ children }) {
     { path: '/admin', icon: Settings, label: 'Admin Tools' }
   ] : [];
 
+  /* Inline theme styles so sidebar/active state always match (no CSS override) */
+  const sidebarBgStyle = { backgroundColor: 'var(--gm-bg-top)' };
+  const sidebarActiveStyle = { background: 'var(--gm-card-hover)', backgroundImage: 'none', borderLeft: '3px solid var(--gm-gold)', color: 'var(--gm-gold)' };
+  const sidebarActiveGroupStyle = { background: 'var(--gm-card)', backgroundImage: 'none', borderLeft: '3px solid var(--gm-gold)', color: 'var(--gm-gold)' };
+
   return (
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
       {/* Sidebar */}
@@ -201,6 +206,7 @@ export default function Layout({ children }) {
         className={`fixed left-0 top-0 h-full w-64 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
+        style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
           {/* Logo – thin gold line under header (match reference) */}
@@ -234,9 +240,10 @@ export default function Layout({ children }) {
                         type="button"
                         data-testid="nav-ranking-group"
                         onClick={() => setRankingOpen((v) => !v)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth ${
+                        className={`w-full flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm transition-smooth ${
                           isAnyRankingActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
+                        style={isAnyRankingActive ? sidebarActiveGroupStyle : undefined}
                       >
                         <Icon size={16} style={{ color: 'var(--gm-gold)' }} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
@@ -248,9 +255,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/crimes"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/crimes' ? sidebarActiveStyle : undefined}
                             data-testid="nav-crimes"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
@@ -267,9 +275,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/gta"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/gta' ? sidebarActiveStyle : undefined}
                             data-testid="nav-gta"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
@@ -286,9 +295,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/jail"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/jail' ? sidebarActiveStyle : undefined}
                             data-testid="nav-jail"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
@@ -324,9 +334,10 @@ export default function Layout({ children }) {
                         type="button"
                         data-testid="nav-casino-group"
                         onClick={() => setCasinoOpen((v) => !v)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth ${
+                        className={`w-full flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm transition-smooth ${
                           isAnyCasinoActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
+                        style={isAnyCasinoActive ? sidebarActiveGroupStyle : undefined}
                       >
                         <Icon size={16} style={{ color: 'var(--gm-gold)' }} />
                         <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
@@ -338,9 +349,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/casino' ? sidebarActiveStyle : undefined}
                             data-testid="nav-casino"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Casino</span>
@@ -348,9 +360,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/dice"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/dice' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/casino/dice' ? sidebarActiveStyle : undefined}
                             data-testid="nav-dice"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Dice</span>
@@ -358,9 +371,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/rlt"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/rlt' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/casino/rlt' ? sidebarActiveStyle : undefined}
                             data-testid="nav-roulette"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Roulette</span>
@@ -368,9 +382,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/blackjack"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/blackjack' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/casino/blackjack' ? sidebarActiveStyle : undefined}
                             data-testid="nav-blackjack"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Blackjack</span>
@@ -378,9 +393,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/horseracing"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/casino/horseracing' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/casino/horseracing' ? sidebarActiveStyle : undefined}
                             data-testid="nav-horseracing"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span>
@@ -388,9 +404,10 @@ export default function Layout({ children }) {
                           <Link
                             to="/sports-betting"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
                               location.pathname === '/sports-betting' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
+                            style={location.pathname === '/sports-betting' ? sidebarActiveStyle : undefined}
                             data-testid="nav-sports-betting"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Sports Betting</span>
@@ -408,7 +425,7 @@ export default function Layout({ children }) {
                     to={item.path}
                     data-testid={`nav-${item.label.toLowerCase()}`}
                     data-at-war={atWar && item.path === '/families' ? 'true' : undefined}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth ${
+                    className={`flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm transition-smooth ${
                       isFamiliesAtWar
                         ? isActive
                           ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500'
@@ -417,7 +434,7 @@ export default function Layout({ children }) {
                           ? styles.navItemActivePage
                           : styles.sidebarNavLink
                     }`}
-                    style={isFamiliesAtWar ? { color: '#f87171' } : undefined}
+                    style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
                     <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--gm-gold)' }} />
@@ -526,14 +543,15 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className={`fixed top-0 right-0 left-0 md:left-64 h-12 ${styles.topBar} backdrop-blur-md z-30 flex items-center px-4 gap-3`}>
+      <div className={`fixed top-0 right-0 left-0 md:left-64 min-h-[48px] h-12 ${styles.topBar} backdrop-blur-md z-30 flex items-center px-4 gap-3`}>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           data-testid="mobile-menu-toggle"
-          className="md:hidden shrink-0"
+          className="md:hidden shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center -m-2"
           style={{ color: 'var(--gm-gold)' }}
+          aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
         >
-          {sidebarOpen ? <X size={18} /> : <Menu size={18} />}
+          {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
         </button>
 
         {/* Flash news ticker */}
@@ -605,7 +623,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className="md:ml-64 mt-12 min-h-screen p-4 md:p-6">
+      <main className="md:ml-64 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden">
         {children}
       </main>
     </div>
