@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Building2, Users, DollarSign, TrendingUp, ArrowLeft } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -55,7 +56,7 @@ export default function FamilyProfilePage() {
 
   if (!family) {
     return (
-      <div className="space-y-4">
+      <div className={`space-y-4 ${styles.pageContent}`}>
         <button type="button" onClick={() => navigate('/families')} className="flex items-center gap-2 text-mutedForeground hover:text-primary text-xs font-heading uppercase tracking-wider">
           <ArrowLeft size={14} /> Back to families
         </button>
@@ -65,9 +66,10 @@ export default function FamilyProfilePage() {
   }
 
   const members = family.members || [];
+  const rackets = family.rackets || [];
 
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5 ${styles.pageContent}`}>
       <button type="button" onClick={() => navigate('/families')} className="flex items-center gap-2 text-mutedForeground hover:text-primary text-xs font-heading uppercase tracking-wider">
         <ArrowLeft size={14} /> Back to families
       </button>
@@ -85,7 +87,7 @@ export default function FamilyProfilePage() {
       </div>
 
       {/* Family Info Card */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/40 rounded-sm overflow-hidden shadow-lg shadow-primary/5">
+      <div className={`${styles.panel} border border-primary/40 rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
         <div className="px-4 py-3 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -109,7 +111,7 @@ export default function FamilyProfilePage() {
       </div>
 
       {/* Rackets */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
@@ -120,22 +122,23 @@ export default function FamilyProfilePage() {
           </div>
         </div>
         <div className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {(family.rackets || []).map((r) => (
-              <div key={r.id} className="bg-zinc-800/50 border border-primary/20 rounded-sm p-3">
-                <p className="font-heading font-bold text-foreground text-sm">{r.name}</p>
-                <p className="text-xs text-primary font-heading">Level {r.level}</p>
-              </div>
-            ))}
-            {(!family.rackets || family.rackets.length === 0) && (
-              <p className="text-xs text-mutedForeground font-heading italic col-span-full">No rackets yet.</p>
-            )}
-          </div>
+          {rackets.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {rackets.map((r) => (
+                <div key={r.id} className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
+                  <p className="font-heading font-bold text-foreground text-sm">{r.name}</p>
+                  <p className="text-xs text-primary font-heading">Level {r.level}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-mutedForeground font-heading italic">No rackets yet.</p>
+          )}
         </div>
       </div>
 
       {/* Members */}
-      <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
@@ -149,7 +152,7 @@ export default function FamilyProfilePage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-primary/20 bg-zinc-800/50">
+                <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
                   <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Member</th>
                   <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Role</th>
                   <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Rank</th>
@@ -160,7 +163,7 @@ export default function FamilyProfilePage() {
                   <tr><td colSpan={3} className="py-4 text-center text-mutedForeground font-heading italic">No members.</td></tr>
                 ) : (
                   members.map((m) => (
-                    <tr key={m.user_id} className="border-b border-primary/10 last:border-0">
+                    <tr key={m.user_id} className="border-b border-primary/10 last:border-0 hover:bg-zinc-800/30 transition-smooth">
                       <td className="py-2 px-2">
                         <Link to={`/profile/${encodeURIComponent(m.username)}`} className="font-heading font-medium text-foreground hover:text-primary">
                           {m.username}

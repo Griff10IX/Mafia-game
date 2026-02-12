@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Car, Flame, DollarSign, CheckSquare, Square, Filter } from 'lucide-react';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
+
+const RARITY_ORDER = { exclusive: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
+const DEFAULT_VISIBLE = 12;
 
 export default function Garage() {
   const [cars, setCars] = useState([]);
   const [selectedCars, setSelectedCars] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState('newest');
+  const [sortBy, setSortBy] = useState('rarity');
   const [filterRarity, setFilterRarity] = useState('all');
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     fetchGarage();
@@ -94,8 +98,7 @@ export default function Garage() {
         case 'value-low':
           return a.value - b.value;
         case 'rarity':
-          const rarityOrder = { exclusive: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
-          return (rarityOrder[b.rarity] || 0) - (rarityOrder[a.rarity] || 0);
+          return (RARITY_ORDER[b.rarity] || 0) - (RARITY_ORDER[a.rarity] || 0);
         default:
           return 0;
       }
@@ -104,7 +107,10 @@ export default function Garage() {
     return filtered;
   };
 
-  const displayedCars = getFilteredAndSortedCars();
+  const allFilteredCars = getFilteredAndSortedCars();
+  const totalCount = allFilteredCars.length;
+  const displayedCars = showAll ? allFilteredCars : allFilteredCars.slice(0, DEFAULT_VISIBLE);
+  const hiddenCount = totalCount - displayedCars.length;
   const displayedCarIds = displayedCars.map((c) => c.user_car_id);
   const allDisplayedSelected =
     displayedCarIds.length > 0 && displayedCarIds.every((id) => selectedCars.includes(id));
@@ -201,8 +207,11 @@ export default function Garage() {
           {/* Actions Bar */}
           <div className={`${styles.panel} rounded-sm overflow-hidden p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3`}>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-primary font-heading font-bold">{displayedCars.length}</span>
+              <span className="text-primary font-heading font-bold">{totalCount}</span>
               <span className="text-mutedForeground text-sm font-heading">Cars</span>
+              {!showAll && hiddenCount > 0 && (
+                <span className="text-mutedForeground text-xs font-heading">(showing top {displayedCars.length})</span>
+              )}
               {selectedCars.length > 0 && (
                 <span className="text-primary text-xs font-heading">({selectedCars.length} selected)</span>
               )}
@@ -283,6 +292,29 @@ export default function Garage() {
               </div>
             ))}
           </div>
+
+          {/* View All / Show Less */}
+          {totalCount > DEFAULT_VISIBLE && (
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                className={`flex items-center gap-2 ${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth`}
+              >
+                {showAll ? (
+                  <>
+                    <ChevronUp size={14} />
+                    Show Top {DEFAULT_VISIBLE}
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={14} />
+                    View All ({hiddenCount} more)
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
