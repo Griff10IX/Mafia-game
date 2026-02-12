@@ -55,7 +55,15 @@ export default function Crimes() {
   useEffect(() => {
     const hasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
     if (!hasCooldown) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    let refetched = false;
+    const id = setInterval(() => {
+      const stillHasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
+      if (!stillHasCooldown && !refetched) {
+        refetched = true;
+        fetchCrimes();
+      }
+      setTick((t) => t + 1);
+    }, 1000);
     return () => clearInterval(id);
   }, [crimes]);
 
@@ -81,13 +89,15 @@ export default function Crimes() {
       const successRate = getSuccessRate(crime.crime_type);
       const risk = Math.round((1 - successRate) * 100);
       const remaining = crime.next_available ? secondsUntil(crime.next_available) : null;
+      // Treat crime as available if cooldown has expired (no refresh needed)
+      const canCommit = crime.can_commit || (crime.next_available && (remaining === null || remaining <= 0));
       const wait =
-        crime.can_commit
+        canCommit
           ? formatWaitFromMinutes(crime.cooldown_minutes)
           : remaining && remaining > 0
             ? `${remaining} seconds`
             : 'Unavailable';
-      return { ...crime, risk, wait, remaining };
+      return { ...crime, can_commit: canCommit, risk, wait, remaining };
     });
   }, [crimes, tick]);
 
@@ -185,7 +195,7 @@ export default function Crimes() {
                     <button
                       type="button"
                       onClick={() => commitCrime(crime.id)}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth touch-manipulation"
+                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-0.5 text-[10px] uppercase tracking-wider font-heading font-bold border border-yellow-600/50 transition-smooth touch-manipulation"
                       data-testid={`commit-crime-${crime.id}`}
                     >
                       Commit

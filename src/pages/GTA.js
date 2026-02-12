@@ -31,7 +31,15 @@ export default function GTA() {
   useEffect(() => {
     const hasCooldown = options.some((o) => o.cooldown_until && new Date(o.cooldown_until) > new Date());
     if (!hasCooldown) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    let refetched = false;
+    const id = setInterval(() => {
+      const stillHasCooldown = options.some((o) => o.cooldown_until && new Date(o.cooldown_until) > new Date());
+      if (!stillHasCooldown && !refetched) {
+        refetched = true;
+        fetchData();
+      }
+      setTick((t) => t + 1);
+    }, 1000);
     return () => clearInterval(id);
   }, [options]);
 
