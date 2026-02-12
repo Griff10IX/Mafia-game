@@ -2752,7 +2752,7 @@ async def sell_armour(current_user: dict = Depends(get_current_user)):
     return {"message": msg + " (50% of purchase price).", "refund_money": refund_money, "refund_points": refund_points}
 
 # Admin endpoints
-ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com"]
+ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
 
 @api_router.post("/admin/change-rank")
 async def admin_change_rank(target_username: str, new_rank: int, current_user: dict = Depends(get_current_user)):
