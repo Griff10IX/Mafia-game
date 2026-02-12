@@ -6148,6 +6148,7 @@ async def families_config(current_user: dict = Depends(get_current_user)):
         "roles": FAMILY_ROLES,
         "racket_max_level": RACKET_MAX_LEVEL,
         "rackets": FAMILY_RACKETS,
+        "racket_upgrade_cost": RACKET_UPGRADE_COST,
     }
 
 

@@ -560,44 +560,80 @@ export default function FamilyPage() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {rackets.map((r) => {
                   const incomeDisplay = r.effective_income_per_collect != null ? r.effective_income_per_collect : r.income_per_collect;
                   const cooldownDisplay = r.effective_cooldown_hours != null ? r.effective_cooldown_hours : r.cooldown_hours;
                   const timeLeft = formatTimeLeft(r.next_collect_at);
                   const onCooldown = timeLeft && timeLeft !== 'Ready';
+                  const isReady = r.level > 0 && !onCooldown;
+                  const maxLevel = config?.racket_max_level ?? 5;
+                  const levelPct = Math.min(100, (r.level / maxLevel) * 100);
                   return (
-                    <div key={r.id} className={`${styles.surfaceMuted} border border-primary/20 rounded-sm p-3`}>
-                      <p className="font-heading font-bold text-foreground text-sm">{r.name}</p>
-                      <p className="text-xs text-mutedForeground mb-1">{r.description}</p>
-                      <p className="text-xs text-mutedForeground font-heading">
-                        Lv.{r.level} · {formatMoney(incomeDisplay)} · {cooldownDisplay}h
-                      </p>
-                      {r.level > 0 && (
-                        <p className="text-xs font-heading mt-1 text-primary">
-                          {onCooldown ? `${timeLeft}` : 'Ready'}
-                        </p>
-                      )}
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {r.level > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => collectRacket(r.id)}
-                            disabled={onCooldown}
-                            className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-2 min-h-[44px] rounded text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed border border-yellow-600/50 touch-manipulation"
-                          >
-                            Collect
-                          </button>
-                        )}
-                        {canUpgradeRacket && r.level < (config?.racket_max_level ?? 5) && (
-                          <button
-                            type="button"
-                            onClick={() => upgradeRacket(r.id)}
-                            className={`${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 min-h-[44px] rounded text-xs font-heading font-bold uppercase tracking-wider text-foreground touch-manipulation`}
-                          >
-                            Upgrade
-                          </button>
-                        )}
+                    <div key={r.id} className={`${styles.panel} border rounded-sm overflow-hidden ${isReady ? 'border-primary/40' : 'border-primary/15'}`}>
+                      <div className="px-3 py-2 bg-gradient-to-r from-primary/10 to-transparent border-b border-primary/15 flex items-center justify-between">
+                        <h4 className="font-heading font-bold text-foreground text-sm truncate">{r.name}</h4>
+                        <span className={`text-[10px] font-heading font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
+                          r.level === 0
+                            ? 'text-mutedForeground bg-zinc-800 border border-primary/10'
+                            : isReady
+                              ? 'text-primary bg-primary/15 border border-primary/30'
+                              : 'text-mutedForeground bg-zinc-800 border border-primary/10'
+                        }`}>
+                          {r.level === 0 ? 'Locked' : isReady ? 'Ready' : onCooldown ? timeLeft : `Lv.${r.level}`}
+                        </span>
+                      </div>
+                      <div className="px-3 py-2.5 space-y-2">
+                        <p className="text-[11px] text-mutedForeground font-heading">{r.description}</p>
+                        <div className="flex items-center gap-3 text-[11px] font-heading">
+                          <span className="text-foreground font-bold">Lv.{r.level}<span className="text-mutedForeground font-normal">/{maxLevel}</span></span>
+                          <span className="text-primary font-bold">{formatMoney(incomeDisplay)}</span>
+                          <span className="text-mutedForeground">{cooldownDisplay}h</span>
+                        </div>
+                        <div
+                          style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: 3,
+                            backgroundColor: '#222',
+                            borderRadius: 99,
+                            overflow: 'hidden'
+                          }}
+                        >
+                          <div
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              bottom: 0,
+                              width: `${levelPct}%`,
+                              background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+                              borderRadius: 99,
+                              transition: 'width 0.3s ease'
+                            }}
+                          />
+                        </div>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {r.level > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => collectRacket(r.id)}
+                              disabled={onCooldown}
+                              className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed border border-yellow-600/50 touch-manipulation"
+                            >
+                              Collect
+                            </button>
+                          )}
+                          {canUpgradeRacket && r.level < maxLevel && (
+                            <button
+                              type="button"
+                              onClick={() => upgradeRacket(r.id)}
+                              className={`${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider text-foreground touch-manipulation`}
+                            >
+                              Upgrade {config?.racket_upgrade_cost ? `(${formatMoney(config.racket_upgrade_cost)})` : ''}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
