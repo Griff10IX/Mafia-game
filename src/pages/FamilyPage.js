@@ -628,9 +628,12 @@ export default function FamilyPage() {
                             <button
                               type="button"
                               onClick={() => upgradeRacket(r.id)}
-                              className={`${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider text-foreground touch-manipulation`}
+                              className={r.level === 0
+                                ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50 touch-manipulation'
+                                : `${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-1.5 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider text-foreground touch-manipulation`
+                              }
                             >
-                              Upgrade {config?.racket_upgrade_cost ? `(${formatMoney(config.racket_upgrade_cost)})` : ''}
+                              {r.level === 0 ? 'Purchase' : 'Upgrade'} {config?.racket_upgrade_cost ? `(${formatMoney(config.racket_upgrade_cost)})` : ''}
                             </button>
                           )}
                         </div>
