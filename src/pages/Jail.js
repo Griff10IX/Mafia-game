@@ -125,7 +125,7 @@ export default function Jail() {
             <div className="px-4 py-10 text-center text-mutedForeground text-sm font-heading italic">No players currently in jail</div>
           ) : (
             <>
-              <div className="grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
+              <div className="hidden md:grid grid-cols-12 bg-zinc-800/50 text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20">
                 <div className="col-span-5">Player</div>
                 <div className="col-span-3">Bust</div>
                 <div className="col-span-2 text-right">Reward</div>
@@ -138,10 +138,10 @@ export default function Jail() {
                 return (
                   <div
                     key={`${player.username}-${index}`}
-                    className="grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30"
+                    className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-0 px-4 py-3 md:py-2.5 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 min-w-0"
                     data-testid={`jailed-player-${index}`}
                   >
-                    <div className="col-span-5 min-w-0">
+                    <div className="md:col-span-5 min-w-0">
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <div className="text-sm font-heading font-bold text-foreground truncate">{player.username}</div>
@@ -159,7 +159,7 @@ export default function Jail() {
                       </div>
                     </div>
 
-                    <div className="col-span-3 text-xs text-mutedForeground font-heading">
+                    <div className="md:col-span-3 text-xs text-mutedForeground font-heading">
                       {player.is_npc ? (
                         <span className="inline-flex items-center gap-1">
                           <Zap size={12} className="text-amber-400" />
@@ -170,11 +170,11 @@ export default function Jail() {
                       )}
                     </div>
 
-                    <div className="col-span-2 text-right text-sm font-heading text-primary font-bold">
+                    <div className="md:col-span-2 text-sm font-heading text-primary font-bold">
                       +{rp} RP
                     </div>
 
-                    <div className="col-span-2 text-right">
+                    <div className="md:col-span-2 flex justify-end">
                       {player.is_self ? (
                         <span className="text-xs text-mutedForeground font-heading">—</span>
                       ) : (
@@ -182,7 +182,7 @@ export default function Jail() {
                           type="button"
                           onClick={() => bustOut(player.username, player.is_npc)}
                           disabled={loading || jailStatus.in_jail}
-                          className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 transition-smooth"
+                          className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50 transition-smooth min-h-[44px] touch-manipulation"
                           data-testid={`bust-out-${index}`}
                         >
                           {loading ? '...' : 'Bust'}

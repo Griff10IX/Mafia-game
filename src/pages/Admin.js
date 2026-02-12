@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Trash2 } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -292,7 +293,11 @@ export default function Admin() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[60vh]"><div className="text-primary text-xl font-heading">Loading...</div></div>;
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className={`text-xl font-heading ${styles.textGold}`}>Loading...</div>
+      </div>
+    );
   }
 
   if (!isAdmin) {
@@ -304,14 +309,19 @@ export default function Admin() {
             <h2 className="text-2xl font-heading font-bold text-red-400">Access Denied</h2>
             <div className="h-px w-12 bg-primary/60" />
           </div>
-          <p className="text-mutedForeground font-heading">Admin privileges required</p>
+          <p className={`font-heading ${styles.textMuted}`}>Admin privileges required</p>
         </div>
       </div>
     );
   }
 
+  const panelHeader = `${styles.panelHeader} px-4 py-2 flex items-center justify-between flex-wrap gap-2`;
+  const inputClass = `${styles.input} w-full h-10 px-3 text-sm font-heading`;
+  const btnPrimary = `${styles.btnPrimary} rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs min-h-[44px]`;
+  const btnDanger = `${styles.surface} border border-red-500/50 text-red-400 hover:bg-red-500/10 rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs min-h-[44px]`;
+
   return (
-    <div className="space-y-6" data-testid="admin-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="admin-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
@@ -321,12 +331,30 @@ export default function Admin() {
         <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">Use with caution</p>
       </div>
 
-      {/* NPC Management Section */}
+      {/* Target user – shared for all actions below */}
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden shadow-lg shadow-primary/5" data-testid="npc-management">
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between flex-wrap gap-2">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
+          <div className={panelHeader}>
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Target Username</span>
+          </div>
+          <div className="p-4">
+            <input
+              type="text"
+              value={formData.targetUsername}
+              onChange={(e) => setFormData({ ...formData, targetUsername: e.target.value })}
+              className={inputClass}
+              placeholder="Enter username for actions below"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* NPC Management */}
+      <div className="flex justify-center">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`} data-testid="npc-management">
+          <div className={panelHeader}>
             <div className="flex items-center gap-2">
-              <Bot className="text-primary" size={18} />
+              <Bot className={styles.textGold} size={18} />
               <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">NPC Management</span>
             </div>
             <div className="text-xs font-heading text-mutedForeground">
@@ -335,54 +363,34 @@ export default function Admin() {
               Active: <span className="font-bold text-foreground">{npcData.npc_count}</span>
             </div>
           </div>
-
           <div className="p-4">
-            <p className="text-sm text-mutedForeground font-heading mb-4">
+            <p className={`text-sm font-heading mb-4 ${styles.textMuted}`}>
               Create test NPCs with random ranks and wealth for testing kills, attacks, and other features.
             </p>
-
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
               <div className="sm:col-span-6">
-                <label className="block text-xs font-heading text-mutedForeground mb-1 uppercase tracking-wider">Number of NPCs</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={npcCount}
-                  onChange={(e) => setNpcCount(parseInt(e.target.value) || 10)}
-                  className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none"
-                />
+                <label className={`block text-xs font-heading mb-1 uppercase tracking-wider ${styles.textMuted}`}>Number of NPCs</label>
+                <input type="number" min="1" max="50" value={npcCount} onChange={(e) => setNpcCount(parseInt(e.target.value) || 10)} className={inputClass} />
               </div>
               <div className="sm:col-span-6 flex gap-2">
-                <button
-                  onClick={() => handleToggleNPCs(true)}
-                  className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs border border-yellow-600/50 transition-smooth"
-                >
-                  Enable
-                </button>
-                <button
-                  onClick={() => handleToggleNPCs(false)}
-                  className="flex-1 bg-zinc-800 border border-red-500/40 text-red-400 hover:bg-red-500/20 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth"
-                >
-                  Disable
-                </button>
+                <button onClick={() => handleToggleNPCs(true)} className={`flex-1 ${btnPrimary}`}>Enable</button>
+                <button onClick={() => handleToggleNPCs(false)} className={`flex-1 ${btnDanger}`}>Disable</button>
               </div>
             </div>
-
             {npcData.npcs.length > 0 && (
-              <div className="mt-4 max-h-40 overflow-y-auto border border-primary/20 rounded-sm overflow-hidden">
-                <div className="grid grid-cols-12 bg-zinc-800/50 text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-3 py-2 border-b border-primary/20">
-                  <div className="col-span-4">Name</div>
+              <div className={`mt-4 max-h-40 overflow-y-auto rounded-sm overflow-hidden border ${styles.borderGoldLight}`}>
+                <div className={`grid grid-cols-12 text-xs font-heading font-bold uppercase tracking-wider px-3 py-2 border-b ${styles.panelHeader}`}>
+                  <div className="col-span-4 text-primary/80">Name</div>
                   <div className="col-span-3">Rank</div>
                   <div className="col-span-3">Money</div>
                   <div className="col-span-2 text-right">Location</div>
                 </div>
                 {npcData.npcs.slice(0, 10).map((npc) => (
-                  <div key={npc.id} className="grid grid-cols-12 px-3 py-2 border-b border-primary/10 text-xs font-heading hover:bg-zinc-800/30">
-                    <div className="col-span-4 text-foreground font-bold truncate">{npc.username}</div>
-                    <div className="col-span-3 text-mutedForeground truncate">{npc.rank_name}</div>
-                    <div className="col-span-3 text-mutedForeground">${npc.money?.toLocaleString()}</div>
-                    <div className="col-span-2 text-right text-mutedForeground truncate">{npc.current_state}</div>
+                  <div key={npc.id} className={`grid grid-cols-12 px-3 py-2 border-b border-primary/10 text-xs font-heading ${styles.raisedHover}`}>
+                    <div className={`col-span-4 font-bold truncate ${styles.textForeground}`}>{npc.username}</div>
+                    <div className={`col-span-3 truncate ${styles.textMuted}`}>{npc.rank_name}</div>
+                    <div className={`col-span-3 ${styles.textMuted}`}>${npc.money?.toLocaleString()}</div>
+                    <div className={`col-span-2 text-right truncate ${styles.textMuted}`}>{npc.current_state}</div>
                   </div>
                 ))}
               </div>
@@ -393,39 +401,39 @@ export default function Admin() {
 
       {/* Game events */}
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden" data-testid="admin-events">
-          <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`} data-testid="admin-events">
+          <div className={panelHeader}>
             <div className="flex items-center gap-2">
-              <Zap className="text-primary" size={18} />
-              <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Game events</span>
+              <Zap className={styles.textGold} size={18} />
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Game events</span>
             </div>
-            <div className="text-xs font-heading text-mutedForeground">
+            <div className={`text-xs font-heading ${styles.textMuted}`}>
               Daily: <span className={`font-bold ${eventsEnabled ? 'text-emerald-400' : 'text-red-400'}`}>{eventsEnabled ? 'On' : 'Off'}</span>
               {todayEvent?.name && <span className="text-primary/50"> · {todayEvent.name}</span>}
               {allEventsForTesting && <span className="text-amber-400 font-bold"> · All (testing) ON</span>}
             </div>
           </div>
           <div className="p-4">
-            <p className="text-sm text-mutedForeground font-heading mb-3">
+            <p className={`text-sm font-heading mb-3 ${styles.textMuted}`}>
               When enabled, daily events rotate. When disabled, all multipliers are 1x.
             </p>
             <div className="flex flex-wrap gap-2 items-center">
               <button
                 onClick={handleToggleEvents}
-                className={`rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs transition-smooth ${eventsEnabled ? 'bg-zinc-800 border border-red-500/40 text-red-400 hover:bg-red-500/20' : 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50'}`}
+                className={`rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs min-h-[44px] ${eventsEnabled ? btnDanger : btnPrimary}`}
                 data-testid="admin-events-toggle"
               >
                 {eventsEnabled ? 'Disable events' : 'Enable events'}
               </button>
               <button
                 onClick={handleToggleAllEventsForTesting}
-                className={`rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs transition-smooth border ${allEventsForTesting ? 'bg-amber-600/30 border-amber-500/50 text-amber-400 hover:opacity-90' : 'bg-zinc-800 border-primary/30 text-foreground hover:bg-zinc-700'}`}
+                className={`rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs min-h-[44px] border ${allEventsForTesting ? 'bg-amber-600/30 border-amber-500/50 text-amber-400 hover:opacity-90' : `${styles.surface} border-primary/30 text-foreground hover:opacity-90`}`}
                 data-testid="admin-all-events-testing-toggle"
               >
                 {allEventsForTesting ? 'Disable all (testing)' : 'Enable all (testing)'}
               </button>
             </div>
-            <p className="text-xs text-mutedForeground font-heading mt-2">
+            <p className={`text-xs font-heading mt-2 ${styles.textMuted}`}>
               All events (testing): applies every event multiplier at once.
             </p>
           </div>
@@ -434,68 +442,47 @@ export default function Admin() {
 
       {/* Seed families */}
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
-            <Building2 className="text-primary" size={18} />
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Seed test families</span>
-            <div className="flex-1 h-px bg-primary/50" />
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
+          <div className={panelHeader}>
+            <div className="flex items-center gap-2">
+              <Building2 className={styles.textGold} size={18} />
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Seed test families</span>
+            </div>
           </div>
           <div className="p-4">
-            <p className="text-sm text-mutedForeground font-heading mb-3">
-              Creates 3 families (Corleone, Baranco, Stracci) with 5 members each — 15 test users. Password: <span className="font-bold text-foreground">test1234</span>. Skips existing.
+            <p className={`text-sm font-heading mb-3 ${styles.textMuted}`}>
+              Creates 3 families (Corleone, Baranco, Stracci) with 5 members each — 15 test users. Password: <span className={`font-bold ${styles.textForeground}`}>test1234</span>. Skips existing.
             </p>
-            <button
-              onClick={handleSeedFamilies}
-              className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs border border-yellow-600/50 transition-smooth"
-            >
-              Seed 3 families (15 users)
-            </button>
+            <button onClick={handleSeedFamilies} className={btnPrimary}>Seed 3 families (15 users)</button>
           </div>
         </div>
       </div>
 
+      {/* Force Online */}
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm p-4">
-          <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider mb-2">Target Username</label>
-          <input
-            type="text"
-            value={formData.targetUsername}
-            onChange={(e) => setFormData({ ...formData, targetUsername: e.target.value })}
-            className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none placeholder:text-mutedForeground"
-            placeholder="Enter username"
-          />
-        </div>
-      </div>
-
-      {/* Force Online Section */}
-      <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden">
-          <div className="px-4 py-2 bg-zinc-800/50 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
+        <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
+          <div className={panelHeader}>
             <div className="flex items-center gap-2">
-              <UserCog className="text-primary" size={18} />
-              <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Force Online</span>
+              <UserCog className={styles.textGold} size={18} />
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Force Online</span>
             </div>
             {forceOnlineInfo?.until && (
-              <div className="text-xs font-heading text-mutedForeground">
-                Until: <span className="font-bold text-foreground">{new Date(forceOnlineInfo.until).toLocaleString()}</span>
+              <div className={`text-xs font-heading ${styles.textMuted}`}>
+                Until: <span className={`font-bold ${styles.textForeground}`}>{new Date(forceOnlineInfo.until).toLocaleString()}</span>
               </div>
             )}
           </div>
           <div className="p-4">
-            <p className="text-sm text-mutedForeground font-heading mb-3">
-              Brings <span className="text-foreground font-bold">offline</span> (alive) users online for <span className="text-foreground font-bold">1 hour</span>.
+            <p className={`text-sm font-heading mb-3 ${styles.textMuted}`}>
+              Brings <span className={`font-bold ${styles.textForeground}`}>offline</span> (alive) users online for <span className={`font-bold ${styles.textForeground}`}>1 hour</span>.
             </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleForceOnline}
-                className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-2 px-4 text-xs border border-yellow-600/50 transition-smooth"
-                data-testid="admin-force-online"
-              >
+            <div className="flex items-center gap-3 flex-wrap">
+              <button onClick={handleForceOnline} className={btnPrimary} data-testid="admin-force-online">
                 Force Offline Users Online (1h)
               </button>
               {typeof forceOnlineInfo?.updated === 'number' && (
-                <div className="text-xs font-heading text-mutedForeground">
-                  Updated: <span className="font-bold text-foreground">{forceOnlineInfo.updated}</span>
+                <div className={`text-xs font-heading ${styles.textMuted}`}>
+                  Updated: <span className={`font-bold ${styles.textForeground}`}>{forceOnlineInfo.updated}</span>
                 </div>
               )}
             </div>
@@ -503,257 +490,166 @@ export default function Admin() {
         </div>
       </div>
 
+      {/* Player actions – use target username above */}
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <UserCog className="text-primary" size={20} />
-            <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Change Rank</h3>
+        <div className="w-full max-w-3xl">
+          <h2 className={`text-sm font-heading font-bold uppercase tracking-widest mb-3 ${styles.textGold}`}>Player actions</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <UserCog className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Change Rank</h3>
+              </div>
+              {ranks.length > 0 ? (
+                <select value={String(formData.newRank)} onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })} className={`${inputClass} mb-3`}>
+                  {ranks.map((r) => (<option key={r.id} value={String(r.id)}>{r.name} (Rank {r.id})</option>))}
+                </select>
+              ) : (
+                <input type="number" min="1" max="11" value={formData.newRank} onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })} className={`${inputClass} mb-3`} />
+              )}
+              <button onClick={handleChangeRank} className={`w-full ${btnPrimary}`}>Change Rank</button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Coins className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Add Points</h3>
+              </div>
+              <input type="number" value={formData.points} onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) })} className={`${inputClass} mb-3`} />
+              <button onClick={handleAddPoints} className={`w-full ${btnPrimary}`}>Add Points</button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Crosshair className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Give Bullets</h3>
+              </div>
+              <input type="number" min="1" value={formData.bullets} onChange={(e) => setFormData({ ...formData, bullets: parseInt(e.target.value) })} className={`${inputClass} mb-3`} />
+              <button onClick={handleAddBullets} className={`w-full ${btnPrimary}`}>Give Bullets</button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Car className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Add Car</h3>
+              </div>
+              <select value={formData.carId} onChange={(e) => setFormData({ ...formData, carId: e.target.value })} className={`${inputClass} mb-3`}>
+                {cars.length > 0 ? cars.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>)) : Array.from({ length: 20 }, (_, i) => i + 1).map(i => (<option key={i} value={`car${i}`}>Car {i}</option>))}
+              </select>
+              <button onClick={handleAddCar} className={`w-full ${btnPrimary}`}>Add Car</button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="text-red-400" size={20} />
+                <h3 className="font-heading font-bold text-red-400 text-sm uppercase tracking-wider">Lock Player</h3>
+              </div>
+              <input type="number" value={formData.lockMinutes} onChange={(e) => setFormData({ ...formData, lockMinutes: parseInt(e.target.value) })} className={`${inputClass} mb-3`} placeholder="Minutes" />
+              <button onClick={handleLockPlayer} className={`w-full ${btnDanger}`}>Lock Player</button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Skull className="text-red-400" size={20} />
+                <h3 className="font-heading font-bold text-red-400 text-sm uppercase tracking-wider">Kill Player</h3>
+              </div>
+              <p className={`text-xs font-heading mb-3 ${styles.textMuted}`}>Takes 20% of their money</p>
+              <button onClick={handleKillPlayer} className={`w-full ${btnDanger}`}>Kill Player</button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Settings className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Set Search Time</h3>
+              </div>
+              <input type="number" value={formData.searchMinutes} onChange={(e) => setFormData({ ...formData, searchMinutes: parseInt(e.target.value) })} className={`${inputClass} mb-3`} placeholder="Minutes" />
+              <button onClick={handleSetSearchTime} className={`w-full ${btnPrimary}`}>Set Search Time (Persistent)</button>
+              <p className={`text-xs font-heading mt-2 ${styles.textMuted}`}>Set to 0 to clear override.</p>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4 md:col-span-2`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Shield className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Bodyguard Testing</h3>
+              </div>
+              <p className={`text-xs font-heading mb-3 ${styles.textMuted}`}>Clear or generate robot bodyguards for target user.</p>
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                <div className="md:col-span-4">
+                  <label className={`block text-xs font-heading uppercase tracking-wider mb-2 ${styles.textMuted}`}>Generate count (1–4)</label>
+                  <input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} className={inputClass} />
+                </div>
+                <div className="md:col-span-8 flex flex-col sm:flex-row gap-2">
+                  <button onClick={handleGenerateBodyguards} className={`flex-1 ${btnPrimary}`}>Generate Robot Bodyguards</button>
+                  <button onClick={handleClearBodyguards} className={`flex-1 ${btnDanger}`}>Drop All Bodyguards</button>
+                </div>
+              </div>
+            </div>
           </div>
-          {ranks.length > 0 ? (
-            <select
-              value={String(formData.newRank)}
-              onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })}
-              className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3"
-            >
-              {ranks.map((r) => (
-                <option key={r.id} value={String(r.id)}>
-                  {r.name} (Rank {r.id})
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              type="number"
-              min="1"
-              max="11"
-              value={formData.newRank}
-              onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })}
-              className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3"
-            />
-          )}
-          <button onClick={handleChangeRank} className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase py-2 text-sm border border-yellow-600/50">Change Rank</button>
         </div>
+      </div>
 
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Coins className="text-primary" size={20} />
-            <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Add Points</h3>
-          </div>
-          <input
-            type="number"
-            value={formData.points}
-            onChange={(e) => setFormData({...formData, points: parseInt(e.target.value)})}
-            className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3"
-          />
-          <button onClick={handleAddPoints} className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase py-2 text-sm border border-yellow-600/50">Add Points</button>
-        </div>
-
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Crosshair className="text-primary" size={20} />
-            <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Give Bullets</h3>
-          </div>
-          <input
-            type="number"
-            min="1"
-            value={formData.bullets}
-            onChange={(e) => setFormData({ ...formData, bullets: parseInt(e.target.value) })}
-            className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3"
-          />
-          <button onClick={handleAddBullets} className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase py-2 text-sm border border-yellow-600/50">Give Bullets</button>
-        </div>
-
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Car className="text-primary" size={20} />
-            <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Add Car</h3>
-          </div>
-          <select
-            value={formData.carId}
-            onChange={(e) => setFormData({...formData, carId: e.target.value})}
-            className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3"
-          >
-            {cars.length > 0 ? (
-              cars.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))
-            ) : (
-              Array.from({length: 20}, (_, i) => i + 1).map(i => (
-                <option key={i} value={`car${i}`}>Car {i}</option>
-              ))
-            )}
-          </select>
-          <button onClick={handleAddCar} className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase py-2 text-sm border border-yellow-600/50">Add Car</button>
-        </div>
-
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Lock className="text-red-400" size={20} />
-            <h3 className="font-heading font-bold text-red-400 text-sm uppercase tracking-wider">Lock Player</h3>
-          </div>
-          <input
-            type="number"
-            value={formData.lockMinutes}
-            onChange={(e) => setFormData({...formData, lockMinutes: parseInt(e.target.value)})}
-            className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3 placeholder:text-mutedForeground"
-            placeholder="Minutes"
-          />
-          <button onClick={handleLockPlayer} className="w-full bg-zinc-800 border border-red-500/50 text-red-400 hover:bg-red-500/20 rounded-sm font-heading font-bold uppercase py-2 text-sm">Lock Player</button>
-        </div>
-
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Skull className="text-red-400" size={20} />
-            <h3 className="font-heading font-bold text-red-400 text-sm uppercase tracking-wider">Kill Player</h3>
-          </div>
-          <p className="text-xs text-mutedForeground font-heading mb-3">Takes 20% of their money</p>
-          <button onClick={handleKillPlayer} className="w-full bg-zinc-800 border border-red-500/50 text-red-400 hover:bg-red-500/20 rounded-sm font-heading font-bold uppercase py-2 text-sm">Kill Player</button>
-        </div>
-
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <Settings className="text-primary" size={20} />
-            <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Set Search Time</h3>
-          </div>
-          <input
-            type="number"
-            value={formData.searchMinutes}
-            onChange={(e) => setFormData({...formData, searchMinutes: parseInt(e.target.value)})}
-            className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3 placeholder:text-mutedForeground"
-            placeholder="Minutes"
-          />
-          <button onClick={handleSetSearchTime} className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase py-2 text-sm border border-yellow-600/50">Set Search Time (Persistent)</button>
-          <p className="text-xs text-mutedForeground font-heading mt-2">Set to 0 to clear override.</p>
-        </div>
-
-        <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4 md:col-span-2">
-          <div className="flex items-center gap-2 mb-3">
-            <Shield className="text-primary" size={20} />
-            <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Bodyguard Testing</h3>
-          </div>
-          <p className="text-xs text-mutedForeground font-heading mb-3">
-            Clear or generate robot bodyguards for target user.
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            <div className="md:col-span-4">
-              <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-2">Generate count (1–4)</label>
+      {/* Database Management */}
+      <div className="flex justify-center mt-8">
+        <div className="w-full max-w-3xl">
+          <h2 className={`text-sm font-heading font-bold uppercase tracking-widest mb-4 ${styles.textGold}`}>Database Management</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <UserCog className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Find Duplicate Users</h3>
+              </div>
               <input
-                type="number"
-                min="1"
-                max="4"
-                value={bgTestCount}
-                onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)}
-                className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none"
+                type="text"
+                placeholder="Search username (or leave empty for all duplicates)"
+                value={searchUsername}
+                onChange={(e) => setSearchUsername(e.target.value)}
+                className={`${inputClass} mb-3`}
               />
-            </div>
-            <div className="md:col-span-8 flex flex-col sm:flex-row gap-2">
-              <button
-                onClick={handleGenerateBodyguards}
-                className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase py-2 text-sm border border-yellow-600/50"
-              >
-                Generate Robot Bodyguards
+              <button onClick={handleFindDuplicates} disabled={dbLoading} className={`w-full ${btnPrimary} disabled:opacity-50`}>
+                {dbLoading ? 'Searching...' : 'Search'}
               </button>
+              {searchResults && (
+                <pre className={`mt-3 max-h-64 overflow-y-auto text-xs p-2 rounded-sm font-heading whitespace-pre-wrap border ${styles.surface} ${styles.borderGoldLight}`}>
+                  {JSON.stringify(searchResults, null, 2)}
+                </pre>
+              )}
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Skull className="text-red-400" size={20} />
+                <h3 className="font-heading font-bold text-red-400 text-sm uppercase tracking-wider">Delete Single User</h3>
+              </div>
+              <p className={`text-xs font-heading mb-3 ${styles.textMuted}`}>Enter a user ID (from Find Duplicates) to permanently delete that account.</p>
+              <input type="text" placeholder="User ID" value={deleteUserId} onChange={(e) => setDeleteUserId(e.target.value)} className={`${inputClass} mb-3`} />
+              <button onClick={handleDeleteUser} disabled={dbLoading} className={`w-full ${btnDanger} disabled:opacity-50`}>
+                {dbLoading ? 'Deleting...' : 'Delete User'}
+              </button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4 md:col-span-2 border-2 border-red-500/50`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="text-red-400" size={20} />
+                <h3 className="font-heading font-bold text-red-400 uppercase tracking-wider">WIPE ALL USERS</h3>
+              </div>
+              <p className="text-xs text-red-400/90 font-heading mb-3">DANGER: Permanently deletes ALL users, families, bodyguards, cars, properties, attacks, and game data. Cannot be undone.</p>
+              <input
+                type="text"
+                placeholder='Type "WIPE ALL" to confirm'
+                value={wipeConfirmText}
+                onChange={(e) => setWipeConfirmText(e.target.value)}
+                className={`${inputClass} mb-3 border-red-500/50`}
+              />
               <button
-                onClick={handleClearBodyguards}
-                className="flex-1 bg-zinc-800 border border-red-500/50 text-red-400 hover:bg-red-500/20 rounded-sm font-heading font-bold uppercase py-2 text-sm"
+                onClick={handleWipeAllUsers}
+                disabled={dbLoading || wipeConfirmText !== 'WIPE ALL'}
+                className={`w-full ${btnDanger} disabled:opacity-50 disabled:cursor-not-allowed`}
               >
-                Drop All Bodyguards
+                {dbLoading ? 'Wiping...' : 'WIPE ALL USERS'}
               </button>
             </div>
           </div>
         </div>
-        </div>
-
-        {/* Database Management Section */}
-        <div className="flex items-center gap-2 mt-8 mb-4">
-          <div className="w-6 h-px bg-primary/50" />
-          <Settings size={20} className="text-red-400" />
-          <h2 className="text-sm font-heading font-bold text-primary/80 uppercase tracking-widest">Database Management</h2>
-          <div className="flex-1 h-px bg-primary/30" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Find Duplicates */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <UserCog className="text-primary" size={20} />
-              <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Find Duplicate Users</h3>
-            </div>
-            <input
-              type="text"
-              placeholder="Search username (or leave empty for all duplicates)"
-              value={searchUsername}
-              onChange={(e) => setSearchUsername(e.target.value)}
-              className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none placeholder:text-mutedForeground mb-3"
-            />
-            <button
-              onClick={handleFindDuplicates}
-              disabled={dbLoading}
-              className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase py-2 text-sm border border-yellow-600/50 disabled:opacity-50"
-            >
-              {dbLoading ? 'Searching...' : 'Search'}
-            </button>
-            {searchResults && (
-              <pre className="mt-3 max-h-64 overflow-y-auto text-xs bg-zinc-800/50 border border-primary/20 p-2 rounded-sm text-foreground font-heading whitespace-pre-wrap">
-                {JSON.stringify(searchResults, null, 2)}
-              </pre>
-            )}
-          </div>
-
-          {/* Delete Single User */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border border-primary/30 rounded-sm overflow-hidden p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Skull className="text-red-400" size={20} />
-              <h3 className="font-heading font-bold text-red-400 text-sm uppercase tracking-wider">Delete Single User</h3>
-            </div>
-            <p className="text-xs text-mutedForeground font-heading mb-3">
-              Enter a user ID (from Find Duplicates) to permanently delete that account.
-            </p>
-            <input
-              type="text"
-              placeholder="User ID"
-              value={deleteUserId}
-              onChange={(e) => setDeleteUserId(e.target.value)}
-              className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-primary/50 focus:outline-none mb-3 placeholder:text-mutedForeground"
-            />
-            <button
-              onClick={handleDeleteUser}
-              disabled={dbLoading}
-              className="w-full bg-zinc-800 border border-red-500/50 text-red-400 hover:bg-red-500/20 rounded-sm font-heading font-bold uppercase py-2 text-sm disabled:opacity-50"
-            >
-              {dbLoading ? 'Deleting...' : 'Delete User'}
-            </button>
-          </div>
-
-          {/* Wipe All Users */}
-          <div className="bg-gradient-to-b from-zinc-900 to-black border-2 border-red-500/60 rounded-sm overflow-hidden p-4 md:col-span-2">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="text-red-400" size={20} />
-              <h3 className="font-heading font-bold text-red-400 uppercase tracking-wider">WIPE ALL USERS</h3>
-            </div>
-            <p className="text-xs text-red-400/90 font-heading mb-3">
-              DANGER: Permanently deletes ALL users, families, bodyguards, cars, properties, attacks, and game data. Cannot be undone.
-            </p>
-            <input
-              type="text"
-              placeholder='Type "WIPE ALL" to confirm'
-              value={wipeConfirmText}
-              onChange={(e) => setWipeConfirmText(e.target.value)}
-              className="w-full bg-zinc-800/80 border border-red-500/50 rounded-sm h-10 px-3 text-foreground text-sm font-heading focus:border-red-500 focus:outline-none mb-3 placeholder:text-mutedForeground"
-            />
-            <button
-              onClick={handleWipeAllUsers}
-              disabled={dbLoading || wipeConfirmText !== 'WIPE ALL'}
-              className="w-full bg-zinc-800 border border-red-500/50 text-red-400 hover:bg-red-500/20 rounded-sm font-heading font-bold uppercase py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {dbLoading ? 'Wiping...' : 'WIPE ALL USERS'}
-            </button>
-          </div>
-        </div>
-
       </div>
     </div>
   );

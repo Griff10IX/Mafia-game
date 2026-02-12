@@ -128,10 +128,16 @@ export default function Dashboard() {
                 )}
               </span>
             </div>
-            <div className={`h-2.5 ${styles.raised} rounded-full overflow-hidden border border-primary/20`}>
+            <div className={`h-2.5 ${styles.raised} rounded-full overflow-hidden border border-primary/20 flex`}>
               <div
-                className="h-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-500 rounded-full"
-                style={{ width: `${rankProgress.rank_points_progress || 0}%` }}
+                className="h-full flex-none bg-gradient-to-r from-primary to-yellow-600 transition-all duration-500 rounded-full"
+                style={{
+                  width: `${(function () {
+                    const pct = Number(rankProgress.rank_points_progress);
+                    return (typeof pct === 'number' && !Number.isNaN(pct)) ? Math.min(100, Math.max(0, pct)) : 0;
+                  })()}%`,
+                  minWidth: (Number(rankProgress.rank_points_progress) || 0) > 0 ? 4 : 0
+                }}
               />
             </div>
             {user?.premium_rank_bar && rankProgress.rank_points_needed > 0 && (

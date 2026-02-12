@@ -574,26 +574,30 @@ export default function Layout({ children }) {
         {user && (
           <div className="flex items-center gap-1.5 shrink-0">
             {/* Rank Progress Mini Bar */}
-            {rankProgress && (
-              <div
-                className="hidden sm:flex items-center gap-2 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm"
-                title={`Rank progress: ${(Number(rankProgress.rank_points_progress || 0)).toFixed(2)}%`}
-              >
-                <TrendingUp size={12} className="text-primary" />
-                <div className="flex flex-col">
-                  <span className="text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                  <div className="w-16 h-1 bg-noir-raised rounded-full mt-0.5 overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300" 
-                      style={{ width: `${rankProgress.rank_points_progress || 0}%` }}
-                    ></div>
+            {rankProgress && (() => {
+              const pct = Number(rankProgress.rank_points_progress);
+              const progress = (typeof pct === 'number' && !Number.isNaN(pct)) ? Math.min(100, Math.max(0, pct)) : 0;
+              return (
+                <div
+                  className="hidden sm:flex items-center gap-2 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm"
+                  title={`Rank progress: ${progress.toFixed(2)}%`}
+                >
+                  <TrendingUp size={12} className="text-primary" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
+                    <div className="w-16 h-1.5 bg-noir-raised rounded-full mt-0.5 overflow-hidden flex">
+                      <div
+                        className="h-full flex-none bg-gradient-to-r from-primary to-yellow-600 transition-all duration-300 rounded-full"
+                        style={{ width: `${progress}%`, minWidth: progress > 0 ? 2 : 0 }}
+                      />
+                    </div>
                   </div>
+                  <span className="text-[10px] text-primary font-heading shrink-0">
+                    {progress.toFixed(1)}%
+                  </span>
                 </div>
-                <span className="text-[10px] text-primary font-heading">
-                  {(Number(rankProgress.rank_points_progress || 0)).toFixed(1)}%
-                </span>
-              </div>
-            )}
+              );
+            })()}
             
             {/* Bullets */}
             <div className="hidden md:flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Bullets">
