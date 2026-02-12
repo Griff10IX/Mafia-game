@@ -2977,6 +2977,7 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
         await db.bodyguards.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": target["id"],
+            "owner_username": target.get("username"),
             "slot_number": slot,
             "is_robot": True,
             "robot_name": robot_username,
@@ -3378,7 +3379,7 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
             }
             await db.users.insert_one(user_doc)
             created_users.append({"username": username, "email": email, "role": role, "family": name})
-            user_ids.append((user_id, role))
+            user_ids.append((user_id, role, username))
         boss_id = user_ids[0][0] if user_ids else None
         if not boss_id:
             continue
@@ -3397,7 +3398,7 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
             "rackets": rackets,
         })
         created_families.append({"name": name, "tag": tag})
-        for user_id, role in user_ids:
+        for user_id, role, _ in user_ids:
             await db.family_members.insert_one({
                 "id": str(uuid.uuid4()),
                 "family_id": family_id,
@@ -3410,7 +3411,7 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
                 {"$set": {"family_id": family_id, "family_role": role}},
             )
         # Give each member 2 robot bodyguards
-        for user_id, role in user_ids:
+        for user_id, role, owner_username in user_ids:
             owner = {"id": user_id, "current_state": "Chicago"}
             for slot in range(1, 3):
                 try:
@@ -3418,6 +3419,7 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
                     await db.bodyguards.insert_one({
                         "id": str(uuid.uuid4()),
                         "user_id": user_id,
+                        "owner_username": owner_username,
                         "slot_number": slot,
                         "is_robot": True,
                         "robot_name": robot_username,
@@ -4020,6 +4022,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
     bodyguard_doc = {
         "id": str(uuid.uuid4()),
         "user_id": current_user["id"],
+        "owner_username": current_user.get("username"),  # who this bodyguard is for (easy to see in DB)
         "slot_number": slot,
         "is_robot": is_robot,
         "robot_name": robot_name,
@@ -5060,7 +5063,7 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
 @api_router.get("/leaderboard", response_model=List[LeaderboardEntry])
 async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     users = await db.users.find(
-        {"is_dead": {"$ne": True}},
+        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}},
         {"_id": 0, "username": 1, "money": 1, "total_kills": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "id": 1}
     ).sort("money", -1).limit(10).to_list(10)
     
@@ -5082,7 +5085,7 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
 async def _top_by_field(field: str, current_user_id: str, limit: int) -> List[StatLeaderboardEntry]:
     limit = max(1, min(100, int(limit)))
     users = await db.users.find(
-        {"is_dead": {"$ne": True}},
+        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}},
         {"_id": 0, "username": 1, "id": 1, field: 1}
     ).sort(field, -1).limit(limit).to_list(limit)
     out: List[StatLeaderboardEntry] = []
