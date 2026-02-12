@@ -211,7 +211,7 @@
   border-color: var(--noir-border-light);
 }
 
-/* ========== OLD SCHOOL GANGSTER + MODERN TWIST (Booze Run preview) ========== */
+/* ========== OLD SCHOOL GANGSTER + MODERN TWIST (app-wide main content) ========== */
 .themeGangsterModern {
   /* Neutral charcoal + reflective gold (no brown) */
   --gm-bg: #0a0a0a;

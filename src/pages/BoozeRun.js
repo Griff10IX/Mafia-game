@@ -278,7 +278,7 @@ export default function BoozeRun() {
   });
 
   return (
-    <div className={`space-y-6 ${styles.pageContent} ${styles.themeGangsterModern}`} data-testid="booze-run-page">
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="booze-run-page">
       <div className="flex items-center justify-center flex-col gap-2 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-primary/40" />

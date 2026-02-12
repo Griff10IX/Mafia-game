@@ -605,7 +605,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className="md:ml-64 mt-12 min-h-screen p-4 md:p-6">
+      <main className={`md:ml-64 mt-12 min-h-screen p-4 md:p-6 ${styles.themeGangsterModern}`}>
         {children}
       </main>
     </div>
