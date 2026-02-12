@@ -14,7 +14,7 @@ function formatMoney(n) {
 }
 
 export default function Dice() {
-  const [diceConfig, setDiceConfig] = useState({ sides_min: 2, sides_max: 1000, max_bet: 5_000_000 });
+  const [diceConfig, setDiceConfig] = useState({ sides_min: 2, sides_max: 5000, max_bet: 5_000_000 });
   const [ownership, setOwnership] = useState({ current_city: null, owner: null });
   const [stake, setStake] = useState('');
   const [sides, setSides] = useState('6');
@@ -37,7 +37,7 @@ export default function Dice() {
   const rollStartTimeRef = useRef(0);
 
   const fetchConfigAndOwnership = () => {
-    api.get('/casino/dice/config').then((r) => setDiceConfig(r.data || { sides_min: 2, sides_max: 1000, max_bet: 5_000_000 })).catch(() => {});
+    api.get('/casino/dice/config').then((r) => setDiceConfig(r.data || { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 })).catch(() => {});
     api.get('/casino/dice/ownership').then((r) => {
       const data = r.data || { current_city: null, owner: null, max_bet: null, buy_back_reward: null };
       setOwnership(data);
@@ -51,6 +51,15 @@ export default function Dice() {
   useEffect(() => {
     fetchConfigAndOwnership();
   }, []);
+
+  // When sides change, clamp chosen number to 1..sidesNum so it's never out of range
+  useEffect(() => {
+    const n = parseInt(String(chosenNumber || ''), 10);
+    if (chosenNumber === '' || Number.isNaN(n)) return;
+    if (n < 1) setChosenNumber('1');
+    else if (n > sidesNum) setChosenNumber(String(sidesNum));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- only clamp when sidesNum changes
+  }, [sidesNum]);
 
   useEffect(() => {
     return () => {
@@ -75,7 +84,7 @@ export default function Dice() {
   }, [buyBackOffer]);
 
   const stakeNum = parseInt(String(stake || '').replace(/[^\d]/g, ''), 10) || 0;
-  const sidesNum = Math.max(diceConfig.sides_min || 2, Math.min(diceConfig.sides_max || 1000, parseInt(String(sides || ''), 10) || 6));
+  const sidesNum = Math.max(diceConfig.sides_min || 2, Math.min(diceConfig.sides_max || 5000, parseInt(String(sides || ''), 10) || 6));
   const chosenNum = Math.max(1, Math.min(sidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
   const canBet = stakeNum > 0 && stakeNum <= (diceConfig.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= sidesNum;
@@ -484,7 +493,22 @@ export default function Dice() {
                   max={sidesNum}
                   placeholder={`1–${sidesNum}`}
                   value={chosenNumber}
-                  onChange={(e) => setChosenNumber(e.target.value)}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === '') {
+                      setChosenNumber('');
+                      return;
+                    }
+                    const n = parseInt(v, 10);
+                    if (Number.isNaN(n)) return;
+                    const clamped = Math.max(1, Math.min(sidesNum, n));
+                    setChosenNumber(String(clamped));
+                  }}
+                  onBlur={() => {
+                    const n = parseInt(String(chosenNumber || ''), 10);
+                    if (Number.isNaN(n) || n < 1) setChosenNumber('1');
+                    else if (n > sidesNum) setChosenNumber(String(sidesNum));
+                  }}
                   className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-8 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
                 />
               </div>

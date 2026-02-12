@@ -108,7 +108,7 @@ BANK_INTEREST_OPTIONS = [
 
 # Dice game (casino): sides 2–1000, chosen 1–sides, house edge 5% so multiplier = sides * 0.95
 DICE_SIDES_MIN = 2
-DICE_SIDES_MAX = 1000
+DICE_SIDES_MAX = 5000
 DICE_HOUSE_EDGE = 0.05  # 5% house edge
 DICE_MAX_BET = 5_000_000
 
@@ -5330,7 +5330,10 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
         raise HTTPException(status_code=400, detail="No current city")
     stake = max(0, int(request.stake))
     sides = max(DICE_SIDES_MIN, min(DICE_SIDES_MAX, int(request.sides)))
-    chosen = max(1, min(sides, int(request.chosen_number)))
+    chosen_raw = int(request.chosen_number)
+    if chosen_raw < 1 or chosen_raw > sides:
+        raise HTTPException(status_code=400, detail=f"Chosen number must be between 1 and {sides} (sides)")
+    chosen = chosen_raw
     if stake <= 0:
         raise HTTPException(status_code=400, detail="Stake must be positive")
     stored_city, doc = await _get_dice_ownership_doc(city)
