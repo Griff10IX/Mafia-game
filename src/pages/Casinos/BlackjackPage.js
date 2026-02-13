@@ -93,10 +93,69 @@ export default function Blackjack() {
   const [ownerLoading, setOwnerLoading] = useState(false);
   const [newMaxBet, setNewMaxBet] = useState('');
   const [transferUsername, setTransferUsername] = useState('');
+  const [buyBackOffer, setBuyBackOffer] = useState(null);
+  const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
+  const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
 
   const fetchConfigAndOwnership = () => {
     api.get('/casino/blackjack/config').then((r) => setConfig(r.data || { max_bet: 50_000_000 })).catch(() => {});
-    api.get('/casino/blackjack/ownership').then((r) => setOwnership(r.data || null)).catch(() => setOwnership(null));
+    api.get('/casino/blackjack/ownership').then((r) => {
+      const data = r.data || null;
+      setOwnership(data);
+      if (data?.buy_back_offer) {
+        setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
+      } else {
+        setBuyBackOffer(null);
+      }
+    }).catch(() => setOwnership(null));
+  };
+
+  // Buy-back timer countdown
+  useEffect(() => {
+    if (!buyBackOffer?.expires_at) {
+      setBuyBackSecondsLeft(null);
+      return;
+    }
+    const update = () => {
+      const exp = new Date(buyBackOffer.expires_at).getTime();
+      const left = Math.max(0, Math.ceil((exp - Date.now()) / 1000));
+      setBuyBackSecondsLeft(left);
+      if (left <= 0) setBuyBackOffer(null);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [buyBackOffer]);
+
+  const acceptBuyBack = async () => {
+    if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
+    setBuyBackActionLoading(true);
+    try {
+      const res = await api.post('/casino/blackjack/buy-back/accept', { offer_id: buyBackOffer.offer_id });
+      toast.success(res.data?.message || 'Accepted! You received the points.');
+      setBuyBackOffer(null);
+      refreshUser();
+      fetchConfigAndOwnership();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setBuyBackActionLoading(false);
+    }
+  };
+
+  const rejectBuyBack = async () => {
+    if (!buyBackOffer?.offer_id || buyBackActionLoading) return;
+    setBuyBackActionLoading(true);
+    try {
+      await api.post('/casino/blackjack/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      toast.success('You kept the casino!');
+      setBuyBackOffer(null);
+      fetchConfigAndOwnership();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setBuyBackActionLoading(false);
+    }
   };
 
   const fetchHistory = () => {
@@ -234,8 +293,16 @@ export default function Blackjack() {
       else if (data.result === 'win' || data.result === 'dealer_bust') toast.success(`You won ${formatMoney(data.payout - game.bet)}!`);
       else if (data.result === 'push') toast.info('Push. Bet returned.');
       else toast.error(`Dealer wins. You lost ${formatMoney(game.bet)}.`);
+      // Handle ownership transfer and buy-back offer
+      if (data.ownership_transferred) {
+        toast.success('🎰 You won the casino! This table is now yours.');
+      }
+      if (data.buy_back_offer) {
+        setBuyBackOffer(data.buy_back_offer);
+      }
       refreshUser(data.new_balance);
       fetchHistory();
+      fetchConfigAndOwnership();
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Failed to stand'));
     } finally {
@@ -285,6 +352,39 @@ export default function Blackjack() {
           </div>
         )}
       </div>
+
+      {/* Buy-back offer panel */}
+      {buyBackOffer && (
+        <div className="p-4 rounded-lg border-2 border-primary/50 bg-gradient-to-r from-primary/10 to-primary/5 space-y-3">
+          <h3 className="font-heading font-bold text-primary uppercase tracking-wider">Buy-Back Offer</h3>
+          <p className="text-sm text-mutedForeground">
+            House could only pay {formatMoney(buyBackOffer.owner_paid)}. Accept to return the table for {(buyBackOffer.points_offered || 0).toLocaleString()} points, or reject to keep ownership.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {buyBackSecondsLeft !== null && (
+              <span className="text-sm font-heading font-medium text-primary tabular-nums">
+                {Math.floor(buyBackSecondsLeft / 60)}:{String(buyBackSecondsLeft % 60).padStart(2, '0')}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={acceptBuyBack}
+              disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
+              className="bg-primary text-primaryForeground px-5 py-2 rounded-md text-sm font-bold uppercase tracking-wide hover:opacity-90 disabled:opacity-50 touch-manipulation"
+            >
+              {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
+            </button>
+            <button
+              type="button"
+              onClick={rejectBuyBack}
+              disabled={buyBackActionLoading}
+              className="bg-secondary border border-border text-foreground px-5 py-2 rounded-md text-sm font-bold uppercase tracking-wide hover:opacity-90 disabled:opacity-50 touch-manipulation"
+            >
+              {buyBackActionLoading ? '...' : 'Reject'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Owner panel - like RLT */}
       {isOwner && (

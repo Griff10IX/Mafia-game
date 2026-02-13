@@ -5753,28 +5753,15 @@ async def _get_dice_ownership_doc(city: str):
 
 @api_router.get("/casino/dice/ownership")
 async def casino_dice_ownership(current_user: dict = Depends(get_current_user)):
-    """Current city's dice ownership and effective max_bet (owner's or default). Processes expired buy-back offers as auto-accept."""
+    """Current city's dice ownership and effective max_bet (owner's or default).
+    Expired buy-back offers are auto-REJECTED (winner keeps ownership).
+    """
     now = datetime.now(timezone.utc)
-    expired = await db.dice_buy_back_offers.find_one({
+    # Clean up expired buy-back offers: auto-reject = winner keeps ownership, just delete the offer
+    await db.dice_buy_back_offers.delete_many({
         "to_user_id": current_user["id"],
         "expires_at": {"$lt": now.isoformat()},
-    }, {"_id": 0})
-    while expired:
-        city_offer = expired.get("city")
-        from_owner_id = expired.get("from_owner_id")
-        points_offered = int(expired.get("points_offered") or 0)
-        if city_offer and from_owner_id:
-            from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1})
-            from_points = int((from_user.get("points") or 0) or 0)
-            if points_offered > 0 and from_points >= points_offered:
-                await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
-            await db.dice_ownership.update_one({"city": city_offer}, {"$set": {"owner_id": from_owner_id}})
-        await db.dice_buy_back_offers.delete_one({"id": expired["id"]})
-        expired = await db.dice_buy_back_offers.find_one({
-            "to_user_id": current_user["id"],
-            "expires_at": {"$lt": now.isoformat()},
-        }, {"_id": 0})
+    })
     raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
     city = _normalize_city_for_dice(raw) if raw else (STATES[0] if STATES else "")
     if not city:
@@ -5847,6 +5834,9 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
     if doc:
         max_bet = doc.get("max_bet") if doc.get("max_bet") is not None else DICE_MAX_BET
         owner_id = doc.get("owner_id")
+    # Prevent owner from playing at their own table
+    if owner_id and owner_id == current_user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot play at your own table")
     if stake > max_bet:
         raise HTTPException(status_code=400, detail=f"Stake exceeds max bet ({max_bet})")
     player_money = int((current_user.get("money") or 0) or 0)
@@ -6408,28 +6398,15 @@ async def casino_blackjack_config(current_user: dict = Depends(get_current_user)
 
 @api_router.get("/casino/blackjack/ownership")
 async def casino_blackjack_ownership(current_user: dict = Depends(get_current_user)):
-    """Current city's blackjack ownership. Processes expired buy-back offers as auto-accept (2 min expiry)."""
+    """Current city's blackjack ownership.
+    Expired buy-back offers are auto-REJECTED (winner keeps ownership).
+    """
     now = datetime.now(timezone.utc)
-    expired = await db.blackjack_buy_back_offers.find_one({
+    # Clean up expired buy-back offers: auto-reject = winner keeps ownership, just delete the offer
+    await db.blackjack_buy_back_offers.delete_many({
         "to_user_id": current_user["id"],
         "expires_at": {"$lt": now.isoformat()},
-    }, {"_id": 0})
-    while expired:
-        city_offer = expired.get("city")
-        from_owner_id = expired.get("from_owner_id")
-        points_offered = int(expired.get("points_offered") or 0)
-        if city_offer and from_owner_id:
-            from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1})
-            from_points = int((from_user.get("points") or 0) or 0)
-            if points_offered > 0 and from_points >= points_offered:
-                await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
-            await db.blackjack_ownership.update_one({"city": city_offer}, {"$set": {"owner_id": from_owner_id}})
-        await db.blackjack_buy_back_offers.delete_one({"id": expired["id"]})
-        expired = await db.blackjack_buy_back_offers.find_one({
-            "to_user_id": current_user["id"],
-            "expires_at": {"$lt": now.isoformat()},
-        }, {"_id": 0})
+    })
     raw = (current_user.get("current_state") or "").strip()
     city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "Chicago")
     display_city = city or raw or "Chicago"

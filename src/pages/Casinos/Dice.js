@@ -336,6 +336,7 @@ export default function Dice() {
       toast.success(res.data?.message || 'Accepted! You received the points.');
       setBuyBackOffer(null);
       refreshUser();
+      fetchConfigAndOwnership(); // Refresh ownership state after accepting
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -348,8 +349,9 @@ export default function Dice() {
     setBuyBackActionLoading(true);
     try {
       await api.post('/casino/dice/buy-back/reject', { offer_id: buyBackOffer.offer_id });
-      toast.success('You kept the casino payout');
+      toast.success('You kept the casino!');
       setBuyBackOffer(null);
+      fetchConfigAndOwnership(); // Refresh ownership state after rejecting
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -488,6 +490,7 @@ export default function Dice() {
             <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
               <h3 className="text-lg font-heading font-semibold text-primary">Owner Controls</h3>
               <p className="text-sm text-mutedForeground">Manage your dice table in {currentCity}</p>
+              <p className="text-xs text-red-400 mt-1">You cannot play at your own table.</p>
               {ownership?.profit != null && (
                 <p className={`text-xl font-heading font-bold mt-2 ${
                   (ownership?.profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
