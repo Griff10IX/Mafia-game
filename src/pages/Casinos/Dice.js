@@ -353,7 +353,7 @@ export default function Dice() {
             {isOwner ? (
               <p className="text-primary font-heading">You own this table — you profit when players lose and pay when they win.</p>
             ) : ownership?.owner ? (
-              <p className="text-mutedForeground">Owned by <span className="text-primary font-medium">{ownership.owner.username}</span>{ownership.owner.wealth_rank_name ? ` (${ownership.owner.wealth_rank_name})` : ''}. The house pays wins; losses go to the owner.</p>
+              <p className="text-mutedForeground">Owned by <span className="text-primary font-medium">{ownership.owner?.username ?? 'Unknown'}</span>{ownership.owner?.wealth_rank_name ? ` (${ownership.owner.wealth_rank_name})` : ''}. The house pays wins; losses go to the owner.</p>
             ) : (
               <p className="text-mutedForeground">No owner. Wins and losses are against the house.</p>
             )}
@@ -508,9 +508,9 @@ export default function Dice() {
                 <label className="block text-xs font-heading font-medium text-primary/80 uppercase tracking-wider mb-1">Number of Sides</label>
                 <input
                   type="number"
-                  min={diceConfig.sides_min}
-                  max={diceConfig.sides_max}
-                  placeholder={`${diceConfig.sides_min}–${diceConfig.sides_max}`}
+                  min={config.sides_min ?? 2}
+                  max={config.sides_max ?? 5000}
+                  placeholder={`${config.sides_min ?? 2}–${config.sides_max ?? 5000}`}
                   value={sides}
                   onChange={(e) => setSides(e.target.value)}
                   className="w-full bg-zinc-800/80 border border-primary/20 rounded-sm h-8 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
@@ -612,7 +612,7 @@ export default function Dice() {
             <div className="space-y-1.5 text-[10px] sm:text-xs">
               <div className="flex justify-between items-center py-1 border-b border-primary/10">
                 <span className="text-mutedForeground font-heading uppercase tracking-wider">Max Bet</span>
-                <span className="text-primary font-heading font-bold">{formatMoney(diceConfig.max_bet)}</span>
+                <span className="text-primary font-heading font-bold">{formatMoney(config.max_bet ?? 0)}</span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-primary/10">
                 <span className="text-mutedForeground font-heading uppercase tracking-wider">House Edge</span>
