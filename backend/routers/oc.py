@@ -4,6 +4,7 @@ import random
 import os
 import sys
 import logging
+import uuid
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
@@ -22,7 +23,7 @@ def _parse_iso_datetime(val):
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
-from server import db, get_current_user, get_effective_event
+from server import db, get_current_user, get_effective_event, send_notification
 
 # Roles (team of 4)
 OC_ROLES = [
@@ -43,15 +44,29 @@ OC_JOBS = [
 OC_COOLDOWN_HOURS = 6
 OC_COOLDOWN_HOURS_REDUCED = 4
 NPC_PAYOUT_MULTIPLIER = 0.35  # Each NPC gets 35% of a full share for total pool
+OC_INVITE_EXPIRY_MINUTES = 5
+ROLE_KEYS = ["driver", "weapons", "explosives", "hacker"]
 
 
 class OCExecuteRequest(BaseModel):
     job_id: str
-    driver: str   # "self" | "npc" | user_id
+    driver: str   # "self" | "npc" | user_id / username
     weapons: str
     explosives: str
     hacker: str
-    # Creator sets % cut per slot (must sum to 100). NPC slots get nothing.
+    driver_pct: int = 25
+    weapons_pct: int = 25
+    explosives_pct: int = 25
+    hacker_pct: int = 25
+    pending_heist_id: str | None = None  # when running from pending invites
+
+
+class OCSendInvitesRequest(BaseModel):
+    job_id: str
+    driver: str
+    weapons: str
+    explosives: str
+    hacker: str
     driver_pct: int = 25
     weapons_pct: int = 25
     explosives_pct: int = 25
@@ -64,7 +79,7 @@ async def get_oc_config(current_user: dict = Depends(get_current_user)):
 
 
 async def get_oc_status(current_user: dict = Depends(get_current_user)):
-    """Return cooldown and timer upgrade status."""
+    """Return cooldown, timer upgrade, and pending heist/invites (creator)."""
     has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
     cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if has_timer_upgrade else OC_COOLDOWN_HOURS
     cooldown_until = current_user.get("oc_cooldown_until")
@@ -73,11 +88,53 @@ async def get_oc_status(current_user: dict = Depends(get_current_user)):
         until = _parse_iso_datetime(cooldown_until)
         if until and until <= now:
             cooldown_until = None
-    return {
+    out = {
         "cooldown_until": cooldown_until,
         "cooldown_hours": cooldown_hours,
         "has_timer_upgrade": has_timer_upgrade,
+        "pending_heist": None,
+        "pending_invites": [],
     }
+    # Creator's pending heist (one per user)
+    pending = await db.oc_pending_heists.find_one(
+        {"creator_id": current_user["id"]},
+        {"_id": 0}
+    )
+    if pending:
+        out["pending_heist"] = {
+            "id": pending["id"],
+            "job_id": pending["job_id"],
+            "driver": pending.get("driver"),
+            "weapons": pending.get("weapons"),
+            "explosives": pending.get("explosives"),
+            "hacker": pending.get("hacker"),
+            "driver_pct": pending.get("driver_pct", 25),
+            "weapons_pct": pending.get("weapons_pct", 25),
+            "explosives_pct": pending.get("explosives_pct", 25),
+            "hacker_pct": pending.get("hacker_pct", 25),
+        }
+        invites = await db.oc_invites.find(
+            {"pending_heist_id": pending["id"]},
+            {"_id": 0, "id": 1, "role": 1, "target_username": 1, "status": 1, "expires_at": 1}
+        ).to_list(10)
+        for inv in invites:
+            exp = inv.get("expires_at")
+            if exp:
+                try:
+                    exp_dt = _parse_iso_datetime(exp)
+                    if exp_dt and exp_dt <= now and inv.get("status") == "pending":
+                        await db.oc_invites.update_one({"id": inv["id"]}, {"$set": {"status": "expired"}})
+                        inv["status"] = "expired"
+                except Exception:
+                    pass
+            out["pending_invites"].append({
+                "invite_id": inv["id"],
+                "role": inv.get("role"),
+                "target_username": inv.get("target_username"),
+                "status": inv.get("status", "pending"),
+                "expires_at": inv.get("expires_at"),
+            })
+    return out
 
 
 async def _resolve_slot(slot: str, current_user_id: str) -> str | None:
@@ -87,7 +144,6 @@ async def _resolve_slot(slot: str, current_user_id: str) -> str | None:
         return None
     if s.lower() == "self":
         return current_user_id
-    # Resolve by username or id
     u = await db.users.find_one(
         {"$or": [{"username": s}, {"id": s}]},
         {"_id": 0, "id": 1},
@@ -95,44 +151,293 @@ async def _resolve_slot(slot: str, current_user_id: str) -> str | None:
     return u["id"] if u else None
 
 
-async def execute_oc(
-    request: OCExecuteRequest,
+def _slot_is_invite(slot_val: str, uid: str) -> bool:
+    """True if slot is another user (username), not self or npc."""
+    s = (slot_val or "").strip().lower()
+    if not s or s == "npc" or s == "self":
+        return False
+    return True
+
+
+async def send_invites_oc(
+    request: OCSendInvitesRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Run an Organised Crime heist. Leader (current user) must fill all 4 slots (self, npc, or other user_id)."""
+    """Create a pending heist and send inbox invites to each invited player. They must accept in inbox."""
     job = next((j for j in OC_JOBS if j["id"] == request.job_id), None)
     if not job:
         raise HTTPException(status_code=404, detail="Invalid job")
-
     uid = current_user["id"]
     pcts = [request.driver_pct, request.weapons_pct, request.explosives_pct, request.hacker_pct]
     if sum(pcts) != 100 or any(p < 0 or p > 100 for p in pcts):
         raise HTTPException(status_code=400, detail="Percentages must be 0–100 and sum to 100")
-    slots = [request.driver, request.weapons, request.explosives, request.hacker]
-    resolved = []
-    for s in slots:
-        r = await _resolve_slot(s, uid)
-        resolved.append(r)
-    if not any(r == uid for r in resolved):
-        raise HTTPException(status_code=400, detail="You must fill at least one slot (use 'self')")
+    slots_raw = [request.driver, request.weapons, request.explosives, request.hacker]
+    if not any((s or "").strip().lower() == "self" for s in slots_raw):
+        raise HTTPException(status_code=400, detail="You must fill at least one slot (self)")
+    # Require at least one invite slot
+    invite_slots = []
+    for i, role in enumerate(ROLE_KEYS):
+        val = (slots_raw[i] or "").strip()
+        if _slot_is_invite(val, uid):
+            invite_slots.append((role, val))
+    if not invite_slots:
+        raise HTTPException(status_code=400, detail="No invite slots: add at least one username to invite")
+    # Resolve usernames to user_ids and validate
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(minutes=OC_INVITE_EXPIRY_MINUTES)).isoformat()
+    # If creator already has a pending heist, remove it (replace with new one)
+    await db.oc_pending_heists.delete_many({"creator_id": uid})
+    await db.oc_invites.delete_many({"creator_id": uid})
+    pending_id = str(uuid.uuid4())
+    doc = {
+        "id": pending_id,
+        "creator_id": uid,
+        "job_id": request.job_id,
+        "driver": (request.driver or "").strip() or None,
+        "weapons": (request.weapons or "").strip() or None,
+        "explosives": (request.explosives or "").strip() or None,
+        "hacker": (request.hacker or "").strip() or None,
+        "driver_pct": request.driver_pct,
+        "weapons_pct": request.weapons_pct,
+        "explosives_pct": request.explosives_pct,
+        "hacker_pct": request.hacker_pct,
+        "created_at": now.isoformat(),
+    }
+    await db.oc_pending_heists.insert_one(doc)
+    job_name = job["name"]
+    creator_username = current_user.get("username") or "Someone"
+    invites_out = []
+    for role, username in invite_slots:
+        target = await db.users.find_one(
+            {"$or": [{"username": username}, {"id": username}]},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+        )
+        if not target:
+            await db.oc_pending_heists.delete_many({"id": pending_id})
+            await db.oc_invites.delete_many({"pending_heist_id": pending_id})
+            raise HTTPException(status_code=400, detail=f"User not found: {username}")
+        if target.get("is_dead"):
+            await db.oc_pending_heists.delete_many({"id": pending_id})
+            await db.oc_invites.delete_many({"pending_heist_id": pending_id})
+            raise HTTPException(status_code=400, detail="Cannot invite dead players")
+        target_id = target["id"]
+        invite_id = str(uuid.uuid4())
+        await db.oc_invites.insert_one({
+            "id": invite_id,
+            "pending_heist_id": pending_id,
+            "creator_id": uid,
+            "creator_username": creator_username,
+            "role": role,
+            "target_id": target_id,
+            "target_username": target.get("username") or username,
+            "status": "pending",
+            "created_at": now.isoformat(),
+            "expires_at": expires_at,
+        })
+        role_name = role.replace("_", " ").capitalize()
+        msg = f"{creator_username} invited you to an Organised Crime heist as {role_name} ({job_name}). Accept or decline in your inbox. Expires in {OC_INVITE_EXPIRY_MINUTES} min."
+        await send_notification(
+            target_id,
+            "OC Heist invite",
+            msg,
+            "system",
+            oc_invite_id=invite_id,
+            oc_role=role,
+            oc_job_name=job_name,
+        )
+        invites_out.append({"role": role, "target_username": target.get("username"), "invite_id": invite_id, "expires_at": expires_at})
+    return {
+        "status": "pending_invites",
+        "message": "Invites sent. Check status; run heist when all have accepted or clear slots.",
+        "pending_heist_id": pending_id,
+        "invites": invites_out,
+    }
 
-    # All 4 slots must be filled (self, npc, or valid user)
-    user_ids = []
-    for i, r in enumerate(resolved):
-        slot_val = (slots[i] or "").strip().lower()
-        if r is None:
-            if slot_val not in ("", "npc"):
-                raise HTTPException(status_code=400, detail=f"User not found: {slots[i]}")
-            continue  # NPC
-        if r == uid:
-            user_ids.append(uid)
-            continue
-        other = await db.users.find_one({"id": r}, {"_id": 0, "id": 1, "is_dead": 1})
-        if not other:
-            raise HTTPException(status_code=400, detail=f"User not found: {slots[i]}")
-        if other.get("is_dead"):
-            raise HTTPException(status_code=400, detail="Cannot include dead players")
-        user_ids.append(r)
+
+async def oc_invite_accept(invite_id: str, current_user: dict = Depends(get_current_user)):
+    """Invited user accepts the OC invite."""
+    inv = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if inv.get("target_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your invite")
+    if inv.get("status") != "pending":
+        raise HTTPException(status_code=400, detail=f"Invite already {inv.get('status')}")
+    now = datetime.now(timezone.utc)
+    exp = _parse_iso_datetime(inv.get("expires_at"))
+    if exp and exp <= now:
+        await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "expired"}})
+        raise HTTPException(status_code=400, detail="Invite expired")
+    await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "accepted"}})
+    return {"message": "You accepted the heist invite. The creator can run the heist when everyone has accepted."}
+
+
+async def oc_invite_decline(invite_id: str, current_user: dict = Depends(get_current_user)):
+    """Invited user declines the OC invite."""
+    inv = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if inv.get("target_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your invite")
+    if inv.get("status") != "pending":
+        raise HTTPException(status_code=400, detail=f"Invite already {inv.get('status')}")
+    await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "declined"}})
+    return {"message": "You declined the heist invite."}
+
+
+async def oc_invite_cancel(invite_id: str, current_user: dict = Depends(get_current_user)):
+    """Creator cancels an invite and clears that slot (so they can re-invite or use NPC)."""
+    inv = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if inv.get("creator_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Not your invite")
+    if inv.get("status") not in ("pending", "expired"):
+        raise HTTPException(status_code=400, detail="Can only cancel pending or expired invites")
+    role = inv.get("role")
+    pending_id = inv.get("pending_heist_id")
+    await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "cancelled"}})
+    if pending_id and role:
+        await db.oc_pending_heists.update_one(
+            {"id": pending_id},
+            {"$set": {role: None}},
+        )
+    return {"message": "Invite cancelled. You can assign someone else or use NPC for that slot."}
+
+
+class OCPendingSlotRequest(BaseModel):
+    role: str  # driver, weapons, explosives, hacker
+    value: str  # "npc" or username to invite
+
+
+async def oc_pending_set_slot(
+    request: OCPendingSlotRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """After clearing an invite, set a slot to NPC or send a new invite (username)."""
+    if request.role not in ROLE_KEYS:
+        raise HTTPException(status_code=400, detail="Invalid role")
+    pending = await db.oc_pending_heists.find_one({"creator_id": current_user["id"]}, {"_id": 0})
+    if not pending:
+        raise HTTPException(status_code=400, detail="No pending heist. Send invites first.")
+    val = (request.value or "").strip()
+    if not val:
+        raise HTTPException(status_code=400, detail="Set value to 'npc' or a username")
+    if val.lower() == "npc":
+        await db.oc_pending_heists.update_one(
+            {"id": pending["id"]},
+            {"$set": {request.role: "npc"}},
+        )
+        return {"message": f"{request.role} set to NPC."}
+    # New invite
+    target = await db.users.find_one(
+        {"$or": [{"username": val}, {"id": val}]},
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+    )
+    if not target:
+        raise HTTPException(status_code=400, detail=f"User not found: {val}")
+    if target.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Cannot invite dead players")
+    now = datetime.now(timezone.utc)
+    expires_at = (now + timedelta(minutes=OC_INVITE_EXPIRY_MINUTES)).isoformat()
+    invite_id = str(uuid.uuid4())
+    job = next((j for j in OC_JOBS if j["id"] == pending["job_id"]), None)
+    job_name = job["name"] if job else "Heist"
+    await db.oc_invites.insert_one({
+        "id": invite_id,
+        "pending_heist_id": pending["id"],
+        "creator_id": current_user["id"],
+        "creator_username": current_user.get("username") or "Someone",
+        "role": request.role,
+        "target_id": target["id"],
+        "target_username": target.get("username") or val,
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "expires_at": expires_at,
+    })
+    await db.oc_pending_heists.update_one(
+        {"id": pending["id"]},
+        {"$set": {request.role: target.get("username") or val}},
+    )
+    await send_notification(
+        target["id"],
+        "OC Heist invite",
+        f"{current_user.get('username') or 'Someone'} invited you to an Organised Crime heist as {request.role.replace('_', ' ').capitalize()} ({job_name}). Accept or decline in your inbox. Expires in {OC_INVITE_EXPIRY_MINUTES} min.",
+        "system",
+        oc_invite_id=invite_id,
+        oc_role=request.role,
+        oc_job_name=job_name,
+    )
+    return {"message": f"Invite sent to {target.get('username') or val}.", "invite_id": invite_id}
+
+
+async def execute_oc(
+    request: OCExecuteRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Run an Organised Crime heist. Use pending_heist_id when running after invites accepted; else slots must be self/npc only."""
+    uid = current_user["id"]
+    now = datetime.now(timezone.utc)
+    job_id = request.job_id
+    pcts = [request.driver_pct, request.weapons_pct, request.explosives_pct, request.hacker_pct]
+    slots_raw = [request.driver, request.weapons, request.explosives, request.hacker]
+    resolved = None
+
+    if request.pending_heist_id:
+        # Run from pending heist: all invite slots must be accepted
+        pending = await db.oc_pending_heists.find_one({"id": request.pending_heist_id, "creator_id": uid}, {"_id": 0})
+        if not pending:
+            raise HTTPException(status_code=404, detail="Pending heist not found")
+        job_id = pending["job_id"]
+        pcts = [pending.get("driver_pct", 25), pending.get("weapons_pct", 25), pending.get("explosives_pct", 25), pending.get("hacker_pct", 25)]
+        resolved = [None, None, None, None]
+        for i, role in enumerate(ROLE_KEYS):
+            val = (pending.get(role) or "").strip() if isinstance(pending.get(role), str) else None
+            if not val:
+                raise HTTPException(status_code=400, detail=f"Slot {role} is empty. Clear expired invites or assign NPC.")
+            if (val or "").lower() == "self":
+                resolved[i] = uid
+            elif (val or "").lower() == "npc":
+                resolved[i] = None
+            else:
+                inv = await db.oc_invites.find_one({"pending_heist_id": request.pending_heist_id, "role": role}, {"_id": 0})
+                if not inv or inv.get("status") != "accepted":
+                    raise HTTPException(status_code=400, detail=f"Waiting for {val} to accept invite for {role}, or clear the slot.")
+                resolved[i] = inv.get("target_id")
+        job = next((j for j in OC_JOBS if j["id"] == job_id), None)
+        if not job:
+            raise HTTPException(status_code=404, detail="Invalid job")
+        # Consume pending heist
+        await db.oc_pending_heists.delete_one({"id": request.pending_heist_id})
+        await db.oc_invites.delete_many({"pending_heist_id": request.pending_heist_id})
+    else:
+        # Immediate run: no usernames allowed (must use send-invites first)
+        job = next((j for j in OC_JOBS if j["id"] == job_id), None)
+        if not job:
+            raise HTTPException(status_code=404, detail="Invalid job")
+        if sum(pcts) != 100 or any(p < 0 or p > 100 for p in pcts):
+            raise HTTPException(status_code=400, detail="Percentages must be 0–100 and sum to 100")
+        for s in slots_raw:
+            if _slot_is_invite(s, uid):
+                raise HTTPException(status_code=400, detail="You invited a player. Use Send invites, then Run heist when they accept (or clear the slot).")
+        resolved = []
+        for s in slots_raw:
+            r = await _resolve_slot(s, uid)
+            resolved.append(r)
+        if not any(r == uid for r in resolved):
+            raise HTTPException(status_code=400, detail="You must fill at least one slot (use 'self')")
+        for i, r in enumerate(resolved):
+            slot_val = (slots_raw[i] or "").strip().lower()
+            if r is None:
+                if slot_val not in ("", "npc"):
+                    raise HTTPException(status_code=400, detail=f"User not found: {slots_raw[i]}")
+                continue
+            if r != uid:
+                other = await db.users.find_one({"id": r}, {"_id": 0, "id": 1, "is_dead": 1})
+                if not other:
+                    raise HTTPException(status_code=400, detail=f"User not found: {slots_raw[i]}")
+                if other.get("is_dead"):
+                    raise HTTPException(status_code=400, detail="Cannot include dead players")
 
     now = datetime.now(timezone.utc)
     has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
@@ -203,4 +508,9 @@ async def execute_oc(
 def register(router):
     router.add_api_route("/oc/config", get_oc_config, methods=["GET"])
     router.add_api_route("/oc/status", get_oc_status, methods=["GET"])
+    router.add_api_route("/oc/send-invites", send_invites_oc, methods=["POST"])
+    router.add_api_route("/oc/invite/{invite_id}/accept", oc_invite_accept, methods=["POST"])
+    router.add_api_route("/oc/invite/{invite_id}/decline", oc_invite_decline, methods=["POST"])
+    router.add_api_route("/oc/invite/{invite_id}/cancel", oc_invite_cancel, methods=["POST"])
+    router.add_api_route("/oc/pending/set-slot", oc_pending_set_slot, methods=["POST"])
     router.add_api_route("/oc/execute", execute_oc, methods=["POST"])

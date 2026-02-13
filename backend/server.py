@@ -846,8 +846,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             pass
     return user
 
-async def send_notification(user_id: str, title: str, message: str, notification_type: str):
-    """Send a notification to user's inbox"""
+async def send_notification(user_id: str, title: str, message: str, notification_type: str, **extra):
+    """Send a notification to user's inbox. Optional extra fields (e.g. oc_invite_id) are merged in."""
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -855,7 +855,8 @@ async def send_notification(user_id: str, title: str, message: str, notification
         "message": message,
         "notification_type": notification_type,
         "read": False,
-        "created_at": datetime.now(timezone.utc).isoformat()
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        **extra,
     }
     await db.notifications.insert_one(notification)
     return notification

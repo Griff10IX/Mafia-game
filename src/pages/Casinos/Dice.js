@@ -59,7 +59,8 @@ export default function Dice() {
     const n = parseInt(String(chosenNumber || ''), 10);
     if (chosenNumber === '' || Number.isNaN(n)) return;
     const cfg = diceConfig && typeof diceConfig === 'object' ? diceConfig : { sides_min: 2, sides_max: 5000 };
-    const actual = Math.max(2, Math.ceil((Math.max(cfg.sides_min || 2, Math.min(cfg.sides_max || 5000, parseInt(String(sides || ''), 10) || 6)) * 1.05));
+    const sidesVal = Math.max(cfg.sides_min || 2, Math.min(cfg.sides_max || 5000, parseInt(String(sides || ''), 10) || 6));
+    const actual = Math.max(2, Math.ceil(sidesVal * 1.05));
     if (n < 1) setChosenNumber('1');
     else if (n > actual) setChosenNumber(String(actual));
   // eslint-disable-next-line react-hooks/exhaustive-deps -- only clamp when sides/actual sides change

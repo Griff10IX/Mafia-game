@@ -14,9 +14,10 @@ const NOTIFICATION_ICONS = {
   system: Bell
 };
 
-function NotificationItem({ notification, onMarkRead, onDelete }) {
+function NotificationItem({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline }) {
   const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
+  const isOcInvite = !!notification.oc_invite_id;
 
   return (
     <div
@@ -37,9 +38,25 @@ function NotificationItem({ notification, onMarkRead, onDelete }) {
             <span className="text-xs text-mutedForeground font-heading whitespace-nowrap">{timeAgo}</span>
           </div>
           <p className="text-xs text-mutedForeground font-heading">{notification.message}</p>
+          {isOcInvite && onOcAccept && onOcDecline && (
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={() => onOcAccept(notification.oc_invite_id)}
+                className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wider px-2 py-1 rounded border border-primary/50 hover:bg-primary/10"
+              >
+                Accept
+              </button>
+              <button
+                onClick={() => onOcDecline(notification.oc_invite_id)}
+                className="text-xs font-heading font-bold text-mutedForeground hover:text-foreground uppercase tracking-wider px-2 py-1 rounded border border-primary/20 hover:bg-primary/5"
+              >
+                Decline
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {!notification.read && (
+          {!notification.read && !isOcInvite && (
             <button
               onClick={() => onMarkRead(notification.id)}
               className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wider"
@@ -143,6 +160,26 @@ export default function Inbox() {
     }
   };
 
+  const handleOcInviteAccept = async (inviteId) => {
+    try {
+      const res = await api.post(`/oc/invite/${inviteId}/accept`);
+      toast.success(res.data?.message || 'Accepted');
+      fetchNotifications();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to accept');
+    }
+  };
+
+  const handleOcInviteDecline = async (inviteId) => {
+    try {
+      const res = await api.post(`/oc/invite/${inviteId}/decline`);
+      toast.success(res.data?.message || 'Declined');
+      fetchNotifications();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to decline');
+    }
+  };
+
   const filteredNotifications = filter === 'all' 
     ? notifications 
     : filter === 'unread'
@@ -222,6 +259,8 @@ export default function Inbox() {
               notification={notification}
               onMarkRead={markAsRead}
               onDelete={deleteMessage}
+              onOcAccept={handleOcInviteAccept}
+              onOcDecline={handleOcInviteDecline}
             />
           ))}
         </div>

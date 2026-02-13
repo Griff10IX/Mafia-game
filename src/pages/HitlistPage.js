@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users } from 'lucide-react';
+import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -8,8 +8,10 @@ export default function HitlistPage() {
   const [list, setList] = useState([]);
   const [me, setMe] = useState(null);
   const [user, setUser] = useState(null);
+  const [npcStatus, setNpcStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [addingNpc, setAddingNpc] = useState(false);
   const [targetUsername, setTargetUsername] = useState('');
   const [targetType, setTargetType] = useState('user');
   const [rewardType, setRewardType] = useState('cash');
@@ -18,14 +20,16 @@ export default function HitlistPage() {
 
   const fetchData = async () => {
     try {
-      const [listRes, meRes, userRes] = await Promise.all([
+      const [listRes, meRes, userRes, npcStatusRes] = await Promise.all([
         api.get('/hitlist/list'),
         api.get('/hitlist/me'),
-        api.get('/auth/me')
+        api.get('/auth/me'),
+        api.get('/hitlist/npc-status').catch(() => ({ data: null }))
       ]);
       setList(listRes.data?.items || []);
       setMe(meRes.data);
       setUser(userRes.data);
+      setNpcStatus(npcStatusRes.data);
     } catch (e) {
       toast.error('Failed to load hitlist');
     } finally {
@@ -106,6 +110,21 @@ export default function HitlistPage() {
     }
   };
 
+  const handleAddNpc = async () => {
+    if (!npcStatus?.can_add || addingNpc) return;
+    setAddingNpc(true);
+    try {
+      const res = await api.post('/hitlist/add-npc');
+      toast.success(res.data?.message);
+      refreshUser();
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to add NPC');
+    } finally {
+      setAddingNpc(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -127,8 +146,46 @@ export default function HitlistPage() {
           <h1 className="text-3xl md:text-4xl font-heading font-bold text-primary tracking-wider uppercase">Hitlist</h1>
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
         </div>
-        <p className="text-center text-mutedForeground font-heading tracking-wide">Place bounties on users or their bodyguards. Hidden bounties cost 50% extra.</p>
+        <p className="text-center text-mutedForeground font-heading tracking-wide">Place bounties on users or their bodyguards. Add NPCs for extra targets. Hidden bounties cost 50% extra.</p>
       </div>
+
+      {/* Add NPC to hitlist */}
+      {npcStatus != null && (
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+            <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+              <UserPlus size={18} /> Add NPC to hitlist
+            </h2>
+          </div>
+          <div className="p-4 flex flex-wrap items-center gap-3">
+            <p className="text-sm text-mutedForeground font-heading flex-1 min-w-[200px]">
+              Add a random NPC target (max {npcStatus.max_per_window ?? 3} per {npcStatus.window_hours ?? 3} hours). Attack them from the Attack page for rewards.
+            </p>
+            {npcStatus.can_add ? (
+              <button
+                type="button"
+                onClick={handleAddNpc}
+                disabled={addingNpc}
+                className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest px-4 py-2 text-sm border border-yellow-600/50 disabled:opacity-50 flex items-center gap-2"
+                data-testid="hitlist-add-npc"
+              >
+                <UserPlus size={16} />
+                {addingNpc ? 'Adding...' : 'Add NPC'}
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 text-sm text-mutedForeground font-heading">
+                <Clock size={16} />
+                <span>
+                  {npcStatus.adds_used_in_window ?? 0}/{npcStatus.max_per_window ?? 3} used this window.
+                  {npcStatus.next_add_at && (
+                    <> Next available {new Date(npcStatus.next_add_at).toLocaleString()}</>
+                  )}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* You're on the hitlist */}
       {(onHitlist || revealed) && (
