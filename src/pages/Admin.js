@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2 } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -41,6 +41,7 @@ export default function Admin() {
   const [giveAllMoney, setGiveAllMoney] = useState(10000);
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
+  const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
 
   const checkAdmin = async () => {
     try {
@@ -215,6 +216,19 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed');
     } finally {
       setClearSearchesLoading(false);
+    }
+  };
+
+  const handleResetHitlistNpcTimers = async () => {
+    if (!window.confirm('Reset hitlist NPC timers for everyone? All users will be able to add NPCs again (3 per 3h from now).')) return;
+    setResetNpcTimersLoading(true);
+    try {
+      const res = await api.post('/admin/hitlist/reset-npc-timers');
+      toast.success(res.data?.message || 'Hitlist NPC timers reset');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setResetNpcTimersLoading(false);
     }
   };
 
@@ -671,6 +685,17 @@ export default function Admin() {
               <p className={`text-xs font-heading mb-3 ${styles.textMuted}`}>Remove every attack/search from the database (all users).</p>
               <button onClick={handleClearAllSearches} disabled={clearSearchesLoading} className={`w-full ${btnDanger} disabled:opacity-50`}>
                 {clearSearchesLoading ? 'Clearing...' : 'Clear All Searches'}
+              </button>
+            </div>
+
+            <div className={`${styles.panel} rounded-md overflow-hidden p-4`}>
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className={styles.textGold} size={20} />
+                <h3 className="font-heading font-bold text-primary text-sm uppercase tracking-wider">Reset Hitlist NPC Timers</h3>
+              </div>
+              <p className={`text-xs font-heading mb-3 ${styles.textMuted}`}>Clear everyone&apos;s &quot;3 per 3 hours&quot; NPC add window. All users can add NPCs again immediately.</p>
+              <button onClick={handleResetHitlistNpcTimers} disabled={resetNpcTimersLoading} className={`w-full ${btnPrimary} disabled:opacity-50`}>
+                {resetNpcTimersLoading ? 'Resetting...' : "Reset Everyone's NPC Timers"}
               </button>
             </div>
 
