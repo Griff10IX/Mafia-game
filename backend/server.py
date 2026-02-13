@@ -423,6 +423,14 @@ class MoneyTransferRequest(BaseModel):
     to_username: str
     amount: int
 
+
+class SendMessageRequest(BaseModel):
+    """Send a direct message to another user (inbox). Supports text, emojis, and optional GIF URL."""
+    target_username: str
+    message: str
+    gif_url: Optional[str] = None
+
+
 class DiceBetRequest(BaseModel):
     stake: int
     sides: int  # 2..1000
@@ -5562,6 +5570,36 @@ async def delete_all_notifications(current_user: dict = Depends(get_current_user
     """Delete all messages in the current user's inbox."""
     result = await db.notifications.delete_many({"user_id": current_user["id"]})
     return {"message": "All messages deleted", "deleted_count": result.deleted_count}
+
+
+@api_router.post("/notifications/send")
+async def send_message_to_user(request: SendMessageRequest, current_user: dict = Depends(get_current_user)):
+    """Send a direct message to another user. Message can include emojis; optional gif_url is shown as an image."""
+    target_username = (request.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Enter a username")
+    if target_username == (current_user.get("username") or ""):
+        raise HTTPException(status_code=400, detail="You cannot message yourself")
+    target = await db.users.find_one(
+        {"username": target_username},
+        {"_id": 0, "id": 1, "username": 1}
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    message = (request.message or "").strip()
+    if not message and not (request.gif_url or "").strip():
+        raise HTTPException(status_code=400, detail="Message or GIF is required")
+    message = message or "(GIF)"
+    gif_url = (request.gif_url or "").strip()
+    if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="GIF URL must start with http:// or https://")
+    sender_username = current_user.get("username") or "?"
+    title = f"Message from {sender_username}"
+    extra = {"sender_id": current_user["id"], "sender_username": sender_username}
+    if gif_url:
+        extra["gif_url"] = gif_url
+    await send_notification(target["id"], title, message, "user_message", **extra)
+    return {"message": f"Message sent to {target['username']}"}
 
 
 # ============ BOOZE RUN (Supply Run / Prohibition) ============

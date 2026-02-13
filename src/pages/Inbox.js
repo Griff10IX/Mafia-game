@@ -1,7 +1,7 @@
 // Inbox page - notifications list
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2 } from 'lucide-react';
+import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -11,7 +11,8 @@ const NOTIFICATION_ICONS = {
   reward: Gift,
   bodyguard: Shield,
   attack: Skull,
-  system: Bell
+  system: Bell,
+  user_message: MessageCircle
 };
 
 function NotificationItem({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline }) {
@@ -38,6 +39,11 @@ function NotificationItem({ notification, onMarkRead, onDelete, onOcAccept, onOc
             <span className="text-xs text-mutedForeground font-heading whitespace-nowrap">{timeAgo}</span>
           </div>
           <p className="text-xs text-mutedForeground font-heading">{notification.message}</p>
+          {notification.notification_type === 'user_message' && notification.gif_url && (
+            <div className="mt-2">
+              <img src={notification.gif_url} alt="GIF" className="max-w-[200px] max-h-[150px] rounded border border-primary/20 object-cover" />
+            </div>
+          )}
           {isOcInvite && onOcAccept && onOcDecline && (
             <div className="flex items-center gap-2 mt-2">
               <button
@@ -89,7 +95,13 @@ function getTimeAgo(dateString) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-const VALID_FILTERS = ['all', 'unread', 'rank_up', 'reward', 'bodyguard', 'attack', 'system'];
+const VALID_FILTERS = ['all', 'unread', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message'];
+
+const EMOJI_ROWS = [
+  ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢'],
+  ['💰', '💵', '💎', '🎩', '🕴️', '🔫', '⚔️', '🔪', '🃏', '🎲'],
+  ['👔', '💼', '🥃', '🍷', '🎭', '👑', '🏆', '✨', '🙏', '💪'],
+];
 
 export default function Inbox() {
   const [searchParams] = useSearchParams();
@@ -99,6 +111,10 @@ export default function Inbox() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(initialFilter);
+  const [sendTo, setSendTo] = useState('');
+  const [sendMessage, setSendMessage] = useState('');
+  const [sendGifUrl, setSendGifUrl] = useState('');
+  const [sending, setSending] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -180,6 +196,36 @@ export default function Inbox() {
     }
   };
 
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    const to = (sendTo || '').trim();
+    const msg = (sendMessage || '').trim();
+    const gif = (sendGifUrl || '').trim();
+    if (!to) {
+      toast.error('Enter a username');
+      return;
+    }
+    if (!msg && !gif) {
+      toast.error('Enter a message or GIF URL');
+      return;
+    }
+    setSending(true);
+    try {
+      const res = await api.post('/notifications/send', { target_username: to, message: msg || '(GIF)', gif_url: gif || null });
+      toast.success(res.data?.message || 'Message sent');
+      setSendTo('');
+      setSendMessage('');
+      setSendGifUrl('');
+      fetchNotifications();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to send message');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const insertEmoji = (emoji) => setSendMessage(m => m + emoji);
+
   const filteredNotifications = filter === 'all' 
     ? notifications 
     : filter === 'unread'
@@ -207,9 +253,62 @@ export default function Inbox() {
         </p>
       </div>
 
+      <div className={`${styles.panel} rounded-sm p-4 border border-primary/20`}>
+        <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-3">Send message</h2>
+        <form onSubmit={handleSendMessage} className="space-y-3">
+          <div>
+            <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1">To</label>
+            <input
+              type="text"
+              value={sendTo}
+              onChange={(e) => setSendTo(e.target.value)}
+              placeholder="Username"
+              className={`w-full px-3 py-2 rounded-sm text-sm font-heading border ${styles.input} border-primary/30 bg-background`}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1">Message</label>
+            <textarea
+              value={sendMessage}
+              onChange={(e) => setSendMessage(e.target.value)}
+              placeholder="Type a message..."
+              rows={3}
+              className={`w-full px-3 py-2 rounded-sm text-sm font-heading border ${styles.input} border-primary/30 bg-background resize-y`}
+            />
+            <div className="mt-1">
+              <span className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider">Smileys</span>
+              <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                {EMOJI_ROWS.flat().map((emoji) => (
+                  <button key={emoji} type="button" onClick={() => insertEmoji(emoji)} className="text-lg leading-none p-1 rounded hover:bg-primary/20 transition-smooth" title="Insert emoji">
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1">GIF URL (optional)</label>
+            <input
+              type="url"
+              value={sendGifUrl}
+              onChange={(e) => setSendGifUrl(e.target.value)}
+              placeholder="https://..."
+              className={`w-full px-3 py-2 rounded-sm text-sm font-heading border ${styles.input} border-primary/30 bg-background`}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={sending}
+            className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 px-4 py-2 rounded-sm text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth disabled:opacity-60"
+          >
+            {sending ? 'Sending...' : 'Send'}
+          </button>
+        </form>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {['all', 'unread', 'rank_up', 'reward', 'bodyguard', 'attack', 'system'].map(f => (
+          {['all', 'unread', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message'].map(f => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -219,7 +318,7 @@ export default function Inbox() {
                   : `${styles.surface} ${styles.raisedHover} text-mutedForeground border-primary/20`
               }`}
             >
-              {f === 'rank_up' ? 'Rank Up' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'rank_up' ? 'Rank Up' : f === 'user_message' ? 'Messages' : f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>
