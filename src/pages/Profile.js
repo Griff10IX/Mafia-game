@@ -232,37 +232,37 @@ export default function Profile() {
 
       {/* Honours (leaderboard rankings) */}
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
           <Trophy className="text-primary shrink-0" size={18} />
           <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Honours ({honours.length})</h3>
         </div>
-        <div className="p-4">
+        <div className="p-4 flex flex-col items-center text-center">
           {honours.length === 0 ? (
             <p className="text-xs text-mutedForeground font-heading">No leaderboard rankings yet.</p>
           ) : (
-            <ul className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md justify-items-center">
               {honours.map((h, i) => (
-                <li key={i} className="flex items-center gap-2 text-sm font-heading">
+                <div key={i} className="flex items-center gap-2 text-sm font-heading w-full sm:max-w-[280px] rounded-sm border border-primary/20 px-3 py-2 bg-primary/5">
                   <span className="text-primary font-bold shrink-0">#{h.rank}</span>
-                  <span className="text-foreground">{h.label}</span>
-                </li>
+                  <span className="text-foreground text-left flex-1">{h.label}</span>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
       </div>
 
       {/* Properties: casinos owned (max bet, buyback) */}
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
           <Building2 className="text-primary shrink-0" size={18} />
           <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Properties</h3>
         </div>
-        <div className="p-4">
+        <div className="p-4 flex flex-col items-center text-center">
           {ownedCasinos.length === 0 ? (
             <p className="text-xs text-mutedForeground font-heading">No casinos owned.</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 justify-center">
               {ownedCasinos.map((c, i) => (
                 <div key={i} className={`rounded-sm border border-primary/30 px-3 py-2 ${styles.surface} min-w-0`}>
                   <div className="font-heading font-bold text-foreground text-sm">{c.city} Dice</div>
@@ -323,13 +323,13 @@ export default function Profile() {
 
       {/* Profile picture: large display + upload when own profile */}
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
           <div className="w-6 h-px bg-primary/50" />
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Profile picture</span>
-          <div className="flex-1 h-px bg-primary/50" />
+          <div className="w-6 h-px bg-primary/50" />
         </div>
-        <div className="p-4">
-          <div className="aspect-video max-h-64 rounded-sm overflow-hidden border border-primary/20 bg-primary/5 flex items-center justify-center">
+        <div className="p-4 flex flex-col items-center text-center">
+          <div className="aspect-video max-h-64 w-full max-w-md mx-auto rounded-sm overflow-hidden border border-primary/20 bg-primary/5 flex items-center justify-center">
             {avatarSrc ? (
               <img src={avatarSrc} alt="" className="w-full h-full object-contain" />
             ) : (
@@ -340,7 +340,7 @@ export default function Profile() {
             )}
           </div>
           {isMe && (
-            <div className="mt-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+            <div className="mt-4 flex flex-col sm:flex-row gap-3 items-center justify-center">
               <input
                 type="file"
                 accept="image/*"
@@ -364,10 +364,10 @@ export default function Profile() {
       </div>
 
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20`}>
+        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 text-center`}>
           <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Account created</span>
         </div>
-        <div className="px-4 py-3 text-foreground font-heading">{formatDateTime(profile.created_at)}</div>
+        <div className="px-4 py-3 text-foreground font-heading text-center">{formatDateTime(profile.created_at)}</div>
       </div>
     </div>
   );
