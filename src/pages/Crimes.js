@@ -1,7 +1,8 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
-import { HelpCircle, Clock, AlertCircle } from 'lucide-react';
+import { useMemo, useState, useEffect } from 'react';
+import { Flame, HelpCircle, Clock, AlertCircle } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 // Constants
 const CRIME_SUCCESS_RATES = {
@@ -122,85 +123,98 @@ const CrimeCard = ({ crime, onCommit }) => {
 
   return (
     <div
-      className={`relative bg-gradient-to-br from-zinc-900 to-zinc-900/50 border rounded-lg p-3 transition-all ${
+      className={`relative bg-gradient-to-br from-zinc-800/90 to-zinc-900/70 border rounded-lg p-4 md:p-3.5 transition-all backdrop-blur-sm ${
         crime.can_commit 
-          ? 'border-emerald-600/30 shadow-lg shadow-emerald-900/20 hover:shadow-emerald-800/30 hover:border-emerald-500/40' 
-          : 'border-zinc-800/50 opacity-80'
+          ? 'border-emerald-500/40 shadow-xl shadow-emerald-900/30 active:shadow-emerald-800/40 active:border-emerald-400/60 md:hover:shadow-emerald-800/40 md:hover:border-emerald-400/60 md:hover:from-zinc-800 md:hover:to-zinc-900' 
+          : 'border-zinc-700/60 opacity-75'
       }`}
       data-testid={`crime-row-${crime.id}`}
     >
-      {/* Glow effect for available crimes */}
+      {/* Stronger glow effect for available crimes */}
       {crime.can_commit && (
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent rounded-lg pointer-events-none" />
+        <>
+          <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-green-500/5 to-transparent rounded-lg pointer-events-none" />
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
+        </>
       )}
       
-      {/* Header with name and risk */}
-      <div className="relative flex items-start justify-between gap-2 mb-2">
-        <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-bold text-white truncate flex items-center gap-1.5">
-            <span className="text-emerald-500/60">▸</span>
-            {crime.name}
-          </h3>
-          <p className="text-xs text-gray-500 truncate mt-0.5">
-            {crime.description}
-          </p>
-        </div>
-        <div className="shrink-0">
-          <div className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
-            crime.can_commit 
-              ? 'bg-gradient-to-br from-red-500/20 to-red-600/10 text-red-400 border border-red-500/40 shadow-sm shadow-red-500/20' 
-              : 'bg-zinc-800/80 text-gray-600 border border-zinc-700/50'
-          }`}>
-            {unavailable ? '—' : `${crime.risk}%`}
+      {/* Mobile: Stacked layout, Desktop: Horizontal */}
+      <div className="relative space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-3">
+        
+        {/* Top row on mobile: Crime info + Risk */}
+        <div className="flex items-start justify-between gap-3 md:flex-1 md:min-w-0">
+          {/* Left: Crime info */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base md:text-sm font-bold text-gray-100 truncate flex items-center gap-1.5">
+              <span className="text-emerald-400/80 text-lg md:text-base">▸</span>
+              {crime.name}
+            </h3>
+            <p className="text-sm md:text-xs text-gray-400 line-clamp-1 md:truncate mt-1 md:mt-0.5">
+              {crime.description}
+            </p>
+          </div>
+
+          {/* Risk badge - visible on all screens */}
+          <div className="flex-shrink-0">
+            <div className={`px-3 py-1.5 rounded-md text-sm md:text-xs font-bold transition-all ${
+              crime.can_commit 
+                ? 'bg-gradient-to-br from-red-600/30 to-red-700/20 text-red-300 border border-red-500/50 shadow-md shadow-red-900/30' 
+                : 'bg-zinc-800 text-gray-500 border border-zinc-700'
+            }`}>
+              {unavailable ? '—' : `${crime.risk}%`}
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Stats and action in one row */}
-      <div className="relative flex items-center justify-between gap-2 mt-2.5">
-        {/* Active countdown timer on the left (only when on cooldown) */}
-        <div className="flex-1">
-          {onCooldown && crime.remaining > 0 && (
-            <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
-              <Clock size={12} className="animate-pulse text-emerald-500" />
-              <span>{crime.wait}</span>
-            </div>
-          )}
-        </div>
+        {/* Bottom row on mobile: Timer + Button */}
+        <div className="flex items-center justify-between gap-3 md:gap-2">
+          {/* Timer (if on cooldown) */}
+          <div className="flex-1 md:flex-shrink-0 md:flex-grow-0">
+            {onCooldown && crime.remaining > 0 && (
+              <div className="flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 bg-emerald-950/40 border border-emerald-500/30 rounded text-sm md:text-xs text-emerald-300 font-bold">
+                <Clock size={16} className="md:hidden animate-pulse text-emerald-400" />
+                <Clock size={13} className="hidden md:block animate-pulse text-emerald-400" />
+                <span>{crime.wait}</span>
+              </div>
+            )}
+          </div>
 
-        {/* Action button - compact */}
-        <div className="shrink-0">
-          {crime.can_commit ? (
-            <button
-              type="button"
-              onClick={() => onCommit(crime.id)}
-              className="relative bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 hover:from-emerald-500 hover:via-green-500 hover:to-emerald-600 text-white active:scale-95 rounded-md px-4 py-1.5 text-xs font-bold uppercase tracking-wide shadow-lg shadow-emerald-900/40 border border-emerald-500/30 transition-all touch-manipulation overflow-hidden"
-              data-testid={`commit-crime-${crime.id}`}
-            >
-              <span className="relative z-10 flex items-center gap-1">
-                💰 Commit
-              </span>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-              <div className="absolute inset-0 bg-white/0 hover:bg-white/5 transition-all" />
-            </button>
-          ) : onCooldown ? (
-            <button
-              type="button"
-              disabled
-              className="bg-zinc-800/80 text-gray-500 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide border border-zinc-700/50 cursor-not-allowed opacity-60"
-            >
-              Wait
-            </button>
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="bg-zinc-800/50 text-gray-600 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide border border-zinc-700/30 cursor-not-allowed flex items-center gap-1 opacity-50"
-            >
-              <HelpCircle size={12} className="opacity-50" />
-              Locked
-            </button>
-          )}
+          {/* Action button - larger on mobile */}
+          <div className="flex-shrink-0">
+            {crime.can_commit ? (
+              <button
+                type="button"
+                onClick={() => onCommit(crime.id)}
+                className="relative bg-gradient-to-br from-emerald-500 via-green-600 to-emerald-700 active:from-emerald-400 active:via-green-500 active:to-emerald-600 md:hover:from-emerald-400 md:hover:via-green-500 md:hover:to-emerald-600 text-white active:scale-95 rounded-lg md:rounded-md px-6 py-2.5 md:px-5 md:py-2 text-sm md:text-xs font-bold uppercase tracking-wide shadow-xl shadow-emerald-900/50 border border-emerald-400/30 transition-all touch-manipulation overflow-hidden"
+                data-testid={`commit-crime-${crime.id}`}
+              >
+                <span className="relative z-10 flex items-center gap-2 md:gap-1.5">
+                  💰 Commit
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
+                <div className="absolute inset-0 bg-white/0 active:bg-white/10 md:hover:bg-white/10 transition-all" />
+                <div className="absolute top-0 left-0 right-0 h-px bg-white/30" />
+              </button>
+            ) : onCooldown ? (
+              <button
+                type="button"
+                disabled
+                className="bg-zinc-800 text-gray-500 rounded-lg md:rounded-md px-5 py-2.5 md:px-4 md:py-2 text-sm md:text-xs font-bold uppercase tracking-wide border border-zinc-700 cursor-not-allowed"
+              >
+                Wait
+              </button>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="bg-zinc-800/70 text-gray-600 rounded-lg md:rounded-md px-5 py-2.5 md:px-4 md:py-2 text-sm md:text-xs font-bold uppercase tracking-wide border border-zinc-700/50 cursor-not-allowed flex items-center gap-2 md:gap-1.5 opacity-60"
+              >
+                <HelpCircle size={16} className="md:hidden opacity-60" />
+                <HelpCircle size={13} className="hidden md:block opacity-60" />
+                <span>Locked</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -240,7 +254,7 @@ export default function Crimes() {
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
 
-  const fetchCrimes = useCallback(async () => {
+  const fetchCrimes = async () => {
     try {
       const [crimesRes, meRes, eventsRes] = await Promise.all([
         api.get('/crimes'),
@@ -258,15 +272,15 @@ export default function Crimes() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchCrimes();
-  }, [fetchCrimes]);
+  }, []);
 
   const tick = useCooldownTicker(crimes, fetchCrimes);
 
-  const commitCrime = useCallback(async (crimeId) => {
+  const commitCrime = async (crimeId) => {
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
       
@@ -282,7 +296,7 @@ export default function Crimes() {
       toast.error(error.response?.data?.detail || 'Failed to commit crime');
       console.error('Error committing crime:', error);
     }
-  }, [fetchCrimes]);
+  };
 
   const crimeRows = useMemo(() => {
     // Include tick to trigger recalculation on countdown
