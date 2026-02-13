@@ -17,8 +17,8 @@
 
 html {
   overflow-x: hidden;
-  /* Match sidebar scrollbar: dark track, grey thumb */
-  scrollbar-color: #333333 #1a1a1a;
+  /* Scrollbar: dark grey thumb (#303030) to match UI panels */
+  scrollbar-color: #303030 #1a1a1a;
   scrollbar-width: thin;
 }
 
@@ -47,13 +47,13 @@ body::-webkit-scrollbar-track {
 
 html::-webkit-scrollbar-thumb,
 body::-webkit-scrollbar-thumb {
-  background: #333333;
+  background: #303030;
   border-radius: 3px;
 }
 
 html::-webkit-scrollbar-thumb:hover,
 body::-webkit-scrollbar-thumb:hover {
-  background: rgba(212, 175, 55, 0.35);
+  background: #404040;
 }
 
 code {

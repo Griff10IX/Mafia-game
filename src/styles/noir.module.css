@@ -236,9 +236,9 @@
   color: var(--gm-gold);
 }
 
-/* Sidebar scrollbar – dark to match theme (no bright default track) */
+/* Sidebar scrollbar – dark grey thumb #303030 to match main scrollbar */
 .themeGangsterModern .sidebarNav {
-  scrollbar-color: var(--gm-border) var(--gm-bg);
+  scrollbar-color: #303030 var(--gm-bg);
   scrollbar-width: thin;
 }
 
@@ -251,12 +251,12 @@
 }
 
 .themeGangsterModern .sidebarNav::-webkit-scrollbar-thumb {
-  background: var(--gm-border);
+  background: #303030;
   border-radius: 3px;
 }
 
 .themeGangsterModern .sidebarNav::-webkit-scrollbar-thumb:hover {
-  background: var(--gm-gold-dim);
+  background: #404040;
 }
 
 .themeGangsterModern .sidebarNavLink {

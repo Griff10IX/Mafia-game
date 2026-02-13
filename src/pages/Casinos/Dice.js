@@ -416,8 +416,8 @@ export default function Dice() {
                 <div className="flex-1 h-px bg-primary/50" />
               </div>
               {ownership?.profit != null && (
-                <p className={`text-sm font-heading font-bold mt-1 ${(ownership.profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                  {(ownership.profit || 0) >= 0 ? 'Profit' : 'Loss'}: {formatMoney(Math.abs(ownership.profit))}
+                <p className={`text-sm font-heading font-bold mt-1 ${(ownership?.profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {(ownership?.profit || 0) >= 0 ? 'Profit' : 'Loss'}: {formatMoney(Math.abs(ownership?.profit ?? 0))}
                 </p>
               )}
               <p className="text-xs text-mutedForeground mt-1">You cannot play at your own table</p>

@@ -18,6 +18,9 @@ export default class ErrorBoundary extends Component {
 
   render() {
     if (this.state.hasError) {
+      const err = this.state.error;
+      const msg = err?.message || String(err);
+      const isDev = typeof process !== 'undefined' && process.env?.NODE_ENV === 'development';
       return (
         <div className={`${styles.pageContent} min-h-[40vh] flex items-center justify-center p-8`}>
           <div className={`${styles.panel} rounded-md p-6 max-w-md text-center`}>
@@ -25,6 +28,16 @@ export default class ErrorBoundary extends Component {
             <p className="text-sm text-mutedForeground font-heading mb-4">
               This page failed to load. You can try again or go back.
             </p>
+            {msg && (
+              <p className="text-xs text-left text-red-300/90 font-mono mb-4 p-2 rounded bg-black/30 break-all">
+                {msg}
+              </p>
+            )}
+            {isDev && err?.stack && (
+              <pre className="text-[10px] text-left text-mutedForeground overflow-auto max-h-32 mb-4 p-2 rounded bg-black/30 whitespace-pre-wrap">
+                {err.stack}
+              </pre>
+            )}
             <div className="flex gap-3 justify-center">
               <button
                 type="button"
