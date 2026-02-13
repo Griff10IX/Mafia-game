@@ -1,240 +1,346 @@
-import { useMemo, useState, useEffect } from 'react';
-import { Flame, HelpCircle, Clock } from 'lucide-react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
+import { HelpCircle, Clock, AlertCircle } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
-import styles from '../styles/noir.module.css';
 
-function getSuccessRate(crimeType) {
-  if (crimeType === 'petty') return 0.7;
-  if (crimeType === 'medium') return 0.5;
-  return 0.3; // major
-}
+// Constants
+const CRIME_SUCCESS_RATES = {
+  petty: 0.7,
+  medium: 0.5,
+  major: 0.3,
+};
 
-function formatWaitFromMinutes(cooldownMinutes) {
-  if (cooldownMinutes >= 1) return `${Math.round(cooldownMinutes)} min`;
-  return `${Math.round(cooldownMinutes * 60)} seconds`;
-}
+const TICK_INTERVAL = 1000;
 
-function secondsUntil(iso) {
+// Utility functions
+const getSuccessRate = (crimeType) => CRIME_SUCCESS_RATES[crimeType] ?? 0.3;
+
+const formatWaitFromMinutes = (cooldownMinutes) => {
+  if (cooldownMinutes >= 1) return `${Math.round(cooldownMinutes)}m`;
+  return `${Math.round(cooldownMinutes * 60)}s`;
+};
+
+const secondsUntil = (iso) => {
   if (!iso) return null;
   const t = new Date(iso).getTime();
   if (Number.isNaN(t)) return null;
   return Math.max(0, Math.ceil((t - Date.now()) / 1000));
-}
+};
 
+// Custom hooks
+const useCooldownTicker = (crimes, onCooldownExpired) => {
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const hasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
+    if (!hasCooldown) return;
+
+    let hasRefetched = false;
+    const intervalId = setInterval(() => {
+      const stillHasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
+      
+      if (!stillHasCooldown && !hasRefetched) {
+        hasRefetched = true;
+        onCooldownExpired();
+      }
+      
+      setTick((prev) => prev + 1);
+    }, TICK_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [crimes, onCooldownExpired]);
+
+  return tick;
+};
+
+// Subcomponents
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="text-yellow-500 text-xl font-bold">Loading...</div>
+  </div>
+);
+
+const PageHeader = () => (
+  <div className="flex items-center justify-center flex-col gap-1.5 text-center px-4">
+    <div className="flex items-center gap-3 w-full justify-center">
+      <div className="h-px flex-1 max-w-[60px] bg-gradient-to-r from-transparent via-yellow-500/40 to-yellow-500/60" />
+      <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent uppercase tracking-wider drop-shadow-lg">
+        Crimes
+      </h1>
+      <div className="h-px flex-1 max-w-[60px] bg-gradient-to-l from-transparent via-yellow-500/40 to-yellow-500/60" />
+    </div>
+    <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-medium">
+      Commit Crimes • Earn Cash
+    </p>
+  </div>
+);
+
+const JailNotice = () => (
+  <div className="mx-3 rounded-lg border border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-amber-900/20 px-3 py-2.5 text-xs text-amber-200 flex items-start gap-2.5 shadow-lg shadow-amber-500/10 backdrop-blur-sm">
+    <div className="shrink-0 mt-0.5 p-1 rounded-full bg-amber-500/20">
+      <AlertCircle size={14} className="text-amber-400" />
+    </div>
+    <div>
+      <div className="font-bold text-amber-300 mb-0.5">Incarcerated</div>
+      <div className="text-amber-200/80">Can't commit crimes while in jail. Serve time or bust out.</div>
+    </div>
+  </div>
+);
+
+const EventBanner = ({ event }) => {
+  if (!event?.name || (event.kill_cash === 1 && event.rank_points === 1)) {
+    return null;
+  }
+
+  return (
+    <div className="px-3">
+      <div className="w-full bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-yellow-500/30 rounded-lg overflow-hidden shadow-lg shadow-yellow-500/10 backdrop-blur-sm">
+        <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/5 px-3 py-2 border-b border-yellow-500/20 flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+          <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-widest">
+            Live Event
+          </span>
+        </div>
+        <div className="px-3 py-2.5">
+          <p className="text-sm font-bold text-yellow-300 flex items-center gap-2">
+            <span>✨</span>
+            {event.name}
+          </p>
+          <p className="text-[11px] text-gray-400 mt-1">
+            {event.message}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Mobile-friendly crime card
+const CrimeCard = ({ crime, onCommit }) => {
+  const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
+  const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
+
+  return (
+    <div
+      className={`relative bg-gradient-to-br from-zinc-900 to-zinc-900/50 border rounded-lg p-3 transition-all ${
+        crime.can_commit 
+          ? 'border-emerald-600/30 shadow-lg shadow-emerald-900/20 hover:shadow-emerald-800/30 hover:border-emerald-500/40' 
+          : 'border-zinc-800/50 opacity-80'
+      }`}
+      data-testid={`crime-row-${crime.id}`}
+    >
+      {/* Glow effect for available crimes */}
+      {crime.can_commit && (
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 to-transparent rounded-lg pointer-events-none" />
+      )}
+      
+      {/* Header with name and risk */}
+      <div className="relative flex items-start justify-between gap-2 mb-2">
+        <div className="flex-1 min-w-0">
+          <h3 className="text-sm font-bold text-white truncate flex items-center gap-1.5">
+            <span className="text-emerald-500/60">▸</span>
+            {crime.name}
+          </h3>
+          <p className="text-xs text-gray-500 truncate mt-0.5">
+            {crime.description}
+          </p>
+        </div>
+        <div className="shrink-0">
+          <div className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+            crime.can_commit 
+              ? 'bg-gradient-to-br from-red-500/20 to-red-600/10 text-red-400 border border-red-500/40 shadow-sm shadow-red-500/20' 
+              : 'bg-zinc-800/80 text-gray-600 border border-zinc-700/50'
+          }`}>
+            {unavailable ? '—' : `${crime.risk}%`}
+          </div>
+        </div>
+      </div>
+
+      {/* Stats and action in one row */}
+      <div className="relative flex items-center justify-between gap-2 mt-2.5">
+        {/* Active countdown timer on the left (only when on cooldown) */}
+        <div className="flex-1">
+          {onCooldown && crime.remaining > 0 && (
+            <div className="flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold">
+              <Clock size={12} className="animate-pulse text-emerald-500" />
+              <span>{crime.wait}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Action button - compact */}
+        <div className="shrink-0">
+          {crime.can_commit ? (
+            <button
+              type="button"
+              onClick={() => onCommit(crime.id)}
+              className="relative bg-gradient-to-r from-emerald-600 via-green-600 to-emerald-700 hover:from-emerald-500 hover:via-green-500 hover:to-emerald-600 text-white active:scale-95 rounded-md px-4 py-1.5 text-xs font-bold uppercase tracking-wide shadow-lg shadow-emerald-900/40 border border-emerald-500/30 transition-all touch-manipulation overflow-hidden"
+              data-testid={`commit-crime-${crime.id}`}
+            >
+              <span className="relative z-10 flex items-center gap-1">
+                💰 Commit
+              </span>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+              <div className="absolute inset-0 bg-white/0 hover:bg-white/5 transition-all" />
+            </button>
+          ) : onCooldown ? (
+            <button
+              type="button"
+              disabled
+              className="bg-zinc-800/80 text-gray-500 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide border border-zinc-700/50 cursor-not-allowed opacity-60"
+            >
+              Wait
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="bg-zinc-800/50 text-gray-600 rounded-md px-3 py-1.5 text-xs font-bold uppercase tracking-wide border border-zinc-700/30 cursor-not-allowed flex items-center gap-1 opacity-50"
+            >
+              <HelpCircle size={12} className="opacity-50" />
+              Locked
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const StatsFooter = ({ totalCrimes = 0, crimeProfit = 0 }) => (
+  <div className="px-3">
+    <div className="w-full bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-yellow-500/20 rounded-lg px-3 py-3 shadow-lg shadow-yellow-500/5">
+      <div className="grid grid-cols-2 gap-3 text-center">
+        <div className="space-y-1">
+          <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
+            Crimes
+          </div>
+          <div className="text-xl font-bold bg-gradient-to-br from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
+            {totalCrimes.toLocaleString()}
+          </div>
+        </div>
+        <div className="border-l border-yellow-500/20 space-y-1">
+          <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
+            Profit
+          </div>
+          <div className="text-xl font-bold bg-gradient-to-br from-green-400 to-green-600 bg-clip-text text-transparent">
+            ${Number(crimeProfit).toLocaleString()}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// Main component
 export default function Crimes() {
   const [crimes, setCrimes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
-  const [tick, setTick] = useState(0);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
 
-  const fetchCrimes = async () => {
+  const fetchCrimes = useCallback(async () => {
     try {
       const [crimesRes, meRes, eventsRes] = await Promise.all([
         api.get('/crimes'),
         api.get('/auth/me'),
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } }))
+        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
       ]);
+      
       setCrimes(crimesRes.data);
       setUser(meRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
     } catch (error) {
       toast.error('Failed to load crimes');
+      console.error('Error fetching crimes:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchCrimes();
   }, []);
 
   useEffect(() => {
-    const hasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
-    if (!hasCooldown) return;
-    let refetched = false;
-    const id = setInterval(() => {
-      const stillHasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
-      if (!stillHasCooldown && !refetched) {
-        refetched = true;
-        fetchCrimes();
-      }
-      setTick((t) => t + 1);
-    }, 1000);
-    return () => clearInterval(id);
-  }, [crimes]);
+    fetchCrimes();
+  }, [fetchCrimes]);
 
-  const commitCrime = async (crimeId) => {
+  const tick = useCooldownTicker(crimes, fetchCrimes);
+
+  const commitCrime = useCallback(async (crimeId) => {
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
+      
       if (response.data.success) {
         toast.success(response.data.message);
         refreshUser();
       } else {
         toast.error(response.data.message);
       }
-      fetchCrimes();
+      
+      await fetchCrimes();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to commit crime');
+      console.error('Error committing crime:', error);
     }
-  };
+  }, [fetchCrimes]);
 
-  const rows = useMemo(() => {
-    // touch tick so countdown updates
+  const crimeRows = useMemo(() => {
+    // Include tick to trigger recalculation on countdown
     void tick;
+    
     const inJail = !!user?.in_jail;
+
     return crimes.map((crime) => {
       const successRate = getSuccessRate(crime.crime_type);
       const risk = Math.round((1 - successRate) * 100);
       const remaining = crime.next_available ? secondsUntil(crime.next_available) : null;
-      // Treat crime as available if cooldown has expired (no refresh needed); block if in jail
-      const canCommit = !inJail && (crime.can_commit || (crime.next_available && (remaining === null || remaining <= 0)));
-      const wait =
-        canCommit
-          ? formatWaitFromMinutes(crime.cooldown_minutes)
-          : remaining && remaining > 0
-            ? `${remaining} seconds`
-            : 'Unavailable';
-      return { ...crime, can_commit: canCommit, risk, wait, remaining, in_jail: inJail };
+      
+      // Crime is available if not in jail AND (can_commit flag is true OR cooldown has expired)
+      const canCommit = !inJail && (
+        crime.can_commit || 
+        (crime.next_available && (remaining === null || remaining <= 0))
+      );
+      
+      const wait = canCommit
+        ? formatWaitFromMinutes(crime.cooldown_minutes)
+        : remaining && remaining > 0
+          ? `${remaining}s`
+          : 'Unavailable';
+
+      return {
+        ...crime,
+        can_commit: canCommit,
+        risk,
+        wait,
+        remaining,
+        in_jail: inJail,
+      };
     });
   }, [crimes, tick, user?.in_jail]);
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (
-    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent}`} data-testid="crimes-page">
-      <div className="flex items-center justify-center flex-col gap-1 sm:gap-2 text-center">
-        <div className="flex items-center gap-2 sm:gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[60px] sm:max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Crimes</h1>
-          <div className="h-px flex-1 max-w-[60px] sm:max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
-        </div>
-        <p className="text-[11px] sm:text-xs font-heading text-mutedForeground uppercase tracking-widest">Commit Crimes</p>
-      </div>
+    <div className="min-h-screen bg-zinc-950 text-white pb-6" data-testid="crimes-page">
+      <div className="space-y-4 py-5">
+        <PageHeader />
 
-      {user?.in_jail && (
-        <div className="rounded-sm border border-amber-500/50 bg-amber-950/30 px-4 py-2 text-center text-sm font-heading text-amber-200">
-          You can't commit crimes while in jail. Go to Jail to serve your time or bust out.
-        </div>
-      )}
+        {user?.in_jail && <JailNotice />}
 
-      {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
-        <div className="flex justify-center">
-          <div className={`w-full max-w-3xl ${styles.panel} rounded-md overflow-hidden`}>
-            <div className={`${styles.panelHeader} px-3 py-1.5 sm:px-4`}>
-              <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">Today&apos;s event</span>
-            </div>
-            <div className="px-3 py-2 sm:px-4">
-              <p className="text-xs sm:text-sm font-heading font-bold text-primary">{event.name}</p>
-              <p className={`text-[10px] sm:text-xs font-heading mt-0.5 ${styles.textMuted}`}>{event.message}</p>
-            </div>
+        {eventsEnabled && <EventBanner event={event} />}
+
+        {/* Mobile-optimized crime cards */}
+        <div className="px-3">
+          <div className="space-y-2.5">
+            {crimeRows.map((crime) => (
+              <CrimeCard key={crime.id} crime={crime} onCommit={commitCrime} />
+            ))}
           </div>
         </div>
-      )}
 
-      <div className="flex justify-center min-w-0">
-        <div className={`w-full max-w-3xl min-w-0 ${styles.panel} rounded-md overflow-hidden`}>
-          <div className="grid grid-cols-12 gap-1 bg-zinc-800/50 text-[10px] sm:text-xs uppercase tracking-widest font-heading text-primary/80 px-2 sm:px-4 py-1.5 sm:py-2 border-b border-primary/20">
-            <div className="col-span-5 sm:col-span-6 min-w-0">Crime</div>
-            <div className="col-span-2 text-right">Risk</div>
-            <div className="col-span-2 text-right hidden sm:block">Status</div>
-            <div className="col-span-5 sm:col-span-2">
-              <div className="flex items-center justify-end gap-1">
-                <span className="sm:hidden">Status</span>
-                <span>Action</span>
-              </div>
-            </div>
-          </div>
-
-          {rows.map((crime) => {
-            const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
-            const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
-            const statusText = crime.in_jail ? 'In jail' : crime.can_commit ? 'Available' : onCooldown ? 'Cooldown' : 'Unavailable';
-
-            return (
-              <div
-                key={crime.id}
-                className={`grid grid-cols-12 gap-1 px-2 sm:px-4 py-2 border-b border-primary/10 items-center transition-smooth bg-transparent hover:bg-zinc-800/30 ${!crime.can_commit ? 'opacity-90' : ''}`}
-                data-testid={`crime-row-${crime.id}`}
-              >
-                <div className="col-span-5 sm:col-span-6 min-w-0">
-                  <div className="text-xs sm:text-sm font-heading font-bold text-foreground truncate">{crime.name}</div>
-                  <div className="text-[10px] sm:text-xs text-mutedForeground font-heading truncate">{crime.description}</div>
-                </div>
-
-                <div className={`col-span-2 text-right text-xs sm:text-sm font-heading shrink-0 ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
-                  {unavailable ? '—' : `${crime.risk}%`}
-                </div>
-
-                <div className="col-span-2 text-right shrink-0 hidden sm:block">
-                  <span
-                    className={`inline-flex items-center justify-center px-2 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-heading font-bold ${
-                      crime.can_commit
-                        ? 'bg-primary/20 text-primary border border-primary/30'
-                        : onCooldown
-                          ? 'bg-zinc-800 text-mutedForeground border border-primary/10'
-                          : 'bg-zinc-800/80 text-mutedForeground border border-primary/10'
-                    }`}
-                    data-testid={`crime-status-${crime.id}`}
-                  >
-                    {statusText}
-                  </span>
-                </div>
-
-                <div className="col-span-5 sm:col-span-2 flex flex-col sm:flex-row items-end sm:items-center justify-end gap-1">
-                  <span
-                    className={`sm:hidden inline-flex items-center justify-center px-1.5 py-0.5 rounded-sm text-[9px] uppercase tracking-wider font-heading font-bold ${
-                      crime.can_commit
-                        ? 'bg-primary/20 text-primary border border-primary/30'
-                        : 'bg-zinc-800 text-mutedForeground border border-primary/10'
-                    }`}
-                  >
-                    {statusText}
-                  </span>
-                  {crime.can_commit ? (
-                    <button
-                      type="button"
-                      onClick={() => commitCrime(crime.id)}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-2 py-0.5 text-[10px] uppercase tracking-wider font-heading font-bold border border-yellow-600/50 transition-smooth touch-manipulation"
-                      data-testid={`commit-crime-${crime.id}`}
-                    >
-                      Commit
-                    </button>
-                  ) : onCooldown ? (
-                    <span className="inline-flex items-center justify-end gap-1 text-[10px] sm:text-xs text-mutedForeground font-heading">
-                      <Clock size={11} className="text-primary shrink-0" />
-                      <span className="truncate">{crime.wait}</span>
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center justify-end gap-1 text-[10px] sm:text-xs text-mutedForeground font-heading">
-                      <HelpCircle size={11} className="text-mutedForeground shrink-0" />
-                      Locked
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="flex justify-center">
-        <div className={`w-full max-w-3xl ${styles.panel} rounded-md px-3 py-2 sm:px-4 sm:py-3`}>
-          <div className="text-[11px] sm:text-xs font-heading text-mutedForeground flex items-center justify-center gap-3 sm:gap-6">
-            <span><span className="text-primary font-bold">◆</span> Crimes: <span className="text-foreground font-bold">{user?.total_crimes ?? 0}</span></span>
-            <span className="text-primary/50">|</span>
-            <span><span className="text-primary font-bold">◆</span> Profit: <span className="text-foreground font-bold">${Number(user?.crime_profit ?? 0).toLocaleString()}</span></span>
-          </div>
-        </div>
+        <StatsFooter totalCrimes={user?.total_crimes} crimeProfit={user?.crime_profit} />
       </div>
     </div>
   );
