@@ -35,9 +35,8 @@ export default function OrganisedCrime() {
   const [, setTick] = useState(0);
   const [pendingSlotEdit, setPendingSlotEdit] = useState({ role: null, value: '' });
 
-  const ocBorder = '#303030';
-  const ocMuted = '#a1a1aa';
-  const ocText = '#f5f5f5';
+  /* Radio buttons: grey like scrollbar (#303030); rest of page matches Crimes (gold/primary) */
+  const radioAccent = '#303030';
 
   const fetchData = async () => {
     try {
@@ -249,42 +248,42 @@ export default function OrganisedCrime() {
 
   return (
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="organised-crime-page">
-      <div>
-        <div className="flex items-center gap-4 mb-3">
-          <div className="h-px flex-1" style={{ background: `linear-gradient(to right, transparent, ${ocBorder})` }} />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold tracking-wider uppercase flex items-center gap-3" style={{ color: ocText }}>
-            <Users size={24} style={{ color: ocMuted }} />
+      <div className="flex items-center justify-center flex-col gap-1 sm:gap-2 text-center">
+        <div className="flex items-center gap-2 sm:gap-3 w-full justify-center">
+          <div className="h-px flex-1 max-w-[60px] sm:max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-3">
+            <Users size={24} className="text-primary/80" />
             Organised Crime
           </h1>
-          <div className="h-px flex-1" style={{ background: `linear-gradient(to left, transparent, ${ocBorder})` }} />
+          <div className="h-px flex-1 max-w-[60px] sm:max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
         </div>
-        <p className="text-center text-sm font-heading tracking-wide" style={{ color: ocMuted }}>
-          Team of 4: Driver, Weapons, Explosives, Hacker. Fill empty slots with NPCs for lower payouts. Once every {status?.cooldown_hours ?? 6}h.
+        <p className="text-[11px] sm:text-xs font-heading text-mutedForeground uppercase tracking-widest">
+          Team of 4: Driver, Weapons, Explosives, Hacker. Once every {status?.cooldown_hours ?? 6}h.
         </p>
       </div>
 
       {status?.cooldown_until && (
-        <div className={`${styles.panel} rounded-md overflow-hidden max-w-2xl mx-auto border`} style={{ borderColor: ocBorder }}>
-          <div className="px-4 py-2 border-b flex items-center justify-between" style={{ borderColor: ocBorder, color: ocMuted }}>
-            <span className="text-xs font-heading font-bold uppercase tracking-widest">Cooldown</span>
-            <Clock size={18} style={{ color: ocMuted }} />
+        <div className={`${styles.panel} rounded-md overflow-hidden max-w-2xl mx-auto border border-primary/20`}>
+          <div className="px-4 py-2 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">Cooldown</span>
+            <Clock size={18} className="text-primary/80" />
           </div>
           <div className="p-4 flex items-center justify-between">
             <span className="text-sm text-mutedForeground font-heading">
               {onCooldown ? `Next heist in ${cooldownStr}` : 'Ready for a heist'}
             </span>
             {status.has_timer_upgrade && (
-              <span className="text-xs font-heading" style={{ color: ocMuted }}>4h timer (upgrade active)</span>
+              <span className="text-xs font-heading text-primary/80">4h timer (upgrade active)</span>
             )}
           </div>
         </div>
       )}
 
       {status?.pending_heist && (
-        <div className="rounded-md overflow-hidden max-w-2xl mx-auto border" style={{ backgroundColor: 'var(--gm-bg-top)', borderColor: ocBorder }}>
-          <div className="px-4 py-2 border-b flex items-center justify-between" style={{ borderColor: ocBorder, color: ocMuted }}>
-            <span className="text-xs font-heading font-bold uppercase tracking-widest">Pending heist — invites sent</span>
-            <UserCheck size={18} style={{ color: ocMuted }} />
+        <div className={`${styles.panel} rounded-md overflow-hidden max-w-2xl mx-auto border border-primary/20`}>
+          <div className="px-4 py-2 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">Pending heist — invites sent</span>
+            <UserCheck size={18} className="text-primary/80" />
           </div>
           <div className="p-4 space-y-3">
             {ROLE_IDS.map((roleId) => {
@@ -297,18 +296,18 @@ export default function OrganisedCrime() {
               const editing = pendingSlotEdit.role === roleId;
               return (
                 <div key={roleId} className="flex flex-wrap items-center gap-2">
-                  <span className="w-24 text-xs font-heading font-bold capitalize shrink-0" style={{ color: ocMuted }}>{roleId}</span>
-                  <span className="text-xs font-heading" style={{ color: ocText }}>{displayVal}</span>
-                  {inv && <span className="text-xs font-heading" style={{ color: statusStr === 'accepted' ? 'var(--gm-profit)' : ocMuted }}>({statusStr})</span>}
+                  <span className="w-24 text-xs font-heading font-bold capitalize shrink-0 text-primary/80">{roleId}</span>
+                  <span className="text-xs font-heading text-foreground">{displayVal}</span>
+                  {inv && <span className={`text-xs font-heading ${statusStr === 'accepted' ? 'text-green-500' : 'text-mutedForeground'}`}>({statusStr})</span>}
                   {canClear && (
-                    <button type="button" onClick={() => cancelInvite(inv.invite_id)} className="flex items-center gap-1 text-xs font-heading hover:underline" style={{ color: ocMuted }} title="Clear slot">
+                    <button type="button" onClick={() => cancelInvite(inv.invite_id)} className="flex items-center gap-1 text-xs font-heading hover:underline text-mutedForeground" title="Clear slot">
                       <XCircle size={14} /> Clear
                     </button>
                   )}
                   {isEmpty && (
                     <>
                       {!editing ? (
-                        <button type="button" onClick={() => setPendingSlotEdit({ role: roleId, value: '' })} className="text-xs font-heading hover:underline" style={{ color: ocText }}>Set NPC or invite</button>
+                        <button type="button" onClick={() => setPendingSlotEdit({ role: roleId, value: '' })} className="text-xs font-heading hover:underline text-primary">Set NPC or invite</button>
                       ) : (
                         <div className="flex items-center gap-2">
                           <input
@@ -316,10 +315,9 @@ export default function OrganisedCrime() {
                             placeholder="npc or username"
                             value={pendingSlotEdit.value}
                             onChange={(e) => setPendingSlotEdit((p) => ({ ...p, value: e.target.value }))}
-                            className="rounded px-2 py-1 text-xs font-heading w-32"
-                            style={{ backgroundColor: 'var(--gm-card)', border: `1px solid ${ocBorder}`, color: ocText }}
+                            className="rounded px-2 py-1 text-xs font-heading w-32 bg-zinc-800/80 border border-primary/20 text-foreground focus:border-primary/50 focus:outline-none"
                           />
-                          <button type="button" onClick={() => { setPendingSlot(pendingSlotEdit.role, pendingSlotEdit.value); setPendingSlotEdit({ role: null, value: '' }); }} className="text-xs font-heading font-bold" style={{ color: ocText }}>Set</button>
+                          <button type="button" onClick={() => { setPendingSlot(pendingSlotEdit.role, pendingSlotEdit.value); setPendingSlotEdit({ role: null, value: '' }); }} className="text-xs font-heading font-bold text-primary">Set</button>
                           <button type="button" onClick={() => setPendingSlotEdit({ role: null, value: '' })} className="text-xs text-mutedForeground">Cancel</button>
                         </div>
                       )}
@@ -329,7 +327,7 @@ export default function OrganisedCrime() {
               );
             })}
             <div className="pt-2">
-              <button type="button" onClick={runFromPending} disabled={executing || onCooldown || (status.pending_invites || []).some((i) => i.status === 'pending') || ROLE_IDS.some((r) => status.pending_heist[r] == null || status.pending_heist[r] === '')} className="rounded-sm font-heading font-bold uppercase tracking-widest px-4 py-2 text-sm border disabled:opacity-50" style={{ backgroundColor: 'var(--gm-card)', borderColor: ocBorder, color: ocText }}>
+              <button type="button" onClick={runFromPending} disabled={executing || onCooldown || (status.pending_invites || []).some((i) => i.status === 'pending') || ROLE_IDS.some((r) => status.pending_heist[r] == null || status.pending_heist[r] === '')} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-4 py-2 text-sm font-heading font-bold uppercase tracking-widest border border-yellow-600/50 disabled:opacity-50">
                 {executing ? 'Running...' : 'Run heist'}
               </button>
             </div>
@@ -338,7 +336,7 @@ export default function OrganisedCrime() {
       )}
 
       <div className="max-w-4xl mx-auto space-y-4">
-        <h3 className="text-sm font-heading font-bold uppercase tracking-widest" style={{ color: ocMuted }}>Choose job</h3>
+        <h3 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">Choose job</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {(config.jobs || []).map((job) => (
             <button
@@ -346,22 +344,18 @@ export default function OrganisedCrime() {
               type="button"
               onClick={() => setSelectedJobId(job.id)}
               className={`${styles.panel} rounded-md p-4 text-left border transition-smooth ${
-                selectedJobId === job.id ? 'hover:opacity-95' : ''
+                selectedJobId === job.id ? 'border-primary/60 bg-primary/10' : 'border-primary/20 hover:border-primary/30'
               }`}
-              style={{
-                borderColor: selectedJobId === job.id ? ocBorder : ocBorder,
-                backgroundColor: selectedJobId === job.id ? 'var(--gm-card-hover)' : 'var(--gm-card)',
-              }}
             >
               <div className="font-heading font-bold text-foreground">{job.name}</div>
               <div className="mt-1 flex items-center gap-2 text-xs text-mutedForeground">
                 <span>{(job.success_rate * 100).toFixed(0)}% success</span>
               </div>
               <div className="mt-2 flex items-center gap-3 text-xs">
-                <span className="flex items-center gap-1" style={{ color: ocMuted }}>
+                <span className="flex items-center gap-1 text-primary/80">
                   <Banknote size={12} /> ${(job.cash || 0).toLocaleString()}
                 </span>
-                <span className="flex items-center gap-1" style={{ color: ocMuted }}>
+                <span className="flex items-center gap-1 text-primary/80">
                   <Star size={12} /> {job.rp || 0} RP
                 </span>
               </div>
@@ -370,25 +364,25 @@ export default function OrganisedCrime() {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden max-w-2xl mx-auto border" style={{ backgroundColor: 'var(--gm-bg-top)', borderColor: ocBorder }}>
-        <div className="px-4 py-2 border-b flex items-center justify-between" style={{ borderColor: ocBorder, color: ocMuted }}>
-          <span className="text-xs font-heading font-bold uppercase tracking-widest">Team (4 slots)</span>
-          <Users size={18} style={{ color: ocMuted }} />
+      <div className={`${styles.panel} rounded-md overflow-hidden max-w-2xl mx-auto border border-primary/20`}>
+        <div className="px-4 py-2 border-b border-primary/20 flex items-center justify-between bg-zinc-800/50">
+          <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">Team (4 slots)</span>
+          <Users size={18} className="text-primary/80" />
         </div>
         <div className="p-4 space-y-3">
           {ROLE_IDS.map((roleId) => (
             <div key={roleId} className="flex flex-wrap items-center gap-2">
-              <span className="w-24 text-xs font-heading font-bold capitalize shrink-0" style={{ color: ocMuted }}>{roleId}</span>
+              <span className="w-24 text-xs font-heading font-bold capitalize shrink-0 text-primary/80">{roleId}</span>
               <div className="flex flex-wrap items-center gap-2">
                 {['self', 'npc', 'invite'].map((opt) => (
-                  <label key={opt} className="flex items-center gap-1.5 cursor-pointer" style={{ color: ocText }}>
+                  <label key={opt} className="flex items-center gap-1.5 cursor-pointer text-foreground">
                     <input
                       type="radio"
                       name={`slot-${roleId}`}
                       checked={slots[roleId] === opt}
                       onChange={() => setSlot(roleId, opt)}
-                      className="accent-[#404040]"
-                      style={{ accentColor: '#404040' }}
+                      className="accent-[#303030]"
+                      style={{ accentColor: radioAccent }}
                     />
                     <span className="text-xs font-heading">
                       {opt === 'self' ? 'You' : opt === 'npc' ? 'NPC' : 'Invite'}
@@ -401,15 +395,14 @@ export default function OrganisedCrime() {
                     placeholder="Username"
                     value={inviteInputs[roleId]}
                     onChange={(e) => setInviteInputs((p) => ({ ...p, [roleId]: e.target.value }))}
-                    className="rounded px-2 py-1 text-xs font-heading w-32"
-                    style={{ backgroundColor: 'var(--gm-card)', border: `1px solid ${ocBorder}`, color: ocText }}
+                    className="rounded px-2 py-1 text-xs font-heading w-32 bg-zinc-800/80 border border-primary/20 text-foreground focus:border-primary/50 focus:outline-none"
                   />
                 )}
               </div>
             </div>
           ))}
           {selfCount !== 1 && (
-            <p className="text-xs font-heading flex items-center gap-1" style={{ color: ocMuted }}>
+            <p className="text-xs font-heading flex items-center gap-1 text-mutedForeground">
               <AlertCircle size={12} /> Exactly one slot must be &quot;You&quot;.
             </p>
           )}
@@ -419,8 +412,7 @@ export default function OrganisedCrime() {
                 type="button"
                 onClick={sendInvitesOnly}
                 disabled={sendInviteLoading || selfCount !== 1 || pctTotal !== 100}
-                className="rounded px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: 'var(--gm-card)', borderColor: ocBorder, color: ocText }}
+                className="rounded px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-primary/30 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {sendInviteLoading ? 'Sending…' : 'Send invite'}
               </button>
@@ -429,30 +421,29 @@ export default function OrganisedCrime() {
         </div>
       </div>
 
-      <div className="rounded-md overflow-hidden max-w-2xl mx-auto border" style={{ backgroundColor: 'var(--gm-bg-top)', borderColor: ocBorder }}>
-        <div className="px-4 py-2 border-b flex items-center justify-between" style={{ borderColor: ocBorder, color: ocMuted }}>
-          <span className="text-xs font-heading font-bold uppercase tracking-widest">Cut per role (%) — creator decides</span>
-          <span className="text-xs font-heading font-bold" style={{ color: pctTotal === 100 ? ocText : ocMuted }}>Total: {pctTotal}%</span>
+      <div className={`${styles.panel} rounded-md overflow-hidden max-w-2xl mx-auto border border-primary/20`}>
+        <div className="px-4 py-2 border-b border-primary/20 flex items-center justify-between bg-zinc-800/50">
+          <span className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest">Cut per role (%) — creator decides</span>
+          <span className={`text-xs font-heading font-bold ${pctTotal === 100 ? 'text-primary' : 'text-mutedForeground'}`}>Total: {pctTotal}%</span>
         </div>
         <div className="p-4 flex flex-wrap items-center gap-4">
           {ROLE_IDS.map((roleId) => (
             <div key={roleId} className="flex items-center gap-2">
-              <span className="text-xs font-heading capitalize w-20" style={{ color: ocMuted }}>{roleId}</span>
+              <span className="text-xs font-heading capitalize w-20 text-primary/80">{roleId}</span>
               <input
                 type="number"
                 min={0}
                 max={100}
                 value={pcts[roleId] ?? 25}
                 onChange={(e) => setPct(roleId, e.target.value)}
-                className="w-14 rounded px-2 py-1 text-xs font-heading text-right"
-                style={{ backgroundColor: 'var(--gm-card)', border: `1px solid ${ocBorder}`, color: ocText }}
+                className="w-14 rounded px-2 py-1 text-xs font-heading text-right bg-zinc-800/80 border border-primary/20 text-foreground focus:border-primary/50 focus:outline-none"
               />
-              <span className="text-xs font-heading" style={{ color: ocMuted }}>%</span>
+              <span className="text-xs font-heading text-mutedForeground">%</span>
             </div>
           ))}
         </div>
         {pctTotal !== 100 && (
-          <p className="px-4 pb-3 text-xs font-heading" style={{ color: ocMuted }}>Percentages must sum to 100.</p>
+          <p className="px-4 pb-3 text-xs font-heading text-mutedForeground">Percentages must sum to 100.</p>
         )}
       </div>
 
@@ -462,16 +453,15 @@ export default function OrganisedCrime() {
             type="button"
             onClick={execute}
             disabled={!canExecute || onCooldown || executing}
-            className={`${styles.panel} px-6 py-3 font-heading font-bold uppercase tracking-wider border transition-smooth ${!canExecute || onCooldown || executing ? 'opacity-60 cursor-not-allowed' : ''}`}
-            style={{ borderColor: ocBorder, backgroundColor: 'var(--gm-card)', color: ocText }}
+            className={`px-6 py-3 font-heading font-bold uppercase tracking-wider border transition-smooth rounded-sm ${!canExecute || onCooldown || executing ? 'opacity-60 cursor-not-allowed bg-zinc-800 text-mutedForeground border-primary/10' : 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50'}`}
           >
             {executing ? 'Running...' : onCooldown ? `Cooldown ${cooldownStr}` : hasInviteSlot() ? 'Send invites' : 'Run heist'}
           </button>
         </div>
       )}
 
-      <div className={`${styles.panel} rounded-md p-4 max-w-2xl mx-auto border`} style={{ borderColor: ocBorder }}>
-        <h3 className="text-sm font-heading font-bold uppercase tracking-widest mb-2" style={{ color: ocMuted }}>Rules</h3>
+      <div className={`${styles.panel} rounded-md p-4 max-w-2xl mx-auto border border-primary/20`}>
+        <h3 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2">Rules</h3>
         <ul className="space-y-1 text-xs text-mutedForeground font-heading">
           <li>• Team of 4: Driver, Weapons, Explosives, Hacker. You must fill one slot (You).</li>
           <li>• The creator sets each role&apos;s cut (%). Must sum to 100. NPC slots get nothing.</li>
