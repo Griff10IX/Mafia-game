@@ -14,26 +14,26 @@ echo          MAFIA GAME - PUSH ^& DEPLOY
 echo ============================================
 echo.
 
-echo [1/4] Staging all changes...
+echo [1/5] Staging all changes...
 git add -A
 echo.
 
-echo [2/4] Committing: %msg%
+echo [2/5] Committing: %msg%
 git commit -m "%msg%" 2>nul || echo (no changes to commit)
 echo.
 
-echo [3/4] Pushing to GitHub...
+echo [3/5] Pushing to origin (Mafia-game)...
 git push origin MAfiaGame2
+echo [4/5] Pushing to mafia2 (Mafia-Game-2 - server pulls this)...
 git push mafia2 MAfiaGame2
 echo.
 
-echo [4/4] Deploying on server (SSH)...
-echo      - Enabling maintenance page
-echo      - Fetching latest code
-echo      - Building frontend
-echo      - Restarting backend
-echo      - Disabling maintenance page
-ssh root@178.128.38.68 "cd /opt/mafia-app && cp backend/.env /tmp/env-backup 2>/dev/null; cp public/maintenance.html /var/www/html/maintenance.html 2>/dev/null; touch /tmp/mafia-maintenance && sudo systemctl reload nginx 2>/dev/null; git fetch mafia2 && git reset --hard mafia2/MAfiaGame2 && cp /tmp/env-backup backend/.env 2>/dev/null; npm run build && sudo systemctl restart mafia-backend && sleep 2 && rm -f /tmp/mafia-maintenance && sudo systemctl reload nginx 2>/dev/null"
+echo [5/5] Deploying on server (SSH)...
+echo      - Fetching latest from origin (Mafia-Game-2)
+echo      - Building frontend, restarting backend
+ssh root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); npm run build && sudo systemctl restart mafia-backend && sudo systemctl reload nginx"
+echo.
+echo [5/5] Pushed and deployed.
 echo.
 
 echo ============================================

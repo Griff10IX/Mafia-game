@@ -1,11 +1,11 @@
 # Push updates (go live)
 
-## On your PC (after making code changes)
+## One push = commit, push to both repos, deploy on server
 
 **Easiest:** double-click **`push-live.bat`**  
-- Commits all changes with message "Update" and pushes to both repos.
+- Commits all changes (message "Update"), pushes to **origin** (Mafia-game) and **mafia2** (Mafia-Game-2), then SSHs to the server and runs: fetch, reset, build, restart backend, reload nginx.
 
-**With a custom message:** in terminal:
+**With a custom commit message:** in terminal:
 ```powershell
 .\push-live.bat "Fixed families page"
 ```
@@ -14,7 +14,7 @@ or
 .\push-live.ps1 "Fixed families page"
 ```
 
-**Manual (if you prefer):**
+**Manual (push only, no server deploy):**
 ```powershell
 git add -A
 git commit -m "Your message"
@@ -24,16 +24,17 @@ git push mafia2 MAfiaGame2
 
 ---
 
-## On the server (to deploy the new code)
+## If you deploy on the server by hand
 
-SSH into the server, then:
+SSH in, then:
 
 ```bash
 cd /opt/mafia-app
-git fetch mafia2
-git reset --hard mafia2/MAfiaGame2
+git fetch origin
+git reset --hard origin/MAfiaGame2
 npm run build
 sudo systemctl restart mafia-backend
+sudo systemctl reload nginx
 ```
 
 ---

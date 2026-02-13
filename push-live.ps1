@@ -35,5 +35,8 @@ git push origin MAfiaGame2
 Write-Host "`n5. Pushing to mafia2 (Mafia-Game-2 - server)..." -ForegroundColor Yellow
 git push mafia2 MAfiaGame2
 
-Write-Host "`n=== Done ===" -ForegroundColor Green
-Write-Host "On the server run: git fetch origin && git reset --hard origin/MAfiaGame2 && npm run build" -ForegroundColor Gray
+# 6. Deploy on server (SSH)
+Write-Host "`n6. Deploying on server (SSH)..." -ForegroundColor Yellow
+ssh root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); npm run build && sudo systemctl restart mafia-backend && sudo systemctl reload nginx"
+
+Write-Host "`n=== Done - pushed and deployed ===" -ForegroundColor Green
