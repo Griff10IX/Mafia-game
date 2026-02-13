@@ -1630,6 +1630,19 @@ def _interest_option(duration_hours: int) -> dict | None:
         return None
     return next((o for o in BANK_INTEREST_OPTIONS if int(o.get("hours", 0) or 0) == h), None)
 
+
+def _parse_matures_at(matures_at: str | None) -> datetime | None:
+    """Parse deposit matures_at to timezone-aware UTC datetime. Returns None if missing/invalid."""
+    if not matures_at:
+        return None
+    try:
+        mat = datetime.fromisoformat(matures_at.replace("Z", "+00:00"))
+        if mat.tzinfo is None:
+            mat = mat.replace(tzinfo=timezone.utc)
+        return mat
+    except Exception:
+        return None
+
 @api_router.get("/bank/meta")
 async def bank_meta(current_user: dict = Depends(get_current_user)):
     return {
@@ -1650,7 +1663,8 @@ async def bank_overview(current_user: dict = Depends(get_current_user)):
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
     for d in deposits:
-        d["matured"] = bool(d.get("matures_at") and datetime.fromisoformat(d["matures_at"]) <= now)
+        mat = _parse_matures_at(d.get("matures_at"))
+        d["matured"] = bool(mat is not None and now >= mat)
 
     transfers = await db.money_transfers.find(
         {"$or": [{"from_user_id": current_user["id"]}, {"to_user_id": current_user["id"]}]},
@@ -1704,6 +1718,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
 
 @api_router.post("/bank/interest/claim")
 async def bank_interest_claim(request: BankDepositClaimRequest, current_user: dict = Depends(get_current_user)):
+    """Claim a matured interest deposit. Early withdrawal is not allowed."""
     dep = await db.bank_deposits.find_one({"id": request.deposit_id, "user_id": current_user["id"]}, {"_id": 0})
     if not dep:
         raise HTTPException(status_code=404, detail="Deposit not found")
@@ -1711,17 +1726,11 @@ async def bank_interest_claim(request: BankDepositClaimRequest, current_user: di
         raise HTTPException(status_code=400, detail="Deposit already claimed")
 
     now = datetime.now(timezone.utc)
-    matures_at = dep.get("matures_at")
-    if not matures_at:
-        raise HTTPException(status_code=400, detail="Deposit missing maturity time")
-    try:
-        mat = datetime.fromisoformat(matures_at)
-        if mat.tzinfo is None:
-            mat = mat.replace(tzinfo=timezone.utc)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid maturity time")
+    mat = _parse_matures_at(dep.get("matures_at"))
+    if mat is None:
+        raise HTTPException(status_code=400, detail="Deposit missing or invalid maturity time")
     if now < mat:
-        raise HTTPException(status_code=400, detail="Deposit has not matured yet")
+        raise HTTPException(status_code=400, detail="Cannot withdraw early. Deposit has not matured yet.")
 
     principal = int(dep.get("principal", 0) or 0)
     interest = int(dep.get("interest_amount", 0) or 0)

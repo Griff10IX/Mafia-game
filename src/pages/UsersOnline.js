@@ -89,9 +89,9 @@ function UserCard({ user, profileCache, profileLoading, ensureProfilePreview }) 
           </h3>
         </div>
         {user.in_jail && (
-          <div className="bg-red-500/20 border border-red-500/40 px-2 py-0.5 rounded-sm shrink-0">
-            <span className="text-[11px] text-red-400 font-heading font-bold uppercase">Jailed</span>
-          </div>
+          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-heading font-bold uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/30">
+            Jailed
+          </span>
         )}
       </div>
     </div>
@@ -156,7 +156,7 @@ export default function UsersOnline() {
         <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">See who&apos;s currently active</p>
       </div>
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden p-4`} data-testid="online-count">
+      <div className={`${styles.panel} rounded-sm overflow-hidden p-4 max-w-2xl mx-auto`} data-testid="online-count">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 rounded-sm flex items-center justify-center bg-primary/20 border border-primary/30">
             <Users className="text-primary" size={24} />
@@ -173,11 +173,10 @@ export default function UsersOnline() {
           <p className="text-sm text-mutedForeground font-heading">No other users online right now</p>
         </div>
       ) : (
-        <div className="flex flex-wrap items-start gap-3" data-testid="users-grid">
+        <div className="flex flex-wrap justify-center items-start gap-3" data-testid="users-grid">
           {users.map((user, idx) => (
             <div
               key={idx}
-              className={user.in_jail ? 'mt-5' : ''}
               data-testid={user.in_jail ? 'user-card-jailed' : undefined}
             >
               <UserCard
@@ -191,16 +190,16 @@ export default function UsersOnline() {
         </div>
       )}
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden`} data-testid="info-box">
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`} data-testid="info-box">
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-center gap-2">
             <div className="w-6 h-px bg-primary/50" />
             <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Quick Info</h3>
-            <div className="flex-1 h-px bg-primary/50" />
+            <div className="w-6 h-px bg-primary/50" />
           </div>
         </div>
-        <div className="p-4">
-          <ul className="space-y-1 text-xs text-mutedForeground font-heading">
+        <div className="p-4 flex flex-col items-center text-center">
+          <ul className="space-y-1 text-xs text-mutedForeground font-heading text-left">
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Status updates every 30 seconds</li>
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Inactive 5+ minutes = offline</li>
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Plan attacks and rackets by who&apos;s active</li>

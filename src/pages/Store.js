@@ -317,7 +317,7 @@ export default function Store() {
               </p>
               <div className="space-y-2 mb-6 font-heading text-xs text-mutedForeground">
                 <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Requires at least one weapon</div>
-                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Witness statements go to victim (or bodyguard owner) inbox</div>
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Witness statements are sent to random users&apos; inboxes</div>
               </div>
               {user?.has_silencer ? (
                 <div className={`${styles.surface} border border-primary/20 rounded-sm py-3 text-center text-primary font-heading font-bold uppercase tracking-wider`}>
