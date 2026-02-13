@@ -4562,6 +4562,7 @@ async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depe
 HITLIST_HIDDEN_MULTIPLIER = 1.5  # 50% extra for hidden
 HITLIST_BUY_OFF_MULTIPLIER = 1.5  # pay bounty amount + 50% per entry (cash or points, same as placed)
 HITLIST_REVEAL_COST_POINTS = 5000
+# Hitlist NPC add limit: per-user (each user has their own 3-per-3h window, not global)
 HITLIST_NPC_COOLDOWN_HOURS = 3
 HITLIST_NPC_MAX_PER_WINDOW = 3
 
@@ -4640,9 +4641,10 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
 
 @api_router.get("/hitlist/npc-status")
 async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
-    """Whether user can add an NPC to the hitlist (max 3 per 3 hours)."""
+    """Whether this user can add an NPC to the hitlist (max 3 per 3 hours). Timers are per-user, not global."""
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
+    # Per-user timestamps (stored on user doc); each user has their own window
     timestamps = (current_user.get("hitlist_npc_add_timestamps") or [])[:]
     timestamps = [t for t in timestamps if t and (datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t) > window_start]
     adds_in_window = len(timestamps)
@@ -4666,9 +4668,10 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/hitlist/add-npc")
 async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
-    """Add a random NPC to the hitlist. Max 3 per 3 hours. NPC is attackable like any other target on the attack page."""
+    """Add a random NPC to the hitlist. Max 3 per 3 hours per user (user-based, not global). NPC is attackable from Attack page."""
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
+    # Use this user's timestamps only (per-user limit; other users have their own)
     timestamps = list(current_user.get("hitlist_npc_add_timestamps") or [])
     timestamps = [t for t in timestamps if t and (datetime.fromisoformat(t.replace("Z", "+00:00")) if isinstance(t, str) else t) > window_start]
     if len(timestamps) >= HITLIST_NPC_MAX_PER_WINDOW:
