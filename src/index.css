@@ -174,6 +174,39 @@ code {
   animation: roulette-reveal 0.5s ease-out forwards;
 }
 
+/* Dice: rolling icon + win/lose result */
+@keyframes dice-roll {
+  0% { transform: rotate(0deg) scale(1); opacity: 1; }
+  25% { transform: rotate(-12deg) scale(1.05); opacity: 0.9; }
+  50% { transform: rotate(8deg) scale(1.02); opacity: 1; }
+  75% { transform: rotate(-5deg) scale(0.98); opacity: 0.95; }
+  100% { transform: rotate(0deg) scale(1); opacity: 1; }
+}
+
+@keyframes dice-win {
+  0% { transform: scale(0.5); opacity: 0; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 20px 4px rgba(16, 185, 129, 0.25); }
+}
+
+@keyframes dice-lose {
+  0% { transform: scale(0.5); opacity: 0; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 20px 4px rgba(239, 68, 68, 0.25); }
+}
+
+.animate-dice-roll {
+  animation: dice-roll 0.6s ease-in-out infinite;
+}
+
+.animate-dice-win {
+  animation: dice-win 0.5s ease-out forwards;
+}
+
+.animate-dice-lose {
+  animation: dice-lose 0.5s ease-out forwards;
+}
+
 /* Blackjack cards */
 @keyframes card-deal {
   0% { transform: translateY(-20px) scale(0.8); opacity: 0; }

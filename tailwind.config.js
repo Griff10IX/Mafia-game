@@ -15,6 +15,9 @@ module.exports = {
         border: '#2d2d2d',
         background: '#1a1a1a',
         foreground: '#f5f5f5',
+        card: '#242424',
+        input: '#282828',
+        secondary: '#333333',
         primary: {
           DEFAULT: '#d4af37',
           foreground: '#ffffff',
