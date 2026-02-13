@@ -155,19 +155,19 @@ export default function Profile() {
   const ownedCasinos = profile.owned_casinos || [];
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="profile-page">
-      <div className="flex items-center justify-center flex-col gap-2 text-center mb-2">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="profile-page">
+      <div className="flex items-center justify-center flex-col gap-1 text-center mb-1">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-xl md:text-2xl font-heading font-bold text-primary uppercase tracking-wider">Profile</h1>
+          <h1 className="text-lg md:text-xl font-heading font-bold text-primary uppercase tracking-wider">Profile</h1>
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/60" />
         </div>
       </div>
 
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
         {/* Header: username (large) + rank badge right */}
-        <div className={`px-4 py-4 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between gap-3`}>
-          <h2 className="flex-1 text-xl md:text-2xl font-heading font-bold text-foreground uppercase tracking-wider truncate" data-testid="profile-username">
+        <div className={`px-4 py-2.5 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between gap-3`}>
+          <h2 className="flex-1 text-lg md:text-xl font-heading font-bold text-foreground uppercase tracking-wider truncate" data-testid="profile-username">
             {profile.username}
           </h2>
           <div className="flex items-center gap-2 shrink-0">
@@ -193,7 +193,7 @@ export default function Profile() {
         {/* User info: label / value rows */}
         <div className="divide-y divide-primary/10">
           {profileRows.map((row) => (
-            <div key={row.label} className={`grid grid-cols-12 gap-3 px-4 py-3 items-center ${row.crew ? 'border-l-2 border-primary/50 pl-4' : ''}`}>
+            <div key={row.label} className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${row.crew ? 'border-l-2 border-primary/50 pl-4' : ''}`}>
               <div className="col-span-4 sm:col-span-3 text-left">
                 <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">{row.label}:</span>
               </div>
@@ -222,7 +222,7 @@ export default function Profile() {
         </div>
 
         {profile.is_npc && (
-          <div className="px-4 py-2 border-t border-primary/10">
+          <div className="px-4 py-1.5 border-t border-primary/10">
             <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-heading font-bold ${styles.surface} border border-primary/10 text-mutedForeground`}>
               NPC
             </span>
@@ -230,13 +230,13 @@ export default function Profile() {
         )}
       </div>
 
-      {/* Honours (leaderboard rankings) */}
+      {/* Honours (leaderboard rankings) - keep badge style as-is */}
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
+        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
           <Trophy className="text-primary shrink-0" size={18} />
           <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Honours ({honours.length})</h3>
         </div>
-        <div className="p-4 flex flex-col items-center text-center">
+        <div className="p-3 flex flex-col items-center text-center">
           {honours.length === 0 ? (
             <p className="text-xs text-mutedForeground font-heading">No leaderboard rankings yet.</p>
           ) : (
@@ -254,11 +254,11 @@ export default function Profile() {
 
       {/* Properties: casinos owned (max bet, buyback) */}
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
+        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
           <Building2 className="text-primary shrink-0" size={18} />
           <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Properties</h3>
         </div>
-        <div className="p-4 flex flex-col items-center text-center">
+        <div className="p-3 flex flex-col items-center text-center">
           {ownedCasinos.length === 0 ? (
             <p className="text-xs text-mutedForeground font-heading">No casinos owned.</p>
           ) : (
@@ -328,8 +328,8 @@ export default function Profile() {
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Profile picture</span>
           <div className="w-6 h-px bg-primary/50" />
         </div>
-        <div className="p-4 flex flex-col items-center text-center">
-          <div className="aspect-video max-h-64 w-full max-w-md mx-auto rounded-sm overflow-hidden border border-primary/20 bg-primary/5 flex items-center justify-center">
+        <div className="p-3 flex flex-col items-center text-center">
+          <div className="aspect-video max-h-48 w-full max-w-md mx-auto rounded-sm overflow-hidden border border-primary/20 bg-primary/5 flex items-center justify-center">
             {avatarSrc ? (
               <img src={avatarSrc} alt="" className="w-full h-full object-contain" />
             ) : (
@@ -340,7 +340,7 @@ export default function Profile() {
             )}
           </div>
           {isMe && (
-            <div className="mt-4 flex flex-col sm:flex-row gap-3 items-center justify-center">
+            <div className="mt-3 flex flex-col sm:flex-row gap-2 items-center justify-center">
               <input
                 type="file"
                 accept="image/*"
@@ -359,15 +359,15 @@ export default function Profile() {
               </button>
             </div>
           )}
-          {isMe && <p className="text-xs text-mutedForeground font-heading mt-2">You can upload a picture to your profile. Square images work best.</p>}
+          {isMe && <p className="text-xs text-mutedForeground font-heading mt-1.5">You can upload a picture to your profile. Square images work best.</p>}
         </div>
       </div>
 
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 text-center`}>
+        <div className={`px-4 py-1.5 ${styles.surfaceMuted} border-b border-primary/20 text-center`}>
           <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Account created</span>
         </div>
-        <div className="px-4 py-3 text-foreground font-heading text-center">{formatDateTime(profile.created_at)}</div>
+        <div className="px-4 py-2 text-foreground font-heading text-sm text-center">{formatDateTime(profile.created_at)}</div>
       </div>
     </div>
   );
