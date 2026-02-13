@@ -1,4 +1,4 @@
-# Push updates to both repos and go live
+# Commit, push to Git (both remotes), then deploy on server
 # Usage: .\push-live.ps1
 #        .\push-live.ps1 "Your commit message here"
 
@@ -10,29 +10,25 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
-Write-Host "=== Mafia push live ===" -ForegroundColor Cyan
+Write-Host "=== Mafia: commit, push Git, deploy ===" -ForegroundColor Cyan
 
 # 1. Show status
 Write-Host "`n1. Checking for changes..." -ForegroundColor Yellow
 $status = git status --short
 if (-not $status) {
     Write-Host "   No changes to commit. Working tree clean." -ForegroundColor Gray
-    $pushOnly = $true
 } else {
     Write-Host $status
-    # 2. Add all
     Write-Host "`n2. Staging all changes..." -ForegroundColor Yellow
     git add -A
-    # 3. Commit
     Write-Host "`n3. Committing: $Message" -ForegroundColor Yellow
     git commit -m $Message
-    $pushOnly = $false
 }
 
-# 4. Push to both remotes
-Write-Host "`n4. Pushing to origin (Mafia-game)..." -ForegroundColor Yellow
+# 4. Push to Git (both remotes)
+Write-Host "`n4. Push to Git: origin (Mafia-game)..." -ForegroundColor Yellow
 git push origin MAfiaGame2
-Write-Host "`n5. Pushing to mafia2 (Mafia-Game-2 - server)..." -ForegroundColor Yellow
+Write-Host "`n5. Push to Git: mafia2 (Mafia-Game-2)..." -ForegroundColor Yellow
 git push mafia2 MAfiaGame2
 
 # 6. Deploy on server (SSH)
