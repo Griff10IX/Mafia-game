@@ -269,7 +269,7 @@ export default function ArmourWeapons() {
                   {w.owned ? (
                     <>
                       {w.equipped ? (
-                        <button type="button" onClick={unequipWeapon} disabled={buyingId != null} className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-2 py-1 text-[11px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`} data-testid={`unequip-weapon-${w.id}`}>
+                        <button type="button" onClick={unequipWeapon} disabled={buyingId != null} className={`${styles.surface} ${styles.raisedHover} border border-primary/20 text-foreground rounded-sm px-2 py-1 text-[11px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`} data-testid={`unequip-weapon-${w.id}`}>
                           {buyingId === 'unequip' ? '...' : 'Unequip'}
                         </button>
                       ) : (
@@ -282,7 +282,7 @@ export default function ArmourWeapons() {
                       </button>
                     </>
                   ) : canBuy ? (
-                    <button type="button" onClick={() => buyWeapon(w.id, usingPoints ? 'points' : 'money')} disabled={buyingId != null} className={`rounded-sm px-2 py-1 text-[11px] font-heading font-bold uppercase tracking-wider disabled:opacity-50 ${usingPoints ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50' : `${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary`}`} data-testid={`buy-weapon-${w.id}`}>
+                    <button type="button" onClick={() => buyWeapon(w.id, usingPoints ? 'points' : 'money')} disabled={buyingId != null} className={`rounded-sm px-2 py-1 text-[11px] font-heading font-bold uppercase tracking-wider disabled:opacity-50 ${usingPoints ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50' : `${styles.surface} ${styles.raisedHover} border border-primary/20 text-foreground`}`} data-testid={`buy-weapon-${w.id}`}>
                       <span className="inline-flex items-center gap-0.5"><CostIcon size={10} />{buyingId === w.id ? '...' : 'Buy'}</span>
                     </button>
                   ) : (
@@ -297,7 +297,7 @@ export default function ArmourWeapons() {
                     <div className="text-sm font-heading font-bold text-foreground truncate">{w.name}</div>
                     {showOwned && <div className="text-[10px] text-mutedForeground font-heading">Owned {w.quantity}{isEquipped && ' · Equipped'}</div>}
                   </div>
-                  <span className="text-xs font-heading text-primary text-right truncate">{costText}</span>
+                  <span className="text-xs font-heading text-foreground text-right truncate">{costText}</span>
                   <div className="flex justify-end min-w-0">{actionBlock}</div>
                 </div>
               );
@@ -319,7 +319,7 @@ export default function ArmourWeapons() {
               const actionBlock = (
                 <div className="flex gap-1.5 justify-end flex-wrap">
                   {o.equipped ? (
-                    <button type="button" onClick={unequipArmour} disabled={equippingLevel != null} className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-2 py-1 text-[11px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`} data-testid={`armour-unequip-${o.level}`}>
+                    <button type="button" onClick={unequipArmour} disabled={equippingLevel != null} className={`${styles.surface} ${styles.raisedHover} border border-primary/20 text-foreground rounded-sm px-2 py-1 text-[11px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`} data-testid={`armour-unequip-${o.level}`}>
                       {equippingLevel === 0 ? '...' : 'Unequip'}
                     </button>
                   ) : o.owned ? (
@@ -345,7 +345,7 @@ export default function ArmourWeapons() {
                     <div className="text-sm font-heading font-bold text-foreground truncate">{o.name}</div>
                     <div className="text-[10px] text-mutedForeground font-heading">Lv.{o.level}</div>
                   </div>
-                  <span className="text-xs font-heading text-primary text-right inline-flex items-center justify-end gap-0.5"><CostIcon size={10} />{formatCost(o)}</span>
+                  <span className="text-xs font-heading text-foreground text-right inline-flex items-center justify-end gap-0.5"><CostIcon size={10} className="text-mutedForeground" />{formatCost(o)}</span>
                   <div className="flex justify-end min-w-0">{actionBlock}</div>
                 </div>
               );

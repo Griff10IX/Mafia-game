@@ -84,17 +84,17 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className={`space-y-8 ${styles.pageContent}`} data-testid="dashboard-page">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="dashboard-page">
       {/* Header */}
-      <header className="flex items-center justify-center flex-col gap-2 text-center">
+      <header className="flex items-center justify-center flex-col gap-1 text-center">
         <div className="flex items-center gap-3 w-full justify-center">
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider" data-testid="dashboard-title">
+          <h1 className="text-xl md:text-2xl font-heading font-bold text-primary uppercase tracking-wider" data-testid="dashboard-title">
             Welcome, {user?.username}
           </h1>
           <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/60" />
         </div>
-        <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">
+        <p className="text-[11px] font-heading text-mutedForeground uppercase tracking-widest">
           {user?.rank_name ?? '—'} · {user?.current_state ?? '—'}
         </p>
       </header>
@@ -102,24 +102,24 @@ export default function Dashboard() {
       {/* Rank progress */}
       {rankProgress && (
         <section className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex flex-wrap items-center justify-between gap-3">
+          <div className="px-3 py-1.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <div className="w-6 h-px bg-primary/50" />
               <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Rank progress</h2>
               <div className="flex-1 h-px bg-primary/50" />
             </div>
             {!user?.premium_rank_bar && (
-              <Link to="/store" className="text-xs font-heading font-bold text-primary hover:text-primary/80">
+              <Link to="/store" className="text-[11px] font-heading font-bold text-primary hover:text-primary/80">
                 Premium bar in Store
               </Link>
             )}
           </div>
-          <div className="p-4 space-y-2">
-            <p className="text-xs font-heading text-mutedForeground">
+          <div className="p-3 space-y-1.5">
+            <p className="text-[11px] font-heading text-mutedForeground">
               {rankProgress.current_rank_name}
               {rankProgress.next_rank && ` → ${rankProgress.next_rank_name}`}
             </p>
-            <div className="flex justify-between text-xs font-heading text-mutedForeground">
+            <div className="flex justify-between text-[11px] font-heading text-mutedForeground">
               <span>Rank points</span>
               <span className="font-bold text-foreground">
                 {(rankProgress.rank_points_current || 0).toLocaleString()}
@@ -169,7 +169,7 @@ export default function Dashboard() {
               );
             })()}
             {user?.premium_rank_bar && rankProgress.rank_points_needed > 0 && (
-              <p className="text-xs font-heading text-mutedForeground">{rankProgress.rank_points_needed.toLocaleString()} RP to next rank</p>
+              <p className="text-[11px] font-heading text-mutedForeground">{rankProgress.rank_points_needed.toLocaleString()} RP to next rank</p>
             )}
           </div>
         </section>
@@ -177,30 +177,30 @@ export default function Dashboard() {
 
       {/* Stats grid */}
       <section>
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-2">
           <div className="w-6 h-px bg-primary/50" />
           <h2 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">At a glance</h2>
           <div className="flex-1 h-px bg-primary/30" />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {stats.map((s) => {
             const Icon = s.icon;
             return (
               <div
                 key={s.id}
-                className={`${styles.panel} rounded-sm p-4 flex items-start gap-3 shadow-lg shadow-primary/5`}
+                className={`${styles.panel} rounded-sm p-3 flex items-start gap-2 shadow-lg shadow-primary/5`}
                 data-testid={s.testId}
               >
-                <div className="p-1.5 rounded-sm bg-primary/20 border border-primary/30 shrink-0">
-                  <Icon className="text-primary shrink-0" size={18} />
+                <div className="p-1 rounded-sm bg-primary/20 border border-primary/30 shrink-0">
+                  <Icon className="text-primary shrink-0" size={16} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-heading text-mutedForeground uppercase tracking-wider">{s.label}</p>
+                  <p className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider">{s.label}</p>
                   {s.tooltip ? (
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <p className="text-base font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-1">
+                          <p className="text-sm font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-1">
                             {s.value}
                           </p>
                         </TooltipTrigger>
@@ -210,9 +210,9 @@ export default function Dashboard() {
                       </Tooltip>
                     </TooltipProvider>
                   ) : (
-                    <p className="text-base font-heading font-bold text-foreground truncate">{s.value}</p>
+                    <p className="text-sm font-heading font-bold text-foreground truncate">{s.value}</p>
                   )}
-                  {s.sub && <p className="text-xs font-heading text-mutedForeground">{s.sub}</p>}
+                  {s.sub && <p className="text-[10px] font-heading text-mutedForeground">{s.sub}</p>}
                 </div>
               </div>
             );
@@ -222,12 +222,12 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       <section>
-        <div className="flex items-center gap-2 mb-3">
+        <div className="flex items-center gap-2 mb-2">
           <div className="w-6 h-px bg-primary/50" />
           <h2 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Quick actions</h2>
           <div className="flex-1 h-px bg-primary/30" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {quickActions.map((a) => {
             const Icon = a.icon;
             return (
@@ -235,16 +235,16 @@ export default function Dashboard() {
                 key={a.id}
                 to={a.to}
                 data-testid={`quick-action-${a.id}`}
-                className={`group ${styles.panel} rounded-sm p-4 flex items-center gap-4 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-smooth`}
+                className={`group ${styles.panel} rounded-sm p-3 flex items-center gap-3 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-smooth`}
               >
-                <div className="p-2 rounded-sm bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0">
-                  <Icon className="text-primary shrink-0" size={22} />
+                <div className="p-1.5 rounded-sm bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0">
+                  <Icon className="text-primary shrink-0" size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-heading font-bold text-foreground group-hover:text-primary transition-colors">{a.title}</p>
-                  <p className="text-xs font-heading text-mutedForeground truncate">{a.desc}</p>
+                  <p className="text-xs font-heading font-bold text-foreground group-hover:text-primary transition-colors">{a.title}</p>
+                  <p className="text-[11px] font-heading text-mutedForeground truncate">{a.desc}</p>
                 </div>
-                <ChevronRight className="text-mutedForeground group-hover:text-primary shrink-0 transition-colors" size={18} />
+                <ChevronRight className="text-mutedForeground group-hover:text-primary shrink-0 transition-colors" size={16} />
               </Link>
             );
           })}
@@ -253,21 +253,21 @@ export default function Dashboard() {
 
       {/* Game systems (compact) */}
       <section className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
-          <Zap size={16} className="text-primary" />
+        <div className="px-3 py-1.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+          <Zap size={14} className="text-primary" />
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Game systems</span>
           <div className="flex-1 h-px bg-primary/50" />
         </div>
-        <div className="p-4 grid sm:grid-cols-2 gap-4 text-sm font-heading">
+        <div className="p-3 grid sm:grid-cols-2 gap-3 text-sm font-heading">
           <div>
-            <p className="font-bold text-primary mb-1 flex items-center gap-2"><span className="text-primary">◆</span> Ranks</p>
-            <p className="text-mutedForeground leading-relaxed text-xs">
+            <p className="font-bold text-primary text-xs mb-0.5 flex items-center gap-2"><span className="text-primary">◆</span> Ranks</p>
+            <p className="text-mutedForeground leading-snug text-[11px]">
               Rise from Street Thug to The Commission. Each rank unlocks crimes, weapons, and opportunities.
             </p>
           </div>
           <div>
-            <p className="font-bold text-primary mb-1 flex items-center gap-2"><span className="text-primary">◆</span> Bodyguards</p>
-            <p className="text-mutedForeground leading-relaxed text-xs">
+            <p className="font-bold text-primary text-xs mb-0.5 flex items-center gap-2"><span className="text-primary">◆</span> Bodyguards</p>
+            <p className="text-mutedForeground leading-snug text-[11px]">
               Hire up to 4 bodyguards (points). Human or robot guards protect you from attacks.
             </p>
           </div>
