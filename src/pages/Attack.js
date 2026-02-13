@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -13,6 +13,7 @@ function formatDateTime(iso) {
 }
 
 export default function Attack() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [targetUsername, setTargetUsername] = useState('');
   const [note, setNote] = useState('');
   const [attacks, setAttacks] = useState([]);
@@ -37,6 +38,19 @@ export default function Attack() {
   const [travelInfo, setTravelInfo] = useState(null);
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
+
+  // Pre-fill search from hitlist link: /attack?target=Username
+  useEffect(() => {
+    const t = searchParams.get('target');
+    if (t && typeof t === 'string' && t.trim()) {
+      setTargetUsername(t.trim());
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('target');
+        return next;
+      }, { replace: true });
+    }
+  }, []);
 
   useEffect(() => {
     refreshAttacks();

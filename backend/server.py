@@ -1278,6 +1278,57 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
             except Exception:
                 pass
     wealth_range = get_wealth_rank_range(user.get("money", 0))
+    user_id = user["id"]
+
+    # Family name (Crew)
+    family_name = None
+    if user.get("family_id"):
+        fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1})
+        if fam:
+            family_name = fam.get("name")
+
+    # Honours: leaderboard rankings for this user (rank in each stat)
+    async def _rank_for_field(field: str, value: int) -> int:
+        if value is None:
+            value = 0
+        n_better = await db.users.count_documents({
+            "is_dead": {"$ne": True},
+            "is_bodyguard": {"$ne": True},
+            field: {"$gt": value},
+        })
+        return n_better + 1
+
+    kills_rank = await _rank_for_field("total_kills", int(user.get("total_kills") or 0))
+    crimes_rank = await _rank_for_field("total_crimes", int(user.get("total_crimes") or 0))
+    gta_rank = await _rank_for_field("total_gta", int(user.get("total_gta") or 0))
+    jail_rank = await _rank_for_field("jail_busts", int(user.get("jail_busts") or 0))
+    rank_points_rank = await _rank_for_field("rank_points", int(user.get("rank_points") or 0))
+    honours = [
+        {"rank": rank_points_rank, "label": "Most Rank Points Earned"},
+        {"rank": kills_rank, "label": "Most Kills"},
+        {"rank": crimes_rank, "label": "Most Crimes Committed"},
+        {"rank": gta_rank, "label": "Most GTAs Committed"},
+        {"rank": jail_rank, "label": "Most Jail Busts"},
+    ]
+
+    # Casinos (dice tables) owned by this user: city, max_bet, buy_back_reward
+    dice_owned = await db.dice_ownership.find(
+        {"owner_id": user_id},
+        {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1}
+    ).to_list(20)
+    owned_casinos = [
+        {
+            "city": d.get("city", "?"),
+            "max_bet": int(d.get("max_bet") or 0),
+            "buy_back_reward": int(d.get("buy_back_reward") or 0),
+        }
+        for d in dice_owned
+    ]
+
+    # Inbox: received = notifications for this user (we don't track sent per user)
+    messages_received = await db.notifications.count_documents({"user_id": user_id})
+    messages_sent = 0
+
     out = {
         "username": user["username"],
         "rank": rank_id,
@@ -1294,6 +1345,11 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
         "is_bodyguard": bool(user.get("is_bodyguard")),
         "online": online,
         "last_seen": last_seen,
+        "family_name": family_name,
+        "honours": honours,
+        "owned_casinos": owned_casinos,
+        "messages_sent": messages_sent,
+        "messages_received": messages_received,
     }
     if current_user.get("email") in ADMIN_EMAILS:
         today_utc = datetime.now(timezone.utc).date().isoformat()
@@ -4280,6 +4336,14 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot attack yourself")
+    # NPCs on the hitlist are personal: you can only attack NPCs you added
+    if target.get("is_npc"):
+        hitlist_npc = await db.hitlist.find_one(
+            {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
+            {"_id": 1}
+        )
+        if not hitlist_npc:
+            raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
 
     # Allow multiple concurrent attacks, but prevent duplicates for the same target
     existing_attack_for_target = await db.attacks.find_one(
@@ -4652,8 +4716,13 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/hitlist/list")
 async def hitlist_list(current_user: dict = Depends(get_current_user)):
-    """List all public hitlist entries. Hidden bounties show placer as null. NPCs include npc_rank and npc_rewards."""
-    cursor = db.hitlist.find({}, {"_id": 0}).sort("created_at", -1)
+    """List public hitlist entries (user bounties) + only this user's NPC entries. NPCs are personal per placer."""
+    user_id = current_user["id"]
+    query = {"$or": [
+        {"target_type": {"$ne": "npc"}},
+        {"target_type": "npc", "placer_id": user_id},
+    ]}
+    cursor = db.hitlist.find(query, {"_id": 0}).sort("created_at", -1)
     items = []
     async for doc in cursor:
         item = {

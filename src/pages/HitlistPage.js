@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock } from 'lucide-react';
+import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -319,35 +320,47 @@ export default function HitlistPage() {
         </div>
       </div>
 
-      {/* Hitlist table */}
+      {/* Active bounties */}
       <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Active bounties</h2>
         </div>
         <div className="overflow-x-auto">
           {list.length === 0 ? (
             <div className="p-6 text-center text-mutedForeground text-sm font-heading">No bounties on the list.</div>
           ) : (
-            <table className="w-full text-sm font-heading">
+            <table className="w-full text-sm font-heading min-w-[400px]">
               <thead>
-                <tr className="border-b border-primary/20">
-                  <th className="text-left py-2 px-3 text-primary uppercase tracking-wider">Target</th>
-                  <th className="text-left py-2 px-3 text-primary uppercase tracking-wider">Type</th>
-                  <th className="text-left py-2 px-3 text-primary uppercase tracking-wider">Reward</th>
-                  <th className="text-left py-2 px-3 text-primary uppercase tracking-wider">Placed by</th>
+                <tr className="border-b border-primary/20 bg-primary/5">
+                  <th className="text-left py-2.5 px-4 text-primary uppercase tracking-wider text-xs">Target</th>
+                  <th className="text-left py-2.5 px-4 text-primary uppercase tracking-wider text-xs w-24">Type</th>
+                  <th className="text-left py-2.5 px-4 text-primary uppercase tracking-wider text-xs w-32">Reward</th>
+                  <th className="text-left py-2.5 px-4 text-primary uppercase tracking-wider text-xs w-28">Placed by</th>
                 </tr>
               </thead>
               <tbody>
                 {list.map((item) => (
-                  <tr key={item.id} className="border-b border-primary/10 hover:bg-primary/5">
-                    <td className="py-2 px-3 text-foreground font-medium">{item.target_username}</td>
-                    <td className="py-2 px-3 text-mutedForeground">
+                  <tr key={item.id} className="border-b border-primary/10 hover:bg-primary/5 transition-colors">
+                    <td className="py-2.5 px-4 align-middle">
+                      <span className="flex items-center gap-2">
+                        <span className="text-foreground font-medium truncate max-w-[180px] sm:max-w-none" title={item.target_username}>{item.target_username}</span>
+                        <Link
+                          to={`/attack?target=${encodeURIComponent(item.target_username)}`}
+                          className="shrink-0 p-1 rounded text-primary/80 hover:text-primary hover:bg-primary/20 transition-colors"
+                          title="Search on Attack page"
+                          aria-label={`Search for ${item.target_username} on Attack`}
+                        >
+                          <Search size={14} />
+                        </Link>
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 text-mutedForeground align-middle">
                       {item.target_type === 'bodyguards' ? <span className="flex items-center gap-1"><Users size={14} /> Bodyguards</span> : <span className="flex items-center gap-1"><User size={14} /> User</span>}
                     </td>
-                    <td className="py-2 px-3">
+                    <td className="py-2.5 px-4 align-middle">
                       {item.reward_type === 'cash' ? <span className="flex items-center gap-1 text-primary"><DollarSign size={14} /> ${Number(item.reward_amount).toLocaleString()}</span> : <span className="flex items-center gap-1 text-primary"><Coins size={14} /> {Number(item.reward_amount).toLocaleString()} pts</span>}
                     </td>
-                    <td className="py-2 px-3 text-mutedForeground">{item.placer_username ?? 'Hidden'}</td>
+                    <td className="py-2.5 px-4 text-mutedForeground align-middle">{item.placer_username ?? 'Hidden'}</td>
                   </tr>
                 ))}
               </tbody>

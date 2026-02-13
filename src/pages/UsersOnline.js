@@ -175,13 +175,18 @@ export default function UsersOnline() {
       ) : (
         <div className="flex flex-wrap items-start gap-3" data-testid="users-grid">
           {users.map((user, idx) => (
-            <UserCard
+            <div
               key={idx}
-              user={user}
-              profileCache={profileCache}
-              profileLoading={profileLoading}
-              ensureProfilePreview={ensureProfilePreview}
-            />
+              className={user.in_jail ? 'mt-5' : ''}
+              data-testid={user.in_jail ? 'user-card-jailed' : undefined}
+            >
+              <UserCard
+                user={user}
+                profileCache={profileCache}
+                profileLoading={profileLoading}
+                ensureProfilePreview={ensureProfilePreview}
+              />
+            </div>
           ))}
         </div>
       )}

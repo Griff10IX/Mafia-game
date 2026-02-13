@@ -231,245 +231,132 @@ export default function ArmourWeapons() {
         </div>
       )}
 
-      {/* Armour section */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-              <Shield size={16} /> Armour
-            </h2>
-            <div className="flex-1 h-px bg-primary/50" />
-          </div>
+      {/* Combat loadout summary */}
+      <div className={`${styles.panel} rounded-sm overflow-hidden py-2.5 px-4`}>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-heading">
+          <span className="text-mutedForeground">
+            Weapon: <span className="text-primary font-bold">{equippedWeapon ? equippedWeapon.name : bestOwned ? bestOwned.name : 'Brass Knuckles'}</span>
+            {equippedWeapon ? ' (equipped)' : bestOwned ? ' (auto)' : ''}
+          </span>
+          <span className="text-mutedForeground">
+            Armour: <span className="text-primary font-bold">{equippedArmourOption ? `Lv.${equippedArmourOption.level} ${equippedArmourOption.name}` : 'None'}</span>
+          </span>
         </div>
-        <div className="overflow-x-auto min-w-0">
-          <div className="w-full min-w-0">
-            <div className={`hidden md:grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20`}>
-              <div className="col-span-6">Set</div>
-              <div className="col-span-2 text-right">Level</div>
-              <div className="col-span-2 text-right">Cost</div>
-              <div className="col-span-2 text-right">Action</div>
-            </div>
-            {armourRows.map((o) => {
-              const CostIcon = o.cost_points != null ? Gem : DollarSign;
+      </div>
+
+      {/* Side-by-side: Weapon (left) | Vest / Armour (right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left: Weapons */}
+        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5 min-w-0`}>
+          <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+            <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+              <Sword size={16} /> Weapon
+            </h2>
+            <span className="text-xs font-heading text-primary/80 uppercase tracking-wider">Cost</span>
+          </div>
+          <div className="overflow-x-auto min-w-0">
+            {weaponRows.map((w, idx) => {
+              const showOwned = !!w.owned;
+              const canBuy = !w.owned && (w.canBuyMoney || w.canBuyPoints);
+              const usingPoints = w.canBuyPoints;
+              const CostIcon = usingPoints ? Gem : DollarSign;
+              const costText = formatWeaponCost(w);
+              const isEquipped = !!w.equipped;
               const actionBlock = (
                 <div className="flex flex-wrap gap-2 justify-end">
-                  {o.equipped ? (
-                    <button
-                      type="button"
-                      onClick={unequipArmour}
-                      disabled={equippingLevel != null}
-                      className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50 min-h-[44px] touch-manipulation`}
-                      data-testid={`armour-unequip-${o.level}`}
-                    >
-                      {equippingLevel === 0 ? '...' : 'Unequip'}
-                    </button>
-                  ) : o.owned ? (
-                    <button
-                      type="button"
-                      onClick={() => equipArmour(o.level)}
-                      disabled={equippingLevel != null}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth border border-yellow-600/50 disabled:opacity-50 min-h-[44px] touch-manipulation"
-                      data-testid={`armour-equip-${o.level}`}
-                    >
-                      {equippingLevel === o.level ? '...' : 'Equip'}
-                    </button>
-                  ) : o.canBuy ? (
-                    <button
-                      type="button"
-                      onClick={() => buyArmour(o.level)}
-                      disabled={buyingLevel != null}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth border border-yellow-600/50 disabled:opacity-50 min-h-[44px] touch-manipulation"
-                      data-testid={`armour-buy-${o.level}`}
-                    >
-                      {buyingLevel === o.level ? '...' : 'Buy'}
+                  {w.owned ? (
+                    <>
+                      {w.equipped ? (
+                        <button type="button" onClick={unequipWeapon} disabled={buyingId != null} className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`} data-testid={`unequip-weapon-${w.id}`}>
+                          {buyingId === 'unequip' ? '...' : 'Unequip'}
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => equipWeapon(w.id)} disabled={buyingId != null} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50" data-testid={`equip-weapon-${w.id}`}>
+                          {buyingId === w.id ? '...' : 'Equip'}
+                        </button>
+                      )}
+                      <button type="button" onClick={() => sellWeapon(w.id)} disabled={buyingId != null} className="bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded-sm px-2 py-1.5 text-[10px] font-heading font-bold uppercase disabled:opacity-50" data-testid={`sell-weapon-${w.id}`}>
+                        {buyingId === `sell-${w.id}` ? '...' : 'Sell'}
+                      </button>
+                    </>
+                  ) : canBuy ? (
+                    <button type="button" onClick={() => buyWeapon(w.id, usingPoints ? 'points' : 'money')} disabled={buyingId != null} className={`rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider disabled:opacity-50 ${usingPoints ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50' : `${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary`}`} data-testid={`buy-weapon-${w.id}`}>
+                      <span className="inline-flex items-center gap-1"><CostIcon size={12} />{buyingId === w.id ? '...' : 'Buy'}</span>
                     </button>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-xs text-mutedForeground font-heading py-2">
-                      <Lock size={12} /> {o.status}
-                    </span>
-                  )}
-                  {o.owned && o.level === armourData.owned_max && armourData.owned_max >= 1 && (
-                    <button
-                      type="button"
-                      onClick={sellArmour}
-                      className="bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded-sm px-3 py-2 text-[10px] font-heading font-bold uppercase tracking-wider transition-smooth min-h-[44px] touch-manipulation"
-                      data-testid={`armour-sell-${o.level}`}
-                    >
-                      Sell (50%)
-                    </button>
+                    <span className="inline-flex items-center gap-1 text-xs text-mutedForeground font-heading"><Lock size={12} /> Locked</span>
                   )}
                 </div>
               );
               return (
-                <div
-                  key={o.level}
-                  className={`grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-0 px-4 py-3 border-b border-primary/10 items-center transition-smooth bg-transparent ${styles.raisedHover}`}
-                  data-testid={`armour-row-${o.level}`}
-                >
-                  <div className="md:col-span-6 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-heading font-bold text-foreground">{o.name}</div>
-                        <div className="text-xs text-mutedForeground font-heading">{o.description}</div>
-                      </div>
-                      <Shield className="text-primary/60 shrink-0" size={16} />
+                <div key={w.id} data-testid={`weapon-row-${w.id}`} className={`flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-primary/10 ${idx % 2 === 1 ? 'bg-primary/5' : ''} ${styles.raisedHover}`}>
+                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <input type="radio" name="weapon-pick" readOnly checked={isEquipped} className="accent-[#303030]" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-heading font-bold text-foreground">{w.name}</div>
+                      {showOwned && <div className="text-[10px] text-mutedForeground font-heading">Owned {w.quantity}{isEquipped && ' · Equipped'}</div>}
                     </div>
                   </div>
-                  <div className="md:col-span-2 text-right text-sm font-heading text-primary">Lv.{o.level}</div>
-                  <div className="md:col-span-2 text-right text-xs font-heading text-mutedForeground">
-                    <span className="inline-flex items-center justify-end gap-1">
-                      <CostIcon size={12} className="text-primary" />
-                      <span>{formatCost(o)}</span>
-                    </span>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs font-heading text-primary">{costText}</span>
+                    {actionBlock}
                   </div>
-                  <div className="md:col-span-2">{actionBlock}</div>
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
 
-      {/* Weapons section */}
-      <div className="space-y-3">
-        <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-px bg-primary/50" />
-              <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                <Sword size={16} /> Weapons
-              </h2>
-              <div className="flex-1 h-px bg-primary/50" />
-            </div>
-          </div>
-          <div className="p-4">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <div className="min-w-0 flex-1">
-                <div className="text-xs uppercase tracking-widest font-heading text-primary/80">Combat Loadout</div>
-                <div className="text-base font-heading font-bold text-primary mt-1 truncate">
-                  {equippedWeapon ? equippedWeapon.name : bestOwned ? bestOwned.name : 'Brass Knuckles'}
-                </div>
-                <div className="text-xs text-mutedForeground mt-1 font-heading">
-                  {equippedWeapon
-                    ? 'Equipped weapon is used for kills and the bullet calculator.'
-                    : bestOwned
-                      ? 'No weapon equipped — your best owned weapon is used automatically.'
-                      : "You don't own a weapon yet — you'll use Brass Knuckles until you buy one."}
-                </div>
-                <div className="text-xs text-mutedForeground mt-2 flex items-center gap-2 font-heading">
-                  <Shield size={12} className="text-primary shrink-0" />
-                  <span>
-                    Armour: {equippedArmourOption ? `Lv.${equippedArmourOption.level} ${equippedArmourOption.name}` : 'None'}
-                  </span>
-                </div>
-              </div>
-              <div className="shrink-0 inline-flex items-center gap-2 text-xs font-heading font-bold uppercase tracking-widest text-primary">
-                <Sword size={14} />
-                {equippedWeapon ? 'Equipped' : bestOwned ? 'Auto' : 'Default'}
-              </div>
-            </div>
-          </div>
-        </div>
-
+        {/* Right: Armour / Vest */}
         <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5 min-w-0`}>
-          <div className={`hidden md:grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-4 py-2 border-b border-primary/20`}>
-            <div className="col-span-8">Weapon</div>
-            <div className="col-span-4 text-right">Action</div>
+          <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+            <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+              <Shield size={16} /> Vest
+            </h2>
+            <span className="text-xs font-heading text-primary/80 uppercase tracking-wider">Cost</span>
           </div>
-          {weaponRows.map((w) => {
-            const showOwned = !!w.owned;
-            const canBuy = !w.owned && (w.canBuyMoney || w.canBuyPoints);
-            const usingPoints = w.canBuyPoints;
-            const CostIcon = usingPoints ? Gem : DollarSign;
-            const costText = formatWeaponCost(w);
-            const isEquipped = !!w.equipped;
-            const actionBlock = (
-              <div className="flex flex-wrap gap-2 justify-end">
-                {w.owned ? (
-                  <>
-                    {w.equipped ? (
-                      <button
-                        type="button"
-                        onClick={unequipWeapon}
-                        disabled={buyingId != null}
-                        className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50 min-h-[44px] touch-manipulation`}
-                        data-testid={`unequip-weapon-${w.id}`}
-                      >
-                        {buyingId === 'unequip' ? '...' : 'Unequip'}
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => equipWeapon(w.id)}
-                        disabled={buyingId != null}
-                        className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth border border-yellow-600/50 disabled:opacity-50 min-h-[44px] touch-manipulation"
-                        data-testid={`equip-weapon-${w.id}`}
-                      >
-                        {buyingId === w.id ? '...' : 'Equip'}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => sellWeapon(w.id)}
-                      disabled={buyingId != null}
-                      className="bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded-sm px-3 py-2 text-[10px] font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50 min-h-[44px] touch-manipulation"
-                      data-testid={`sell-weapon-${w.id}`}
-                    >
-                      {buyingId === `sell-${w.id}` ? '...' : 'Sell (50%)'}
+          <div className="overflow-x-auto min-w-0">
+            {armourRows.map((o, idx) => {
+              const CostIcon = o.cost_points != null ? Gem : DollarSign;
+              const actionBlock = (
+                <div className="flex flex-wrap gap-2 justify-end">
+                  {o.equipped ? (
+                    <button type="button" onClick={unequipArmour} disabled={equippingLevel != null} className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50`} data-testid={`armour-unequip-${o.level}`}>
+                      {equippingLevel === 0 ? '...' : 'Unequip'}
                     </button>
-                  </>
-                ) : canBuy ? (
-                  <button
-                    type="button"
-                    onClick={() => buyWeapon(w.id, usingPoints ? 'points' : 'money')}
-                    disabled={buyingId != null}
-                    className={`rounded-sm px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth disabled:opacity-50 min-h-[44px] touch-manipulation ${
-                      usingPoints
-                        ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border border-yellow-600/50'
-                        : `${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary`
-                    }`}
-                    data-testid={`buy-weapon-${w.id}`}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <CostIcon size={12} />
-                      {buyingId === w.id ? '...' : costText}
-                    </span>
-                  </button>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-xs text-mutedForeground font-heading py-2">
-                    <Lock size={12} /> Locked
-                  </span>
-                )}
-              </div>
-            );
-            return (
-              <div
-                key={w.id}
-                data-testid={`weapon-row-${w.id}`}
-                className={`grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-0 px-4 py-3 border-b border-primary/10 items-center transition-smooth bg-transparent ${styles.raisedHover}`}
-              >
-                <div className="md:col-span-8 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-sm font-heading font-bold text-foreground">{w.name}</div>
-                      <div className="text-xs text-mutedForeground font-heading">{w.description}</div>
-                      {showOwned && (
-                        <div className="mt-1 text-xs text-mutedForeground font-heading">
-                          Owned: <span className="text-primary font-bold">{w.quantity}</span>
-                          {isEquipped && (
-                            <span className="ml-2 inline-flex px-2 py-0.5 rounded-sm bg-primary/20 text-primary text-[10px] uppercase tracking-wider font-bold border border-primary/30">Equipped</span>
-                          )}
-                        </div>
-                      )}
+                  ) : o.owned ? (
+                    <button type="button" onClick={() => equipArmour(o.level)} disabled={equippingLevel != null} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50" data-testid={`armour-equip-${o.level}`}>
+                      {equippingLevel === o.level ? '...' : 'Equip'}
+                    </button>
+                  ) : o.canBuy ? (
+                    <button type="button" onClick={() => buyArmour(o.level)} disabled={buyingLevel != null} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50 disabled:opacity-50" data-testid={`armour-buy-${o.level}`}>
+                      {buyingLevel === o.level ? '...' : 'Buy'}
+                    </button>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-mutedForeground font-heading"><Lock size={12} /> {o.status}</span>
+                  )}
+                  {o.owned && o.level === armourData.owned_max && armourData.owned_max >= 1 && (
+                    <button type="button" onClick={sellArmour} className="bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded-sm px-2 py-1.5 text-[10px] font-heading font-bold uppercase" data-testid={`armour-sell-${o.level}`}>Sell</button>
+                  )}
+                </div>
+              );
+              return (
+                <div key={o.level} data-testid={`armour-row-${o.level}`} className={`flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 border-b border-primary/10 ${idx % 2 === 1 ? 'bg-primary/5' : ''} ${styles.raisedHover}`}>
+                  <div className="min-w-0 flex-1 flex items-center gap-2">
+                    <input type="radio" name="vest-pick" readOnly checked={!!o.equipped} className="accent-[#303030]" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-heading font-bold text-foreground">{o.name}</div>
+                      <div className="text-[10px] text-mutedForeground font-heading">Lv.{o.level}</div>
                     </div>
-                    <Sword className="text-primary/60 shrink-0" size={16} />
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-xs font-heading text-primary inline-flex items-center gap-1"><CostIcon size={12} />{formatCost(o)}</span>
+                    {actionBlock}
                   </div>
                 </div>
-                <div className="md:col-span-4">{actionBlock}</div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 

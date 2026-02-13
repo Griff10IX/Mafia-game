@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User as UserIcon, Upload, Search } from 'lucide-react';
+import { User as UserIcon, Upload, Search, Shield, Trophy, Building2 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -142,58 +142,58 @@ export default function Profile() {
 
   const profileRows = [
     { label: 'Username', value: profile.username, valueClass: 'text-foreground font-heading font-bold' },
-    { label: 'Crew', value: profile.family_name || '—', valueClass: 'text-foreground font-heading' },
+    { label: 'Crew', value: profile.family_name || '—', valueClass: 'text-foreground font-heading', crew: true },
     { label: 'Rank', value: profile.rank_name, valueClass: 'text-primary font-heading font-bold underline decoration-dotted decoration-primary/50 underline-offset-2' },
-    { label: 'Wealth', value: null, valueClass: 'text-foreground font-heading', component: <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} /> },
+    { label: 'Wealth', value: null, valueClass: 'text-emerald-500 font-heading', component: <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} /> },
     { label: 'Status', isStatus: true, isDead: profile.is_dead, isOnline: profile.online },
-    { label: 'Messages', value: profile.messages_sent != null ? `${profile.messages_sent} sent / ${profile.messages_received ?? 0} received` : '—', valueClass: 'text-foreground font-heading' },
+    { label: 'Messages', value: profile.messages_sent != null ? `${profile.messages_sent} sent / ${profile.messages_received ?? 0} received` : `${profile.messages_received ?? 0} received`, valueClass: 'text-foreground font-heading' },
     { label: 'Jailbusts', value: String(profile.jail_busts ?? 0), valueClass: 'text-foreground font-heading' },
     { label: 'Kills', value: String(profile.kills ?? 0), valueClass: 'text-foreground font-heading font-bold' },
   ];
 
+  const honours = profile.honours || [];
+  const ownedCasinos = profile.owned_casinos || [];
+
   return (
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="profile-page">
-      <div className="flex items-center justify-center flex-col gap-2 text-center mb-4">
+      <div className="flex items-center justify-center flex-col gap-2 text-center mb-2">
         <div className="flex items-center gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Profile</h1>
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
+          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
+          <h1 className="text-xl md:text-2xl font-heading font-bold text-primary uppercase tracking-wider">Profile</h1>
+          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/60" />
         </div>
       </div>
 
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        {/* Header: username in caps + optional avatar & attack */}
-        <div className={`px-4 py-3 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between gap-3`}>
-          <div className={`w-12 h-12 rounded-sm overflow-hidden border border-primary/20 flex items-center justify-center shrink-0 ${styles.surface}`}>
-            {avatarSrc ? (
-              <img src={avatarSrc} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <UserIcon className="text-mutedForeground" size={22} />
-            )}
-          </div>
-          <h2 className="flex-1 text-lg md:text-xl font-heading font-bold text-foreground uppercase tracking-wider truncate text-center" data-testid="profile-username">
+        {/* Header: username (large) + rank badge right */}
+        <div className={`px-4 py-4 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between gap-3`}>
+          <h2 className="flex-1 text-xl md:text-2xl font-heading font-bold text-foreground uppercase tracking-wider truncate" data-testid="profile-username">
             {profile.username}
           </h2>
-          {!isMe ? (
-            <button
-              type="button"
-              onClick={addToAttackSearches}
-              className={`inline-flex items-center justify-center h-9 w-9 rounded-sm border border-primary/30 ${styles.surface} ${styles.raisedHover} text-primary transition-smooth shrink-0`}
-              title="Add to Attack searches"
-              aria-label="Add to Attack searches"
-              data-testid="profile-add-to-search"
-            >
-              <Search size={16} />
-            </button>
-          ) : (
-            <div className="w-9" />
-          )}
+          <div className="flex items-center gap-2 shrink-0">
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm border border-primary/30 ${styles.surface}`}>
+              <Shield className="text-primary" size={18} />
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-wider">{profile.rank_name || '—'}</span>
+            </div>
+            {!isMe && (
+              <button
+                type="button"
+                onClick={addToAttackSearches}
+                className={`inline-flex items-center justify-center h-9 w-9 rounded-sm border border-primary/30 ${styles.surface} ${styles.raisedHover} text-primary transition-smooth`}
+                title="Add to Attack searches"
+                aria-label="Add to Attack searches"
+                data-testid="profile-add-to-search"
+              >
+                <Search size={16} />
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Rows: label left, value right */}
+        {/* User info: label / value rows */}
         <div className="divide-y divide-primary/10">
           {profileRows.map((row) => (
-            <div key={row.label} className="grid grid-cols-12 gap-3 px-4 py-3 items-center">
+            <div key={row.label} className={`grid grid-cols-12 gap-3 px-4 py-3 items-center ${row.crew ? 'border-l-2 border-primary/50 pl-4' : ''}`}>
               <div className="col-span-4 sm:col-span-3 text-left">
                 <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">{row.label}:</span>
               </div>
@@ -228,6 +228,55 @@ export default function Profile() {
             </span>
           </div>
         )}
+      </div>
+
+      {/* Honours (leaderboard rankings) */}
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
+        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+          <Trophy className="text-primary shrink-0" size={18} />
+          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Honours ({honours.length})</h3>
+        </div>
+        <div className="p-4">
+          {honours.length === 0 ? (
+            <p className="text-xs text-mutedForeground font-heading">No leaderboard rankings yet.</p>
+          ) : (
+            <ul className="space-y-2">
+              {honours.map((h, i) => (
+                <li key={i} className="flex items-center gap-2 text-sm font-heading">
+                  <span className="text-primary font-bold shrink-0">#{h.rank}</span>
+                  <span className="text-foreground">{h.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* Properties: casinos owned (max bet, buyback) */}
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
+        <div className="px-4 py-2.5 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+          <Building2 className="text-primary shrink-0" size={18} />
+          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Properties</h3>
+        </div>
+        <div className="p-4">
+          {ownedCasinos.length === 0 ? (
+            <p className="text-xs text-mutedForeground font-heading">No casinos owned.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {ownedCasinos.map((c, i) => (
+                <div key={i} className={`rounded-sm border border-primary/30 px-3 py-2 ${styles.surface} min-w-0`}>
+                  <div className="font-heading font-bold text-foreground text-sm">{c.city} Dice</div>
+                  <div className="text-xs text-mutedForeground font-heading mt-0.5">
+                    Max bet: <span className="text-primary font-bold">${Number(c.max_bet || 0).toLocaleString()}</span>
+                    {c.buy_back_reward != null && c.buy_back_reward > 0 && (
+                      <> · Buyback: <span className="text-primary font-bold">{Number(c.buy_back_reward).toLocaleString()} pts</span></>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {!isMe && profile.admin_stats && (
@@ -272,15 +321,26 @@ export default function Profile() {
         </div>
       )}
 
-      {isMe && (
-        <div className={`${styles.panel} rounded-sm overflow-hidden max-w-xl mx-auto`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Avatar</span>
-            <div className="flex-1 h-px bg-primary/50" />
+      {/* Profile picture: large display + upload when own profile */}
+      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
+        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+          <div className="w-6 h-px bg-primary/50" />
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Profile picture</span>
+          <div className="flex-1 h-px bg-primary/50" />
+        </div>
+        <div className="p-4">
+          <div className="aspect-video max-h-64 rounded-sm overflow-hidden border border-primary/20 bg-primary/5 flex items-center justify-center">
+            {avatarSrc ? (
+              <img src={avatarSrc} alt="" className="w-full h-full object-contain" />
+            ) : (
+              <div className="flex flex-col items-center gap-2 text-mutedForeground">
+                <UserIcon size={48} />
+                <span className="text-xs font-heading">No picture</span>
+              </div>
+            )}
           </div>
-          <div className="p-4">
-            <div className="flex flex-col md:flex-row gap-3 items-start md:items-center">
+          {isMe && (
+            <div className="mt-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
               <input
                 type="file"
                 accept="image/*"
@@ -295,13 +355,13 @@ export default function Profile() {
                 data-testid="avatar-upload"
               >
                 <Upload size={16} />
-                {uploading ? 'Uploading...' : 'Upload'}
+                {uploading ? 'Uploading...' : 'Upload picture'}
               </button>
             </div>
-            <p className="text-xs text-mutedForeground font-heading mt-2">Tip: use a small image (square works best).</p>
-          </div>
+          )}
+          {isMe && <p className="text-xs text-mutedForeground font-heading mt-2">You can upload a picture to your profile. Square images work best.</p>}
         </div>
-      )}
+      </div>
 
       <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
         <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20`}>
