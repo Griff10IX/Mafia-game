@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Flame, HelpCircle, Clock, AlertCircle } from 'lucide-react';
+import { HelpCircle, Clock, AlertCircle } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -57,33 +57,33 @@ const useCooldownTicker = (crimes, onCooldownExpired) => {
 // Subcomponents
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-yellow-500 text-xl font-bold">Loading...</div>
+    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
   </div>
 );
 
 const PageHeader = () => (
-  <div className="flex items-center justify-center flex-col gap-1.5 text-center px-4">
-    <div className="flex items-center gap-3 w-full justify-center">
-      <div className="h-px flex-1 max-w-[60px] bg-gradient-to-r from-transparent via-yellow-500/40 to-yellow-500/60" />
-      <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-600 bg-clip-text text-transparent uppercase tracking-wider drop-shadow-lg">
-        Crimes
-      </h1>
-      <div className="h-px flex-1 max-w-[60px] bg-gradient-to-l from-transparent via-yellow-500/40 to-yellow-500/60" />
-    </div>
-    <p className="text-[10px] text-gray-500 uppercase tracking-[0.2em] font-medium">
-      Commit Crimes • Earn Cash
+  <div>
+    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2">
+      Crimes
+    </h1>
+    <p className="text-sm text-mutedForeground">
+      Commit crimes to earn cash and rank points.
     </p>
   </div>
 );
 
 const JailNotice = () => (
-  <div className="mx-3 rounded-lg border border-amber-500/40 bg-gradient-to-br from-amber-950/40 to-amber-900/20 px-3 py-2.5 text-xs text-amber-200 flex items-start gap-2.5 shadow-lg shadow-amber-500/10 backdrop-blur-sm">
-    <div className="shrink-0 mt-0.5 p-1 rounded-full bg-amber-500/20">
-      <AlertCircle size={14} className="text-amber-400" />
-    </div>
-    <div>
-      <div className="font-bold text-amber-300 mb-0.5">Incarcerated</div>
-      <div className="text-amber-200/80">Can't commit crimes while in jail. Serve time or bust out.</div>
+  <div className="p-3 bg-card border border-amber-500/40 rounded-sm text-sm">
+    <div className="flex items-start gap-2.5">
+      <div className="shrink-0 mt-0.5 p-1 rounded-full bg-amber-500/20">
+        <AlertCircle size={14} className="text-amber-400" />
+      </div>
+      <div>
+        <div className="font-bold text-amber-300 mb-0.5">Incarcerated</div>
+        <div className="text-amber-200/80">
+          Can't commit crimes while in jail. Serve time or bust out.
+        </div>
+      </div>
     </div>
   </div>
 );
@@ -94,72 +94,61 @@ const EventBanner = ({ event }) => {
   }
 
   return (
-    <div className="px-3">
-      <div className="w-full bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-yellow-500/30 rounded-lg overflow-hidden shadow-lg shadow-yellow-500/10 backdrop-blur-sm">
-        <div className="bg-gradient-to-r from-yellow-500/10 to-yellow-600/5 px-3 py-2 border-b border-yellow-500/20 flex items-center gap-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
-          <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-widest">
-            Live Event
-          </span>
-        </div>
-        <div className="px-3 py-2.5">
-          <p className="text-sm font-bold text-yellow-300 flex items-center gap-2">
-            <span>✨</span>
-            {event.name}
-          </p>
-          <p className="text-[11px] text-gray-400 mt-1">
-            {event.message}
-          </p>
-        </div>
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+        <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+          Live Event
+        </span>
+      </div>
+      <div className="px-4 py-3">
+        <p className="text-sm font-heading font-bold text-primary mb-1">
+          ✨ {event.name}
+        </p>
+        <p className="text-xs text-mutedForeground">
+          {event.message}
+        </p>
       </div>
     </div>
   );
 };
 
-// Mobile-friendly crime card
+// Mobile-optimized crime card
 const CrimeCard = ({ crime, onCommit }) => {
   const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
   const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
 
   return (
     <div
-      className={`relative bg-gradient-to-br from-zinc-800/90 to-zinc-900/70 border rounded-lg p-4 md:p-3.5 transition-all backdrop-blur-sm ${
+      className={`bg-card border rounded-md p-4 transition-all ${
         crime.can_commit 
-          ? 'border-emerald-500/40 shadow-xl shadow-emerald-900/30 active:shadow-emerald-800/40 active:border-emerald-400/60 md:hover:shadow-emerald-800/40 md:hover:border-emerald-400/60 md:hover:from-zinc-800 md:hover:to-zinc-900' 
-          : 'border-zinc-700/60 opacity-75'
+          ? 'border-primary/30 hover:border-primary/50 hover:bg-card/80' 
+          : 'border-border opacity-75'
       }`}
       data-testid={`crime-row-${crime.id}`}
     >
-      {/* Stronger glow effect for available crimes */}
-      {crime.can_commit && (
-        <>
-          <div className="absolute inset-0 bg-gradient-to-br from-emerald-400/10 via-green-500/5 to-transparent rounded-lg pointer-events-none" />
-          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-emerald-400/40 to-transparent" />
-        </>
-      )}
-      
       {/* Mobile: Stacked layout, Desktop: Horizontal */}
-      <div className="relative space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-3">
+      <div className="space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
         
         {/* Top row on mobile: Crime info + Risk */}
         <div className="flex items-start justify-between gap-3 md:flex-1 md:min-w-0">
           {/* Left: Crime info */}
           <div className="flex-1 min-w-0">
-            <h3 className="text-base md:text-sm font-bold text-gray-100 truncate flex items-center gap-1.5">
-              <span className="text-emerald-400/80 text-lg md:text-base">▸</span>
+            <h3 className="text-base md:text-sm font-heading font-bold text-foreground truncate flex items-center gap-1.5">
+              <span className="text-primary/60">▸</span>
               {crime.name}
             </h3>
-            <p className="text-sm md:text-xs text-gray-400 line-clamp-1 md:truncate mt-1 md:mt-0.5">
+            <p className="text-sm md:text-xs text-mutedForeground line-clamp-1 md:truncate mt-1 md:mt-0.5">
               {crime.description}
             </p>
           </div>
 
-          {/* Risk badge - visible on all screens */}
+          {/* Risk badge */}
           <div className="flex-shrink-0">
             <div className={`px-3 py-1.5 rounded-md text-sm md:text-xs font-bold transition-all ${
               crime.can_commit 
-                ? 'bg-gradient-to-br from-red-600/30 to-red-700/20 text-red-300 border border-red-500/50 shadow-md shadow-red-900/30' 
-                : 'bg-zinc-800 text-gray-500 border border-zinc-700'
+                ? 'bg-red-500/20 text-red-400 border border-red-500/40' 
+                : 'bg-secondary text-mutedForeground border border-border'
             }`}>
               {unavailable ? '—' : `${crime.risk}%`}
             </div>
@@ -171,35 +160,29 @@ const CrimeCard = ({ crime, onCommit }) => {
           {/* Timer (if on cooldown) */}
           <div className="flex-1 md:flex-shrink-0 md:flex-grow-0">
             {onCooldown && crime.remaining > 0 && (
-              <div className="flex items-center gap-2 px-3 py-2 md:px-2 md:py-1 bg-emerald-950/40 border border-emerald-500/30 rounded text-sm md:text-xs text-emerald-300 font-bold">
-                <Clock size={16} className="md:hidden animate-pulse text-emerald-400" />
-                <Clock size={13} className="hidden md:block animate-pulse text-emerald-400" />
+              <div className="flex items-center gap-2 text-sm md:text-xs text-mutedForeground font-heading">
+                <Clock size={14} className="text-primary shrink-0" />
                 <span>{crime.wait}</span>
               </div>
             )}
           </div>
 
-          {/* Action button - larger on mobile */}
+          {/* Action button */}
           <div className="flex-shrink-0">
             {crime.can_commit ? (
               <button
                 type="button"
                 onClick={() => onCommit(crime.id)}
-                className="relative bg-gradient-to-br from-emerald-500 via-green-600 to-emerald-700 active:from-emerald-400 active:via-green-500 active:to-emerald-600 md:hover:from-emerald-400 md:hover:via-green-500 md:hover:to-emerald-600 text-white active:scale-95 rounded-lg md:rounded-md px-6 py-2.5 md:px-5 md:py-2 text-sm md:text-xs font-bold uppercase tracking-wide shadow-xl shadow-emerald-900/50 border border-emerald-400/30 transition-all touch-manipulation overflow-hidden"
+                className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground active:scale-98 rounded-md px-5 py-2 md:px-4 md:py-1.5 text-sm md:text-xs font-bold uppercase tracking-wide shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all touch-manipulation border border-yellow-600/50"
                 data-testid={`commit-crime-${crime.id}`}
               >
-                <span className="relative z-10 flex items-center gap-2 md:gap-1.5">
-                  💰 Commit
-                </span>
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
-                <div className="absolute inset-0 bg-white/0 active:bg-white/10 md:hover:bg-white/10 transition-all" />
-                <div className="absolute top-0 left-0 right-0 h-px bg-white/30" />
+                💰 Commit
               </button>
             ) : onCooldown ? (
               <button
                 type="button"
                 disabled
-                className="bg-zinc-800 text-gray-500 rounded-lg md:rounded-md px-5 py-2.5 md:px-4 md:py-2 text-sm md:text-xs font-bold uppercase tracking-wide border border-zinc-700 cursor-not-allowed"
+                className="bg-secondary text-mutedForeground rounded-md px-4 py-2 md:px-3 md:py-1.5 text-sm md:text-xs font-bold uppercase tracking-wide border border-border cursor-not-allowed"
               >
                 Wait
               </button>
@@ -207,10 +190,9 @@ const CrimeCard = ({ crime, onCommit }) => {
               <button
                 type="button"
                 disabled
-                className="bg-zinc-800/70 text-gray-600 rounded-lg md:rounded-md px-5 py-2.5 md:px-4 md:py-2 text-sm md:text-xs font-bold uppercase tracking-wide border border-zinc-700/50 cursor-not-allowed flex items-center gap-2 md:gap-1.5 opacity-60"
+                className="bg-secondary/70 text-mutedForeground rounded-md px-4 py-2 md:px-3 md:py-1.5 text-sm md:text-xs font-bold uppercase tracking-wide border border-border cursor-not-allowed flex items-center gap-1.5 opacity-60"
               >
-                <HelpCircle size={16} className="md:hidden opacity-60" />
-                <HelpCircle size={13} className="hidden md:block opacity-60" />
+                <HelpCircle size={13} className="opacity-60" />
                 <span>Locked</span>
               </button>
             )}
@@ -222,24 +204,22 @@ const CrimeCard = ({ crime, onCommit }) => {
 };
 
 const StatsFooter = ({ totalCrimes = 0, crimeProfit = 0 }) => (
-  <div className="px-3">
-    <div className="w-full bg-gradient-to-br from-zinc-900 to-zinc-900/50 border border-yellow-500/20 rounded-lg px-3 py-3 shadow-lg shadow-yellow-500/5">
-      <div className="grid grid-cols-2 gap-3 text-center">
-        <div className="space-y-1">
-          <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
-            Crimes
-          </div>
-          <div className="text-xl font-bold bg-gradient-to-br from-yellow-400 to-yellow-600 bg-clip-text text-transparent">
-            {totalCrimes.toLocaleString()}
-          </div>
+  <div className={`${styles.panel} rounded-md px-4 py-3`}>
+    <div className="grid grid-cols-2 gap-4 text-center">
+      <div className="space-y-1">
+        <div className="text-xs text-mutedForeground uppercase tracking-wider font-heading">
+          Total Crimes
         </div>
-        <div className="border-l border-yellow-500/20 space-y-1">
-          <div className="text-xs text-gray-500 uppercase tracking-wider font-medium">
-            Profit
-          </div>
-          <div className="text-xl font-bold bg-gradient-to-br from-green-400 to-green-600 bg-clip-text text-transparent">
-            ${Number(crimeProfit).toLocaleString()}
-          </div>
+        <div className="text-xl font-heading font-bold text-primary">
+          {totalCrimes.toLocaleString()}
+        </div>
+      </div>
+      <div className="border-l border-border space-y-1">
+        <div className="text-xs text-mutedForeground uppercase tracking-wider font-heading">
+          Total Profit
+        </div>
+        <div className="text-xl font-heading font-bold text-primary">
+          ${Number(crimeProfit).toLocaleString()}
         </div>
       </div>
     </div>
@@ -337,25 +317,21 @@ export default function Crimes() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white pb-6" data-testid="crimes-page">
-      <div className="space-y-4 py-5">
-        <PageHeader />
+    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="crimes-page">
+      <PageHeader />
 
-        {user?.in_jail && <JailNotice />}
+      {user?.in_jail && <JailNotice />}
 
-        {eventsEnabled && <EventBanner event={event} />}
+      {eventsEnabled && <EventBanner event={event} />}
 
-        {/* Mobile-optimized crime cards */}
-        <div className="px-3">
-          <div className="space-y-2.5">
-            {crimeRows.map((crime) => (
-              <CrimeCard key={crime.id} crime={crime} onCommit={commitCrime} />
-            ))}
-          </div>
-        </div>
-
-        <StatsFooter totalCrimes={user?.total_crimes} crimeProfit={user?.crime_profit} />
+      {/* Crime cards */}
+      <div className="space-y-3">
+        {crimeRows.map((crime) => (
+          <CrimeCard key={crime.id} crime={crime} onCommit={commitCrime} />
+        ))}
       </div>
+
+      <StatsFooter totalCrimes={user?.total_crimes} crimeProfit={user?.crime_profit} />
     </div>
   );
 }
