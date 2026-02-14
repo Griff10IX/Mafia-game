@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
 const RARITY_ORDER = { exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
-const DEFAULT_VISIBLE = 12;
+const DEFAULT_VISIBLE = 16;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
 
