@@ -2,10 +2,16 @@
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any
 import logging
-import httpx
 import os
 from collections import defaultdict
 import asyncio
+
+# Optional httpx import for Telegram alerts
+try:
+    import httpx
+    HTTPX_AVAILABLE = True
+except ImportError:
+    HTTPX_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +64,11 @@ async def send_telegram_alert(message: str, alert_type: str = "warning"):
 async def flush_telegram_alerts():
     """Send all pending alerts to Telegram (batch). Called periodically or on critical alert."""
     if not pending_alerts or not TELEGRAM_ENABLED:
+        return
+    
+    if not HTTPX_AVAILABLE:
+        logger.warning(f"httpx not installed - cannot send {len(pending_alerts)} Telegram alerts. Install with: pip install httpx")
+        pending_alerts.clear()
         return
     
     # Take up to 10 alerts at a time
@@ -161,37 +172,6 @@ async def check_duplicate_request(user_id: str, path: str, params_hash: str, db,
     return False
 
 
-async def check_negative_balance(db, user_id: str, username: str, balance_type: str, value: int):
-    """Detect negative balances (should never happen)."""
-    if value < 0:
-        await flag_user_suspicious(
-            db, user_id, username,
-            "exploit_attempt",
-            f"Negative {balance_type}: {value}",
-            {"balance_type": balance_type, "value": value}
-        )
-        # Critical - send immediately
-        await flush_telegram_alerts()
-
-
-async def check_impossible_wealth_gain(db, user_id: str, username: str, previous_money: int, new_money: int, source: str = "unknown"):
-    """
-    Detect IMPOSSIBLE wealth gains (exploits, not legitimate high gameplay).
-    Only flags gains over $1T in single action which should never happen legitimately.
-    """
-    gain = new_money - previous_money
-    
-    # Only flag impossible gains (exploits), not legitimate high earnings
-    if gain > DETECT_IMPOSSIBLE_GAIN:
-        await flag_user_suspicious(
-            db, user_id, username,
-            "exploit_impossible_gain",
-            f"EXPLOIT: Impossible wealth gain ${gain:,} from {source}",
-            {"previous": previous_money, "new": new_money, "gain": gain, "source": source}
-        )
-        await flush_telegram_alerts()  # Send immediately
-
-
 async def check_failed_attack_spam(user_id: str, username: str, db) -> bool:
     """Detect spam failed attacks (bot-like behavior)."""
     now = datetime.now(timezone.utc)
@@ -210,30 +190,6 @@ async def check_failed_attack_spam(user_id: str, username: str, db) -> bool:
         )
         return True
     return False
-
-
-# Admin endpoints can fetch security_flags
-async def get_security_summary(db, hours: int = 24) -> Dict[str, Any]:
-    """Get summary of security flags in last N hours."""
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-    flags = await db.security_flags.find(
-        {"created_at": {"$gte": cutoff.isoformat()}},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(500)
-    
-    by_type = defaultdict(int)
-    by_user = defaultdict(int)
-    for f in flags:
-        by_type[f.get("flag_type", "unknown")] += 1
-        by_user[f.get("username", "Unknown")] += 1
-    
-    return {
-        "total_flags": len(flags),
-        "hours": hours,
-        "by_type": dict(by_type),
-        "top_flagged_users": sorted(by_user.items(), key=lambda x: x[1], reverse=True)[:10],
-        "recent_flags": flags[:20],
-    }
 
 
 # Background task to flush alerts periodically
