@@ -17,26 +17,30 @@ const LoadingSpinner = () => (
 );
 
 const PageHeader = ({ jailStatus }) => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Lock className="w-8 h-8 md:w-10 md:h-10" />
-      Jail
-    </h1>
-    <p className="text-sm text-mutedForeground mb-3">
-      Bust out players for rank points
-    </p>
-    <div className="flex flex-wrap gap-4 text-sm">
-      <div className="flex flex-col">
-        <span className="text-xs text-mutedForeground uppercase tracking-wider">Your Busts</span>
-        <span className="text-lg font-bold text-primary">{jailStatus.jail_busts ?? 0}</span>
+  <div className="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
+        <Lock className="w-6 h-6 sm:w-7 sm:h-7" />
+        Jail
+      </h1>
+      <p className="text-xs text-mutedForeground">
+        Bust out players for rank points
+      </p>
+    </div>
+    
+    {/* Stats inline */}
+    <div className="flex items-center gap-4 text-xs font-heading">
+      <div className="flex items-center gap-1.5">
+        <span className="text-mutedForeground">Busts:</span>
+        <span className="text-primary font-bold">{jailStatus.jail_busts ?? 0}</span>
       </div>
-      <div className="flex flex-col">
-        <span className="text-xs text-mutedForeground uppercase tracking-wider">Streak</span>
-        <span className="text-lg font-bold text-foreground">{jailStatus.current_consecutive_busts ?? 0}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-mutedForeground">Streak:</span>
+        <span className="text-foreground font-bold">{jailStatus.current_consecutive_busts ?? 0}</span>
       </div>
-      <div className="flex flex-col">
-        <span className="text-xs text-mutedForeground uppercase tracking-wider">Record</span>
-        <span className="text-lg font-bold text-primary/80">{jailStatus.consecutive_busts_record ?? 0}</span>
+      <div className="flex items-center gap-1.5">
+        <span className="text-mutedForeground">Record:</span>
+        <span className="text-primary/80 font-bold">{jailStatus.consecutive_busts_record ?? 0}</span>
       </div>
     </div>
   </div>
@@ -50,11 +54,12 @@ const JailStatusCard = ({
   onSetReward, 
   setRewardLoading,
   onLeaveJail,
-  leavingJail 
+  leavingJail,
+  currentReward
 }) => {
   if (inJail) {
     return (
-      <div className="relative border-2 border-red-500/60 rounded-lg overflow-hidden min-h-[240px] md:min-h-[280px]">
+      <div className="relative border-2 border-red-500/60 rounded-lg overflow-hidden">
         <img 
           src={JAIL_BACKGROUND_IMAGE} 
           alt="" 
@@ -63,32 +68,31 @@ const JailStatusCard = ({
         <div className="absolute inset-0 bg-black/70" aria-hidden />
         <div className="absolute inset-0 bg-red-950/30" aria-hidden />
         <div 
-          className="relative z-10 p-6 md:p-8 text-center flex flex-col items-center justify-center h-full" 
+          className="relative z-10 p-4 md:p-6 text-center flex flex-col items-center justify-center" 
           style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
         >
-          <Lock className="text-red-400 mb-4 drop-shadow-lg" size={48} />
-          <h2 className="text-xl md:text-2xl font-heading font-bold text-red-400 uppercase tracking-wider mb-2">
+          <Lock className="text-red-400 mb-2 drop-shadow-lg" size={32} />
+          <h2 className="text-lg font-heading font-bold text-red-400 uppercase tracking-wider mb-1">
             You Are In Jail
           </h2>
-          <p className="text-white font-heading mb-3 text-sm">Time remaining:</p>
-          <div className="text-4xl md:text-5xl font-heading font-bold text-red-400 mb-6 tabular-nums">
+          <div className="text-3xl font-heading font-bold text-red-400 mb-3 tabular-nums">
             {secondsRemaining}s
           </div>
           
           {/* Bust reward input */}
-          <div className="mb-4 w-full max-w-sm">
-            <label className="block text-xs font-heading text-zinc-300 mb-2">
+          <div className="mb-3 w-full max-w-xs">
+            <label className="block text-[10px] font-heading text-zinc-300 mb-1">
               💰 Reward for busting you out
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60">$</span>
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60 text-sm">$</span>
                 <input
                   type="number"
                   min="0"
                   value={bustRewardInput}
                   onChange={(e) => onBustRewardChange(e.target.value)}
-                  className="w-full h-10 pl-7 pr-3 rounded-md border border-primary/30 bg-black/40 text-white text-sm font-heading focus:border-primary/50 focus:outline-none"
+                  className="w-full h-8 pl-6 pr-2 rounded-md border border-primary/30 bg-black/40 text-white text-sm font-heading focus:border-primary/50 focus:outline-none"
                   placeholder="0"
                 />
               </div>
@@ -96,24 +100,20 @@ const JailStatusCard = ({
                 type="button"
                 onClick={onSetReward}
                 disabled={setRewardLoading}
-                className="h-10 px-4 rounded-md bg-primary/20 text-primary font-heading text-sm font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
+                className="h-8 px-3 rounded-md bg-primary/20 text-primary font-heading text-xs font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
               >
                 {setRewardLoading ? '...' : 'Set'}
               </button>
             </div>
           </div>
-
-          <p className="text-xs text-zinc-300 font-heading mb-4 max-w-md">
-            Wait for release or ask another player to bust you out
-          </p>
           
           <button
             type="button"
             onClick={onLeaveJail}
             disabled={leavingJail}
-            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-lg px-6 py-3 text-sm font-bold uppercase tracking-wide shadow-xl shadow-primary/20 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-2 border-2 border-yellow-600/50"
+            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wide shadow-lg shadow-primary/20 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1.5 border border-yellow-600/50"
           >
-            <DoorOpen size={18} />
+            <DoorOpen size={14} />
             {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
           </button>
         </div>
@@ -122,7 +122,7 @@ const JailStatusCard = ({
   }
 
   return (
-    <div className="relative border border-primary/30 rounded-lg overflow-hidden min-h-[200px] md:min-h-[240px] shadow-lg">
+    <div className="relative border border-primary/30 rounded-lg overflow-hidden shadow-lg">
       <img 
         src={JAIL_BACKGROUND_IMAGE} 
         alt="" 
@@ -130,97 +130,117 @@ const JailStatusCard = ({
       />
       <div className="absolute inset-0 bg-black/60" aria-hidden />
       <div 
-        className="relative z-10 p-6 md:p-8 text-center flex flex-col items-center justify-center h-full" 
+        className="relative z-10 p-4 md:p-6 text-center flex flex-col items-center justify-center" 
         style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
       >
-        <AlertCircle className="text-primary/80 mb-4 drop-shadow-lg" size={48} />
-        <h2 className="text-xl md:text-2xl font-heading font-bold text-primary uppercase tracking-wider mb-2">
+        <AlertCircle className="text-primary/80 mb-2 drop-shadow-lg" size={32} />
+        <h2 className="text-lg font-heading font-bold text-primary uppercase tracking-wider mb-1">
           You Are Free
         </h2>
-        <p className="text-sm text-zinc-300 font-heading">
+        <p className="text-xs text-zinc-300 font-heading mb-3">
           Bust out jailed players for rank points
         </p>
+        
+        {/* Reward setting when free */}
+        <div className="w-full max-w-xs">
+          <label className="block text-[10px] font-heading text-zinc-400 mb-1">
+            💰 Set reward if you get jailed
+            {currentReward > 0 && <span className="text-primary ml-1">(Current: ${Number(currentReward).toLocaleString()})</span>}
+          </label>
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/60 text-sm">$</span>
+              <input
+                type="number"
+                min="0"
+                value={bustRewardInput}
+                onChange={(e) => onBustRewardChange(e.target.value)}
+                className="w-full h-8 pl-6 pr-2 rounded-md border border-primary/30 bg-black/40 text-white text-sm font-heading focus:border-primary/50 focus:outline-none"
+                placeholder="0"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onSetReward}
+              disabled={setRewardLoading}
+              className="h-8 px-3 rounded-md bg-primary/20 text-primary font-heading text-xs font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
+            >
+              {setRewardLoading ? '...' : 'Set'}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-const JailedPlayerCard = ({ player, index, onBust, loading, userInJail }) => {
+const JailedPlayerRow = ({ player, index, onBust, loading, userInJail }) => {
   const successRate = player.bust_success_rate ?? (player.is_npc ? 50 : 70);
   const rp = player.rp_reward ?? (player.is_npc ? 25 : 15);
 
   return (
     <div
-      className={`bg-card border rounded-md p-4 transition-all ${
+      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md transition-all ${
         player.is_self 
-          ? 'border-red-500/30 opacity-75' 
-          : 'border-border hover:border-primary/30'
+          ? 'bg-red-500/10 border border-red-500/20 opacity-60' 
+          : 'bg-zinc-800/30 border border-transparent hover:border-primary/20 hover:bg-zinc-800/50'
       }`}
       data-testid={`jailed-player-${index}`}
     >
-      {/* Mobile: Stacked layout, Desktop: Horizontal */}
-      <div className="space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
-        
-        {/* Player info + badges */}
-        <div className="flex items-start justify-between gap-3 md:flex-1 md:min-w-0">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-base md:text-sm font-heading font-bold text-foreground truncate">
-              {player.username}
-            </h3>
-            <p className="text-sm md:text-xs text-mutedForeground truncate mt-0.5">
-              {player.rank_name}
-            </p>
+      {/* Player info */}
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <div className="min-w-0">
+          <div className="text-sm font-heading font-bold text-foreground truncate">
+            {player.username}
           </div>
-
-          {/* Badges */}
-          <div className="flex-shrink-0 flex gap-2">
-            {player.is_self ? (
-              <span className="px-2 py-1 rounded-md text-xs font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40">
-                You
-              </span>
-            ) : player.is_npc ? (
-              <span className="px-2 py-1 rounded-md text-xs font-bold uppercase bg-secondary text-mutedForeground border border-border">
-                NPC
-              </span>
-            ) : null}
+          <div className="text-[10px] text-mutedForeground truncate">
+            {player.rank_name}
           </div>
         </div>
+      </div>
 
-        {/* Stats + Action */}
-        <div className="flex items-center justify-between gap-3 md:gap-4">
-          {/* Stats */}
-          <div className="flex items-center gap-3 md:gap-4 text-sm md:text-xs">
-            <div className="flex items-center gap-1.5">
-              {player.is_npc && <Zap size={14} className="text-amber-400" />}
-              <span className={player.is_npc ? 'text-amber-400 font-bold' : 'text-mutedForeground'}>
-                {successRate}%
-              </span>
-            </div>
-            <div className="text-primary font-bold">
-              +{rp} RP
-            </div>
-            <div className="text-mutedForeground">
-              {player.bust_reward_cash > 0 ? `$${Number(player.bust_reward_cash).toLocaleString()}` : '—'}
-            </div>
-          </div>
+      {/* Badge */}
+      <div className="shrink-0">
+        {player.is_self ? (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40">
+            You
+          </span>
+        ) : player.is_npc ? (
+          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-zinc-700/50 text-mutedForeground border border-zinc-600/50">
+            NPC
+          </span>
+        ) : null}
+      </div>
 
-          {/* Action button */}
-          <div className="flex-shrink-0">
-            {player.is_self ? (
-              <span className="text-xs text-mutedForeground">—</span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onBust(player.username, player.is_npc)}
-                disabled={loading || userInJail}
-                className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground active:scale-98 rounded-md px-5 py-2 md:px-4 md:py-1.5 text-sm md:text-xs font-bold uppercase tracking-wide shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all touch-manipulation border border-yellow-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
-                data-testid={`bust-out-${index}`}
-              >
-                {loading ? '...' : '🔓 Bust'}
-              </button>
-            )}
-          </div>
+      {/* Stats */}
+      <div className="flex items-center gap-3 text-xs font-heading shrink-0">
+        <div className="flex items-center gap-1">
+          {player.is_npc && <Zap size={10} className="text-amber-400" />}
+          <span className={player.is_npc ? 'text-amber-400 font-bold' : 'text-mutedForeground'}>
+            {successRate}%
+          </span>
         </div>
+        <span className="text-primary font-bold">+{rp} RP</span>
+        <span className="text-mutedForeground w-16 text-right">
+          {player.bust_reward_cash > 0 ? `$${Number(player.bust_reward_cash).toLocaleString()}` : '—'}
+        </span>
+      </div>
+
+      {/* Action */}
+      <div className="shrink-0">
+        {player.is_self ? (
+          <span className="text-xs text-mutedForeground w-16 text-center inline-block">—</span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => onBust(player.username, player.is_npc)}
+            disabled={loading || userInJail}
+            className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation border border-yellow-600/50 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+            data-testid={`bust-out-${index}`}
+          >
+            🔓 Bust
+          </button>
+        )}
       </div>
     </div>
   );
@@ -228,32 +248,28 @@ const JailedPlayerCard = ({ player, index, onBust, loading, userInJail }) => {
 
 const InfoSection = () => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
-        Jail System
+    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+        ℹ️ Jail System
       </h3>
     </div>
-    <div className="p-4">
-      <ul className="space-y-2 text-xs text-mutedForeground font-heading">
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>Failed crimes/GTA send you to jail (15–60s)</span>
+    <div className="p-3">
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
+        <li className="flex items-start gap-1.5">
+          <span className="text-primary shrink-0">•</span>
+          <span>Failed crimes/GTA = 15–60s jail</span>
         </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>NPCs appear every 1–2 min, harder bust (50% vs 70%)</span>
+        <li className="flex items-start gap-1.5">
+          <span className="text-primary shrink-0">•</span>
+          <span>NPCs: 50% success, 25 RP reward</span>
         </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>15 RP regular bust, 25 RP NPC bust</span>
+        <li className="flex items-start gap-1.5">
+          <span className="text-primary shrink-0">•</span>
+          <span>Players: 70% success, 15 RP reward</span>
         </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
+        <li className="flex items-start gap-1.5">
+          <span className="text-primary shrink-0">•</span>
           <span>Failed bust = 30s in jail</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>Booze runs have a small chance to get you caught and sent to jail</span>
         </li>
       </ul>
     </div>
@@ -308,10 +324,10 @@ export default function Jail() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (jailStatus.in_jail && bustRewardInput === '' && (jailStatus.bust_reward_cash ?? 0) > 0) {
+    if (bustRewardInput === '' && (jailStatus.bust_reward_cash ?? 0) > 0) {
       setBustRewardInput(String(jailStatus.bust_reward_cash));
     }
-  }, [jailStatus.in_jail, jailStatus.bust_reward_cash, bustRewardInput]);
+  }, [jailStatus.bust_reward_cash, bustRewardInput]);
 
   const leaveJail = async () => {
     setLeavingJail(true);
@@ -371,7 +387,7 @@ export default function Jail() {
   }
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="jail-page">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="jail-page">
       <PageHeader jailStatus={jailStatus} />
 
       <JailStatusCard
@@ -383,28 +399,29 @@ export default function Jail() {
         setRewardLoading={setRewardLoading}
         onLeaveJail={leaveJail}
         leavingJail={leavingJail}
+        currentReward={jailStatus.bust_reward_cash ?? 0}
       />
 
       {/* Jailed Players */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-            <Users size={16} />
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
+            <Users size={14} />
             Jailed Players
           </span>
-          <span className="text-sm text-primary font-heading font-bold">
+          <span className="text-xs text-primary font-heading font-bold">
             {jailedPlayers.length}
           </span>
         </div>
 
         {jailedPlayers.length === 0 ? (
-          <div className="px-4 py-12 text-center text-mutedForeground text-sm font-heading italic">
+          <div className="px-4 py-8 text-center text-mutedForeground text-xs font-heading italic">
             No players currently in jail
           </div>
         ) : (
-          <div className="p-3 md:p-4 space-y-3">
+          <div className="p-2 space-y-1">
             {jailedPlayers.map((player, index) => (
-              <JailedPlayerCard
+              <JailedPlayerRow
                 key={`${player.username}-${index}`}
                 player={player}
                 index={index}
