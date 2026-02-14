@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import GifPicker from '../components/GifPicker';
 import styles from '../styles/noir.module.css';
 
 const NOTIFICATION_ICONS = {
@@ -41,19 +42,30 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ unreadCount }) => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Mail className="w-8 h-8 md:w-10 md:h-10" />
-      Inbox
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      {unreadCount > 0 ? `${unreadCount} unread message${unreadCount !== 1 ? 's' : ''}` : 'All caught up!'}
-    </p>
+const PageHeader = ({ unreadCount, onCompose }) => (
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 flex items-center gap-3">
+        <Mail className="w-8 h-8 md:w-10 md:h-10" />
+        Inbox
+      </h1>
+      <p className="text-sm text-mutedForeground">
+        {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+      </p>
+    </div>
+    <button
+      onClick={onCompose}
+      className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 md:px-6 py-2.5 md:py-3 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all active:scale-95 touch-manipulation flex items-center gap-2"
+    >
+      <Send size={18} />
+      <span className="hidden sm:inline">Compose</span>
+    </button>
   </div>
 );
 
-const SendMessageCard = ({ 
+const ComposeModal = ({ 
+  isOpen,
+  onClose,
   sendTo, 
   onSendToChange, 
   sendMessage, 
@@ -62,207 +74,289 @@ const SendMessageCard = ({
   onSendGifUrlChange,
   onSendMessage,
   sending,
-  onInsertEmoji 
-}) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
-        Send Message
-      </h2>
-    </div>
-    <form onSubmit={onSendMessage} className="p-4 space-y-4">
-      <div>
-        <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1.5">
-          To
-        </label>
-        <input
-          type="text"
-          value={sendTo}
-          onChange={(e) => onSendToChange(e.target.value)}
-          placeholder="Username"
-          className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-        />
-      </div>
-      
-      <div>
-        <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1.5">
-          Message
-        </label>
-        <textarea
-          value={sendMessage}
-          onChange={(e) => onSendMessageChange(e.target.value)}
-          placeholder="Type a message..."
-          rows={3}
-          className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none resize-y"
-        />
-        <div className="mt-2">
-          <span className="text-xs font-heading text-mutedForeground uppercase tracking-wider">
-            Smileys
-          </span>
-          <div className="flex flex-wrap items-center gap-1 mt-1.5">
-            {EMOJI_ROWS.flat().map((emoji) => (
-              <button 
-                key={emoji} 
-                type="button" 
-                onClick={() => onInsertEmoji(emoji)} 
-                className="text-lg leading-none p-1.5 rounded hover:bg-primary/20 transition-all" 
-                title="Insert emoji"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-      
-      <div>
-        <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1.5">
-          GIF URL (optional)
-        </label>
-        <input
-          type="url"
-          value={sendGifUrl}
-          onChange={(e) => onSendGifUrlChange(e.target.value)}
-          placeholder="https://..."
-          className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-        />
-      </div>
-      
-      <button
-        type="submit"
-        disabled={sending}
-        className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-lg font-heading font-bold uppercase tracking-wide py-3 border-2 border-yellow-600/50 transition-all shadow-lg shadow-primary/20 disabled:opacity-60 disabled:cursor-not-allowed touch-manipulation"
-      >
-        {sending ? 'Sending...' : '📤 Send Message'}
-      </button>
-    </form>
-  </div>
-);
+  onInsertEmoji,
+  onOpenGifPicker,
+  showGifPicker,
+  gifPickerOnSelect,
+  gifPickerOnClose,
+}) => {
+  if (!isOpen) return null;
 
-const NotificationItem = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline }) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="bg-card rounded-lg border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <h2 className="text-lg font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+            <Send size={20} />
+            New Message
+          </h2>
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-secondary rounded transition-colors"
+          >
+            <X size={20} className="text-mutedForeground" />
+          </button>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={onSendMessage} className="p-4 md:p-6 space-y-4 overflow-y-auto">
+          <div>
+            <label className="block text-sm font-heading text-mutedForeground mb-2">
+              To
+            </label>
+            <input
+              type="text"
+              value={sendTo}
+              onChange={(e) => onSendToChange(e.target.value)}
+              placeholder="Enter username..."
+              className="w-full bg-input border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+              autoFocus
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-heading text-mutedForeground mb-2">
+              Message
+            </label>
+            <textarea
+              value={sendMessage}
+              onChange={(e) => onSendMessageChange(e.target.value)}
+              placeholder="Type your message..."
+              rows={5}
+              className="w-full bg-input border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
+            />
+            <div className="mt-2 flex flex-wrap gap-1">
+              {EMOJI_ROWS.flat().map((emoji) => (
+                <button 
+                  key={emoji} 
+                  type="button" 
+                  onClick={() => onInsertEmoji(emoji)} 
+                  className="text-base p-1.5 rounded hover:bg-primary/20 active:scale-95 transition-all" 
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-heading text-mutedForeground">
+                GIF (Optional)
+              </label>
+              {onOpenGifPicker && (
+                <button
+                  type="button"
+                  onClick={onOpenGifPicker}
+                  className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase"
+                >
+                  Search GIPHY →
+                </button>
+              )}
+            </div>
+            {showGifPicker && (
+              <GifPicker
+                onSelect={gifPickerOnSelect}
+                onClose={gifPickerOnClose}
+                className="mb-2"
+              />
+            )}
+            <input
+              type="url"
+              value={sendGifUrl}
+              onChange={(e) => onSendGifUrlChange(e.target.value)}
+              placeholder="Paste GIF URL..."
+              className="w-full bg-input border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+            />
+          </div>
+          
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 bg-secondary text-foreground border border-border hover:bg-secondary/80 rounded-lg px-6 py-3 font-heading font-bold uppercase tracking-wide text-sm transition-all active:scale-95"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={sending}
+              className="flex-1 bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-6 py-3 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+            >
+              {sending ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, onOcAccept, onOcDecline }) => {
   const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
   const isOcInvite = !!notification.oc_invite_id;
+  const isUserMessage = notification.notification_type === 'user_message';
 
   return (
     <div
-      className={`rounded-md p-4 transition-all border ${
-        notification.read
-          ? 'bg-secondary/50 border-border opacity-80'
-          : 'bg-card border-primary/30'
+      onClick={onClick}
+      className={`flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ${
+        isSelected 
+          ? 'bg-primary/10 border-l-4 border-l-primary' 
+          : notification.read 
+          ? 'bg-secondary/30 hover:bg-secondary/50' 
+          : 'bg-card hover:bg-secondary/30 border-l-4 border-l-primary/50'
       }`}
-      data-testid={`notification-${notification.id}`}
     >
-      {/* Mobile: Stacked, Desktop: Horizontal */}
-      <div className="space-y-3 md:space-y-0 md:flex md:items-start md:gap-3">
-        {/* Icon */}
-        <div className={`p-2 rounded-md shrink-0 w-fit ${
-          notification.read 
-            ? 'bg-secondary border border-border' 
-            : 'bg-primary/20 border border-primary/30'
-        }`}>
-          <Icon size={20} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
+      {/* Icon */}
+      <div className={`p-2 rounded-md shrink-0 ${
+        notification.read ? 'bg-secondary' : 'bg-primary/20'
+      }`}>
+        <Icon size={18} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h3 className={`text-sm font-heading truncate ${
+            notification.read ? 'text-foreground' : 'text-foreground font-bold'
+          }`}>
+            {notification.title}
+          </h3>
+          <span className="text-xs text-mutedForeground whitespace-nowrap">
+            {timeAgo}
+          </span>
         </div>
-        
-        {/* Content */}
-        <div className="flex-1 min-w-0 space-y-2">
-          <div className="flex items-start justify-between gap-2">
-            <h3 className="text-sm md:text-base font-heading font-bold text-foreground">
-              {notification.title}
-            </h3>
-            <span className="text-xs text-mutedForeground font-heading whitespace-nowrap">
-              {timeAgo}
-            </span>
-          </div>
-          
-          <p className="text-sm text-mutedForeground font-heading">
-            {notification.message}
+        <p className="text-xs text-mutedForeground truncate">
+          {notification.message}
+        </p>
+      </div>
+
+      {/* Unread indicator */}
+      {!notification.read && (
+        <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+      )}
+
+      {/* Arrow */}
+      <ChevronRight size={16} className="text-mutedForeground shrink-0" />
+    </div>
+  );
+};
+
+const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline, onOpenChat }) => {
+  if (!notification) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-secondary/20">
+        <div className="text-center">
+          <MailOpen size={64} className="mx-auto text-primary/30 mb-4" />
+          <p className="text-mutedForeground font-heading">
+            Select a message to read
           </p>
-          
-          {notification.notification_type === 'user_message' && notification.gif_url && (
-            <div className="mt-2">
-              <img 
-                src={notification.gif_url} 
-                alt="GIF" 
-                className="max-w-full sm:max-w-[200px] max-h-[150px] rounded-md border border-primary/20 object-cover" 
-              />
+        </div>
+      </div>
+    );
+  }
+
+  const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
+  const isOcInvite = !!notification.oc_invite_id;
+  const isUserMessage = notification.notification_type === 'user_message' && notification.sender_id;
+
+  return (
+    <div className="flex-1 flex flex-col bg-card">
+      {/* Message Header */}
+      <div className="px-4 md:px-6 py-4 border-b border-border bg-secondary/30">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 rounded-md bg-primary/20 border border-primary/30">
+              <Icon size={24} className="text-primary" />
             </div>
-          )}
-          
-          {isOcInvite && onOcAccept && onOcDecline && (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onOcAccept(notification.oc_invite_id)}
-                className="bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30 rounded-md px-3 py-1.5 text-sm font-heading font-bold uppercase tracking-wide transition-all touch-manipulation"
-              >
-                ✓ Accept
-              </button>
-              <button
-                onClick={() => onOcDecline(notification.oc_invite_id)}
-                className="bg-secondary text-mutedForeground border border-border hover:text-foreground hover:border-primary/30 rounded-md px-3 py-1.5 text-sm font-heading font-bold uppercase tracking-wide transition-all touch-manipulation"
-              >
-                ✗ Decline
-              </button>
+            <div>
+              <h2 className="text-lg md:text-xl font-heading font-bold text-foreground mb-1">
+                {notification.title}
+              </h2>
+              <p className="text-sm text-mutedForeground">
+                {getTimeAgo(notification.created_at)}
+              </p>
             </div>
-          )}
-          
-          {/* Actions for mobile */}
-          <div className="flex items-center gap-2 md:hidden">
-            {!notification.read && !isOcInvite && (
-              <button
-                onClick={() => onMarkRead(notification.id)}
-                className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wide"
-              >
-                Mark read
-              </button>
-            )}
-            <button
-              onClick={() => onDelete(notification.id)}
-              className="p-1.5 rounded text-mutedForeground hover:text-red-400 hover:bg-red-400/10 transition-all"
-              title="Delete"
-              aria-label="Delete message"
-            >
-              <Trash2 size={16} />
-            </button>
           </div>
         </div>
-        
-        {/* Actions for desktop */}
-        <div className="hidden md:flex items-center gap-2 shrink-0">
-          {!notification.read && !isOcInvite && (
+
+        {/* Actions */}
+        <div className="flex flex-wrap gap-2">
+          {!notification.read && (
             <button
               onClick={() => onMarkRead(notification.id)}
-              className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wide whitespace-nowrap"
+              className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase transition-all"
             >
-              Mark read
+              ✓ Mark Read
+            </button>
+          )}
+          {isUserMessage && (
+            <button
+              onClick={() => onOpenChat(notification)}
+              className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase transition-all"
+            >
+              💬 Reply
             </button>
           )}
           <button
             onClick={() => onDelete(notification.id)}
-            className="p-1.5 rounded text-mutedForeground hover:text-red-400 hover:bg-red-400/10 transition-all"
-            title="Delete"
-            aria-label="Delete message"
+            className="px-3 py-1.5 rounded-md bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-xs font-heading font-bold uppercase transition-all"
           >
-            <Trash2 size={16} />
+            🗑️ Delete
           </button>
+        </div>
+      </div>
+
+      {/* Message Body */}
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+        <div className="prose prose-invert max-w-none">
+          <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+            {notification.message}
+          </p>
+          
+          {notification.notification_type === 'user_message' && notification.gif_url && (
+            <div className="mt-4">
+              <img 
+                src={notification.gif_url} 
+                alt="GIF" 
+                className="max-w-full max-h-[400px] rounded-md border border-primary/20 shadow-lg" 
+              />
+            </div>
+          )}
+
+          {isOcInvite && (
+            <div className="mt-6 p-4 bg-primary/10 border border-primary/30 rounded-md">
+              <p className="text-sm text-foreground font-heading font-bold mb-3">
+                Organised Crime Invitation
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onOcAccept(notification.oc_invite_id)}
+                  className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black border border-yellow-600/50 rounded-md px-4 py-2 text-sm font-heading font-bold uppercase shadow-md shadow-primary/20 transition-all active:scale-95"
+                >
+                  ✓ Accept Invitation
+                </button>
+                <button
+                  onClick={() => onOcDecline(notification.oc_invite_id)}
+                  className="bg-secondary text-foreground border border-border hover:border-primary/30 rounded-md px-4 py-2 text-sm font-heading font-bold uppercase transition-all active:scale-95"
+                >
+                  ✗ Decline
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-const EmptyState = () => (
-  <div className="bg-card rounded-md py-16 text-center" data-testid="no-notifications">
-    <MailOpen size={64} className="mx-auto text-primary/50 mb-4" />
-    <p className="text-foreground font-heading text-lg mb-2">No notifications yet</p>
-    <p className="text-sm text-mutedForeground font-heading">
-      Rank up, get attacked, or hire bodyguards to receive notifications
-    </p>
-  </div>
-);
-
 // Main component
 export default function Inbox() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterParam = searchParams.get('filter');
   const initialFilter = VALID_FILTERS.includes(filterParam) ? filterParam : 'all';
@@ -271,10 +365,13 @@ export default function Inbox() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(initialFilter);
+  const [selectedNotification, setSelectedNotification] = useState(null);
+  const [showCompose, setShowCompose] = useState(false);
   const [sendTo, setSendTo] = useState('');
   const [sendMessage, setSendMessage] = useState('');
   const [sendGifUrl, setSendGifUrl] = useState('');
   const [sending, setSending] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -319,6 +416,9 @@ export default function Inbox() {
   const deleteMessage = async (notificationId) => {
     try {
       await api.delete(`/notifications/${notificationId}`);
+      if (selectedNotification?.id === notificationId) {
+        setSelectedNotification(null);
+      }
       fetchNotifications();
       toast.success('Message deleted');
     } catch (error) {
@@ -330,6 +430,7 @@ export default function Inbox() {
     if (!window.confirm('Delete all messages in your inbox?')) return;
     try {
       const res = await api.delete('/notifications');
+      setSelectedNotification(null);
       fetchNotifications();
       toast.success(res.data?.message || 'All messages deleted');
     } catch (error) {
@@ -383,6 +484,8 @@ export default function Inbox() {
       setSendTo('');
       setSendMessage('');
       setSendGifUrl('');
+      setShowGifPicker(false);
+      setShowCompose(false);
       fetchNotifications();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to send message');
@@ -404,21 +507,21 @@ export default function Inbox() {
   }
 
   const filterButtons = [
-    { value: 'all', label: 'All' },
-    { value: 'unread', label: 'Unread' },
-    { value: 'rank_up', label: 'Rank Up' },
-    { value: 'reward', label: 'Reward' },
-    { value: 'bodyguard', label: 'Bodyguard' },
-    { value: 'attack', label: 'Attack' },
-    { value: 'system', label: 'System' },
-    { value: 'user_message', label: 'Messages' },
+    { value: 'all', label: 'All', icon: Mail },
+    { value: 'unread', label: 'Unread', icon: MailOpen },
+    { value: 'user_message', label: 'Messages', icon: MessageCircle },
+    { value: 'rank_up', label: 'Rank', icon: Trophy },
+    { value: 'attack', label: 'Attack', icon: Skull },
+    { value: 'system', label: 'System', icon: Bell },
   ];
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="inbox-page">
-      <PageHeader unreadCount={unreadCount} />
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="inbox-page">
+      <PageHeader unreadCount={unreadCount} onCompose={() => setShowCompose(true)} />
 
-      <SendMessageCard
+      <ComposeModal
+        isOpen={showCompose}
+        onClose={() => setShowCompose(false)}
         sendTo={sendTo}
         onSendToChange={setSendTo}
         sendMessage={sendMessage}
@@ -428,63 +531,121 @@ export default function Inbox() {
         onSendMessage={handleSendMessage}
         sending={sending}
         onInsertEmoji={insertEmoji}
+        onOpenGifPicker={() => setShowGifPicker(true)}
+        showGifPicker={showGifPicker}
+        gifPickerOnSelect={(url) => { setSendGifUrl(url); setShowGifPicker(false); }}
+        gifPickerOnClose={() => setShowGifPicker(false)}
       />
 
-      {/* Filters and actions */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {filterButtons.map(btn => (
-            <button
-              key={btn.value}
-              onClick={() => setFilter(btn.value)}
-              className={`px-3 py-2 rounded-md text-sm font-heading font-bold whitespace-nowrap transition-all border touch-manipulation ${
-                filter === btn.value
-                  ? 'bg-primary/20 text-primary border-primary/50'
-                  : 'bg-secondary text-mutedForeground border-border hover:text-foreground hover:border-primary/30'
-              }`}
-            >
-              {btn.label}
-            </button>
-          ))}
+      {/* Inbox Layout */}
+      <div className="bg-card border border-primary/20 rounded-lg overflow-hidden">
+        {/* Toolbar */}
+        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1">
+            {filterButtons.map(btn => {
+              const Icon = btn.icon;
+              return (
+                <button
+                  key={btn.value}
+                  onClick={() => setFilter(btn.value)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-heading font-bold whitespace-nowrap transition-all border ${
+                    filter === btn.value
+                      ? 'bg-primary/20 text-primary border-primary/50'
+                      : 'bg-secondary/50 text-mutedForeground border-border hover:text-foreground'
+                  }`}
+                >
+                  <Icon size={14} />
+                  {btn.label}
+                </button>
+              );
+            })}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {unreadCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase whitespace-nowrap transition-all"
+              >
+                ✓ Mark All Read
+              </button>
+            )}
+            {notifications.length > 0 && (
+              <button
+                onClick={deleteAllMessages}
+                className="px-3 py-1.5 rounded-md bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-xs font-heading font-bold uppercase whitespace-nowrap transition-all"
+              >
+                🗑️ Delete All
+              </button>
+            )}
+          </div>
         </div>
-        
-        <div className="flex items-center gap-2">
-          {unreadCount > 0 && (
-            <button
-              onClick={markAllAsRead}
-              className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md px-4 py-2 text-sm font-heading font-bold uppercase tracking-wide border border-yellow-600/50 transition-all shadow-lg shadow-primary/20 touch-manipulation"
-              data-testid="mark-all-read"
-            >
-              Mark All Read
-            </button>
-          )}
-          {notifications.length > 0 && (
-            <button
-              onClick={deleteAllMessages}
-              className="bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 rounded-md px-4 py-2 text-sm font-heading font-bold uppercase tracking-wide transition-all touch-manipulation"
-              data-testid="delete-all"
-            >
-              Delete All
-            </button>
-          )}
-        </div>
-      </div>
 
-      {/* Notifications list */}
-      {filteredNotifications.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div className="space-y-3" data-testid="notifications-list">
-          {filteredNotifications.map(notification => (
-            <NotificationItem
-              key={notification.id}
-              notification={notification}
+        {/* Inbox Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-5">
+          {/* Message List */}
+          <div className="lg:col-span-2 border-r border-border bg-secondary/20 max-h-[600px] overflow-y-auto">
+            {filteredNotifications.length === 0 ? (
+              <div className="p-8 text-center">
+                <MailOpen size={48} className="mx-auto text-primary/30 mb-3" />
+                <p className="text-sm text-mutedForeground font-heading">
+                  No messages
+                </p>
+              </div>
+            ) : (
+              filteredNotifications.map(notification => (
+                <MessageRow
+                  key={notification.id}
+                  notification={notification}
+                  isSelected={selectedNotification?.id === notification.id}
+                  onClick={() => setSelectedNotification(notification)}
+                  onMarkRead={markAsRead}
+                  onDelete={deleteMessage}
+                  onOcAccept={handleOcInviteAccept}
+                  onOcDecline={handleOcInviteDecline}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Message Detail */}
+          <div className="lg:col-span-3 hidden lg:block">
+            <MessageDetail
+              notification={selectedNotification}
               onMarkRead={markAsRead}
               onDelete={deleteMessage}
               onOcAccept={handleOcInviteAccept}
               onOcDecline={handleOcInviteDecline}
+              onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
             />
-          ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile: Selected message fullscreen */}
+      {selectedNotification && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-background">
+          <div className="flex flex-col h-full">
+            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-3">
+              <button
+                onClick={() => setSelectedNotification(null)}
+                className="p-2 hover:bg-secondary rounded transition-colors"
+              >
+                <X size={20} className="text-foreground" />
+              </button>
+              <h2 className="text-sm font-heading font-bold text-primary uppercase">
+                Message
+              </h2>
+            </div>
+            <MessageDetail
+              notification={selectedNotification}
+              onMarkRead={markAsRead}
+              onDelete={deleteMessage}
+              onOcAccept={handleOcInviteAccept}
+              onOcDecline={handleOcInviteDecline}
+              onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
+            />
+          </div>
         </div>
       )}
     </div>
