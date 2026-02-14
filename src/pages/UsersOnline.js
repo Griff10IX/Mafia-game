@@ -68,136 +68,134 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 
   return (
     <div
-      className="bg-card rounded-md border border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all p-3 w-[160px] md:w-[200px]"
+      className="bg-card rounded-md border border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all px-3 py-2"
       data-testid="user-card"
     >
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0 flex-1">
-          <HoverCard onOpenChange={(open) => open && ensureProfilePreview(user.username)}>
-            <HoverCardTrigger asChild>
-              <Link
-                to={`/profile/${encodeURIComponent(user.username)}`}
-                className="text-sm font-heading font-bold text-foreground hover:text-primary transition-colors truncate block"
-                data-testid={`user-profile-link-${user.username}`}
-              >
-                {user.username}
-              </Link>
-            </HoverCardTrigger>
-            <HoverCardContent 
-              align="start" 
-              sideOffset={8} 
-              className="w-80 max-w-[90vw] bg-card border-2 border-primary/30 rounded-lg shadow-2xl p-0 overflow-hidden"
+      <div className="flex items-center gap-2">
+        <HoverCard onOpenChange={(open) => open && ensureProfilePreview(user.username)}>
+          <HoverCardTrigger asChild>
+            <Link
+              to={`/profile/${encodeURIComponent(user.username)}`}
+              className="text-sm font-heading font-bold text-foreground hover:text-primary transition-colors"
+              data-testid={`user-profile-link-${user.username}`}
             >
-              {preview?.error ? (
-                <div className="p-4 text-sm text-mutedForeground font-heading">
-                  Failed to load preview
+              {user.username}
+            </Link>
+          </HoverCardTrigger>
+          <HoverCardContent 
+            align="start" 
+            sideOffset={8} 
+            className="w-80 max-w-[90vw] bg-card border-2 border-primary/30 rounded-lg shadow-2xl p-0 overflow-hidden"
+          >
+            {preview?.error ? (
+              <div className="p-4 text-sm text-mutedForeground font-heading">
+                Failed to load preview
+              </div>
+            ) : isLoading && !preview ? (
+              <div className="p-4 text-sm text-mutedForeground font-heading">
+                Loading preview...
+              </div>
+            ) : preview ? (
+              <>
+                <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
+                  <h3 className="text-base font-heading font-bold text-primary">
+                    Profile Preview
+                  </h3>
                 </div>
-              ) : isLoading && !preview ? (
-                <div className="p-4 text-sm text-mutedForeground font-heading">
-                  Loading preview...
-                </div>
-              ) : preview ? (
-                <>
-                  <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-                    <h3 className="text-base font-heading font-bold text-primary">
-                      Profile Preview
-                    </h3>
-                  </div>
-                  <div className="p-4 space-y-3">
-                    <div className="flex gap-3">
-                      <div className="w-12 h-12 rounded-md overflow-hidden border border-primary/20 bg-secondary flex items-center justify-center shrink-0">
-                        {preview.avatar_url ? (
-                          <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                        ) : (
-                          <User size={24} className="text-mutedForeground" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-heading font-bold text-foreground text-base truncate mb-2">
-                          {preview.username}
-                        </div>
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs font-heading">
-                          <div className="flex justify-between">
-                            <span className="text-mutedForeground">Kills</span>
-                            <span className="text-foreground font-bold">{preview.kills}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-mutedForeground">Jailbusts</span>
-                            <span className="text-foreground font-bold">{preview.jail_busts}</span>
-                          </div>
-                        </div>
-                      </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex gap-3">
+                    <div className="w-12 h-12 rounded-md overflow-hidden border border-primary/20 bg-secondary flex items-center justify-center shrink-0">
+                      {preview.avatar_url ? (
+                        <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                      ) : (
+                        <User size={24} className="text-mutedForeground" />
+                      )}
                     </div>
-                    
-                    <div className="text-xs text-mutedForeground font-heading flex items-center gap-1.5">
-                      <Clock size={12} />
-                      Joined {formatDateTime(preview.created_at)}
-                    </div>
-                    
-                    {preview.admin_stats && (
-                      <div className="pt-3 border-t border-border space-y-2">
-                        <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs font-heading">
-                          <div className="flex justify-between">
-                            <span className="text-mutedForeground">Cash</span>
-                            <span className="text-primary font-bold">
-                              ${Number(preview.admin_stats.money ?? 0).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-mutedForeground">Points</span>
-                            <span className="text-primary font-bold">
-                              {Number(preview.admin_stats.points ?? 0).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-mutedForeground">Bullets</span>
-                            <span className="text-primary font-bold">
-                              {Number(preview.admin_stats.bullets ?? 0).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="flex justify-between col-span-2">
-                            <span className="text-mutedForeground">Booze (Today)</span>
-                            <span className="text-emerald-400 font-bold">
-                              ${Number(preview.admin_stats.booze_profit_today ?? 0).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="flex justify-between col-span-2">
-                            <span className="text-mutedForeground">Booze (Total)</span>
-                            <span className="text-emerald-400 font-bold">
-                              ${Number(preview.admin_stats.booze_profit_total ?? 0).toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                        
-                        {preview.admin_stats.current_state && (
-                          <div className="flex items-center gap-1.5 text-xs font-heading">
-                            <MapPin size={12} className="text-primary" />
-                            <span className="text-mutedForeground">Location:</span>
-                            <span className="text-foreground font-bold">{preview.admin_stats.current_state}</span>
-                          </div>
-                        )}
-                        
-                        {preview.admin_stats.in_jail && (
-                          <div className="px-2 py-1.5 rounded-md bg-red-500/20 text-red-400 text-xs font-heading font-bold text-center border border-red-500/30">
-                            🔒 In Jail
-                          </div>
-                        )}
+                    <div className="min-w-0 flex-1">
+                      <div className="font-heading font-bold text-foreground text-base truncate mb-2">
+                        {preview.username}
                       </div>
-                    )}
-                    
-                    <div className="pt-3 border-t border-border text-xs text-mutedForeground font-heading italic text-center">
-                      Click username to view full profile
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs font-heading">
+                        <div className="flex justify-between">
+                          <span className="text-mutedForeground">Kills</span>
+                          <span className="text-foreground font-bold">{preview.kills}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-mutedForeground">Jailbusts</span>
+                          <span className="text-foreground font-bold">{preview.jail_busts}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </>
-              ) : (
-                <div className="p-4 text-sm text-mutedForeground font-heading">
-                  Hover to preview profile
+                  
+                  <div className="text-xs text-mutedForeground font-heading flex items-center gap-1.5">
+                    <Clock size={12} />
+                    Joined {formatDateTime(preview.created_at)}
+                  </div>
+                  
+                  {preview.admin_stats && (
+                    <div className="pt-3 border-t border-border space-y-2">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs font-heading">
+                        <div className="flex justify-between">
+                          <span className="text-mutedForeground">Cash</span>
+                          <span className="text-primary font-bold">
+                            ${Number(preview.admin_stats.money ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-mutedForeground">Points</span>
+                          <span className="text-primary font-bold">
+                            {Number(preview.admin_stats.points ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-mutedForeground">Bullets</span>
+                          <span className="text-primary font-bold">
+                            {Number(preview.admin_stats.bullets ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between col-span-2">
+                          <span className="text-mutedForeground">Booze (Today)</span>
+                          <span className="text-emerald-400 font-bold">
+                            ${Number(preview.admin_stats.booze_profit_today ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between col-span-2">
+                          <span className="text-mutedForeground">Booze (Total)</span>
+                          <span className="text-emerald-400 font-bold">
+                            ${Number(preview.admin_stats.booze_profit_total ?? 0).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {preview.admin_stats.current_state && (
+                        <div className="flex items-center gap-1.5 text-xs font-heading">
+                          <MapPin size={12} className="text-primary" />
+                          <span className="text-mutedForeground">Location:</span>
+                          <span className="text-foreground font-bold">{preview.admin_stats.current_state}</span>
+                        </div>
+                      )}
+                      
+                      {preview.admin_stats.in_jail && (
+                        <div className="px-2 py-1.5 rounded-md bg-red-500/20 text-red-400 text-xs font-heading font-bold text-center border border-red-500/30">
+                          🔒 In Jail
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <div className="pt-3 border-t border-border text-xs text-mutedForeground font-heading italic text-center">
+                    Click username to view full profile
+                  </div>
                 </div>
-              )}
-            </HoverCardContent>
-          </HoverCard>
-        </div>
+              </>
+            ) : (
+              <div className="p-4 text-sm text-mutedForeground font-heading">
+                Hover to preview profile
+              </div>
+            )}
+          </HoverCardContent>
+        </HoverCard>
         
         {user.in_jail && (
           <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
@@ -323,22 +321,8 @@ export default function UsersOnline() {
             </h2>
           </div>
           <div className="p-3 md:p-4">
-            {/* Mobile: Horizontal scroll */}
-            <div className="md:hidden flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" data-testid="users-grid">
-              {users.map((user, idx) => (
-                <div key={idx} className="shrink-0">
-                  <UserCard
-                    user={user}
-                    profileCache={profileCache}
-                    profileLoading={profileLoading}
-                    ensureProfilePreview={ensureProfilePreview}
-                  />
-                </div>
-              ))}
-            </div>
-            
-            {/* Desktop: Grid */}
-            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="users-grid-desktop">
+            {/* Flexbox wrap layout - cards flow naturally */}
+            <div className="flex flex-wrap gap-2" data-testid="users-grid">
               {users.map((user, idx) => (
                 <UserCard
                   key={idx}
