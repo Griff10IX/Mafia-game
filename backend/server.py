@@ -24,6 +24,9 @@ from urllib.parse import unquote
 import httpx
 import certifi
 
+# Import security module (anti-cheat and monitoring)
+import security as security_module
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 # Also load project root .env if present (e.g. when running from root)
@@ -47,6 +50,21 @@ security = HTTPBearer()
 
 # Create the main app without a prefix
 app = FastAPI()
+
+# Security monitoring (imported after app creation)
+from security import (
+    check_request_spam,
+    check_duplicate_request,
+    check_negative_balance,
+    check_impossible_wealth_gain,
+    check_failed_attack_spam,
+    get_security_summary,
+    sanitize_username,
+    validate_positive_int,
+    send_telegram_alert,
+    flush_telegram_alerts,
+    flag_user_suspicious,
+)
 
 
 @app.get("/")
@@ -835,6 +853,12 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    
+    # Check if user is banned
+    is_banned, ban_reason = await check_ban_status(db, user_id)
+    if is_banned:
+        raise HTTPException(status_code=403, detail=ban_reason or "You are banned from this game")
+    
     if user.get("is_dead"):
         raise HTTPException(
             status_code=403,
@@ -1780,6 +1804,11 @@ async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict 
 
 @api_router.post("/bank/transfer")
 async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depends(get_current_user)):
+    # Security: Rate limit money transfers
+    allowed, error_msg = check_rate_limit(current_user["id"], "money_transfers")
+    if not allowed:
+        raise HTTPException(status_code=429, detail=error_msg)
+    
     to_username = (request.to_username or "").strip()
     if not to_username:
         raise HTTPException(status_code=400, detail="Recipient username required")
@@ -1802,8 +1831,14 @@ async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depe
 
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
+    
+    # Perform transfer
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
     await db.users.update_one({"id": recipient["id"]}, {"$inc": {"money": amount}})
+    
+    # Security: Check for negative balance (exploit detection)
+    await security_module.check_negative_balance(db, current_user["id"], current_user["username"])
+    await security_module.check_negative_balance(db, recipient["id"], recipient["username"])
     await db.money_transfers.insert_one({
         "id": transfer_id,
         "from_user_id": current_user["id"],
@@ -3130,6 +3165,122 @@ async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_use
         "message": f"Dropped ALL bodyguards ({res.deleted_count} slot(s) cleared, {res_robots.deleted_count} robot user(s) deleted)",
         "deleted_bodyguards": res.deleted_count,
         "deleted_robot_users": res_robots.deleted_count
+    }
+
+
+# ===== SECURITY & ANTI-CHEAT ADMIN ENDPOINTS =====
+
+@api_router.get("/admin/security/summary")
+async def admin_security_summary(limit: int = 100, flag_type: str = None, current_user: dict = Depends(get_current_user)):
+    """Get summary of security flags."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    summary = await security_module.get_security_summary(db, limit=limit, flag_type=flag_type)
+    return summary
+
+
+@api_router.get("/admin/security/flags")
+async def admin_security_flags(
+    limit: int = 100,
+    flag_type: str = None,
+    user_id: str = None,
+    resolved: bool = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get detailed security flags with filtering options."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    query = {}
+    if flag_type:
+        query["flag_type"] = flag_type
+    if user_id:
+        query["user_id"] = user_id
+    if resolved is not None:
+        query["resolved"] = resolved
+    
+    flags = await db.security_flags.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+    return {"flags": flags, "count": len(flags)}
+
+
+@api_router.post("/admin/security/flags/{flag_id}/resolve")
+async def admin_resolve_security_flag(flag_id: str, current_user: dict = Depends(get_current_user)):
+    """Mark a security flag as resolved."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    result = await db.security_flags.update_one(
+        {"id": flag_id},
+        {"$set": {"resolved": True, "resolved_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Flag not found")
+    
+    return {"message": "Flag marked as resolved", "flag_id": flag_id}
+
+
+@api_router.get("/admin/security/rate-limits")
+async def admin_get_rate_limits(current_user: dict = Depends(get_current_user)):
+    """Get current rate limit configuration for all endpoints."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    return {
+        "rate_limits": security_module.RATE_LIMIT_CONFIG,
+        "note": "Edit backend/security.py RATE_LIMIT_CONFIG to modify these settings"
+    }
+
+
+@api_router.post("/admin/security/test-telegram")
+async def admin_test_telegram(current_user: dict = Depends(get_current_user)):
+    """Send a test alert to Telegram to verify configuration."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if not security_module.TELEGRAM_ENABLED:
+        return {
+            "success": False,
+            "message": "Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env file."
+        }
+    
+    await security_module.send_telegram_alert(
+        f"🧪 Test alert from Mafia Game\n\nAdmin: {current_user.get('username', 'Unknown')}\n\nIf you see this, Telegram integration is working!",
+        "info"
+    )
+    await security_module.flush_telegram_alerts()
+    
+    return {
+        "success": True,
+        "message": "Test alert sent! Check your Telegram chat."
+    }
+
+
+@api_router.post("/admin/security/clear-user-flags")
+async def admin_clear_user_flags(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Clear all security flags for a specific user."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    count = await security_module.clear_user_security_flags(db, user_id)
+    return {
+        "message": f"Cleared {count} flag(s) for user {user_id}",
+        "cleared_count": count
+    }
+
+
+@api_router.post("/admin/security/clear-old-flags")
+async def admin_clear_old_flags(days: int = 30, current_user: dict = Depends(get_current_user)):
+    """Clear security flags older than specified days."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    count = await security_module.clear_old_security_flags(db, days)
+    return {
+        "message": f"Cleared {count} flag(s) older than {days} days",
+        "cleared_count": count,
+        "days": days
     }
 
 
@@ -8825,6 +8976,8 @@ async def startup_db():
     await init_game_data()
     from routers.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
+    # Start security monitoring background task
+    asyncio.create_task(security_module.security_monitor_task(db))
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
