@@ -1,17 +1,16 @@
 # Bank endpoints: meta, overview, interest deposit/claim, Swiss deposit/withdraw, transfer
 from datetime import datetime, timezone, timedelta
 import uuid
-from typing import Optional
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
-from server import (
-    db,
-    get_current_user,
-    SWISS_BANK_LIMIT_START,
-    BANK_INTEREST_OPTIONS,
-)
+
+# Import dependencies from server - avoid circular import by importing inside register()
+db = None
+get_current_user = None
+SWISS_BANK_LIMIT_START = None
+BANK_INTEREST_OPTIONS = None
 
 
 class BankInterestDepositRequest(BaseModel):
@@ -32,7 +31,7 @@ class MoneyTransferRequest(BaseModel):
     amount: int
 
 
-def _interest_option(duration_hours: int) -> Optional[dict]:
+def _interest_option(duration_hours: int) -> dict | None:
     try:
         h = int(duration_hours)
     except Exception:
@@ -40,7 +39,8 @@ def _interest_option(duration_hours: int) -> Optional[dict]:
     return next((o for o in BANK_INTEREST_OPTIONS if int(o.get("hours", 0) or 0) == h), None)
 
 
-def _parse_matures_at(matures_at: Optional[str]) -> Optional[datetime]:
+def _parse_matures_at(matures_at: str | None) -> datetime | None:
+    """Parse deposit matures_at to timezone-aware UTC datetime. Returns None if missing/invalid."""
     if not matures_at:
         return None
     try:
@@ -65,6 +65,7 @@ async def bank_overview(current_user: dict = Depends(get_current_user)):
     money = int(user.get("money", 0) or 0) if user else 0
     swiss_balance = int((user or {}).get("swiss_balance", 0) or 0)
     swiss_limit = int((user or {}).get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START)
+
     deposits = await db.bank_deposits.find(
         {"user_id": current_user["id"]},
         {"_id": 0}
@@ -72,12 +73,14 @@ async def bank_overview(current_user: dict = Depends(get_current_user)):
     for d in deposits:
         mat = _parse_matures_at(d.get("matures_at"))
         d["matured"] = bool(mat is not None and now >= mat)
+
     transfers = await db.money_transfers.find(
         {"$or": [{"from_user_id": current_user["id"]}, {"to_user_id": current_user["id"]}]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(50)
     for t in transfers:
         t["direction"] = "sent" if t.get("from_user_id") == current_user["id"] else "received"
+
     return {
         "cash_on_hand": money,
         "swiss_balance": swiss_balance,
@@ -96,13 +99,16 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
         raise HTTPException(status_code=400, detail="Invalid duration")
     rate = float(opt["rate"])
     hours = int(opt["hours"])
+
     user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
     money = int(user.get("money", 0) or 0) if user else 0
     if amount > money:
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
+
     now = datetime.now(timezone.utc)
     matures = now + timedelta(hours=hours)
     interest = int(round(amount * rate))
+
     deposit_id = str(uuid.uuid4())
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
     await db.bank_deposits.insert_one({
@@ -120,20 +126,24 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
 
 
 async def bank_interest_claim(request: BankDepositClaimRequest, current_user: dict = Depends(get_current_user)):
+    """Claim a matured interest deposit. Early withdrawal is not allowed."""
     dep = await db.bank_deposits.find_one({"id": request.deposit_id, "user_id": current_user["id"]}, {"_id": 0})
     if not dep:
         raise HTTPException(status_code=404, detail="Deposit not found")
     if dep.get("claimed_at"):
         raise HTTPException(status_code=400, detail="Deposit already claimed")
+
     now = datetime.now(timezone.utc)
     mat = _parse_matures_at(dep.get("matures_at"))
     if mat is None:
         raise HTTPException(status_code=400, detail="Deposit missing or invalid maturity time")
     if now < mat:
         raise HTTPException(status_code=400, detail="Cannot withdraw early. Deposit has not matured yet.")
+
     principal = int(dep.get("principal", 0) or 0)
     interest = int(dep.get("interest_amount", 0) or 0)
     total = principal + interest
+
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": total}})
     await db.bank_deposits.update_one({"id": dep["id"]}, {"$set": {"claimed_at": now.isoformat()}})
     return {"message": f"Claimed ${total:,} (${principal:,} + ${interest:,} interest)", "total": total}
@@ -151,6 +161,7 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     if swiss_balance + amount > swiss_limit:
         raise HTTPException(status_code=400, detail=f"Swiss bank limit is ${swiss_limit:,}")
+
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": -amount, "swiss_balance": amount}}
@@ -182,15 +193,18 @@ async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depe
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+
     recipient = await db.users.find_one({"username": to_username}, {"_id": 0})
     if not recipient:
         raise HTTPException(status_code=404, detail="Recipient not found")
     if recipient.get("is_dead"):
         raise HTTPException(status_code=400, detail="Recipient is dead")
+
     sender = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
     money = int(sender.get("money", 0) or 0) if sender else 0
     if amount > money:
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
+
     now = datetime.now(timezone.utc).isoformat()
     transfer_id = str(uuid.uuid4())
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
@@ -208,6 +222,15 @@ async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depe
 
 
 def register(router):
+    """Register bank routes. Must be called after server module is fully loaded."""
+    # Import here to avoid circular dependency
+    import server as srv
+    global db, get_current_user, SWISS_BANK_LIMIT_START, BANK_INTEREST_OPTIONS
+    db = srv.db
+    get_current_user = srv.get_current_user
+    SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
+    BANK_INTEREST_OPTIONS = srv.BANK_INTEREST_OPTIONS
+    
     router.add_api_route("/bank/meta", bank_meta, methods=["GET"])
     router.add_api_route("/bank/overview", bank_overview, methods=["GET"])
     router.add_api_route("/bank/interest/deposit", bank_interest_deposit, methods=["POST"])
