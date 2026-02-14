@@ -7274,24 +7274,7 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
     return {"wars": out}
 
 # Crime endpoints -> see routers/crimes.py
-# Register modular routers (crimes, gta, jail, oc, hitlist, meta, weapons, armour, properties, racket, leaderboard, store, states)
-from routers import crimes, gta, jail, oc, hitlist, meta, weapons, armour, properties, racket, leaderboard, store, bank, states
-crimes.register(api_router)
-gta.register(api_router)
-jail.register(api_router)
-oc.register(api_router)
-hitlist.register(api_router)
-meta.register(api_router)
-weapons.register(api_router)
-armour.register(api_router)
-properties.register(api_router)
-racket.register(api_router)
-leaderboard.register(api_router)
-store.register(api_router)
-bank.register(api_router)
-states.register(api_router)
-
-app.include_router(api_router)
+# Router registration is deferred to startup_db() to avoid circular imports (routers import from server).
 
 # CORS: with credentials=True you must list explicit origins (not "*").
 # Set CORS_ORIGINS on Render to your Vercel URL, e.g. https://your-app.vercel.app
@@ -7336,6 +7319,24 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_db():
+    # Register routers after server is fully loaded (avoids circular import 502 on login).
+    from routers import crimes, gta, jail, oc, hitlist, meta, weapons, armour, properties, racket, leaderboard, store, bank, states
+    crimes.register(api_router)
+    gta.register(api_router)
+    jail.register(api_router)
+    oc.register(api_router)
+    hitlist.register(api_router)
+    meta.register(api_router)
+    weapons.register(api_router)
+    armour.register(api_router)
+    properties.register(api_router)
+    racket.register(api_router)
+    leaderboard.register(api_router)
+    store.register(api_router)
+    bank.register(api_router)
+    states.register(api_router)
+    app.include_router(api_router)
+
     await init_game_data()
     from routers.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
