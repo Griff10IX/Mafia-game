@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck } from 'lucide-react';
+import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
 const ROLE_IDS = ['driver', 'weapons', 'explosives', 'hacker'];
+const ROLE_ICONS = { driver: '🚗', weapons: '🔫', explosives: '💣', hacker: '💻' };
 const TICK_INTERVAL = 1000;
+const COLLAPSED_KEY = 'oc_sections_collapsed';
 
 // Utility functions
 function formatCooldown(isoUntil) {
@@ -57,163 +59,273 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ cooldownHours }) => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Users className="w-8 h-8 md:w-10 md:h-10" />
-      Organised Crime
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Team of 4: Driver, Weapons, Explosives, Hacker. Once every {cooldownHours ?? 6}h.
-    </p>
-  </div>
-);
-
-const CooldownBanner = ({ status }) => {
+const PageHeader = ({ cooldownHours, status }) => {
   const onCooldown = status?.cooldown_until && new Date(status.cooldown_until) > new Date();
   const cooldownStr = formatCooldown(status?.cooldown_until);
 
-  if (!status?.cooldown_until) return null;
-
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-          <Clock size={16} />
-          Cooldown
-        </span>
-      </div>
-      <div className="px-4 py-3">
-        <p className="text-sm text-foreground font-heading">
-          {onCooldown ? `Next heist in ${cooldownStr}` : '✓ Ready for a heist'}
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
+          <Users className="w-6 h-6 sm:w-7 sm:h-7" />
+          Organised Crime
+        </h1>
+        <p className="text-xs text-mutedForeground">
+          Team of 4 — Once every {cooldownHours ?? 6}h
         </p>
-        {status.has_timer_upgrade && (
-          <p className="text-xs text-primary/80 font-heading mt-1">
-            4h timer (upgrade active)
-          </p>
+      </div>
+      
+      {/* Status */}
+      <div className="flex items-center gap-2 text-xs font-heading">
+        <Clock size={14} className="text-primary" />
+        {onCooldown ? (
+          <span className="text-mutedForeground">Next in <span className="text-primary font-bold">{cooldownStr}</span></span>
+        ) : (
+          <span className="text-emerald-400 font-bold">✓ Ready</span>
         )}
+        {status?.has_timer_upgrade && <span className="text-primary/60">(4h)</span>}
       </div>
     </div>
   );
 };
 
-const JobCard = ({ job, selected, onSelect }) => (
+// Compact job row
+const JobRow = ({ job, selected, onSelect }) => (
   <button
     type="button"
     onClick={() => onSelect(job.id)}
-    className={`bg-card border rounded-md p-4 text-left transition-all ${
+    className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md transition-all w-full text-left ${
       selected 
-        ? 'border-primary/60 bg-primary/10' 
-        : 'border-border hover:border-primary/30'
+        ? 'bg-primary/15 border border-primary/40' 
+        : 'bg-zinc-800/30 border border-transparent hover:border-primary/20 hover:bg-zinc-800/50'
     }`}
   >
-    <div className="font-heading font-bold text-foreground text-base md:text-sm">
-      {job.name}
-    </div>
-    <div className="mt-2 flex items-center gap-2 text-xs text-mutedForeground">
-      <span>{(job.success_rate * 100).toFixed(0)}% success</span>
-    </div>
-    <div className="mt-3 flex items-center gap-3 text-sm md:text-xs">
-      <span className="flex items-center gap-1.5 text-primary font-bold">
-        <Banknote size={14} /> 
-        ${(job.cash || 0).toLocaleString()}
+    <div className="flex items-center gap-2 min-w-0 flex-1">
+      <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+        selected ? 'border-primary bg-primary' : 'border-zinc-600'
+      }`}>
+        {selected && <span className="w-1.5 h-1.5 rounded-full bg-primaryForeground" />}
       </span>
-      <span className="flex items-center gap-1.5 text-primary font-bold">
-        <Star size={14} /> 
-        {job.rp || 0} RP
-      </span>
+      <span className="text-sm font-heading font-bold text-foreground truncate">{job.name}</span>
+    </div>
+    <div className="flex items-center gap-3 text-xs font-heading shrink-0">
+      <span className="text-mutedForeground">{(job.success_rate * 100).toFixed(0)}%</span>
+      <span className="text-primary font-bold">${(job.cash || 0).toLocaleString()}</span>
+      <span className="text-primary font-bold">+{job.rp || 0} RP</span>
     </div>
   </button>
 );
 
-const RoleSlotControl = ({ roleId, value, onValueChange, inviteInput, onInviteChange }) => {
+// Styled toggle button group for role assignment
+const RoleToggleGroup = ({ roleId, value, onValueChange }) => {
+  const options = [
+    { id: 'self', label: 'You', color: 'emerald' },
+    { id: 'npc', label: 'NPC', color: 'zinc' },
+    { id: 'invite', label: 'Invite', color: 'blue' },
+  ];
+
   return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="w-24 text-sm md:text-xs font-heading font-bold capitalize text-primary">
-          {roleId}
-        </span>
-        <div className="flex items-center gap-3 flex-wrap">
-          {['self', 'npc', 'invite'].map((opt) => (
-            <label key={opt} className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="radio"
-                name={`slot-${roleId}`}
-                checked={value === opt}
-                onChange={() => onValueChange(opt)}
-                className="w-4 h-4 accent-primary cursor-pointer"
-              />
-              <span className="text-sm md:text-xs font-heading text-foreground">
-                {opt === 'self' ? 'You' : opt === 'npc' ? 'NPC' : 'Invite'}
-              </span>
-            </label>
-          ))}
-        </div>
-      </div>
-      {value === 'invite' && (
-        <input
-          type="text"
-          placeholder="Enter username"
-          value={inviteInput}
-          onChange={(e) => onInviteChange(e.target.value)}
-          className="w-full md:w-48 bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-        />
-      )}
+    <div className="flex rounded-md overflow-hidden border border-zinc-700/50">
+      {options.map((opt) => (
+        <button
+          key={opt.id}
+          type="button"
+          onClick={() => onValueChange(opt.id)}
+          className={`px-3 py-1.5 text-[10px] font-heading font-bold uppercase transition-all ${
+            value === opt.id
+              ? opt.id === 'self'
+                ? 'bg-emerald-500/20 text-emerald-400 border-r border-emerald-500/30'
+                : opt.id === 'npc'
+                ? 'bg-zinc-600/30 text-zinc-300 border-r border-zinc-600/50'
+                : 'bg-blue-500/20 text-blue-400'
+              : 'bg-zinc-800/50 text-mutedForeground hover:bg-zinc-700/50 border-r border-zinc-700/50 last:border-r-0'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
     </div>
   );
 };
 
-const PercentageControl = ({ roleId, value, onChange, isNpc }) => (
-  <div className="flex items-center gap-2">
-    <span className="text-sm md:text-xs font-heading capitalize w-24 text-primary/80">
-      {roleId}
-    </span>
-    <input
-      type="number"
-      min={0}
-      max={100}
-      value={isNpc ? (value ?? 35) : (value ?? 25)}
-      onChange={(e) => onChange(e.target.value)}
-      readOnly={isNpc}
-      className={`w-16 md:w-14 border rounded-md px-2 py-1.5 text-sm md:text-xs text-right text-foreground focus:outline-none ${
-        isNpc ? 'bg-secondary/50 border-border text-mutedForeground cursor-default' : 'bg-input border-border focus:border-primary/50'
-      }`}
-    />
-    <span className="text-sm md:text-xs text-mutedForeground">%</span>
+// Compact role slot row
+const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange, pct, onPctChange, isNpc }) => (
+  <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-800/20 border border-transparent hover:border-primary/10">
+    {/* Role name */}
+    <div className="w-24 flex items-center gap-1.5">
+      <span className="text-sm">{ROLE_ICONS[roleId]}</span>
+      <span className="text-xs font-heading font-bold text-primary capitalize">{roleId}</span>
+    </div>
+
+    {/* Toggle buttons */}
+    <RoleToggleGroup roleId={roleId} value={value} onValueChange={onValueChange} />
+
+    {/* Invite input */}
+    {value === 'invite' && (
+      <input
+        type="text"
+        placeholder="Username"
+        value={inviteInput}
+        onChange={(e) => onInviteChange(e.target.value)}
+        className="w-28 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+      />
+    )}
+
+    {/* Percentage */}
+    <div className="flex items-center gap-1 ml-auto">
+      <input
+        type="number"
+        min={0}
+        max={100}
+        value={pct}
+        onChange={(e) => onPctChange(e.target.value)}
+        readOnly={isNpc}
+        className={`w-12 border rounded px-2 py-1 text-xs text-right focus:outline-none ${
+          isNpc 
+            ? 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground cursor-default' 
+            : 'bg-zinc-900/50 border-zinc-700/50 text-foreground focus:border-primary/50'
+        }`}
+      />
+      <span className="text-[10px] text-mutedForeground">%</span>
+    </div>
   </div>
 );
 
-const InfoSection = ({ cooldownHours }) => (
+// Pending heist section
+const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, pendingSlotEdit, setPendingSlotEdit, setPendingSlot }) => {
+  if (!status?.pending_heist) return null;
+
+  return (
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
+      <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between">
+        <span className="text-xs font-heading font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+          <UserCheck size={14} />
+          Pending Heist
+        </span>
+      </div>
+      <div className="p-3 space-y-2">
+        {ROLE_IDS.map((roleId) => {
+          const val = status.pending_heist[roleId];
+          const inv = (status.pending_invites || []).find((i) => i.role === roleId);
+          const isEmpty = val == null || val === '';
+          const displayVal = isEmpty ? '—' : (val === 'self' ? 'You' : val === 'npc' ? 'NPC' : val);
+          const statusStr = inv?.status;
+          const canClear = inv && (statusStr === 'pending' || statusStr === 'expired');
+          const editing = pendingSlotEdit.role === roleId;
+          
+          return (
+            <div key={roleId} className="flex items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs">
+              <span className="w-20 font-heading font-bold text-primary capitalize flex items-center gap-1">
+                <span>{ROLE_ICONS[roleId]}</span> {roleId}
+              </span>
+              <span className="font-heading text-foreground">{displayVal}</span>
+              {inv && (
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  statusStr === 'accepted' 
+                    ? 'bg-emerald-500/20 text-emerald-400' 
+                    : statusStr === 'pending'
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : 'bg-zinc-700/50 text-mutedForeground'
+                }`}>
+                  {statusStr}
+                </span>
+              )}
+              {canClear && (
+                <button type="button" onClick={() => onCancel(inv.invite_id)} className="text-mutedForeground hover:text-red-400 ml-auto">
+                  <XCircle size={14} />
+                </button>
+              )}
+              {isEmpty && !editing && (
+                <button
+                  type="button"
+                  onClick={() => setPendingSlotEdit({ role: roleId, value: '' })}
+                  className="text-[10px] font-heading text-primary hover:underline ml-auto"
+                >
+                  Set
+                </button>
+              )}
+              {isEmpty && editing && (
+                <div className="flex items-center gap-1 ml-auto">
+                  <input
+                    type="text"
+                    placeholder="npc / username"
+                    value={pendingSlotEdit.value}
+                    onChange={(e) => setPendingSlotEdit((p) => ({ ...p, value: e.target.value }))}
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-0.5 text-[10px] w-24 text-foreground focus:border-primary/50 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setPendingSlot(pendingSlotEdit.role, pendingSlotEdit.value); setPendingSlotEdit({ role: null, value: '' }); }}
+                    className="text-[10px] font-bold text-primary"
+                  >
+                    ✓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPendingSlotEdit({ role: null, value: '' })}
+                    className="text-[10px] text-mutedForeground"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+        
+        <button
+          type="button"
+          onClick={onRun}
+          disabled={
+            executing || onCooldown ||
+            (status.pending_invites || []).some((i) => i.status === 'pending') ||
+            ROLE_IDS.some((r) => status.pending_heist[r] == null || status.pending_heist[r] === '')
+          }
+          className="w-full mt-2 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-4 py-2 text-xs font-bold uppercase tracking-wide shadow shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation border border-yellow-600/50"
+        >
+          {executing ? 'Running...' : '🎯 Run Heist'}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
-        Rules
-      </h3>
-    </div>
-    <div className="p-4">
-      <ul className="space-y-2 text-xs text-mutedForeground font-heading">
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>Team of 4: Driver, Weapons, Explosives, Hacker. You must fill one slot (You).</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>The creator sets each role's cut (%). Must sum to 100. NPC slots get nothing.</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>Up to 3 NPCs auto-join (no invite). 1–2 NPCs: 35% each; 3 NPCs: 80% total between them. You can run heist without waiting for invites—unaccepted slots count as NPC.</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>Harder jobs = better cash & RP but lower success chance.</span>
-        </li>
-        <li className="flex items-start gap-2">
-          <span className="text-primary shrink-0">▸</span>
-          <span>Cooldown: {cooldownHours ?? 6} hours. Buy "Reduce OC timer" on the Points/Store page for 4h.</span>
-        </li>
-      </ul>
-    </div>
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between hover:bg-primary/15 transition-colors"
+    >
+      <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+        ℹ️ Rules
+      </span>
+      <span className="text-primary/80">
+        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+      </span>
+    </button>
+    {!isCollapsed && (
+      <div className="p-3">
+        <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
+          <li className="flex items-start gap-1.5">
+            <span className="text-primary shrink-0">•</span>
+            <span>Team of 4: Driver, Weapons, Explosives, Hacker</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <span className="text-primary shrink-0">•</span>
+            <span>Exactly one slot must be "You"</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <span className="text-primary shrink-0">•</span>
+            <span>Cut % must sum to 100. NPCs auto-assigned</span>
+          </li>
+          <li className="flex items-start gap-1.5">
+            <span className="text-primary shrink-0">•</span>
+            <span>Cooldown: {cooldownHours ?? 6}h (4h with upgrade)</span>
+          </li>
+        </ul>
+      </div>
+    )}
   </div>
 );
 
@@ -229,6 +341,17 @@ export default function OrganisedCrime() {
   const [sendInviteLoading, setSendInviteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pendingSlotEdit, setPendingSlotEdit] = useState({ role: null, value: '' });
+  const [rulesCollapsed, setRulesCollapsed] = useState(() => {
+    try { return localStorage.getItem(COLLAPSED_KEY) === 'true'; } catch { return true; }
+  });
+
+  const toggleRules = () => {
+    setRulesCollapsed((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(COLLAPSED_KEY, String(next)); } catch {}
+      return next;
+    });
+  };
 
   const fetchData = async () => {
     try {
@@ -250,15 +373,12 @@ export default function OrganisedCrime() {
       }
     } catch (e) {
       toast.error('Failed to load Organised Crime data');
-      console.error('Error fetching OC data:', e);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { fetchData(); }, []);
 
   const tick = useCooldownTicker(status?.cooldown_until, fetchData);
 
@@ -273,7 +393,6 @@ export default function OrganisedCrime() {
     if (value !== 'invite') {
       setInviteInputs((prev) => ({ ...prev, [roleId]: '' }));
     }
-    // When NPC is picked: 1–2 NPCs = 35% each; 3 NPCs = 80% total between them (27, 27, 26)
     if (value === 'npc') {
       setPcts((prev) => {
         const npcSlots = [roleId, ...ROLE_IDS.filter((r) => r !== roleId && slots[r] === 'npc')];
@@ -341,7 +460,7 @@ export default function OrganisedCrime() {
     setSendInviteLoading(true);
     try {
       const sendRes = await api.post('/oc/send-invites', payload);
-      toast.success(sendRes.data?.message || 'Invites sent. They must accept in their inbox.');
+      toast.success(sendRes.data?.message || 'Invites sent.');
       fetchData();
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
@@ -354,10 +473,7 @@ export default function OrganisedCrime() {
 
   const execute = async () => {
     if (!canExecute || executing) return;
-    if (pctTotal !== 100) {
-      toast.error('Cut % must sum to 100');
-      return;
-    }
+    if (pctTotal !== 100) { toast.error('Cut % must sum to 100'); return; }
     
     const payload = {
       job_id: selectedJobId,
@@ -380,7 +496,7 @@ export default function OrganisedCrime() {
     try {
       if (hasInviteSlot()) {
         const sendRes = await api.post('/oc/send-invites', payload);
-        toast.success(sendRes.data?.message || 'Invites sent. They must accept in their inbox.');
+        toast.success(sendRes.data?.message || 'Invites sent.');
         fetchData();
         return;
       }
@@ -389,9 +505,7 @@ export default function OrganisedCrime() {
       if (res.data.success) {
         toast.success(res.data.message, {
           description: res.data.cash_earned != null && (
-            <span className="text-xs">
-              +${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP
-            </span>
+            <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP</span>
           ),
         });
       } else {
@@ -411,16 +525,12 @@ export default function OrganisedCrime() {
     const onCooldown = status?.cooldown_until && new Date(status.cooldown_until) > new Date();
     if (!status?.pending_heist?.id || executing || onCooldown) return;
     
-    const allAccepted = (status.pending_invites || []).every((inv) => inv.status === 'accepted');
     const hasEmpty = ROLE_IDS.some((r) => {
       const v = status.pending_heist[r];
       return v == null || v === '';
     });
     
-    if (hasEmpty) {
-      toast.error('Fill all slots (set cleared slots to NPC or re-invite).');
-      return;
-    }
+    if (hasEmpty) { toast.error('Fill all slots first.'); return; }
     
     setExecuting(true);
     try {
@@ -440,9 +550,7 @@ export default function OrganisedCrime() {
       if (res.data.success) {
         toast.success(res.data.message, {
           description: res.data.cash_earned != null && (
-            <span className="text-xs">
-              +${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP
-            </span>
+            <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP</span>
           ),
         });
       } else {
@@ -461,7 +569,7 @@ export default function OrganisedCrime() {
   const cancelInvite = async (inviteId) => {
     try {
       await api.post(`/oc/invite/${inviteId}/cancel`);
-      toast.success('Slot cleared. Set to NPC or invite someone else.');
+      toast.success('Slot cleared.');
       fetchData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to clear');
@@ -482,238 +590,97 @@ export default function OrganisedCrime() {
   const onCooldown = status?.cooldown_until && new Date(status.cooldown_until) > new Date();
   const cooldownStr = formatCooldown(status?.cooldown_until);
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  if (loading) return <LoadingSpinner />;
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="organised-crime-page">
-      <PageHeader cooldownHours={status?.cooldown_hours} />
-
-      <CooldownBanner status={status} />
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="organised-crime-page">
+      <PageHeader cooldownHours={status?.cooldown_hours} status={status} />
 
       {/* Pending Heist */}
-      {status?.pending_heist && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-          <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-              <UserCheck size={16} />
-              Pending Heist — Invites Sent
-            </span>
-          </div>
-          <div className="p-4 space-y-3">
-            {ROLE_IDS.map((roleId) => {
-              const val = status.pending_heist[roleId];
-              const inv = (status.pending_invites || []).find((i) => i.role === roleId);
-              const isEmpty = val == null || val === '';
-              const displayVal = isEmpty ? '(empty)' : (val === 'self' ? 'You' : val === 'npc' ? 'NPC' : val);
-              const statusStr = inv?.status;
-              const canClear = inv && (statusStr === 'pending' || statusStr === 'expired');
-              const editing = pendingSlotEdit.role === roleId;
-              
-              return (
-                <div key={roleId} className="flex flex-wrap items-center gap-2 text-sm md:text-xs">
-                  <span className="w-24 font-heading font-bold capitalize text-primary">
-                    {roleId}
-                  </span>
-                  <span className="font-heading text-foreground">{displayVal}</span>
-                  {inv && (
-                    <span className={`font-heading ${
-                      statusStr === 'accepted' ? 'text-green-500' : 'text-mutedForeground'
-                    }`}>
-                      ({statusStr})
-                    </span>
-                  )}
-                  {canClear && (
-                    <button
-                      type="button"
-                      onClick={() => cancelInvite(inv.invite_id)}
-                      className="flex items-center gap-1 font-heading hover:underline text-mutedForeground"
-                      title="Clear slot"
-                    >
-                      <XCircle size={14} /> Clear
-                    </button>
-                  )}
-                  {isEmpty && !editing && (
-                    <button
-                      type="button"
-                      onClick={() => setPendingSlotEdit({ role: roleId, value: '' })}
-                      className="font-heading hover:underline text-primary"
-                    >
-                      Set NPC or invite
-                    </button>
-                  )}
-                  {isEmpty && editing && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        placeholder="npc or username"
-                        value={pendingSlotEdit.value}
-                        onChange={(e) => setPendingSlotEdit((p) => ({ ...p, value: e.target.value }))}
-                        className="bg-input border border-border rounded-md px-2 py-1 text-xs w-32 text-foreground focus:border-primary/50 focus:outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPendingSlot(pendingSlotEdit.role, pendingSlotEdit.value);
-                          setPendingSlotEdit({ role: null, value: '' });
-                        }}
-                        className="text-xs font-heading font-bold text-primary"
-                      >
-                        Set
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setPendingSlotEdit({ role: null, value: '' })}
-                        className="text-xs text-mutedForeground"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={runFromPending}
-                disabled={
-                  executing ||
-                  onCooldown ||
-                  (status.pending_invites || []).some((i) => i.status === 'pending') ||
-                  ROLE_IDS.some((r) => status.pending_heist[r] == null || status.pending_heist[r] === '')
-                }
-                className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md px-6 py-3 text-sm font-bold uppercase tracking-wide shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation border border-yellow-600/50"
-              >
-                {executing ? 'Running...' : '🎯 Run Heist'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <PendingHeistSection
+        status={status}
+        executing={executing}
+        onCooldown={onCooldown}
+        onRun={runFromPending}
+        onCancel={cancelInvite}
+        pendingSlotEdit={pendingSlotEdit}
+        setPendingSlotEdit={setPendingSlotEdit}
+        setPendingSlot={setPendingSlot}
+      />
 
-      {/* Choose Job */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
-          Choose Job
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      {/* Job Selection */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+            Select Job
+          </span>
+        </div>
+        <div className="p-2 space-y-1">
           {(config.jobs || []).map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              selected={selectedJobId === job.id}
-              onSelect={setSelectedJobId}
-            />
+            <JobRow key={job.id} job={job} selected={selectedJobId === job.id} onSelect={setSelectedJobId} />
           ))}
         </div>
       </div>
 
       {/* Team Slots */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-            <Users size={16} />
-            Team (4 slots)
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+            Team & Cut %
+          </span>
+          <span className={`text-xs font-heading font-bold ${pctTotal === 100 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {pctTotal}%
           </span>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="p-2 space-y-1">
           {ROLE_IDS.map((roleId) => (
-            <RoleSlotControl
+            <RoleSlotRow
               key={roleId}
               roleId={roleId}
               value={slots[roleId]}
               onValueChange={(val) => setSlot(roleId, val)}
               inviteInput={inviteInputs[roleId]}
               onInviteChange={(val) => setInviteInputs((p) => ({ ...p, [roleId]: val }))}
-            />
-          ))}
-          
-          {selfCount !== 1 && (
-            <p className="text-sm md:text-xs font-heading flex items-center gap-1.5 text-mutedForeground pt-2">
-              <AlertCircle size={14} /> 
-              Exactly one slot must be "You".
-            </p>
-          )}
-          
-          {hasInviteSlot() && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={sendInvitesOnly}
-                disabled={sendInviteLoading || selfCount !== 1 || pctTotal !== 100}
-                className="bg-secondary text-foreground border border-primary/30 hover:bg-secondary/80 rounded-md px-4 py-2 text-sm font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
-              >
-                {sendInviteLoading ? 'Sending…' : '📨 Send Invites'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Cut Percentages */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <span className="text-sm md:text-xs font-heading font-bold text-primary uppercase tracking-widest">
-            Cut per role (%)
-          </span>
-          <span className={`text-sm font-heading font-bold ${
-            pctTotal === 100 ? 'text-primary' : 'text-mutedForeground'
-          }`}>
-            Total: {pctTotal}%
-          </span>
-        </div>
-        <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {ROLE_IDS.map((roleId) => (
-            <PercentageControl
-              key={roleId}
-              roleId={roleId}
-              value={pcts[roleId]}
-              onChange={(val) => setPct(roleId, val)}
+              pct={pcts[roleId]}
+              onPctChange={(val) => setPct(roleId, val)}
               isNpc={slots[roleId] === 'npc'}
             />
           ))}
         </div>
-        {ROLE_IDS.some((r) => slots[r] === 'npc') && (
-          <p className="px-4 pb-2 text-xs text-mutedForeground">
-            NPC slots auto-assigned (3 NPCs = 80% total; 1–2 NPCs = 35% each).
-          </p>
+        
+        {selfCount !== 1 && (
+          <div className="px-3 pb-2">
+            <p className="text-[10px] font-heading flex items-center gap-1 text-amber-400">
+              <AlertCircle size={12} /> Exactly one slot must be "You"
+            </p>
+          </div>
         )}
         {pctTotal !== 100 && (
-          <p className="px-4 pb-3 text-xs text-mutedForeground">
-            Percentages must sum to 100.
-          </p>
+          <div className="px-3 pb-2">
+            <p className="text-[10px] font-heading text-mutedForeground">
+              Percentages must sum to 100
+            </p>
+          </div>
         )}
       </div>
 
       {/* Execute Button */}
       {!status?.pending_heist && (
-        <div className="flex justify-center">
-          <button
-            type="button"
-            onClick={execute}
-            disabled={!canExecute || onCooldown || executing}
-            className={`px-8 py-4 font-heading font-bold uppercase tracking-wider text-base md:text-sm transition-all touch-manipulation rounded-lg ${
-              !canExecute || onCooldown || executing
-                ? 'opacity-60 cursor-not-allowed bg-secondary text-mutedForeground border border-border'
-                : 'bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground shadow-xl shadow-primary/20 hover:shadow-primary/30 border-2 border-yellow-600/50'
-            }`}
-          >
-            {executing ? (
-              'Running...'
-            ) : onCooldown ? (
-              `Cooldown ${cooldownStr}`
-            ) : hasInviteSlot() ? (
-              '📨 Send Invites'
-            ) : (
-              '🎯 Run Heist'
-            )}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={execute}
+          disabled={!canExecute || onCooldown || executing}
+          className={`w-full py-3 font-heading font-bold uppercase tracking-wider text-sm transition-all touch-manipulation rounded-md ${
+            !canExecute || onCooldown || executing
+              ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border border-zinc-700'
+              : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground shadow-lg shadow-primary/20 border border-yellow-600/50'
+          }`}
+        >
+          {executing ? 'Running...' : onCooldown ? `Cooldown ${cooldownStr}` : hasInviteSlot() ? '📨 Send Invites' : '🎯 Run Heist'}
+        </button>
       )}
 
-      <InfoSection cooldownHours={status?.cooldown_hours} />
+      <InfoSection cooldownHours={status?.cooldown_hours} isCollapsed={rulesCollapsed} onToggle={toggleRules} />
     </div>
   );
 }
