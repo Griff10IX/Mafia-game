@@ -16,7 +16,12 @@ backend/
 │   ├── hitlist.py     # /api/hitlist/* (bounties, buy off, reveal, NPCs)
 │   ├── meta.py        # /api/meta/ranks, /api/meta/cars
 │   ├── weapons.py     # /api/weapons/* (list, equip, unequip, buy, sell)
-│   └── armour.py      # /api/armour/* (options, buy, equip, unequip, sell)
+│   ├── armour.py      # /api/armour/* (options, buy, equip, unequip, sell)
+│   ├── properties.py  # /api/properties/* (list, buy, collect)
+│   ├── racket.py      # /api/racket/* (extort, targets)
+│   ├── leaderboard.py # /api/leaderboard, /api/leaderboards/top
+│   ├── store.py       # /api/store/* (rank bar, silencer, OC timer, garage, booze, bullets, custom car)
+│   └── states.py      # /api/states (cities, games, dice owners)
 ├── requirements.txt
 ├── .env               # MONGO_URL, DB_NAME, JWT_SECRET_KEY, CORS_ORIGINS, etc.
 └── README.md          # This file

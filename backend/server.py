@@ -382,9 +382,6 @@ class TravelRequest(BaseModel):
     destination: str
     travel_method: str  # car_id or "airport"
 
-class CustomCarPurchase(BaseModel):
-    car_name: str
-
 class BoozeBuyRequest(BaseModel):
     booze_id: str
     amount: int
@@ -404,20 +401,7 @@ class DeadAliveRetrieveRequest(BaseModel):
 class AvatarUpdateRequest(BaseModel):
     avatar_data: str  # data URL: data:image/...;base64,...
 
-class BankInterestDepositRequest(BaseModel):
-    amount: int
-    duration_hours: int
-
-class BankDepositClaimRequest(BaseModel):
-    deposit_id: str
-
-class BankSwissMoveRequest(BaseModel):
-    amount: int
-
-class MoneyTransferRequest(BaseModel):
-    to_username: str
-    amount: int
-
+# Bank request models -> see routers/bank.py
 
 class SendMessageRequest(BaseModel):
     """Send a direct message to another user (inbox). Supports text, emojis, and optional GIF URL."""
@@ -526,17 +510,6 @@ class CommitCrimeResponse(BaseModel):
     message: str
     reward: Optional[int]
     next_available: str
-
-class PropertyResponse(BaseModel):
-    id: str
-    name: str
-    property_type: str
-    price: int
-    income_per_hour: int
-    max_level: int
-    owned: bool
-    level: int
-    available_income: float
 
 class BodyguardResponse(BaseModel):
     slot_number: int
@@ -713,22 +686,6 @@ class CheckoutRequest(BaseModel):
     package_id: str
     origin_url: str
 
-class LeaderboardEntry(BaseModel):
-    rank: int
-    username: str
-    money: float
-    kills: int
-    crimes: int
-    gta: int
-    jail_busts: int
-    is_current_user: bool = False
-
-class StatLeaderboardEntry(BaseModel):
-    rank: int
-    username: str
-    value: int
-    is_current_user: bool = False
-
 class GTAAttemptRequest(BaseModel):
     option_id: str
 
@@ -759,10 +716,6 @@ class BustOutRequest(BaseModel):
 class JailSetBustRewardRequest(BaseModel):
     amount: int  # $ reward for whoever busts you out (0 to clear)
 
-
-class ProtectionRacketRequest(BaseModel):
-    target_username: str
-    property_id: str
 
 class OnlineUsersResponse(BaseModel):
     total_online: int
@@ -1579,196 +1532,7 @@ async def get_stats_overview(
     }
 
 # Meta (ranks, cars) -> see routers/meta.py
-
-def _interest_option(duration_hours: int) -> dict | None:
-    try:
-        h = int(duration_hours)
-    except Exception:
-        return None
-    return next((o for o in BANK_INTEREST_OPTIONS if int(o.get("hours", 0) or 0) == h), None)
-
-
-def _parse_matures_at(matures_at: str | None) -> datetime | None:
-    """Parse deposit matures_at to timezone-aware UTC datetime. Returns None if missing/invalid."""
-    if not matures_at:
-        return None
-    try:
-        mat = datetime.fromisoformat(matures_at.replace("Z", "+00:00"))
-        if mat.tzinfo is None:
-            mat = mat.replace(tzinfo=timezone.utc)
-        return mat
-    except Exception:
-        return None
-
-@api_router.get("/bank/meta")
-async def bank_meta(current_user: dict = Depends(get_current_user)):
-    return {
-        "swiss_limit_start": SWISS_BANK_LIMIT_START,
-        "interest_options": BANK_INTEREST_OPTIONS,
-    }
-
-@api_router.get("/bank/overview")
-async def bank_overview(current_user: dict = Depends(get_current_user)):
-    now = datetime.now(timezone.utc)
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1})
-    money = int(user.get("money", 0) or 0) if user else 0
-    swiss_balance = int((user or {}).get("swiss_balance", 0) or 0)
-    swiss_limit = int((user or {}).get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START)
-
-    deposits = await db.bank_deposits.find(
-        {"user_id": current_user["id"]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
-    for d in deposits:
-        mat = _parse_matures_at(d.get("matures_at"))
-        d["matured"] = bool(mat is not None and now >= mat)
-
-    transfers = await db.money_transfers.find(
-        {"$or": [{"from_user_id": current_user["id"]}, {"to_user_id": current_user["id"]}]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
-    for t in transfers:
-        t["direction"] = "sent" if t.get("from_user_id") == current_user["id"] else "received"
-
-    return {
-        "cash_on_hand": money,
-        "swiss_balance": swiss_balance,
-        "swiss_limit": swiss_limit,
-        "deposits": deposits,
-        "transfers": transfers,
-    }
-
-@api_router.post("/bank/interest/deposit")
-async def bank_interest_deposit(request: BankInterestDepositRequest, current_user: dict = Depends(get_current_user)):
-    amount = int(request.amount or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    opt = _interest_option(request.duration_hours)
-    if not opt:
-        raise HTTPException(status_code=400, detail="Invalid duration")
-    rate = float(opt["rate"])
-    hours = int(opt["hours"])
-
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    money = int(user.get("money", 0) or 0) if user else 0
-    if amount > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
-
-    now = datetime.now(timezone.utc)
-    matures = now + timedelta(hours=hours)
-    interest = int(round(amount * rate))
-
-    deposit_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
-    await db.bank_deposits.insert_one({
-        "id": deposit_id,
-        "user_id": current_user["id"],
-        "principal": int(amount),
-        "duration_hours": hours,
-        "interest_rate": rate,
-        "interest_amount": int(interest),
-        "created_at": now.isoformat(),
-        "matures_at": matures.isoformat(),
-        "claimed_at": None,
-    })
-    return {"message": f"Deposited ${amount:,} for {hours}h", "deposit_id": deposit_id, "interest": interest, "matures_at": matures.isoformat()}
-
-@api_router.post("/bank/interest/claim")
-async def bank_interest_claim(request: BankDepositClaimRequest, current_user: dict = Depends(get_current_user)):
-    """Claim a matured interest deposit. Early withdrawal is not allowed."""
-    dep = await db.bank_deposits.find_one({"id": request.deposit_id, "user_id": current_user["id"]}, {"_id": 0})
-    if not dep:
-        raise HTTPException(status_code=404, detail="Deposit not found")
-    if dep.get("claimed_at"):
-        raise HTTPException(status_code=400, detail="Deposit already claimed")
-
-    now = datetime.now(timezone.utc)
-    mat = _parse_matures_at(dep.get("matures_at"))
-    if mat is None:
-        raise HTTPException(status_code=400, detail="Deposit missing or invalid maturity time")
-    if now < mat:
-        raise HTTPException(status_code=400, detail="Cannot withdraw early. Deposit has not matured yet.")
-
-    principal = int(dep.get("principal", 0) or 0)
-    interest = int(dep.get("interest_amount", 0) or 0)
-    total = principal + interest
-
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": total}})
-    await db.bank_deposits.update_one({"id": dep["id"]}, {"$set": {"claimed_at": now.isoformat()}})
-    return {"message": f"Claimed ${total:,} (${principal:,} + ${interest:,} interest)", "total": total}
-
-@api_router.post("/bank/swiss/deposit")
-async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict = Depends(get_current_user)):
-    amount = int(request.amount or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1})
-    money = int(user.get("money", 0) or 0) if user else 0
-    swiss_balance = int(user.get("swiss_balance", 0) or 0) if user else 0
-    swiss_limit = int(user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START) if user else SWISS_BANK_LIMIT_START
-    if amount > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
-    if swiss_balance + amount > swiss_limit:
-        raise HTTPException(status_code=400, detail=f"Swiss bank limit is ${swiss_limit:,}")
-
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"money": -amount, "swiss_balance": amount}}
-    )
-    return {"message": f"Deposited ${amount:,} into Swiss Bank"}
-
-@api_router.post("/bank/swiss/withdraw")
-async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict = Depends(get_current_user)):
-    amount = int(request.amount or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "swiss_balance": 1})
-    swiss_balance = int(user.get("swiss_balance", 0) or 0) if user else 0
-    if amount > swiss_balance:
-        raise HTTPException(status_code=400, detail="Insufficient Swiss balance")
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"money": amount, "swiss_balance": -amount}}
-    )
-    return {"message": f"Withdrew ${amount:,} from Swiss Bank"}
-
-@api_router.post("/bank/transfer")
-async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depends(get_current_user)):
-    to_username = (request.to_username or "").strip()
-    if not to_username:
-        raise HTTPException(status_code=400, detail="Recipient username required")
-    if to_username == current_user["username"]:
-        raise HTTPException(status_code=400, detail="Cannot send money to yourself")
-    amount = int(request.amount or 0)
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-
-    recipient = await db.users.find_one({"username": to_username}, {"_id": 0})
-    if not recipient:
-        raise HTTPException(status_code=404, detail="Recipient not found")
-    if recipient.get("is_dead"):
-        raise HTTPException(status_code=400, detail="Recipient is dead")
-
-    sender = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-    money = int(sender.get("money", 0) or 0) if sender else 0
-    if amount > money:
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
-
-    now = datetime.now(timezone.utc).isoformat()
-    transfer_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
-    await db.users.update_one({"id": recipient["id"]}, {"$inc": {"money": amount}})
-    await db.money_transfers.insert_one({
-        "id": transfer_id,
-        "from_user_id": current_user["id"],
-        "from_username": current_user["username"],
-        "to_user_id": recipient["id"],
-        "to_username": recipient["username"],
-        "amount": int(amount),
-        "created_at": now,
-    })
-    return {"message": f"Sent ${amount:,} to {recipient['username']}"}
-
+# Bank -> see routers/bank.py
 
 # ---- Sports Betting (live games / results) ----
 async def _sports_ensure_seed_events():
@@ -2649,148 +2413,9 @@ async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_us
 
 
 
-# Rank Progress endpoint
-@api_router.get("/user/rank-progress")
-async def get_rank_progress(current_user: dict = Depends(get_current_user)):
-    current_rank_id, current_rank_name = get_rank_info(current_user.get("rank_points", 0))
-    
-    if current_rank_id >= 11:
-        return {
-            "current_rank": current_rank_id,
-            "current_rank_name": current_rank_name,
-            "next_rank": None,
-            "next_rank_name": "Max Rank",
-            "money_progress": 100,
-            "rank_points_progress": 100,
-            "money_needed": 0,
-            "rank_points_needed": 0,
-            "money_current": current_user["money"],
-            "rank_points_current": current_user.get("rank_points", 0)
-        }
-    
-    next_rank = RANKS[current_rank_id]
-    current_rank_req = RANKS[current_rank_id - 1]
-    
-    rank_points_progress = 0
-    
-    if next_rank["required_points"] > current_rank_req["required_points"]:
-        points_range = next_rank["required_points"] - current_rank_req["required_points"]
-        points_current = current_user.get("rank_points", 0) - current_rank_req["required_points"]
-        rank_points_progress = min(100, max(0, (points_current / points_range * 100)))
-    
-    return {
-        "current_rank": current_rank_id,
-        "current_rank_name": current_rank_name,
-        "next_rank": next_rank["id"],
-        "next_rank_name": next_rank["name"],
-        "rank_points_progress": rank_points_progress,
-        "rank_points_needed": max(0, next_rank["required_points"] - current_user.get("rank_points", 0)),
-        "rank_points_current": current_user.get("rank_points", 0)
-    }
+# Rank/wealth progress -> see routers/user_progress.py
 
-
-@api_router.get("/wealth-ranks")
-async def get_wealth_ranks_list():
-    """Return the full wealth rank ladder (1920s–1930s style). No auth required."""
-    return {"wealth_ranks": [{"id": r["id"], "name": r["name"], "min_money": r["min_money"]} for r in WEALTH_RANKS]}
-
-
-@api_router.get("/user/wealth-progress")
-async def get_wealth_progress(current_user: dict = Depends(get_current_user)):
-    """Current wealth rank and progress to next tier."""
-    money = int(current_user.get("money", 0) or 0)
-    wealth_id, wealth_name = get_wealth_rank(money)
-    is_max = wealth_id >= WEALTH_RANKS[-1]["id"]
-    if is_max:
-        return {
-            "wealth_rank": wealth_id,
-            "wealth_rank_name": wealth_name,
-            "money": money,
-            "next_rank": None,
-            "next_rank_name": None,
-            "min_money_next": None,
-            "money_needed": 0,
-        }
-    next_tier = next((r for r in WEALTH_RANKS if r["id"] == wealth_id + 1), None)
-    if not next_tier:
-        return {"wealth_rank": wealth_id, "wealth_rank_name": wealth_name, "money": money, "next_rank": None, "next_rank_name": None, "min_money_next": None, "money_needed": 0}
-    min_next = next_tier["min_money"]
-    return {
-        "wealth_rank": wealth_id,
-        "wealth_rank_name": wealth_name,
-        "money": money,
-        "next_rank": next_tier["id"],
-        "next_rank_name": next_tier["name"],
-        "min_money_next": min_next,
-        "money_needed": max(0, min_next - money),
-    }
-
-
-# Points Store endpoints
-@api_router.post("/store/buy-rank-bar")
-async def buy_premium_rank_bar(current_user: dict = Depends(get_current_user)):
-    if current_user.get("premium_rank_bar", False):
-        raise HTTPException(status_code=400, detail="You already own the premium rank bar")
-    
-    cost = 50
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -cost}, "$set": {"premium_rank_bar": True}}
-    )
-    
-    return {"message": "Premium rank bar purchased!", "cost": cost}
-
-SILENCER_COST_POINTS = 150
-
-@api_router.post("/store/buy-silencer")
-async def buy_silencer(current_user: dict = Depends(get_current_user)):
-    """Buy a silencer (reduces witness statements when you kill). Requires owning at least one weapon."""
-    if current_user.get("has_silencer", False):
-        raise HTTPException(status_code=400, detail="You already own a silencer")
-    if (current_user.get("points") or 0) < SILENCER_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {SILENCER_COST_POINTS})")
-    owned = await db.user_weapons.find_one({"user_id": current_user["id"], "quantity": {"$gt": 0}}, {"_id": 0})
-    if not owned:
-        raise HTTPException(status_code=400, detail="You need at least one weapon to use a silencer")
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -SILENCER_COST_POINTS}, "$set": {"has_silencer": True}}
-    )
-    return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": SILENCER_COST_POINTS}
-
-OC_TIMER_COST_POINTS = 300
-
-@api_router.post("/store/buy-oc-timer")
-async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
-    """Reduce Organised Crime cooldown from 6 hours to 4 hours. One-time purchase."""
-    if current_user.get("oc_timer_reduced", False):
-        raise HTTPException(status_code=400, detail="You already have the reduced OC timer (4h)")
-    if (current_user.get("points") or 0) < OC_TIMER_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}}
-    )
-    return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
-
-@api_router.post("/store/upgrade-garage-batch")
-async def upgrade_garage_batch_limit(current_user: dict = Depends(get_current_user)):
-    """Increase garage melt/scrap batch limit using points."""
-    current_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
-    if current_limit >= GARAGE_BATCH_LIMIT_MAX:
-        raise HTTPException(status_code=400, detail="Garage batch limit already maxed")
-    if current_user["points"] < GARAGE_BATCH_UPGRADE_COST:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-
-    new_limit = min(GARAGE_BATCH_LIMIT_MAX, current_limit + GARAGE_BATCH_UPGRADE_INCREMENT)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -GARAGE_BATCH_UPGRADE_COST}, "$set": {"garage_batch_limit": new_limit}}
-    )
-    return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": GARAGE_BATCH_UPGRADE_COST}
+# Store -> see routers/store.py
 
 # Armour -> see routers/armour.py
 
@@ -3456,228 +3081,13 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
 
 # Protection Racket endpoints
 # Property attack: success chance falls as defender's property level (upgrades) increases. Take % of revenue.
-PROPERTY_ATTACK_BASE_SUCCESS = 0.70
-PROPERTY_ATTACK_LEVEL_PENALTY = 0.10  # per defender level
-PROPERTY_ATTACK_MIN_SUCCESS = 0.10
-PROPERTY_ATTACK_REVENUE_PCT = 0.25  # 25% of revenue (12h worth)
-PROPERTY_ATTACK_HOURS = 12
-
-
-@api_router.post("/racket/extort")
-async def extort_property(request: ProtectionRacketRequest, current_user: dict = Depends(get_current_user)):
-    target = await db.users.find_one({"username": request.target_username}, {"_id": 0, "money": 1})
-    if not target:
-        raise HTTPException(status_code=404, detail="Target user not found")
-    if target.get("is_dead"):
-        raise HTTPException(status_code=400, detail="Target is dead")
-    if target["id"] == current_user["id"]:
-        raise HTTPException(status_code=400, detail="Cannot attack your own properties")
-    
-    target_property = await db.user_properties.find_one(
-        {"user_id": target["id"], "property_id": request.property_id},
-        {"_id": 0}
-    )
-    if not target_property:
-        raise HTTPException(status_code=404, detail="Target doesn't own this property")
-    
-    prop = await db.properties.find_one({"id": request.property_id}, {"_id": 0})
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    
-    last_extortion = await db.extortions.find_one(
-        {"extorter_id": current_user["id"], "target_id": target["id"], "property_id": request.property_id},
-        {"_id": 0}
-    )
-    if last_extortion:
-        cooldown_time = datetime.fromisoformat(last_extortion["timestamp"]) + timedelta(hours=2)
-        if cooldown_time > datetime.now(timezone.utc):
-            raise HTTPException(status_code=400, detail="Must wait 2 hours between attacks on the same property")
-    
-    defender_level = target_property.get("level", 1)
-    success_chance = max(PROPERTY_ATTACK_MIN_SUCCESS, PROPERTY_ATTACK_BASE_SUCCESS - defender_level * PROPERTY_ATTACK_LEVEL_PENALTY)
-    success = random.random() < success_chance
-    
-    if success:
-        revenue_12h = prop["income_per_hour"] * defender_level * PROPERTY_ATTACK_HOURS
-        extortion_amount = int(revenue_12h * PROPERTY_ATTACK_REVENUE_PCT)
-        extortion_amount = max(1, extortion_amount)
-        target_money = int(target.get("money", 0) or 0)
-        if target_money < extortion_amount:
-            extortion_amount = target_money
-        rank_points = 10
-        if extortion_amount > 0:
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {"$inc": {"money": extortion_amount, "rank_points": rank_points}}
-            )
-            await db.users.update_one(
-                {"id": target["id"]},
-                {"$inc": {"money": -extortion_amount}}
-            )
-        await db.extortions.update_one(
-            {"extorter_id": current_user["id"], "target_id": target["id"], "property_id": request.property_id},
-            {"$set": {"timestamp": datetime.now(timezone.utc).isoformat(), "amount": extortion_amount}},
-            upsert=True
-        )
-        return {
-            "success": True,
-            "message": f"Raid successful! You took ${extortion_amount:,} ({PROPERTY_ATTACK_REVENUE_PCT*100:.0f}% of revenue) from {target['username']}'s {prop['name']}.",
-            "amount": extortion_amount,
-            "rank_points_earned": rank_points,
-        }
-    return {
-        "success": False,
-        "message": f"Raid failed. {prop['name']} is well defended (level {defender_level}). Try again later.",
-        "amount": 0,
-        "rank_points_earned": 0,
-    }
-
-@api_router.get("/racket/targets")
-async def get_racket_targets(current_user: dict = Depends(get_current_user)):
-    users_with_properties = await db.user_properties.distinct("user_id")
-    alive = {u["id"] for u in await db.users.find({"id": {"$in": users_with_properties}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1}).to_list(100)}
-    targets = []
-    for user_id in users_with_properties:
-        if user_id == current_user["id"] or user_id not in alive:
-            continue
-        user = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1, "current_state": 1})
-        if not user:
-            continue
-        properties = await db.user_properties.find({"user_id": user_id}, {"_id": 0}).to_list(100)
-        property_details = []
-        for up in properties:
-            prop = await db.properties.find_one({"id": up["property_id"]}, {"_id": 0})
-            if prop:
-                level = up.get("level", 1)
-                revenue_12h = prop["income_per_hour"] * level * PROPERTY_ATTACK_HOURS
-                potential_take = int(revenue_12h * PROPERTY_ATTACK_REVENUE_PCT)
-                success_chance = max(PROPERTY_ATTACK_MIN_SUCCESS, PROPERTY_ATTACK_BASE_SUCCESS - level * PROPERTY_ATTACK_LEVEL_PENALTY)
-                property_details.append({
-                    "property_id": up["property_id"],
-                    "property_name": prop["name"],
-                    "level": level,
-                    "potential_take": potential_take,
-                    "success_chance_pct": int(round(success_chance * 100)),
-                })
-        if property_details:
-            targets.append({
-                "username": user["username"],
-                "location": user.get("current_state") or "—",
-                "properties": property_details,
-            })
-    return {"targets": targets[:25]}
+# Racket (property extortion) -> see routers/racket.py
 
 # Crime endpoints -> see routers/crimes.py
 
 # Weapons -> see routers/weapons.py
 
-# Properties endpoints
-@api_router.get("/properties", response_model=List[PropertyResponse])
-async def get_properties(current_user: dict = Depends(get_current_user)):
-    properties = await db.properties.find({}, {"_id": 0}).to_list(100)
-    user_properties = await db.user_properties.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
-    
-    properties_map = {up["property_id"]: up for up in user_properties}
-    
-    result = []
-    for prop in properties:
-        user_prop = properties_map.get(prop["id"])
-        owned = user_prop is not None
-        level = user_prop["level"] if owned else 0
-        
-        available_income = 0
-        if owned and "last_collected" in user_prop:
-            last_collected = datetime.fromisoformat(user_prop["last_collected"])
-            hours_passed = (datetime.now(timezone.utc) - last_collected).total_seconds() / 3600
-            available_income = min(hours_passed * prop["income_per_hour"] * level, prop["income_per_hour"] * level * 24)
-        
-        result.append(PropertyResponse(
-            id=prop["id"],
-            name=prop["name"],
-            property_type=prop["property_type"],
-            price=prop["price"],
-            income_per_hour=prop["income_per_hour"],
-            max_level=prop["max_level"],
-            owned=owned,
-            level=level,
-            available_income=available_income
-        ))
-    
-    return result
-
-@api_router.post("/properties/{property_id}/buy")
-async def buy_property(property_id: str, current_user: dict = Depends(get_current_user)):
-    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    
-    user_prop = await db.user_properties.find_one(
-        {"user_id": current_user["id"], "property_id": property_id},
-        {"_id": 0}
-    )
-    
-    if user_prop:
-        if user_prop["level"] >= prop["max_level"]:
-            raise HTTPException(status_code=400, detail="Property already at max level")
-        cost = prop["price"] * (user_prop["level"] + 1)
-    else:
-        cost = prop["price"]
-    
-    if current_user["money"] < cost:
-        raise HTTPException(status_code=400, detail="Insufficient money")
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"money": -cost}}
-    )
-    
-    if user_prop:
-        await db.user_properties.update_one(
-            {"user_id": current_user["id"], "property_id": property_id},
-            {"$inc": {"level": 1}}
-        )
-    else:
-        await db.user_properties.insert_one({
-            "user_id": current_user["id"],
-            "property_id": property_id,
-            "level": 1,
-            "last_collected": datetime.now(timezone.utc).isoformat()
-        })
-    
-    return {"message": f"Successfully purchased/upgraded {prop['name']}"}
-
-@api_router.post("/properties/{property_id}/collect")
-async def collect_property_income(property_id: str, current_user: dict = Depends(get_current_user)):
-    prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
-    if not prop:
-        raise HTTPException(status_code=404, detail="Property not found")
-    
-    user_prop = await db.user_properties.find_one(
-        {"user_id": current_user["id"], "property_id": property_id},
-        {"_id": 0}
-    )
-    
-    if not user_prop:
-        raise HTTPException(status_code=404, detail="You don't own this property")
-    
-    last_collected = datetime.fromisoformat(user_prop["last_collected"])
-    hours_passed = (datetime.now(timezone.utc) - last_collected).total_seconds() / 3600
-    income = min(hours_passed * prop["income_per_hour"] * user_prop["level"], prop["income_per_hour"] * user_prop["level"] * 24)
-    
-    if income < 1:
-        raise HTTPException(status_code=400, detail="No income to collect yet")
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"money": income}}
-    )
-    
-    await db.user_properties.update_one(
-        {"user_id": current_user["id"], "property_id": property_id},
-        {"$set": {"last_collected": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    return {"message": f"Collected ${income:,.2f}"}
+# Properties -> see routers/properties.py
 
 # Bodyguards endpoints
 def _camelize(name: str) -> str:
@@ -4876,62 +4286,7 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
                     d["bodyguard_owner_username"] = owner.get("username")
     return {"attempts": docs}
 
-# Leaderboard endpoints
-@api_router.get("/leaderboard", response_model=List[LeaderboardEntry])
-async def get_leaderboard(current_user: dict = Depends(get_current_user)):
-    users = await db.users.find(
-        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}},
-        {"_id": 0, "username": 1, "money": 1, "total_kills": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "id": 1}
-    ).sort("money", -1).limit(10).to_list(10)
-    
-    result = []
-    for i, user in enumerate(users):
-        result.append(LeaderboardEntry(
-            rank=i + 1,
-            username=user["username"],
-            money=user["money"],
-            kills=user["total_kills"],
-            crimes=user.get("total_crimes", 0),
-            gta=user.get("total_gta", 0),
-            jail_busts=user.get("jail_busts", 0),
-            is_current_user=user["id"] == current_user["id"]
-        ))
-    
-    return result
-
-async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
-    limit = max(1, min(100, int(limit)))
-    query = {"is_dead": True} if dead else {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}}
-    users = await db.users.find(
-        query,
-        {"_id": 0, "username": 1, "id": 1, field: 1}
-    ).sort(field, -1).limit(limit).to_list(limit)
-    out: List[StatLeaderboardEntry] = []
-    for i, user in enumerate(users):
-        out.append(StatLeaderboardEntry(
-            rank=i + 1,
-            username=user["username"],
-            value=int(user.get(field, 0) or 0),
-            is_current_user=user["id"] == current_user_id
-        ))
-    return out
-
-
-@api_router.get("/leaderboards/top")
-async def get_top_leaderboards(
-    limit: int = Query(10, ge=1, le=100, description="Top N (5, 10, 20, 50, 100)"),
-    dead: bool = Query(False, description="If true, show top dead accounts instead of alive"),
-    current_user: dict = Depends(get_current_user),
-):
-    """Top N leaderboards per stat (kills, crimes, gta, jail busts). Limit 1-100. Use dead=true for top dead accounts."""
-    user_id = current_user["id"]
-    kills, crimes, gta, jail_busts = await asyncio.gather(
-        _top_by_field("total_kills", user_id, limit, dead=dead),
-        _top_by_field("total_crimes", user_id, limit, dead=dead),
-        _top_by_field("total_gta", user_id, limit, dead=dead),
-        _top_by_field("jail_busts", user_id, limit, dead=dead),
-    )
-    return {"kills": kills, "crimes": crimes, "gta": gta, "jail_busts": jail_busts}
+# Leaderboard -> see routers/leaderboard.py
 
 # Payment endpoints (Stripe/emergent removed; routes kept so frontend does not 404)
 @api_router.post("/payments/checkout")
@@ -5174,35 +4529,9 @@ def _booze_prices_for_rotation():
 
 
 # ============ TRAVEL ENDPOINTS ============
+# STATES, CASINO_GAMES used by routers/states.py and travel/casino
 
-STATES = ["Chicago", "New York", "Los Angeles", "Miami"]
-
-# Casino games and max bets (same in every city; exposed for States page)
-CASINO_GAMES = [
-    {"id": "blackjack", "name": "Blackjack", "max_bet": BLACKJACK_MAX_BET},
-    {"id": "horseracing", "name": "Horse Racing", "max_bet": HORSERACING_MAX_BET},
-    {"id": "roulette", "name": "Roulette", "max_bet": ROULETTE_MAX_BET},
-    {"id": "dice", "name": "Dice", "max_bet": DICE_MAX_BET},
-]
-
-@api_router.get("/states")
-async def get_states(current_user: dict = Depends(get_current_user)):
-    """List all cities (travel destinations), casino games with max bet, and dice owners per city."""
-    dice_docs = await db.dice_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
-    owner_ids = list({d["owner_id"] for d in dice_docs if d.get("owner_id")})
-    users = await db.users.find({"id": {"$in": owner_ids}}, {"_id": 0, "id": 1, "username": 1, "money": 1}).to_list(len(owner_ids) or 1)
-    user_map = {u["id"]: u for u in users}
-    dice_owners = {}
-    for d in dice_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        dice_max = d.get("max_bet") if d.get("max_bet") is not None else DICE_MAX_BET
-        dice_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": dice_max}
-    return {"cities": list(STATES), "games": CASINO_GAMES, "dice_owners": dice_owners}
-
+# States (cities, games, dice owners) -> see routers/states.py
 
 # ============ Casino Dice Game API ============
 DICE_CLAIM_COST_POINTS = 0  # cost in points to claim a dice table (0 = free)
@@ -7085,83 +6414,6 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
     return {"message": f"Sold {request.amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val}
 
 
-@api_router.post("/store/buy-booze-capacity")
-async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
-    """Spend points to increase booze carry capacity (+100 per purchase, bonus capped at 1000)."""
-    if current_user["points"] < BOOZE_CAPACITY_UPGRADE_COST:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
-        raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
-    add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": add_bonus}}
-    )
-    new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
-    return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
-
-
-BULLET_PACKS = {
-    5000: 500,
-    10000: 1000,
-    50000: 5000,
-    100000: 10000,
-}
-
-@api_router.post("/store/buy-bullets")
-async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
-    """Buy bullets with points."""
-    cost = BULLET_PACKS.get(bullets)
-    if cost is None:
-        raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost}, have {current_user['points']}")
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bullets": bullets}}
-    )
-    return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
-
-@api_router.post("/store/buy-custom-car")
-async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
-    CUSTOM_CAR_COST = 500  # Points
-    # Allow multiple custom cars; no "already own" check
-    
-    if current_user["points"] < CUSTOM_CAR_COST:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    
-    if not request.car_name or len(request.car_name) < 2 or len(request.car_name) > 30:
-        raise HTTPException(status_code=400, detail="Car name must be 2-30 characters")
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -CUSTOM_CAR_COST}}
-    )
-    # Keep custom_car_name for backward compat (last bought); travel uses first from garage
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"custom_car_name": request.car_name}}
-    )
-    # Also add to garage as a car entity (supports custom_image_url for picture)
-    await db.user_cars.insert_one({
-        "id": str(uuid.uuid4()),
-        "user_id": current_user["id"],
-        "car_id": "car_custom",
-        "custom_name": request.car_name,
-        "custom_image_url": None,
-        "acquired_at": datetime.now(timezone.utc).isoformat(),
-    })
-    
-    await send_notification(
-        current_user["id"],
-        "🚗 Custom Car Purchased",
-        f"You've purchased a custom car named '{request.car_name}' for {CUSTOM_CAR_COST} points!",
-        "reward"
-    )
-    
-    return {"message": f"Custom car '{request.car_name}' purchased for {CUSTOM_CAR_COST} points"}
-
 # ============ BODYGUARD INVITE SYSTEM ============
 
 @api_router.post("/bodyguards/invite")
@@ -8022,8 +7274,8 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
     return {"wars": out}
 
 # Crime endpoints -> see routers/crimes.py
-# Register modular routers (crimes, gta, jail, oc, hitlist, meta, weapons, armour)
-from routers import crimes, gta, jail, oc, hitlist, meta, weapons, armour
+# Register modular routers (crimes, gta, jail, oc, hitlist, meta, weapons, armour, properties, racket, leaderboard, store, states)
+from routers import crimes, gta, jail, oc, hitlist, meta, weapons, armour, properties, racket, leaderboard, store, bank, states
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
@@ -8032,6 +7284,12 @@ hitlist.register(api_router)
 meta.register(api_router)
 weapons.register(api_router)
 armour.register(api_router)
+properties.register(api_router)
+racket.register(api_router)
+leaderboard.register(api_router)
+store.register(api_router)
+bank.register(api_router)
+states.register(api_router)
 
 app.include_router(api_router)
 
