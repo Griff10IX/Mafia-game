@@ -54,7 +54,7 @@ const StatCard = ({ title, rows }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
   
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
       <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
         <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
           {title}
@@ -82,7 +82,7 @@ const StatCard = ({ title, rows }) => {
 };
 
 const RankStatsCard = ({ rankStats }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         Rank Stats
@@ -114,7 +114,7 @@ const RankStatsCard = ({ rankStats }) => (
 );
 
 const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between flex-wrap gap-2">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         Last 15 Kills
@@ -196,7 +196,7 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
 );
 
 const DeadUsersListView = ({ users }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         Top Dead Users
