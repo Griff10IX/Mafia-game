@@ -320,6 +320,7 @@ export default function Crimes() {
     setCommitAllLoading(true);
     let committed = 0;
     let totalCash = 0;
+    let totalRankPoints = 0;
     try {
       for (const crime of available) {
         try {
@@ -327,6 +328,7 @@ export default function Crimes() {
           if (response.data?.success) {
             committed += 1;
             totalCash += Number(response.data?.reward) || 0;
+            totalRankPoints += Number(response.data?.rank_points) || 0;
             refreshUser();
           } else {
             toast.error(response.data?.message || `${crime.name} failed`);
@@ -344,7 +346,7 @@ export default function Crimes() {
       }
       if (committed > 0) {
         toast.success(
-          `You committed ${committed} crime${committed !== 1 ? 's' : ''} and made $${totalCash.toLocaleString()}`
+          `You committed ${committed} crime${committed !== 1 ? 's' : ''} and earned $${totalCash.toLocaleString()} + ${totalRankPoints.toLocaleString()} RP`
         );
       }
     } finally {

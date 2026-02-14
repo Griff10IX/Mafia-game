@@ -42,24 +42,15 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ unreadCount, onCompose }) => (
-  <div className="flex items-center justify-between gap-4">
-    <div>
-      <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 flex items-center gap-3">
-        <Mail className="w-8 h-8 md:w-10 md:h-10" />
-        Inbox
-      </h1>
-      <p className="text-sm text-mutedForeground">
-        {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-      </p>
-    </div>
-    <button
-      onClick={onCompose}
-      className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 md:px-6 py-2.5 md:py-3 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all active:scale-95 touch-manipulation flex items-center gap-2"
-    >
-      <Send size={18} />
-      <span className="hidden sm:inline">Compose</span>
-    </button>
+const PageHeader = ({ unreadCount }) => (
+  <div>
+    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 flex items-center gap-3">
+      <Mail className="w-8 h-8 md:w-10 md:h-10" />
+      Inbox
+    </h1>
+    <p className="text-sm text-mutedForeground">
+      {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
+    </p>
   </div>
 );
 
@@ -194,6 +185,7 @@ const ComposeModal = ({
 };
 
 const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, onOcAccept, onOcDecline, isSent }) => {
+  const [showPreview, setShowPreview] = useState(false);
   const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
   const isOcInvite = !!notification.oc_invite_id;
@@ -205,6 +197,8 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
   return (
     <div
       onClick={onClick}
+      onMouseEnter={() => setShowPreview(true)}
+      onMouseLeave={() => setShowPreview(false)}
       className={`group relative flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ${
         isSelected 
           ? 'bg-primary/10 border-l-4 border-l-primary' 
@@ -255,40 +249,64 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
       {/* Arrow */}
       <ChevronRight size={16} className="text-mutedForeground shrink-0" />
       
-      {/* Hover Preview Tooltip */}
-      <div className="absolute left-full ml-2 top-0 z-50 hidden group-hover:block pointer-events-none">
-        <div className="bg-zinc-900 border-2 border-primary/40 rounded-lg p-4 shadow-2xl max-w-sm w-80">
-          <div className="flex items-start gap-3 mb-3">
-            <div className="p-2 rounded-md bg-primary/20 border border-primary/30">
-              {isSent ? (
-                <Send size={16} className="text-primary" />
-              ) : (
-                <Icon size={16} className="text-primary" />
+      {/* Hover Preview Tooltip - Fixed positioning */}
+      {showPreview && (
+        <div 
+          className="fixed z-[100] pointer-events-none hidden lg:block"
+          style={{
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)'
+          }}
+        >
+          <div className="bg-zinc-900 border-2 border-primary/40 rounded-lg p-4 shadow-2xl shadow-black/50 w-96 animate-in fade-in duration-150">
+            {/* Preview Header */}
+            <div className="flex items-start gap-3 mb-3 pb-3 border-b border-primary/20">
+              <div className="p-2.5 rounded-md bg-primary/20 border border-primary/30">
+                {isSent ? (
+                  <Send size={18} className="text-primary" />
+                ) : (
+                  <Icon size={18} className="text-primary" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-base font-heading font-bold text-primary mb-1">
+                  {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
+                </h4>
+                <p className="text-xs text-mutedForeground">
+                  {timeAgo}
+                </p>
+              </div>
+              {!isSent && !notification.read && (
+                <div className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold">
+                  NEW
+                </div>
               )}
             </div>
-            <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-heading font-bold text-primary mb-1">
-                {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
-              </h4>
-              <p className="text-xs text-mutedForeground">
-                {timeAgo}
-              </p>
+            
+            {/* Preview Body */}
+            <p className="text-sm text-foreground leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap">
+              {notification.message}
+            </p>
+            
+            {/* GIF Preview */}
+            {notification.gif_url && (
+              <div className="mt-3 pt-3 border-t border-primary/20">
+                <img 
+                  src={notification.gif_url} 
+                  alt="GIF preview" 
+                  className="max-w-full max-h-32 rounded border border-primary/20 mx-auto" 
+                />
+              </div>
+            )}
+            
+            {/* Click hint */}
+            <div className="mt-3 pt-3 border-t border-primary/20 text-center">
+              <span className="text-xs text-mutedForeground">Click to view full message</span>
             </div>
           </div>
-          <p className="text-sm text-foreground leading-relaxed max-h-32 overflow-y-auto">
-            {notification.message}
-          </p>
-          {notification.gif_url && (
-            <div className="mt-2">
-              <img 
-                src={notification.gif_url} 
-                alt="GIF preview" 
-                className="max-w-full max-h-24 rounded border border-primary/20" 
-              />
-            </div>
-          )}
         </div>
-      </div>
+      )}
     </div>
   );
 };
@@ -585,7 +603,7 @@ export default function Inbox() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="inbox-page">
-      <PageHeader unreadCount={unreadCount} onCompose={() => setShowCompose(true)} />
+      <PageHeader unreadCount={unreadCount} />
 
       <ComposeModal
         isOpen={showCompose}
@@ -608,28 +626,41 @@ export default function Inbox() {
       {/* Inbox Layout */}
       <div className="bg-card border border-primary/20 rounded-lg overflow-hidden">
         {/* Toolbar */}
-        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1">
-            {filterButtons.map(btn => {
-              const Icon = btn.icon;
-              return (
-                <button
-                  key={btn.value}
-                  onClick={() => setFilter(btn.value)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-heading font-bold whitespace-nowrap transition-all border ${
-                    filter === btn.value
-                      ? 'bg-primary/20 text-primary border-primary/50'
-                      : 'bg-secondary/50 text-mutedForeground border-border hover:text-foreground'
-                  }`}
-                >
-                  <Icon size={14} />
-                  {btn.label}
-                </button>
-              );
-            })}
+        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
+          {/* Top row: Filters + Compose */}
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1">
+              {filterButtons.map(btn => {
+                const Icon = btn.icon;
+                return (
+                  <button
+                    key={btn.value}
+                    onClick={() => setFilter(btn.value)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-heading font-bold whitespace-nowrap transition-all border ${
+                      filter === btn.value
+                        ? 'bg-primary/20 text-primary border-primary/50'
+                        : 'bg-secondary/50 text-mutedForeground border-border hover:text-foreground'
+                    }`}
+                  >
+                    <Icon size={14} />
+                    {btn.label}
+                  </button>
+                );
+              })}
+            </div>
+            
+            {/* Compose button - integrated with toolbar */}
+            <button
+              onClick={() => setShowCompose(true)}
+              className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-md px-4 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-yellow-600/50 shadow-lg shadow-primary/20 transition-all active:scale-95 touch-manipulation flex items-center gap-1.5 shrink-0"
+            >
+              <Send size={14} />
+              <span className="hidden sm:inline">Compose</span>
+            </button>
           </div>
           
-          <div className="flex items-center gap-2">
+          {/* Bottom row: Actions */}
+          <div className="flex items-center justify-end gap-2">
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
