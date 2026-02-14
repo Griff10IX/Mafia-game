@@ -328,10 +328,18 @@ export default function Crimes() {
             committed += 1;
             totalCash += Number(response.data?.reward) || 0;
             refreshUser();
+          } else {
+            toast.error(response.data?.message || `${crime.name} failed`);
           }
           await fetchCrimes();
-        } catch (_) {
+        } catch (err) {
+          const detail = err.response?.data?.detail ?? err.message ?? 'Request failed';
+          toast.error(detail);
+          await refreshUser();
           await fetchCrimes();
+          if (typeof detail === 'string' && detail.toLowerCase().includes('jail')) {
+            break;
+          }
         }
       }
       if (committed > 0) {

@@ -13,6 +13,11 @@ function formatTime(dateString) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// Gangster / noir themed — money, power, danger, no hearts/cutesy
+const CHAT_EMOJIS = [
+  '💰', '💵', '💎', '🎩', '🔫', '⚔️', '🔪', '💀', '🚬', '🥃', '🍷', '🎲', '🃏', '👔', '💼', '🕴️', '🏆', '👑', '✨', '💪', '👍', '😎', '🎭',
+];
+
 export default function InboxChat() {
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -23,6 +28,8 @@ export default function InboxChat() {
   const [sending, setSending] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
+
+  const insertEmoji = (emoji) => setReplyText((t) => t + emoji);
 
   const fetchThread = async () => {
     if (!userId) return;
@@ -143,12 +150,12 @@ export default function InboxChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Reply box (Telegram-style input at bottom) */}
+      {/* Reply box (Telegram-style input at bottom) + gangster emojis below */}
       <form
         onSubmit={handleSend}
         className="p-3 border-t border-primary/20 bg-card shrink-0"
       >
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-2">
           <input
             type="text"
             value={replyText}
@@ -165,6 +172,20 @@ export default function InboxChat() {
           >
             <Send size={18} />
           </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          {CHAT_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => insertEmoji(emoji)}
+              className="text-lg leading-none p-1.5 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50"
+              title="Insert emoji"
+              aria-label="Insert emoji"
+            >
+              {emoji}
+            </button>
+          ))}
         </div>
       </form>
     </div>
