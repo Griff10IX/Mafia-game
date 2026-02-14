@@ -35,6 +35,167 @@ function apiDetail(e) {
 }
 
 const ROLE_LABELS = { boss: 'Boss', underboss: 'Underboss', consigliere: 'Consigliere', capo: 'Capo', soldier: 'Soldier', associate: 'Associate' };
+const ROLE_ICONS = { boss: '👑', underboss: '⭐', consigliere: '🎭', capo: '🎖️', soldier: '🔫', associate: '👤' };
+const ROLE_COLORS = {
+  boss: 'bg-gradient-to-r from-yellow-500/30 to-amber-500/30 border-yellow-500/50 text-yellow-300',
+  underboss: 'bg-gradient-to-r from-purple-500/30 to-violet-500/30 border-purple-500/50 text-purple-300',
+  consigliere: 'bg-gradient-to-r from-blue-500/30 to-cyan-500/30 border-blue-500/50 text-blue-300',
+  capo: 'bg-gradient-to-r from-emerald-500/30 to-teal-500/30 border-emerald-500/50 text-emerald-300',
+  soldier: 'bg-zinc-700/50 border-zinc-600/50 text-zinc-300',
+  associate: 'bg-zinc-800/50 border-zinc-700/50 text-zinc-400',
+};
+
+// ============================================================================
+// MOBILE CARD COMPONENTS
+// ============================================================================
+
+const RoleBadge = ({ role }) => {
+  const roleKey = role?.toLowerCase() || 'associate';
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-xs font-bold ${ROLE_COLORS[roleKey] || ROLE_COLORS.associate}`}>
+      <span>{ROLE_ICONS[roleKey] || '👤'}</span>
+      {ROLE_LABELS[roleKey] || role}
+    </span>
+  );
+};
+
+// Mobile card for roster members
+const RosterMemberCard = ({ member, canManage, onKick }) => (
+  <div className="bg-zinc-800/50 border border-primary/20 rounded-lg p-4 hover:border-primary/40 transition-all">
+    <div className="flex items-start justify-between mb-3">
+      <div className="flex items-center gap-3">
+        <div className="w-11 h-11 rounded-lg bg-gradient-to-br from-primary/30 to-yellow-700/30 border border-primary/30 flex items-center justify-center text-lg font-bold text-primary">
+          {member.username?.charAt(0)?.toUpperCase() || '?'}
+        </div>
+        <div>
+          <div className="font-heading font-bold text-foreground">{member.username}</div>
+          <div className="text-xs text-mutedForeground">{member.rank_name || 'Unknown Rank'}</div>
+        </div>
+      </div>
+      {canManage && member.role !== 'boss' && (
+        <button
+          type="button"
+          onClick={() => onKick(member.user_id)}
+          className="px-2 py-1 text-xs text-red-400 hover:bg-red-500/20 border border-red-500/30 rounded transition-all font-heading uppercase tracking-wider"
+        >
+          Kick
+        </button>
+      )}
+    </div>
+    <div className="flex items-center justify-between">
+      <RoleBadge role={member.role} />
+    </div>
+  </div>
+);
+
+// Mobile card for all families list
+const FamilyCard = ({ family, isOwn = false }) => (
+  <div className={`relative overflow-hidden rounded-lg p-4 transition-all ${
+    isOwn 
+      ? 'bg-gradient-to-br from-primary/20 via-amber-900/15 to-primary/20 border-2 border-primary/50' 
+      : 'bg-zinc-800/50 border border-primary/20 hover:border-primary/40'
+  }`}>
+    {isOwn && (
+      <div className="absolute top-2 right-2 px-2 py-0.5 bg-primary/30 rounded text-[10px] text-primary font-heading font-bold uppercase tracking-wider">
+        Your Family
+      </div>
+    )}
+    
+    <div className="flex items-start gap-3 mb-3">
+      <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/30 to-yellow-700/30 border border-primary/30 flex items-center justify-center">
+        <Building2 size={20} className="text-primary" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <Link to={`/families/${encodeURIComponent(family.tag || family.id)}`} className="font-heading font-bold text-foreground hover:text-primary transition-colors">
+          {family.name}
+        </Link>
+        <div className="flex items-center gap-2 text-sm">
+          <span className="px-1.5 py-0.5 bg-primary/20 rounded text-xs text-primary font-mono font-bold">[{family.tag}]</span>
+        </div>
+      </div>
+    </div>
+    
+    <div className="grid grid-cols-2 gap-2">
+      <div className="text-center bg-zinc-900/50 rounded-lg py-2">
+        <div className="text-primary font-heading font-bold">{family.member_count}</div>
+        <div className="text-[10px] text-mutedForeground uppercase tracking-wider">Members</div>
+      </div>
+      <div className="text-center bg-zinc-900/50 rounded-lg py-2">
+        <div className="text-primary font-heading font-bold">{formatMoney(family.treasury)}</div>
+        <div className="text-[10px] text-mutedForeground uppercase tracking-wider">Treasury</div>
+      </div>
+    </div>
+  </div>
+);
+
+// Mobile card for war history
+const WarHistoryCard = ({ war }) => {
+  const isActive = war.status === 'active' || war.status === 'truce_offered';
+  const isTruce = war.status === 'truce';
+  const hasWinner = war.status === 'family_a_wins' || war.status === 'family_b_wins';
+  
+  return (
+    <div className={`relative overflow-hidden rounded-lg p-4 transition-all border ${
+      isActive 
+        ? 'bg-gradient-to-br from-red-900/20 to-red-800/10 border-red-500/40' 
+        : 'bg-zinc-800/50 border-primary/20 hover:border-primary/40'
+    }`}>
+      {/* Header */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <Swords size={18} className={isActive ? 'text-red-400' : 'text-primary'} />
+          <div>
+            <div className="text-sm font-heading font-bold text-foreground">
+              {war.family_a_name} <span className="text-primary">[{war.family_a_tag}]</span>
+            </div>
+            <div className="text-xs text-mutedForeground">
+              vs {war.family_b_name} <span className="text-primary">[{war.family_b_tag}]</span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Status Badge */}
+        <div className={`px-2 py-1 rounded-lg border text-xs font-heading font-bold ${
+          isActive 
+            ? 'bg-red-500/20 border-red-500/40 text-red-400 animate-pulse' 
+            : isTruce
+            ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+            : hasWinner
+            ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400'
+            : 'bg-zinc-700/50 border-zinc-600/50 text-zinc-400'
+        }`}>
+          {isActive ? '⚔️ Active' : isTruce ? '🤝 Truce' : hasWinner ? '🏆 Ended' : war.status}
+        </div>
+      </div>
+      
+      {/* Result */}
+      {hasWinner && (
+        <div className="mb-3 px-3 py-2 bg-zinc-900/50 rounded-lg">
+          <div className="text-xs text-mutedForeground mb-1">Winner</div>
+          <div className="text-sm font-heading font-bold text-primary">{war.winner_family_name}</div>
+        </div>
+      )}
+      
+      {/* Prize & Date */}
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-zinc-900/50 rounded-lg p-2">
+          <div className="text-mutedForeground mb-1">Prize</div>
+          <div className="text-foreground font-heading">
+            {war.prize_exclusive_cars ? `${war.prize_exclusive_cars} car(s)` : ''}
+            {war.prize_rackets?.length > 0 && war.prize_rackets.map(r => `${r.name} Lv.${r.level}`).join(', ')}
+            {!war.prize_exclusive_cars && (!war.prize_rackets || !war.prize_rackets.length) && '—'}
+          </div>
+        </div>
+        <div className="bg-zinc-900/50 rounded-lg p-2">
+          <div className="text-mutedForeground mb-1">Ended</div>
+          <div className="text-foreground font-heading">
+            {war.ended_at ? new Date(war.ended_at).toLocaleDateString() : '—'}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 function RaidTargetFamilyBlock({ target, attackLoading, onRaid }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -123,7 +284,7 @@ export default function FamilyPage() {
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [tick, setTick] = useState(0);
   const [racketAttackTargets, setRacketAttackTargets] = useState([]);
-  const [racketAttackLoading, setRacketAttackLoading] = useState(null); // 'familyId-racketId'
+  const [racketAttackLoading, setRacketAttackLoading] = useState(null);
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
   const [dbSnapshot, setDbSnapshot] = useState(null);
 
@@ -250,7 +411,6 @@ export default function FamilyPage() {
     return () => clearInterval(id);
   }, []);
 
-  // Refetch war stats when opening the war modal so kills show up immediately
   useEffect(() => {
     if (!showWarModal || !myFamily?.family) return;
     api.get('/families/war/stats')
@@ -753,6 +913,7 @@ export default function FamilyPage() {
             )}
           </div>
 
+          {/* ROSTER SECTION - With Mobile Cards */}
           <div className={`${styles.panel} rounded-md overflow-hidden`}>
             <button type="button" onClick={() => toggleSection('roster')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
               <div className="flex items-center gap-2">
@@ -766,7 +927,8 @@ export default function FamilyPage() {
             </button>
             {!isCollapsed('roster') && (
             <div className="p-4">
-              <div className="overflow-x-auto">
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
@@ -781,9 +943,7 @@ export default function FamilyPage() {
                       <tr key={m.user_id} className="border-b border-primary/10 last:border-0">
                         <td className="py-2 px-2 font-heading font-medium text-foreground">{m.username}</td>
                         <td className="py-2 px-2">
-                          <span className={m.role === 'boss' ? 'text-primary font-heading font-bold' : 'text-mutedForeground font-heading'}>
-                            {ROLE_LABELS[m.role] || m.role}
-                          </span>
+                          <RoleBadge role={m.role} />
                         </td>
                         <td className="py-2 px-2 text-mutedForeground font-heading">{m.rank_name}</td>
                         {canManage && (
@@ -804,12 +964,25 @@ export default function FamilyPage() {
                   </tbody>
                 </table>
               </div>
+              
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-3">
+                {members.map((m) => (
+                  <RosterMemberCard 
+                    key={m.user_id} 
+                    member={m} 
+                    canManage={canManage} 
+                    onKick={handleKick} 
+                  />
+                ))}
+              </div>
+              
               {myRole === 'boss' && (
-                <form onSubmit={handleAssignRole} className="mt-3 flex flex-wrap items-center gap-2">
+                <form onSubmit={handleAssignRole} className="mt-4 pt-4 border-t border-primary/20 flex flex-wrap items-center gap-2">
                   <select
                     value={assignRole}
                     onChange={(e) => setAssignRole(e.target.value)}
-                    className={`${styles.surface} border border-primary/20 rounded px-2 py-1 text-sm font-heading focus:border-primary/50 focus:outline-none`}
+                    className={`${styles.surface} border border-primary/20 rounded px-2 py-1.5 text-sm font-heading focus:border-primary/50 focus:outline-none`}
                   >
                     {(config?.roles || []).filter((r) => r !== 'boss').map((role) => (
                       <option key={role} value={role}>{ROLE_LABELS[role]}</option>
@@ -818,14 +991,14 @@ export default function FamilyPage() {
                   <select
                     value={assignUserId}
                     onChange={(e) => setAssignUserId(e.target.value)}
-                    className={`${styles.surface} border border-primary/20 rounded px-2 py-1 text-sm font-heading focus:border-primary/50 focus:outline-none`}
+                    className={`${styles.surface} border border-primary/20 rounded px-2 py-1.5 text-sm font-heading focus:border-primary/50 focus:outline-none flex-1 min-w-[150px]`}
                   >
                     <option value="">Select member</option>
                     {members.filter((m) => m.role !== 'boss').map((m) => (
                       <option key={m.user_id} value={m.user_id}>{m.username}</option>
                     ))}
                   </select>
-                  <button type="submit" className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-1 rounded text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50">
+                  <button type="submit" className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-4 py-1.5 rounded text-xs font-heading font-bold uppercase tracking-wider hover:opacity-90 border border-yellow-600/50">
                     Assign
                   </button>
                 </form>
@@ -927,6 +1100,7 @@ export default function FamilyPage() {
         </>
       )}
 
+      {/* ALL FAMILIES SECTION - With Mobile Cards */}
       <div className={`${styles.panel} rounded-md overflow-hidden`}>
         <button type="button" onClick={() => toggleSection('allFamilies')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
           <div className="flex items-center gap-2">
@@ -938,7 +1112,8 @@ export default function FamilyPage() {
         </button>
         {!isCollapsed('allFamilies') && (
         <div className="p-4">
-          <div className="overflow-x-auto">
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
@@ -953,11 +1128,12 @@ export default function FamilyPage() {
                   <tr><td colSpan={4} className="py-4 text-center text-mutedForeground font-heading">No families yet.</td></tr>
                 ) : (
                   families.map((f) => (
-                    <tr key={f.id} className="border-b border-primary/10 last:border-0">
+                    <tr key={f.id} className={`border-b border-primary/10 last:border-0 ${family?.id === f.id ? 'bg-primary/10' : ''}`}>
                       <td className="py-2 px-2">
                         <Link to={`/families/${encodeURIComponent(f.tag || f.id)}`} className="font-heading font-medium text-foreground hover:text-primary">
                           {f.name}
                         </Link>
+                        {family?.id === f.id && <span className="ml-2 text-[10px] text-primary font-bold">(YOU)</span>}
                       </td>
                       <td className="py-2 px-2 font-heading text-primary">[{f.tag}]</td>
                       <td className="py-2 px-2 text-right text-mutedForeground font-heading">{f.member_count}</td>
@@ -968,10 +1144,26 @@ export default function FamilyPage() {
               </tbody>
             </table>
           </div>
+          
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-3">
+            {families.length === 0 ? (
+              <p className="text-center text-mutedForeground font-heading py-4">No families yet.</p>
+            ) : (
+              families.map((f) => (
+                <FamilyCard 
+                  key={f.id} 
+                  family={f} 
+                  isOwn={family?.id === f.id}
+                />
+              ))
+            )}
+          </div>
         </div>
         )}
       </div>
 
+      {/* WAR HISTORY SECTION - With Mobile Cards */}
       <div className={`${styles.panel} rounded-md overflow-hidden`}>
         <button type="button" onClick={() => toggleSection('warHistory')} className="w-full px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 text-left flex items-center justify-between hover:opacity-95 transition-opacity">
           <div className="flex items-center gap-2">
@@ -988,53 +1180,63 @@ export default function FamilyPage() {
           {warHistory.length === 0 ? (
             <p className="text-xs text-mutedForeground font-heading italic">No war history yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Sides</th>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Result</th>
-                    <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Prize</th>
-                    <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Ended</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {warHistory.map((w) => (
-                    <tr key={w.id} className="border-b border-primary/10 last:border-0">
-                      <td className="py-2 px-2 text-foreground font-heading text-xs">
-                        {w.family_a_name} <span className="text-primary">[{w.family_a_tag}]</span> vs {w.family_b_name} <span className="text-primary">[{w.family_b_tag}]</span>
-                      </td>
-                      <td className="py-2 px-2 font-heading">
-                        {w.status === 'truce' && <span className="text-mutedForeground">Truce</span>}
-                        {w.status === 'family_a_wins' && (
-                          <span><span className="text-primary font-bold">{w.winner_family_name}</span> won</span>
-                        )}
-                        {w.status === 'family_b_wins' && (
-                          <span><span className="text-primary font-bold">{w.winner_family_name}</span> won</span>
-                        )}
-                        {(w.status === 'active' || w.status === 'truce_offered') && (
-                          <span className="text-red-400 font-bold uppercase">Active</span>
-                        )}
-                      </td>
-                      <td className="py-2 px-2 text-mutedForeground font-heading">
-                        {w.prize_exclusive_cars != null && (
-                          <span>{w.prize_exclusive_cars} car(s)</span>
-                        )}
-                        {w.prize_rackets?.length > 0 && (
-                          <span className="ml-1">
-                            {w.prize_rackets.map((r) => `${r.name} Lv.${r.level}`).join(', ')}
-                          </span>
-                        )}
-                        {(!w.prize_exclusive_cars && (!w.prize_rackets || !w.prize_rackets.length)) && '—'}
-                      </td>
-                      <td className="py-2 px-2 text-right text-mutedForeground font-heading">
-                        {w.ended_at ? new Date(w.ended_at).toLocaleDateString() : '—'}
-                      </td>
+            <>
+              {/* Desktop Table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className={`border-b border-primary/20 ${styles.surfaceMuted}`}>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Sides</th>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Result</th>
+                      <th className="text-left py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Prize</th>
+                      <th className="text-right py-2 px-2 font-heading font-bold text-primary uppercase tracking-wider">Ended</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {warHistory.map((w) => (
+                      <tr key={w.id} className="border-b border-primary/10 last:border-0">
+                        <td className="py-2 px-2 text-foreground font-heading text-xs">
+                          {w.family_a_name} <span className="text-primary">[{w.family_a_tag}]</span> vs {w.family_b_name} <span className="text-primary">[{w.family_b_tag}]</span>
+                        </td>
+                        <td className="py-2 px-2 font-heading">
+                          {w.status === 'truce' && <span className="text-mutedForeground">Truce</span>}
+                          {w.status === 'family_a_wins' && (
+                            <span><span className="text-primary font-bold">{w.winner_family_name}</span> won</span>
+                          )}
+                          {w.status === 'family_b_wins' && (
+                            <span><span className="text-primary font-bold">{w.winner_family_name}</span> won</span>
+                          )}
+                          {(w.status === 'active' || w.status === 'truce_offered') && (
+                            <span className="text-red-400 font-bold uppercase">Active</span>
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-mutedForeground font-heading">
+                          {w.prize_exclusive_cars != null && (
+                            <span>{w.prize_exclusive_cars} car(s)</span>
+                          )}
+                          {w.prize_rackets?.length > 0 && (
+                            <span className="ml-1">
+                              {w.prize_rackets.map((r) => `${r.name} Lv.${r.level}`).join(', ')}
+                            </span>
+                          )}
+                          {(!w.prize_exclusive_cars && (!w.prize_rackets || !w.prize_rackets.length)) && '—'}
+                        </td>
+                        <td className="py-2 px-2 text-right text-mutedForeground font-heading">
+                          {w.ended_at ? new Date(w.ended_at).toLocaleDateString() : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              
+              {/* Mobile Cards */}
+              <div className="md:hidden space-y-3">
+                {warHistory.map((w) => (
+                  <WarHistoryCard key={w.id} war={w} />
+                ))}
+              </div>
+            </>
           )}
         </div>
         )}
