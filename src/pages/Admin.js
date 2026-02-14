@@ -252,11 +252,11 @@ export default function Admin() {
   };
 
   const handleDropAllHumanBodyguards = async () => {
-    if (!window.confirm('Remove all human bodyguard slots from every user? Robot bodyguards will be kept.')) return;
+    if (!window.confirm('Remove ALL bodyguards (human AND robot) from EVERY user? This cannot be undone!')) return;
     setDropHumanBgLoading(true);
     try {
-      const res = await api.post('/admin/bodyguards/drop-all-human');
-      toast.success(res.data?.message || 'Dropped all human bodyguards');
+      const res = await api.post('/admin/bodyguards/drop-all');
+      toast.success(res.data?.message || 'Dropped all bodyguards');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
     } finally {
@@ -716,7 +716,7 @@ export default function Admin() {
                     <button onClick={handleClearBodyguards} className={`flex-1 ${btnDanger}`}>Drop All Bodyguards</button>
                   </div>
                   <button onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading} className={`w-full ${btnDanger} disabled:opacity-50`}>
-                    {dropHumanBgLoading ? 'Dropping...' : 'Drop All Human Bodyguards'}
+                    {dropHumanBgLoading ? 'Dropping...' : 'Drop ALL Bodyguards (Human & Robot)'}
                   </button>
                 </div>
               </div>

@@ -3118,6 +3118,21 @@ async def admin_drop_all_human_bodyguards(current_user: dict = Depends(get_curre
     return {"message": f"Dropped all human bodyguards ({res.deleted_count} slot(s) cleared)", "deleted_count": res.deleted_count}
 
 
+@api_router.post("/admin/bodyguards/drop-all")
+async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_user)):
+    """Remove ALL bodyguard slots from ALL users (both human and robot bodyguards)."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    res = await db.bodyguards.delete_many({})
+    # Also delete all robot bodyguard user accounts
+    res_robots = await db.users.delete_many({"is_bodyguard": True})
+    return {
+        "message": f"Dropped ALL bodyguards ({res.deleted_count} slot(s) cleared, {res_robots.deleted_count} robot user(s) deleted)",
+        "deleted_bodyguards": res.deleted_count,
+        "deleted_robot_users": res_robots.deleted_count
+    }
+
+
 @api_router.post("/admin/hitlist/reset-npc-timers")
 async def admin_reset_hitlist_npc_timers(current_user: dict = Depends(get_current_user)):
     """Reset everyone's hitlist NPC add timers (3-per-3h window). All users can add NPCs again as if the window just started."""
