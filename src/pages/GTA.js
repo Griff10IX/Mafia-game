@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Car, Lock, AlertCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -144,11 +145,16 @@ const GTACard = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled }
           <div className="flex-1 min-w-0">
             <h3 className="text-base md:text-sm font-heading font-bold text-foreground truncate flex items-center gap-1.5">
               {unlocked ? (
-                <Car className="text-primary/60 w-4 h-4" />
+                <Car className="text-primary/60 w-4 h-4 shrink-0" />
               ) : (
-                <Lock className="text-mutedForeground/60 w-4 h-4" />
+                <Lock className="text-mutedForeground/60 w-4 h-4 shrink-0" />
               )}
-              {option.name}
+              <Link
+                to={`/gta/car/${option.id}`}
+                className="hover:text-primary hover:underline focus:outline-none focus:underline truncate inline-block"
+              >
+                {option.name}
+              </Link>
             </h3>
             <p className="text-sm md:text-xs text-mutedForeground line-clamp-1 md:truncate mt-1 md:mt-0.5">
               Difficulty {option.difficulty}/5

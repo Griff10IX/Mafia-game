@@ -8,6 +8,7 @@ import Ranking from "./pages/Ranking";
 import Crimes from "./pages/Crimes";
 import GTA from "./pages/GTA";
 import Garage from "./pages/Garage";
+import CarProfile from "./pages/CarProfile";
 import Jail from "./pages/Jail";
 import OrganisedCrime from "./pages/OrganisedCrime";
 import Attack from "./pages/Attack";
@@ -175,6 +176,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <GTA />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/gta/car/:carId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <CarProfile />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

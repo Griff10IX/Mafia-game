@@ -1,11 +1,31 @@
 import { useState, useEffect } from 'react';
-import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
 const RARITY_ORDER = { exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 12;
+const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
+const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
+
+function loadMeltScrapRarities() {
+  try {
+    const raw = localStorage.getItem(MELT_SCRAP_RARITIES_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMeltScrapRarities(rarities) {
+  try {
+    localStorage.setItem(MELT_SCRAP_RARITIES_KEY, JSON.stringify(rarities));
+  } catch (_) {}
+}
 
 export default function Garage() {
   const [cars, setCars] = useState([]);
@@ -17,6 +37,9 @@ export default function Garage() {
   const [customCarModal, setCustomCarModal] = useState(null);
   const [customCarImageUrl, setCustomCarImageUrl] = useState('');
   const [savingCustomImage, setSavingCustomImage] = useState(false);
+  const [meltScrapRarities, setMeltScrapRarities] = useState(() => loadMeltScrapRarities());
+  const [meltScrapSettingsOpen, setMeltScrapSettingsOpen] = useState(false);
+  const [meltScrapSettingsDraft, setMeltScrapSettingsDraft] = useState([]);
 
   useEffect(() => {
     fetchGarage();
@@ -137,19 +160,38 @@ export default function Garage() {
   const totalCount = allFilteredCars.length;
   const displayedCars = showAll ? allFilteredCars : allFilteredCars.slice(0, DEFAULT_VISIBLE);
   const hiddenCount = totalCount - displayedCars.length;
-  const displayedCarIds = displayedCars.map((c) => c.user_car_id);
+  // For melt/scrap, only non-custom cars; filter by saved rarities when set (empty = all)
+  const displayedEligibleForMelt = displayedCars.filter(
+    (c) => c.car_id !== 'car_custom' && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
+  );
+  const displayedEligibleIds = displayedEligibleForMelt.map((c) => c.user_car_id);
   const allDisplayedSelected =
-    displayedCarIds.length > 0 && displayedCarIds.every((id) => selectedCars.includes(id));
+    displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));
 
   const toggleSelectAllDisplayed = () => {
     setSelectedCars((prev) => {
       if (allDisplayedSelected) {
-        // clear only displayed cars from selection
-        return prev.filter((id) => !displayedCarIds.includes(id));
+        return prev.filter((id) => !displayedEligibleIds.includes(id));
       }
-      // add displayed cars to selection (dedupe)
-      return [...new Set([...prev, ...displayedCarIds])];
+      return [...new Set([...prev, ...displayedEligibleIds])];
     });
+  };
+
+  const openMeltScrapSettings = () => {
+    setMeltScrapSettingsDraft([...meltScrapRarities]);
+    setMeltScrapSettingsOpen(true);
+  };
+
+  const saveMeltScrapSettings = () => {
+    setMeltScrapRarities(meltScrapSettingsDraft);
+    saveMeltScrapRarities(meltScrapSettingsDraft);
+    setMeltScrapSettingsOpen(false);
+  };
+
+  const toggleDraftRarity = (rarity) => {
+    setMeltScrapSettingsDraft((prev) =>
+      prev.includes(rarity) ? prev.filter((r) => r !== rarity) : [...prev, rarity]
+    );
   };
 
   if (loading) {
@@ -243,19 +285,30 @@ export default function Garage() {
                 <span className="text-primary text-xs font-heading">({selectedCars.length} selected)</span>
               )}
               {displayedCars.length > 0 && (
-                <button
-                  type="button"
-                  onClick={toggleSelectAllDisplayed}
-                  className="inline-flex items-center gap-2 text-xs font-heading font-bold uppercase tracking-wider text-mutedForeground hover:text-primary transition-smooth"
-                  data-testid="garage-select-all"
-                >
-                  {allDisplayedSelected ? (
-                    <CheckSquare size={14} className="text-primary" />
-                  ) : (
-                    <Square size={14} className="text-mutedForeground" />
-                  )}
-                  {allDisplayedSelected ? 'Clear selection' : 'Select all'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleSelectAllDisplayed}
+                    className="inline-flex items-center gap-2 text-xs font-heading font-bold uppercase tracking-wider text-mutedForeground hover:text-primary transition-smooth"
+                    data-testid="garage-select-all"
+                  >
+                    {allDisplayedSelected ? (
+                      <CheckSquare size={14} className="text-primary" />
+                    ) : (
+                      <Square size={14} className="text-mutedForeground" />
+                    )}
+                    {allDisplayedSelected ? 'Clear selection' : 'Select all'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openMeltScrapSettings}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-sm border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 transition-smooth"
+                    title="Melt/Scrap rarities filter"
+                    aria-label="Melt/Scrap settings"
+                  >
+                    <Settings size={14} />
+                  </button>
+                </>
               )}
             </div>
             {selectedCars.length > 0 && (
@@ -316,11 +369,65 @@ export default function Garage() {
                 <div className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} leading-tight`}>
                   {car.rarity.replace('_', ' ')}
                 </div>
-                <h3 className="text-[10px] sm:text-xs font-heading font-bold text-foreground truncate leading-tight">{car.name}</h3>
+                <Link
+                  to={`/gta/car/${car.car_id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-[10px] sm:text-xs font-heading font-bold text-foreground truncate leading-tight block hover:text-primary hover:underline focus:outline-none focus:underline"
+                >
+                  {car.name}
+                </Link>
                 <div className="text-[9px] sm:text-[10px] text-primary font-heading font-bold">${car.value.toLocaleString()}</div>
               </div>
             ))}
           </div>
+
+          {/* Melt/Scrap rarities settings modal */}
+          {meltScrapSettingsOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setMeltScrapSettingsOpen(false)}>
+              <div className={`${styles.panel} border border-primary/30 rounded-sm shadow-xl max-w-sm w-full p-4`} onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                    <Settings size={16} /> Melt / Scrap filter
+                  </h3>
+                  <button type="button" onClick={() => setMeltScrapSettingsOpen(false)} className="text-mutedForeground hover:text-foreground">✕</button>
+                </div>
+                <p className="text-xs text-mutedForeground font-heading mb-3">
+                  When you use &quot;Select all&quot;, only cars of these rarities are selected. Leave all unchecked to include every rarity.
+                </p>
+                <div className="space-y-2 mb-4">
+                  {ALL_RARITIES.map((rarity) => (
+                    <label key={rarity} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={meltScrapSettingsDraft.includes(rarity)}
+                        onChange={() => toggleDraftRarity(rarity)}
+                        className="rounded border-primary/50 text-primary focus:ring-primary/50"
+                      />
+                      <span className={`text-sm font-heading capitalize ${getRarityColor(rarity)}`}>
+                        {rarity.replace('_', ' ')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMeltScrapSettingsDraft([])}
+                    className="text-xs font-heading text-mutedForeground hover:text-primary"
+                  >
+                    Clear (allow all)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveMeltScrapSettings}
+                    className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground font-heading font-bold uppercase tracking-wider py-2 rounded-sm border border-yellow-600/50"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Custom car picture modal */}
           {customCarModal && (

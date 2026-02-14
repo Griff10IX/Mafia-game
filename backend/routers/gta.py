@@ -242,8 +242,17 @@ async def melt_cars(
     return {"success": False, "message": "No cars were processed"}
 
 
+async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
+    """Return full car details by id (for profile page)."""
+    car = next((c for c in CARS if c.get("id") == car_id), None)
+    if not car:
+        raise HTTPException(status_code=404, detail="Car not found")
+    return dict(car)
+
+
 def register(router):
     router.add_api_route("/gta/options", get_gta_options, methods=["GET"])
+    router.add_api_route("/gta/car/{car_id}", get_car, methods=["GET"])
     router.add_api_route(
         "/gta/attempt",
         attempt_gta,
