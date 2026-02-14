@@ -1532,7 +1532,28 @@ async def get_stats_overview(
     }
 
 # Meta (ranks, cars) -> see routers/meta.py
-# Bank -> see routers/bank.py
+
+def _interest_option(duration_hours: int) -> dict | None:
+    try:
+        h = int(duration_hours)
+    except Exception:
+        return None
+    return next((o for o in BANK_INTEREST_OPTIONS if int(o.get("hours", 0) or 0) == h), None)
+
+
+def _parse_matures_at(matures_at: str | None) -> datetime | None:
+    """Parse deposit matures_at to timezone-aware UTC datetime. Returns None if missing/invalid."""
+    if not matures_at:
+        return None
+    try:
+        mat = datetime.fromisoformat(matures_at.replace("Z", "+00:00"))
+        if mat.tzinfo is None:
+            mat = mat.replace(tzinfo=timezone.utc)
+        return mat
+    except Exception:
+        return None
+
+# Bank routes -> see routers/bank.py (duplicate handlers kept here for compatibility)
 
 # ---- Sports Betting (live games / results) ----
 async def _sports_ensure_seed_events():
