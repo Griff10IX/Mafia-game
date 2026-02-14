@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import api, { refreshUser } from '../utils/api';
 import styles from '../styles/noir.module.css';
 
+// Utility functions
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -20,7 +21,12 @@ function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
 }
 
 function timeLeft(iso) {
@@ -38,6 +44,303 @@ function timeLeft(iso) {
   return `${s}s`;
 }
 
+// Subcomponents
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-[60vh]" data-testid="bank-loading">
+    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const PageHeader = () => (
+  <div>
+    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2">
+      Bank
+    </h1>
+    <p className="text-sm text-mutedForeground">
+      Interest · Swiss · Send Money
+    </p>
+  </div>
+);
+
+const InterestBankCard = ({ 
+  overview, 
+  meta, 
+  depositAmount, 
+  onDepositAmountChange, 
+  durationHours, 
+  onDurationChange,
+  preview,
+  onDeposit 
+}) => (
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Landmark size={18} className="text-primary" />
+        <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+          Interest Bank
+        </span>
+      </div>
+      <span className="text-xs text-mutedForeground">
+        Cash: <span className="font-bold text-foreground">{formatMoney(overview?.cash_on_hand)}</span>
+      </span>
+    </div>
+
+    <div className="p-4 space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-heading text-mutedForeground mb-1.5 uppercase tracking-wider">
+            Amount
+          </label>
+          <input
+            value={depositAmount}
+            onChange={(e) => onDepositAmountChange(e.target.value)}
+            placeholder="e.g. 250000"
+            className="w-full bg-input border border-border rounded-md h-10 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-heading text-mutedForeground mb-1.5 uppercase tracking-wider">
+            Duration
+          </label>
+          <select
+            value={String(durationHours)}
+            onChange={(e) => onDurationChange(parseInt(e.target.value, 10))}
+            className="w-full bg-input border border-border rounded-md h-10 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+          >
+            {(Array.isArray(meta?.interest_options) ? meta.interest_options : []).map((o) => (
+              <option key={o.hours} value={String(o.hours)}>
+                {o.hours}h ({Math.round(Number(o.rate) * 10000) / 100}%)
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="bg-secondary border border-primary/20 rounded-md p-3">
+        <div className="flex items-center gap-2 text-xs font-heading text-primary mb-3">
+          <Clock size={14} />
+          Preview
+        </div>
+        <div className="space-y-2 text-sm font-heading">
+          <div className="flex justify-between">
+            <span className="text-mutedForeground">Interest rate</span>
+            <span className="font-bold text-foreground">{(preview.rate * 100).toFixed(2)}%</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-mutedForeground">Estimated interest</span>
+            <span className="font-bold text-foreground">{formatMoney(preview.interest)}</span>
+          </div>
+          <div className="flex justify-between pt-2 border-t border-border">
+            <span className="text-mutedForeground">Total at maturity</span>
+            <span className="font-bold text-primary text-base">{formatMoney(preview.total)}</span>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onDeposit}
+        className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-lg font-heading font-bold uppercase tracking-wide py-3 border-2 border-yellow-600/50 transition-all shadow-lg shadow-primary/20 touch-manipulation"
+      >
+        💰 Deposit
+      </button>
+    </div>
+  </div>
+);
+
+const SwissBankCard = ({ 
+  overview, 
+  swissAmount, 
+  onSwissAmountChange, 
+  onDeposit, 
+  onWithdraw 
+}) => (
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <ShieldCheck size={18} className="text-primary" />
+        <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+          Swiss Bank
+        </span>
+      </div>
+      <span className="text-xs text-mutedForeground">
+        Limit: <span className="font-bold text-foreground">{formatMoney(overview?.swiss_limit)}</span>
+      </span>
+    </div>
+
+    <div className="p-4 space-y-4">
+      <div className="bg-secondary border border-primary/20 rounded-md p-3">
+        <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1">
+          Swiss Balance
+        </div>
+        <div className="text-xl font-heading font-bold text-primary">
+          {formatMoney(overview?.swiss_balance)}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-xs font-heading text-mutedForeground mb-1.5 uppercase tracking-wider">
+          Amount
+        </label>
+        <input
+          value={swissAmount}
+          onChange={(e) => onSwissAmountChange(e.target.value)}
+          placeholder="e.g. 100000"
+          className="w-full bg-input border border-border rounded-md h-10 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={onDeposit}
+          className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md font-heading font-bold uppercase tracking-wide py-2.5 text-sm border border-yellow-600/50 transition-all touch-manipulation"
+        >
+          Deposit
+        </button>
+        <button
+          type="button"
+          onClick={onWithdraw}
+          className="bg-secondary text-foreground border border-border hover:border-primary/30 rounded-md font-heading font-bold uppercase tracking-wide py-2.5 text-sm transition-all touch-manipulation"
+        >
+          Withdraw
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+const DepositCard = ({ deposit, onClaim }) => {
+  const left = timeLeft(deposit.matures_at);
+  const matured = !!deposit.matured;
+  const claimed = !!deposit.claimed_at;
+  const canClaim = matured && !claimed;
+
+  return (
+    <div className="bg-card border border-border rounded-md p-4 hover:border-primary/30 transition-all">
+      <div className="space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
+        <div className="flex-1 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-mutedForeground">Principal</span>
+            <span className="text-base font-heading font-bold text-foreground">
+              {formatMoney(deposit.principal)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-mutedForeground">
+              {(Number(deposit.interest_rate || 0) * 100).toFixed(2)}% rate
+            </span>
+            <span className="text-xs text-mutedForeground">
+              {formatDateTime(deposit.matures_at)}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between md:flex-col md:items-end gap-2">
+          <div className="text-sm font-heading">
+            {claimed ? (
+              <span className="text-mutedForeground">Claimed</span>
+            ) : matured ? (
+              <span className="text-primary font-bold">✓ Matured</span>
+            ) : (
+              <span className="text-mutedForeground">{left || '—'}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => onClaim(deposit.id)}
+            disabled={!canClaim}
+            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md px-4 py-2 text-sm font-bold uppercase border border-yellow-600/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+          >
+            Claim
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SendMoneyCard = ({ 
+  transferTo, 
+  onTransferToChange, 
+  transferAmount, 
+  onTransferAmountChange, 
+  transferNum,
+  onSend 
+}) => (
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
+      <div className="flex items-center gap-2">
+        <ArrowRightLeft size={18} className="text-primary" />
+        <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+          Send Money
+        </span>
+      </div>
+    </div>
+
+    <div className="p-4 space-y-4">
+      <div>
+        <label className="block text-xs font-heading text-mutedForeground mb-1.5 uppercase tracking-wider">
+          To Username
+        </label>
+        <input
+          value={transferTo}
+          onChange={(e) => onTransferToChange(e.target.value)}
+          placeholder="username..."
+          className="w-full bg-input border border-border rounded-md h-10 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-heading text-mutedForeground mb-1.5 uppercase tracking-wider">
+          Amount
+        </label>
+        <input
+          value={transferAmount}
+          onChange={(e) => onTransferAmountChange(e.target.value)}
+          placeholder="e.g. 50000"
+          className="w-full bg-input border border-border rounded-md h-10 px-3 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+        />
+        <div className="mt-1.5 text-xs text-mutedForeground">
+          You will send: <span className="font-bold text-foreground">{formatMoney(transferNum)}</span>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onSend}
+        className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-lg font-heading font-bold uppercase tracking-wide py-3 border-2 border-yellow-600/50 transition-all shadow-lg shadow-primary/20 touch-manipulation"
+      >
+        📤 Send
+      </button>
+    </div>
+  </div>
+);
+
+const TransferCard = ({ transfer }) => (
+  <div className="bg-card border border-border rounded-md p-4 hover:border-primary/30 transition-all">
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-heading font-bold mb-1 ${
+          transfer.direction === 'sent' ? 'text-red-400' : 'text-emerald-400'
+        }`}>
+          {transfer.direction === 'sent' ? '📤 Sent' : '📥 Received'}
+        </div>
+        <div className="text-xs text-mutedForeground truncate">
+          {transfer.direction === 'sent' ? `To: ${transfer.to_username}` : `From: ${transfer.from_username}`}
+        </div>
+      </div>
+      <div className="text-right">
+        <div className="text-base font-heading font-bold text-foreground">
+          {formatMoney(transfer.amount)}
+        </div>
+        <div className="text-xs text-mutedForeground">
+          {formatDateTime(transfer.created_at)}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// Main component
 export default function Bank() {
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState({ interest_options: [] });
@@ -58,6 +361,7 @@ export default function Bank() {
       setOverview(o.data);
     } catch (e) {
       toast.error('Failed to load bank');
+      console.error('Error fetching bank data:', e);
     } finally {
       setLoading(false);
     }
@@ -161,264 +465,88 @@ export default function Bank() {
   };
 
   if (loading && !overview) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]" data-testid="bank-loading">
-        <div className="text-primary text-xl font-heading">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   const deposits = Array.isArray(overview?.deposits) ? overview.deposits : [];
   const transfers = Array.isArray(overview?.transfers) ? overview.transfers : [];
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="bank-page">
-      <div className="flex items-center justify-center flex-col gap-2 text-center">
-        <div className="flex items-center gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Bank</h1>
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
-        </div>
-        <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">Interest · Swiss · Send money</p>
+    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="bank-page">
+      <PageHeader />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <InterestBankCard
+          overview={overview}
+          meta={meta}
+          depositAmount={depositAmount}
+          onDepositAmountChange={setDepositAmount}
+          durationHours={durationHours}
+          onDurationChange={setDurationHours}
+          preview={preview}
+          onDeposit={doDeposit}
+        />
+
+        <SwissBankCard
+          overview={overview}
+          swissAmount={swissAmount}
+          onSwissAmountChange={setSwissAmount}
+          onDeposit={swissDeposit}
+          onWithdraw={swissWithdraw}
+        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Interest Bank */}
-        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Landmark size={18} className="text-primary" />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Interest Bank</span>
-            </div>
-            <span className="text-xs font-heading text-primary/90">Cash: <span className="font-bold text-foreground">{formatMoney(overview?.cash_on_hand)}</span></span>
-          </div>
-
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-              <div className="sm:col-span-6">
-                <label className="block text-xs font-heading text-mutedForeground mb-1 uppercase tracking-wider">Amount</label>
-                <input
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(e.target.value)}
-                  placeholder="e.g. 250000"
-                  className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
-                />
-              </div>
-              <div className="sm:col-span-6">
-                <label className="block text-xs font-heading text-mutedForeground mb-1 uppercase tracking-wider">Duration</label>
-                <select
-                  value={String(durationHours)}
-                  onChange={(e) => setDurationHours(parseInt(e.target.value, 10))}
-                  className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
-                >
-                  {(Array.isArray(meta?.interest_options) ? meta.interest_options : []).map((o) => (
-                    <option key={o.hours} value={String(o.hours)}>
-                      {o.hours} hours ({Math.round(Number(o.rate) * 10000) / 100}%)
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className={`border border-primary/20 rounded-sm p-3 ${styles.surfaceMuted}`}>
-              <div className="text-xs font-heading text-primary/80 flex items-center gap-2">
-                <Clock size={14} className="text-primary" />
-                Preview
-              </div>
-              <div className="mt-2 grid grid-cols-12 gap-2 text-xs font-heading">
-                <div className="col-span-6 text-mutedForeground">Interest rate</div>
-                <div className="col-span-6 text-right font-bold text-foreground">{(preview.rate * 100).toFixed(2)}%</div>
-                <div className="col-span-6 text-mutedForeground">Estimated interest</div>
-                <div className="col-span-6 text-right font-bold text-foreground">{formatMoney(preview.interest)}</div>
-                <div className="col-span-6 text-mutedForeground">Total at maturity</div>
-                <div className="col-span-6 text-right font-bold text-primary">{formatMoney(preview.total)}</div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={doDeposit}
-              className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth"
-            >
-              Deposit
-            </button>
-          </div>
-        </div>
-
-        {/* Swiss Bank */}
-        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={18} className="text-primary" />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Swiss Bank</span>
-            </div>
-            <span className="text-xs font-heading text-primary/90">Limit: <span className="font-bold text-foreground">{formatMoney(overview?.swiss_limit)}</span></span>
-          </div>
-
-          <div className="p-4 space-y-3">
-            <div className={`border border-primary/20 rounded-sm p-3 ${styles.surfaceMuted}`}>
-              <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider">Swiss balance</div>
-              <div className="text-lg font-heading font-bold text-primary">{formatMoney(overview?.swiss_balance)}</div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-heading text-mutedForeground mb-1 uppercase tracking-wider">Amount</label>
-              <input
-                value={swissAmount}
-                onChange={(e) => setSwissAmount(e.target.value)}
-                placeholder="e.g. 100000"
-                className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={swissDeposit}
-                className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs border border-yellow-600/50 transition-smooth"
-              >
-                Deposit
-              </button>
-              <button
-                type="button"
-                onClick={swissWithdraw}
-                className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-foreground rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth`}
-              >
-                Withdraw
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Active Deposits */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between`}>
+      {/* Interest Deposits */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Coins size={18} className="text-primary" />
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Interest Deposits</span>
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+              Interest Deposits
+            </span>
           </div>
-          <span className="text-xs font-heading text-mutedForeground">{deposits.length} total</span>
+          <span className="text-xs text-mutedForeground">{deposits.length} total</span>
         </div>
 
         {deposits.length === 0 ? (
-          <div className="p-4 text-sm text-mutedForeground font-heading">No deposits yet.</div>
+          <div className="p-8 text-sm text-mutedForeground font-heading text-center">
+            No deposits yet.
+          </div>
         ) : (
-          <div>
-            <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
-              <div className="col-span-3">Principal</div>
-              <div className="col-span-2">Rate</div>
-              <div className="col-span-3">Matures</div>
-              <div className="col-span-2">Status</div>
-              <div className="col-span-2 text-right">Action</div>
-            </div>
-            {deposits.map((d) => {
-              const left = timeLeft(d.matures_at);
-              const matured = !!d.matured;
-              const claimed = !!d.claimed_at;
-              const canClaim = matured && !claimed;
-              return (
-                <div key={d.id} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs items-center font-heading ${styles.raisedHover} transition-smooth`}>
-                  <div className="col-span-3 font-bold text-foreground">{formatMoney(d.principal)}</div>
-                  <div className="col-span-2 text-mutedForeground">{(Number(d.interest_rate || 0) * 100).toFixed(2)}%</div>
-                  <div className="col-span-3 text-mutedForeground">{formatDateTime(d.matures_at)}</div>
-                  <div className="col-span-2">
-                    {claimed ? (
-                      <span className="text-mutedForeground">Claimed</span>
-                    ) : matured ? (
-                      <span className="text-primary font-bold">Matured</span>
-                    ) : (
-                      <span className="text-mutedForeground">{left || '—'}</span>
-                    )}
-                  </div>
-                  <div className="col-span-2 text-right">
-                    <button
-                      type="button"
-                      onClick={() => claimDeposit(d.id)}
-                      disabled={!canClaim}
-                      className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-[11px] font-heading font-bold uppercase tracking-wider border border-yellow-600/50 transition-smooth disabled:opacity-50"
-                    >
-                      Claim
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="p-3 md:p-4 space-y-3">
+            {deposits.map((d) => (
+              <DepositCard key={d.id} deposit={d} onClaim={claimDeposit} />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Transfers */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-            <div className="flex items-center gap-2">
-              <ArrowRightLeft size={18} className="text-primary" />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Send Money</span>
-            </div>
-          </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <SendMoneyCard
+          transferTo={transferTo}
+          onTransferToChange={setTransferTo}
+          transferAmount={transferAmount}
+          onTransferAmountChange={setTransferAmount}
+          transferNum={transferNum}
+          onSend={sendMoney}
+        />
 
-          <div className="p-4 space-y-3">
-            <div>
-              <label className="block text-xs font-heading text-mutedForeground mb-1 uppercase tracking-wider">To username</label>
-              <input
-                value={transferTo}
-                onChange={(e) => setTransferTo(e.target.value)}
-                placeholder="username..."
-                className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-heading text-mutedForeground mb-1 uppercase tracking-wider">Amount</label>
-              <input
-                value={transferAmount}
-                onChange={(e) => setTransferAmount(e.target.value)}
-                placeholder="e.g. 50000"
-                className={`w-full ${styles.input} h-10 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
-              />
-              <div className="mt-1 text-xs text-mutedForeground font-heading">
-                You will send: <span className="font-bold text-foreground">{formatMoney(transferNum)}</span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={sendMoney}
-              className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-
-        <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-          <div className={`px-4 py-2 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between`}>
-            <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Sent / Received</span>
-            <span className="text-xs font-heading text-mutedForeground">{transfers.length} recent</span>
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+          <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+              Sent / Received
+            </span>
+            <span className="text-xs text-mutedForeground">{transfers.length} recent</span>
           </div>
 
           {transfers.length === 0 ? (
-            <div className="p-4 text-sm text-mutedForeground font-heading">No transfers yet.</div>
+            <div className="p-8 text-sm text-mutedForeground font-heading text-center">
+              No transfers yet.
+            </div>
           ) : (
-            <div>
-              <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs font-heading font-bold text-primary/80 uppercase tracking-wider px-4 py-2 border-b border-primary/20`}>
-                <div className="col-span-4">Type</div>
-                <div className="col-span-4">User</div>
-                <div className="col-span-2 text-right">Amount</div>
-                <div className="col-span-2 text-right">Time</div>
-              </div>
+            <div className="p-3 md:p-4 space-y-3">
               {transfers.map((t) => (
-                <div key={t.id} className={`grid grid-cols-12 px-4 py-2.5 border-b border-primary/10 text-xs items-center font-heading ${styles.raisedHover} transition-smooth`}>
-                  <div className="col-span-4">
-                    <span className={t.direction === 'sent' ? 'text-red-400 font-bold' : 'text-emerald-400 font-bold'}>
-                      {t.direction === 'sent' ? 'Sent' : 'Received'}
-                    </span>
-                  </div>
-                  <div className="col-span-4 text-mutedForeground truncate">
-                    {t.direction === 'sent' ? t.to_username : t.from_username}
-                  </div>
-                  <div className="col-span-2 text-right font-bold text-foreground">{formatMoney(t.amount)}</div>
-                  <div className="col-span-2 text-right text-mutedForeground">{formatDateTime(t.created_at)}</div>
-                </div>
+                <TransferCard key={t.id} transfer={t} />
               ))}
             </div>
           )}
@@ -427,4 +555,3 @@ export default function Bank() {
     </div>
   );
 }
-

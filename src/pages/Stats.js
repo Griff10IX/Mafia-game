@@ -60,17 +60,23 @@ const StatCard = ({ title, rows }) => {
           {title}
         </h2>
       </div>
-      <div className="divide-y divide-border">
-        {safeRows.map((r) => (
-          <div 
-            key={r.label} 
-            className="flex items-center justify-between px-4 py-3 text-sm font-heading hover:bg-secondary/30 transition-colors"
-          >
-            <span className="text-mutedForeground">{r.label}</span>
-            <span className="font-bold text-foreground tabular-nums">{r.value}</span>
-          </div>
-        ))}
-      </div>
+      {safeRows.length === 0 ? (
+        <div className="px-4 py-6 text-sm text-mutedForeground font-heading text-center">
+          No data available
+        </div>
+      ) : (
+        <div className="divide-y divide-border">
+          {safeRows.map((r) => (
+            <div 
+              key={r.label} 
+              className="flex items-center justify-between px-4 py-2.5 text-sm font-heading hover:bg-secondary/30 transition-colors"
+            >
+              <span className="text-mutedForeground">{r.label}</span>
+              <span className="font-bold text-foreground tabular-nums">{r.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
@@ -82,16 +88,16 @@ const RankStatsCard = ({ rankStats }) => (
         Rank Stats
       </h2>
     </div>
-    <div className="divide-y divide-border">
-      {rankStats.length === 0 ? (
-        <div className="px-4 py-8 text-sm text-mutedForeground font-heading text-center">
-          No rank data yet.
-        </div>
-      ) : (
-        rankStats.map((r) => (
+    {rankStats.length === 0 ? (
+      <div className="px-4 py-6 text-sm text-mutedForeground font-heading text-center">
+        No rank data yet.
+      </div>
+    ) : (
+      <div className="divide-y divide-border">
+        {rankStats.map((r) => (
           <div 
             key={r.rank_id} 
-            className="flex items-center justify-between px-4 py-3 text-sm font-heading hover:bg-secondary/30 transition-colors"
+            className="flex items-center justify-between px-4 py-2.5 text-sm font-heading hover:bg-secondary/30 transition-colors"
           >
             <span className="font-bold text-foreground flex-1 truncate">{r.rank_name}</span>
             <span className="text-emerald-400 font-bold tabular-nums w-16 text-center">
@@ -101,9 +107,9 @@ const RankStatsCard = ({ rankStats }) => (
               {formatNumber(r.dead)}
             </span>
           </div>
-        ))
-      )}
-    </div>
+        ))}
+      </div>
+    )}
   </div>
 );
 
