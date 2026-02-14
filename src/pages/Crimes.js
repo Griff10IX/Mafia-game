@@ -319,22 +319,38 @@ export default function Crimes() {
     if (available.length === 0 || commitAllLoading || user?.in_jail) return;
     setCommitAllLoading(true);
     let committed = 0;
+    let failed = 0;
     let totalCash = 0;
     let totalRankPoints = 0;
+    
     try {
       for (const crime of available) {
         try {
           const response = await api.post(`/crimes/${crime.id}/commit`);
           if (response.data?.success) {
             committed += 1;
-            totalCash += Number(response.data?.reward) || 0;
-            totalRankPoints += Number(response.data?.rank_points) || 0;
+            
+            // Try to parse cash and RP from the message
+            // Expected format: "You did X and earned $Y" or "... earned $Y and Z RP"
+            const msg = response.data?.message || '';
+            const cashMatch = msg.match(/\$([0-9,]+)/);
+            const rpMatch = msg.match(/(\d+)\s*(?:RP|rank points?)/i);
+            
+            if (cashMatch) {
+              totalCash += parseInt(cashMatch[1].replace(/,/g, ''), 10) || 0;
+            }
+            if (rpMatch) {
+              totalRankPoints += parseInt(rpMatch[1], 10) || 0;
+            }
+            
             refreshUser();
           } else {
+            failed += 1;
             toast.error(response.data?.message || `${crime.name} failed`);
           }
           await fetchCrimes();
         } catch (err) {
+          failed += 1;
           const detail = err.response?.data?.detail ?? err.message ?? 'Request failed';
           toast.error(detail);
           await refreshUser();
@@ -345,9 +361,14 @@ export default function Crimes() {
         }
       }
       if (committed > 0) {
-        toast.success(
-          `You committed ${committed} crime${committed !== 1 ? 's' : ''} and earned $${totalCash.toLocaleString()} + ${totalRankPoints.toLocaleString()} RP`
-        );
+        const parts = [`Committed ${committed} crime${committed !== 1 ? 's' : ''}`];
+        if (totalCash > 0 || totalRankPoints > 0) {
+          const rewards = [];
+          if (totalCash > 0) rewards.push(`$${totalCash.toLocaleString()}`);
+          if (totalRankPoints > 0) rewards.push(`${totalRankPoints.toLocaleString()} RP`);
+          parts.push(`earned ${rewards.join(' + ')}`);
+        }
+        toast.success(parts.join(' and '));
       }
     } finally {
       setCommitAllLoading(false);
