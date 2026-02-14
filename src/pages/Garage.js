@@ -35,25 +35,32 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Car className="w-8 h-8 md:w-10 md:h-10" />
-      Garage
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Manage your stolen vehicles
-    </p>
+const PageHeader = ({ totalCount }) => (
+  <div className="flex flex-wrap items-end justify-between gap-4">
+    <div>
+      <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
+        <Car className="w-6 h-6 sm:w-7 sm:h-7" />
+        Garage
+      </h1>
+      <p className="text-xs text-mutedForeground">
+        Manage your stolen vehicles
+      </p>
+    </div>
+    <div className="flex items-center gap-1.5 text-xs font-heading">
+      <span className="text-mutedForeground">Total:</span>
+      <span className="text-primary font-bold text-lg">{totalCount}</span>
+      <span className="text-mutedForeground">cars</span>
+    </div>
   </div>
 );
 
 const EmptyGarageCard = () => (
-  <div className="bg-card rounded-md border border-border py-16 text-center">
-    <Car size={64} className="mx-auto text-primary/30 mb-4" />
-    <h3 className="text-lg font-heading font-bold text-foreground uppercase tracking-wide mb-2">
+  <div className="bg-card rounded-md border border-border py-12 text-center">
+    <Car size={48} className="mx-auto text-primary/30 mb-3" />
+    <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wide mb-1">
       Empty Garage
     </h3>
-    <p className="text-sm text-mutedForeground font-heading">
+    <p className="text-xs text-mutedForeground font-heading">
       Steal some cars to see them here
     </p>
   </div>
@@ -61,22 +68,22 @@ const EmptyGarageCard = () => (
 
 const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-        <Filter size={16} />
+    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
+        <Filter size={14} />
         Sort & Filter
       </h2>
     </div>
-    <div className="p-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div className="p-3">
+      <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-2">
+          <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
             Sort By
           </label>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
+            className="w-full bg-input border border-border rounded px-2 py-1.5 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
           >
             <option value="newest">Newest First</option>
             <option value="oldest">Oldest First</option>
@@ -86,13 +93,13 @@ const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) =
           </select>
         </div>
         <div>
-          <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-2">
+          <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
             Filter Rarity
           </label>
           <select
             value={filterRarity}
             onChange={(e) => setFilterRarity(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
+            className="w-full bg-input border border-border rounded px-2 py-1.5 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
           >
             <option value="all">All Rarities</option>
             <option value="common">Common</option>
@@ -110,7 +117,6 @@ const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) =
 );
 
 const ActionsBar = ({
-  totalCount,
   displayedCount,
   hiddenCount,
   showAll,
@@ -124,51 +130,41 @@ const ActionsBar = ({
   onMelt,
   onScrap
 }) => (
-  <div className="bg-card rounded-md border border-primary/20 p-4">
-    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <span className="text-2xl font-heading font-bold text-primary tabular-nums">
-            {totalCount}
-          </span>
-          <span className="text-sm text-mutedForeground font-heading">
-            {totalCount === 1 ? 'Car' : 'Cars'}
-          </span>
-        </div>
-        
+  <div className="bg-card rounded-md border border-primary/20 p-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         {!showAll && hiddenCount > 0 && (
-          <span className="text-xs text-mutedForeground font-heading">
-            (showing {displayedCount})
+          <span className="text-[10px] text-mutedForeground font-heading">
+            Showing {displayedCount}
           </span>
         )}
         
         {selectedCount > 0 && (
-          <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/30">
+          <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/30">
             {selectedCount} selected
           </span>
         )}
         
         {displayedCount > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={onToggleSelectAll}
               disabled={noEligibleInView}
-              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-heading font-bold uppercase tracking-wide transition-all ${
+              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-heading font-bold uppercase tracking-wide transition-all ${
                 noEligibleInView
                   ? 'border-border text-mutedForeground/60 cursor-not-allowed'
                   : 'border-primary/30 text-foreground hover:border-primary/50 hover:bg-primary/10 active:scale-95'
               }`}
               data-testid="garage-select-all"
-              title={noEligibleInView ? 'No cars match your filter' : undefined}
             >
               {allDisplayedSelected ? (
-                <CheckSquare size={14} className="text-primary" />
+                <CheckSquare size={12} className="text-primary" />
               ) : (
-                <Square size={14} className="text-mutedForeground" />
+                <Square size={12} className="text-mutedForeground" />
               )}
               {noEligibleInView
-                ? 'No cars match'
+                ? 'No match'
                 : allDisplayedSelected
                 ? `Clear${filterActive ? ` (${displayedEligibleCount})` : ''}`
                 : `Select all${filterActive ? ` (${displayedEligibleCount})` : ''}`}
@@ -177,31 +173,30 @@ const ActionsBar = ({
             <button
               type="button"
               onClick={onOpenSettings}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all active:scale-95"
-              title="Filter rarities for Select All"
-              aria-label="Melt/Scrap settings"
+              className="inline-flex items-center justify-center w-7 h-7 rounded border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all active:scale-95"
+              title="Filter rarities"
             >
-              <Settings size={16} />
+              <Settings size={14} />
             </button>
           </div>
         )}
       </div>
       
       {selectedCount > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           <button
             onClick={onMelt}
-            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 text-sm font-heading font-bold uppercase tracking-wide border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all active:scale-95 inline-flex items-center gap-2 touch-manipulation"
+            className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide border border-yellow-600/50 shadow shadow-primary/20 transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
           >
-            <Flame size={16} />
-            Melt for Bullets
+            <Flame size={12} />
+            Melt
           </button>
           <button
             onClick={onScrap}
-            className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded-lg px-4 py-2.5 text-sm font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-2 touch-manipulation"
+            className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
           >
-            <DollarSign size={16} />
-            Scrap for Cash
+            <DollarSign size={12} />
+            Scrap
           </button>
         </div>
       )}
@@ -215,13 +210,13 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
   return (
     <div
       onClick={() => (isCustom ? onOpenCustomModal(car) : onToggle(car.user_car_id))}
-      className={`bg-card rounded-md border-2 p-2 cursor-pointer transition-all ${
+      className={`bg-card rounded-md border p-1.5 cursor-pointer transition-all ${
         isSelected
           ? 'border-primary shadow-md shadow-primary/20'
           : 'border-border hover:border-primary/30 hover:shadow-sm'
       }`}
     >
-      <div className="w-full aspect-square rounded-md overflow-hidden bg-secondary border border-border mb-2 relative">
+      <div className="w-full aspect-square rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
         {car.image ? (
           <img
             src={car.image}
@@ -231,41 +226,34 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Car size={32} className="text-primary/30" />
+            <Car size={24} className="text-primary/30" />
           </div>
         )}
         {!isCustom && (
-          <div className="absolute top-2 right-2 w-7 h-7 rounded-md flex items-center justify-center bg-card/95 border-2 border-primary/50 shadow-lg">
+          <div className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center bg-card/95 border border-primary/50 shadow">
             {isSelected ? (
-              <CheckSquare size={18} className="text-primary" strokeWidth={2.5} />
+              <CheckSquare size={12} className="text-primary" strokeWidth={2.5} />
             ) : (
-              <Square size={18} className="text-mutedForeground" strokeWidth={2} />
+              <Square size={12} className="text-mutedForeground" strokeWidth={2} />
             )}
           </div>
         )}
       </div>
       
-      <div className={`text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} mb-1`}>
+      <div className={`text-[8px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} mb-0.5`}>
         {car.rarity.replace('_', ' ')}
       </div>
       
       <Link
         to={`/gta/car/${car.car_id}`}
         onClick={(e) => e.stopPropagation()}
-        className="text-xs md:text-sm font-heading font-bold text-foreground hover:text-primary transition-colors truncate block mb-1"
+        className="text-[11px] font-heading font-bold text-foreground hover:text-primary transition-colors truncate block mb-0.5"
       >
         {car.name}
       </Link>
       
-      <div className="flex items-center justify-between gap-1 text-xs">
-        <span className="text-primary font-heading font-bold">
-          ${car.value.toLocaleString()}
-        </span>
-        {!isCustom && (
-          <span className={`text-[10px] font-heading ${isSelected ? 'text-primary font-bold' : 'text-mutedForeground'}`}>
-            {isSelected ? 'Selected' : '—'}
-          </span>
-        )}
+      <div className="text-[10px] text-primary font-heading font-bold">
+        ${car.value.toLocaleString()}
       </div>
     </div>
   );
@@ -284,59 +272,55 @@ const SettingsModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
-        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <h3 className="text-base font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
-            <Settings size={18} />
+      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
+            <Settings size={16} />
             Select All Filter
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-mutedForeground hover:text-primary transition-colors p-1"
-          >
-            <span className="text-xl">×</span>
+          <button type="button" onClick={onClose} className="text-mutedForeground hover:text-primary transition-colors">
+            <span className="text-lg">×</span>
           </button>
         </div>
         
-        <div className="p-4 md:p-6 space-y-4">
-          <p className="text-sm text-mutedForeground font-heading leading-relaxed">
-            Choose which rarities to include when using "Select all". Leave all unchecked to include every rarity.
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-mutedForeground font-heading">
+            Choose rarities for "Select all". Leave unchecked to include all.
           </p>
           
-          <div className="space-y-2">
+          <div className="space-y-1">
             {ALL_RARITIES.map((rarity) => (
               <label
                 key={rarity}
-                className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-secondary/30 transition-colors"
+                className="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-secondary/30 transition-colors"
               >
                 <input
                   type="checkbox"
                   checked={draft.includes(rarity)}
                   onChange={() => onToggleRarity(rarity)}
-                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50 cursor-pointer"
+                  className="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary/50 cursor-pointer"
                 />
-                <span className={`text-sm font-heading font-bold capitalize ${getRarityColor(rarity)}`}>
+                <span className={`text-xs font-heading font-bold capitalize ${getRarityColor(rarity)}`}>
                   {rarity.replace('_', ' ')}
                 </span>
               </label>
             ))}
           </div>
           
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-2 pt-2">
             <button
               type="button"
               onClick={onClear}
-              className="px-4 py-2 text-sm font-heading text-mutedForeground hover:text-foreground transition-colors"
+              className="px-3 py-1.5 text-xs font-heading text-mutedForeground hover:text-foreground transition-colors"
             >
-              Clear All
+              Clear
             </button>
             <button
               type="button"
               onClick={onSave}
-              className="flex-1 bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all active:scale-95"
+              className="flex-1 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-yellow-600/50 transition-all active:scale-95"
             >
-              Save Settings
+              Save
             </button>
           </div>
         </div>
@@ -357,64 +341,49 @@ const CustomCarModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
-        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <h3 className="text-base font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
-            <ImageIcon size={18} />
+      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
+            <ImageIcon size={16} />
             Custom Car Picture
           </h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-mutedForeground hover:text-primary transition-colors p-1"
-          >
-            <span className="text-xl">×</span>
+          <button type="button" onClick={onClose} className="text-mutedForeground hover:text-primary transition-colors">
+            <span className="text-lg">×</span>
           </button>
         </div>
         
-        <div className="p-4 md:p-6 space-y-4">
+        <div className="p-4 space-y-3">
           <div>
-            <p className="text-sm font-heading font-bold text-foreground mb-1">
-              {car.name}
-            </p>
-            <p className="text-xs text-mutedForeground font-heading">
-              Update the image URL for your custom car
-            </p>
+            <p className="text-sm font-heading font-bold text-foreground">{car.name}</p>
+            <p className="text-[10px] text-mutedForeground font-heading">Update the image URL</p>
           </div>
           
-          <div className="aspect-video rounded-md overflow-hidden bg-secondary border-2 border-border">
+          <div className="aspect-video rounded overflow-hidden bg-secondary border border-border">
             {imageUrl ? (
-              <img
-                src={imageUrl}
-                alt={car.name}
-                className="w-full h-full object-cover"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
+              <img src={imageUrl} alt={car.name} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
-                <Car size={48} className="text-primary/30" />
+                <Car size={32} className="text-primary/30" />
               </div>
             )}
           </div>
           
           <div>
-            <label className="block text-sm text-mutedForeground font-heading mb-2">
-              Image URL
-            </label>
+            <label className="block text-[10px] text-mutedForeground font-heading mb-1">Image URL</label>
             <input
               type="url"
               value={imageUrl}
               onChange={(e) => setImageUrl(e.target.value)}
               placeholder="https://example.com/car-image.jpg"
-              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+              className="w-full bg-input border border-border rounded px-2 py-1.5 text-xs text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
             />
           </div>
           
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-border rounded-md text-sm font-heading text-foreground hover:bg-secondary/50 transition-colors"
+              className="px-3 py-1.5 border border-border rounded text-xs font-heading text-foreground hover:bg-secondary/50 transition-colors"
             >
               Cancel
             </button>
@@ -422,9 +391,9 @@ const CustomCarModal = ({
               type="button"
               onClick={onSave}
               disabled={saving}
-              className="flex-1 bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="flex-1 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-yellow-600/50 transition-all disabled:opacity-50 active:scale-95"
             >
-              {saving ? 'Saving...' : 'Save Picture'}
+              {saving ? 'Saving...' : 'Save'}
             </button>
           </div>
         </div>
@@ -458,7 +427,6 @@ export default function Garage() {
       setCars(response.data.cars);
     } catch (error) {
       toast.error('Failed to load garage');
-      console.error('Error fetching garage:', error);
     } finally {
       setLoading(false);
     }
@@ -493,11 +461,7 @@ export default function Garage() {
   };
 
   const meltCars = async () => {
-    if (selectedCars.length === 0) {
-      toast.error('No cars selected');
-      return;
-    }
-
+    if (selectedCars.length === 0) { toast.error('No cars selected'); return; }
     try {
       const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'bullets' });
       toast.success(response.data.message);
@@ -509,11 +473,7 @@ export default function Garage() {
   };
 
   const scrapCars = async () => {
-    if (selectedCars.length === 0) {
-      toast.error('No cars selected');
-      return;
-    }
-
+    if (selectedCars.length === 0) { toast.error('No cars selected'); return; }
     try {
       const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'cash' });
       toast.success(response.data.message);
@@ -539,28 +499,19 @@ export default function Garage() {
 
   const getFilteredAndSortedCars = () => {
     let filtered = [...cars];
-    
     if (filterRarity !== 'all') {
       filtered = filtered.filter(car => car.rarity === filterRarity);
     }
-    
     filtered.sort((a, b) => {
       switch(sortBy) {
-        case 'newest':
-          return new Date(b.acquired_at) - new Date(a.acquired_at);
-        case 'oldest':
-          return new Date(a.acquired_at) - new Date(b.acquired_at);
-        case 'value-high':
-          return b.value - a.value;
-        case 'value-low':
-          return a.value - b.value;
-        case 'rarity':
-          return (RARITY_ORDER[b.rarity] || 0) - (RARITY_ORDER[a.rarity] || 0);
-        default:
-          return 0;
+        case 'newest': return new Date(b.acquired_at) - new Date(a.acquired_at);
+        case 'oldest': return new Date(a.acquired_at) - new Date(b.acquired_at);
+        case 'value-high': return b.value - a.value;
+        case 'value-low': return a.value - b.value;
+        case 'rarity': return (RARITY_ORDER[b.rarity] || 0) - (RARITY_ORDER[a.rarity] || 0);
+        default: return 0;
       }
     });
-    
     return filtered;
   };
 
@@ -573,8 +524,7 @@ export default function Garage() {
     (c) => c.car_id !== 'car_custom' && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
   );
   const displayedEligibleIds = displayedEligibleForMelt.map((c) => c.user_car_id);
-  const allDisplayedSelected =
-    displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));
+  const allDisplayedSelected = displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));
   const filterActive = meltScrapRarities.length > 0;
   const noEligibleInView = filterActive && displayedEligibleIds.length === 0;
 
@@ -605,13 +555,11 @@ export default function Garage() {
     );
   };
 
-  if (loading) {
-    return <LoadingSpinner />;
-  }
+  if (loading) return <LoadingSpinner />;
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`}>
-      <PageHeader />
+    <div className={`space-y-4 ${styles.pageContent}`}>
+      <PageHeader totalCount={cars.length} />
 
       {cars.length === 0 ? (
         <EmptyGarageCard />
@@ -625,7 +573,6 @@ export default function Garage() {
           />
 
           <ActionsBar
-            totalCount={totalCount}
             displayedCount={displayedCars.length}
             hiddenCount={hiddenCount}
             showAll={showAll}
@@ -640,7 +587,7 @@ export default function Garage() {
             onScrap={scrapCars}
           />
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
             {displayedCars.map((car, index) => (
               <CarCard
                 key={index}
@@ -658,16 +605,16 @@ export default function Garage() {
               <button
                 type="button"
                 onClick={() => setShowAll((v) => !v)}
-                className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded-lg px-6 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-2 touch-manipulation"
+                className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
               >
                 {showAll ? (
                   <>
-                    <ChevronUp size={16} />
+                    <ChevronUp size={14} />
                     Show Top {DEFAULT_VISIBLE}
                   </>
                 ) : (
                   <>
-                    <ChevronDown size={16} />
+                    <ChevronDown size={14} />
                     View All ({hiddenCount} more)
                   </>
                 )}
