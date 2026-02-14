@@ -104,9 +104,11 @@ export default function CarProfile() {
             <div className={`${styles.surface} rounded-sm border border-primary/20 p-3 flex items-center gap-2`}>
               <Clock size={18} className="text-primary shrink-0" />
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Travel bonus</div>
+                <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Travel time</div>
                 <div className="font-heading font-bold text-foreground">
-                  {car.travel_bonus != null && car.travel_bonus > 0 ? `+${car.travel_bonus}%` : '—'}
+                  {car.travel_time != null && car.travel_time >= 0
+                    ? `${car.travel_time}s`
+                    : '—'}
                 </div>
               </div>
             </div>

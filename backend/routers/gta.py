@@ -12,6 +12,7 @@ from server import (
     get_effective_event,
     RANKS,
     CARS,
+    TRAVEL_TIMES,
     GTA_OPTIONS,
     DEFAULT_GARAGE_BATCH_LIMIT,
     GTAAttemptRequest,
@@ -247,7 +248,14 @@ async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
     car = next((c for c in CARS if c.get("id") == car_id), None)
     if not car:
         raise HTTPException(status_code=404, detail="Car not found")
-    return dict(car)
+    out = dict(car)
+    # Add travel_time (seconds) so profile can show how long this car takes to travel
+    rarity = car.get("rarity") or "common"
+    if car.get("id") == "car_custom":
+        out["travel_time"] = TRAVEL_TIMES.get("custom", 20)
+    else:
+        out["travel_time"] = TRAVEL_TIMES.get(rarity, 45)
+    return out
 
 
 def register(router):

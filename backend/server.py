@@ -58,19 +58,19 @@ api_router = APIRouter(prefix="/api")
 
 # Constants
 STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
-# Rank is based on rank_points only; 10x harder than original scale
+# Rank is based on rank_points only; 20x harder than original scale
 RANKS = [
     {"id": 1, "name": "Street Thug", "required_points": 0},
-    {"id": 2, "name": "Hustler", "required_points": 500},
-    {"id": 3, "name": "Goon", "required_points": 1500},
-    {"id": 4, "name": "Made Man", "required_points": 3000},
-    {"id": 5, "name": "Capo", "required_points": 6000},
-    {"id": 6, "name": "Underboss", "required_points": 12000},
-    {"id": 7, "name": "Consigliere", "required_points": 25000},
-    {"id": 8, "name": "Boss", "required_points": 50000},
-    {"id": 9, "name": "Don", "required_points": 100000},
-    {"id": 10, "name": "Godfather", "required_points": 200000},
-    {"id": 11, "name": "The Commission", "required_points": 500000}
+    {"id": 2, "name": "Hustler", "required_points": 1000},
+    {"id": 3, "name": "Goon", "required_points": 3000},
+    {"id": 4, "name": "Made Man", "required_points": 6000},
+    {"id": 5, "name": "Capo", "required_points": 12000},
+    {"id": 6, "name": "Underboss", "required_points": 24000},
+    {"id": 7, "name": "Consigliere", "required_points": 50000},
+    {"id": 8, "name": "Boss", "required_points": 100000},
+    {"id": 9, "name": "Don", "required_points": 200000},
+    {"id": 10, "name": "Godfather", "required_points": 400000},
+    {"id": 11, "name": "The Commission", "required_points": 1000000}
 ]
 
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)
@@ -3471,8 +3471,8 @@ SEED_FAMILIES_CONFIG = [
     {"name": "Stracci", "tag": "STRC", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
 ]
 # rank_points by role so seeded users have different ranks (boss highest -> soldier lowest)
-# Scaled 10x to match RANKS required_points (ranking up 10x harder)
-SEED_RANK_POINTS_BY_ROLE = {"boss": 12000, "underboss": 6000, "consigliere": 3000, "capo": 1500, "soldier": 500}
+# Scaled to match RANKS required_points (ranking up 20x harder)
+SEED_RANK_POINTS_BY_ROLE = {"boss": 24000, "underboss": 12000, "consigliere": 6000, "capo": 3000, "soldier": 1000}
 # racket levels per family (name -> {racket_id: level}). All at least 1 so they can collect.
 SEED_RACKETS_BY_FAMILY = {
     "Corleone": {"protection": 2, "gambling": 1, "loansharking": 1, "labour": 1},
@@ -5619,7 +5619,64 @@ async def send_message_to_user(request: SendMessageRequest, current_user: dict =
     if gif_url:
         extra["gif_url"] = gif_url
     await send_notification(target["id"], title, message, "user_message", **extra)
+    # Store a copy for the sender so thread view can show "You: ..."
+    sent_copy = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "sender_id": current_user["id"],
+        "sender_username": sender_username,
+        "recipient_id": target["id"],
+        "recipient_username": target["username"],
+        "title": f"To {target['username']}",
+        "message": message,
+        "notification_type": "user_message_sent",
+        "read": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if gif_url:
+        sent_copy["gif_url"] = gif_url
+    await db.notifications.insert_one(sent_copy)
     return {"message": f"Message sent to {target['username']}"}
+
+
+@api_router.get("/notifications/thread/{other_user_id}")
+async def get_thread(other_user_id: str, current_user: dict = Depends(get_current_user)):
+    """Get conversation thread with another user (for Telegram-style chat). Returns messages from both sides, sorted by time."""
+    me = current_user["id"]
+    # Messages they sent to me (user_message, I am user_id)
+    from_them = await db.notifications.find(
+        {
+            "user_id": me,
+            "sender_id": other_user_id,
+            "notification_type": "user_message",
+        },
+        {"_id": 0, "id": 1, "message": 1, "created_at": 1, "sender_username": 1, "gif_url": 1},
+    ).sort("created_at", 1).to_list(100)
+    # Messages I sent to them (user_message_sent, I am user_id, they are recipient_id)
+    from_me = await db.notifications.find(
+        {
+            "user_id": me,
+            "recipient_id": other_user_id,
+            "notification_type": "user_message_sent",
+        },
+        {"_id": 0, "id": 1, "message": 1, "created_at": 1, "sender_username": 1, "gif_url": 1},
+    ).sort("created_at", 1).to_list(100)
+    # Merge and sort
+    for m in from_them:
+        m["from_me"] = False
+    for m in from_me:
+        m["from_me"] = True
+    thread = sorted(from_them + from_me, key=lambda x: x["created_at"])
+    # Resolve other user's username for header (from first message from them, or we need to look up)
+    other_username = None
+    for m in from_them:
+        if m.get("sender_username"):
+            other_username = m["sender_username"]
+            break
+    if not other_username:
+        other_doc = await db.users.find_one({"id": other_user_id}, {"_id": 0, "username": 1})
+        other_username = (other_doc or {}).get("username") or "User"
+    return {"thread": thread, "other_user_id": other_user_id, "other_username": other_username}
 
 
 # ============ BOOZE RUN (Supply Run / Prohibition) ============

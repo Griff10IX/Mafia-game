@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -139,18 +139,26 @@ const SendMessageCard = ({
   </div>
 );
 
-const NotificationItem = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline }) => {
+const NotificationItem = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline, onOpenChat }) => {
   const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
   const isOcInvite = !!notification.oc_invite_id;
+  const isUserMessage = notification.notification_type === 'user_message' && notification.sender_id;
+  const handleCardClick = () => {
+    if (isUserMessage && onOpenChat) onOpenChat(notification);
+  };
 
   return (
     <div
+      role={isUserMessage ? 'button' : undefined}
+      tabIndex={isUserMessage ? 0 : undefined}
+      onKeyDown={isUserMessage ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCardClick(); } } : undefined}
+      onClick={handleCardClick}
       className={`rounded-md p-4 transition-all border ${
         notification.read
           ? 'bg-secondary/50 border-border opacity-80'
           : 'bg-card border-primary/30'
-      }`}
+      } ${isUserMessage ? 'cursor-pointer hover:border-primary/50' : ''}`}
       data-testid={`notification-${notification.id}`}
     >
       {/* Mobile: Stacked, Desktop: Horizontal */}
@@ -178,6 +186,9 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOcAccept, onOc
           <p className="text-sm text-mutedForeground font-heading">
             {notification.message}
           </p>
+          {isUserMessage && (
+            <p className="text-xs text-primary/80 font-heading">Tap to open chat & reply</p>
+          )}
           
           {notification.notification_type === 'user_message' && notification.gif_url && (
             <div className="mt-2">
@@ -190,7 +201,7 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOcAccept, onOc
           )}
           
           {isOcInvite && onOcAccept && onOcDecline && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => onOcAccept(notification.oc_invite_id)}
                 className="bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30 rounded-md px-3 py-1.5 text-sm font-heading font-bold uppercase tracking-wide transition-all touch-manipulation"
@@ -207,7 +218,7 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOcAccept, onOc
           )}
           
           {/* Actions for mobile */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex items-center gap-2 md:hidden" onClick={(e) => e.stopPropagation()}>
             {!notification.read && !isOcInvite && (
               <button
                 onClick={() => onMarkRead(notification.id)}
@@ -228,7 +239,7 @@ const NotificationItem = ({ notification, onMarkRead, onDelete, onOcAccept, onOc
         </div>
         
         {/* Actions for desktop */}
-        <div className="hidden md:flex items-center gap-2 shrink-0">
+        <div className="hidden md:flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
           {!notification.read && !isOcInvite && (
             <button
               onClick={() => onMarkRead(notification.id)}
@@ -263,6 +274,7 @@ const EmptyState = () => (
 
 // Main component
 export default function Inbox() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const filterParam = searchParams.get('filter');
   const initialFilter = VALID_FILTERS.includes(filterParam) ? filterParam : 'all';
@@ -483,6 +495,7 @@ export default function Inbox() {
               onDelete={deleteMessage}
               onOcAccept={handleOcInviteAccept}
               onOcDecline={handleOcInviteDecline}
+              onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
             />
           ))}
         </div>

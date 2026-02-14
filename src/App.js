@@ -33,6 +33,7 @@ import Travel from "./pages/Travel";
 import States from "./pages/States";
 import BoozeRun from "./pages/BoozeRun.js";
 import Inbox from "./pages/Inbox";
+import InboxChat from "./pages/InboxChat";
 import DeadAlive from "./pages/DeadAlive";
 import Profile from "./pages/Profile";
 import Stats from "./pages/Stats";
@@ -456,6 +457,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Inbox />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/inbox/chat/:userId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <InboxChat />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
