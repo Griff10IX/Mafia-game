@@ -384,7 +384,7 @@ async def execute_oc(
     resolved = None
 
     if request.pending_heist_id:
-        # Run from pending heist: all invite slots must be accepted
+        # Run from pending heist; unaccepted invite slots are treated as NPC (auto-join)
         pending = await db.oc_pending_heists.find_one({"id": request.pending_heist_id, "creator_id": uid}, {"_id": 0})
         if not pending:
             raise HTTPException(status_code=404, detail="Pending heist not found")
@@ -401,9 +401,10 @@ async def execute_oc(
                 resolved[i] = None
             else:
                 inv = await db.oc_invites.find_one({"pending_heist_id": request.pending_heist_id, "role": role}, {"_id": 0})
-                if not inv or inv.get("status") != "accepted":
-                    raise HTTPException(status_code=400, detail=f"Waiting for {val} to accept invite for {role}, or clear the slot.")
-                resolved[i] = inv.get("target_id")
+                if inv and inv.get("status") == "accepted":
+                    resolved[i] = inv.get("target_id")
+                else:
+                    resolved[i] = None  # Unaccepted invite = treat as NPC (auto-join)
         job = next((j for j in OC_JOBS if j["id"] == job_id), None)
         if not job:
             raise HTTPException(status_code=404, detail="Invalid job")
@@ -475,14 +476,16 @@ async def execute_oc(
     total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
     cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
     rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
-    # Creator's % per slot: each human gets that slot's % of the pool; NPC slots get nothing
+    # Each human gets that slot's % of the pool; NPC slots' share goes to the creator
     cash_each = rp_each = 0
     for i, user_id in enumerate(resolved):
-        if user_id is None:
-            continue
         pct = pcts[i]
         cash_add = int(cash_pool * pct / 100)
         rp_add = int(rp_pool * pct / 100)
+        if user_id is None:
+            cash_each += cash_add
+            rp_each += rp_add
+            continue
         if user_id == uid:
             cash_each += cash_add
             rp_each += rp_add

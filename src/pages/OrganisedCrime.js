@@ -163,7 +163,6 @@ const RoleSlotControl = ({ roleId, value, onValueChange, inviteInput, onInviteCh
   );
 };
 
-const NPC_SHARE = 35;
 const PercentageControl = ({ roleId, value, onChange, isNpc }) => (
   <div className="flex items-center gap-2">
     <span className="text-sm md:text-xs font-heading capitalize w-24 text-primary/80">
@@ -173,7 +172,7 @@ const PercentageControl = ({ roleId, value, onChange, isNpc }) => (
       type="number"
       min={0}
       max={100}
-      value={isNpc ? NPC_SHARE : (value ?? 25)}
+      value={isNpc ? (value ?? 35) : (value ?? 25)}
       onChange={(e) => onChange(e.target.value)}
       readOnly={isNpc}
       className={`w-16 md:w-14 border rounded-md px-2 py-1.5 text-sm md:text-xs text-right text-foreground focus:outline-none ${
@@ -203,7 +202,7 @@ const InfoSection = ({ cooldownHours }) => (
         </li>
         <li className="flex items-start gap-2">
           <span className="text-primary shrink-0">▸</span>
-          <span>Empty slots can be filled with NPCs for lower total pool (35% share per NPC).</span>
+          <span>Up to 3 NPCs auto-join (no invite). 1–2 NPCs: 35% each; 3 NPCs: 80% total between them. You can run heist without waiting for invites—unaccepted slots count as NPC.</span>
         </li>
         <li className="flex items-start gap-2">
           <span className="text-primary shrink-0">▸</span>
@@ -274,16 +273,27 @@ export default function OrganisedCrime() {
     if (value !== 'invite') {
       setInviteInputs((prev) => ({ ...prev, [roleId]: '' }));
     }
-    // When NPC is picked, auto-assign 35% to that slot (take from self so total stays 100)
+    // When NPC is picked: 1–2 NPCs = 35% each; 3 NPCs = 80% total between them (27, 27, 26)
     if (value === 'npc') {
-      const NPC_SHARE = 35;
       setPcts((prev) => {
+        const npcSlots = [roleId, ...ROLE_IDS.filter((r) => r !== roleId && slots[r] === 'npc')];
         const selfRole = ROLE_IDS.find((r) => slots[r] === 'self');
+        const next = { ...prev };
+
+        if (npcSlots.length === 3) {
+          next[selfRole] = 20;
+          next[npcSlots[0]] = 27;
+          next[npcSlots[1]] = 27;
+          next[npcSlots[2]] = 26;
+          return next;
+        }
+
+        const NPC_SHARE = 35;
         const selfCurrent = selfRole ? (prev[selfRole] || 0) : 0;
         const sumOthers = ROLE_IDS.filter((r) => r !== roleId).reduce((s, r) => s + (prev[r] || 0), 0);
         const room = 100 - sumOthers;
         const assign = Math.min(NPC_SHARE, room, (prev[roleId] || 0) + selfCurrent);
-        const next = { ...prev, [roleId]: assign };
+        next[roleId] = assign;
         if (selfRole) {
           next[selfRole] = selfCurrent - (assign - (prev[roleId] || 0));
         }
@@ -409,11 +419,6 @@ export default function OrganisedCrime() {
     
     if (hasEmpty) {
       toast.error('Fill all slots (set cleared slots to NPC or re-invite).');
-      return;
-    }
-    
-    if (!allAccepted && (status.pending_invites || []).length > 0) {
-      toast.error('Wait for all invites to be accepted, or clear the slot.');
       return;
     }
     
@@ -672,7 +677,7 @@ export default function OrganisedCrime() {
         </div>
         {ROLE_IDS.some((r) => slots[r] === 'npc') && (
           <p className="px-4 pb-2 text-xs text-mutedForeground">
-            NPC slots auto-assigned 35% each (pool reduced per NPC).
+            NPC slots auto-assigned (3 NPCs = 80% total; 1–2 NPCs = 35% each).
           </p>
         )}
         {pctTotal !== 100 && (
