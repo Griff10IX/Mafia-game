@@ -258,7 +258,7 @@ export default function OrganisedCrime() {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const tick = useCooldownTicker(status?.cooldown_until, fetchData);
 

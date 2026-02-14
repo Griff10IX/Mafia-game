@@ -68,7 +68,7 @@ export default function InboxChat() {
   useEffect(() => {
     setLoading(true);
     fetchThread();
-  }, [userId]);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

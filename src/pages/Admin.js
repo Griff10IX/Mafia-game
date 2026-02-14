@@ -25,7 +25,7 @@ export default function Admin() {
 
   useEffect(() => {
     checkAdmin();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [eventsEnabled, setEventsEnabled] = useState(true);
   const [allEventsForTesting, setAllEventsForTesting] = useState(false);

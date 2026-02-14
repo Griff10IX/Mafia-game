@@ -305,7 +305,7 @@ export default function Jail() {
     fetchJailData();
     const interval = setInterval(fetchJailStatus, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (jailStatus.in_jail && bustRewardInput === '' && (jailStatus.bust_reward_cash ?? 0) > 0) {

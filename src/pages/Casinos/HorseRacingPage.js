@@ -72,7 +72,7 @@ export default function HorseRacingPage() {
   useEffect(() => {
     fetchConfigAndOwnership();
     fetchHistory();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleClaim = async () => {
     const city = ownership?.current_city;

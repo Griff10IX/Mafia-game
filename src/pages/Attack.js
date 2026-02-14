@@ -50,25 +50,25 @@ export default function Attack() {
         return next;
       }, { replace: true });
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     refreshAttacks();
     const interval = setInterval(refreshAttacks, 10000);
     return () => clearInterval(interval);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchInflation();
     fetchBullets();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     api.get('/events/active').then((r) => {
       setEvent(r.data?.event ?? null);
       setEventsEnabled(!!r.data?.events_enabled);
     }).catch(() => {});
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (travelCountdown == null || travelCountdown <= 0) return;

@@ -24,7 +24,7 @@ export default function Layout({ children }) {
     fetchData();
     checkAdmin();
     fetchUnreadCount();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const handler = (event) => {
@@ -38,27 +38,27 @@ export default function Layout({ children }) {
     };
     window.addEventListener('app:refresh-user', handler);
     return () => window.removeEventListener('app:refresh-user', handler);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Refetch on route change so top bar is fresh when navigating
     fetchData();
     fetchUnreadCount();
     fetchWarStatus();
-  }, [location.pathname]);
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchWarStatus();
     const id = setInterval(fetchWarStatus, 15000);
     return () => clearInterval(id);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     // Lightweight polling so the sidebar badges stay fresh
     fetchRankingCounts();
     const id = setInterval(fetchRankingCounts, 15000);
     return () => clearInterval(id);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchFlashNews = async () => {
     try {
@@ -73,7 +73,7 @@ export default function Layout({ children }) {
     fetchFlashNews();
     const id = setInterval(fetchFlashNews, 60000);
     return () => clearInterval(id);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (flashNews.length <= 1) return;

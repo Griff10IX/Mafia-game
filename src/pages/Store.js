@@ -40,7 +40,7 @@ export default function Store() {
     if (sessionId) {
       checkPaymentStatus(sessionId);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     try {
