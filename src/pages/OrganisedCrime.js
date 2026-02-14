@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -357,7 +357,7 @@ export default function OrganisedCrime() {
     });
   };
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       const [configRes, statusRes] = await Promise.all([
         api.get('/oc/config'),
@@ -380,9 +380,9 @@ export default function OrganisedCrime() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedJobId]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const tick = useCooldownTicker(status?.cooldown_until, fetchData);
 
