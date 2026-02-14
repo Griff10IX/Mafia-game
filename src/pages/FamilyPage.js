@@ -339,7 +339,7 @@ const RacketCard = ({ racket, config, canUpgrade, onCollect, onUpgrade }) => {
 // ============================================================================
 
 const RaidTargetFamilyBlock = ({ target, attackLoading, onRaid }) => {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
   const rackets = target.rackets || [];
   const raidsRemaining = target.raids_remaining ?? 2;
   const canRaid = raidsRemaining > 0;
