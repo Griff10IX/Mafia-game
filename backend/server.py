@@ -854,11 +854,6 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
     
-    # Check if user is banned
-    is_banned, ban_reason = await check_ban_status(db, user_id)
-    if is_banned:
-        raise HTTPException(status_code=403, detail=ban_reason or "You are banned from this game")
-    
     if user.get("is_dead"):
         raise HTTPException(
             status_code=403,
