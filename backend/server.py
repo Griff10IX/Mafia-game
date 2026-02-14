@@ -26,6 +26,8 @@ import certifi
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+# Also load project root .env if present (e.g. when running from root)
+load_dotenv(ROOT_DIR.parent / '.env')
 
 # MongoDB connection (certifi CA bundle only needed for Atlas SSL, skip for localhost)
 mongo_url = os.environ['MONGO_URL']
@@ -5689,7 +5691,7 @@ async def giphy_search(
     if not api_key:
         raise HTTPException(
             status_code=503,
-            detail="Giphy is not configured. Add GIPHY_API_KEY to backend .env",
+            detail="Giphy not configured. Add GIPHY_API_KEY to backend/.env and restart the backend.",
         )
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.get(
