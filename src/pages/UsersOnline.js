@@ -68,7 +68,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 
   return (
     <div
-      className="bg-card rounded-md border border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all p-3 w-full sm:w-[200px]"
+      className="bg-card rounded-md border border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all p-3 w-[160px] md:w-[200px]"
       data-testid="user-card"
     >
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -200,8 +200,8 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
         </div>
         
         {user.in_jail && (
-          <span className="shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
-            Jailed
+          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
+            Jail
           </span>
         )}
       </div>
@@ -322,8 +322,23 @@ export default function UsersOnline() {
               👤 Active Users ({users.length})
             </h2>
           </div>
-          <div className="p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="users-grid">
+          <div className="p-3 md:p-4">
+            {/* Mobile: Horizontal scroll */}
+            <div className="md:hidden flex gap-2 overflow-x-auto pb-2 -mx-1 px-1" data-testid="users-grid">
+              {users.map((user, idx) => (
+                <div key={idx} className="shrink-0">
+                  <UserCard
+                    user={user}
+                    profileCache={profileCache}
+                    profileLoading={profileLoading}
+                    ensureProfilePreview={ensureProfilePreview}
+                  />
+                </div>
+              ))}
+            </div>
+            
+            {/* Desktop: Grid */}
+            <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3" data-testid="users-grid-desktop">
               {users.map((user, idx) => (
                 <UserCard
                   key={idx}

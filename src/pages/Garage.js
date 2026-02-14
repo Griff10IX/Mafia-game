@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings } from 'lucide-react';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Image as ImageIcon } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -16,7 +16,6 @@ function loadMeltScrapRarities() {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    // Only keep rarities that exist in ALL_RARITIES so settings stay valid
     return parsed.filter((r) => ALL_RARITIES.includes(r));
   } catch {
     return [];
@@ -29,6 +28,412 @@ function saveMeltScrapRarities(rarities) {
   } catch (_) {}
 }
 
+// Subcomponents
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const PageHeader = () => (
+  <div>
+    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
+      <Car className="w-8 h-8 md:w-10 md:h-10" />
+      Garage
+    </h1>
+    <p className="text-sm text-mutedForeground">
+      Manage your stolen vehicles
+    </p>
+  </div>
+);
+
+const EmptyGarageCard = () => (
+  <div className="bg-card rounded-md border border-border py-16 text-center">
+    <Car size={64} className="mx-auto text-primary/30 mb-4" />
+    <h3 className="text-lg font-heading font-bold text-foreground uppercase tracking-wide mb-2">
+      Empty Garage
+    </h3>
+    <p className="text-sm text-mutedForeground font-heading">
+      Steal some cars to see them here
+    </p>
+  </div>
+);
+
+const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+        <Filter size={16} />
+        Sort & Filter
+      </h2>
+    </div>
+    <div className="p-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-2">
+            Sort By
+          </label>
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="value-high">Highest Value</option>
+            <option value="value-low">Lowest Value</option>
+            <option value="rarity">Rarity</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-2">
+            Filter Rarity
+          </label>
+          <select
+            value={filterRarity}
+            onChange={(e) => setFilterRarity(e.target.value)}
+            className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
+          >
+            <option value="all">All Rarities</option>
+            <option value="common">Common</option>
+            <option value="uncommon">Uncommon</option>
+            <option value="rare">Rare</option>
+            <option value="ultra_rare">Ultra Rare</option>
+            <option value="legendary">Legendary</option>
+            <option value="custom">Custom</option>
+            <option value="exclusive">Exclusive</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const ActionsBar = ({
+  totalCount,
+  displayedCount,
+  hiddenCount,
+  showAll,
+  selectedCount,
+  allDisplayedSelected,
+  noEligibleInView,
+  filterActive,
+  displayedEligibleCount,
+  onToggleSelectAll,
+  onOpenSettings,
+  onMelt,
+  onScrap
+}) => (
+  <div className="bg-card rounded-md border border-primary/20 p-4">
+    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2">
+          <span className="text-2xl font-heading font-bold text-primary tabular-nums">
+            {totalCount}
+          </span>
+          <span className="text-sm text-mutedForeground font-heading">
+            {totalCount === 1 ? 'Car' : 'Cars'}
+          </span>
+        </div>
+        
+        {!showAll && hiddenCount > 0 && (
+          <span className="text-xs text-mutedForeground font-heading">
+            (showing {displayedCount})
+          </span>
+        )}
+        
+        {selectedCount > 0 && (
+          <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/30">
+            {selectedCount} selected
+          </span>
+        )}
+        
+        {displayedCount > 0 && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onToggleSelectAll}
+              disabled={noEligibleInView}
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md border text-xs font-heading font-bold uppercase tracking-wide transition-all ${
+                noEligibleInView
+                  ? 'border-border text-mutedForeground/60 cursor-not-allowed'
+                  : 'border-primary/30 text-foreground hover:border-primary/50 hover:bg-primary/10 active:scale-95'
+              }`}
+              data-testid="garage-select-all"
+              title={noEligibleInView ? 'No cars match your filter' : undefined}
+            >
+              {allDisplayedSelected ? (
+                <CheckSquare size={14} className="text-primary" />
+              ) : (
+                <Square size={14} className="text-mutedForeground" />
+              )}
+              {noEligibleInView
+                ? 'No cars match'
+                : allDisplayedSelected
+                ? `Clear${filterActive ? ` (${displayedEligibleCount})` : ''}`
+                : `Select all${filterActive ? ` (${displayedEligibleCount})` : ''}`}
+            </button>
+            
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="inline-flex items-center justify-center w-9 h-9 rounded-md border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all active:scale-95"
+              title="Filter rarities for Select All"
+              aria-label="Melt/Scrap settings"
+            >
+              <Settings size={16} />
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {selectedCount > 0 && (
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={onMelt}
+            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 text-sm font-heading font-bold uppercase tracking-wide border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all active:scale-95 inline-flex items-center gap-2 touch-manipulation"
+          >
+            <Flame size={16} />
+            Melt for Bullets
+          </button>
+          <button
+            onClick={onScrap}
+            className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded-lg px-4 py-2.5 text-sm font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-2 touch-manipulation"
+          >
+            <DollarSign size={16} />
+            Scrap for Cash
+          </button>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor }) => {
+  const isCustom = car.car_id === 'car_custom';
+  
+  return (
+    <div
+      onClick={() => (isCustom ? onOpenCustomModal(car) : onToggle(car.user_car_id))}
+      className={`bg-card rounded-md border-2 p-2 cursor-pointer transition-all ${
+        isSelected
+          ? 'border-primary shadow-md shadow-primary/20'
+          : 'border-border hover:border-primary/30 hover:shadow-sm'
+      }`}
+    >
+      <div className="w-full aspect-square rounded-md overflow-hidden bg-secondary border border-border mb-2 relative">
+        {car.image ? (
+          <img
+            src={car.image}
+            alt={car.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Car size={32} className="text-primary/30" />
+          </div>
+        )}
+        {!isCustom && (
+          <div className="absolute top-2 right-2 w-7 h-7 rounded-md flex items-center justify-center bg-card/95 border-2 border-primary/50 shadow-lg">
+            {isSelected ? (
+              <CheckSquare size={18} className="text-primary" strokeWidth={2.5} />
+            ) : (
+              <Square size={18} className="text-mutedForeground" strokeWidth={2} />
+            )}
+          </div>
+        )}
+      </div>
+      
+      <div className={`text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} mb-1`}>
+        {car.rarity.replace('_', ' ')}
+      </div>
+      
+      <Link
+        to={`/gta/car/${car.car_id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="text-xs md:text-sm font-heading font-bold text-foreground hover:text-primary transition-colors truncate block mb-1"
+      >
+        {car.name}
+      </Link>
+      
+      <div className="flex items-center justify-between gap-1 text-xs">
+        <span className="text-primary font-heading font-bold">
+          ${car.value.toLocaleString()}
+        </span>
+        {!isCustom && (
+          <span className={`text-[10px] font-heading ${isSelected ? 'text-primary font-bold' : 'text-mutedForeground'}`}>
+            {isSelected ? 'Selected' : '—'}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const SettingsModal = ({ 
+  isOpen, 
+  onClose, 
+  draft, 
+  onToggleRarity, 
+  onClear, 
+  onSave, 
+  getRarityColor 
+}) => {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <h3 className="text-base font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
+            <Settings size={18} />
+            Select All Filter
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-mutedForeground hover:text-primary transition-colors p-1"
+          >
+            <span className="text-xl">×</span>
+          </button>
+        </div>
+        
+        <div className="p-4 md:p-6 space-y-4">
+          <p className="text-sm text-mutedForeground font-heading leading-relaxed">
+            Choose which rarities to include when using "Select all". Leave all unchecked to include every rarity.
+          </p>
+          
+          <div className="space-y-2">
+            {ALL_RARITIES.map((rarity) => (
+              <label
+                key={rarity}
+                className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-secondary/30 transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={draft.includes(rarity)}
+                  onChange={() => onToggleRarity(rarity)}
+                  className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50 cursor-pointer"
+                />
+                <span className={`text-sm font-heading font-bold capitalize ${getRarityColor(rarity)}`}>
+                  {rarity.replace('_', ' ')}
+                </span>
+              </label>
+            ))}
+          </div>
+          
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClear}
+              className="px-4 py-2 text-sm font-heading text-mutedForeground hover:text-foreground transition-colors"
+            >
+              Clear All
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              className="flex-1 bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all active:scale-95"
+            >
+              Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CustomCarModal = ({ 
+  car, 
+  imageUrl, 
+  setImageUrl, 
+  onSave, 
+  onClose, 
+  saving 
+}) => {
+  if (!car) return null;
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
+      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-lg w-full" onClick={e => e.stopPropagation()}>
+        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <h3 className="text-base font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
+            <ImageIcon size={18} />
+            Custom Car Picture
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-mutedForeground hover:text-primary transition-colors p-1"
+          >
+            <span className="text-xl">×</span>
+          </button>
+        </div>
+        
+        <div className="p-4 md:p-6 space-y-4">
+          <div>
+            <p className="text-sm font-heading font-bold text-foreground mb-1">
+              {car.name}
+            </p>
+            <p className="text-xs text-mutedForeground font-heading">
+              Update the image URL for your custom car
+            </p>
+          </div>
+          
+          <div className="aspect-video rounded-md overflow-hidden bg-secondary border-2 border-border">
+            {imageUrl ? (
+              <img
+                src={imageUrl}
+                alt={car.name}
+                className="w-full h-full object-cover"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Car size={48} className="text-primary/30" />
+              </div>
+            )}
+          </div>
+          
+          <div>
+            <label className="block text-sm text-mutedForeground font-heading mb-2">
+              Image URL
+            </label>
+            <input
+              type="url"
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://example.com/car-image.jpg"
+              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+            />
+          </div>
+          
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 border border-border rounded-md text-sm font-heading text-foreground hover:bg-secondary/50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="flex-1 bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+            >
+              {saving ? 'Saving...' : 'Save Picture'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Main component
 export default function Garage() {
   const [cars, setCars] = useState([]);
   const [selectedCars, setSelectedCars] = useState([]);
@@ -53,6 +458,7 @@ export default function Garage() {
       setCars(response.data.cars);
     } catch (error) {
       toast.error('Failed to load garage');
+      console.error('Error fetching garage:', error);
     } finally {
       setLoading(false);
     }
@@ -162,7 +568,7 @@ export default function Garage() {
   const totalCount = allFilteredCars.length;
   const displayedCars = showAll ? allFilteredCars : allFilteredCars.slice(0, DEFAULT_VISIBLE);
   const hiddenCount = totalCount - displayedCars.length;
-  // For melt/scrap, only non-custom cars; filter by saved rarities when set (empty = all)
+  
   const displayedEligibleForMelt = displayedCars.filter(
     (c) => c.car_id !== 'car_custom' && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
   );
@@ -200,307 +606,68 @@ export default function Garage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   return (
-    <div className={`space-y-5 ${styles.pageContent}`}>
-      {/* Art Deco Header */}
-      <div>
-        <div className="flex items-center gap-4 mb-3">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/40 to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-3">
-            <Car size={24} className="text-primary/80" />
-            Garage
-          </h1>
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
-        </div>
-        <p className="text-center text-sm text-mutedForeground font-heading tracking-wide">Manage your stolen vehicles</p>
-      </div>
+    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`}>
+      <PageHeader />
 
       {cars.length === 0 ? (
-        <div className={`${styles.panel} rounded-sm overflow-hidden p-12 text-center`}>
-          <Car className="text-primary/40 mx-auto mb-4" size={48} />
-          <h3 className="text-lg font-heading font-bold text-primary uppercase tracking-wider mb-2">Empty Garage</h3>
-          <p className="text-mutedForeground font-heading text-sm">Steal some cars to see them here.</p>
-        </div>
+        <EmptyGarageCard />
       ) : (
         <>
-          {/* Filters and Sort */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-px bg-primary/50" />
-                <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                  <Filter size={14} /> Sort & Filter
-                </span>
-                <div className="flex-1 h-px bg-primary/50" />
-              </div>
-            </div>
-            <div className="p-4">
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1">
-                  <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Sort By</label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className={`w-full ${styles.input} h-9 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
-                  >
-                    <option value="newest">Newest First</option>
-                    <option value="oldest">Oldest First</option>
-                    <option value="value-high">Highest Value</option>
-                    <option value="value-low">Lowest Value</option>
-                    <option value="rarity">Rarity</option>
-                  </select>
-                </div>
-                <div className="flex-1">
-                  <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Filter Rarity</label>
-                  <select
-                    value={filterRarity}
-                    onChange={(e) => setFilterRarity(e.target.value)}
-                    className={`w-full ${styles.input} h-9 px-3 text-sm font-heading focus:border-primary/50 focus:outline-none`}
-                  >
-                    <option value="all">All Rarities</option>
-                    <option value="common">Common</option>
-                    <option value="uncommon">Uncommon</option>
-                    <option value="rare">Rare</option>
-                    <option value="ultra_rare">Ultra Rare</option>
-                    <option value="legendary">Legendary</option>
-                    <option value="custom">Custom</option>
-                    <option value="exclusive">Exclusive</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
+          <FiltersSortCard
+            sortBy={sortBy}
+            setSortBy={setSortBy}
+            filterRarity={filterRarity}
+            setFilterRarity={setFilterRarity}
+          />
 
-          {/* Actions Bar */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3`}>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-primary font-heading font-bold">{totalCount}</span>
-              <span className="text-mutedForeground text-sm font-heading">Cars</span>
-              {!showAll && hiddenCount > 0 && (
-                <span className="text-mutedForeground text-xs font-heading">(showing top {displayedCars.length})</span>
-              )}
-              {selectedCars.length > 0 && (
-                <span className="text-primary text-xs font-heading">({selectedCars.length} selected)</span>
-              )}
-              {displayedCars.length > 0 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={toggleSelectAllDisplayed}
-                    disabled={noEligibleInView}
-                    className={`inline-flex items-center gap-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth ${
-                      noEligibleInView ? 'text-mutedForeground/60 cursor-not-allowed' : 'text-mutedForeground hover:text-primary'
-                    }`}
-                    data-testid="garage-select-all"
-                    title={noEligibleInView ? 'No cars in view match your melt/scrap rarity filter' : undefined}
-                  >
-                    {allDisplayedSelected ? (
-                      <CheckSquare size={14} className="text-primary" />
-                    ) : (
-                      <Square size={14} className="text-mutedForeground" />
-                    )}
-                    {noEligibleInView
-                      ? 'No cars match filter'
-                      : allDisplayedSelected
-                        ? `Clear selection${filterActive ? ` (${displayedEligibleIds.length})` : ''}`
-                        : `Select all${filterActive ? ` (${displayedEligibleIds.length})` : ''}`}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={openMeltScrapSettings}
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-sm border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 transition-smooth"
-                    title="Melt/Scrap rarities filter"
-                    aria-label="Melt/Scrap settings"
-                  >
-                    <Settings size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-            {selectedCars.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={meltCars}
-                  className="flex items-center gap-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm px-4 py-2 text-xs font-heading font-bold uppercase tracking-wider border border-yellow-600/50"
-                >
-                  <Flame size={14} />
-                  Melt for Bullets
-                </button>
-                <button
-                  onClick={scrapCars}
-                  className={`flex items-center gap-2 ${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-4 py-2 text-xs font-heading font-bold uppercase tracking-wider`}
-                >
-                  <DollarSign size={14} />
-                  Scrap for Cash
-                </button>
-              </div>
-            )}
-          </div>
+          <ActionsBar
+            totalCount={totalCount}
+            displayedCount={displayedCars.length}
+            hiddenCount={hiddenCount}
+            showAll={showAll}
+            selectedCount={selectedCars.length}
+            allDisplayedSelected={allDisplayedSelected}
+            noEligibleInView={noEligibleInView}
+            filterActive={filterActive}
+            displayedEligibleCount={displayedEligibleIds.length}
+            onToggleSelectAll={toggleSelectAllDisplayed}
+            onOpenSettings={openMeltScrapSettings}
+            onMelt={meltCars}
+            onScrap={scrapCars}
+          />
 
-          {/* Cars Grid */}
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
             {displayedCars.map((car, index) => (
-              <div
+              <CarCard
                 key={index}
-                onClick={() => (car.car_id === 'car_custom' ? openCustomCarModal(car) : toggleSelect(car.user_car_id))}
-                className={`${styles.panel} border rounded-sm p-1.5 sm:p-2 cursor-pointer transition-smooth ${
-                  selectedCars.includes(car.user_car_id)
-                    ? 'border-primary ring-1 ring-primary/30'
-                    : 'border-primary/20 hover:border-primary/50'
-                }`}
-              >
-                <div className={`w-full aspect-square rounded-sm overflow-hidden ${styles.surface} border border-primary/20 mb-1 relative`}>
-                  {car.image ? (
-                    <img
-                      src={car.image}
-                      alt={car.name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Car size={20} className="text-primary/30" />
-                    </div>
-                  )}
-                  {car.car_id !== 'car_custom' && (
-                    <div className="absolute top-1 right-1 w-6 h-6 rounded flex items-center justify-center bg-background/90 border border-primary/40 shadow">
-                      {selectedCars.includes(car.user_car_id) ? (
-                        <CheckSquare size={16} className="text-primary" strokeWidth={2.5} />
-                      ) : (
-                        <Square size={16} className="text-mutedForeground" strokeWidth={2} />
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} leading-tight`}>
-                  {car.rarity.replace('_', ' ')}
-                </div>
-                <Link
-                  to={`/gta/car/${car.car_id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-[10px] sm:text-xs font-heading font-bold text-foreground truncate leading-tight block hover:text-primary hover:underline focus:outline-none focus:underline"
-                >
-                  {car.name}
-                </Link>
-                <div className="flex items-center justify-between gap-1">
-                  <div className="text-[9px] sm:text-[10px] text-primary font-heading font-bold">${car.value.toLocaleString()}</div>
-                  {car.car_id !== 'car_custom' && (
-                    <div className={`flex items-center gap-0.5 text-[8px] sm:text-[9px] font-heading ${selectedCars.includes(car.user_car_id) ? 'text-primary font-bold' : 'text-mutedForeground'}`}>
-                      {selectedCars.includes(car.user_car_id) ? (
-                        <><CheckSquare size={10} className="shrink-0" /> Selected</>
-                      ) : (
-                        <><Square size={10} className="shrink-0" /> —</>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
+                car={car}
+                isSelected={selectedCars.includes(car.user_car_id)}
+                onToggle={toggleSelect}
+                onOpenCustomModal={openCustomCarModal}
+                getRarityColor={getRarityColor}
+              />
             ))}
           </div>
 
-          {/* Melt/Scrap rarities settings modal */}
-          {meltScrapSettingsOpen && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setMeltScrapSettingsOpen(false)}>
-              <div className={`${styles.panel} border border-primary/30 rounded-sm shadow-xl max-w-sm w-full p-4`} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-                    <Settings size={16} /> Melt / Scrap filter
-                  </h3>
-                  <button type="button" onClick={() => setMeltScrapSettingsOpen(false)} className="text-mutedForeground hover:text-foreground">✕</button>
-                </div>
-                <p className="text-xs text-mutedForeground font-heading mb-3">
-                  When you use &quot;Select all&quot;, only cars of these rarities are selected. Leave all unchecked to include every rarity.
-                </p>
-                <div className="space-y-2 mb-4">
-                  {ALL_RARITIES.map((rarity) => (
-                    <label key={rarity} className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={meltScrapSettingsDraft.includes(rarity)}
-                        onChange={() => toggleDraftRarity(rarity)}
-                        className="rounded border-primary/50 text-primary focus:ring-primary/50"
-                      />
-                      <span className={`text-sm font-heading capitalize ${getRarityColor(rarity)}`}>
-                        {rarity.replace('_', ' ')}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setMeltScrapSettingsDraft([])}
-                    className="text-xs font-heading text-mutedForeground hover:text-primary"
-                  >
-                    Clear (allow all)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={saveMeltScrapSettings}
-                    className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground font-heading font-bold uppercase tracking-wider py-2 rounded-sm border border-yellow-600/50"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Custom car picture modal */}
-          {customCarModal && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setCustomCarModal(null)}>
-              <div className={`${styles.panel} border border-primary/30 rounded-sm shadow-xl max-w-md w-full p-4`} onClick={e => e.stopPropagation()}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Custom car — change picture</h3>
-                  <button type="button" onClick={() => setCustomCarModal(null)} className="text-mutedForeground hover:text-foreground">✕</button>
-                </div>
-                <p className="text-xs text-mutedForeground font-heading mb-2">{customCarModal.name}</p>
-                <div className="aspect-video rounded-sm overflow-hidden bg-muted border border-primary/20 mb-3">
-                  {customCarImageUrl ? (
-                    <img src={customCarImageUrl} alt={customCarModal.name} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center"><Car size={32} className="text-primary/30" /></div>
-                  )}
-                </div>
-                <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Image URL</label>
-                <input
-                  type="url"
-                  value={customCarImageUrl}
-                  onChange={(e) => setCustomCarImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  className={`${styles.input} w-full h-9 px-3 text-sm mb-3`}
-                />
-                <div className="flex gap-2">
-                  <button type="button" onClick={saveCustomCarImage} disabled={savingCustomImage} className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground font-heading font-bold uppercase tracking-wider py-2 rounded-sm border border-yellow-600/50 disabled:opacity-50">Save</button>
-                  <button type="button" onClick={() => setCustomCarModal(null)} className="px-4 border border-primary/30 font-heading text-sm rounded-sm hover:bg-primary/10">Cancel</button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* View All / Show Less */}
           {totalCount > DEFAULT_VISIBLE && (
             <div className="flex justify-center">
               <button
                 type="button"
                 onClick={() => setShowAll((v) => !v)}
-                className={`flex items-center gap-2 ${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary rounded-sm px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth`}
+                className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded-lg px-6 py-3 text-sm font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-2 touch-manipulation"
               >
                 {showAll ? (
                   <>
-                    <ChevronUp size={14} />
+                    <ChevronUp size={16} />
                     Show Top {DEFAULT_VISIBLE}
                   </>
                 ) : (
                   <>
-                    <ChevronDown size={14} />
+                    <ChevronDown size={16} />
                     View All ({hiddenCount} more)
                   </>
                 )}
@@ -509,6 +676,25 @@ export default function Garage() {
           )}
         </>
       )}
+
+      <SettingsModal
+        isOpen={meltScrapSettingsOpen}
+        onClose={() => setMeltScrapSettingsOpen(false)}
+        draft={meltScrapSettingsDraft}
+        onToggleRarity={toggleDraftRarity}
+        onClear={() => setMeltScrapSettingsDraft([])}
+        onSave={saveMeltScrapSettings}
+        getRarityColor={getRarityColor}
+      />
+
+      <CustomCarModal
+        car={customCarModal}
+        imageUrl={customCarImageUrl}
+        setImageUrl={setCustomCarImageUrl}
+        onSave={saveCustomCarImage}
+        onClose={() => setCustomCarModal(null)}
+        saving={savingCustomImage}
+      />
     </div>
   );
 }
