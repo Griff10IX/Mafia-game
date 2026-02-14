@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText } from 'lucide-react';
+import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -9,9 +9,712 @@ function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
 }
 
+// Shown in toast when caught during booze run (prohibition bust)
+const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
+
+// Subcomponents
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const PageHeader = () => (
+  <div>
+    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
+      <Crosshair className="w-8 h-8 md:w-10 md:h-10" />
+      Attack
+    </h1>
+    <p className="text-sm text-mutedForeground">
+      Search, track, travel, and execute hits
+    </p>
+  </div>
+);
+
+const EventBanner = ({ event }) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        🎯 Today's Event
+      </h2>
+    </div>
+    <div className="p-4">
+      <p className="text-base font-heading font-bold text-primary mb-1">{event.name}</p>
+      <p className="text-sm text-mutedForeground font-heading">{event.message}</p>
+    </div>
+  </div>
+);
+
+const KillUserCard = ({
+  killUsername,
+  setKillUsername,
+  bulletsToUse,
+  setBulletsToUse,
+  deathMessage,
+  setDeathMessage,
+  makePublic,
+  setMakePublic,
+  inflationPct,
+  userBullets,
+  foundAndReady,
+  loading,
+  onKill,
+  onOpenCalc
+}) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+        <Skull size={16} />
+        Kill User
+      </h2>
+      <button
+        type="button"
+        className="text-xs uppercase tracking-wider text-primary hover:text-primary/80 font-heading inline-flex items-center gap-1.5 transition-colors"
+        onClick={onOpenCalc}
+      >
+        <Calculator size={14} />
+        Calculator
+      </button>
+    </div>
+    <div className="p-4 space-y-3">
+      <div>
+        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+          Username
+        </label>
+        <input
+          type="text"
+          value={killUsername}
+          onChange={(e) => setKillUsername(e.target.value)}
+          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          placeholder="Enter username..."
+          list="found-users-inline"
+          data-testid="kill-username-inline"
+        />
+        <datalist id="found-users-inline">
+          {foundAndReady.map((a) => (
+            <option key={a.attack_id} value={a.target_username} />
+          ))}
+        </datalist>
+      </div>
+      
+      <div>
+        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+          Bullets <span className="text-primary">({Number(userBullets).toLocaleString()} available)</span>
+        </label>
+        <input
+          type="number"
+          value={bulletsToUse}
+          onChange={(e) => setBulletsToUse(e.target.value)}
+          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          placeholder="Enter amount (min 1)"
+          min="1"
+          data-testid="kill-bullets-inline"
+        />
+      </div>
+      
+      <div>
+        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+          Death Message (Optional)
+        </label>
+        <textarea
+          value={deathMessage}
+          onChange={(e) => setDeathMessage(e.target.value)}
+          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
+          placeholder="Leave a message..."
+          rows={3}
+          data-testid="kill-death-message-inline"
+        />
+      </div>
+      
+      <div className="flex items-center justify-between bg-secondary/50 border border-border rounded-md px-4 py-3">
+        <div className="text-sm text-mutedForeground font-heading">
+          Inflation: <span className="text-foreground font-bold">{inflationPct}%</span>
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm text-foreground font-heading cursor-pointer">
+          <input 
+            type="checkbox" 
+            checked={makePublic} 
+            onChange={(e) => setMakePublic(e.target.checked)} 
+            className="w-4 h-4 accent-primary cursor-pointer" 
+            data-testid="kill-make-public-inline" 
+          />
+          <span>Make Public</span>
+        </label>
+      </div>
+      
+      <button
+        type="button"
+        disabled={loading || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
+        onClick={onKill}
+        className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+        data-testid="kill-inline-button"
+      >
+        {loading ? '⏳ Executing...' : '💀 Kill User'}
+      </button>
+      
+      <p className="text-xs text-mutedForeground font-heading italic">
+        💡 Tip: Starts a search if target not found. Travel to target location before killing.
+      </p>
+    </div>
+  </div>
+);
+
+const FindUserCard = ({
+  targetUsername,
+  setTargetUsername,
+  note,
+  setNote,
+  loading,
+  onSearch
+}) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+        <Search size={16} />
+        Find User
+      </h2>
+    </div>
+    <form onSubmit={onSearch} className="p-4 space-y-3">
+      <div>
+        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+          Username
+        </label>
+        <input
+          type="text"
+          value={targetUsername}
+          onChange={(e) => setTargetUsername(e.target.value)}
+          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          placeholder="Enter username..."
+          required
+          data-testid="target-username-input"
+        />
+      </div>
+      
+      <div>
+        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+          Note (Optional)
+        </label>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          placeholder="E.g. rival, bounty, etc."
+          data-testid="target-note-input"
+        />
+      </div>
+      
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+        data-testid="search-target-button"
+      >
+        {loading ? '⏳ Searching...' : '🔍 Start Search'}
+      </button>
+      
+      <p className="text-xs text-mutedForeground font-heading italic">
+        💡 Tip: Searches take time. Track progress in "My Searches" below.
+      </p>
+    </form>
+  </div>
+);
+
+const SearchesCard = ({
+  attacks,
+  filterText,
+  setFilterText,
+  show,
+  setShow,
+  selectedAttackIds,
+  toggleSelected,
+  toggleSelectAll,
+  allSelected,
+  loading,
+  onDelete,
+  onTravel,
+  onAttack
+}) => {
+  return (
+    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+      <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+          <Users size={16} />
+          My Searches ({attacks.length})
+        </h2>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-mutedForeground font-heading">Show:</span>
+          <select
+            value={show}
+            onChange={(e) => setShow(e.target.value)}
+            className="bg-secondary border border-border rounded-md px-2 py-1 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none"
+            data-testid="attack-show-filter"
+          >
+            <option value="all">All</option>
+            <option value="searching">Searching</option>
+            <option value="found">Found</option>
+          </select>
+        </div>
+      </div>
+      
+      <div className="p-4 space-y-3">
+        <input
+          type="text"
+          value={filterText}
+          onChange={(e) => setFilterText(e.target.value)}
+          className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          placeholder="Filter by username or note..."
+          data-testid="attack-filter-input"
+        />
+
+        <div className="flex items-center justify-between gap-3">
+          <label className="inline-flex items-center gap-2 text-sm text-mutedForeground font-heading cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              className="w-4 h-4 accent-primary cursor-pointer"
+              data-testid="attack-select-all"
+            />
+            Select all
+          </label>
+          <button
+            type="button"
+            disabled={loading || selectedAttackIds.length === 0}
+            onClick={onDelete}
+            className="px-3 py-1.5 rounded-md bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 text-xs font-heading font-bold uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+            data-testid="attack-delete-selected"
+          >
+            🗑️ Delete ({selectedAttackIds.length})
+          </button>
+        </div>
+
+        {attacks.length === 0 ? (
+          <div className="py-12 text-center">
+            <Search size={48} className="mx-auto text-primary/30 mb-3" />
+            <p className="text-sm text-mutedForeground font-heading">No active searches</p>
+            <p className="text-xs text-mutedForeground font-heading mt-1">Start a search above to track targets</p>
+          </div>
+        ) : (
+          <>
+            {/* Desktop: Table */}
+            <div className="hidden md:block border border-border rounded-md overflow-hidden">
+              <div className="grid grid-cols-12 bg-secondary/30 text-xs uppercase tracking-wider font-heading text-primary/80 px-4 py-2 border-b border-border">
+                <div className="col-span-1"></div>
+                <div className="col-span-4">User / Note</div>
+                <div className="col-span-3">Location</div>
+                <div className="col-span-4 text-right">Expires</div>
+              </div>
+              
+              <div className="divide-y divide-border">
+                {attacks.map((a) => (
+                  <div key={a.attack_id} className="grid grid-cols-12 px-4 py-3 items-start gap-3 hover:bg-secondary/30 transition-colors">
+                    <div className="col-span-1 pt-1">
+                      <input
+                        type="checkbox"
+                        checked={selectedAttackIds.includes(a.attack_id)}
+                        onChange={() => toggleSelected(a.attack_id)}
+                        className="w-4 h-4 accent-primary cursor-pointer"
+                        data-testid={`attack-select-${a.attack_id}`}
+                      />
+                    </div>
+
+                    <div className="col-span-4 min-w-0">
+                      <Link
+                        to={`/profile/${encodeURIComponent(a.target_username)}`}
+                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-sm truncate"
+                        data-testid={`attack-user-${a.attack_id}`}
+                      >
+                        {a.target_username}
+                      </Link>
+                      {a.note && (
+                        <div className="text-xs text-mutedForeground truncate font-heading mt-0.5">
+                          {a.note}
+                        </div>
+                      )}
+                      <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
+                        <span className={`px-2 py-0.5 rounded-md font-heading font-bold uppercase ${
+                          a.status === 'searching' 
+                            ? 'bg-secondary text-mutedForeground border border-border' 
+                            : 'bg-primary/20 text-primary border border-primary/30'
+                        }`}>
+                          {a.status}
+                        </span>
+                        {a.can_travel && (
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => onTravel(a.location_state)}
+                            className="inline-flex items-center gap-1 text-primary hover:text-primary/80 font-heading font-bold transition-colors disabled:opacity-50"
+                            data-testid={`attack-travel-${a.attack_id}`}
+                          >
+                            <Plane size={12} />
+                            Travel
+                          </button>
+                        )}
+                        {a.can_attack && (
+                          <button
+                            type="button"
+                            disabled={loading}
+                            onClick={() => onAttack(a.attack_id)}
+                            className="inline-flex items-center gap-1 text-red-400 hover:text-red-300 font-heading font-bold transition-colors disabled:opacity-50"
+                            data-testid={`attack-kill-${a.attack_id}`}
+                          >
+                            <Crosshair size={12} />
+                            Kill
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="col-span-3 text-sm text-mutedForeground font-heading">
+                      {a.status === 'found' && a.location_state ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <MapPin size={14} className="text-primary" />
+                          <span className="text-foreground">{a.location_state}</span>
+                        </span>
+                      ) : (
+                        <span className="text-mutedForeground/60">Searching...</span>
+                      )}
+                    </div>
+
+                    <div className="col-span-4 text-right text-xs text-mutedForeground font-heading">
+                      <span className="inline-flex items-center gap-1.5 justify-end">
+                        <Clock size={14} />
+                        {formatDateTime(a.expires_at || a.search_started)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Mobile: Cards */}
+            <div className="md:hidden space-y-3">
+              {attacks.map((a) => (
+                <div key={a.attack_id} className="bg-secondary/30 rounded-md p-4 border border-border space-y-3">
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedAttackIds.includes(a.attack_id)}
+                      onChange={() => toggleSelected(a.attack_id)}
+                      className="w-4 h-4 accent-primary cursor-pointer mt-1"
+                      data-testid={`attack-select-${a.attack_id}`}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        to={`/profile/${encodeURIComponent(a.target_username)}`}
+                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-base truncate"
+                      >
+                        {a.target_username}
+                      </Link>
+                      {a.note && (
+                        <div className="text-sm text-mutedForeground font-heading mt-0.5">
+                          {a.note}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`px-2 py-1 rounded-md text-xs font-heading font-bold uppercase ${
+                      a.status === 'searching' 
+                        ? 'bg-secondary text-mutedForeground border border-border' 
+                        : 'bg-primary/20 text-primary border border-primary/30'
+                    }`}>
+                      {a.status}
+                    </span>
+                    
+                    {a.status === 'found' && a.location_state && (
+                      <span className="inline-flex items-center gap-1 text-sm text-foreground font-heading">
+                        <MapPin size={14} className="text-primary" />
+                        {a.location_state}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {a.can_travel && (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => onTravel(a.location_state)}
+                        className="flex-1 bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded-md px-3 py-2 text-sm font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1.5"
+                      >
+                        <Plane size={14} />
+                        Travel
+                      </button>
+                    )}
+                    {a.can_attack && (
+                      <button
+                        type="button"
+                        disabled={loading}
+                        onClick={() => onAttack(a.attack_id)}
+                        className="flex-1 bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded-md px-3 py-2 text-sm font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1.5"
+                      >
+                        <Crosshair size={14} />
+                        Kill
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-mutedForeground font-heading flex items-center gap-1.5">
+                    <Clock size={12} />
+                    Expires: {formatDateTime(a.expires_at || a.search_started)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        
+        {attacks.length > 0 && (
+          <p className="text-xs text-mutedForeground font-heading italic pt-2">
+            💡 Searches complete automatically. Location revealed when target is found.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const TravelModal = ({ 
+  destination, 
+  onClose, 
+  travelInfo, 
+  loading, 
+  countdown, 
+  onTravel 
+}) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+    <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden">
+      <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+        <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+          <MapPin size={18} />
+          Travel to {destination}
+        </h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-mutedForeground hover:text-primary transition-colors p-1"
+          aria-label="Close"
+        >
+          <span className="text-xl">×</span>
+        </button>
+      </div>
+      
+      <div className="p-4 md:p-6">
+        {countdown != null && countdown > 0 ? (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-4">🚗</div>
+            <p className="text-base font-heading font-bold text-primary mb-2">
+              Traveling to {destination}...
+            </p>
+            <p className="text-4xl font-heading font-bold text-foreground tabular-nums">
+              {countdown}s
+            </p>
+          </div>
+        ) : !travelInfo ? (
+          <div className="py-8 text-center text-sm text-mutedForeground font-heading">
+            Loading travel options...
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <button
+              onClick={() => onTravel('airport')}
+              disabled={loading || travelInfo.carrying_booze || (travelInfo.user_points ?? 0) < (travelInfo.airport_cost ?? 10)}
+              className="w-full flex items-center justify-between bg-gradient-to-r from-primary/20 to-yellow-600/20 hover:from-primary/30 hover:to-yellow-600/30 border-2 border-primary/50 px-4 py-3 rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+            >
+              <span className="flex items-center gap-2">
+                <Plane size={18} className="text-primary" />
+                <span className="text-sm font-heading font-bold text-primary">Airport</span>
+              </span>
+              <span className="text-xs text-primary font-heading">
+                {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost ?? 10} pts
+              </span>
+            </button>
+            
+            {travelInfo.carrying_booze && (
+              <p className="text-xs text-amber-400 font-heading">
+                ⚠️ Car only while carrying booze
+              </p>
+            )}
+            
+            {travelInfo?.custom_car && (
+              <button
+                onClick={() => onTravel('custom')}
+                disabled={loading}
+                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-4 py-3 rounded-md transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
+              >
+                <span className="flex items-center gap-2">
+                  <Zap size={18} className="text-primary" />
+                  <span className="text-sm font-heading font-bold text-foreground">{travelInfo.custom_car.name}</span>
+                </span>
+                <span className="text-xs text-mutedForeground font-heading">
+                  {travelInfo.custom_car.travel_time}s
+                </span>
+              </button>
+            )}
+            
+            {(travelInfo?.cars || []).slice(0, 3).map((car) => (
+              <button
+                key={car.user_car_id}
+                onClick={() => onTravel(car.user_car_id)}
+                disabled={loading}
+                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-4 py-3 rounded-md transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
+              >
+                <span className="flex items-center gap-2 min-w-0 flex-1">
+                  <Car size={18} className="text-primary shrink-0" />
+                  <span className="text-sm font-heading truncate text-foreground">{car.name}</span>
+                </span>
+                <span className="text-xs text-mutedForeground font-heading whitespace-nowrap ml-2">
+                  {car.travel_time}s
+                </span>
+              </button>
+            ))}
+            
+            {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
+              <div className="text-center py-4 text-sm text-mutedForeground font-heading">
+                <Car size={32} className="mx-auto text-primary/30 mb-2" />
+                <p>No cars available</p>
+                <p className="text-xs mt-1">Steal some cars or use airport</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+const CalcModal = ({
+  isOpen,
+  onClose,
+  calcTarget,
+  setCalcTarget,
+  foundAndReady,
+  calcLoading,
+  calcResult,
+  onCalculate
+}) => {
+  if (!isOpen) return null;
+  
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] overflow-auto">
+        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between sticky top-0">
+          <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+            <Calculator size={18} />
+            Bullet Calculator
+          </h2>
+          <div className="flex items-center gap-3">
+            <Link
+              to="/inbox?filter=attack"
+              className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wide transition-colors inline-flex items-center gap-1.5"
+            >
+              <FileText size={14} />
+              Witness Statements
+            </Link>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-mutedForeground hover:text-primary transition-colors p-1"
+              aria-label="Close"
+            >
+              <span className="text-xl">×</span>
+            </button>
+          </div>
+        </div>
+        
+        <div className="p-4 md:p-6 space-y-4">
+          <div>
+            <label className="block text-sm text-mutedForeground font-heading mb-2">
+              Target Username
+            </label>
+            <input
+              type="text"
+              value={calcTarget}
+              onChange={(e) => setCalcTarget(e.target.value)}
+              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+              placeholder="Enter username..."
+              list="calc-users"
+              data-testid="bullet-calc-target"
+            />
+            <datalist id="calc-users">
+              {foundAndReady.map((a) => (
+                <option key={a.attack_id} value={a.target_username} />
+              ))}
+            </datalist>
+          </div>
+
+          <button
+            type="button"
+            onClick={onCalculate}
+            disabled={calcLoading || !calcTarget.trim()}
+            className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+            data-testid="bullet-calc-run"
+          >
+            {calcLoading ? '⏳ Calculating...' : '🔢 Calculate Bullets'}
+          </button>
+
+          {calcResult && (
+            <div className="bg-secondary/50 border border-border rounded-md overflow-hidden">
+              <div className="px-4 py-2.5 bg-secondary/30 border-b border-border">
+                <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">
+                  Results
+                </h3>
+              </div>
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-mutedForeground font-heading">Bullets Required:</span>
+                  <span className="text-2xl font-heading font-bold text-primary tabular-nums">
+                    {Number(calcResult.bullets_required || 0).toLocaleString()}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-mutedForeground font-heading">Inflation:</span>
+                  <span className="text-base font-heading font-bold text-foreground">
+                    {Number(calcResult.inflation_pct ?? 0)}%
+                  </span>
+                </div>
+                <div className="pt-3 border-t border-border text-sm text-mutedForeground font-heading space-y-1">
+                  <div>
+                    Your Rank: <span className="text-foreground font-bold">{calcResult.attacker_rank_name}</span>
+                  </div>
+                  <div>
+                    Your Weapon: <span className="text-foreground font-bold">{calcResult.weapon_name}</span>
+                  </div>
+                  <div>
+                    Target Rank: <span className="text-foreground font-bold">{calcResult.target_rank_name}</span>
+                  </div>
+                  <div>
+                    Target Armour: <span className="text-foreground font-bold">Level {calcResult.target_armour_level}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {!calcResult && (
+            <p className="text-sm text-mutedForeground font-heading italic text-center py-4">
+              💡 Enter a target username and calculate bullets needed
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Main component
 export default function Attack() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [targetUsername, setTargetUsername] = useState('');
@@ -20,9 +723,7 @@ export default function Attack() {
   const [selectedAttackIds, setSelectedAttackIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filterText, setFilterText] = useState('');
-  const [show, setShow] = useState('all'); // all | searching | found
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTab, setModalTab] = useState('kill'); // kill | calc
+  const [show, setShow] = useState('all');
   const [killUsername, setKillUsername] = useState('');
   const [deathMessage, setDeathMessage] = useState('');
   const [makePublic, setMakePublic] = useState(false);
@@ -31,6 +732,7 @@ export default function Attack() {
   const [calcTarget, setCalcTarget] = useState('');
   const [calcLoading, setCalcLoading] = useState(false);
   const [calcResult, setCalcResult] = useState(null);
+  const [showCalcModal, setShowCalcModal] = useState(false);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [userBullets, setUserBullets] = useState(0);
@@ -39,7 +741,7 @@ export default function Attack() {
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
 
-  // Pre-fill search from hitlist link: /attack?target=Username
+  // Pre-fill search from hitlist link
   useEffect(() => {
     const t = searchParams.get('target');
     if (t && typeof t === 'string' && t.trim()) {
@@ -98,18 +800,14 @@ export default function Attack() {
     try {
       const res = await api.get('/attack/inflation');
       setInflationPct(Number(res.data?.inflation_pct ?? 0));
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
   };
 
   const refreshAttacks = async () => {
     try {
       const response = await api.get('/attack/list');
       setAttacks(response.data.attacks || []);
-    } catch (error) {
-      // ignore
-    }
+    } catch (error) {}
   };
 
   const toggleSelected = (attackId) => {
@@ -128,14 +826,14 @@ export default function Attack() {
     });
   };
 
-  const deleteSelected = async (ids) => {
-    const toDelete = (ids || []).filter(Boolean);
+  const deleteSelected = async () => {
+    const toDelete = selectedAttackIds.filter(Boolean);
     if (toDelete.length === 0) return;
     setLoading(true);
     try {
       const res = await api.post('/attack/delete', { attack_ids: toDelete });
       toast.success(res.data?.message || `Deleted ${toDelete.length} search(es)`);
-      setSelectedAttackIds((prev) => prev.filter((x) => !toDelete.includes(x)));
+      setSelectedAttackIds([]);
       await refreshAttacks();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to delete searches');
@@ -239,12 +937,10 @@ export default function Attack() {
       return;
     }
 
-    // Prefer a found attack that can attack, else any found attack.
     const found = attacks.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
     const best = found.find((a) => a.can_attack) || found[0];
 
     if (!best) {
-      // Start a search if we haven't found them yet.
       setLoading(true);
       try {
         const res = await api.post('/attack/search', { target_username: username, note: 'kill' });
@@ -276,7 +972,7 @@ export default function Attack() {
   const runCalc = async () => {
     const username = (calcTarget || '').trim();
     if (!username) {
-      toast.error('Pick a target first');
+      toast.error('Enter a target username');
       return;
     }
     setCalcLoading(true);
@@ -292,6 +988,7 @@ export default function Attack() {
   };
 
   const foundAndReady = useMemo(() => attacks.filter((a) => a.status === 'found'), [attacks]);
+  
   const filteredAttacks = useMemo(() => {
     const t = filterText.trim().toLowerCase();
     return attacks
@@ -304,564 +1001,89 @@ export default function Attack() {
   }, [attacks, filterText, show]);
 
   const filteredIds = useMemo(() => filteredAttacks.map((a) => a.attack_id), [filteredAttacks]);
+  
   const allFilteredSelected = useMemo(
     () => filteredIds.length > 0 && filteredIds.every((id) => selectedAttackIds.includes(id)),
     [filteredIds, selectedAttackIds]
   );
 
   return (
-    <div className={`space-y-5 ${styles.pageContent}`} data-testid="attack-page">
-      {/* Art Deco Header */}
-      <div>
-        <div className="flex items-center gap-4 mb-3">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/40 to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-3">
-            <Crosshair size={24} className="text-primary/80" />
-            Attack
-          </h1>
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
-        </div>
-        <p className="text-center text-sm text-mutedForeground font-heading tracking-wide">Search, track, travel, and execute hits</p>
-      </div>
+    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="attack-page">
+      <PageHeader />
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
-        <div className={`${styles.panel} rounded-md overflow-hidden`}>
-          <div className={`${styles.panelHeader} px-3 py-2 sm:px-4`}>
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Today&apos;s event</span>
-          </div>
-          <div className="p-3 sm:p-4">
-            <p className="text-sm font-heading font-bold text-primary">{event.name}</p>
-            <p className={`text-xs font-heading mt-1 ${styles.textMuted}`}>{event.message}</p>
-          </div>
-        </div>
+        <EventBanner event={event} />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         {/* Left Column */}
-        <div className="space-y-6">
-          {/* Kill User */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-px bg-primary/50" />
-                <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                  <Skull size={14} /> Kill User
-                </span>
-                <div className="w-6 h-px bg-primary/50" />
-              </div>
-              <button
-                type="button"
-                className="text-xs uppercase tracking-wider text-primary/80 hover:text-primary font-heading inline-flex items-center gap-1"
-                onClick={() => { setModalTab('calc'); setModalOpen(true); }}
-              >
-                <Calculator size={12} /> Calculator
-              </button>
-            </div>
-            <div className="p-4 space-y-3">
-              <div>
-                <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Username</label>
-                <input
-                  type="text"
-                  value={killUsername}
-                  onChange={(e) => setKillUsername(e.target.value)}
-                  className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-                  placeholder="Enter username..."
-                  list="found-users-inline"
-                  data-testid="kill-username-inline"
-                />
-                <datalist id="found-users-inline">
-                  {foundAndReady.map((a) => (
-                    <option key={a.attack_id} value={a.target_username} />
-                  ))}
-                </datalist>
-              </div>
-              <div>
-                <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">
-                  Bullets <span className="text-primary/60">(you have {Number(userBullets).toLocaleString()})</span>
-                </label>
-                <input
-                  type="number"
-                  value={bulletsToUse}
-                  onChange={(e) => setBulletsToUse(e.target.value)}
-                  className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-                  placeholder="Enter amount (min 1)"
-                  min="1"
-                  data-testid="kill-bullets-inline"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Death Message (Optional)</label>
-                <textarea
-                  value={deathMessage}
-                  onChange={(e) => setDeathMessage(e.target.value)}
-                  className={`w-full ${styles.input} min-h-20 p-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-                  placeholder="Death message (optional)..."
-                  data-testid="kill-death-message-inline"
-                />
-              </div>
-              <div className={`flex items-center justify-between border border-primary/20 rounded-sm px-3 py-2 ${styles.surfaceMuted}`}>
-                <div className="text-xs text-mutedForeground font-heading">Inflation: {inflationPct}%</div>
-                <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading">
-                  <span className="uppercase tracking-wider">Make Public</span>
-                  <input type="checkbox" checked={makePublic} onChange={(e) => setMakePublic(e.target.checked)} className="h-4 w-4 accent-primary" data-testid="kill-make-public-inline" />
-                </label>
-              </div>
-              <button
-                type="button"
-                disabled={loading || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
-                onClick={killByUsername}
-                className="w-full bg-gradient-to-r from-red-700 to-red-900 text-white hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2.5 text-sm border border-red-600/50 disabled:opacity-50 transition-smooth"
-                data-testid="kill-inline-button"
-              >
-                {loading ? 'Killing...' : 'Kill'}
-              </button>
-              <div className="text-xs text-mutedForeground font-heading italic">Tip: Starts a search if not found. Travel required before kill.</div>
-            </div>
-          </div>
+        <div className="space-y-4 md:space-y-6">
+          <KillUserCard
+            killUsername={killUsername}
+            setKillUsername={setKillUsername}
+            bulletsToUse={bulletsToUse}
+            setBulletsToUse={setBulletsToUse}
+            deathMessage={deathMessage}
+            setDeathMessage={setDeathMessage}
+            makePublic={makePublic}
+            setMakePublic={setMakePublic}
+            inflationPct={inflationPct}
+            userBullets={userBullets}
+            foundAndReady={foundAndReady}
+            loading={loading}
+            onKill={killByUsername}
+            onOpenCalc={() => setShowCalcModal(true)}
+          />
 
-          {/* Find User */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-px bg-primary/50" />
-                <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-                  <Search size={14} /> Find User
-                </span>
-                <div className="flex-1 h-px bg-primary/50" />
-              </div>
-            </div>
-            <form onSubmit={searchTarget} className="p-4 space-y-3">
-              <div>
-                <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Username</label>
-                <input
-                  type="text"
-                  value={targetUsername}
-                  onChange={(e) => setTargetUsername(e.target.value)}
-                  className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-                  placeholder="Enter username..."
-                  required
-                  data-testid="target-username-input"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Note (optional)</label>
-                <input
-                  type="text"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-                  placeholder="E.g. big spender, rival"
-                  data-testid="target-note-input"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2.5 text-sm border border-yellow-600/50 disabled:opacity-50 transition-smooth"
-                data-testid="search-target-button"
-              >
-                {loading ? 'Searching...' : 'Start Search'}
-              </button>
-              <div className="text-xs text-mutedForeground font-heading italic">
-                Searches take time. Manage from “My Searches”.
-              </div>
-            </form>
-          </div>
+          <FindUserCard
+            targetUsername={targetUsername}
+            setTargetUsername={setTargetUsername}
+            note={note}
+            setNote={setNote}
+            loading={loading}
+            onSearch={searchTarget}
+          />
         </div>
 
         {/* Right Column */}
-        <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-px bg-primary/50" />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-                My Searches ({attacks.length})
-              </span>
-              <div className="flex-1 h-px bg-primary/50" />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-mutedForeground font-heading">Show:</span>
-              <select
-                value={show}
-                onChange={(e) => setShow(e.target.value)}
-                className={`${styles.surface} border border-primary/20 rounded-sm h-8 px-2 text-xs focus:border-primary/50 focus:outline-none`}
-                data-testid="attack-show-filter"
-              >
-                <option value="all">All</option>
-                <option value="searching">Searching</option>
-                <option value="found">Found</option>
-              </select>
-            </div>
-          </div>
-          <div className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <input
-              type="text"
-              value={filterText}
-              onChange={(e) => setFilterText(e.target.value)}
-              className={`flex-1 ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-              placeholder="Filter by username / note"
-              data-testid="attack-filter-input"
-            />
-          </div>
-
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <label className="inline-flex items-center gap-2 text-xs text-mutedForeground select-none font-heading">
-              <input
-                type="checkbox"
-                checked={allFilteredSelected}
-                onChange={() => toggleSelectAllFiltered(filteredIds)}
-                className="h-4 w-4 accent-primary"
-                data-testid="attack-select-all"
-              />
-              Select all
-            </label>
-            <button
-              type="button"
-              disabled={loading || selectedAttackIds.length === 0}
-              onClick={() => deleteSelected(selectedAttackIds)}
-              className="px-3 h-8 rounded-sm uppercase tracking-widest font-bold text-xs bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 disabled:opacity-50 transition-smooth"
-              data-testid="attack-delete-selected"
-            >
-              Delete ({selectedAttackIds.length})
-            </button>
-          </div>
-
-          <div className="border border-primary/20 rounded-sm overflow-hidden">
-            <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-3 py-2 border-b border-primary/20`}>
-              <div className="col-span-1"></div>
-              <div className="col-span-4">User / Note</div>
-              <div className="col-span-3">Location</div>
-              <div className="col-span-4 text-right">Expires</div>
-            </div>
-
-            {filteredAttacks.length === 0 ? (
-              <div className="p-4 text-sm text-mutedForeground font-heading italic">You do not have any active searches.</div>
-            ) : (
-              filteredAttacks.map((a) => (
-                <div key={a.attack_id} className={`grid grid-cols-12 px-3 py-2.5 border-b border-primary/10 items-start gap-2 ${styles.raisedHover} transition-smooth`}>
-                  <div className="col-span-1 pt-1">
-                    <input
-                      type="checkbox"
-                      checked={selectedAttackIds.includes(a.attack_id)}
-                      onChange={() => toggleSelected(a.attack_id)}
-                      className="h-4 w-4 accent-primary"
-                      data-testid={`attack-select-${a.attack_id}`}
-                    />
-                  </div>
-
-                  <div className="col-span-4 min-w-0">
-                    <Link
-                      to={`/profile/${encodeURIComponent(a.target_username)}`}
-                      className="font-heading font-bold text-foreground truncate hover:text-primary transition-smooth block text-sm"
-                      data-testid={`attack-user-${a.attack_id}`}
-                    >
-                      {a.target_username}
-                    </Link>
-                    {a.note && <div className="text-xs text-mutedForeground truncate font-heading">{a.note}</div>}
-                    <div className="mt-1 inline-flex items-center gap-2 text-[11px] text-mutedForeground font-heading flex-wrap">
-                      <span className={`px-2 py-0.5 rounded-sm uppercase tracking-wider font-bold ${
-                        a.status === 'searching' ? `${styles.surface} text-mutedForeground border border-primary/10` : 'bg-primary/20 text-primary border border-primary/30'
-                      }`}>
-                        {a.status}
-                      </span>
-                      {a.can_travel && (
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() => openTravelModal(a.location_state)}
-                          className="inline-flex items-center gap-1 text-primary hover:underline disabled:opacity-50"
-                          data-testid={`attack-travel-${a.attack_id}`}
-                        >
-                          <Plane size={12} />
-                          Travel
-                        </button>
-                      )}
-                      {a.can_attack && (
-                        <button
-                          type="button"
-                          disabled={loading}
-                          onClick={() => executeAttack(a.attack_id)}
-                          className="inline-flex items-center gap-1 text-red-400 hover:underline disabled:opacity-50"
-                          data-testid={`attack-kill-${a.attack_id}`}
-                        >
-                          <Crosshair size={12} />
-                          Kill
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="col-span-3 text-sm text-mutedForeground font-heading">
-                    {a.status === 'found' && a.location_state ? (
-                      <span className="inline-flex items-center gap-1">
-                        <MapPin size={12} className="text-primary" />
-                        <span className="text-foreground">{a.location_state}</span>
-                      </span>
-                    ) : (
-                      <span className="text-mutedForeground/60">Hidden</span>
-                    )}
-                  </div>
-
-                  <div className="col-span-4 text-right text-xs text-mutedForeground font-heading">
-                    <span className="inline-flex items-center gap-1 justify-end">
-                      <Clock size={14} />
-                      {formatDateTime(a.expires_at || a.search_started)}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          <div className="mt-4 text-xs text-mutedForeground font-heading italic">
-            Searches take time to complete. Location stays hidden until the target is found.
-          </div>
-          </div>
-        </div>
+        <SearchesCard
+          attacks={filteredAttacks}
+          filterText={filterText}
+          setFilterText={setFilterText}
+          show={show}
+          setShow={setShow}
+          selectedAttackIds={selectedAttackIds}
+          toggleSelected={toggleSelected}
+          toggleSelectAll={() => toggleSelectAllFiltered(filteredIds)}
+          allSelected={allFilteredSelected}
+          loading={loading}
+          onDelete={deleteSelected}
+          onTravel={openTravelModal}
+          onAttack={executeAttack}
+        />
       </div>
 
-      {modalOpen && (
-        <div className="fixed inset-0 z-50">
-          <div
-            className="absolute inset-0 bg-black/80"
-            onClick={() => setModalOpen(false)}
-          />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className={`w-full max-w-xl ${styles.panel} border border-primary/40 rounded-sm overflow-hidden shadow-2xl shadow-primary/20`}>
-              <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-                <div className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-                  {modalTab === 'kill' ? 'Kill User' : 'Bullet Calculator'}
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setModalTab('kill')}
-                    className={`px-2 py-1 rounded-sm uppercase tracking-wider font-heading font-bold transition-smooth ${
-                      modalTab === 'kill' ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border border-yellow-600/50' : 'text-mutedForeground hover:text-primary'
-                    }`}
-                  >
-                    Kill
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalTab('calc')}
-                    className={`px-2 py-1 rounded-sm uppercase tracking-wider font-heading font-bold transition-smooth ${
-                      modalTab === 'calc' ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border border-yellow-600/50' : 'text-mutedForeground hover:text-primary'
-                    }`}
-                  >
-                    Calculator
-                  </button>
-                  <Link
-                    to="/inbox?filter=attack"
-                    className="flex items-center gap-1 px-2 py-1 rounded-sm text-xs font-heading font-bold uppercase tracking-wider text-primary hover:bg-primary/20 transition-smooth"
-                    data-testid="view-witness-statements"
-                  >
-                    <FileText size={12} />
-                    View witness statements
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="ml-2 text-mutedForeground hover:text-primary transition-smooth font-heading"
-                    aria-label="Close"
-                  >
-                    ✕
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 space-y-3">
-                {modalTab === 'kill' ? (
-                  <>
-                    <div>
-                      <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Username</label>
-                      <input
-                        type="text"
-                        value={killUsername}
-                        onChange={(e) => setKillUsername(e.target.value)}
-                        className={`w-full ${styles.input} h-9 px-3 text-sm focus:border-primary/50 focus:outline-none`}
-                        placeholder="Enter username..."
-                        list="found-users"
-                        data-testid="kill-username"
-                      />
-                      <datalist id="found-users">
-                        {foundAndReady.map((a) => (
-                          <option key={a.attack_id} value={a.target_username} />
-                        ))}
-                      </datalist>
-                    </div>
-                    <div>
-                      <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">
-                        Bullets <span className="text-primary/60">(you have {Number(userBullets).toLocaleString()})</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={bulletsToUse}
-                        onChange={(e) => setBulletsToUse(e.target.value)}
-                        className={`w-full ${styles.input} h-9 px-3 text-sm placeholder:text-mutedForeground/60 focus:border-primary/50 focus:outline-none`}
-                        placeholder="Enter amount (min 1)"
-                        min="1"
-                        data-testid="kill-bullets-modal"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Death Message (Optional)</label>
-                      <textarea
-                        value={deathMessage}
-                        onChange={(e) => setDeathMessage(e.target.value)}
-                        className={`w-full ${styles.input} min-h-20 p-3 text-sm focus:border-primary/50 focus:outline-none`}
-                        placeholder="Death message (optional)..."
-                        data-testid="kill-death-message"
-                      />
-                    </div>
-                    <div className={`flex items-center justify-between border border-primary/20 rounded-sm px-3 py-2 ${styles.surfaceMuted}`}>
-                      <div className="text-xs text-mutedForeground font-heading">Inflation: {Number(calcResult?.inflation_pct ?? 0)}%</div>
-                      <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading">
-                        <span className="uppercase tracking-wider">Make Public</span>
-                        <input type="checkbox" checked={makePublic} onChange={(e) => setMakePublic(e.target.checked)} className="h-4 w-4 accent-primary" data-testid="kill-make-public" />
-                      </label>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={loading || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
-                      onClick={killByUsername}
-                      className="w-full bg-gradient-to-r from-red-700 to-red-900 text-white hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2.5 text-sm border border-red-600/50 disabled:opacity-50"
-                    >
-                      {loading ? 'Killing...' : 'Kill'}
-                    </button>
-                    <div className="text-xs text-mutedForeground font-heading italic">Tip: Enter bullets (min 1). Starts a search if not found. Travel required before kill.</div>
-                  </>
-                ) : (
-                  <>
-                    <div>
-                      <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1">Username</label>
-                      <input
-                        type="text"
-                        value={calcTarget}
-                        onChange={(e) => setCalcTarget(e.target.value)}
-                        className={`w-full ${styles.input} h-9 px-3 text-sm focus:border-primary/50 focus:outline-none`}
-                        data-testid="bullet-calc-target"
-                        placeholder="Enter username..."
-                        list="calc-users"
-                      />
-                      <datalist id="calc-users">
-                        {foundAndReady.map((a) => (
-                          <option key={a.attack_id} value={a.target_username} />
-                        ))}
-                      </datalist>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={runCalc}
-                      disabled={calcLoading}
-                      className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2.5 text-sm border border-yellow-600/50 disabled:opacity-50"
-                      data-testid="bullet-calc-run"
-                    >
-                      {calcLoading ? '...' : 'Calculate'}
-                    </button>
-
-                    {calcResult ? (
-                      <div className={`border border-primary/20 rounded-sm overflow-hidden ${styles.surfaceMuted}`}>
-                        <div className={`grid grid-cols-12 ${styles.surfaceMuted} text-xs uppercase tracking-widest font-heading text-primary/80 px-3 py-2 border-b border-primary/20`}>
-                          <div className="col-span-6">Estimated</div>
-                          <div className="col-span-6 text-right">Inflation</div>
-                        </div>
-                        <div className="grid grid-cols-12 px-3 py-3 text-sm items-center">
-                          <div className="col-span-6 font-heading font-bold text-primary">
-                            {Number(calcResult.bullets_required || 0).toLocaleString()} bullets
-                          </div>
-                          <div className="col-span-6 text-right text-mutedForeground font-heading">
-                            {Number(calcResult.inflation_pct ?? 0)}%
-                          </div>
-                          <div className="col-span-12 mt-2 text-xs text-mutedForeground font-heading">
-                            You: <span className="text-foreground font-bold">{calcResult.attacker_rank_name}</span> · {calcResult.weapon_name}
-                            <span className="text-mutedForeground/60"> · </span>
-                            Target: <span className="text-foreground font-bold">{calcResult.target_rank_name}</span> · Armour Lv.{calcResult.target_armour_level}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-mutedForeground font-heading italic">Pick a target and calculate bullets needed.</div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {travelModalDestination && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/80" onClick={() => setTravelModalDestination(null)} />
-          <div className="absolute inset-0 flex items-center justify-center p-4">
-            <div className={`w-full max-w-md ${styles.panel} border border-primary/40 rounded-sm overflow-hidden shadow-2xl shadow-primary/20`} onClick={(e) => e.stopPropagation()}>
-              <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
-                <div className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Travel to {travelModalDestination}</div>
-                <button type="button" onClick={() => setTravelModalDestination(null)} className="text-mutedForeground hover:text-primary font-heading" aria-label="Close">✕</button>
-              </div>
-              <div className="p-4 space-y-2">
-                {travelCountdown != null && travelCountdown > 0 ? (
-                  <div className="text-center py-6">
-                    <p className="text-sm font-heading text-primary font-bold">Traveling to {travelModalDestination}…</p>
-                    <p className="text-2xl font-heading font-bold text-foreground mt-2 tabular-nums">{travelCountdown}s</p>
-                  </div>
-                ) : !travelInfo ? (
-                  <div className="text-sm text-mutedForeground font-heading py-4 text-center">Loading travel options…</div>
-                ) : (
-                  <>
-                    <button
-                      onClick={() => handleTravelFromModal('airport')}
-                      disabled={travelSubmitLoading || travelInfo.carrying_booze || (travelInfo.user_points ?? 0) < (travelInfo.airport_cost ?? 10)}
-                      className="w-full flex items-center justify-between bg-gradient-to-b from-primary/30 to-primary/10 hover:from-primary/40 hover:to-primary/20 border border-primary/50 px-3 py-2.5 rounded-sm transition-smooth disabled:opacity-50 text-left"
-                      data-testid="travel-modal-airport"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Plane size={16} className="text-primary" />
-                        <span className="text-sm font-heading font-bold text-primary">Airport</span>
-                      </span>
-                      <span className="text-xs text-primary/90 font-heading">{(travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant')} · {travelInfo.airport_cost ?? 10} pts</span>
-                    </button>
-                    {travelInfo.carrying_booze && <p className="text-xs text-amber-400 font-heading">Car only while carrying booze</p>}
-                    {travelInfo?.custom_car && (
-                      <button
-                        onClick={() => handleTravelFromModal('custom')}
-                        disabled={travelSubmitLoading}
-                        className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth text-left disabled:opacity-50`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Zap size={16} className="text-primary" />
-                          <span className="text-sm font-heading font-bold text-foreground">{travelInfo.custom_car.name}</span>
-                        </span>
-                        <span className="text-xs text-mutedForeground font-heading">{travelInfo.custom_car.travel_time}s</span>
-                      </button>
-                    )}
-                    {(travelInfo?.cars || []).slice(0, 3).map((car) => (
-                      <button
-                        key={car.user_car_id}
-                        onClick={() => handleTravelFromModal(car.user_car_id)}
-                        disabled={travelSubmitLoading}
-                        className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth text-left disabled:opacity-50`}
-                      >
-                        <span className="flex items-center gap-2">
-                          <Car size={16} className="text-primary" />
-                          <span className="text-sm font-heading truncate max-w-[140px] text-foreground">{car.name}</span>
-                        </span>
-                        <span className="text-xs text-mutedForeground font-heading">{car.travel_time}s</span>
-                      </button>
-                    ))}
-                    {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
-                      <p className="text-xs text-mutedForeground font-heading text-center py-2">No cars. Use airport or steal a car.</p>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <TravelModal
+          destination={travelModalDestination}
+          onClose={() => setTravelModalDestination(null)}
+          travelInfo={travelInfo}
+          loading={travelSubmitLoading}
+          countdown={travelCountdown}
+          onTravel={handleTravelFromModal}
+        />
       )}
+
+      <CalcModal
+        isOpen={showCalcModal}
+        onClose={() => setShowCalcModal(false)}
+        calcTarget={calcTarget}
+        setCalcTarget={setCalcTarget}
+        foundAndReady={foundAndReady}
+        calcLoading={calcLoading}
+        calcResult={calcResult}
+        onCalculate={runCalc}
+      />
     </div>
   );
 }
