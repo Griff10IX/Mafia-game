@@ -7,6 +7,12 @@ param(
     [string]$Message = "Update"
 )
 
+# ======= CONFIGURATION =======
+# Set your SSH password here (requires sshpass to be installed: choco install sshpass)
+# Leave empty to use SSH key authentication (recommended)
+$SSH_PASSWORD = ""
+# =============================
+
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
@@ -33,6 +39,11 @@ git push mafia2 MAfiaGame2
 
 # 6. Deploy on server (SSH)
 Write-Host "`n6. Deploying on server (SSH)..." -ForegroundColor Yellow
-ssh root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); npm run build && sudo systemctl restart mafia-backend && sudo systemctl reload nginx"
+$sshCommand = "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); npm run build && sudo systemctl restart mafia-backend && sudo systemctl reload nginx"
+if ($SSH_PASSWORD) {
+    sshpass -p $SSH_PASSWORD ssh root@178.128.38.68 $sshCommand
+} else {
+    ssh root@178.128.38.68 $sshCommand
+}
 
 Write-Host "`n=== Done - pushed and deployed ===" -ForegroundColor Green
