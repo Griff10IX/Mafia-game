@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award } from 'lucide-react';
+import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -85,18 +85,21 @@ export default function Leaderboard() {
   const [boards, setBoards] = useState({ kills: [], crimes: [], gta: [], jail_busts: [] });
   const [loading, setLoading] = useState(true);
   const [topLimit, setTopLimit] = useState(10);
+  const [viewMode, setViewMode] = useState('alive'); // 'alive' | 'dead'
 
   const fetchLeaderboard = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get('/leaderboards/top', { params: { limit: topLimit } });
+      const response = await api.get('/leaderboards/top', {
+        params: { limit: topLimit, dead: viewMode === 'dead' },
+      });
       setBoards(response.data || { kills: [], crimes: [], gta: [], jail_busts: [] });
     } catch (error) {
       toast.error('Failed to load leaderboard');
     } finally {
       setLoading(false);
     }
-  }, [topLimit]);
+  }, [topLimit, viewMode]);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -124,8 +127,37 @@ export default function Leaderboard() {
           <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
         </div>
         <p className="text-center text-sm text-mutedForeground font-heading tracking-wide mb-4">
-          The most powerful players in the underworld
+          {viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats'}
         </p>
+        <div className="flex flex-wrap items-center justify-center gap-3 mb-3">
+          <span className="text-xs text-mutedForeground font-heading uppercase tracking-wider">View:</span>
+          <div className="flex flex-wrap gap-1">
+            <button
+              type="button"
+              onClick={() => setViewMode('alive')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
+                viewMode === 'alive'
+                  ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border border-yellow-600/50'
+                  : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
+              }`}
+            >
+              <Trophy size={12} />
+              Top {topLimit}
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('dead')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
+                viewMode === 'dead'
+                  ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border border-yellow-600/50'
+                  : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
+              }`}
+            >
+              <Skull size={12} />
+              Top dead
+            </button>
+          </div>
+        </div>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <span className="text-xs text-mutedForeground font-heading uppercase tracking-wider">Show:</span>
           <div className="flex flex-wrap gap-1">
@@ -157,13 +189,38 @@ export default function Leaderboard() {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <StatBoard title="Top Kills" icon={Target} entries={boards.kills} valueLabel="kills" topLabel={`Top ${topLimit}`} />
-        <StatBoard title="Top Crimes" icon={Flame} entries={boards.crimes} valueLabel="crimes" topLabel={`Top ${topLimit}`} />
-        <StatBoard title="Top GTA" icon={Car} entries={boards.gta} valueLabel="GTA" topLabel={`Top ${topLimit}`} />
-        <StatBoard title="Top Jail Busts" icon={Lock} entries={boards.jail_busts} valueLabel="busts" topLabel={`Top ${topLimit}`} />
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Kills' : 'Top Kills'}
+          icon={Target}
+          entries={boards.kills}
+          valueLabel="kills"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+        />
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Crimes' : 'Top Crimes'}
+          icon={Flame}
+          entries={boards.crimes}
+          valueLabel="crimes"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+        />
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · GTA' : 'Top GTA'}
+          icon={Car}
+          entries={boards.gta}
+          valueLabel="GTA"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+        />
+        <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Jail Busts' : 'Top Jail Busts'}
+          icon={Lock}
+          entries={boards.jail_busts}
+          valueLabel="busts"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+        />
       </div>
 
-      {/* Weekly Rewards */}
+      {/* Weekly Rewards (alive only) */}
+      {viewMode === 'alive' && (
       <section className={`${styles.panel} rounded-sm overflow-hidden`}>
         <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
           <div className="flex items-center gap-2">
@@ -209,6 +266,7 @@ export default function Leaderboard() {
           </div>
         </div>
       </section>
+      )}
     </div>
   );
 }

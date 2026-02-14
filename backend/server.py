@@ -5494,10 +5494,11 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     
     return result
 
-async def _top_by_field(field: str, current_user_id: str, limit: int) -> List[StatLeaderboardEntry]:
+async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
     limit = max(1, min(100, int(limit)))
+    query = {"is_dead": True} if dead else {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}}
     users = await db.users.find(
-        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}},
+        query,
         {"_id": 0, "username": 1, "id": 1, field: 1}
     ).sort(field, -1).limit(limit).to_list(limit)
     out: List[StatLeaderboardEntry] = []
@@ -5514,15 +5515,16 @@ async def _top_by_field(field: str, current_user_id: str, limit: int) -> List[St
 @api_router.get("/leaderboards/top")
 async def get_top_leaderboards(
     limit: int = Query(10, ge=1, le=100, description="Top N (5, 10, 20, 50, 100)"),
+    dead: bool = Query(False, description="If true, show top dead accounts instead of alive"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Top N leaderboards per stat (kills, crimes, gta, jail busts). Limit 1-100."""
+    """Top N leaderboards per stat (kills, crimes, gta, jail busts). Limit 1-100. Use dead=true for top dead accounts."""
     user_id = current_user["id"]
     kills, crimes, gta, jail_busts = await asyncio.gather(
-        _top_by_field("total_kills", user_id, limit),
-        _top_by_field("total_crimes", user_id, limit),
-        _top_by_field("total_gta", user_id, limit),
-        _top_by_field("jail_busts", user_id, limit),
+        _top_by_field("total_kills", user_id, limit, dead=dead),
+        _top_by_field("total_crimes", user_id, limit, dead=dead),
+        _top_by_field("total_gta", user_id, limit, dead=dead),
+        _top_by_field("jail_busts", user_id, limit, dead=dead),
     )
     return {"kills": kills, "crimes": crimes, "gta": gta, "jail_busts": jail_busts}
 
