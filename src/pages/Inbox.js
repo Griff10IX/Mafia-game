@@ -15,7 +15,7 @@ const NOTIFICATION_ICONS = {
   user_message: MessageCircle
 };
 
-const VALID_FILTERS = ['all', 'unread', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message'];
+const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message'];
 
 const EMOJI_ROWS = [
   ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢'],
@@ -193,7 +193,7 @@ const ComposeModal = ({
   );
 };
 
-const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, onOcAccept, onOcDecline }) => {
+const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, onOcAccept, onOcDecline, isSent }) => {
   const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
   const timeAgo = getTimeAgo(notification.created_at);
   const isOcInvite = !!notification.oc_invite_id;
@@ -205,6 +205,8 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
       className={`flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ${
         isSelected 
           ? 'bg-primary/10 border-l-4 border-l-primary' 
+          : isSent
+          ? 'bg-secondary/20 hover:bg-secondary/40 border-l-4 border-l-transparent'
           : notification.read 
           ? 'bg-secondary/30 hover:bg-secondary/50' 
           : 'bg-card hover:bg-secondary/30 border-l-4 border-l-primary/50'
@@ -212,18 +214,22 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
     >
       {/* Icon */}
       <div className={`p-2 rounded-md shrink-0 ${
-        notification.read ? 'bg-secondary' : 'bg-primary/20'
+        isSent ? 'bg-primary/20' : notification.read ? 'bg-secondary' : 'bg-primary/20'
       }`}>
-        <Icon size={18} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
+        {isSent ? (
+          <Send size={18} className="text-primary" />
+        ) : (
+          <Icon size={18} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
+        )}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2 mb-1">
           <h3 className={`text-sm font-heading truncate ${
-            notification.read ? 'text-foreground' : 'text-foreground font-bold'
+            isSent ? 'text-foreground' : notification.read ? 'text-foreground' : 'text-foreground font-bold'
           }`}>
-            {notification.title}
+            {isSent ? `To: ${notification.to_username || notification.target_username}` : notification.title}
           </h3>
           <span className="text-xs text-mutedForeground whitespace-nowrap">
             {timeAgo}
@@ -234,10 +240,14 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
         </p>
       </div>
 
-      {/* Unread indicator */}
-      {!notification.read && (
+      {/* Unread indicator or Sent badge */}
+      {isSent ? (
+        <div className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold shrink-0">
+          SENT
+        </div>
+      ) : !notification.read ? (
         <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
-      )}
+      ) : null}
 
       {/* Arrow */}
       <ChevronRight size={16} className="text-mutedForeground shrink-0" />
@@ -245,7 +255,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
   );
 };
 
-const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline, onOpenChat }) => {
+const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDecline, onOpenChat, isSent }) => {
   if (!notification) {
     return (
       <div className="flex-1 flex items-center justify-center bg-secondary/20">
@@ -259,7 +269,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
     );
   }
 
-  const Icon = NOTIFICATION_ICONS[notification.notification_type] || Bell;
+  const Icon = isSent ? Send : (NOTIFICATION_ICONS[notification.notification_type] || Bell);
   const isOcInvite = !!notification.oc_invite_id;
   const isUserMessage = notification.notification_type === 'user_message' && notification.sender_id;
 
@@ -274,9 +284,10 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             </div>
             <div>
               <h2 className="text-lg md:text-xl font-heading font-bold text-foreground mb-1">
-                {notification.title}
+                {isSent ? `To: ${notification.to_username || notification.target_username}` : notification.title}
               </h2>
               <p className="text-sm text-mutedForeground">
+                {isSent && <span className="text-primary font-bold mr-2">Sent</span>}
                 {getTimeAgo(notification.created_at)}
               </p>
             </div>
@@ -285,7 +296,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
-          {!notification.read && (
+          {!isSent && !notification.read && (
             <button
               onClick={() => onMarkRead(notification.id)}
               className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase transition-all"
@@ -293,7 +304,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
               ✓ Mark Read
             </button>
           )}
-          {isUserMessage && (
+          {!isSent && isUserMessage && (
             <button
               onClick={() => onOpenChat(notification)}
               className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase transition-all"
@@ -317,7 +328,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             {notification.message}
           </p>
           
-          {notification.notification_type === 'user_message' && notification.gif_url && (
+          {notification.gif_url && (
             <div className="mt-4">
               <img 
                 src={notification.gif_url} 
@@ -327,7 +338,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             </div>
           )}
 
-          {isOcInvite && (
+          {!isSent && isOcInvite && (
             <div className="mt-6 p-4 bg-primary/10 border border-primary/30 rounded-md">
               <p className="text-sm text-foreground font-heading font-bold mb-3">
                 Organised Crime Invitation
@@ -362,6 +373,7 @@ export default function Inbox() {
   const initialFilter = VALID_FILTERS.includes(filterParam) ? filterParam : 'all';
   
   const [notifications, setNotifications] = useState([]);
+  const [sentMessages, setSentMessages] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState(initialFilter);
@@ -386,9 +398,20 @@ export default function Inbox() {
     }
   }, []);
 
+  const fetchSentMessages = useCallback(async () => {
+    try {
+      const response = await api.get('/notifications/sent');
+      setSentMessages(response.data.sent_messages || []);
+    } catch (error) {
+      console.error('Error fetching sent messages:', error);
+      // Don't show error toast as this is optional
+    }
+  }, []);
+
   useEffect(() => {
     fetchNotifications();
-  }, [fetchNotifications]);
+    fetchSentMessages();
+  }, [fetchNotifications, fetchSentMessages]);
 
   useEffect(() => {
     if (VALID_FILTERS.includes(filterParam)) setFilter(filterParam);
@@ -487,6 +510,7 @@ export default function Inbox() {
       setShowGifPicker(false);
       setShowCompose(false);
       fetchNotifications();
+      fetchSentMessages();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to send message');
     } finally {
@@ -496,7 +520,9 @@ export default function Inbox() {
 
   const insertEmoji = (emoji) => setSendMessage(m => m + emoji);
 
-  const filteredNotifications = filter === 'all' 
+  const filteredNotifications = filter === 'sent'
+    ? sentMessages
+    : filter === 'all' 
     ? notifications 
     : filter === 'unread'
       ? notifications.filter(n => !n.read)
@@ -509,6 +535,7 @@ export default function Inbox() {
   const filterButtons = [
     { value: 'all', label: 'All', icon: Mail },
     { value: 'unread', label: 'Unread', icon: MailOpen },
+    { value: 'sent', label: 'Sent', icon: Send },
     { value: 'user_message', label: 'Messages', icon: MessageCircle },
     { value: 'rank_up', label: 'Rank', icon: Trophy },
     { value: 'attack', label: 'Attack', icon: Skull },
@@ -603,6 +630,7 @@ export default function Inbox() {
                   onDelete={deleteMessage}
                   onOcAccept={handleOcInviteAccept}
                   onOcDecline={handleOcInviteDecline}
+                  isSent={filter === 'sent'}
                 />
               ))
             )}
@@ -617,6 +645,7 @@ export default function Inbox() {
               onOcAccept={handleOcInviteAccept}
               onOcDecline={handleOcInviteDecline}
               onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
+              isSent={filter === 'sent'}
             />
           </div>
         </div>
@@ -644,6 +673,7 @@ export default function Inbox() {
               onOcAccept={handleOcInviteAccept}
               onOcDecline={handleOcInviteDecline}
               onOpenChat={(n) => n.sender_id && navigate(`/inbox/chat/${n.sender_id}`)}
+              isSent={filter === 'sent'}
             />
           </div>
         </div>
