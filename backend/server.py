@@ -5679,6 +5679,37 @@ async def get_thread(other_user_id: str, current_user: dict = Depends(get_curren
     return {"thread": thread, "other_user_id": other_user_id, "other_username": other_username}
 
 
+@api_router.get("/giphy/search")
+async def giphy_search(
+    q: str = Query(..., min_length=1, max_length=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Proxy Giphy GIF search. API key is read from backend .env (GIPHY_API_KEY)."""
+    api_key = (os.environ.get("GIPHY_API_KEY") or "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Giphy is not configured. Add GIPHY_API_KEY to backend .env",
+        )
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.get(
+            "https://api.giphy.com/v1/gifs/search",
+            params={
+                "api_key": api_key,
+                "q": q,
+                "limit": 20,
+                "rating": "pg-13",
+            },
+        )
+    data = resp.json()
+    if data.get("meta", {}).get("status") != 200:
+        raise HTTPException(
+            status_code=502,
+            detail=data.get("meta", {}).get("msg") or "Giphy error",
+        )
+    return {"data": data.get("data") or []}
+
+
 # ============ BOOZE RUN (Supply Run / Prohibition) ============
 # 6 historically accurate prohibition-era booze types. Prices rotate every 3 hours per location.
 BOOZE_ROTATION_HOURS = 3

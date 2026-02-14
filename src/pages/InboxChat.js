@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Send } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import GifPicker from '../components/GifPicker';
 import styles from '../styles/noir.module.css';
 
 function formatTime(dateString) {
@@ -26,10 +27,29 @@ export default function InboxChat() {
   const [loading, setLoading] = useState(true);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
 
   const insertEmoji = (emoji) => setReplyText((t) => t + emoji);
+
+  const handleSendGif = async (gifUrl) => {
+    if (!gifUrl || sending) return;
+    setSending(true);
+    setShowGifPicker(false);
+    try {
+      await api.post('/notifications/send', {
+        target_username: otherUsername,
+        message: '(GIF)',
+        gif_url: gifUrl,
+      });
+      await fetchThread();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to send GIF');
+    } finally {
+      setSending(false);
+    }
+  };
 
   const fetchThread = async () => {
     if (!userId) return;
@@ -150,12 +170,29 @@ export default function InboxChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Reply box (Telegram-style input at bottom) + gangster emojis below */}
+      {/* Reply box (Telegram-style input at bottom) + GIPHY + gangster emojis below */}
       <form
         onSubmit={handleSend}
         className="p-3 border-t border-primary/20 bg-card shrink-0"
       >
+        {showGifPicker && (
+          <div className="mb-2">
+            <GifPicker
+              onSelect={handleSendGif}
+              onClose={() => setShowGifPicker(false)}
+            />
+          </div>
+        )}
         <div className="flex gap-2 mb-2">
+          <button
+            type="button"
+            onClick={() => setShowGifPicker((v) => !v)}
+            className="shrink-0 w-10 h-10 rounded-full border border-primary/30 text-primary flex items-center justify-center hover:bg-primary/10 transition-colors"
+            title="Search GIFs"
+            aria-label="GIF"
+          >
+            GIF
+          </button>
           <input
             type="text"
             value={replyText}

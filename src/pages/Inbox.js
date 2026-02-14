@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import GifPicker from '../components/GifPicker';
 import styles from '../styles/noir.module.css';
 
 const NOTIFICATION_ICONS = {
@@ -62,7 +63,11 @@ const SendMessageCard = ({
   onSendGifUrlChange,
   onSendMessage,
   sending,
-  onInsertEmoji 
+  onInsertEmoji,
+  onOpenGifPicker,
+  showGifPicker,
+  gifPickerOnSelect,
+  gifPickerOnClose,
 }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
@@ -116,14 +121,32 @@ const SendMessageCard = ({
       </div>
       
       <div>
-        <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider mb-1.5">
-          GIF URL (optional)
-        </label>
+        <div className="flex items-center gap-2 mb-1.5">
+          <label className="block text-xs font-heading text-mutedForeground uppercase tracking-wider">
+            GIF (optional)
+          </label>
+          {onOpenGifPicker && (
+            <button
+              type="button"
+              onClick={onOpenGifPicker}
+              className="text-xs font-heading font-bold text-primary hover:underline"
+            >
+              Search GIPHY
+            </button>
+          )}
+        </div>
+        {showGifPicker && (
+          <GifPicker
+            onSelect={gifPickerOnSelect}
+            onClose={gifPickerOnClose}
+            className="mb-2"
+          />
+        )}
         <input
           type="url"
           value={sendGifUrl}
           onChange={(e) => onSendGifUrlChange(e.target.value)}
-          placeholder="https://..."
+          placeholder="Paste URL or search above"
           className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
         />
       </div>
@@ -287,6 +310,7 @@ export default function Inbox() {
   const [sendMessage, setSendMessage] = useState('');
   const [sendGifUrl, setSendGifUrl] = useState('');
   const [sending, setSending] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -440,6 +464,10 @@ export default function Inbox() {
         onSendMessage={handleSendMessage}
         sending={sending}
         onInsertEmoji={insertEmoji}
+        onOpenGifPicker={() => setShowGifPicker(true)}
+        showGifPicker={showGifPicker}
+        gifPickerOnSelect={(url) => { setSendGifUrl(url); setShowGifPicker(false); }}
+        gifPickerOnClose={() => setShowGifPicker(false)}
       />
 
       {/* Filters and actions */}
