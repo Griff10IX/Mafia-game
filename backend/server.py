@@ -693,6 +693,10 @@ class HitlistAddRequest(BaseModel):
     hidden: bool = False
 
 
+class HitlistBuyOffUserRequest(BaseModel):
+    target_username: str
+
+
 class HitlistAttemptNpcRequest(BaseModel):
     hitlist_id: str
     bullets_to_use: int
@@ -4831,6 +4835,49 @@ async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
     if cost_points > 0:
         cost_parts.append(f"{cost_points:,} pts")
     return {"message": f"Removed {res.deleted_count} bounty(ies). Cost: {', '.join(cost_parts)}.", "deleted": res.deleted_count}
+
+
+@api_router.post("/hitlist/buy-off-user")
+async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: dict = Depends(get_current_user)):
+    """Pay to remove all bounties on another user (or their bodyguards). Same cost rule: bounty + 50% per entry."""
+    target_username = (request.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Target username required")
+    target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1, "username": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["id"] == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Use the Buy Off button for yourself")
+    entries = await db.hitlist.find(
+        {"target_id": target["id"], "target_type": {"$in": ["user", "bodyguards"]}},
+        {"_id": 0, "reward_type": 1, "reward_amount": 1}
+    ).to_list(100)
+    if not entries:
+        raise HTTPException(status_code=400, detail="That user is not on the hitlist")
+    cost_cash = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "cash"))
+    cost_points = int(sum(e["reward_amount"] * HITLIST_BUY_OFF_MULTIPLIER for e in entries if e.get("reward_type") == "points"))
+    user_cash = int((current_user.get("money") or 0) or 0)
+    user_points = int((current_user.get("points") or 0) or 0)
+    if cost_cash > 0 and user_cash < cost_cash:
+        raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
+    if cost_points > 0 and user_points < cost_points:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
+    updates = {}
+    if cost_cash > 0:
+        updates["$inc"] = updates.get("$inc") or {}
+        updates["$inc"]["money"] = -cost_cash
+    if cost_points > 0:
+        updates["$inc"] = updates.get("$inc") or {}
+        updates["$inc"]["points"] = -cost_points
+    if updates:
+        await db.users.update_one({"id": current_user["id"]}, updates)
+    res = await db.hitlist.delete_many({"target_id": target["id"], "target_type": {"$in": ["user", "bodyguards"]}})
+    cost_parts = []
+    if cost_cash > 0:
+        cost_parts.append(f"${cost_cash:,} cash")
+    if cost_points > 0:
+        cost_parts.append(f"{cost_points:,} pts")
+    return {"message": f"Removed all bounties on {target['username']}. Cost: {', '.join(cost_parts)}.", "deleted": res.deleted_count}
 
 
 @api_router.post("/hitlist/reveal")

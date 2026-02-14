@@ -77,7 +77,35 @@ const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
 const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onReveal }) => {
   const onHitlist = me?.on_hitlist ?? false;
   
-  if (!onHitlist && !revealed) return null;
+  // Only show "You're on the Hitlist" when actually on the hitlist
+  if (!onHitlist) {
+    // Optional: show past "who placed" if they had revealed and are no longer on list
+    if (revealed && who?.length > 0) {
+      return (
+        <div className="bg-card rounded-md overflow-hidden border border-border">
+          <div className="px-4 py-2 bg-secondary/50 border-b border-border">
+            <h2 className="text-sm font-heading font-bold text-mutedForeground uppercase tracking-widest">
+              Previously on hitlist (revealed)
+            </h2>
+          </div>
+          <div className="p-4">
+            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-3">Who had placed bounties</h3>
+            <div className="space-y-2">
+              {who.map((w, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 text-sm font-heading bg-secondary/30 rounded-md p-2 border border-border">
+                  <span className="text-foreground font-bold">{w.placer_username}</span>
+                  <span className="text-mutedForeground text-xs">
+                    {w.reward_amount} {w.reward_type} · {w.target_type}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  }
   
   const needCash = me?.buy_off_cash ?? 0;
   const needPoints = me?.buy_off_points ?? 0;
@@ -273,7 +301,25 @@ const PlaceBountyCard = ({
   </div>
 );
 
-const ActiveBountiesCard = ({ list }) => (
+const BUY_OFF_MULTIPLIER = 1.5;
+
+function getBuyOffCostForTarget(list, targetUsername) {
+  const entries = list.filter((i) => i.target_username === targetUsername && i.target_type !== 'npc');
+  const cash = Math.floor(entries.filter((e) => e.reward_type === 'cash').reduce((s, e) => s + (e.reward_amount || 0) * BUY_OFF_MULTIPLIER, 0));
+  const points = Math.floor(entries.filter((e) => e.reward_type === 'points').reduce((s, e) => s + (e.reward_amount || 0) * BUY_OFF_MULTIPLIER, 0));
+  return { cash, points };
+}
+
+const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
+  const isFirstForTarget = (item, index) =>
+    item.target_type !== 'npc' &&
+    list.findIndex((i) => i.target_username === item.target_username && i.target_type !== 'npc') === index;
+  const haveCash = Number(user?.money ?? 0);
+  const havePoints = Number(user?.points ?? 0);
+  const canAffordBuyOff = (cash, points) =>
+    (cash === 0 || haveCash >= cash) && (points === 0 || havePoints >= points);
+
+  return (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-between">
@@ -302,10 +348,19 @@ const ActiveBountiesCard = ({ list }) => (
                 <th className="text-left py-2.5 px-4">Type</th>
                 <th className="text-left py-2.5 px-4">Reward</th>
                 <th className="text-left py-2.5 px-4">Placed By</th>
+                <th className="text-left py-2.5 px-4">Buy Off</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {list.map((item) => (
+              {list.map((item, index) => {
+                const showBuyOff = isFirstForTarget(item, index);
+                const cost = showBuyOff ? getBuyOffCostForTarget(list, item.target_username) : null;
+                const costLabel = cost && (cost.cash > 0 || cost.points > 0)
+                  ? [cost.cash > 0 && `$${cost.cash.toLocaleString()}`, cost.points > 0 && `${cost.points.toLocaleString()} pts`].filter(Boolean).join(' + ')
+                  : null;
+                const buying = buyingOffTarget === item.target_username;
+                const afford = cost && canAffordBuyOff(cost.cash, cost.points);
+                return (
                 <tr key={item.id} className="hover:bg-secondary/30 transition-colors">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
@@ -326,6 +381,8 @@ const ActiveBountiesCard = ({ list }) => (
                           <Users size={14} />
                           Bodyguards
                         </>
+                      ) : item.target_type === 'npc' ? (
+                        <>NPC</>
                       ) : (
                         <>
                           <User size={14} />
@@ -352,15 +409,37 @@ const ActiveBountiesCard = ({ list }) => (
                   <td className="py-3 px-4 text-mutedForeground">
                     {item.placer_username ?? 'Hidden'}
                   </td>
+                  <td className="py-3 px-4">
+                    {showBuyOff && costLabel && (
+                      <button
+                        type="button"
+                        onClick={() => onBuyOffUser?.(item.target_username)}
+                        disabled={buying || !afford}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ShieldOff size={12} />
+                        {buying ? '...' : `Buy off (${costLabel})`}
+                      </button>
+                    )}
+                  </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
         
         {/* Mobile: Cards */}
         <div className="md:hidden divide-y divide-border">
-          {list.map((item) => (
+          {list.map((item, index) => {
+            const showBuyOff = isFirstForTarget(item, index);
+            const cost = showBuyOff ? getBuyOffCostForTarget(list, item.target_username) : null;
+            const costLabel = cost && (cost.cash > 0 || cost.points > 0)
+              ? [cost.cash > 0 && `$${cost.cash.toLocaleString()}`, cost.points > 0 && `${cost.points.toLocaleString()} pts`].filter(Boolean).join(' + ')
+              : null;
+            const buying = buyingOffTarget === item.target_username;
+            const afford = cost && canAffordBuyOff(cost.cash, cost.points);
+            return (
             <div key={item.id} className="p-4 space-y-3 hover:bg-secondary/30 transition-colors">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -382,6 +461,8 @@ const ActiveBountiesCard = ({ list }) => (
                         <Users size={12} />
                         Bodyguards
                       </>
+                    ) : item.target_type === 'npc' ? (
+                      <>NPC</>
                     ) : (
                       <>
                         <User size={12} />
@@ -411,13 +492,26 @@ const ActiveBountiesCard = ({ list }) => (
               <div className="text-xs text-mutedForeground font-heading">
                 Placed by: <span className="text-foreground">{item.placer_username ?? 'Hidden'}</span>
               </div>
+              {showBuyOff && costLabel && (
+                <button
+                  type="button"
+                  onClick={() => onBuyOffUser?.(item.target_username)}
+                  disabled={buying || !afford}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2 rounded-md text-xs font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ShieldOff size={14} />
+                  {buying ? 'Buying off...' : `Buy off ${item.target_username} (${costLabel})`}
+                </button>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </>
     )}
   </div>
-);
+  );
+};
 
 const InfoCard = () => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
@@ -471,6 +565,7 @@ export default function HitlistPage() {
   const [rewardType, setRewardType] = useState('cash');
   const [rewardAmount, setRewardAmount] = useState('');
   const [hidden, setHidden] = useState(false);
+  const [buyingOffTarget, setBuyingOffTarget] = useState(null);
 
   const fetchData = async () => {
     try {
@@ -580,6 +675,21 @@ export default function HitlistPage() {
     }
   };
 
+  const handleBuyOffUser = async (targetUsername) => {
+    if (!targetUsername || buyingOffTarget) return;
+    setBuyingOffTarget(targetUsername);
+    try {
+      const res = await api.post('/hitlist/buy-off-user', { target_username: targetUsername });
+      toast.success(res.data?.message);
+      refreshUser();
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to buy off');
+    } finally {
+      setBuyingOffTarget(null);
+    }
+  };
+
   if (loading) {
     return <LoadingSpinner />;
   }
@@ -624,7 +734,12 @@ export default function HitlistPage() {
         onSubmit={handleAdd}
       />
 
-      <ActiveBountiesCard list={list} />
+      <ActiveBountiesCard
+        list={list}
+        user={user}
+        onBuyOffUser={handleBuyOffUser}
+        buyingOffTarget={buyingOffTarget}
+      />
 
       <InfoCard />
     </div>
