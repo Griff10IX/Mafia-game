@@ -51,9 +51,7 @@ const AttemptRow = ({ attempt }) => {
   const bgOwner = attempt.bodyguard_owner_username;
 
   return (
-    <div className={`px-4 py-3 border-b border-border transition-colors ${
-      killed ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-secondary/30'
-    }`}>
+    <div className="px-4 py-3 border-b border-border hover:bg-secondary/30 transition-colors">
       <div className="flex items-start md:items-center justify-between gap-3">
         {/* Left side - Main info */}
         <div className="min-w-0 flex-1 space-y-2">
