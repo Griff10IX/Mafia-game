@@ -282,40 +282,34 @@ MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25  # Points for 5 extra travels
 
 CARS = [
-    # Common (difficulty 1) - 6 cars
-    {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 500, "travel_bonus": 0, "image": None},
-    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 600, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 700, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1577423704717-d48ffcb561e3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 650, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1747401648939-41e148128f8b?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 550, "travel_bonus": 0, "image": None},
-    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 600, "travel_bonus": 5, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
-    
+    # Common (difficulty 1) - 6 cars (images from public/images/gta/)
+    {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 500, "travel_bonus": 0, "image": "/images/gta/car1.jpg"},
+    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 600, "travel_bonus": 5, "image": "/images/gta/car2.jpg"},
+    {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 700, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
+    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 650, "travel_bonus": 5, "image": "/images/gta/car4.jpg"},
+    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 550, "travel_bonus": 0, "image": "/images/gta/car5.jpg"},
+    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 600, "travel_bonus": 5, "image": "/images/gta/car6.jpg"},
     # Uncommon (difficulty 2) - 4 cars
-    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 1200, "travel_bonus": 10, "image": "https://images.unsplash.com/photo-1747401648939-41e148128f8b?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 1500, "travel_bonus": 10, "image": "https://images.unsplash.com/photo-1577423704717-d48ffcb561e3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 2000, "travel_bonus": 15, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 1800, "travel_bonus": 12, "image": "https://images.unsplash.com/photo-1552072805-2a9039d00e57?auto=format&fit=crop&w=600&q=80"},
-    
+    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 1200, "travel_bonus": 10, "image": "/images/gta/car7.jpg"},
+    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 1500, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
+    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 2000, "travel_bonus": 15, "image": "/images/gta/car9.jpg"},
+    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 1800, "travel_bonus": 12, "image": "/images/gta/car10.jpg"},
     # Rare (difficulty 3) - 4 cars
-    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 3500, "travel_bonus": 20, "image": "https://images.unsplash.com/photo-1577423704717-d48ffcb561e3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 4000, "travel_bonus": 20, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 5000, "travel_bonus": 25, "image": "https://images.unsplash.com/photo-1747401648939-41e148128f8b?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 5500, "travel_bonus": 25, "image": "https://images.unsplash.com/photo-1552072805-2a9039d00e57?auto=format&fit=crop&w=600&q=80"},
-    
+    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 3500, "travel_bonus": 20, "image": "/images/gta/car11.jpg"},
+    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 4000, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},
+    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 5000, "travel_bonus": 25, "image": "/images/gta/car13.jpg"},
+    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 5500, "travel_bonus": 25, "image": "/images/gta/car14.jpg"},
     # Ultra Rare (difficulty 4) - 3 cars
-    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 10000, "travel_bonus": 35, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 12000, "travel_bonus": 35, "image": "https://images.unsplash.com/photo-1577423704717-d48ffcb561e3?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 15000, "travel_bonus": 40, "image": "https://images.unsplash.com/photo-1747401648939-41e148128f8b?auto=format&fit=crop&w=600&q=80"},
-    
+    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 10000, "travel_bonus": 35, "image": "/images/gta/car15.jpeg"},
+    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 12000, "travel_bonus": 35, "image": "/images/gta/car16.jpg"},
+    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 15000, "travel_bonus": 40, "image": "/images/gta/car17.jpg"},
     # Legendary (difficulty 5) - 2 cars
-    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 25000, "travel_bonus": 50, "image": "https://images.unsplash.com/photo-1552072805-2a9039d00e57?auto=format&fit=crop&w=600&q=80"},
-    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 30000, "travel_bonus": 55, "image": "https://images.unsplash.com/photo-1563831816793-3d32d7cc07d3?auto=format&fit=crop&w=600&q=80"},
-    
+    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 25000, "travel_bonus": 50, "image": "/images/gta/car18.jpg"},
+    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 30000, "travel_bonus": 55, "image": "/images/gta/car19.jpg"},
     # Custom (store only) - just below exclusive
     {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 40000, "travel_bonus": 55, "image": None},
-
-    # Exclusive (admin only)
-    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 50000, "travel_bonus": 60, "image": "https://images.unsplash.com/photo-1577423704717-d48ffcb561e3?auto=format&fit=crop&w=600&q=80"}
+    # Exclusive (admin only) - no custom image
+    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 50000, "travel_bonus": 60, "image": "/images/gta/car20.png"}
 ]
 
 # Models

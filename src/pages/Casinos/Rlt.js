@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -482,6 +483,28 @@ export default function Rlt() {
   const [transferUsername, setTransferUsername] = useState('');
   const [ownerLoading, setOwnerLoading] = useState(false);
 
+  const COLLAPSED_KEY = 'mafia_rlt_collapsed';
+  const [collapsedSections, setCollapsedSections] = useState(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (_) {}
+    return {};
+  });
+  const toggleSection = (id) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+  const isCollapsed = (id) => !!collapsedSections[id];
+
   const fetchOwnership = () => {
     api.get('/casino/roulette/ownership').then((r) => {
       setOwnership(r.data);
@@ -666,16 +689,40 @@ export default function Rlt() {
       <PageHeader currentCity={currentCity} />
 
       {ownership && (
-        <OwnershipCard
-          ownership={ownership}
-          onClaim={handleClaim}
-          onRelinquish={handleRelinquish}
-          loading={ownerLoading}
-        />
+        <div className="bg-card border border-primary/20 rounded-md overflow-hidden">
+          <button
+            type="button"
+            onClick={() => toggleSection('ownership')}
+            className="w-full px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+          >
+            <span className="shrink-0 text-primary/80">{isCollapsed('ownership') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Ownership</span>
+          </button>
+          {!isCollapsed('ownership') && (
+            <div className="p-4 pt-0">
+              <OwnershipCard
+                ownership={ownership}
+                onClaim={handleClaim}
+                onRelinquish={handleRelinquish}
+                loading={ownerLoading}
+              />
+            </div>
+          )}
+        </div>
       )}
 
       {isOwner && (
-        <OwnerControlsCard
+        <div className="bg-card rounded-md overflow-hidden border-2 border-primary/40">
+          <button
+            type="button"
+            onClick={() => toggleSection('ownerControls')}
+            className="w-full px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+          >
+            <span className="shrink-0 text-primary/80">{isCollapsed('ownerControls') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            <span className="text-lg font-heading font-bold text-primary">Owner Controls</span>
+          </button>
+          {!isCollapsed('ownerControls') && (
+            <OwnerControlsCard
           ownership={ownership}
           config={config}
           onSetMaxBet={handleSetMaxBet}
@@ -685,17 +732,25 @@ export default function Rlt() {
           setNewMaxBet={setNewMaxBet}
           transferUsername={transferUsername}
           setTransferUsername={setTransferUsername}
-        />
+            />
+          )}
+        </div>
       )}
 
       {!isOwner && (
         <>
           <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-            <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
+            <button
+              type="button"
+              onClick={() => toggleSection('chipsControls')}
+              className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+            >
+              <span className="shrink-0 text-primary/80">{isCollapsed('chipsControls') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
               <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
                 Chips & Controls
               </h3>
-            </div>
+            </button>
+            {!isCollapsed('chipsControls') && (
             <div className="p-4 space-y-4">
               <ChipSelector
                 chips={CHIPS}
@@ -717,21 +772,27 @@ export default function Rlt() {
                 onClearBets={clearBets}
               />
             </div>
+            )}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
             {/* Combined Roulette Table - Wheel + Betting Grid */}
             <div className="lg:col-span-2">
               <div className="bg-card border border-primary/20 rounded-md overflow-hidden">
-                <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('rouletteTable')}
+                  className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+                >
+                  <span className="shrink-0 text-primary/80">{isCollapsed('rouletteTable') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
                   <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
                     Roulette Table
                   </h3>
                   <p className="text-xs text-mutedForeground">
                     European single zero · Max {formatMoney(config.max_bet)}
                   </p>
-                </div>
-                
+                </button>
+                {!isCollapsed('rouletteTable') && (
                 <div className="p-4 md:p-6">
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* LEFT: Wheel and Result */}
@@ -850,6 +911,7 @@ export default function Rlt() {
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             </div>
           </div>

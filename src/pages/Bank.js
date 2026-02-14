@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins } from 'lucide-react';
+import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../utils/api';
 import styles from '../styles/noir.module.css';
@@ -353,6 +353,28 @@ export default function Bank() {
   const [transferTo, setTransferTo] = useState('');
   const [transferAmount, setTransferAmount] = useState('');
 
+  const COLLAPSED_KEY = 'mafia_bank_collapsed';
+  const [collapsedSections, setCollapsedSections] = useState(() => {
+    try {
+      const raw = localStorage.getItem(COLLAPSED_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch (_) {}
+    return {};
+  });
+  const toggleSection = (id) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+  const isCollapsed = (id) => !!collapsedSections[id];
+
   const fetchAll = async () => {
     setLoading(true);
     try {
@@ -476,79 +498,133 @@ export default function Bank() {
       <PageHeader />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <InterestBankCard
-          overview={overview}
-          meta={meta}
-          depositAmount={depositAmount}
-          onDepositAmountChange={setDepositAmount}
-          durationHours={durationHours}
-          onDurationChange={setDurationHours}
-          preview={preview}
-          onDeposit={doDeposit}
-        />
+        <div className="rounded-md overflow-hidden border border-primary/20">
+          <button
+            type="button"
+            onClick={() => toggleSection('interestBank')}
+            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+          >
+            <span className="shrink-0 text-primary/80">{isCollapsed('interestBank') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Interest Bank</span>
+          </button>
+          {!isCollapsed('interestBank') && (
+            <div>
+              <InterestBankCard
+                overview={overview}
+                meta={meta}
+                depositAmount={depositAmount}
+                onDepositAmountChange={setDepositAmount}
+                durationHours={durationHours}
+                onDurationChange={setDurationHours}
+                preview={preview}
+                onDeposit={doDeposit}
+              />
+            </div>
+          )}
+        </div>
 
-        <SwissBankCard
-          overview={overview}
-          swissAmount={swissAmount}
-          onSwissAmountChange={setSwissAmount}
-          onDeposit={swissDeposit}
-          onWithdraw={swissWithdraw}
-        />
+        <div className="rounded-md overflow-hidden border border-primary/20">
+          <button
+            type="button"
+            onClick={() => toggleSection('swissBank')}
+            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+          >
+            <span className="shrink-0 text-primary/80">{isCollapsed('swissBank') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Swiss Bank</span>
+          </button>
+          {!isCollapsed('swissBank') && (
+            <div>
+              <SwissBankCard
+                overview={overview}
+                swissAmount={swissAmount}
+                onSwissAmountChange={setSwissAmount}
+                onDeposit={swissDeposit}
+                onWithdraw={swissWithdraw}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Interest Deposits */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => toggleSection('interestDeposits')}
+          className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+        >
+          <span className="shrink-0 text-primary/80">{isCollapsed('interestDeposits') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+          <div className="flex items-center gap-2 flex-1">
             <Coins size={18} className="text-primary" />
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
-              Interest Deposits
-            </span>
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Interest Deposits</span>
           </div>
           <span className="text-xs text-mutedForeground">{deposits.length} total</span>
-        </div>
-
-        {deposits.length === 0 ? (
-          <div className="p-8 text-sm text-mutedForeground font-heading text-center">
-            No deposits yet.
-          </div>
-        ) : (
-          <div className="p-3 md:p-4 space-y-3">
-            {deposits.map((d) => (
-              <DepositCard key={d.id} deposit={d} onClaim={claimDeposit} />
-            ))}
-          </div>
+        </button>
+        {!isCollapsed('interestDeposits') && (
+          <>
+            {deposits.length === 0 ? (
+              <div className="p-8 text-sm text-mutedForeground font-heading text-center">
+                No deposits yet.
+              </div>
+            ) : (
+              <div className="p-3 md:p-4 space-y-3">
+                {deposits.map((d) => (
+                  <DepositCard key={d.id} deposit={d} onClaim={claimDeposit} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <SendMoneyCard
-          transferTo={transferTo}
-          onTransferToChange={setTransferTo}
-          transferAmount={transferAmount}
-          onTransferAmountChange={setTransferAmount}
-          transferNum={transferNum}
-          onSend={sendMoney}
-        />
+        <div className="bg-card border border-primary/20 rounded-md overflow-hidden">
+          <button
+            type="button"
+            onClick={() => toggleSection('sendMoney')}
+            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+          >
+            <span className="shrink-0 text-primary/80">{isCollapsed('sendMoney') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Send Money</span>
+          </button>
+          {!isCollapsed('sendMoney') && (
+            <div>
+              <SendMoneyCard
+                transferTo={transferTo}
+                onTransferToChange={setTransferTo}
+                transferAmount={transferAmount}
+                onTransferAmountChange={setTransferAmount}
+                transferNum={transferNum}
+                onSend={sendMoney}
+              />
+            </div>
+          )}
+        </div>
 
         <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-          <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
-              Sent / Received
-            </span>
+          <button
+            type="button"
+            onClick={() => toggleSection('transfers')}
+            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+          >
+            <span className="shrink-0 text-primary/80">{isCollapsed('transfers') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
+            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex-1">Sent / Received</span>
             <span className="text-xs text-mutedForeground">{transfers.length} recent</span>
-          </div>
-
-          {transfers.length === 0 ? (
-            <div className="p-8 text-sm text-mutedForeground font-heading text-center">
-              No transfers yet.
-            </div>
-          ) : (
-            <div className="p-3 md:p-4 space-y-3">
-              {transfers.map((t) => (
-                <TransferCard key={t.id} transfer={t} />
-              ))}
-            </div>
+          </button>
+          {!isCollapsed('transfers') && (
+            <>
+              {transfers.length === 0 ? (
+                <div className="p-8 text-sm text-mutedForeground font-heading text-center">
+                  No transfers yet.
+                </div>
+              ) : (
+                <div className="p-3 md:p-4 space-y-3">
+                  {transfers.map((t) => (
+                    <TransferCard key={t.id} transfer={t} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
