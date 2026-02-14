@@ -1531,7 +1531,14 @@ async def get_stats_overview(
         "top_dead_users": top_dead_users,
     }
 
-# Meta (ranks, cars) -> see routers/meta.py
+# Meta (ranks, cars)
+@api_router.get("/meta/ranks")
+async def get_meta_ranks(current_user: dict = Depends(get_current_user)):
+    return {"ranks": [{"id": int(r["id"]), "name": r["name"]} for r in RANKS]}
+
+@api_router.get("/meta/cars")
+async def get_meta_cars(current_user: dict = Depends(get_current_user)):
+    return {"cars": [{"id": c["id"], "name": c["name"], "rarity": c.get("rarity")} for c in CARS]}
 
 def _interest_option(duration_hours: int) -> dict | None:
     try:
@@ -7523,18 +7530,12 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_db():
     # Register routers after server is fully loaded (avoids circular import 502 on login).
-    from routers import crimes, gta, jail, oc, hitlist, meta, weapons, armour, properties, racket, leaderboard
+    from routers import crimes, gta, jail, oc, hitlist
     crimes.register(api_router)
     gta.register(api_router)
     jail.register(api_router)
     oc.register(api_router)
     hitlist.register(api_router)
-    meta.register(api_router)
-    weapons.register(api_router)
-    armour.register(api_router)
-    properties.register(api_router)
-    racket.register(api_router)
-    leaderboard.register(api_router)
     app.include_router(api_router)
 
     await init_game_data()
