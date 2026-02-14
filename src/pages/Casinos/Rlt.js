@@ -720,15 +720,138 @@ export default function Rlt() {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-            <ResultCard
-              wheelTargetResult={wheelTargetResult}
-              wheelRotation={wheelRotation}
-              lastResult={lastResult}
-              recentNumbers={recentNumbers}
-              maxBet={config.max_bet}
-            />
+            {/* Combined Roulette Table - Wheel + Betting Grid */}
+            <div className="lg:col-span-2">
+              <div className="bg-card border border-primary/20 rounded-md overflow-hidden">
+                <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
+                  <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+                    Roulette Table
+                  </h3>
+                  <p className="text-xs text-mutedForeground">
+                    European single zero · Max {formatMoney(config.max_bet)}
+                  </p>
+                </div>
+                
+                <div className="p-4 md:p-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* LEFT: Wheel and Result */}
+                    <div className="lg:col-span-1 space-y-4">
+                      <div className="flex flex-col items-center justify-center py-6 px-3 rounded-md bg-secondary/20 border border-border">
+                        {wheelTargetResult !== null ? (
+                          <>
+                            <p className="text-xs text-mutedForeground uppercase tracking-wider mb-3">
+                              Spinning…
+                            </p>
+                            <RouletteWheel rotationDeg={wheelRotation} size={220} />
+                          </>
+                        ) : lastResult !== null ? (
+                          <>
+                            <p className="text-xs text-mutedForeground uppercase tracking-wider mb-3">
+                              Landed on
+                            </p>
+                            <div
+                              className={`inline-flex items-center justify-center w-24 h-24 rounded-full text-5xl font-heading font-bold tabular-nums animate-pulse ${
+                                lastResult === 0 
+                                  ? 'bg-emerald-500/20 text-emerald-400 border-4 border-emerald-500/40' 
+                                  : isRed(lastResult) 
+                                  ? 'bg-red-500/20 text-red-400 border-4 border-red-500/40' 
+                                  : 'bg-zinc-500/20 text-zinc-300 border-4 border-zinc-500/40'
+                              }`}
+                            >
+                              {lastResult}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <RouletteWheel rotationDeg={0} size={220} />
+                            <p className="text-sm text-mutedForeground text-center mt-4">
+                              Place bets and spin
+                            </p>
+                          </>
+                        )}
+                      </div>
+                      
+                      {recentNumbers.length > 0 && (
+                        <div className="bg-secondary/20 border border-border rounded-md p-3">
+                          <p className="text-xs text-mutedForeground uppercase tracking-wider mb-2">
+                            Recent Numbers
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {recentNumbers.map((n, i) => (
+                              <div
+                                key={`${n}-${i}`}
+                                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                                  n === 0 
+                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' 
+                                    : isRed(n) 
+                                    ? 'bg-red-500/20 text-red-400 border border-red-500/40' 
+                                    : 'bg-zinc-500/20 text-zinc-300 border border-zinc-500/40'
+                                }`}
+                              >
+                                {n}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-            <BettingTable onAddBet={addBet} />
+                    {/* RIGHT: Betting Grid */}
+                    <div className="lg:col-span-2 space-y-3">
+                      <div className="border-2 border-primary/40 rounded-md overflow-hidden shadow-inner">
+                        <button
+                          type="button"
+                          onClick={() => addBet('straight', 0)}
+                          className="w-full h-10 md:h-12 bg-gradient-to-b from-emerald-700 to-emerald-900 hover:from-emerald-600 text-white font-heading font-bold text-lg tracking-wider border-b-2 border-emerald-950 transition-all"
+                        >
+                          0
+                        </button>
+                        <div className="grid grid-cols-3">
+                          {Array.from({ length: 36 }, (_, i) => i + 1).map((n) => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => addBet('straight', n)}
+                              className={`h-10 md:h-12 font-heading font-bold text-base md:text-lg border-b border-r border-zinc-950 hover:brightness-125 active:scale-95 transition-all ${
+                                isRed(n) 
+                                  ? 'bg-red-800 hover:bg-red-700 text-white' 
+                                  : 'bg-zinc-900 hover:bg-zinc-800 text-white'
+                              }`}
+                            >
+                              {n}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-3 border-t-2 border-primary/30">
+                          {[1, 2, 3].map((col) => (
+                            <button 
+                              key={col} 
+                              type="button" 
+                              onClick={() => addBet('column', col)} 
+                              className="py-2 bg-zinc-900/80 hover:bg-zinc-800 text-primary text-sm font-heading font-bold border-r border-zinc-800 last:border-r-0 transition-all active:scale-95"
+                            >
+                              2:1
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-6 gap-1 md:gap-2">
+                        <button type="button" onClick={() => addBet('dozen', 1)} className="col-span-2 py-2.5 md:py-3 bg-zinc-900 hover:bg-zinc-800 text-foreground text-xs md:text-sm font-heading font-bold border border-primary/20 hover:border-primary/40 rounded-md transition-all active:scale-95">1st 12</button>
+                        <button type="button" onClick={() => addBet('dozen', 2)} className="col-span-2 py-2.5 md:py-3 bg-zinc-900 hover:bg-zinc-800 text-foreground text-xs md:text-sm font-heading font-bold border border-primary/20 hover:border-primary/40 rounded-md transition-all active:scale-95">2nd 12</button>
+                        <button type="button" onClick={() => addBet('dozen', 3)} className="col-span-2 py-2.5 md:py-3 bg-zinc-900 hover:bg-zinc-800 text-foreground text-xs md:text-sm font-heading font-bold border border-primary/20 hover:border-primary/40 rounded-md transition-all active:scale-95">3rd 12</button>
+                        <button type="button" onClick={() => addBet('low', 'low')} className="py-2.5 md:py-3 bg-zinc-900 hover:bg-zinc-800 text-foreground text-xs md:text-sm font-heading font-bold border border-primary/20 hover:border-primary/40 rounded-md transition-all active:scale-95">1-18</button>
+                        <button type="button" onClick={() => addBet('even', 'even')} className="py-2.5 md:py-3 bg-zinc-900 hover:bg-zinc-800 text-foreground text-xs md:text-sm font-heading font-bold border border-primary/20 hover:border-primary/40 rounded-md transition-all active:scale-95">Even</button>
+                        <button type="button" onClick={() => addBet('red', 'red')} className="py-2.5 md:py-3 bg-gradient-to-b from-red-800 to-red-900 hover:from-red-700 text-white text-xs md:text-sm font-heading font-bold border border-red-700/50 rounded-md transition-all active:scale-95">Red</button>
+                        <button type="button" onClick={() => addBet('black', 'black')} className="py-2.5 md:py-3 bg-gradient-to-b from-zinc-800 to-zinc-900 hover:from-zinc-700 text-white text-xs md:text-sm font-heading font-bold border border-zinc-600/50 rounded-md transition-all active:scale-95">Black</button>
+                        <button type="button" onClick={() => addBet('odd', 'odd')} className="py-2.5 md:py-3 bg-zinc-900 hover:bg-zinc-800 text-foreground text-xs md:text-sm font-heading font-bold border border-primary/20 hover:border-primary/40 rounded-md transition-all active:scale-95">Odd</button>
+                        <button type="button" onClick={() => addBet('high', 'high')} className="py-2.5 md:py-3 bg-zinc-900 hover:bg-zinc-800 text-foreground text-xs md:text-sm font-heading font-bold border border-primary/20 hover:border-primary/40 rounded-md transition-all active:scale-95">19-36</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </>
       )}
