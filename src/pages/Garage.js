@@ -15,7 +15,9 @@ function loadMeltScrapRarities() {
     const raw = localStorage.getItem(MELT_SCRAP_RARITIES_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Only keep rarities that exist in ALL_RARITIES so settings stay valid
+    return parsed.filter((r) => ALL_RARITIES.includes(r));
   } catch {
     return [];
   }
@@ -167,8 +169,11 @@ export default function Garage() {
   const displayedEligibleIds = displayedEligibleForMelt.map((c) => c.user_car_id);
   const allDisplayedSelected =
     displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));
+  const filterActive = meltScrapRarities.length > 0;
+  const noEligibleInView = filterActive && displayedEligibleIds.length === 0;
 
   const toggleSelectAllDisplayed = () => {
+    if (noEligibleInView) return;
     setSelectedCars((prev) => {
       if (allDisplayedSelected) {
         return prev.filter((id) => !displayedEligibleIds.includes(id));
@@ -289,15 +294,23 @@ export default function Garage() {
                   <button
                     type="button"
                     onClick={toggleSelectAllDisplayed}
-                    className="inline-flex items-center gap-2 text-xs font-heading font-bold uppercase tracking-wider text-mutedForeground hover:text-primary transition-smooth"
+                    disabled={noEligibleInView}
+                    className={`inline-flex items-center gap-2 text-xs font-heading font-bold uppercase tracking-wider transition-smooth ${
+                      noEligibleInView ? 'text-mutedForeground/60 cursor-not-allowed' : 'text-mutedForeground hover:text-primary'
+                    }`}
                     data-testid="garage-select-all"
+                    title={noEligibleInView ? 'No cars in view match your melt/scrap rarity filter' : undefined}
                   >
                     {allDisplayedSelected ? (
                       <CheckSquare size={14} className="text-primary" />
                     ) : (
                       <Square size={14} className="text-mutedForeground" />
                     )}
-                    {allDisplayedSelected ? 'Clear selection' : 'Select all'}
+                    {noEligibleInView
+                      ? 'No cars match filter'
+                      : allDisplayedSelected
+                        ? `Clear selection${filterActive ? ` (${displayedEligibleIds.length})` : ''}`
+                        : `Select all${filterActive ? ` (${displayedEligibleIds.length})` : ''}`}
                   </button>
                   <button
                     type="button"
@@ -357,11 +370,11 @@ export default function Garage() {
                     </div>
                   )}
                   {car.car_id !== 'car_custom' && (
-                    <div className="absolute top-0.5 right-0.5">
+                    <div className="absolute top-1 right-1 w-6 h-6 rounded flex items-center justify-center bg-background/90 border border-primary/40 shadow">
                       {selectedCars.includes(car.user_car_id) ? (
-                        <CheckSquare size={12} className="text-primary drop-shadow" />
+                        <CheckSquare size={16} className="text-primary" strokeWidth={2.5} />
                       ) : (
-                        <Square size={12} className="text-mutedForeground/60 drop-shadow" />
+                        <Square size={16} className="text-mutedForeground" strokeWidth={2} />
                       )}
                     </div>
                   )}
@@ -376,7 +389,18 @@ export default function Garage() {
                 >
                   {car.name}
                 </Link>
-                <div className="text-[9px] sm:text-[10px] text-primary font-heading font-bold">${car.value.toLocaleString()}</div>
+                <div className="flex items-center justify-between gap-1">
+                  <div className="text-[9px] sm:text-[10px] text-primary font-heading font-bold">${car.value.toLocaleString()}</div>
+                  {car.car_id !== 'car_custom' && (
+                    <div className={`flex items-center gap-0.5 text-[8px] sm:text-[9px] font-heading ${selectedCars.includes(car.user_car_id) ? 'text-primary font-bold' : 'text-mutedForeground'}`}>
+                      {selectedCars.includes(car.user_car_id) ? (
+                        <><CheckSquare size={10} className="shrink-0" /> Selected</>
+                      ) : (
+                        <><Square size={10} className="shrink-0" /> —</>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
           </div>
