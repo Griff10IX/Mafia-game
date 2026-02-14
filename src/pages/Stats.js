@@ -345,13 +345,13 @@ export default function Stats() {
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="stats-page">
       <PageHeader />
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+      {/* Stats grid — items-start so short cards (Game Capital, Vehicle Stats) don't stretch */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
         <StatCard title="Game Capital" rows={gameCapitalRows} />
         <StatCard title="User Stats" rows={userStatsRows} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
         <StatCard title="Vehicle Stats" rows={vehicleRows} />
         <RankStatsCard rankStats={rankStats} />
       </div>
