@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User as UserIcon, Upload, Search, Shield, Trophy, Building2 } from 'lucide-react';
+import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -10,26 +10,369 @@ function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString();
+  return d.toLocaleString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: 'numeric',
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
 }
 
-function WealthRankWithTooltip({ wealthRankName, wealthRankRange }) {
+// Subcomponents
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const PageHeader = ({ username }) => (
+  <div>
+    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
+      <UserIcon className="w-8 h-8 md:w-10 md:h-10" />
+      Profile
+    </h1>
+    <p className="text-sm text-mutedForeground">
+      {username ? `Viewing ${username}'s profile` : 'User profile'}
+    </p>
+  </div>
+);
+
+const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
   const value = wealthRankName ?? '—';
   const rangeStr = wealthRankRange ?? '—';
+  
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="cursor-default underline decoration-dotted decoration-mutedForeground/50 underline-offset-2">{value}</span>
+          <span className="cursor-help underline decoration-dotted decoration-primary/50 underline-offset-2 text-emerald-400 font-bold">
+            {value}
+          </span>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className={`${styles.surface} ${styles.textForeground} ${styles.borderGold} rounded-md px-3 py-2 text-sm font-heading shadow-lg`}>
+        <TooltipContent 
+          side="bottom" 
+          className="bg-card border-2 border-primary/30 rounded-md px-3 py-2 text-sm font-heading text-foreground shadow-xl"
+        >
           {rangeStr}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
-}
+};
 
+const ProfileInfoCard = ({ profile, isMe, onAddToSearch }) => {
+  const profileRows = [
+    { 
+      label: 'Username', 
+      value: profile.username, 
+      icon: UserIcon,
+      valueClass: 'text-foreground font-heading font-bold' 
+    },
+    { 
+      label: 'Crew', 
+      value: profile.family_name || '—', 
+      icon: UsersIcon,
+      valueClass: 'text-foreground font-heading',
+      highlight: !!profile.family_name
+    },
+    { 
+      label: 'Rank', 
+      value: profile.rank_name, 
+      icon: Shield,
+      valueClass: 'text-primary font-heading font-bold' 
+    },
+    { 
+      label: 'Wealth', 
+      icon: Trophy,
+      component: <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} />
+    },
+    { 
+      label: 'Status', 
+      isStatus: true, 
+      isDead: profile.is_dead, 
+      isOnline: profile.online 
+    },
+    { 
+      label: 'Messages', 
+      icon: Mail,
+      value: profile.messages_sent != null 
+        ? `${profile.messages_sent} sent / ${profile.messages_received ?? 0} received` 
+        : `${profile.messages_received ?? 0} received`, 
+      valueClass: 'text-foreground font-heading text-xs md:text-sm' 
+    },
+    { 
+      label: 'Jailbusts', 
+      value: String(profile.jail_busts ?? 0), 
+      valueClass: 'text-foreground font-heading font-bold' 
+    },
+    { 
+      label: 'Kills', 
+      icon: Skull,
+      value: String(profile.kills ?? 0), 
+      valueClass: 'text-red-400 font-heading font-bold' 
+    },
+  ];
+
+  return (
+    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+      <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
+        <h2 className="text-base md:text-lg font-heading font-bold text-primary uppercase tracking-wider truncate">
+          {profile.username}
+        </h2>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 border-primary/50 bg-primary/20">
+            <Shield className="text-primary" size={16} />
+            <span className="text-xs font-heading font-bold text-primary uppercase">
+              {profile.rank_name || '—'}
+            </span>
+          </div>
+          {!isMe && (
+            <button
+              type="button"
+              onClick={onAddToSearch}
+              className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+              title="Add to Attack searches"
+              aria-label="Add to Attack searches"
+              data-testid="profile-add-to-search"
+            >
+              <Search size={16} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="divide-y divide-border">
+        {profileRows.map((row) => {
+          const Icon = row.icon;
+          return (
+            <div 
+              key={row.label} 
+              className={`grid grid-cols-12 gap-3 px-4 py-3 hover:bg-secondary/20 transition-colors ${
+                row.highlight ? 'border-l-4 border-l-primary/50' : ''
+              }`}
+            >
+              <div className="col-span-5 sm:col-span-4 flex items-center gap-2">
+                {Icon && <Icon size={16} className="text-primary/60 shrink-0" />}
+                <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
+                  {row.label}
+                </span>
+              </div>
+              <div className="col-span-7 sm:col-span-8 text-right flex items-center justify-end">
+                {row.component != null ? (
+                  row.component
+                ) : row.isStatus ? (
+                  <span className="font-heading text-sm">
+                    {row.isDead && <span className="text-red-400">💀 Dead (Offline)</span>}
+                    {!row.isDead && row.isOnline && (
+                      <span>
+                        <span className="text-foreground">Alive </span>
+                        <span className="text-emerald-400">(🟢 Online)</span>
+                      </span>
+                    )}
+                    {!row.isDead && !row.isOnline && (
+                      <span className="text-foreground">Alive (Offline)</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className={row.valueClass}>{row.value}</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {profile.is_npc && (
+        <div className="px-4 py-2 border-t border-border bg-secondary/20">
+          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs uppercase tracking-wider font-heading font-bold bg-secondary text-mutedForeground border border-border">
+            🤖 NPC
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const HonoursCard = ({ honours }) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-2">
+        <Trophy size={16} />
+        Honours ({honours.length})
+      </h3>
+    </div>
+    <div className="p-4">
+      {honours.length === 0 ? (
+        <div className="text-center py-8">
+          <Trophy size={48} className="mx-auto text-primary/30 mb-3" />
+          <p className="text-sm text-mutedForeground font-heading">
+            No leaderboard rankings yet
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {honours.map((h, i) => (
+            <div 
+              key={i} 
+              className="flex items-center gap-3 rounded-md border border-primary/20 px-4 py-3 bg-primary/5 hover:bg-primary/10 transition-colors"
+            >
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 border border-primary/30 shrink-0">
+                <span className="text-primary font-heading font-bold text-sm">
+                  #{h.rank}
+                </span>
+              </div>
+              <span className="text-foreground font-heading text-sm flex-1">
+                {h.label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const PropertiesCard = ({ ownedCasinos }) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-2">
+        <Building2 size={16} />
+        Properties
+      </h3>
+    </div>
+    <div className="p-4">
+      {ownedCasinos.length === 0 ? (
+        <div className="text-center py-8">
+          <Building2 size={48} className="mx-auto text-primary/30 mb-3" />
+          <p className="text-sm text-mutedForeground font-heading">
+            No casinos owned
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {ownedCasinos.map((c, i) => (
+            <div key={i} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors">
+              <div className="font-heading font-bold text-foreground text-base mb-2">
+                🎲 {c.city} Dice
+              </div>
+              <div className="space-y-1 text-sm font-heading">
+                <div className="flex justify-between">
+                  <span className="text-mutedForeground">Max Bet:</span>
+                  <span className="text-primary font-bold">
+                    ${Number(c.max_bet || 0).toLocaleString()}
+                  </span>
+                </div>
+                {c.buy_back_reward != null && c.buy_back_reward > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-mutedForeground">Buyback:</span>
+                    <span className="text-primary font-bold">
+                      {Number(c.buy_back_reward).toLocaleString()} pts
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+const AdminStatsCard = ({ adminStats }) => (
+  <div className="bg-card rounded-md overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+        🔐 Admin Info
+      </h3>
+    </div>
+    <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+      {[
+        { label: 'Cash', value: `$${Number(adminStats.money ?? 0).toLocaleString()}` },
+        { label: 'Points', value: Number(adminStats.points ?? 0).toLocaleString() },
+        { label: 'Bullets', value: Number(adminStats.bullets ?? 0).toLocaleString() },
+        { label: 'Booze Today', value: `$${Number(adminStats.booze_profit_today ?? 0).toLocaleString()}` },
+        { label: 'Booze Total', value: `$${Number(adminStats.booze_profit_total ?? 0).toLocaleString()}` },
+        { label: 'Rank Points', value: Number(adminStats.rank_points ?? 0).toLocaleString() },
+        { label: 'Location', value: adminStats.current_state ?? '—', isLocation: true },
+        { label: 'In Jail', value: adminStats.in_jail ? 'Yes' : 'No', isJail: true, jailed: adminStats.in_jail },
+      ].map((stat) => (
+        <div key={stat.label} className="space-y-1">
+          <div className="text-xs text-mutedForeground font-heading uppercase tracking-wider">
+            {stat.label}
+          </div>
+          <div className={`text-sm font-heading font-bold ${
+            stat.isJail && stat.jailed 
+              ? 'text-red-400' 
+              : stat.isLocation 
+              ? 'text-foreground' 
+              : 'text-primary'
+          }`}>
+            {stat.value}
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+const AvatarCard = ({ 
+  avatarSrc, 
+  isMe, 
+  preview, 
+  uploading, 
+  onPickFile, 
+  onUpload 
+}) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+        📸 Profile Picture
+      </h3>
+    </div>
+    <div className="p-4 space-y-4">
+      <div className="aspect-video max-h-64 w-full max-w-lg mx-auto rounded-md overflow-hidden border-2 border-primary/20 bg-secondary/20 flex items-center justify-center">
+        {avatarSrc ? (
+          <img src={avatarSrc} alt="Profile" className="w-full h-full object-contain" />
+        ) : (
+          <div className="flex flex-col items-center gap-3 text-mutedForeground">
+            <UserIcon size={64} className="text-primary/30" />
+            <span className="text-sm font-heading">No picture uploaded</span>
+          </div>
+        )}
+      </div>
+      
+      {isMe && (
+        <div className="space-y-3">
+          <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => onPickFile(e.target.files?.[0])}
+              className="text-sm bg-input border border-border rounded-md px-3 py-2 focus:border-primary/50 focus:outline-none file:mr-2 file:bg-primary/20 file:text-primary file:border-0 file:rounded-md file:px-3 file:py-1 file:text-xs file:font-heading file:font-bold file:cursor-pointer cursor-pointer transition-colors"
+              data-testid="avatar-file"
+            />
+            <button
+              onClick={onUpload}
+              disabled={!preview || uploading}
+              className="w-full sm:w-auto bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg font-heading font-bold uppercase tracking-wide px-6 py-2.5 text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
+              data-testid="avatar-upload"
+            >
+              <Upload size={16} />
+              {uploading ? 'Uploading...' : 'Upload'}
+            </button>
+          </div>
+          <p className="text-xs text-mutedForeground font-heading italic text-center">
+            💡 Square images work best. File will be automatically resized.
+          </p>
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+// Main component
 export default function Profile() {
   const { username: usernameParam } = useParams();
   const navigate = useNavigate();
@@ -92,7 +435,6 @@ export default function Profile() {
     try {
       const res = await api.post('/profile/avatar', { avatar_data: preview });
       toast.success(res.data.message || 'Avatar updated');
-      // refresh
       const p = await api.get(`/users/${encodeURIComponent(me.username)}/profile`);
       setProfile(p.data);
       setPreview(null);
@@ -115,261 +457,71 @@ export default function Profile() {
   };
 
   if (loading && !profile) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (!profile) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-center flex-col gap-2 text-center">
-          <div className="flex items-center gap-3 w-full justify-center">
-            <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
-            <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Profile</h1>
-            <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
-          </div>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <PageHeader username={null} />
+        <div className="bg-card rounded-md border border-border py-16 text-center">
+          <UserIcon size={64} className="mx-auto text-primary/30 mb-4" />
+          <p className="text-base text-foreground font-heading font-bold mb-1">
+            Profile not found
+          </p>
+          <p className="text-sm text-mutedForeground font-heading">
+            This user doesn't exist or has been deleted
+          </p>
         </div>
-        <p className="text-mutedForeground font-heading text-center">Profile not found.</p>
       </div>
     );
   }
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
   const avatarSrc = isRobotBodyguard ? null : (preview || profile.avatar_url || null);
-
-  const profileRows = [
-    { label: 'Username', value: profile.username, valueClass: 'text-foreground font-heading font-bold' },
-    { label: 'Crew', value: profile.family_name || '—', valueClass: 'text-foreground font-heading', crew: true },
-    { label: 'Rank', value: profile.rank_name, valueClass: 'text-primary font-heading font-bold underline decoration-dotted decoration-primary/50 underline-offset-2' },
-    { label: 'Wealth', value: null, valueClass: 'text-emerald-500 font-heading', component: <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} /> },
-    { label: 'Status', isStatus: true, isDead: profile.is_dead, isOnline: profile.online },
-    { label: 'Messages', value: profile.messages_sent != null ? `${profile.messages_sent} sent / ${profile.messages_received ?? 0} received` : `${profile.messages_received ?? 0} received`, valueClass: 'text-foreground font-heading' },
-    { label: 'Jailbusts', value: String(profile.jail_busts ?? 0), valueClass: 'text-foreground font-heading' },
-    { label: 'Kills', value: String(profile.kills ?? 0), valueClass: 'text-foreground font-heading font-bold' },
-  ];
-
   const honours = profile.honours || [];
   const ownedCasinos = profile.owned_casinos || [];
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="profile-page">
-      <div className="flex items-center justify-center flex-col gap-1 text-center mb-1">
-        <div className="flex items-center gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-lg md:text-xl font-heading font-bold text-primary uppercase tracking-wider">Profile</h1>
-          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/60" />
-        </div>
-      </div>
+    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="profile-page">
+      <PageHeader username={profile.username} />
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        {/* Header: username (large) + rank badge right */}
-        <div className={`px-4 py-2.5 ${styles.surfaceMuted} border-b border-primary/20 flex items-center justify-between gap-3`}>
-          <h2 className="flex-1 text-lg md:text-xl font-heading font-bold text-foreground uppercase tracking-wider truncate" data-testid="profile-username">
-            {profile.username}
-          </h2>
-          <div className="flex items-center gap-2 shrink-0">
-            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm border border-primary/30 ${styles.surface}`}>
-              <Shield className="text-primary" size={18} />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-wider">{profile.rank_name || '—'}</span>
-            </div>
-            {!isMe && (
-              <button
-                type="button"
-                onClick={addToAttackSearches}
-                className={`inline-flex items-center justify-center h-9 w-9 rounded-sm border border-primary/30 ${styles.surface} ${styles.raisedHover} text-primary transition-smooth`}
-                title="Add to Attack searches"
-                aria-label="Add to Attack searches"
-                data-testid="profile-add-to-search"
-              >
-                <Search size={16} />
-              </button>
-            )}
-          </div>
+      <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
+        <ProfileInfoCard 
+          profile={profile} 
+          isMe={isMe} 
+          onAddToSearch={addToAttackSearches} 
+        />
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+          <HonoursCard honours={honours} />
+          <PropertiesCard ownedCasinos={ownedCasinos} />
         </div>
 
-        {/* User info: label / value rows */}
-        <div className="divide-y divide-primary/10">
-          {profileRows.map((row) => (
-            <div key={row.label} className={`grid grid-cols-12 gap-2 px-4 py-2 items-center ${row.crew ? 'border-l-2 border-primary/50 pl-4' : ''}`}>
-              <div className="col-span-4 sm:col-span-3 text-left">
-                <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">{row.label}:</span>
-              </div>
-              <div className="col-span-8 sm:col-span-9 text-right">
-                {row.component != null ? (
-                  <span className={row.valueClass}>{row.component}</span>
-                ) : row.isStatus ? (
-                  <span className="font-heading">
-                    {row.isDead && <span className="text-destructive">Dead (Offline)</span>}
-                    {!row.isDead && row.isOnline && (
-                      <>
-                        <span className="text-foreground">Alive </span>
-                        <span className="text-emerald-400">(Online)</span>
-                      </>
-                    )}
-                    {!row.isDead && !row.isOnline && (
-                      <span className="text-foreground">Alive (Offline)</span>
-                    )}
-                  </span>
-                ) : (
-                  <span className={row.valueClass}>{row.value}</span>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+        {!isMe && profile.admin_stats && (
+          <AdminStatsCard adminStats={profile.admin_stats} />
+        )}
 
-        {profile.is_npc && (
-          <div className="px-4 py-1.5 border-t border-primary/10">
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] uppercase tracking-wider font-heading font-bold ${styles.surface} border border-primary/10 text-mutedForeground`}>
-              NPC
+        <AvatarCard
+          avatarSrc={avatarSrc}
+          isMe={isMe}
+          preview={preview}
+          uploading={uploading}
+          onPickFile={onPickFile}
+          onUpload={onUpload}
+        />
+
+        <div className="bg-card rounded-md overflow-hidden border border-border">
+          <div className="px-4 py-2.5 bg-secondary/30 border-b border-border text-center">
+            <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
+              Account Created
             </span>
           </div>
-        )}
-      </div>
-
-      {/* Honours (leaderboard rankings) - keep badge style as-is */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
-          <Trophy className="text-primary shrink-0" size={18} />
-          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Honours ({honours.length})</h3>
-        </div>
-        <div className="p-3 flex flex-col items-center text-center">
-          {honours.length === 0 ? (
-            <p className="text-xs text-mutedForeground font-heading">No leaderboard rankings yet.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md justify-items-center">
-              {honours.map((h, i) => (
-                <div key={i} className="flex items-center gap-2 text-sm font-heading w-full sm:max-w-[280px] rounded-sm border border-primary/20 px-3 py-2 bg-primary/5">
-                  <span className="text-primary font-bold shrink-0">#{h.rank}</span>
-                  <span className="text-foreground text-left flex-1">{h.label}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Properties: casinos owned (max bet, buyback) */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
-          <Building2 className="text-primary shrink-0" size={18} />
-          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Properties</h3>
-        </div>
-        <div className="p-3 flex flex-col items-center text-center">
-          {ownedCasinos.length === 0 ? (
-            <p className="text-xs text-mutedForeground font-heading">No casinos owned.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2 justify-center">
-              {ownedCasinos.map((c, i) => (
-                <div key={i} className={`rounded-sm border border-primary/30 px-3 py-2 ${styles.surface} min-w-0`}>
-                  <div className="font-heading font-bold text-foreground text-sm">{c.city} Dice</div>
-                  <div className="text-xs text-mutedForeground font-heading mt-0.5">
-                    Max bet: <span className="text-primary font-bold">${Number(c.max_bet || 0).toLocaleString()}</span>
-                    {c.buy_back_reward != null && c.buy_back_reward > 0 && (
-                      <> · Buyback: <span className="text-primary font-bold">{Number(c.buy_back_reward).toLocaleString()} pts</span></>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {!isMe && profile.admin_stats && (
-        <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto border-2 border-primary/40`}>
-          <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Admin info</span>
-          </div>
-          <div className="p-4 grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm font-heading">
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Cash</span>
-              <span className="text-primary font-bold">${Number(profile.admin_stats.money ?? 0).toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Points</span>
-              <span className="text-primary font-bold">{Number(profile.admin_stats.points ?? 0).toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Bullets</span>
-              <span className="text-primary font-bold">{Number(profile.admin_stats.bullets ?? 0).toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Booze profit today</span>
-              <span className="text-primary font-bold">${Number(profile.admin_stats.booze_profit_today ?? 0).toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Booze profit total</span>
-              <span className="text-primary font-bold">${Number(profile.admin_stats.booze_profit_total ?? 0).toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Rank points</span>
-              <span className="text-primary font-bold">{Number(profile.admin_stats.rank_points ?? 0).toLocaleString()}</span>
-            </div>
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">Location</span>
-              <span className="text-foreground">{profile.admin_stats.current_state ?? '—'}</span>
-            </div>
-            <div>
-              <span className="text-mutedForeground uppercase tracking-wider text-xs block">In jail</span>
-              <span className={profile.admin_stats.in_jail ? 'text-red-400 font-bold' : 'text-foreground'}>{profile.admin_stats.in_jail ? 'Yes' : 'No'}</span>
-            </div>
+          <div className="px-4 py-3 text-foreground font-heading text-sm text-center">
+            {formatDateTime(profile.created_at)}
           </div>
         </div>
-      )}
-
-      {/* Profile picture: large display + upload when own profile */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-center gap-2">
-          <div className="w-6 h-px bg-primary/50" />
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Profile picture</span>
-          <div className="w-6 h-px bg-primary/50" />
-        </div>
-        <div className="p-3 flex flex-col items-center text-center">
-          <div className="aspect-video max-h-48 w-full max-w-md mx-auto rounded-sm overflow-hidden border border-primary/20 bg-primary/5 flex items-center justify-center">
-            {avatarSrc ? (
-              <img src={avatarSrc} alt="" className="w-full h-full object-contain" />
-            ) : (
-              <div className="flex flex-col items-center gap-2 text-mutedForeground">
-                <UserIcon size={48} />
-                <span className="text-xs font-heading">No picture</span>
-              </div>
-            )}
-          </div>
-          {isMe && (
-            <div className="mt-3 flex flex-col sm:flex-row gap-2 items-center justify-center">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => onPickFile(e.target.files?.[0])}
-                className={`text-sm ${styles.input} border border-primary/20 rounded-sm px-2 py-1.5 focus:border-primary/50 focus:outline-none file:mr-2 file:bg-primary/20 file:text-primary file:border-0 file:rounded file:px-2 file:py-1 file:text-xs file:font-heading`}
-                data-testid="avatar-file"
-              />
-              <button
-                onClick={onUpload}
-                disabled={!preview || uploading}
-                className="inline-flex items-center gap-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider px-4 py-2 border border-yellow-600/50 transition-smooth disabled:opacity-50"
-                data-testid="avatar-upload"
-              >
-                <Upload size={16} />
-                {uploading ? 'Uploading...' : 'Upload picture'}
-              </button>
-            </div>
-          )}
-          {isMe && <p className="text-xs text-mutedForeground font-heading mt-1.5">You can upload a picture to your profile. Square images work best.</p>}
-        </div>
-      </div>
-
-      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl mx-auto`}>
-        <div className={`px-4 py-1.5 ${styles.surfaceMuted} border-b border-primary/20 text-center`}>
-          <span className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest">Account created</span>
-        </div>
-        <div className="px-4 py-2 text-foreground font-heading text-sm text-center">{formatDateTime(profile.created_at)}</div>
       </div>
     </div>
   );
 }
-
