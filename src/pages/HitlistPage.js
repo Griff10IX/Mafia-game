@@ -186,20 +186,22 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
   );
 };
 
-const PlaceBountyCard = ({ 
-  targetUsername, 
+const PlaceBountyCard = ({
+  targetUsername,
   setTargetUsername,
   targetType,
   setTargetType,
-  rewardType,
-  setRewardType,
-  rewardAmount,
-  setRewardAmount,
+  rewardCash,
+  setRewardCash,
+  rewardPoints,
+  setRewardPoints,
   hidden,
   setHidden,
-  totalCost,
+  totalCostCash,
+  totalCostPoints,
   submitting,
-  onSubmit
+  onSubmit,
+  hasReward,
 }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
@@ -222,61 +224,62 @@ const PlaceBountyCard = ({
             required
           />
         </div>
-        
+
+        <div>
+          <label className="block text-sm text-mutedForeground font-heading mb-2">
+            Target Type
+          </label>
+          <select
+            value={targetType}
+            onChange={(e) => setTargetType(e.target.value)}
+            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-colors font-heading"
+          >
+            <option value="user">User</option>
+            <option value="bodyguards">Bodyguards</option>
+          </select>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm text-mutedForeground font-heading mb-2">
-              Target Type
+              Cash reward ($)
             </label>
-            <select
-              value={targetType}
-              onChange={(e) => setTargetType(e.target.value)}
-              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-colors font-heading"
-            >
-              <option value="user">User</option>
-              <option value="bodyguards">Bodyguards</option>
-            </select>
+            <input
+              type="number"
+              min="0"
+              value={rewardCash}
+              onChange={(e) => setRewardCash(e.target.value)}
+              placeholder="0"
+              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
+            />
           </div>
-          
           <div>
             <label className="block text-sm text-mutedForeground font-heading mb-2">
-              Reward Type
+              Points reward
             </label>
-            <select
-              value={rewardType}
-              onChange={(e) => setRewardType(e.target.value)}
-              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-colors font-heading"
-            >
-              <option value="cash">Cash</option>
-              <option value="points">Points</option>
-            </select>
+            <input
+              type="number"
+              min="0"
+              value={rewardPoints}
+              onChange={(e) => setRewardPoints(e.target.value)}
+              placeholder="0"
+              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
+            />
           </div>
         </div>
-        
-        <div>
-          <label className="block text-sm text-mutedForeground font-heading mb-2">
-            Reward Amount
-          </label>
-          <input
-            type="number"
-            min="1"
-            value={rewardAmount}
-            onChange={(e) => setRewardAmount(e.target.value)}
-            placeholder="Enter amount..."
-            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
-            required
-          />
-          {totalCost != null && totalCost > 0 && (
-            <p className="text-xs text-mutedForeground font-heading mt-2">
-              Cost to you:{' '}
-              <span className="text-foreground font-bold">
-                {rewardType === 'cash' ? `$${totalCost.toLocaleString()}` : `${totalCost.toLocaleString()} pts`}
-              </span>
-              {hidden && <span className="text-amber-400"> (+50% for hidden)</span>}
-            </p>
-          )}
-        </div>
-        
+        <p className="text-xs text-mutedForeground font-heading">
+          Use one or both. At least one reward must be greater than 0.
+        </p>
+        {(totalCostCash > 0 || totalCostPoints > 0) && (
+          <p className="text-xs text-mutedForeground font-heading">
+            Cost to you:{' '}
+            <span className="text-foreground font-bold">
+              {[totalCostCash > 0 && `$${totalCostCash.toLocaleString()}`, totalCostPoints > 0 && `${totalCostPoints.toLocaleString()} pts`].filter(Boolean).join(' + ')}
+            </span>
+            {hidden && <span className="text-amber-400"> (+50% for hidden)</span>}
+          </p>
+        )}
+
         <label className="flex items-center gap-3 cursor-pointer p-3 rounded-md bg-secondary/30 border border-border hover:bg-secondary/50 transition-colors">
           <input
             type="checkbox"
@@ -288,10 +291,10 @@ const PlaceBountyCard = ({
             Hidden bounty <span className="text-mutedForeground">(+50% cost · your name won't show)</span>
           </span>
         </label>
-        
+
         <button
           type="submit"
-          disabled={submitting || !targetUsername.trim() || !(parseInt(rewardAmount, 10) >= 1)}
+          disabled={submitting || !targetUsername.trim() || !hasReward}
           className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-3 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         >
           {submitting ? 'Placing...' : 'Place Bounty'}
@@ -562,8 +565,8 @@ export default function HitlistPage() {
   const [addingNpc, setAddingNpc] = useState(false);
   const [targetUsername, setTargetUsername] = useState('');
   const [targetType, setTargetType] = useState('user');
-  const [rewardType, setRewardType] = useState('cash');
-  const [rewardAmount, setRewardAmount] = useState('');
+  const [rewardCash, setRewardCash] = useState('');
+  const [rewardPoints, setRewardPoints] = useState('');
   const [hidden, setHidden] = useState(false);
   const [buyingOffTarget, setBuyingOffTarget] = useState(null);
 
@@ -591,18 +594,17 @@ export default function HitlistPage() {
     fetchData();
   }, []);
 
-  const cost = () => {
-    const amt = parseInt(rewardAmount, 10) || 0;
-    if (amt < 1) return null;
-    const mult = hidden ? 1.5 : 1;
-    return Math.floor(amt * mult);
-  };
+  const mult = hidden ? 1.5 : 1;
+  const cashAmt = parseInt(rewardCash, 10) || 0;
+  const pointsAmt = parseInt(rewardPoints, 10) || 0;
+  const totalCostCash = Math.floor(cashAmt * mult);
+  const totalCostPoints = Math.floor(pointsAmt * mult);
+  const hasReward = cashAmt >= 1 || pointsAmt >= 1;
 
   const handleAdd = async (e) => {
     e.preventDefault();
-    const amt = parseInt(rewardAmount, 10) || 0;
-    if (amt < 1) {
-      toast.error('Reward amount must be at least 1');
+    if (!hasReward) {
+      toast.error('Enter at least one reward (cash and/or points)');
       return;
     }
     if (!targetUsername.trim()) {
@@ -614,13 +616,14 @@ export default function HitlistPage() {
       await api.post('/hitlist/add', {
         target_username: targetUsername.trim(),
         target_type: targetType,
-        reward_type: rewardType,
-        reward_amount: amt,
+        reward_cash: cashAmt,
+        reward_points: pointsAmt,
         hidden
       });
       toast.success('Bounty placed');
       setTargetUsername('');
-      setRewardAmount('');
+      setRewardCash('');
+      setRewardPoints('');
       setHidden(false);
       refreshUser();
       fetchData();
@@ -696,7 +699,6 @@ export default function HitlistPage() {
 
   const revealed = me?.revealed ?? false;
   const who = me?.who ?? [];
-  const totalCost = cost();
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`}>
@@ -723,15 +725,17 @@ export default function HitlistPage() {
         setTargetUsername={setTargetUsername}
         targetType={targetType}
         setTargetType={setTargetType}
-        rewardType={rewardType}
-        setRewardType={setRewardType}
-        rewardAmount={rewardAmount}
-        setRewardAmount={setRewardAmount}
+        rewardCash={rewardCash}
+        setRewardCash={setRewardCash}
+        rewardPoints={rewardPoints}
+        setRewardPoints={setRewardPoints}
         hidden={hidden}
         setHidden={setHidden}
-        totalCost={totalCost}
+        totalCostCash={totalCostCash}
+        totalCostPoints={totalCostPoints}
         submitting={submitting}
         onSubmit={handleAdd}
+        hasReward={hasReward}
       />
 
       <ActiveBountiesCard

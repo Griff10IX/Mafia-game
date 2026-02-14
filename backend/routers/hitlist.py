@@ -3,6 +3,7 @@ from datetime import datetime, timezone, timedelta
 import logging
 import random
 import uuid
+from typing import Optional
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
@@ -22,8 +23,10 @@ logger = logging.getLogger(__name__)
 class HitlistAddRequest(BaseModel):
     target_username: str
     target_type: str  # "user" | "bodyguards"
-    reward_type: str  # "cash" | "points"
-    reward_amount: int
+    reward_type: Optional[str] = None  # "cash" | "points" when using single reward
+    reward_amount: Optional[int] = None  # when using single reward
+    reward_cash: Optional[int] = 0  # optional: cash reward (can combine with reward_points)
+    reward_points: Optional[int] = 0  # optional: points reward (can combine with reward_cash)
     hidden: bool = False
 
 
@@ -59,55 +62,115 @@ HITLIST_NPC_TEMPLATES = [
 
 
 async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(get_current_user)):
-    """Place a bounty on a user or their bodyguards. Cash or points; optional hidden (+50% cost)."""
+    """Place a bounty on a user or their bodyguards. Cash and/or points; optional hidden (+50% cost). Can place on yourself."""
     target_username = (request.target_username or "").strip()
     if not target_username:
         raise HTTPException(status_code=400, detail="Target username required")
     target_type = (request.target_type or "").strip().lower()
     if target_type not in ("user", "bodyguards"):
         raise HTTPException(status_code=400, detail="target_type must be 'user' or 'bodyguards'")
-    reward_type = (request.reward_type or "").strip().lower()
-    if reward_type not in ("cash", "points"):
-        raise HTTPException(status_code=400, detail="reward_type must be 'cash' or 'points'")
-    reward_amount = int(request.reward_amount or 0)
-    if reward_amount < 1:
-        raise HTTPException(status_code=400, detail="Reward amount must be at least 1")
     hidden = bool(request.hidden)
-    cost = int(reward_amount * (HITLIST_HIDDEN_MULTIPLIER if hidden else 1.0))
-    if reward_type == "points":
-        if (current_user.get("points") or 0) < cost:
-            raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -cost}})
+    mult = HITLIST_HIDDEN_MULTIPLIER if hidden else 1.0
+
+    reward_cash = max(0, int(request.reward_cash or 0))
+    reward_points = max(0, int(request.reward_points or 0))
+    use_dual = reward_cash > 0 or reward_points > 0
+
+    if use_dual:
+        cost_cash = int(reward_cash * mult)
+        cost_points = int(reward_points * mult)
+        if cost_cash > 0 and (current_user.get("money") or 0) < cost_cash:
+            raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
+        if cost_points > 0 and (current_user.get("points") or 0) < cost_points:
+            raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
+        if reward_cash < 1 and reward_points < 1:
+            raise HTTPException(status_code=400, detail="Enter at least one reward (cash and/or points)")
     else:
-        if (current_user.get("money") or 0) < cost:
-            raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost:,})")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+        reward_type = (request.reward_type or "").strip().lower()
+        if reward_type not in ("cash", "points"):
+            raise HTTPException(status_code=400, detail="reward_type must be 'cash' or 'points'")
+        reward_amount = int(request.reward_amount or 0)
+        if reward_amount < 1:
+            raise HTTPException(status_code=400, detail="Reward amount must be at least 1")
+        cost_cash = int(reward_amount * mult) if reward_type == "cash" else 0
+        cost_points = int(reward_amount * mult) if reward_type == "points" else 0
+        if cost_cash > 0 and (current_user.get("money") or 0) < cost_cash:
+            raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
+        if cost_points > 0 and (current_user.get("points") or 0) < cost_points:
+            raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
+
     target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):
         raise HTTPException(status_code=400, detail="Cannot place bounty on a dead account")
-    if target["id"] == current_user["id"]:
-        raise HTTPException(status_code=400, detail="Cannot place a bounty on yourself")
     if target_type == "bodyguards":
         bgs = await db.bodyguards.find({"user_id": target["id"]}, {"_id": 0}).to_list(10)
         if not any(b.get("bodyguard_user_id") or b.get("is_robot") for b in bgs):
             raise HTTPException(status_code=400, detail="Target has no bodyguards")
-    hitlist_id = str(uuid.uuid4())
+
     now = datetime.now(timezone.utc)
-    await db.hitlist.insert_one({
-        "id": hitlist_id,
-        "target_id": target["id"],
-        "target_username": target["username"],
-        "target_type": target_type,
-        "placer_id": current_user["id"],
-        "placer_username": current_user.get("username") or "",
-        "reward_type": reward_type,
-        "reward_amount": reward_amount,
-        "hidden": hidden,
-        "created_at": now.isoformat(),
-    })
-    return {"message": f"Bounty placed on {target['username']} ({target_type}) for {reward_amount} {reward_type}" + (" (hidden)" if hidden else "")}
+    updates = {}
+    if cost_cash > 0:
+        updates["$inc"] = updates.get("$inc") or {}
+        updates["$inc"]["money"] = -cost_cash
+    if cost_points > 0:
+        updates["$inc"] = updates.get("$inc") or {}
+        updates["$inc"]["points"] = -cost_points
+    if updates:
+        await db.users.update_one({"id": current_user["id"]}, updates)
+
+    inserted = []
+    if use_dual:
+        if reward_cash > 0:
+            hitlist_id = str(uuid.uuid4())
+            await db.hitlist.insert_one({
+                "id": hitlist_id,
+                "target_id": target["id"],
+                "target_username": target["username"],
+                "target_type": target_type,
+                "placer_id": current_user["id"],
+                "placer_username": current_user.get("username") or "",
+                "reward_type": "cash",
+                "reward_amount": reward_cash,
+                "hidden": hidden,
+                "created_at": now.isoformat(),
+            })
+            inserted.append(f"${reward_cash:,} cash")
+        if reward_points > 0:
+            hitlist_id = str(uuid.uuid4())
+            await db.hitlist.insert_one({
+                "id": hitlist_id,
+                "target_id": target["id"],
+                "target_username": target["username"],
+                "target_type": target_type,
+                "placer_id": current_user["id"],
+                "placer_username": current_user.get("username") or "",
+                "reward_type": "points",
+                "reward_amount": reward_points,
+                "hidden": hidden,
+                "created_at": now.isoformat(),
+            })
+            inserted.append(f"{reward_points:,} pts")
+        msg = f"Bounty placed on {target['username']} ({target_type}): " + " + ".join(inserted) + (" (hidden)" if hidden else "")
+    else:
+        reward_type = (request.reward_type or "").strip().lower()
+        reward_amount = int(request.reward_amount or 0)
+        hitlist_id = str(uuid.uuid4())
+        await db.hitlist.insert_one({
+            "id": hitlist_id,
+            "target_id": target["id"],
+            "target_username": target["username"],
+            "target_type": target_type,
+            "placer_id": current_user["id"],
+            "placer_username": current_user.get("username") or "",
+            "reward_type": reward_type,
+            "reward_amount": reward_amount,
+            "hidden": hidden,
+            "created_at": now.isoformat(),
+        })
+        msg = f"Bounty placed on {target['username']} ({target_type}) for {reward_amount} {reward_type}" + (" (hidden)" if hidden else "")
+    return {"message": msg}
 
 
 async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
@@ -207,7 +270,7 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
         {"target_type": {"$ne": "npc"}},
         {"target_type": "npc", "placer_id": user_id},
     ]}
-    cursor = db.hitlist.find(query, {"_id": 0}).sort("created_at", -1)
+    cursor = db.hitlist.find(query, {"_id": 0}).sort("reward_amount", -1).sort("created_at", -1)
     items = []
     async for doc in cursor:
         item = {

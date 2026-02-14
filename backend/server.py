@@ -527,27 +527,6 @@ class CommitCrimeResponse(BaseModel):
     reward: Optional[int]
     next_available: str
 
-class WeaponResponse(BaseModel):
-    id: str
-    name: str
-    description: str
-    damage: int
-    bullets_needed: int
-    rank_required: int
-    price_money: Optional[int]
-    price_points: Optional[int]
-    effective_price_money: Optional[int] = None
-    effective_price_points: Optional[int] = None
-    owned: bool
-    quantity: int
-    equipped: bool = False
-
-class WeaponBuyRequest(BaseModel):
-    currency: str  # "money" or "points"
-
-class WeaponEquipRequest(BaseModel):
-    weapon_id: str
-
 class PropertyResponse(BaseModel):
     id: str
     name: str
@@ -769,9 +748,6 @@ class GTAAttemptResponse(BaseModel):
     jailed: bool
     jail_until: Optional[str]
     rank_points_earned: int
-
-class ArmourBuyRequest(BaseModel):
-    level: int  # 1-5
 
 class BulletCalcRequest(BaseModel):
     target_username: str
@@ -1602,13 +1578,7 @@ async def get_stats_overview(
         "top_dead_users": top_dead_users,
     }
 
-@api_router.get("/meta/ranks")
-async def get_meta_ranks(current_user: dict = Depends(get_current_user)):
-    return {"ranks": [{"id": int(r["id"]), "name": r["name"]} for r in RANKS]}
-
-@api_router.get("/meta/cars")
-async def get_meta_cars(current_user: dict = Depends(get_current_user)):
-    return {"cars": [{"id": c["id"], "name": c["name"], "rarity": c.get("rarity")} for c in CARS]}
+# Meta (ranks, cars) -> see routers/meta.py
 
 def _interest_option(duration_hours: int) -> dict | None:
     try:
@@ -2822,136 +2792,7 @@ async def upgrade_garage_batch_limit(current_user: dict = Depends(get_current_us
     )
     return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": GARAGE_BATCH_UPGRADE_COST}
 
-# GTA endpoints - global cooldown (one attempt blocks all options until it expires), options unlock by rank
-@api_router.get("/armour/options")
-async def get_armour_options(current_user: dict = Depends(get_current_user)):
-    """List available armour sets and affordability. Costs and affordability use event multiplier when set."""
-    ev = await get_effective_event()
-    mult = ev.get("armour_weapon_cost", 1.0)
-    equipped_level = int(current_user.get("armour_level", 0) or 0)
-    owned_max = int(current_user.get("armour_owned_level_max", equipped_level) or 0)
-    money = float(current_user.get("money", 0) or 0)
-    points = int(current_user.get("points", 0) or 0)
-
-    rows = []
-    for s in ARMOUR_SETS:
-        cost_money = s.get("cost_money")
-        cost_points = s.get("cost_points")
-        effective_money = int(cost_money * mult) if cost_money is not None else None
-        effective_points = int(cost_points * mult) if cost_points is not None else None
-        affordable = True
-        if effective_money is not None and money < effective_money:
-            affordable = False
-        if effective_points is not None and points < effective_points:
-            affordable = False
-        rows.append({
-            "level": s["level"],
-            "name": s["name"],
-            "description": s["description"],
-            "cost_money": cost_money,
-            "cost_points": cost_points,
-            "effective_cost_money": effective_money,
-            "effective_cost_points": effective_points,
-            "owned": owned_max >= s["level"],
-            "equipped": equipped_level == s["level"],
-            "affordable": affordable,
-        })
-
-    return {
-        "current_level": equipped_level,
-        "owned_max": owned_max,
-        "options": rows
-    }
-
-@api_router.post("/armour/buy")
-async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get_current_user)):
-    """Buy and equip an armour tier. Cost uses event multiplier when set."""
-    level = int(request.level or 0)
-    if level < 1 or level > 5:
-        raise HTTPException(status_code=400, detail="Invalid armour level")
-
-    equipped_level = int(current_user.get("armour_level", 0) or 0)
-    owned_max = int(current_user.get("armour_owned_level_max", equipped_level) or 0)
-    if level <= owned_max:
-        raise HTTPException(status_code=400, detail="You already own this armour tier")
-
-    armour = next((a for a in ARMOUR_SETS if a["level"] == level), None)
-    if not armour:
-        raise HTTPException(status_code=404, detail="Armour not found")
-
-    ev = await get_effective_event()
-    mult = ev.get("armour_weapon_cost", 1.0)
-    updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
-    if armour.get("cost_money") is not None:
-        cost = int(armour["cost_money"] * mult)
-        if current_user.get("money", 0) < cost:
-            raise HTTPException(status_code=400, detail="Insufficient cash")
-        updates["$inc"] = {"money": -cost}
-    elif armour.get("cost_points") is not None:
-        cost = int(armour["cost_points"] * mult)
-        if current_user.get("points", 0) < cost:
-            raise HTTPException(status_code=400, detail="Insufficient points")
-        updates["$inc"] = {"points": -cost}
-    else:
-        raise HTTPException(status_code=500, detail="Armour cost misconfigured")
-
-    await db.users.update_one({"id": current_user["id"]}, updates)
-    return {
-        "message": f"Purchased {armour['name']} (Armour Lv.{level})",
-        "new_level": level
-    }
-
-@api_router.post("/armour/equip")
-async def equip_armour(request: ArmourBuyRequest, current_user: dict = Depends(get_current_user)):
-    """Equip an owned armour tier (or 0 to unequip)."""
-    level = int(request.level or 0)
-    if level < 0 or level > 5:
-        raise HTTPException(status_code=400, detail="Invalid armour level")
-
-    equipped_level = int(current_user.get("armour_level", 0) or 0)
-    owned_max = int(current_user.get("armour_owned_level_max", equipped_level) or 0)
-    if level != 0 and level > owned_max:
-        raise HTTPException(status_code=400, detail="You do not own this armour tier")
-
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"armour_level": level}}
-    )
-    return {"message": "Armour equipped" if level else "Armour unequipped", "equipped_level": level}
-
-@api_router.post("/armour/unequip")
-async def unequip_armour(current_user: dict = Depends(get_current_user)):
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"armour_level": 0}}
-    )
-    return {"message": "Armour unequipped", "equipped_level": 0}
-
-@api_router.post("/armour/sell")
-async def sell_armour(current_user: dict = Depends(get_current_user)):
-    """Sell your highest owned armour tier for 50% of its base purchase price."""
-    owned_max = int(current_user.get("armour_owned_level_max", 0) or 0)
-    if owned_max < 1:
-        raise HTTPException(status_code=400, detail="You have no armour to sell")
-    armour = next((a for a in ARMOUR_SETS if a["level"] == owned_max), None)
-    if not armour:
-        raise HTTPException(status_code=404, detail="Armour tier not found")
-    # Refund 50% of base cost (no event multiplier)
-    refund_money = int(armour["cost_money"] * 0.5) if armour.get("cost_money") is not None else None
-    refund_points = int(armour["cost_points"] * 0.5) if armour.get("cost_points") is not None else None
-    new_owned_max = owned_max - 1
-    equipped = int(current_user.get("armour_level", 0) or 0)
-    updates = {"$set": {"armour_owned_level_max": new_owned_max}}
-    if equipped == owned_max:
-        updates["$set"]["armour_level"] = new_owned_max if new_owned_max > 0 else 0
-    if refund_money is not None:
-        updates["$inc"] = {"money": refund_money}
-    elif refund_points is not None:
-        updates["$inc"] = {"points": refund_points}
-    await db.users.update_one({"id": current_user["id"]}, updates)
-    msg = f"Sold {armour['name']} for "
-    msg += f"${refund_money:,}" if refund_money is not None else f"{refund_points} points"
-    return {"message": msg + " (50% of purchase price).", "refund_money": refund_money, "refund_points": refund_points}
+# Armour -> see routers/armour.py
 
 # Admin endpoints
 ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
@@ -3728,153 +3569,7 @@ async def get_racket_targets(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 
-# Weapons endpoints
-@api_router.get("/weapons", response_model=List[WeaponResponse])
-async def get_weapons(current_user: dict = Depends(get_current_user)):
-    weapons = await db.weapons.find({}, {"_id": 0}).to_list(100)
-    user_weapons = await db.user_weapons.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
-    
-    weapons_map = {uw["weapon_id"]: uw["quantity"] for uw in user_weapons}
-    equipped_weapon_id = current_user.get("equipped_weapon_id")
-    if equipped_weapon_id and weapons_map.get(equipped_weapon_id, 0) <= 0:
-        # Clear invalid equipped weapon (no longer owned)
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"equipped_weapon_id": None}}
-        )
-        equipped_weapon_id = None
-    
-    ev = await get_effective_event()
-    mult = ev.get("armour_weapon_cost", 1.0)
-    result = []
-    for weapon in weapons:
-        quantity = weapons_map.get(weapon["id"], 0)
-        pm = weapon.get("price_money")
-        pp = weapon.get("price_points")
-        result.append(WeaponResponse(
-            id=weapon["id"],
-            name=weapon["name"],
-            description=weapon["description"],
-            damage=weapon["damage"],
-            bullets_needed=weapon["bullets_needed"],
-            rank_required=weapon["rank_required"],
-            price_money=pm,
-            price_points=pp,
-            effective_price_money=int(pm * mult) if pm is not None else None,
-            effective_price_points=int(pp * mult) if pp is not None else None,
-            owned=quantity > 0,
-            quantity=quantity,
-            equipped=(quantity > 0 and equipped_weapon_id == weapon["id"])
-        ))
-    
-    return result
-
-@api_router.post("/weapons/equip")
-async def equip_weapon(request: WeaponEquipRequest, current_user: dict = Depends(get_current_user)):
-    weapon_id = (request.weapon_id or "").strip()
-    if not weapon_id:
-        raise HTTPException(status_code=400, detail="Weapon id required")
-
-    owned = await db.user_weapons.find_one(
-        {"user_id": current_user["id"], "weapon_id": weapon_id, "quantity": {"$gt": 0}},
-        {"_id": 0}
-    )
-    if not owned:
-        raise HTTPException(status_code=400, detail="You do not own this weapon")
-
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"equipped_weapon_id": weapon_id}}
-    )
-    return {"message": "Weapon equipped"}
-
-@api_router.post("/weapons/unequip")
-async def unequip_weapon(current_user: dict = Depends(get_current_user)):
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"equipped_weapon_id": None}}
-    )
-    return {"message": "Weapon unequipped"}
-
-@api_router.post("/weapons/{weapon_id}/buy")
-async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: dict = Depends(get_current_user)):
-    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0})
-    if not weapon:
-        raise HTTPException(status_code=404, detail="Weapon not found")
-
-    ev = await get_effective_event()
-    mult = ev.get("armour_weapon_cost", 1.0)
-    currency = (request.currency or "").strip().lower()
-    if currency not in ("money", "points"):
-        raise HTTPException(status_code=400, detail="Invalid currency")
-    
-    if currency == "money":
-        if weapon.get("price_money") is None:
-            raise HTTPException(status_code=400, detail="This weapon can only be bought with points")
-        cost = int(weapon["price_money"] * mult)
-        if current_user["money"] < cost:
-            raise HTTPException(status_code=400, detail="Insufficient money")
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$inc": {"money": -cost}}
-        )
-    elif currency == "points":
-        if weapon.get("price_points") is None:
-            raise HTTPException(status_code=400, detail="This weapon can only be bought with money")
-        cost = int(weapon["price_points"] * mult)
-        if current_user["points"] < cost:
-            raise HTTPException(status_code=400, detail="Insufficient points")
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$inc": {"points": -cost}}
-        )
-    
-    await db.user_weapons.update_one(
-        {"user_id": current_user["id"], "weapon_id": weapon_id},
-        {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
-        upsert=True
-    )
-    
-    return {"message": f"Successfully purchased {weapon['name']}"}
-
-@api_router.post("/weapons/{weapon_id}/sell")
-async def sell_weapon(weapon_id: str, current_user: dict = Depends(get_current_user)):
-    """Sell one unit of a weapon for 50% of its base purchase price. Refunds money or points (same as list price type)."""
-    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0})
-    if not weapon:
-        raise HTTPException(status_code=404, detail="Weapon not found")
-    uw = await db.user_weapons.find_one({"user_id": current_user["id"], "weapon_id": weapon_id}, {"_id": 0, "quantity": 1})
-    quantity = (uw or {}).get("quantity", 0) or 0
-    if quantity < 1:
-        raise HTTPException(status_code=400, detail="You do not own this weapon")
-    # 50% of base price; refund in money if weapon has price_money else points
-    refund_money = None
-    refund_points = None
-    if weapon.get("price_money") is not None:
-        refund_money = int(weapon["price_money"] * 0.5)
-    if weapon.get("price_points") is not None:
-        refund_points = int(weapon["price_points"] * 0.5)
-    if refund_money is None and refund_points is None:
-        raise HTTPException(status_code=400, detail="Weapon has no sell value")
-    # Prefer refunding money if both exist
-    if refund_money is not None:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": refund_money}})
-        refund_points = None
-    else:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": refund_points}})
-    new_qty = quantity - 1
-    if new_qty <= 0:
-        await db.user_weapons.delete_one({"user_id": current_user["id"], "weapon_id": weapon_id})
-        if current_user.get("equipped_weapon_id") == weapon_id:
-            await db.users.update_one({"id": current_user["id"]}, {"$set": {"equipped_weapon_id": None}})
-    else:
-        await db.user_weapons.update_one(
-            {"user_id": current_user["id"], "weapon_id": weapon_id},
-            {"$inc": {"quantity": -1}}
-        )
-    msg = f"Sold 1× {weapon['name']} for "
-    msg += f"${refund_money:,}" if refund_money is not None else f"{refund_points} points"
-    return {"message": msg + " (50% of purchase price).", "refund_money": refund_money, "refund_points": refund_points}
+# Weapons -> see routers/weapons.py
 
 # Properties endpoints
 @api_router.get("/properties", response_model=List[PropertyResponse])
@@ -8327,13 +8022,16 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
     return {"wars": out}
 
 # Crime endpoints -> see routers/crimes.py
-# Register modular routers (crimes, gta, jail, oc, hitlist)
-from routers import crimes, gta, jail, oc, hitlist
+# Register modular routers (crimes, gta, jail, oc, hitlist, meta, weapons, armour)
+from routers import crimes, gta, jail, oc, hitlist, meta, weapons, armour
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
 oc.register(api_router)
 hitlist.register(api_router)
+meta.register(api_router)
+weapons.register(api_router)
+armour.register(api_router)
 
 app.include_router(api_router)
 

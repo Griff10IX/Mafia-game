@@ -13,7 +13,10 @@ backend/
 │   ├── gta.py         # /api/gta/* (options, attempt, garage, melt)
 │   ├── jail.py        # /api/jail/* (players, bust)
 │   ├── oc.py          # /api/oc/* (organised crime heists)
-│   └── hitlist.py     # /api/hitlist/* (bounties, buy off, reveal, NPCs)
+│   ├── hitlist.py     # /api/hitlist/* (bounties, buy off, reveal, NPCs)
+│   ├── meta.py        # /api/meta/ranks, /api/meta/cars
+│   ├── weapons.py     # /api/weapons/* (list, equip, unequip, buy, sell)
+│   └── armour.py      # /api/armour/* (options, buy, equip, unequip, sell)
 ├── requirements.txt
 ├── .env               # MONGO_URL, DB_NAME, JWT_SECRET_KEY, CORS_ORIGINS, etc.
 └── README.md          # This file
