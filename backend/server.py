@@ -4834,7 +4834,21 @@ async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
         cost_parts.append(f"${cost_cash:,} cash")
     if cost_points > 0:
         cost_parts.append(f"{cost_points:,} pts")
-    return {"message": f"Removed {res.deleted_count} bounty(ies). Cost: {', '.join(cost_parts)}.", "deleted": res.deleted_count}
+    cost_str = ", ".join(cost_parts)
+    try:
+        await send_notification(
+            user_id,
+            "🛡️ Bought off hitlist",
+            f"You bought yourself off the hitlist. {res.deleted_count} bounty(ies) removed. Cost paid: {cost_str}. You're no longer on the hitlist.",
+            "hitlist_buyoff",
+            buyoff_count=res.deleted_count,
+            cost_cash=cost_cash,
+            cost_points=cost_points,
+            buyer_username=current_user.get("username") or "You",
+        )
+    except Exception as e:
+        logging.exception("Hitlist buy-off notification: %s", e)
+    return {"message": f"Removed {res.deleted_count} bounty(ies). Cost: {cost_str}.", "deleted": res.deleted_count}
 
 
 @api_router.post("/hitlist/buy-off-user")
@@ -4877,7 +4891,22 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
         cost_parts.append(f"${cost_cash:,} cash")
     if cost_points > 0:
         cost_parts.append(f"{cost_points:,} pts")
-    return {"message": f"Removed all bounties on {target['username']}. Cost: {', '.join(cost_parts)}.", "deleted": res.deleted_count}
+    cost_str = ", ".join(cost_parts)
+    buyer_username = current_user.get("username") or "Someone"
+    try:
+        await send_notification(
+            target["id"],
+            "🛡️ Bought off hitlist",
+            f"{buyer_username} bought you off the hitlist. {res.deleted_count} bounty(ies) removed. They paid: {cost_str}. You're no longer on the hitlist.",
+            "hitlist_buyoff",
+            buyoff_count=res.deleted_count,
+            cost_cash=cost_cash,
+            cost_points=cost_points,
+            buyer_username=buyer_username,
+        )
+    except Exception as e:
+        logging.exception("Hitlist buy-off-user notification: %s", e)
+    return {"message": f"Removed all bounties on {target['username']}. Cost: {cost_str}.", "deleted": res.deleted_count}
 
 
 @api_router.post("/hitlist/reveal")
