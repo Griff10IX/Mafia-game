@@ -1,9 +1,237 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plane, Car, Clock, MapPin, Zap } from 'lucide-react';
+import { Plane, Car, Clock, MapPin, Zap, ShoppingCart } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const MAX_TRAVELS_PER_HOUR = 15;
+
+// Subcomponents
+const LoadingSpinner = () => (
+  <div className="flex items-center justify-center min-h-[60vh]">
+    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const PageHeader = () => (
+  <div>
+    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
+      <MapPin className="w-8 h-8 md:w-10 md:h-10" />
+      Travel
+    </h1>
+    <p className="text-sm text-mutedForeground">
+      Move between cities · Find new opportunities
+    </p>
+  </div>
+);
+
+const TravelingScreen = ({ destination, timeLeft }) => (
+  <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6" data-testid="traveling-screen">
+    <div className="text-6xl md:text-8xl animate-bounce">🚗</div>
+    <h2 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider text-center">
+      Traveling to {destination}...
+    </h2>
+    <div className="text-5xl md:text-6xl font-heading font-bold text-foreground tabular-nums">
+      {timeLeft}s
+    </div>
+    <div className="w-64 md:w-96 h-3 bg-secondary rounded-full overflow-hidden border border-primary/20">
+      <div className="h-full bg-gradient-to-r from-primary via-yellow-600 to-primary animate-pulse"></div>
+    </div>
+  </div>
+);
+
+const CurrentLocationCard = ({ location, travelsUsed, maxTravels, userPoints }) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        Current Location
+      </h2>
+    </div>
+    <div className="p-4">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="p-3 rounded-md bg-primary/20 border border-primary/30">
+          <MapPin className="text-primary" size={24} />
+        </div>
+        <div>
+          <p className="text-xs text-mutedForeground uppercase tracking-wider mb-0.5">
+            You are in
+          </p>
+          <h3 className="text-2xl font-heading font-bold text-primary">
+            {location}
+          </h3>
+        </div>
+      </div>
+      <div className="flex flex-wrap gap-4 text-sm font-heading">
+        <div className="flex items-center gap-2">
+          <Clock size={16} className="text-mutedForeground" />
+          <span className="text-mutedForeground">
+            Travels: <span className="font-bold text-foreground">{travelsUsed}/{maxTravels}</span> this hour
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Zap size={16} className="text-primary" />
+          <span className="text-mutedForeground">
+            Points: <span className="font-bold text-primary">{userPoints}</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+const DestinationCard = ({ 
+  destination, 
+  onTravel, 
+  travelInfo 
+}) => {
+  const canUseAirport = !travelInfo.carrying_booze && travelInfo.user_points >= travelInfo.airport_cost;
+  
+  return (
+    <div className="bg-card rounded-md overflow-hidden border border-primary/20" data-testid={`dest-${destination}`}>
+      <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+        <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+          {destination}
+        </h3>
+      </div>
+      <div className="p-3 md:p-4 space-y-2">
+        {/* Airport Option */}
+        <button
+          onClick={() => onTravel(destination, 'airport')}
+          disabled={!canUseAirport}
+          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md border-2 transition-all touch-manipulation ${
+            canUseAirport
+              ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50 hover:from-primary/30 hover:via-yellow-600/30 hover:to-primary/30 active:scale-95'
+              : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
+          }`}
+          data-testid={`airport-${destination}`}
+          title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : ''}
+        >
+          <span className="flex items-center gap-2">
+            <Plane size={18} className="text-primary" />
+            <span className="text-sm font-heading font-bold text-foreground">Airport</span>
+          </span>
+          <span className="text-xs text-mutedForeground font-heading">
+            {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost}pts
+          </span>
+        </button>
+        
+        {travelInfo.carrying_booze && (
+          <p className="text-xs text-amber-400 font-heading text-center">
+            ⚠️ Car only while carrying booze
+          </p>
+        )}
+
+        {/* Custom Car */}
+        {travelInfo?.custom_car && (
+          <button
+            onClick={() => onTravel(destination, 'custom')}
+            className="w-full flex items-center justify-between bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 px-3 py-2.5 rounded-md transition-all active:scale-95 touch-manipulation"
+          >
+            <span className="flex items-center gap-2">
+              <Zap size={18} className="text-primary" />
+              <span className="text-sm font-heading font-bold">{travelInfo.custom_car.name}</span>
+            </span>
+            <span className="text-xs text-mutedForeground font-heading">
+              {travelInfo.custom_car.travel_time}s
+            </span>
+          </button>
+        )}
+
+        {/* User Cars */}
+        {travelInfo?.cars?.slice(0, 3).map(car => (
+          <button
+            key={car.user_car_id}
+            onClick={() => onTravel(destination, car.user_car_id)}
+            className="w-full flex items-center justify-between bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 px-3 py-2.5 rounded-md transition-all active:scale-95 touch-manipulation"
+          >
+            <span className="flex items-center gap-2 min-w-0 flex-1">
+              <Car size={18} className="text-primary shrink-0" />
+              <span className="text-sm font-heading truncate">{car.name}</span>
+            </span>
+            <span className="text-xs text-mutedForeground font-heading whitespace-nowrap ml-2">
+              {car.travel_time}s
+            </span>
+          </button>
+        ))}
+
+        {/* No Cars Message */}
+        {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
+          <div className="text-center py-6 text-sm text-mutedForeground font-heading">
+            <Car size={32} className="mx-auto text-primary/30 mb-2" />
+            <p>No cars available</p>
+            <p className="text-xs mt-1">Steal some cars first!</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        ℹ️ Travel Info
+      </h2>
+    </div>
+    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Car Speeds */}
+      <div>
+        <h4 className="text-xs font-heading font-bold text-primary uppercase tracking-wider mb-3">
+          Car Speed by Rarity
+        </h4>
+        <div className="space-y-2 text-sm font-heading">
+          {[
+            { name: 'Exclusive', time: '7s', color: 'text-purple-400' },
+            { name: 'Custom', time: '20s', color: 'text-primary' },
+            { name: 'Legendary', time: '12s', color: 'text-orange-400' },
+            { name: 'Ultra Rare', time: '18s', color: 'text-pink-400' },
+            { name: 'Rare', time: '25s', color: 'text-blue-400' },
+            { name: 'Uncommon', time: '35s', color: 'text-green-400' },
+            { name: 'Common', time: '45s', color: 'text-gray-400' },
+          ].map(item => (
+            <div key={item.name} className="flex items-center justify-between">
+              <span className={item.color}>{item.name}</span>
+              <span className="text-mutedForeground">{item.time}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Extras */}
+      <div>
+        <h4 className="text-xs font-heading font-bold text-primary uppercase tracking-wider mb-3">
+          Travel Options
+        </h4>
+        <div className="space-y-2 text-sm font-heading mb-4">
+          <div className="flex items-center justify-between">
+            <span className="text-mutedForeground">Custom Car (Store)</span>
+            <span className="text-foreground font-bold">20s</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-mutedForeground">Airport</span>
+            <span className="text-foreground font-bold">Instant · {travelInfo?.airport_cost}pts</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-mutedForeground">Travel Limit</span>
+            <span className="text-foreground font-bold">{MAX_TRAVELS_PER_HOUR}/hour</span>
+          </div>
+        </div>
+
+        <button
+          onClick={onBuyAirmiles}
+          disabled={travelInfo?.user_points < (travelInfo?.extra_airmiles_cost || 25)}
+          className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-3 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation flex items-center justify-center gap-2"
+        >
+          <ShoppingCart size={18} />
+          Buy +5 Airmiles ({travelInfo?.extra_airmiles_cost || 25} pts)
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
+// Main component
 export default function Travel() {
   const [travelInfo, setTravelInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -17,6 +245,7 @@ export default function Travel() {
       setTravelInfo(response.data);
     } catch (error) {
       toast.error('Failed to load travel info');
+      console.error('Error fetching travel info:', error);
     } finally {
       setLoading(false);
     }
@@ -78,164 +307,47 @@ export default function Travel() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
-      </div>
-    );
+    return <LoadingSpinner />;
   }
 
   if (traveling) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6" data-testid="traveling-screen">
-        <div className="text-6xl animate-bounce">🚗</div>
-        <div className="flex items-center gap-3">
-          <div className="h-px w-8 bg-primary/60" />
-          <h2 className="text-2xl font-heading font-bold text-primary uppercase tracking-wider">Traveling to {selectedDest}...</h2>
-          <div className="h-px w-8 bg-primary/60" />
-        </div>
-        <div className="text-4xl font-heading font-bold text-foreground">{travelTime}s</div>
-        <div className={`w-64 h-2 ${styles.raised} rounded-full overflow-hidden border border-primary/20`}>
-          <div className="h-full bg-gradient-to-r from-primary to-yellow-600 animate-pulse" style={{ width: '100%' }}></div>
-        </div>
-      </div>
-    );
+    return <TravelingScreen destination={selectedDest} timeLeft={travelTime} />;
   }
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="travel-page">
-      <div className="flex items-center justify-center flex-col gap-2 text-center">
-        <div className="flex items-center gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider">Travel</h1>
-          <div className="h-px flex-1 max-w-[80px] md:max-w-[120px] bg-gradient-to-l from-transparent to-primary/60" />
+    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="travel-page">
+      <PageHeader />
+
+      <CurrentLocationCard
+        location={travelInfo?.current_location}
+        travelsUsed={travelInfo?.travels_this_hour}
+        maxTravels={travelInfo?.max_travels}
+        userPoints={travelInfo?.user_points}
+      />
+
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+            🌎 Destinations
+          </h2>
+          <div className="flex-1 h-px bg-primary/30" />
         </div>
-        <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">Move between cities · find new opportunities</p>
-      </div>
-
-      <div className={`${styles.panel} rounded-sm overflow-hidden p-4`}>
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-sm flex items-center justify-center bg-primary/20 border border-primary/30">
-            <MapPin className="text-primary" size={24} />
-          </div>
-          <div>
-            <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest">Current Location</p>
-            <h2 className="text-xl font-heading font-bold text-primary">{travelInfo?.current_location}</h2>
-          </div>
-        </div>
-        <div className="mt-3 flex items-center gap-4 text-sm font-heading">
-          <span className="text-mutedForeground">
-            Travels: <span className="text-foreground font-bold">{travelInfo?.travels_this_hour}/{travelInfo?.max_travels}</span> this hour
-          </span>
-          <span className="text-mutedForeground">
-            Points: <span className="text-primary font-bold">{travelInfo?.user_points}</span>
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {travelInfo?.destinations?.map(dest => (
-          <div key={dest} className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`} data-testid={`dest-${dest}`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-px bg-primary/50" />
-                <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">{dest}</h3>
-                <div className="flex-1 h-px bg-primary/50" />
-              </div>
-            </div>
-            <div className="p-4 space-y-2">
-              <button
-                onClick={() => handleTravel(dest, 'airport')}
-                disabled={travelInfo.carrying_booze || travelInfo.user_points < travelInfo.airport_cost}
-                className="w-full flex items-center justify-between bg-gradient-to-b from-primary/30 to-primary/10 hover:from-primary/40 hover:to-primary/20 border border-primary/50 px-3 py-2 rounded-sm transition-smooth disabled:opacity-50"
-                data-testid={`airport-${dest}`}
-                title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : ''}
-              >
-                <span className="flex items-center gap-2">
-                  <Plane size={16} className="text-primary" />
-                  <span className="text-sm font-heading font-bold text-primary">Airport</span>
-                </span>
-                <span className="text-xs text-primary/90 font-heading">{travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost}pts</span>
-              </button>
-              {travelInfo.carrying_booze && (
-                <p className="text-xs text-amber-400 font-heading">Car only while carrying booze</p>
-              )}
-
-              {travelInfo?.custom_car && (
-                <button
-                  onClick={() => handleTravel(dest, 'custom')}
-                  className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Zap size={16} className="text-primary" />
-                    <span className="text-sm font-heading font-bold text-foreground">{travelInfo.custom_car.name}</span>
-                  </span>
-                  <span className="text-xs text-mutedForeground font-heading">{travelInfo.custom_car.travel_time}s</span>
-                </button>
-              )}
-
-              {travelInfo?.cars?.slice(0, 3).map(car => (
-                <button
-                  key={car.user_car_id}
-                  onClick={() => handleTravel(dest, car.user_car_id)}
-                  className={`w-full flex items-center justify-between ${styles.surface} ${styles.raisedHover} border border-primary/30 px-3 py-2 rounded-sm transition-smooth`}
-                >
-                  <span className="flex items-center gap-2">
-                    <Car size={16} className="text-primary" />
-                    <span className="text-sm font-heading truncate max-w-[120px] text-foreground">{car.name}</span>
-                  </span>
-                  <span className="text-xs text-mutedForeground font-heading">{car.travel_time}s</span>
-                </button>
-              ))}
-
-              {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
-                <p className="text-xs text-mutedForeground font-heading text-center py-2">No cars available. Steal some!</p>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Travel Info</h3>
-            <div className="flex-1 h-px bg-primary/50" />
-          </div>
-        </div>
-        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h4 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest mb-2">Car speed by rarity</h4>
-            <ul className="space-y-1 text-xs text-mutedForeground font-heading">
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Exclusive: 7s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Custom: 20s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Legendary: 12s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Ultra Rare: 18s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Rare: 25s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Uncommon: 35s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Common: 45s</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-xs font-heading font-bold text-primary/80 uppercase tracking-widest mb-2">Extras</h4>
-            <ul className="space-y-1 text-xs text-mutedForeground font-heading mb-3">
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Custom Car (Store): 20s</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Airport: Instant ({travelInfo?.airport_cost} pts)</li>
-              <li className="flex items-center gap-2"><span className="text-primary">◆</span> Max {MAX_TRAVELS_PER_HOUR || 15} travels/hour</li>
-            </ul>
-            <button
-              onClick={handleBuyAirmiles}
-              disabled={travelInfo?.user_points < (travelInfo?.extra_airmiles_cost || 25)}
-              className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 px-4 py-2 rounded-sm text-sm font-heading font-bold border border-yellow-600/50 disabled:opacity-50 transition-smooth"
-            >
-              Buy +5 Airmiles ({travelInfo?.extra_airmiles_cost || 25} pts)
-            </button>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {travelInfo?.destinations?.map(dest => (
+            <DestinationCard
+              key={dest}
+              destination={dest}
+              onTravel={handleTravel}
+              travelInfo={travelInfo}
+            />
+          ))}
         </div>
       </div>
+
+      <TravelInfoCard
+        travelInfo={travelInfo}
+        onBuyAirmiles={handleBuyAirmiles}
+      />
     </div>
   );
 }
-
-const MAX_TRAVELS_PER_HOUR = 15;

@@ -198,11 +198,14 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
   const timeAgo = getTimeAgo(notification.created_at);
   const isOcInvite = !!notification.oc_invite_id;
   const isUserMessage = notification.notification_type === 'user_message';
+  
+  // Get recipient for sent messages
+  const recipient = isSent ? (notification.recipient_username || notification.to_username || notification.target_username) : null;
 
   return (
     <div
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ${
+      className={`group relative flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ${
         isSelected 
           ? 'bg-primary/10 border-l-4 border-l-primary' 
           : isSent
@@ -229,7 +232,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
           <h3 className={`text-sm font-heading truncate ${
             isSent ? 'text-foreground' : notification.read ? 'text-foreground' : 'text-foreground font-bold'
           }`}>
-            {isSent ? `To: ${notification.to_username || notification.target_username}` : notification.title}
+            {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
           </h3>
           <span className="text-xs text-mutedForeground whitespace-nowrap">
             {timeAgo}
@@ -251,6 +254,41 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
 
       {/* Arrow */}
       <ChevronRight size={16} className="text-mutedForeground shrink-0" />
+      
+      {/* Hover Preview Tooltip */}
+      <div className="absolute left-full ml-2 top-0 z-50 hidden group-hover:block pointer-events-none">
+        <div className="bg-zinc-900 border-2 border-primary/40 rounded-lg p-4 shadow-2xl max-w-sm w-80">
+          <div className="flex items-start gap-3 mb-3">
+            <div className="p-2 rounded-md bg-primary/20 border border-primary/30">
+              {isSent ? (
+                <Send size={16} className="text-primary" />
+              ) : (
+                <Icon size={16} className="text-primary" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="text-sm font-heading font-bold text-primary mb-1">
+                {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
+              </h4>
+              <p className="text-xs text-mutedForeground">
+                {timeAgo}
+              </p>
+            </div>
+          </div>
+          <p className="text-sm text-foreground leading-relaxed max-h-32 overflow-y-auto">
+            {notification.message}
+          </p>
+          {notification.gif_url && (
+            <div className="mt-2">
+              <img 
+                src={notification.gif_url} 
+                alt="GIF preview" 
+                className="max-w-full max-h-24 rounded border border-primary/20" 
+              />
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
@@ -272,6 +310,9 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
   const Icon = isSent ? Send : (NOTIFICATION_ICONS[notification.notification_type] || Bell);
   const isOcInvite = !!notification.oc_invite_id;
   const isUserMessage = notification.notification_type === 'user_message' && notification.sender_id;
+  
+  // Get recipient for sent messages
+  const recipient = isSent ? (notification.recipient_username || notification.to_username || notification.target_username) : null;
 
   return (
     <div className="flex-1 flex flex-col bg-card">
@@ -284,7 +325,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             </div>
             <div>
               <h2 className="text-lg md:text-xl font-heading font-bold text-foreground mb-1">
-                {isSent ? `To: ${notification.to_username || notification.target_username}` : notification.title}
+                {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
               </h2>
               <p className="text-sm text-mutedForeground">
                 {isSent && <span className="text-primary font-bold mr-2">Sent</span>}
