@@ -260,6 +260,8 @@ export default function Crimes() {
 
   const tick = useCooldownTicker(crimes, fetchCrimes);
 
+  const [commitAllLoading, setCommitAllLoading] = useState(false);
+
   const commitCrime = async (crimeId) => {
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
@@ -312,13 +314,57 @@ export default function Crimes() {
     });
   }, [crimes, tick, user?.in_jail]);
 
+  const commitAll = async () => {
+    const available = crimeRows.filter((c) => c.can_commit);
+    if (available.length === 0 || commitAllLoading || user?.in_jail) return;
+    setCommitAllLoading(true);
+    let committed = 0;
+    let totalCash = 0;
+    try {
+      for (const crime of available) {
+        try {
+          const response = await api.post(`/crimes/${crime.id}/commit`);
+          if (response.data?.success) {
+            committed += 1;
+            totalCash += Number(response.data?.reward) || 0;
+            refreshUser();
+          }
+          await fetchCrimes();
+        } catch (_) {
+          await fetchCrimes();
+        }
+      }
+      if (committed > 0) {
+        toast.success(
+          `You committed ${committed} crime${committed !== 1 ? 's' : ''} and made $${totalCash.toLocaleString()}`
+        );
+      }
+    } finally {
+      setCommitAllLoading(false);
+    }
+  };
+
+  const commitAllCount = crimeRows.filter((c) => c.can_commit).length;
+
   if (loading) {
     return <LoadingSpinner />;
   }
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="crimes-page">
-      <PageHeader />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <PageHeader />
+        {!user?.in_jail && commitAllCount > 0 && (
+          <button
+            type="button"
+            onClick={commitAll}
+            disabled={commitAllLoading}
+            className="text-xs font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+          >
+            {commitAllLoading ? '...' : `Commit all (${commitAllCount})`}
+          </button>
+        )}
+      </div>
 
       {user?.in_jail && <JailNotice />}
 

@@ -163,7 +163,8 @@ const RoleSlotControl = ({ roleId, value, onValueChange, inviteInput, onInviteCh
   );
 };
 
-const PercentageControl = ({ roleId, value, onChange }) => (
+const NPC_SHARE = 35;
+const PercentageControl = ({ roleId, value, onChange, isNpc }) => (
   <div className="flex items-center gap-2">
     <span className="text-sm md:text-xs font-heading capitalize w-24 text-primary/80">
       {roleId}
@@ -172,9 +173,12 @@ const PercentageControl = ({ roleId, value, onChange }) => (
       type="number"
       min={0}
       max={100}
-      value={value ?? 25}
+      value={isNpc ? NPC_SHARE : (value ?? 25)}
       onChange={(e) => onChange(e.target.value)}
-      className="w-16 md:w-14 bg-input border border-border rounded-md px-2 py-1.5 text-sm md:text-xs text-right text-foreground focus:border-primary/50 focus:outline-none"
+      readOnly={isNpc}
+      className={`w-16 md:w-14 border rounded-md px-2 py-1.5 text-sm md:text-xs text-right text-foreground focus:outline-none ${
+        isNpc ? 'bg-secondary/50 border-border text-mutedForeground cursor-default' : 'bg-input border-border focus:border-primary/50'
+      }`}
     />
     <span className="text-sm md:text-xs text-mutedForeground">%</span>
   </div>
@@ -269,6 +273,22 @@ export default function OrganisedCrime() {
     setSlots((prev) => ({ ...prev, [roleId]: value }));
     if (value !== 'invite') {
       setInviteInputs((prev) => ({ ...prev, [roleId]: '' }));
+    }
+    // When NPC is picked, auto-assign 35% to that slot (take from self so total stays 100)
+    if (value === 'npc') {
+      const NPC_SHARE = 35;
+      setPcts((prev) => {
+        const selfRole = ROLE_IDS.find((r) => slots[r] === 'self');
+        const selfCurrent = selfRole ? (prev[selfRole] || 0) : 0;
+        const sumOthers = ROLE_IDS.filter((r) => r !== roleId).reduce((s, r) => s + (prev[r] || 0), 0);
+        const room = 100 - sumOthers;
+        const assign = Math.min(NPC_SHARE, room, (prev[roleId] || 0) + selfCurrent);
+        const next = { ...prev, [roleId]: assign };
+        if (selfRole) {
+          next[selfRole] = selfCurrent - (assign - (prev[roleId] || 0));
+        }
+        return next;
+      });
     }
   };
 
@@ -646,9 +666,15 @@ export default function OrganisedCrime() {
               roleId={roleId}
               value={pcts[roleId]}
               onChange={(val) => setPct(roleId, val)}
+              isNpc={slots[roleId] === 'npc'}
             />
           ))}
         </div>
+        {ROLE_IDS.some((r) => slots[r] === 'npc') && (
+          <p className="px-4 pb-2 text-xs text-mutedForeground">
+            NPC slots auto-assigned 35% each (pool reduced per NPC).
+          </p>
+        )}
         {pctTotal !== 100 && (
           <p className="px-4 pb-3 text-xs text-mutedForeground">
             Percentages must sum to 100.

@@ -468,7 +468,8 @@ async def execute_oc(
             "cooldown_until": new_cooldown_until.isoformat(),
         }
 
-    # Pool size: NPC slots reduce total (NPC_PAYOUT_MULTIPLIER per NPC)
+    # Pool size: NPC slots reduce total (35% share per NPC)
+    user_ids = [r for r in resolved if r is not None]
     num_humans = len(user_ids)
     num_npcs = 4 - num_humans
     total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
