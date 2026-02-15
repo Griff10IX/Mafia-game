@@ -115,8 +115,12 @@ export default function QuickTrade() {
   };
 
   // Calculate per-point prices and fees (0.5% fee, minimum 1 point)
-  const sellPerPoint = sellPoints && sellCost ? (parseFloat(sellCost) / parseFloat(sellPoints)).toFixed(2) : '0.00';
-  const buyPerPoint = buyPoints && buyOffer ? (parseFloat(buyOffer) / parseFloat(buyPoints)).toFixed(2) : '0.00';
+  const formatCurrency = (num) => {
+    return parseFloat(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+  
+  const sellPerPoint = sellPoints && sellCost ? formatCurrency(parseFloat(sellCost) / parseFloat(sellPoints)) : '0.00';
+  const buyPerPoint = buyPoints && buyOffer ? formatCurrency(parseFloat(buyOffer) / parseFloat(buyPoints)) : '0.00';
   
   const calculateFee = (points) => {
     const fee = Math.max(1, Math.floor(parseFloat(points) * 0.005));
@@ -355,7 +359,7 @@ export default function QuickTrade() {
                         <div className="text-[11px] text-mutedForeground space-y-0.5">
                           <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
                           <div>Cost: <span className="text-foreground font-bold">${offer.cost?.toLocaleString()}</span></div>
-                          <div>Per Point: <span className="text-mutedForeground">${((offer.cost || 0) / (offer.points || 1)).toFixed(2)}</span></div>
+                          <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span></div>
                         </div>
                       </div>
                       {isMyOffer ? (
@@ -410,7 +414,7 @@ export default function QuickTrade() {
                         <div className="text-[11px] text-mutedForeground space-y-0.5">
                           <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
                           <div>Money: <span className="text-foreground font-bold">${offer.money?.toLocaleString()}</span></div>
-                          <div>Per Point: <span className="text-mutedForeground">${((offer.money || 0) / (offer.points || 1)).toFixed(2)}</span></div>
+                          <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span></div>
                         </div>
                       </div>
                       {isMyOffer ? (
