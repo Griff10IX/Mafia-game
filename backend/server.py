@@ -929,6 +929,13 @@ async def send_notification_to_family(family_id: str, title: str, message: str, 
         await send_notification(m["user_id"], title, message, notification_type)
 
 
+async def send_notification_to_all(title: str, message: str, notification_type: str = "system"):
+    """Notify all users (e.g. new E-Games available)."""
+    user_ids = await db.users.distinct("id")
+    for uid in user_ids:
+        await send_notification(uid, title, message, notification_type)
+
+
 async def _family_war_start(family_a_id: str, family_b_id: str):
     """Start or ensure an active war between two families. Idempotent."""
     if not family_a_id or not family_b_id or family_a_id == family_b_id:
@@ -10287,6 +10294,15 @@ async def startup_db():
     asyncio.create_task(spawn_jail_npcs())
     # Start security monitoring background task
     asyncio.create_task(security_module.security_monitor_task(db))
+
+    async def hourly_entertainer_auto_create():
+        while True:
+            await asyncio.sleep(3600)
+            try:
+                await entertainer.run_auto_create_if_enabled()
+            except Exception as e:
+                logging.exception("Entertainer auto-create: %s", e)
+    asyncio.create_task(hourly_entertainer_auto_create())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

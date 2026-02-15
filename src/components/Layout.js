@@ -648,83 +648,6 @@ export default function Layout({ children }) {
 
         {user && (
           <div className="flex items-center gap-1.5 shrink-0">
-            {/* Notification bell */}
-            <div className="relative" ref={notificationPanelRef}>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
-                className="flex items-center justify-center w-9 h-9 rounded-sm border border-primary/20 bg-noir-surface/90 text-primary hover:bg-noir-raised/90 transition-colors"
-                aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
-              >
-                <Bell size={18} strokeWidth={2} />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-noir-bg text-[10px] font-heading font-bold">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </button>
-              {notificationPanelOpen && (
-                <div
-                  className="absolute top-full right-0 mt-1 w-[320px] max-h-[400px] flex flex-col rounded border shadow-xl z-50"
-                  style={{
-                    backgroundColor: 'var(--noir-content)',
-                    borderColor: 'var(--noir-border-mid)'
-                  }}
-                >
-                  <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-                    <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>
-                      Notifications
-                    </h3>
-                    <p className="text-xs mt-0.5 font-heading" style={{ color: 'var(--noir-muted)' }}>
-                      View & manage your notifications
-                    </p>
-                  </div>
-                  <div className="overflow-y-auto flex-1 min-h-0">
-                    {notificationList.length === 0 ? (
-                      <div className="p-4 text-center font-heading text-sm" style={{ color: 'var(--noir-muted)' }}>
-                        No notifications
-                      </div>
-                    ) : (
-                      notificationList.slice(0, 12).map((n) => (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
-                          className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
-                          style={{
-                            borderColor: 'var(--noir-border)',
-                            color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)',
-                            backgroundColor: n.read ? 'transparent' : 'rgba(212, 175, 55, 0.06)'
-                          }}
-                        >
-                          <span className="font-semibold block truncate">{n.title}</span>
-                          <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                  <div className="p-2 border-t shrink-0 flex gap-2" style={{ borderColor: 'var(--noir-border)' }}>
-                    <button
-                      type="button"
-                      onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
-                      className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors"
-                      style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}
-                    >
-                      View all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { markAllNotificationsRead(); }}
-                      className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors"
-                      style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
             {/* Rank Progress Mini Bar */}
             {rankProgress && (() => {
               const pct = Number(rankProgress.rank_points_progress);
@@ -801,6 +724,83 @@ export default function Layout({ children }) {
             <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Premium Points">
               <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
               <span className="font-heading text-xs text-foreground" data-testid="topbar-points">{formatInt(user.points)}</span>
+            </div>
+
+            {/* Notification bell - same size as other pills */}
+            <div className="relative" ref={notificationPanelRef}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
+                className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors"
+                aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
+              >
+                <Bell size={12} strokeWidth={2} />
+                {unreadCount > 0 && (
+                  <span className="min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-noir-bg text-[10px] font-heading font-bold">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+              {notificationPanelOpen && (
+                <div
+                  className="absolute top-full right-0 mt-1 w-[320px] max-h-[400px] flex flex-col rounded border shadow-xl z-50"
+                  style={{
+                    backgroundColor: 'var(--noir-content)',
+                    borderColor: 'var(--noir-border-mid)'
+                  }}
+                >
+                  <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+                    <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>
+                      Notifications
+                    </h3>
+                    <p className="text-xs mt-0.5 font-heading" style={{ color: 'var(--noir-muted)' }}>
+                      View & manage your notifications
+                    </p>
+                  </div>
+                  <div className="overflow-y-auto flex-1 min-h-0">
+                    {notificationList.length === 0 ? (
+                      <div className="p-4 text-center font-heading text-sm" style={{ color: 'var(--noir-muted)' }}>
+                        No notifications
+                      </div>
+                    ) : (
+                      notificationList.slice(0, 12).map((n) => (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
+                          className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
+                          style={{
+                            borderColor: 'var(--noir-border)',
+                            color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)',
+                            backgroundColor: n.read ? 'transparent' : 'rgba(212, 175, 55, 0.06)'
+                          }}
+                        >
+                          <span className="font-semibold block truncate">{n.title}</span>
+                          <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <div className="p-2 border-t shrink-0 flex gap-2" style={{ borderColor: 'var(--noir-border)' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
+                      className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors"
+                      style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}
+                    >
+                      View all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { markAllNotificationsRead(); }}
+                      className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors"
+                      style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}
+                    >
+                      Clear all
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

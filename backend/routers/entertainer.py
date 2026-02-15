@@ -1,5 +1,5 @@
-# Entertainer Forum: auto dice games and gbox (1–10 players, auto roll/split on full)
-from datetime import datetime, timezone
+# Entertainer Forum: auto dice games and gbox (1–10 players, auto roll/split on full or after 60s)
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
 import random
@@ -9,7 +9,10 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user
+from server import db, get_current_user, send_notification_to_all, _is_admin
+
+AUTO_ROLL_AFTER_SECONDS = 60
+ENTERTAINER_CONFIG_KEY = "entertainer_config"
 
 
 class CreateGameRequest(BaseModel):
@@ -72,19 +75,49 @@ async def _run_gbox_payout(game: dict):
     return {"percent_per_player": dict(zip([p.get("user_id") for p in participants], percent_per_user))}
 
 
+async def _settle_game(game: dict):
+    """Run payout and mark game completed. Idempotent if already completed."""
+    if game.get("status") == "completed":
+        return
+    participants = game.get("participants") or []
+    now = datetime.now(timezone.utc).isoformat()
+    result = None
+    if participants and game.get("pot", 0) >= 0:
+        if game.get("game_type") == "dice":
+            result = await _run_dice_payout(game)
+        else:
+            result = await _run_gbox_payout(game)
+    await db.entertainer_games.update_one(
+        {"id": game["id"]},
+        {"$set": {"status": "completed", "completed_at": now, "result": result}},
+    )
+
+
+async def _maybe_auto_settle_open_games():
+    """Settle any open game older than AUTO_ROLL_AFTER_SECONDS."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=AUTO_ROLL_AFTER_SECONDS)).isoformat()
+    open_old = await db.entertainer_games.find(
+        {"status": "open", "created_at": {"$lt": cutoff}},
+        {"_id": 0},
+    ).to_list(50)
+    for g in open_old:
+        await _settle_game(g)
+
+
 async def list_games(
     game_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """List entertainer games (open + recent completed)."""
+    """List entertainer games (open + recent completed). Auto-settles open games older than 60s."""
+    await _maybe_auto_settle_open_games()
     query = {}
     if game_type and game_type in ("dice", "gbox"):
         query["game_type"] = game_type
     if status and status in ("open", "full", "completed"):
         query["status"] = status
     games = await db.entertainer_games.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return {"games": games}
+    return {"games": games, "auto_roll_after_seconds": AUTO_ROLL_AFTER_SECONDS}
 
 
 async def get_game(game_id: str, current_user: dict = Depends(get_current_user)):
@@ -184,8 +217,130 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
     return {"message": "Joined game" + (" — game full, payout done!" if is_full else ""), "game": updated}
 
 
+# ---------- Admin: manual roll ----------
+async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current_user)):
+    """Admin only: force settle (roll) an open game now."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    if game.get("status") == "completed":
+        raise HTTPException(status_code=400, detail="Game already completed")
+    await _settle_game(game)
+    updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
+    return {"message": "Game rolled", "game": updated}
+
+
+# ---------- Admin: entertainer config (auto-create on/off) ----------
+async def get_entertainer_config(current_user: dict = Depends(get_current_user)):
+    """Get entertainer config (auto_create_enabled). Admin only for write; anyone can read."""
+    doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"_id": 0, "key": 0})
+    if not doc:
+        return {"auto_create_enabled": False, "last_auto_create_at": None}
+    return {"auto_create_enabled": doc.get("auto_create_enabled", False), "last_auto_create_at": doc.get("last_auto_create_at")}
+
+
+class EntertainerConfigUpdate(BaseModel):
+    auto_create_enabled: bool
+
+
+async def update_entertainer_config(
+    body: EntertainerConfigUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin only: enable/disable auto-create games every hour."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    await db.game_config.update_one(
+        {"key": ENTERTAINER_CONFIG_KEY},
+        {"$set": {"key": ENTERTAINER_CONFIG_KEY, "auto_create_enabled": body.auto_create_enabled}},
+        upsert=True,
+    )
+    return {"auto_create_enabled": body.auto_create_enabled}
+
+
+# ---------- Admin: create 3–5 system games now and notify all ----------
+async def _create_system_game(game_type: str, max_players: int, join_fee: int) -> dict:
+    """Create one open game with no creator (system). Participants join and pay."""
+    game_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": game_id,
+        "game_type": game_type,
+        "max_players": max_players,
+        "join_fee": join_fee,
+        "pot": 0,
+        "creator_id": "system",
+        "creator_username": "System",
+        "participants": [],
+        "status": "open",
+        "created_at": now,
+        "completed_at": None,
+        "result": None,
+    }
+    await db.entertainer_games.insert_one(doc)
+    return doc
+
+
+async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
+    """Admin only: create 3–5 system games now and send notification to all users."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    n = random.randint(3, 5)
+    join_fee_options = [0, 100, 250, 500, 1000, 2500]
+    created = []
+    for _ in range(n):
+        game_type = random.choice(["dice", "gbox"])
+        max_players = random.randint(2, 10)
+        join_fee = random.choice(join_fee_options)
+        g = await _create_system_game(game_type, max_players, join_fee)
+        created.append(g)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.game_config.update_one(
+        {"key": ENTERTAINER_CONFIG_KEY},
+        {"$set": {"key": ENTERTAINER_CONFIG_KEY, "last_auto_create_at": now_iso}},
+        upsert=True,
+    )
+    await send_notification_to_all(
+        "🎲 New E-Games",
+        f"{len(created)} new dice & gbox games are open in the Entertainer Forum! Join now.",
+        "system",
+    )
+    return {"message": f"Created {len(created)} games", "count": len(created), "games": created}
+
+
+async def run_auto_create_if_enabled():
+    """Called by hourly task: if auto_create_enabled, create 3–5 games and notify."""
+    doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"_id": 0})
+    if not doc or not doc.get("auto_create_enabled"):
+        return
+    n = random.randint(3, 5)
+    join_fee_options = [0, 100, 250, 500, 1000, 2500]
+    for _ in range(n):
+        game_type = random.choice(["dice", "gbox"])
+        max_players = random.randint(2, 10)
+        join_fee = random.choice(join_fee_options)
+        await _create_system_game(game_type, max_players, join_fee)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.game_config.update_one(
+        {"key": ENTERTAINER_CONFIG_KEY},
+        {"$set": {"key": ENTERTAINER_CONFIG_KEY, "last_auto_create_at": now_iso}},
+        upsert=True,
+    )
+    await send_notification_to_all(
+        "🎲 New E-Games",
+        f"{n} new dice & gbox games are open in the Entertainer Forum! Join now.",
+        "system",
+    )
+
+
 def register(router):
     router.add_api_route("/forum/entertainer/games", list_games, methods=["GET"])
     router.add_api_route("/forum/entertainer/games", create_game, methods=["POST"])
     router.add_api_route("/forum/entertainer/games/{game_id}", get_game, methods=["GET"])
     router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"])
+    router.add_api_route("/forum/entertainer/games/{game_id}/roll", admin_roll_game, methods=["POST"])
+    router.add_api_route("/forum/entertainer/admin/config", get_entertainer_config, methods=["GET"])
+    router.add_api_route("/forum/entertainer/admin/config", update_entertainer_config, methods=["PATCH"])
+    router.add_api_route("/forum/entertainer/admin/auto-create", admin_auto_create_now, methods=["POST"])

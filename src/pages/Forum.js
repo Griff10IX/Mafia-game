@@ -7,6 +7,8 @@ import styles from '../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💵', '💎', '🎩', '🔫', '⚔️', '🎲', '👑', '🏆', '✨'];
 
+const AUTO_ROLL_SECONDS = 60;
+
 function getTimeAgo(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -16,6 +18,12 @@ function getTimeAgo(iso) {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+
+function getSecondsUntilRoll(createdAt) {
+  if (!createdAt) return 0;
+  const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+  return Math.max(0, AUTO_ROLL_SECONDS - elapsed);
 }
 
 const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) => {
@@ -274,10 +282,15 @@ export default function Forum() {
   const [gameModalOpen, setGameModalOpen] = useState(false);
   const [entertainerGames, setEntertainerGames] = useState([]);
   const [gamesLoading, setGamesLoading] = useState(false);
+  const [entertainerConfig, setEntertainerConfig] = useState({ auto_create_enabled: false, last_auto_create_at: null });
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
+  const [rollingId, setRollingId] = useState(null);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [creatingGames, setCreatingGames] = useState(false);
+  const [, setTick] = useState(0);
 
   const fetchTopics = useCallback(async () => {
     setLoading(true);
@@ -304,14 +317,77 @@ export default function Forum() {
     }
   }, []);
 
+  const fetchEntertainerConfig = useCallback(async () => {
+    try {
+      const res = await api.get('/forum/entertainer/admin/config');
+      setEntertainerConfig(res.data ?? { auto_create_enabled: false, last_auto_create_at: null });
+    } catch {
+      setEntertainerConfig({ auto_create_enabled: false, last_auto_create_at: null });
+    }
+  }, []);
+
   useEffect(() => { fetchTopics(); }, [fetchTopics]);
   useEffect(() => {
     if (activeTab === 'entertainer') {
       fetchEntertainerGames();
+      fetchEntertainerConfig();
       api.get('/auth/me').then((r) => setUser(r.data)).catch(() => setUser(null));
     }
+  }, [activeTab, fetchEntertainerGames, fetchEntertainerConfig]);
+  useEffect(() => {
+    if (activeTab === 'entertainer') {
+      const id = setInterval(fetchEntertainerGames, 10000);
+      return () => clearInterval(id);
+    }
   }, [activeTab, fetchEntertainerGames]);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
   useEffect(() => { api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false)); }, []);
+
+  const handleToggleAutoCreate = async () => {
+    if (!isAdmin) return;
+    setConfigSaving(true);
+    try {
+      await api.patch('/forum/entertainer/admin/config', { auto_create_enabled: !entertainerConfig.auto_create_enabled });
+      setEntertainerConfig((c) => ({ ...c, auto_create_enabled: !c.auto_create_enabled }));
+      toast.success(entertainerConfig.auto_create_enabled ? 'Auto-create disabled' : 'Auto-create enabled');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  const handleCreateGamesNow = async () => {
+    if (!isAdmin) return;
+    setCreatingGames(true);
+    try {
+      const res = await api.post('/forum/entertainer/admin/auto-create');
+      toast.success(res.data?.message || 'Games created');
+      fetchEntertainerGames();
+      fetchEntertainerConfig();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setCreatingGames(false);
+    }
+  };
+
+  const handleRollGame = async (gameId) => {
+    if (!isAdmin) return;
+    setRollingId(gameId);
+    try {
+      await api.post(`/forum/entertainer/games/${gameId}/roll`);
+      toast.success('Game rolled');
+      fetchEntertainerGames();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setRollingId(null);
+    }
+  };
 
   const updateTopicFlags = async (topicId, payload) => {
     setUpdatingId(topicId);
@@ -391,50 +467,102 @@ export default function Forum() {
 
       {/* Entertainer: Auto games (dice / gbox) */}
       {activeTab === 'entertainer' && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Auto games</span>
-            <span className="text-[10px] text-mutedForeground">When full, rolls / splits automatically</span>
-          </div>
-          {gamesLoading ? (
-            <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
-          ) : openGames.length === 0 ? (
-            <div className="p-4 text-center text-xs text-mutedForeground">No open games. Create one above.</div>
-          ) : (
-            <div className="divide-y divide-zinc-700/30">
-              {openGames.map((g) => {
-                const participants = g.participants || [];
-                const isIn = user && participants.some((p) => p.user_id === user.id);
-                return (
-                  <div key={g.id} className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                        {g.game_type === 'dice' ? <Dice5 size={14} className="text-primary" /> : <Package size={14} className="text-primary" />}
-                      </div>
-                      <div>
-                        <span className="text-xs font-heading font-bold text-foreground capitalize">{g.game_type}</span>
-                        <span className="text-[10px] text-mutedForeground ml-2">
-                          <Users size={10} className="inline" /> {participants.length}/{g.max_players}
-                        </span>
-                        <span className="text-primary text-[10px] ml-2">${(g.pot || 0).toLocaleString()} pot</span>
-                      </div>
-                    </div>
-                    {!isIn && g.status === 'open' && (
-                      <button
-                        onClick={() => handleJoinGame(g.id)}
-                        disabled={joiningId === g.id || (user?.money ?? 0) < (g.join_fee || 0)}
-                        className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 disabled:opacity-50"
-                      >
-                        {joiningId === g.id ? '...' : `Join ($${(g.join_fee || 0).toLocaleString()})`}
-                      </button>
-                    )}
-                    {isIn && <span className="text-[10px] text-mutedForeground">You're in</span>}
-                  </div>
-                );
-              })}
+        <>
+          {/* Admin tools */}
+          {isAdmin && (
+            <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
+              <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30">
+                <span className="text-xs font-heading font-bold text-amber-400 uppercase tracking-widest">🛠️ E-Games Admin</span>
+              </div>
+              <div className="p-3 flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!entertainerConfig.auto_create_enabled}
+                    onChange={handleToggleAutoCreate}
+                    disabled={configSaving}
+                    className="rounded border-primary/50"
+                  />
+                  <span className="text-xs font-heading">Auto-create 3–5 games every hour</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleCreateGamesNow}
+                  disabled={creatingGames}
+                  className="px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30 disabled:opacity-50"
+                >
+                  {creatingGames ? '...' : 'Create games now'}
+                </button>
+                {entertainerConfig.last_auto_create_at && (
+                  <span className="text-[10px] text-mutedForeground">
+                    Last run: {getTimeAgo(entertainerConfig.last_auto_create_at)}
+                  </span>
+                )}
+              </div>
             </div>
           )}
-        </div>
+
+          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+            <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between flex-wrap gap-1">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Auto games</span>
+              <span className="text-[10px] text-mutedForeground">When full or after 60s, rolls / splits automatically</span>
+            </div>
+            {gamesLoading ? (
+              <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
+            ) : openGames.length === 0 ? (
+              <div className="p-4 text-center text-xs text-mutedForeground">No open games. Create one above{entertainerConfig.auto_create_enabled ? ' or wait for the next hourly batch' : ''}.</div>
+            ) : (
+              <div className="divide-y divide-zinc-700/30">
+                {openGames.map((g) => {
+                  const participants = g.participants || [];
+                  const isIn = user && participants.some((p) => p.user_id === user.id);
+                  const secsLeft = getSecondsUntilRoll(g.created_at);
+                  return (
+                    <div key={g.id} className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                          {g.game_type === 'dice' ? <Dice5 size={14} className="text-primary" /> : <Package size={14} className="text-primary" />}
+                        </div>
+                        <div>
+                          <span className="text-xs font-heading font-bold text-foreground capitalize">{g.game_type}</span>
+                          <span className="text-[10px] text-mutedForeground ml-2">
+                            <Users size={10} className="inline" /> {participants.length}/{g.max_players}
+                          </span>
+                          <span className="text-primary text-[10px] ml-2">${(g.pot || 0).toLocaleString()} pot</span>
+                          {secsLeft > 0 && (
+                            <span className="text-[10px] text-amber-400/90 ml-2">Rolls in {secsLeft}s</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!isIn && g.status === 'open' && (
+                          <button
+                            onClick={() => handleJoinGame(g.id)}
+                            disabled={joiningId === g.id || (user?.money ?? 0) < (g.join_fee || 0)}
+                            className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 disabled:opacity-50"
+                          >
+                            {joiningId === g.id ? '...' : `Join ($${(g.join_fee || 0).toLocaleString()})`}
+                          </button>
+                        )}
+                        {isIn && <span className="text-[10px] text-mutedForeground">You're in</span>}
+                        {isAdmin && g.status === 'open' && (
+                          <button
+                            type="button"
+                            onClick={() => handleRollGame(g.id)}
+                            disabled={rollingId === g.id}
+                            className="px-2 py-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-red-500/30 disabled:opacity-50"
+                          >
+                            {rollingId === g.id ? '...' : 'Roll'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Stats */}
