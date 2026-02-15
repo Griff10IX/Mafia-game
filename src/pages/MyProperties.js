@@ -79,7 +79,7 @@ export default function MyProperties() {
     if (Number.isNaN(amount) || amount < 0) { toast.error('Enter 0 or more points'); return; }
     setSaving(true);
     try {
-      await api.post(`/casino/${c.type}/set-buy-back-reward`, c.type === 'dice' ? { city: c.city, amount } : { amount });
+      await api.post(`/casino/${c.type}/set-buy-back-reward`, (c.type === 'dice' || c.type === 'blackjack') ? { city: c.city, amount } : { amount });
       toast.success('Buy-back reward updated');
       fetchMyProperties();
     } catch (e) {

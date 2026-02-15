@@ -229,7 +229,7 @@ export default function Blackjack() {
     if (Number.isNaN(amount) || amount < 0) { toast.error('Enter 0 or more points'); return; }
     setOwnerLoading(true);
     try {
-      await api.post('/casino/blackjack/set-buy-back-reward', { amount });
+      await api.post('/casino/blackjack/set-buy-back-reward', { city, amount });
       toast.success('Buy-back reward updated');
       fetchConfigAndOwnership();
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }

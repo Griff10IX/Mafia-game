@@ -306,8 +306,8 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
                   const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type || 'Casino';
                   const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : '🎰';
                   return (
-                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-center gap-3">
-                      <span className="text-2xl shrink-0" aria-hidden>{typeEmoji}</span>
+                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-3">
+                      <span className="text-2xl shrink-0 mt-0.5" aria-hidden>{typeEmoji}</span>
                       <div className="min-w-0 flex-1">
                         <div className="font-heading font-bold text-foreground text-base">
                           {c.city} {typeLabel}
@@ -331,8 +331,8 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
               </div>
             )}
             {property?.type === 'airport' && (
-              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-center gap-3">
-                <Plane size={24} className="text-primary shrink-0" />
+              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-3">
+                <Plane size={24} className="text-primary shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <div className="font-heading font-bold text-foreground text-base">
                     ✈️ Airport — {property.state ?? '—'} (Slot {property.slot ?? 1})
@@ -342,10 +342,10 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
                       <span className="text-mutedForeground">Price per travel:</span>
                       <span className="text-primary font-bold">{Number(property.price_per_travel ?? 0).toLocaleString()} pts</span>
                     </div>
-                    {isOwner && property.total_earnings != null && (
+                    {isOwner && (
                       <div className="flex justify-between gap-2">
                         <span className="text-mutedForeground">Total earnings:</span>
-                        <span className="text-primary font-bold">{Number(property.total_earnings).toLocaleString()} pts</span>
+                        <span className="text-primary font-bold">{Number(property.total_earnings ?? 0).toLocaleString()} pts</span>
                       </div>
                     )}
                   </div>
@@ -353,8 +353,8 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
               </div>
             )}
             {property?.type === 'bullet_factory' && (
-              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-center gap-3">
-                <Factory size={24} className="text-primary shrink-0" />
+              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-3">
+                <Factory size={24} className="text-primary shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <div className="font-heading font-bold text-foreground text-base">
                     Bullet factory — {property.state ?? '—'}

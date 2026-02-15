@@ -533,6 +533,7 @@ class HorseRacingBetRequest(BaseModel):
 
 class BlackjackSetBuyBackRequest(BaseModel):
     amount: int  # points offered when owner cannot pay (buy-back)
+    city: Optional[str] = None  # table city (required when setting from My Properties)
 
 
 class BlackjackBuyBackAcceptRequest(BaseModel):
@@ -1615,6 +1616,8 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
 
     # Property (airport or bullet factory; max one per user)
     property_ = await _user_owns_any_property(user_id)
+    if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
+        property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
 
     # Inbox: received = notifications for this user (we don't track sent per user)
     messages_received = await db.notifications.count_documents({"user_id": user_id})
@@ -7916,8 +7919,8 @@ async def casino_blackjack_set_max_bet(request: RouletteSetMaxBetRequest, curren
 
 @api_router.post("/casino/blackjack/set-buy-back-reward")
 async def casino_blackjack_set_buy_back_reward(request: BlackjackSetBuyBackRequest, current_user: dict = Depends(get_current_user)):
-    """Set buy-back reward (points) offered when you cannot pay a win (owner only)."""
-    raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
+    """Set buy-back reward (points) offered when you cannot pay a win (owner only). Uses request.city (owned table) or current location."""
+    raw = (request.city or current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
     city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
     if not city or city not in STATES:
         raise HTTPException(status_code=400, detail="Invalid city")
