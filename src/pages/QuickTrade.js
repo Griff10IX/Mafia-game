@@ -586,18 +586,6 @@ export default function QuickTrade() {
         </div>
       </div>
 
-      {/* Coming Soon Notice */}
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-4 mt-6`}>
-        <div className="flex items-center gap-3">
-          <Coins size={24} className="text-primary" />
-          <div>
-            <h3 className="text-sm font-heading font-bold text-primary">Quick Trade System</h3>
-            <p className="text-xs text-mutedForeground mt-1">
-              Backend endpoints needed: <code className="text-primary">/api/trade/sell-offer</code>, <code className="text-primary">/api/trade/buy-offer</code>, <code className="text-primary">/api/trade/properties</code>
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
