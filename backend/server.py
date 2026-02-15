@@ -3303,6 +3303,9 @@ async def admin_disable_all_rate_limits(current_user: dict = Depends(get_current
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
     
+    # Disable the global toggle
+    security_module.GLOBAL_RATE_LIMITS_ENABLED = False
+    
     count = 0
     for endpoint in security_module.RATE_LIMIT_CONFIG:
         limit, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
@@ -3310,8 +3313,48 @@ async def admin_disable_all_rate_limits(current_user: dict = Depends(get_current
         count += 1
     
     return {
-        "message": f"Disabled rate limiting for all {count} endpoints",
+        "message": f"Disabled ALL rate limiting (global toggle OFF + {count} endpoints disabled)",
+        "global_enabled": False,
         "count": count
+    }
+
+
+@api_router.post("/admin/security/rate-limits/enable-all")
+async def admin_enable_all_rate_limits(current_user: dict = Depends(get_current_user)):
+    """Enable rate limiting for ALL endpoints."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # Enable the global toggle
+    security_module.GLOBAL_RATE_LIMITS_ENABLED = True
+    
+    count = 0
+    for endpoint in security_module.RATE_LIMIT_CONFIG:
+        limit, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
+        security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, True)
+        count += 1
+    
+    return {
+        "message": f"Enabled ALL rate limiting (global toggle ON + {count} endpoints enabled)",
+        "global_enabled": True,
+        "count": count
+    }
+
+
+@api_router.post("/admin/security/rate-limits/global-toggle")
+async def admin_toggle_global_rate_limits(
+    enabled: bool,
+    current_user: dict = Depends(get_current_user)
+):
+    """Toggle the global rate limit master switch. When OFF, all rate limits are bypassed."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    security_module.GLOBAL_RATE_LIMITS_ENABLED = enabled
+    
+    return {
+        "message": f"Global rate limits {'ENABLED' if enabled else 'DISABLED'}",
+        "global_enabled": enabled
     }
 
 

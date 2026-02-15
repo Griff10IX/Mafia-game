@@ -228,6 +228,9 @@ def validate_positive_int(value: Any, field_name: str, max_value: int = None) ->
 
 # ====== CONFIGURABLE RATE LIMITING PER ENDPOINT ======
 
+# GLOBAL TOGGLE - When False, ALL rate limits are bypassed regardless of per-endpoint settings
+GLOBAL_RATE_LIMITS_ENABLED = True
+
 # Rate limit configuration: endpoint_pattern -> (requests_per_minute, enabled)
 # You can enable/disable rate limiting per endpoint here
 RATE_LIMIT_CONFIG = {
@@ -317,6 +320,10 @@ async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) 
     Check if user exceeded rate limit for specific endpoint.
     Returns True if limit exceeded and user should be blocked.
     """
+    # Check global toggle first
+    if not GLOBAL_RATE_LIMITS_ENABLED:
+        return False  # All rate limits disabled globally
+    
     max_rpm, enabled = get_rate_limit_for_path(path)
     
     if not enabled:
