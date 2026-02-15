@@ -6743,7 +6743,7 @@ async def casino_roulette_relinquish(request: RouletteClaimRequest, current_user
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
     
-    await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None}})
+    await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
     return {"message": "Ownership relinquished."}
 
 
@@ -6774,11 +6774,11 @@ async def casino_roulette_send_to_user(request: RouletteSendToUserRequest, curre
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
     
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1})
+    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
-    await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
+    await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target["username"]}})
     return {"message": "Ownership transferred."}
 
 
@@ -8614,9 +8614,9 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     elif prop_type == "casino_rlt":
         city = prop.get("location")
         if city:
-            await db.rlt_ownership.update_one(
+            await db.roulette_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id}},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
     elif prop_type == "casino_blackjack":
