@@ -208,30 +208,31 @@ export default function Layout({ children }) {
     return `$${Math.trunc(num).toLocaleString()}`;
   };
 
+  // Order: Home → You → Money → Combat → Travel → Social → Ranking → Assets → Casino → Shop → Other
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
+    { path: '/profile', icon: User, label: 'Profile' },
     { path: '/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/bank', icon: Landmark, label: 'Bank' },
-    { path: '/forum', icon: MessageSquare, label: 'Forum' },
-    { path: '/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
-    { path: '/travel', icon: Plane, label: 'Travel' },
-    { path: '/states', icon: MapPin, label: 'States' },
-    { path: '/booze-run', icon: Wine, label: 'Booze Run' },
-    { path: '/users-online', icon: Users, label: 'Users Online' },
-    { path: '/profile', icon: User, label: 'Profile' },
-    { path: '/ranking', icon: Target, label: 'Ranking' }, // rendered as dropdown group below
-    { path: '/garage', icon: Car, label: 'Garage' },
     { path: '/attack', icon: Sword, label: 'Attack' },
     { path: '/attempts', icon: Crosshair, label: 'Attempts' },
     { path: '/hitlist', icon: ScrollText, label: 'Hitlist' },
     { path: '/bodyguards', icon: Shield, label: 'Bodyguards' },
-    { path: '/families', icon: Building2, label: 'Families' },
+    { path: '/travel', icon: Plane, label: 'Travel' },
+    { path: '/states', icon: MapPin, label: 'States' },
+    { path: '/booze-run', icon: Wine, label: 'Booze Run' },
+    { path: '/users-online', icon: Users, label: 'Users Online' },
+    { path: '/forum', icon: MessageSquare, label: 'Forum' },
+    { path: '/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
+    { path: '/ranking', icon: Target, label: 'Ranking' },
+    { path: '/garage', icon: Car, label: 'Garage' },
     { path: '/properties', icon: Building, label: 'Properties' },
-    { path: '/casino', icon: Dice5, label: 'Casino' }, // rendered as dropdown group below
     { path: '/armour-weapons', icon: Sword, label: 'Armour & Weapons' },
+    { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
+    { path: '/families', icon: Building2, label: 'Families' },
     { path: '/dead-alive', icon: Skull, label: 'Dead > Alive' },
   ];
 

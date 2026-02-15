@@ -54,7 +54,7 @@ async def get_bullet_factory(current_user: dict = Depends(get_current_user)):
     accumulated = _accumulated_bullets(factory)
     is_owner = current_user["id"] == owner_id
     price = factory.get("price_per_bullet")
-    can_buy = hasOwner and price is not None and price >= BULLET_FACTORY_PRICE_MIN and not is_owner and accumulated > 0
+    can_buy = owner_id is not None and price is not None and price >= BULLET_FACTORY_PRICE_MIN and not is_owner and accumulated > 0
     return {
         "production_per_hour": BULLET_FACTORY_PRODUCTION_PER_HOUR,
         "claim_cost": BULLET_FACTORY_CLAIM_COST,

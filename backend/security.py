@@ -247,6 +247,9 @@ RATE_LIMIT_CONFIG = {
     # Attack system
     "/api/attack/": (1.5, True),
     
+    # Crimes (prevent rapid commit spam)
+    "/api/crimes/": (1.5, True),
+    
     # Hitlist (prevent spam)
     "/api/hitlist/add": (4.0, True),
     "/api/hitlist/buy-off": (3.0, True),
@@ -298,16 +301,16 @@ RATE_LIMIT_CONFIG = {
 endpoint_user_last_request = defaultdict(dict)
 
 
-def get_rate_limit_for_path(path: str) -> tuple[float, bool]:
-    """Get (min_interval_seconds, enabled) for a given path. Based on speed per click, not requests per minute."""
+def get_rate_limit_for_path(path: str) -> tuple[float, bool, str]:
+    """Get (min_interval_seconds, enabled, storage_key) for a given path. Storage key is the pattern so e.g. all /api/crimes/* share one limit."""
     for pattern, (interval, enabled) in RATE_LIMIT_CONFIG.items():
         if pattern.endswith("/"):
             if path.startswith(pattern):
-                return (interval, enabled)
+                return (interval, enabled, pattern)
         else:
             if path == pattern:
-                return (interval, enabled)
-    return (1.0, False)
+                return (interval, enabled, pattern)
+    return (1.0, False, path)
 
 
 async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) -> bool:
@@ -318,13 +321,12 @@ async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) 
     if not GLOBAL_RATE_LIMITS_ENABLED:
         return False
     
-    min_interval_sec, enabled = get_rate_limit_for_path(path)
+    min_interval_sec, enabled, key = get_rate_limit_for_path(path)
     
     if not enabled or min_interval_sec <= 0:
         return False
     
     now = datetime.now(timezone.utc)
-    key = f"{path}"
     last = endpoint_user_last_request.get(key, {}).get(user_id)
     
     if last is not None:
@@ -338,7 +340,7 @@ async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) 
             )
             return True
     
-    endpoint_user_last_request[key][user_id] = now
+    endpoint_user_last_request.setdefault(key, {})[user_id] = now
     return False
 
 

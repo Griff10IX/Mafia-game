@@ -76,7 +76,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 )
             
             # 2. Check endpoint-specific rate limits (if enabled for this endpoint)
-            if await self.check_endpoint_rate_limit(path, user_id, username, self.db):
+            # Only for state-changing methods so GETs (e.g. dice config/ownership) can load in parallel.
+            # When blocked: client gets 429 and this detail; user is also flagged in security_flags.
+            if request.method not in ("GET", "HEAD", "OPTIONS") and await self.check_endpoint_rate_limit(path, user_id, username, self.db):
                 logger.warning(f"RATE LIMIT: {username} - {path}")
                 return JSONResponse(
                     status_code=429,
