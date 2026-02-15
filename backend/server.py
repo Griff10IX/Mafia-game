@@ -586,6 +586,8 @@ class PropertyResponse(BaseModel):
     owned: bool
     level: int
     available_income: float
+    locked: bool
+    required_property_name: str | None
 
 class BodyguardResponse(BaseModel):
     slot_number: int
@@ -601,16 +603,17 @@ FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associat
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
 # Rackets: 1920s-30s family businesses. Cooldown hours, base income per level.
+# ECONOMY REBALANCE: Reduced base_income by ~60% for healthier economy
 FAMILY_RACKETS = [
-    {"id": "protection", "name": "Protection Racket", "cooldown_hours": 6, "base_income": 5000, "description": "Extortion from businesses"},
-    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": 12, "base_income": 8000, "description": "Numbers & bookmaking"},
-    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": 24, "base_income": 12000, "description": "High-interest loans"},
-    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": 8, "base_income": 6000, "description": "Union kickbacks"},
-    {"id": "distillery", "name": "Distillery", "cooldown_hours": 10, "base_income": 6500, "description": "Bootleg liquor production"},
-    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": 8, "base_income": 5000, "description": "Storage and distribution"},
-    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": 6, "base_income": 5500, "description": "Front and steady income"},
-    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": 12, "base_income": 7000, "description": "Respectable front"},
-    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": 9, "base_income": 6000, "description": "Garment district operations"},
+    {"id": "protection", "name": "Protection Racket", "cooldown_hours": 6, "base_income": 2000, "description": "Extortion from businesses"},
+    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": 12, "base_income": 3200, "description": "Numbers & bookmaking"},
+    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": 24, "base_income": 4800, "description": "High-interest loans"},
+    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": 8, "base_income": 2400, "description": "Union kickbacks"},
+    {"id": "distillery", "name": "Distillery", "cooldown_hours": 10, "base_income": 2600, "description": "Bootleg liquor production"},
+    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": 8, "base_income": 2000, "description": "Storage and distribution"},
+    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": 6, "base_income": 2200, "description": "Front and steady income"},
+    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": 12, "base_income": 2800, "description": "Respectable front"},
+    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": 9, "base_income": 2400, "description": "Garment district operations"},
 ]
 RACKET_UPGRADE_COST = 50_000
 RACKET_MAX_LEVEL = 5
@@ -1826,6 +1829,21 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     money = int(user.get("money", 0) or 0) if user else 0
     if amount > money:
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
+    
+    # ECONOMY LIMIT: Max $50M total in unclaimed interest deposits
+    MAX_INTEREST_DEPOSITS = 50_000_000
+    existing_deposits = await db.bank_deposits.aggregate([
+        {"$match": {"user_id": current_user["id"], "claimed_at": None}},
+        {"$group": {"_id": None, "total_principal": {"$sum": "$principal"}}}
+    ]).to_list(1)
+    current_total = int(existing_deposits[0].get("total_principal", 0)) if existing_deposits else 0
+    
+    if current_total + amount > MAX_INTEREST_DEPOSITS:
+        remaining = MAX_INTEREST_DEPOSITS - current_total
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Maximum ${MAX_INTEREST_DEPOSITS:,} in interest deposits allowed. You have ${current_total:,} deposited. You can deposit up to ${remaining:,} more."
+        )
 
     now = datetime.now(timezone.utc)
     matures = now + timedelta(hours=hours)
@@ -4317,6 +4335,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
     user_properties = await db.user_properties.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
     
     properties_map = {up["property_id"]: up for up in user_properties}
+    all_properties_dict = {p["id"]: p for p in properties}
     
     result = []
     for prop in properties:
@@ -4330,6 +4349,18 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             hours_passed = (datetime.now(timezone.utc) - last_collected).total_seconds() / 3600
             available_income = min(hours_passed * prop["income_per_hour"] * level, prop["income_per_hour"] * level * 24)
         
+        # Check if property is locked (requires previous property to be maxed)
+        locked = False
+        required_property_name = None
+        required_prop_id = prop.get("required_property_id")
+        if required_prop_id:
+            required_prop = all_properties_dict.get(required_prop_id)
+            if required_prop:
+                required_property_name = required_prop["name"]
+                user_required_prop = properties_map.get(required_prop_id)
+                if not user_required_prop or user_required_prop.get("level", 0) < required_prop["max_level"]:
+                    locked = True
+        
         result.append(PropertyResponse(
             id=prop["id"],
             name=prop["name"],
@@ -4339,7 +4370,9 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             max_level=prop["max_level"],
             owned=owned,
             level=level,
-            available_income=available_income
+            available_income=available_income,
+            locked=locked,
+            required_property_name=required_property_name
         ))
     
     return result
@@ -4349,6 +4382,26 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     prop = await db.properties.find_one({"id": property_id}, {"_id": 0})
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
+    
+    # Check if previous property is required and maxed out
+    required_prop_id = prop.get("required_property_id")
+    if required_prop_id:
+        required_prop = await db.properties.find_one({"id": required_prop_id}, {"_id": 0})
+        if required_prop:
+            user_required_prop = await db.user_properties.find_one(
+                {"user_id": current_user["id"], "property_id": required_prop_id},
+                {"_id": 0}
+            )
+            if not user_required_prop:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"You must own {required_prop['name']} first"
+                )
+            if user_required_prop.get("level", 0) < required_prop["max_level"]:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"You must fully upgrade {required_prop['name']} (level {required_prop['max_level']}) before buying this property"
+                )
     
     user_prop = await db.user_properties.find_one(
         {"user_id": current_user["id"], "property_id": property_id},
@@ -5013,17 +5066,18 @@ HITLIST_NPC_NAMES = [
     "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
 ]
 # Templates: rank 1-11 (RANKS id), rewards: cash, points, rank_points, bullets, car_id, booze={booze_id: amount} (booze_run ids)
+# ECONOMY REBALANCE: Reduced rewards ~60-70% to prevent inflation
 HITLIST_NPC_TEMPLATES = [
-    {"id": "npc_1", "rank": 2, "rewards": {"cash": 50_000, "booze": {"bathtub_gin": 15}}},
-    {"id": "npc_2", "rank": 4, "rewards": {"points": 300, "car_id": "car2"}},
-    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 40, "bullets": 2000}},
-    {"id": "npc_4", "rank": 3, "rewards": {"cash": 80_000, "booze": {"moonshine": 25}}},
-    {"id": "npc_5", "rank": 6, "rewards": {"points": 600, "rank_points": 30}},
-    {"id": "npc_6", "rank": 6, "rewards": {"cash": 120_000, "bullets": 1500, "booze": {"rum_runners": 20}, "points": 200}},
-    {"id": "npc_7", "rank": 5, "rewards": {"cash": 150_000, "points": 400, "car_id": "car7"}},
-    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 75, "bullets": 3000, "points": 500}},
-    {"id": "npc_9", "rank": 3, "rewards": {"cash": 40_000, "booze": {"speakeasy_whiskey": 10, "needle_beer": 10}}},
-    {"id": "npc_10", "rank": 7, "rewards": {"cash": 200_000, "booze": {"jamaica_ginger": 30}, "points": 250}},
+    {"id": "npc_1", "rank": 2, "rewards": {"cash": 15_000, "booze": {"bathtub_gin": 8}}},
+    {"id": "npc_2", "rank": 4, "rewards": {"points": 150, "car_id": "car2"}},
+    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 25, "bullets": 800}},
+    {"id": "npc_4", "rank": 3, "rewards": {"cash": 25_000, "booze": {"moonshine": 12}}},
+    {"id": "npc_5", "rank": 6, "rewards": {"points": 300, "rank_points": 18}},
+    {"id": "npc_6", "rank": 6, "rewards": {"cash": 40_000, "bullets": 600, "booze": {"rum_runners": 10}, "points": 100}},
+    {"id": "npc_7", "rank": 5, "rewards": {"cash": 50_000, "points": 200, "car_id": "car7"}},
+    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 45, "bullets": 1200, "points": 250}},
+    {"id": "npc_9", "rank": 3, "rewards": {"cash": 12_000, "booze": {"speakeasy_whiskey": 5, "needle_beer": 5}}},
+    {"id": "npc_10", "rank": 7, "rewards": {"cash": 70_000, "booze": {"jamaica_ginger": 15}, "points": 125}},
 ]
 
 @api_router.post("/hitlist/add")
@@ -6325,7 +6379,8 @@ def _booze_prices_for_rotation():
         for booze_i in range(n_booze):
             # Deterministic: no random module
             base = 200 + (loc_i * 100) + (booze_i * 80) + (idx % 17) * 20
-            spread = 150 + (idx + loc_i + booze_i) % 200
+            # ECONOMY REBALANCE: Reduced profit spread by ~60% (was 150-350, now 60-140)
+            spread = 60 + (idx + loc_i + booze_i) % 80
             buy = min(2000, max(100, base))
             sell = buy + spread
             out[(loc_i, booze_i)] = (buy, sell)
@@ -9851,15 +9906,16 @@ async def init_game_data():
     # SAFETY: Only updating crimes collection (game config), not user data
     logging.info("🔄 Initializing game data (crimes, weapons)...")
     await db.crimes.delete_many({})
+    # ECONOMY REBALANCE: Reduced payouts by ~70% to prevent inflation on fresh DB
     crimes = [
-        {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 50, "reward_max": 200, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
-        {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 100, "reward_max": 400, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
-        {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 2, "reward_min": 500, "reward_max": 1500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
-        {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 3, "reward_min": 2000, "reward_max": 5000, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
-        {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 4, "reward_min": 5000, "reward_max": 12000, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
-        {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 5, "reward_min": 10000, "reward_max": 25000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
-        {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 7, "reward_min": 50000, "reward_max": 150000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
-        {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 9, "reward_min": 200000, "reward_max": 500000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
+        {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 20, "reward_max": 60, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
+        {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 40, "reward_max": 120, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
+        {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 2, "reward_min": 200, "reward_max": 500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
+        {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 3, "reward_min": 800, "reward_max": 1800, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
+        {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 4, "reward_min": 2000, "reward_max": 4500, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
+        {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 5, "reward_min": 4000, "reward_max": 9000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
+        {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 7, "reward_min": 18000, "reward_max": 50000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
+        {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 9, "reward_min": 70000, "reward_max": 180000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
     ]
     await db.crimes.insert_many(crimes)
     
@@ -9881,11 +9937,13 @@ async def init_game_data():
     
     properties_count = await db.properties.count_documents({})
     if properties_count == 0:
+        # ECONOMY REBALANCE: Reduced income_per_hour by ~60% for healthier economy
+        # PROGRESSION: Each property requires previous one to be maxed out (required_property_id)
         properties = [
-            {"id": "prop1", "name": "Speakeasy", "property_type": "casino", "price": 5000, "income_per_hour": 100, "max_level": 10},
-            {"id": "prop2", "name": "Bullet Factory", "property_type": "factory", "price": 20000, "income_per_hour": 500, "max_level": 5},
-            {"id": "prop3", "name": "Underground Casino", "property_type": "casino", "price": 50000, "income_per_hour": 1000, "max_level": 8},
-            {"id": "prop4", "name": "Luxury Casino", "property_type": "casino", "price": 200000, "income_per_hour": 5000, "max_level": 5}
+            {"id": "prop1", "name": "Speakeasy", "property_type": "casino", "price": 5000, "income_per_hour": 50, "max_level": 10, "required_property_id": None},
+            {"id": "prop2", "name": "Bullet Factory", "property_type": "factory", "price": 25000, "income_per_hour": 150, "max_level": 10, "required_property_id": "prop1"},
+            {"id": "prop3", "name": "Underground Casino", "property_type": "casino", "price": 75000, "income_per_hour": 400, "max_level": 10, "required_property_id": "prop2"},
+            {"id": "prop4", "name": "Luxury Casino", "property_type": "casino", "price": 250000, "income_per_hour": 1200, "max_level": 10, "required_property_id": "prop3"}
         ]
         await db.properties.insert_many(properties)
     

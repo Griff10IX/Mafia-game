@@ -104,6 +104,21 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     money = int(user.get("money", 0) or 0) if user else 0
     if amount > money:
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
+    
+    # ECONOMY LIMIT: Max $50M total in unclaimed interest deposits
+    MAX_INTEREST_DEPOSITS = 50_000_000
+    existing_deposits = await db.bank_deposits.aggregate([
+        {"$match": {"user_id": current_user["id"], "claimed_at": None}},
+        {"$group": {"_id": None, "total_principal": {"$sum": "$principal"}}}
+    ]).to_list(1)
+    current_total = int(existing_deposits[0].get("total_principal", 0)) if existing_deposits else 0
+    
+    if current_total + amount > MAX_INTEREST_DEPOSITS:
+        remaining = MAX_INTEREST_DEPOSITS - current_total
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Maximum ${MAX_INTEREST_DEPOSITS:,} in interest deposits allowed. You have ${current_total:,} deposited. You can deposit up to ${remaining:,} more."
+        )
 
     now = datetime.now(timezone.utc)
     matures = now + timedelta(hours=hours)

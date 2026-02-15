@@ -43,6 +43,30 @@ def _npc_bust_success_rate(npc_rank_name: str | None) -> float:
     return NPC_BUST_SUCCESS_BY_RANK_NAME.get(npc_rank_name or "", 0.5)
 
 
+def _player_bust_success_rate(total_busts: int) -> float:
+    """Calculate player bust success rate based on experience (total busts). SKILL-BASED PROGRESSION - 25k busts for max 85%"""
+    if total_busts < 250:
+        return 0.03  # 3% - Everyone starts here
+    elif total_busts < 500:
+        return 0.08  # 8%
+    elif total_busts < 1000:
+        return 0.12  # 12%
+    elif total_busts < 2000:
+        return 0.18  # 18%
+    elif total_busts < 4000:
+        return 0.25  # 25%
+    elif total_busts < 7000:
+        return 0.35  # 35%
+    elif total_busts < 12000:
+        return 0.45  # 45%
+    elif total_busts < 18000:
+        return 0.60  # 60%
+    elif total_busts < 25000:
+        return 0.75  # 75%
+    else:
+        return 0.85  # 85% - Master buster at 25k
+
+
 async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     real_players_raw = await db.users.find(
@@ -82,20 +106,17 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
                 "rank_name": rank_name,
                 "is_npc": False,
                 "is_self": player["id"] == current_user["id"],
-                "bust_success_rate": 70,
                 "rp_reward": 15,
                 "bust_reward_cash": reward_cash,
             }
         )
     for npc in npcs:
-        npc_rate = _npc_bust_success_rate(npc.get("rank_name"))
         bust_reward_cash = int((npc.get("bust_reward_cash") or 0) or 0)
         players_data.append(
             {
                 "username": npc["username"],
                 "rank_name": npc.get("rank_name", "Goon"),
                 "is_npc": True,
-                "bust_success_rate": int(round(npc_rate * 100)),
                 "rp_reward": 25,
                 "bust_reward_cash": bust_reward_cash,
             }
@@ -106,12 +127,16 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
 async def bust_out_of_jail(
     request: BustOutRequest, current_user: dict = Depends(get_current_user)
 ):
+    # Get player's bust skill level (total successful busts)
+    total_busts = int(current_user.get("jail_busts", 0) or 0)
+    player_success_rate = _player_bust_success_rate(total_busts)
+    
     npc = await db.jail_npcs.find_one(
         {"username": request.target_username}, {"_id": 0}
     )
     if npc:
-        success_rate = _npc_bust_success_rate(npc.get("rank_name"))
-        success = random.random() < success_rate
+        # Use player skill directly for NPCs (no difficulty modifier)
+        success = random.random() < player_success_rate
         rank_points = 25
         bust_reward_cash = int((npc.get("bust_reward_cash") or 0) or 0)
         if success:
@@ -153,7 +178,8 @@ async def bust_out_of_jail(
         )
     if not target.get("in_jail"):
         raise HTTPException(status_code=400, detail="Target is not in jail")
-    success = random.random() < 0.7
+    # Use player's skill-based success rate (no NPC difficulty modifier for real players)
+    success = random.random() < player_success_rate
     if success:
         rank_points = 15
         await db.users.update_one(
@@ -332,10 +358,10 @@ async def spawn_jail_npcs():
                 existing = await db.jail_npcs.find_one({"username": npc_name})
                 if not existing:
                     rank_name = random.choices(rank_names, weights=weights, k=1)[0]
-                    # Cash reward scales with rank (higher rank = more cash)
+                    # Cash reward scales with rank (ECONOMY REBALANCE: reduced by ~80%, now lower than crimes)
                     rank_index = rank_names.index(rank_name) if rank_name in rank_names else 0
-                    cash_min = 10_000 + rank_index * 15_000
-                    cash_max = 50_000 + rank_index * 25_000
+                    cash_min = 1_000 + rank_index * 1_500
+                    cash_max = 3_000 + rank_index * 2_500
                     bust_reward_cash = random.randint(cash_min, cash_max)
                     await db.jail_npcs.insert_one({
                         "username": npc_name,
