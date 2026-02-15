@@ -622,6 +622,15 @@ export default function Dice() {
               </button>
 
               <button
+                onClick={() => setShowSellModal(true)}
+                disabled={claimLoading}
+                className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <ArrowRightLeft size={16} />
+                Sell on Quick Trade
+              </button>
+
+              <button
                 onClick={resetDiceProfit}
                 disabled={claimLoading}
                 className="w-full bg-secondary border border-border text-foreground hover:bg-secondary/80 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider disabled:opacity-50"
