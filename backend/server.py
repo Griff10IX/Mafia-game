@@ -301,7 +301,7 @@ TRAVEL_TIMES = {
 
 AIRPORT_COST = 10  # Default points per airport travel when unowned
 AIRPORT_PRICE_MAX = 50  # Max points per travel owner can set
-AIRPORT_SLOTS_PER_STATE = 4
+AIRPORT_SLOTS_PER_STATE = 1
 MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25  # Points for 5 extra travels
 
@@ -8339,7 +8339,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         except Exception:
             pass
     carrying_booze = _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0
-    # Airports: 4 per state, ownable; owner gets points (max 50 per travel)
+    # Airports: 1 per state, ownable; owner gets points (max 50 per travel)
     airports = []
     for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):
         doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
@@ -8507,7 +8507,7 @@ class AirportSetPriceRequest(BaseModel):
 
 @api_router.get("/airports")
 async def list_airports(current_user: dict = Depends(get_current_user)):
-    """List all airport slots (4 per state) for overview tables."""
+    """List all airports (1 per state) for overview tables."""
     result = []
     for state in STATES:
         for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):

@@ -1,4 +1,4 @@
-# Entertainer Forum: auto dice games and gbox (1–10 players, auto roll/split on full or after 60s)
+# Entertainer Forum: free entry, random prizes (points/cash/bullets/cars). Dice = one winner; Gbox = everyone gets a random reward.
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
@@ -9,26 +9,132 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, send_notification_to_all, _is_admin
+from server import db, get_current_user, send_notification_to_all, _is_admin, CARS
 
 AUTO_ROLL_AFTER_SECONDS = 60
 ENTERTAINER_CONFIG_KEY = "entertainer_config"
+
+# Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
+E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
+
+REWARD_TYPES = [
+    "points",           # 5-50 points
+    "cash",             # $100-$2000
+    "bullets",          # 1-25 bullets
+    "cash_bullets",     # cash + bullets
+    "cash_points",      # cash + points
+    "bullets_points",   # bullets + points
+    "cash_bullets_points",  # all three
+    "car",              # 1 random car
+    "two_cars",         # 2 random cars
+    "car_cash",         # 1 car + cash
+]
+
+def _random_cash():
+    return random.randint(100, 2000)
+
+def _random_points():
+    return random.randint(5, 50)
+
+def _random_bullets():
+    return random.randint(1, 25)
+
+
+async def _give_random_reward(user_id: str) -> dict:
+    """Apply a random reward to user. Returns description for result."""
+    reward_type = random.choice(REWARD_TYPES)
+    desc = {"reward_type": reward_type, "points": 0, "money": 0, "bullets": 0, "cars": []}
+    updates = {}
+    if reward_type == "points":
+        amt = _random_points()
+        updates["points"] = amt
+        desc["points"] = amt
+    elif reward_type == "cash":
+        amt = _random_cash()
+        updates["money"] = amt
+        desc["money"] = amt
+    elif reward_type == "bullets":
+        amt = _random_bullets()
+        updates["bullets"] = amt
+        desc["bullets"] = amt
+    elif reward_type == "cash_bullets":
+        c, b = _random_cash(), _random_bullets()
+        updates["money"], updates["bullets"] = c, b
+        desc["money"], desc["bullets"] = c, b
+    elif reward_type == "cash_points":
+        c, p = _random_cash(), _random_points()
+        updates["money"], updates["points"] = c, p
+        desc["money"], desc["points"] = c, p
+    elif reward_type == "bullets_points":
+        b, p = _random_bullets(), _random_points()
+        updates["bullets"], updates["points"] = b, p
+        desc["bullets"], desc["points"] = b, p
+    elif reward_type == "cash_bullets_points":
+        c, b, p = _random_cash(), _random_bullets(), _random_points()
+        updates["money"], updates["bullets"], updates["points"] = c, b, p
+        desc["money"], desc["bullets"], desc["points"] = c, b, p
+    elif reward_type == "car":
+        if E_GAME_CAR_IDS:
+            car_id = random.choice(E_GAME_CAR_IDS)
+            car = next((c for c in CARS if c.get("id") == car_id), None)
+            if car:
+                await db.user_cars.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "car_id": car_id,
+                    "car_name": car.get("name", car_id),
+                    "acquired_at": datetime.now(timezone.utc).isoformat(),
+                })
+                desc["cars"] = [car.get("name", car_id)]
+    elif reward_type == "two_cars":
+        if E_GAME_CAR_IDS:
+            chosen = random.sample(E_GAME_CAR_IDS, min(2, len(E_GAME_CAR_IDS)))
+            for car_id in chosen:
+                car = next((c for c in CARS if c.get("id") == car_id), None)
+                if car:
+                    await db.user_cars.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "car_id": car_id,
+                        "car_name": car.get("name", car_id),
+                        "acquired_at": datetime.now(timezone.utc).isoformat(),
+                    })
+                    desc["cars"].append(car.get("name", car_id))
+    elif reward_type == "car_cash":
+        c = _random_cash()
+        updates["money"] = c
+        desc["money"] = c
+        if E_GAME_CAR_IDS:
+            car_id = random.choice(E_GAME_CAR_IDS)
+            car = next((c for c in CARS if c.get("id") == car_id), None)
+            if car:
+                await db.user_cars.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "car_id": car_id,
+                    "car_name": car.get("name", car_id),
+                    "acquired_at": datetime.now(timezone.utc).isoformat(),
+                })
+                desc["cars"] = [car.get("name", car_id)]
+    if updates:
+        inc = {k: v for k, v in updates.items() if v}
+        if inc:
+            await db.users.update_one({"id": user_id}, {"$inc": inc})
+    return desc
 
 
 class CreateGameRequest(BaseModel):
     game_type: str  # "dice" | "gbox"
     max_players: int = 10
-    join_fee: int = 0
+    join_fee: int = 0  # ignored; games are free
 
 
 async def _run_dice_payout(game: dict):
-    """Each player is assigned a number 1–N. One roll (1–N): that number wins the whole pot. No re-roll, no tie."""
+    """One winner by roll; winner gets a random reward (points/cash/bullets/cars)."""
     participants = game.get("participants") or []
     if not participants:
-        return
-    pot = game.get("pot", 0)
+        return None
     n = len(participants)
-    # Assign each player a unique number 1..n (shuffle then assign)
     order = list(participants)
     random.shuffle(order)
     number_to_uid = {}
@@ -41,48 +147,34 @@ async def _run_dice_payout(game: dict):
             assignments.append({"user_id": uid, "username": p.get("username"), "number": num})
     roll = random.randint(1, n)
     winner_id = number_to_uid.get(roll)
-    if winner_id and pot > 0:
-        await db.users.update_one({"id": winner_id}, {"$inc": {"money": pot}})
     winner_username = next((a["username"] for a in assignments if a["user_id"] == winner_id), None)
-    return {"assignments": assignments, "roll": roll, "winner_id": winner_id, "winner_username": winner_username}
+    reward = None
+    if winner_id:
+        reward = await _give_random_reward(winner_id)
+    return {"assignments": assignments, "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "reward": reward}
 
 
 async def _run_gbox_payout(game: dict):
-    """Split the pot between everyone with random shares (random % each, not equal)."""
+    """Each participant gets a random reward (points/cash/bullets/cars)."""
     participants = game.get("participants") or []
     if not participants:
-        return
-    pot = game.get("pot", 0)
-    n = len(participants)
-    # Random positive weights, normalize to sum to 1
-    weights = [random.random() + 0.01 for _ in range(n)]
-    total = sum(weights)
-    shares = [w / total for w in weights]
-    for i, p in enumerate(participants):
+        return None
+    rewards_by_user = {}
+    for p in participants:
         uid = p.get("user_id")
         if uid:
-            amount = int(round(pot * shares[i]))
-            if amount > 0:
-                await db.users.update_one({"id": uid}, {"$inc": {"money": amount}})
-    # Remainder from rounding goes to first participant
-    paid = sum(int(round(pot * s)) for s in shares)
-    remainder = pot - paid
-    if remainder > 0 and participants:
-        uid = participants[0].get("user_id")
-        if uid:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": remainder}})
-    percent_per_user = [round(100 * s, 1) for s in shares]
-    return {"percent_per_player": dict(zip([p.get("user_id") for p in participants], percent_per_user))}
+            rewards_by_user[uid] = await _give_random_reward(uid)
+    return {"rewards_by_user": rewards_by_user}
 
 
 async def _settle_game(game: dict):
-    """Run payout and mark game completed. Idempotent if already completed."""
+    """Run payout (random rewards) and mark game completed. Idempotent if already completed."""
     if game.get("status") == "completed":
         return
     participants = game.get("participants") or []
     now = datetime.now(timezone.utc).isoformat()
     result = None
-    if participants and game.get("pot", 0) >= 0:
+    if participants:
         if game.get("game_type") == "dice":
             result = await _run_dice_payout(game)
         else:
@@ -132,60 +224,38 @@ async def create_game(
     request: CreateGameRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a dice or gbox game. Creator joins as first participant and pays join_fee."""
+    """Create a dice or gbox game. Free to enter. Creator does not join automatically."""
     if request.game_type not in ("dice", "gbox"):
         raise HTTPException(status_code=400, detail="game_type must be dice or gbox")
     max_players = max(1, min(10, request.max_players))
-    join_fee = max(0, request.join_fee)
-    user_money = int(current_user.get("money") or 0)
-    if join_fee > user_money:
-        raise HTTPException(status_code=400, detail="Insufficient cash for join fee")
     game_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
-    participants = [{"user_id": current_user["id"], "username": current_user.get("username") or "?"}]
+    participants = []
     doc = {
         "id": game_id,
         "game_type": request.game_type,
         "max_players": max_players,
-        "join_fee": join_fee,
-        "pot": join_fee,
+        "join_fee": 0,
+        "pot": 0,
         "creator_id": current_user["id"],
         "creator_username": current_user.get("username") or "?",
         "participants": participants,
-        "status": "full" if max_players == 1 else "open",
+        "status": "open",
         "created_at": now,
         "completed_at": None,
         "result": None,
     }
     await db.entertainer_games.insert_one(doc)
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -join_fee}})
-    if max_players == 1:
-        doc["status"] = "completed"
-        doc["completed_at"] = now
-        if request.game_type == "dice":
-            res = await _run_dice_payout(doc)
-            doc["result"] = res
-        else:
-            res = await _run_gbox_payout(doc)
-            doc["result"] = res
-        await db.entertainer_games.update_one(
-            {"id": game_id},
-            {"$set": {"status": "completed", "completed_at": now, "result": doc.get("result")}},
-        )
     return {"id": game_id, "message": "Game created", "game": {**doc, "participants": participants}}
 
 
 async def join_game(game_id: str, current_user: dict = Depends(get_current_user)):
-    """Join an open game. Pay join_fee. If full after join, run payout automatically."""
+    """Join an open game. Free. If full after join, run random-reward payout automatically."""
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     if game.get("status") != "open":
         raise HTTPException(status_code=400, detail="Game is not open to join")
-    join_fee = game.get("join_fee", 0)
-    user_money = int(current_user.get("money") or 0)
-    if join_fee > user_money:
-        raise HTTPException(status_code=400, detail="Insufficient cash for join fee")
     participants = game.get("participants") or []
     if any(p.get("user_id") == current_user["id"] for p in participants):
         raise HTTPException(status_code=400, detail="Already in this game")
@@ -193,18 +263,16 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
     if len(participants) >= max_players:
         raise HTTPException(status_code=400, detail="Game is full")
     new_participants = participants + [{"user_id": current_user["id"], "username": current_user.get("username") or "?"}]
-    new_pot = game.get("pot", 0) + join_fee
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -join_fee}})
     is_full = len(new_participants) >= max_players
     updates = {
         "participants": new_participants,
-        "pot": new_pot,
+        "pot": 0,
         "status": "full" if is_full else "open",
     }
     if is_full:
         now = datetime.now(timezone.utc).isoformat()
         updates["completed_at"] = now
-        updated_game = {**game, **updates}
+        updated_game = {**game, "participants": new_participants, "pot": 0}
         if game.get("game_type") == "dice":
             res = await _run_dice_payout(updated_game)
             updates["result"] = res
@@ -214,7 +282,7 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
         updates["status"] = "completed"
     await db.entertainer_games.update_one({"id": game_id}, {"$set": updates})
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
-    return {"message": "Joined game" + (" — game full, payout done!" if is_full else ""), "game": updated}
+    return {"message": "Joined game" + (" — rewards rolled!" if is_full else ""), "game": updated}
 
 
 # ---------- Admin: manual roll ----------

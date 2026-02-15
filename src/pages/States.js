@@ -219,9 +219,12 @@ export default function States() {
           blackjack_owners: res.data?.blackjack_owners ?? {},
           horseracing_owners: res.data?.horseracing_owners ?? {},
         });
-        // Expand first city by default
-        if (res.data?.cities?.[0]) {
-          setExpandedCities({ [res.data.cities[0]]: true });
+        // Expand all cities by default
+        const citiesList = res.data?.cities ?? [];
+        if (citiesList.length) {
+          const all = {};
+          citiesList.forEach(c => { all[c] = true; });
+          setExpandedCities(all);
         }
       })
       .catch(() => toast.error('Failed to load states'))
