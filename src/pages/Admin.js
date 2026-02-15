@@ -66,8 +66,6 @@ export default function Admin() {
     });
   };
 
-  useEffect(() => { checkAdmin(); }, []);
-
   const checkAdmin = async () => {
     try {
       const response = await api.get('/admin/check');
@@ -80,6 +78,9 @@ export default function Admin() {
     } catch { setIsAdmin(false); }
     finally { setLoading(false); }
   };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { checkAdmin(); }, []);
 
   const fetchEventsStatus = async () => {
     try {

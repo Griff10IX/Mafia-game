@@ -27,9 +27,6 @@ import certifi
 # Import security module (anti-cheat and monitoring)
 import security as security_module
 
-# Import quicktrade module
-import quicktrade
-
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 # Also load project root .env if present (e.g. when running from root)
