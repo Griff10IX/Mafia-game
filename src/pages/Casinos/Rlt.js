@@ -707,6 +707,29 @@ export default function Rlt() {
     }
   };
 
+  const handleSellOnTrade = async () => {
+    const city = ownership?.current_city;
+    if (!city || ownerLoading) return;
+    
+    const points = parseInt(sellPoints);
+    if (!points || points <= 0) {
+      toast.error('Enter a valid point amount');
+      return;
+    }
+
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/roulette/sell-on-trade', { city, points });
+      toast.success(`Listed for ${points.toLocaleString()} points on Quick Trade!`);
+      setSellPoints('');
+      setTimeout(() => navigate('/quick-trade'), 1500);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to list');
+    } finally {
+      setOwnerLoading(false);
+    }
+  };
+
   const isOwner = !!ownership?.is_owner;
   const currentCity = ownership?.current_city || '—';
 
@@ -753,11 +776,14 @@ export default function Rlt() {
           config={config}
           onSetMaxBet={handleSetMaxBet}
           onTransfer={handleTransfer}
+          onSellOnTrade={handleSellOnTrade}
           loading={ownerLoading}
           newMaxBet={newMaxBet}
           setNewMaxBet={setNewMaxBet}
           transferUsername={transferUsername}
           setTransferUsername={setTransferUsername}
+          sellPoints={sellPoints}
+          setSellPoints={setSellPoints}
             />
           )}
         </div>
