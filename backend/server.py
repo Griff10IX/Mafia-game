@@ -6581,8 +6581,7 @@ def _booze_prices_for_rotation():
 
 
 # ============ TRAVEL ENDPOINTS ============
-
-STATES = ["Chicago", "New York", "Los Angeles", "Miami"]
+# STATES defined at top of file; do not redefine here
 
 # Casino games and max bets (same in every city; exposed for States page)
 CASINO_GAMES = [
