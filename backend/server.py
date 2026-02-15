@@ -6751,6 +6751,42 @@ async def get_states(current_user: dict = Depends(get_current_user)):
     }
 
 
+# ============ My Properties (1 casino + 1 property max) ============
+async def _user_owns_any_casino(user_id: str):
+    """Return first casino owned by user: {type, city, max_bet} or None. Rule: 1 casino only."""
+    for game_type, coll in [
+        ("dice", db.dice_ownership),
+        ("roulette", db.roulette_ownership),
+        ("blackjack", db.blackjack_ownership),
+        ("horseracing", db.horseracing_ownership),
+    ]:
+        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "max_bet": 1})
+        if doc:
+            return {"type": game_type, "city": doc.get("city"), "max_bet": doc.get("max_bet")}
+    return None
+
+
+async def _user_owns_any_property(user_id: str):
+    """Return first property owned by user: {type, state, ...} or None. Rule: 1 property only (airport, bullet_factory, or armory). Add armory when armory.js/ownership exists."""
+    doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1})
+    if doc:
+        return {"type": "airport", "state": doc.get("state"), "slot": doc.get("slot", 1), "price_per_travel": doc.get("price_per_travel")}
+    doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
+    if doc:
+        return {"type": "bullet_factory", "state": doc.get("state"), "price_per_bullet": doc.get("price_per_bullet")}
+    # TODO: when armory ownership exists, check db.armory_ownership (or similar) and return {"type": "armory", "state": ...}
+    return None
+
+
+@api_router.get("/my-properties")
+async def get_my_properties(current_user: dict = Depends(get_current_user)):
+    """Return current user's one casino (if any) and one property (if any). Rule: max 1 casino, max 1 property."""
+    user_id = current_user["id"]
+    casino = await _user_owns_any_casino(user_id)
+    property_ = await _user_owns_any_property(user_id)
+    return {"casino": casino, "property": property_}
+
+
 # ============ Casino Dice Game API ============
 DICE_CLAIM_COST_POINTS = 0  # cost in points to claim a dice table (0 = free)
 
@@ -6941,10 +6977,13 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
 
 @api_router.post("/casino/dice/claim")
 async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depends(get_current_user)):
-    """Claim ownership of the dice table in a city (cost in points)."""
+    """Claim ownership of the dice table in a city (cost in points). Max 1 casino per player."""
     city = _normalize_city_for_dice((request.city or "").strip())
     if not city or city not in STATES:
         raise HTTPException(status_code=400, detail="Invalid city")
+    owned = await _user_owns_any_casino(current_user["id"])
+    if owned and (owned.get("type") != "dice" or owned.get("city") != city):
+        raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
     user_city = _normalize_city_for_dice((current_user.get("current_state") or "").strip())
     if user_city != city:
         raise HTTPException(status_code=400, detail="You must be in this city to claim the dice table")
@@ -7245,11 +7284,13 @@ async def casino_roulette_ownership(current_user: dict = Depends(get_current_use
 
 @api_router.post("/casino/roulette/claim")
 async def casino_roulette_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
-    """Claim ownership of an unclaimed roulette table."""
+    """Claim ownership of an unclaimed roulette table. Max 1 casino per player."""
     city = _normalize_city_for_roulette((request.city or "").strip())
     if not city or city not in STATES:
         raise HTTPException(status_code=400, detail="Invalid city")
-    
+    owned = await _user_owns_any_casino(current_user["id"])
+    if owned and (owned.get("type") != "roulette" or owned.get("city") != city):
+        raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
     stored_city, doc = await _get_roulette_ownership_doc(city)
     if doc and doc.get("owner_id"):
         raise HTTPException(status_code=400, detail="This table already has an owner")
@@ -7581,9 +7622,13 @@ async def casino_blackjack_ownership(current_user: dict = Depends(get_current_us
 
 @api_router.post("/casino/blackjack/claim")
 async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    """Claim blackjack table. Max 1 casino per player."""
     city = _normalize_city_for_blackjack((request.city or "").strip())
     if not city or city not in STATES:
         raise HTTPException(status_code=400, detail="Invalid city")
+    owned = await _user_owns_any_casino(current_user["id"])
+    if owned and (owned.get("type") != "blackjack" or owned.get("city") != city):
+        raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
     stored_city, doc = await _get_blackjack_ownership_doc(city)
     if doc and doc.get("owner_id"):
         raise HTTPException(status_code=400, detail="This table already has an owner")
@@ -8183,9 +8228,13 @@ async def casino_horseracing_ownership(current_user: dict = Depends(get_current_
 
 @api_router.post("/casino/horseracing/claim")
 async def casino_horseracing_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    """Claim race track. Max 1 casino per player."""
     city = _normalize_city_for_horseracing((request.city or "").strip())
     if not city or city not in STATES:
         raise HTTPException(status_code=400, detail="Invalid city")
+    owned = await _user_owns_any_casino(current_user["id"])
+    if owned and (owned.get("type") != "horseracing" or owned.get("city") != city):
+        raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
     stored_city, doc = await _get_horseracing_ownership_doc(city)
     if doc and doc.get("owner_id"):
         raise HTTPException(status_code=400, detail="This track already has an owner")
@@ -8611,7 +8660,10 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
         raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
-    # Must be in the same city to claim its airport
+    # Must be in the same city to claim its airport. Max 1 property per player.
+    owned_prop = await _user_owns_any_property(current_user["id"])
+    if owned_prop and (owned_prop.get("type") != "airport" or owned_prop.get("state") != req.state):
+        raise HTTPException(status_code=400, detail="You may only own 1 property (airport or bullet factory). Relinquish it first (My Properties or States).")
     user_location = (current_user.get("current_state") or "").strip()
     if user_location != req.state:
         raise HTTPException(status_code=400, detail=f"You must be in {req.state} to claim this airport. Travel there first.")

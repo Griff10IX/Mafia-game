@@ -144,11 +144,26 @@ async def get_bullet_factory_list(current_user: dict = Depends(get_current_user)
     return {"factories": result}
 
 
+async def _user_owns_any_property(user_id: str):
+    """Check if user owns any property (airport, bullet factory, or armory). Max 1 per player. Add armory when armory ownership exists."""
+    from server import db
+    doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1})
+    if doc:
+        return {"type": "airport", "state": doc.get("state")}
+    doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1})
+    if doc:
+        return {"type": "bullet_factory", "state": doc.get("state")}
+    return None
+
+
 async def claim_bullet_factory(
     body: StateOptionalRequest = Body(default=StateOptionalRequest()),
     current_user: dict = Depends(get_current_user),
 ):
-    """Pay to become the bullet factory owner in this state."""
+    """Pay to become the bullet factory owner in this state. Max 1 property per player."""
+    owned_prop = await _user_owns_any_property(current_user["id"])
+    if owned_prop:
+        raise HTTPException(status_code=400, detail="You may only own 1 property (airport or bullet factory). Relinquish it first (My Properties or States).")
     state = _normalize_state(body.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id"):

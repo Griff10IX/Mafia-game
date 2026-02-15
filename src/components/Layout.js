@@ -255,6 +255,7 @@ export default function Layout({ children }) {
     { path: '/bodyguards', icon: Shield, label: 'Bodyguards' },
     { path: '/travel', icon: Plane, label: 'Travel' },
     { path: '/states', icon: MapPin, label: 'States' },
+    { path: '/my-properties', icon: Building2, label: 'My Properties' },
     { path: '/booze-run', icon: Wine, label: 'Booze Run' },
     { path: '/users-online', icon: Users, label: 'Users Online' },
     { path: '/forum', icon: MessageSquare, label: 'Forum' },

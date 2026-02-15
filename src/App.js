@@ -33,6 +33,7 @@ import Store from "./pages/Store";
 import Admin from "./pages/Admin";
 import Travel from "./pages/Travel";
 import States from "./pages/States";
+import MyProperties from "./pages/MyProperties";
 import BoozeRun from "./pages/BoozeRun.js";
 import Inbox from "./pages/Inbox";
 import InboxChat from "./pages/InboxChat";
@@ -458,6 +459,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <States />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/my-properties"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MyProperties />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
