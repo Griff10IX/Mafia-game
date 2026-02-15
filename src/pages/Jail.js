@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Lock, Users, AlertCircle, Zap, DoorOpen } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -357,6 +357,7 @@ export default function Jail() {
           msg += ` +$${Number(response.data.cash_reward).toLocaleString()}`;
         }
         toast.success(msg);
+        refreshUser();
       } else {
         toast.error(response.data.message);
       }

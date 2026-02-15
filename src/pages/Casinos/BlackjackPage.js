@@ -30,12 +30,11 @@ function Card({ card, hidden, index = 0 }) {
   if (hidden) {
     return (
       <div
-        className="w-10 h-14 sm:w-12 sm:h-16 rounded border-2 border-primary/40 bg-gradient-to-br from-primary/20 via-zinc-800 to-zinc-900 flex items-center justify-center shadow-lg"
+        className="w-12 h-16 sm:w-14 sm:h-20 rounded-lg border-2 border-primary/50 bg-gradient-to-br from-zinc-700 via-zinc-800 to-zinc-900 flex items-center justify-center shadow-lg relative overflow-hidden"
         style={{ animationDelay: `${index * 0.08}s` }}
       >
-        <div className="w-6 h-8 sm:w-7 sm:h-9 rounded-sm border border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
-          <span className="text-primary/40 text-xs">♦</span>
-        </div>
+        <div className="absolute inset-1 rounded border border-primary/20 bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(234,179,8,0.1)_4px,rgba(234,179,8,0.1)_8px)]" />
+        <span className="text-primary/60 text-2xl relative z-10">♦</span>
       </div>
     );
   }
@@ -45,21 +44,26 @@ function Card({ card, hidden, index = 0 }) {
   
   return (
     <div
-      className={`w-10 h-14 sm:w-12 sm:h-16 rounded border bg-gradient-to-br from-white to-gray-100 flex flex-col justify-between p-1 shadow-lg ${
-        isRed ? 'border-red-300' : 'border-gray-300'
+      className={`w-12 h-16 sm:w-14 sm:h-20 rounded-lg border-2 bg-gradient-to-br from-gray-50 to-gray-200 shadow-lg relative overflow-hidden ${
+        isRed ? 'border-red-200' : 'border-gray-300'
       }`}
       style={{ animationDelay: `${index * 0.08}s` }}
     >
-      <div className={`text-[10px] sm:text-xs font-bold leading-none ${s.color}`}>
-        {card.value}
-        <span className="block text-[8px] sm:text-[10px]">{s.sym}</span>
+      {/* Top left */}
+      <div className={`absolute top-1 left-1.5 leading-none ${isRed ? 'text-red-500' : 'text-gray-800'}`}>
+        <div className="text-xs sm:text-sm font-bold">{card.value}</div>
+        <div className="text-[10px] sm:text-xs -mt-0.5">{s.sym}</div>
       </div>
-      <div className={`text-lg sm:text-xl leading-none self-center ${s.color}`}>
-        {s.sym}
+      
+      {/* Center suit */}
+      <div className={`absolute inset-0 flex items-center justify-center ${isRed ? 'text-red-500' : 'text-gray-800'}`}>
+        <span className="text-2xl sm:text-3xl">{s.sym}</span>
       </div>
-      <div className={`text-[10px] sm:text-xs font-bold leading-none self-end rotate-180 ${s.color}`}>
-        {card.value}
-        <span className="block text-[8px] sm:text-[10px]">{s.sym}</span>
+      
+      {/* Bottom right (rotated) */}
+      <div className={`absolute bottom-1 right-1.5 leading-none rotate-180 ${isRed ? 'text-red-500' : 'text-gray-800'}`}>
+        <div className="text-xs sm:text-sm font-bold">{card.value}</div>
+        <div className="text-[10px] sm:text-xs -mt-0.5">{s.sym}</div>
       </div>
     </div>
   );
@@ -404,41 +408,41 @@ export default function Blackjack() {
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎴 The Table</span>
           </div>
           
-          <div className="p-3">
+          <div className="p-4">
             {!game ? (
               /* Betting UI */
-              <div className="flex flex-wrap items-center justify-center gap-3 py-4">
+              <div className="flex flex-wrap items-center justify-center gap-3 py-6">
                 <div className="flex items-center gap-1">
-                  <span className="text-primary font-heading">$</span>
+                  <span className="text-primary font-heading text-lg">$</span>
                   <input
                     type="text"
                     inputMode="numeric"
                     placeholder="1000"
                     value={bet}
                     onChange={(e) => setBet(e.target.value)}
-                    className="w-28 bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground text-center focus:border-primary/50 focus:outline-none"
+                    className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded-lg px-4 py-2.5 text-base text-foreground text-center focus:border-primary/50 focus:outline-none font-heading"
                   />
                 </div>
                 <button
                   onClick={startGame}
                   disabled={!canPlay}
-                  className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-6 py-2 text-sm font-heading font-bold uppercase tracking-wide border border-yellow-600/50 disabled:opacity-50 transition-all touch-manipulation"
+                  className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded-lg px-8 py-2.5 text-sm font-heading font-bold uppercase tracking-wide border border-yellow-600/50 shadow-lg shadow-primary/20 disabled:opacity-50 transition-all touch-manipulation"
                 >
                   Deal
                 </button>
               </div>
             ) : (
               /* Active Game */
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {/* Dealer Hand */}
                 <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] text-mutedForeground uppercase tracking-wider">Dealer</span>
-                    <span className={`text-sm font-heading font-bold ${showDealerTotal && game?.dealer_total > 21 ? 'text-red-400' : 'text-primary'}`}>
+                  <div className="inline-flex items-center gap-2 mb-3 px-3 py-1 bg-zinc-800/50 rounded-full">
+                    <span className="text-xs text-mutedForeground uppercase tracking-wider font-heading">Dealer</span>
+                    <span className={`text-base font-heading font-bold ${showDealerTotal && game?.dealer_total > 21 ? 'text-red-400' : 'text-primary'}`}>
                       {showDealerTotal ? dealerTotal : '??'}
                     </span>
                   </div>
-                  <div className="flex justify-center gap-1.5 flex-wrap">
+                  <div className="flex justify-center gap-2">
                     {game.dealer_hand?.map((c, i) => (
                       <Card
                         key={i}
@@ -450,26 +454,30 @@ export default function Blackjack() {
                   </div>
                 </div>
 
-                {/* Divider with result */}
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-primary/20" />
-                  {(game.status === 'player_bust' || game.status === 'done') && (
-                    <span className={`text-sm font-heading font-bold ${outcomeClass(game.result)}`}>
+                {/* Result Banner */}
+                {(game.status === 'player_bust' || game.status === 'done') && (
+                  <div className={`text-center py-2 px-4 rounded-lg ${
+                    game.result === 'win' || game.result === 'blackjack' || game.result === 'dealer_bust'
+                      ? 'bg-emerald-500/20 border border-emerald-500/30'
+                      : game.result === 'push'
+                      ? 'bg-zinc-500/20 border border-zinc-500/30'
+                      : 'bg-red-500/20 border border-red-500/30'
+                  }`}>
+                    <span className={`text-lg font-heading font-bold ${outcomeClass(game.result)}`}>
                       {outcomeLabel(game.result)}
                     </span>
-                  )}
-                  <div className="flex-1 h-px bg-primary/20" />
-                </div>
+                  </div>
+                )}
 
                 {/* Player Hand */}
                 <div className="text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <span className="text-[10px] text-mutedForeground uppercase tracking-wider">You</span>
-                    <span className={`text-sm font-heading font-bold ${game?.player_total > 21 ? 'text-red-400' : 'text-primary'}`}>
+                  <div className="inline-flex items-center gap-2 mb-3 px-3 py-1 bg-zinc-800/50 rounded-full">
+                    <span className="text-xs text-mutedForeground uppercase tracking-wider font-heading">You</span>
+                    <span className={`text-base font-heading font-bold ${game?.player_total > 21 ? 'text-red-400' : 'text-primary'}`}>
                       {game.player_total ?? '??'}
                     </span>
                   </div>
-                  <div className="flex justify-center gap-1.5 flex-wrap">
+                  <div className="flex justify-center gap-2">
                     {game.player_hand?.map((c, i) => (
                       <Card key={i} card={c} index={i} />
                     ))}
@@ -477,18 +485,18 @@ export default function Blackjack() {
                 </div>
 
                 {/* Actions */}
-                <div className="flex justify-center gap-2 pt-2">
+                <div className="flex justify-center gap-3 pt-2">
                   {game.status === 'playing' ? (
                     <>
-                      <button onClick={hit} disabled={loading} className="flex-1 max-w-32 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-4 py-2 text-sm font-heading font-bold uppercase border border-yellow-600/50 disabled:opacity-50 touch-manipulation">
+                      <button onClick={hit} disabled={loading} className="w-28 sm:w-36 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide border border-yellow-600/50 shadow-lg shadow-primary/20 disabled:opacity-50 touch-manipulation">
                         Hit
                       </button>
-                      <button onClick={stand} disabled={loading} className="flex-1 max-w-32 bg-zinc-700/50 text-foreground rounded px-4 py-2 text-sm font-heading font-bold uppercase border border-zinc-600/50 disabled:opacity-50 touch-manipulation">
+                      <button onClick={stand} disabled={loading} className="w-28 sm:w-36 bg-zinc-700/80 hover:bg-zinc-600/80 text-foreground rounded-lg px-4 py-3 text-sm font-heading font-bold uppercase tracking-wide border border-zinc-600/50 disabled:opacity-50 touch-manipulation">
                         Stand
                       </button>
                     </>
                   ) : (
-                    <button onClick={playAgain} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-6 py-2 text-sm font-heading font-bold uppercase border border-yellow-600/50 touch-manipulation">
+                    <button onClick={playAgain} className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded-lg px-8 py-3 text-sm font-heading font-bold uppercase tracking-wide border border-yellow-600/50 shadow-lg shadow-primary/20 touch-manipulation">
                       Play Again
                     </button>
                   )}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Shield, Sword, DollarSign, Gem, Lock } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -69,6 +69,7 @@ export default function ArmourWeapons() {
     try {
       const res = await api.post('/armour/buy', { level });
       toast.success(res.data.message || 'Purchased armour');
+      refreshUser();
       await fetchAll();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to purchase armour');
@@ -108,6 +109,7 @@ export default function ArmourWeapons() {
     try {
       const response = await api.post(`/weapons/${weaponId}/buy`, { currency });
       toast.success(response.data.message);
+      refreshUser();
       fetchAll();
     } catch (error) {
       const detail = error.response?.data?.detail;

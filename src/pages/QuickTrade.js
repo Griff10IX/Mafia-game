@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -68,6 +68,7 @@ export default function QuickTrade() {
       setSellPoints('');
       setSellCost('');
       fetchTrades();
+      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create offer');
     }
@@ -88,6 +89,7 @@ export default function QuickTrade() {
       setBuyPoints('');
       setBuyOffer('');
       fetchTrades();
+      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to create offer');
     }
@@ -98,6 +100,7 @@ export default function QuickTrade() {
       await api.post(`/trade/${type}-offer/${offerId}/accept`);
       toast.success('Trade completed!');
       fetchTrades();
+      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Trade failed');
     }
@@ -109,6 +112,7 @@ export default function QuickTrade() {
       await api.delete(`/trade/${type}-offer/${offerId}`);
       toast.success('Offer cancelled and refunded!');
       fetchTrades();
+      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to cancel offer');
     }

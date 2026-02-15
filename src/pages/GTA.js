@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -374,8 +374,10 @@ export default function GTA() {
             </div>
           ) : undefined,
         });
+        refreshUser();
       } else if (response.data.jailed) {
         toast.error(response.data.message);
+        refreshUser();
       } else if (response.data.success === false && response.data.message) {
         toast.error(response.data.message);
       }

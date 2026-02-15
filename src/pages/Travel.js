@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Plane, Car, Clock, MapPin, Zap, ShoppingCart } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -300,6 +300,7 @@ export default function Travel() {
     try {
       const response = await api.post('/travel/buy-airmiles');
       toast.success(response.data.message);
+      refreshUser();
       fetchTravelInfo();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to buy airmiles');

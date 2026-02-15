@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Shield, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
