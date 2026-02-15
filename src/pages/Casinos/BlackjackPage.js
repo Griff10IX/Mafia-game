@@ -30,40 +30,42 @@ function Card({ card, hidden, index = 0 }) {
   if (hidden) {
     return (
       <div
-        className="w-12 h-16 sm:w-14 sm:h-20 rounded-lg border-2 border-primary/50 bg-gradient-to-br from-zinc-700 via-zinc-800 to-zinc-900 flex items-center justify-center shadow-lg relative overflow-hidden"
+        className="w-14 h-20 sm:w-16 sm:h-24 rounded-lg border-2 border-primary/50 bg-gradient-to-br from-zinc-700 via-zinc-800 to-zinc-900 flex items-center justify-center shadow-lg"
         style={{ animationDelay: `${index * 0.08}s` }}
       >
-        <div className="absolute inset-1 rounded border border-primary/20 bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,rgba(234,179,8,0.1)_4px,rgba(234,179,8,0.1)_8px)]" />
-        <span className="text-primary/60 text-2xl relative z-10">♦</span>
+        <div className="w-10 h-14 sm:w-12 sm:h-16 rounded border border-primary/30 bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+          <span className="text-primary/50 text-xl">♦</span>
+        </div>
       </div>
     );
   }
   
   const s = SUITS[card.suit] || { sym: '?', color: 'text-foreground' };
   const isRed = card.suit === 'H' || card.suit === 'D';
+  const textColor = isRed ? 'text-red-500' : 'text-gray-800';
   
   return (
     <div
-      className={`w-12 h-16 sm:w-14 sm:h-20 rounded-lg border-2 bg-gradient-to-br from-gray-50 to-gray-200 shadow-lg relative overflow-hidden ${
+      className={`w-14 h-20 sm:w-16 sm:h-24 rounded-lg border-2 bg-white shadow-lg flex flex-col justify-between p-1 sm:p-1.5 relative ${
         isRed ? 'border-red-200' : 'border-gray-300'
       }`}
       style={{ animationDelay: `${index * 0.08}s` }}
     >
       {/* Top left */}
-      <div className={`absolute top-1 left-1.5 leading-none ${isRed ? 'text-red-500' : 'text-gray-800'}`}>
+      <div className={`${textColor} leading-tight`}>
         <div className="text-xs sm:text-sm font-bold">{card.value}</div>
-        <div className="text-[10px] sm:text-xs -mt-0.5">{s.sym}</div>
+        <div className="text-xs sm:text-sm -mt-1">{s.sym}</div>
       </div>
       
-      {/* Center suit */}
-      <div className={`absolute inset-0 flex items-center justify-center ${isRed ? 'text-red-500' : 'text-gray-800'}`}>
-        <span className="text-2xl sm:text-3xl">{s.sym}</span>
+      {/* Center suit - absolute so it doesn't affect layout */}
+      <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${textColor}`}>
+        <span className="text-2xl sm:text-3xl opacity-90">{s.sym}</span>
       </div>
       
-      {/* Bottom right (rotated) */}
-      <div className={`absolute bottom-1 right-1.5 leading-none rotate-180 ${isRed ? 'text-red-500' : 'text-gray-800'}`}>
+      {/* Bottom right */}
+      <div className={`${textColor} leading-tight self-end rotate-180`}>
         <div className="text-xs sm:text-sm font-bold">{card.value}</div>
-        <div className="text-[10px] sm:text-xs -mt-0.5">{s.sym}</div>
+        <div className="text-xs sm:text-sm -mt-1">{s.sym}</div>
       </div>
     </div>
   );

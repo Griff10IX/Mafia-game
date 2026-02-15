@@ -5811,9 +5811,11 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             {"id": target["id"]},
             {"$set": {"health": new_health}}
         )
+        # Keep status as "found" so user can attack again (don't delete the search)
+        # Only record the last_attack_attempt for history
         await db.attacks.update_one(
             {"id": attack["id"]},
-            {"$set": {"status": "failed", "result": "failed"}}
+            {"$set": {"last_attack_result": "damaged", "last_attack_at": datetime.now(timezone.utc).isoformat()}}
         )
         health_pct_str = f"{health_dealt_pct:.1f}" if health_dealt_pct != int(health_dealt_pct) else str(int(health_dealt_pct))
         fail_message = f'You failed to kill {target_name}. You used {bullets_used:,} bullets — they only lost {health_pct_str}% health.'
