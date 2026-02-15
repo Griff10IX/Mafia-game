@@ -152,10 +152,10 @@ const CityCard = ({
         })}
       </div>
 
-      {/* Property: 1 Bullet Factory, 1 Airport, 1 Armoury per state — our style */}
+      {/* Properties: 1 Bullet Factory, 1 Airport, 1 Armoury per state */}
       <div className="border-t border-primary/30">
         <div className="px-4 py-2 bg-primary/5 border-b border-primary/20">
-          <h3 className="text-xs font-heading font-bold text-primary/90 uppercase tracking-widest">Property</h3>
+          <h3 className="text-xs font-heading font-bold text-primary/90 uppercase tracking-widest">Properties</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm font-heading">
@@ -177,7 +177,7 @@ const CityCard = ({
                     <span className="font-heading font-bold text-foreground">Bullet Factory</span>
                   </div>
                 </td>
-                <td className="py-2 px-3 text-mutedForeground font-heading">{bf?.owner_username ?? 'Unclaimed'}</td>
+                <td className="py-2 px-3 text-mutedForeground font-heading">{(bf?.owner_username != null && String(bf.owner_username).trim()) ? bf.owner_username : 'Unclaimed'}</td>
                 <td className="py-2 px-3 text-primary font-heading">{bf?.price_per_bullet != null ? `$${Number(bf.price_per_bullet).toLocaleString()}` : '—'}</td>
                 <td className="py-2 px-3 text-foreground font-heading">{bf?.accumulated_bullets != null ? `${bf.accumulated_bullets} Bullets` : '—'}</td>
               </tr>
@@ -190,7 +190,7 @@ const CityCard = ({
                     <span className="font-heading font-bold text-foreground">Airport</span>
                   </div>
                 </td>
-                <td className="py-2 px-3 text-mutedForeground font-heading">{ap?.owner_username ?? 'Unclaimed'}</td>
+                <td className="py-2 px-3 text-mutedForeground font-heading">{(ap?.owner_username != null && String(ap.owner_username).trim()) ? ap.owner_username : 'Unclaimed'}</td>
                 <td className="py-2 px-3 text-primary font-heading">{ap?.price_per_travel != null ? `${ap.price_per_travel} pts` : '10 pts'}</td>
                 <td className="py-2 px-3 text-mutedForeground">—</td>
               </tr>
@@ -203,7 +203,7 @@ const CityCard = ({
                     <span className="font-heading font-bold text-foreground">Armoury</span>
                   </div>
                 </td>
-                <td className="py-2 px-3 text-mutedForeground">—</td>
+                <td className="py-2 px-3 text-mutedForeground font-heading">Unclaimed</td>
                 <td className="py-2 px-3 text-mutedForeground">—</td>
                 <td className="py-2 px-3 text-amber-400/90 text-xs font-heading">Coming soon</td>
               </tr>
