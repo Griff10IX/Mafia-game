@@ -215,6 +215,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 }
             },
         )
+        await db.crime_earnings.insert_one(
+            {"user_id": current_user["id"], "amount": reward, "at": now}
+        )
         message = f"Success! You earned ${reward:,} and {rank_points} rank points"
     else:
         reward = None
@@ -257,12 +260,55 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     )
 
 
+async def get_crime_stats(current_user: dict = Depends(get_current_user)):
+    """Return profit in last hour, today (UTC), and last 7 days."""
+    now = datetime.now(timezone.utc)
+    last_hour_start = now - timedelta(hours=1)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    seven_days_start = now - timedelta(days=7)
+    pipeline = [
+        {"$match": {"user_id": current_user["id"]}},
+        {
+            "$facet": {
+                "last_hour": [
+                    {"$match": {"at": {"$gte": last_hour_start}}},
+                    {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+                ],
+                "today": [
+                    {"$match": {"at": {"$gte": today_start}}},
+                    {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+                ],
+                "last_7_days": [
+                    {"$match": {"at": {"$gte": seven_days_start}}},
+                    {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+                ],
+            }
+        },
+    ]
+    cursor = db.crime_earnings.aggregate(pipeline)
+    result = await cursor.to_list(1)
+    doc = result[0] if result else {}
+    def _sum(bucket):
+        arr = doc.get(bucket) or []
+        return int(arr[0]["total"]) if arr else 0
+    return {
+        "profit_last_hour": _sum("last_hour"),
+        "profit_today": _sum("today"),
+        "profit_last_7_days": _sum("last_7_days"),
+    }
+
+
 def register(router):
     router.add_api_route(
         "/crimes",
         get_crimes,
         methods=["GET"],
         response_model=List[CrimeResponse],
+    )
+    router.add_api_route(
+        "/crimes/stats",
+        get_crime_stats,
+        methods=["GET"],
     )
     router.add_api_route(
         "/crimes/{crime_id}/commit",

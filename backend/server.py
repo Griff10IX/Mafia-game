@@ -6753,24 +6753,27 @@ async def get_states(current_user: dict = Depends(get_current_user)):
 
 # ============ My Properties (1 casino + 1 property max) ============
 async def _user_owns_any_casino(user_id: str):
-    """Return first casino owned by user: {type, city, max_bet} or None. Rule: 1 casino only."""
+    """Return first casino owned by user: {type, city, max_bet, buy_back_reward?} or None. Rule: 1 casino only."""
     for game_type, coll in [
         ("dice", db.dice_ownership),
         ("roulette", db.roulette_ownership),
         ("blackjack", db.blackjack_ownership),
         ("horseracing", db.horseracing_ownership),
     ]:
-        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "max_bet": 1})
+        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1})
         if doc:
-            return {"type": game_type, "city": doc.get("city"), "max_bet": doc.get("max_bet")}
+            out = {"type": game_type, "city": doc.get("city"), "max_bet": doc.get("max_bet")}
+            if doc.get("buy_back_reward") is not None:
+                out["buy_back_reward"] = doc.get("buy_back_reward")
+            return out
     return None
 
 
 async def _user_owns_any_property(user_id: str):
     """Return first property owned by user: {type, state, ...} or None. Rule: 1 property only (airport, bullet_factory, or armory). Add armory when armory.js/ownership exists."""
-    doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1})
+    doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1, "total_earnings": 1})
     if doc:
-        return {"type": "airport", "state": doc.get("state"), "slot": doc.get("slot", 1), "price_per_travel": doc.get("price_per_travel")}
+        return {"type": "airport", "state": doc.get("state"), "slot": doc.get("slot", 1), "price_per_travel": doc.get("price_per_travel"), "total_earnings": doc.get("total_earnings", 0)}
     doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
     if doc:
         return {"type": "bullet_factory", "state": doc.get("state"), "price_per_bullet": doc.get("price_per_bullet")}
@@ -8552,6 +8555,10 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
                 {"id": owner_id},
                 {"$inc": {"points": airport_price}}
             )
+            await db.airport_ownership.update_one(
+                {"state": current_location, "slot": airport_slot},
+                {"$inc": {"total_earnings": airport_price}}
+            )
     elif request.travel_method == "custom":
         first_custom = await db.user_cars.find_one(
             {"user_id": current_user["id"], "car_id": "car_custom"},
@@ -8685,7 +8692,7 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="This airport slot is already owned")
     await db.airport_ownership.update_one(
         {"state": req.state, "slot": req.slot},
-        {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "price_per_travel": AIRPORT_COST}}
+        {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "price_per_travel": AIRPORT_COST, "total_earnings": 0}}
     )
     return {"message": f"You now own Airport #{req.slot} in {req.state}. Set price (max {AIRPORT_PRICE_MAX} pts) and earn points when players fly from here.", "state": req.state, "slot": req.slot}
 
@@ -8731,7 +8738,7 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
         raise HTTPException(status_code=400, detail="That user already owns a property")
     await db.airport_ownership.update_one(
         {"state": req.state, "slot": req.slot},
-        {"$set": {"owner_id": target["id"], "owner_username": target.get("username", target_username)}}
+        {"$set": {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}}
     )
     return {"message": f"Airport #{req.slot} in {req.state} transferred to {target.get('username', target_username)}"}
 
@@ -9423,7 +9430,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if state and slot is not None:
             await db.airport_ownership.update_one(
                 {"state": state, "slot": slot},
-                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username, "total_earnings": 0}},
                 upsert=True
             )
     

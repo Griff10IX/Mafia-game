@@ -61,7 +61,7 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ totalCrimes = 0, crimeProfit = 0 }) => (
+const PageHeader = ({ totalCrimes = 0, crimeProfit = 0, profitLastHour = 0, profitToday = 0, profitLast7Days = 0 }) => (
   <div className="flex flex-wrap items-end justify-between gap-4">
     <div>
       <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
@@ -73,7 +73,7 @@ const PageHeader = ({ totalCrimes = 0, crimeProfit = 0 }) => (
     </div>
     
     {/* Stats inline */}
-    <div className="flex items-center gap-4 text-xs font-heading">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-heading">
       <div className="flex items-center gap-1.5">
         <span className="text-mutedForeground">Total:</span>
         <span className="text-primary font-bold">{totalCrimes.toLocaleString()}</span>
@@ -81,6 +81,18 @@ const PageHeader = ({ totalCrimes = 0, crimeProfit = 0 }) => (
       <div className="flex items-center gap-1.5">
         <span className="text-mutedForeground">Profit:</span>
         <span className="text-primary font-bold">${Number(crimeProfit).toLocaleString()}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-mutedForeground">Last hour:</span>
+        <span className="text-primary font-bold">${Number(profitLastHour).toLocaleString()}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-mutedForeground">Today:</span>
+        <span className="text-primary font-bold">${Number(profitToday).toLocaleString()}</span>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-mutedForeground">Last 7 days:</span>
+        <span className="text-primary font-bold">${Number(profitLast7Days).toLocaleString()}</span>
       </div>
     </div>
   </div>
@@ -240,19 +252,22 @@ export default function Crimes() {
   const [user, setUser] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
+  const [crimeStats, setCrimeStats] = useState({ profit_last_hour: 0, profit_today: 0, profit_last_7_days: 0 });
 
   const fetchCrimes = async () => {
     try {
-      const [crimesRes, meRes, eventsRes] = await Promise.all([
+      const [crimesRes, meRes, eventsRes, statsRes] = await Promise.all([
         api.get('/crimes'),
         api.get('/auth/me'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        api.get('/crimes/stats').catch(() => ({ data: { profit_last_hour: 0, profit_today: 0, profit_last_7_days: 0 } })),
       ]);
       
       setCrimes(crimesRes.data);
       setUser(meRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
+      setCrimeStats(statsRes.data || { profit_last_hour: 0, profit_today: 0, profit_last_7_days: 0 });
     } catch (error) {
       toast.error('Failed to load crimes');
       console.error('Error fetching crimes:', error);
@@ -395,7 +410,13 @@ export default function Crimes() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="crimes-page">
-      <PageHeader totalCrimes={user?.total_crimes} crimeProfit={user?.crime_profit} />
+      <PageHeader
+        totalCrimes={user?.total_crimes}
+        crimeProfit={user?.crime_profit}
+        profitLastHour={crimeStats.profit_last_hour}
+        profitToday={crimeStats.profit_today}
+        profitLast7Days={crimeStats.profit_last_7_days}
+      />
 
       {user?.in_jail && <JailNotice />}
 

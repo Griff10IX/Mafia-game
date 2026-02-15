@@ -19,6 +19,9 @@ export default function MyProperties() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [casinoMaxBet, setCasinoMaxBet] = useState('');
+  const [casinoBuyBack, setCasinoBuyBack] = useState('');
+  const [casinoTransferUsername, setCasinoTransferUsername] = useState('');
+  const [casinoSellPoints, setCasinoSellPoints] = useState('');
   const [airportPrice, setAirportPrice] = useState('');
   const [airportTransferUsername, setAirportTransferUsername] = useState('');
   const [airportSellPoints, setAirportSellPoints] = useState('');
@@ -29,6 +32,7 @@ export default function MyProperties() {
       const res = await api.get('/my-properties');
       setData({ casino: res.data?.casino ?? null, property: res.data?.property ?? null });
       if (res.data?.casino?.max_bet != null) setCasinoMaxBet(String(res.data.casino.max_bet));
+      if (res.data?.casino?.buy_back_reward != null) setCasinoBuyBack(String(res.data.casino.buy_back_reward));
       if (res.data?.property?.type === 'airport' && res.data?.property?.price_per_travel != null)
         setAirportPrice(String(res.data.property.price_per_travel));
       if (res.data?.property?.type === 'bullet_factory') {
@@ -62,6 +66,59 @@ export default function MyProperties() {
     }
   };
 
+  const handleCasinoSetBuyBack = async () => {
+    const c = data.casino;
+    if (!c || saving || (c.type !== 'dice' && c.type !== 'blackjack')) return;
+    const amount = parseInt(String(casinoBuyBack).replace(/\D/g, ''), 10);
+    if (Number.isNaN(amount) || amount < 0) { toast.error('Enter 0 or more points'); return; }
+    setSaving(true);
+    try {
+      await api.post(`/casino/${c.type}/set-buy-back-reward`, c.type === 'dice' ? { city: c.city, amount } : { amount });
+      toast.success('Buy-back reward updated');
+      fetchMyProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCasinoTransfer = async () => {
+    const c = data.casino;
+    if (!c || saving) return;
+    const username = (casinoTransferUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setSaving(true);
+    try {
+      await api.post(`/casino/${c.type}/send-to-user`, { city: c.city, target_username: username });
+      toast.success('Casino transferred');
+      setCasinoTransferUsername('');
+      fetchMyProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCasinoSell = async () => {
+    const c = data.casino;
+    if (!c || saving) return;
+    const pts = parseInt(String(casinoSellPoints).replace(/\D/g, ''), 10);
+    if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
+    setSaving(true);
+    try {
+      await api.post(`/casino/${c.type}/sell-on-trade`, { city: c.city, points: pts });
+      toast.success('Casino listed on Quick Trade');
+      setCasinoSellPoints('');
+      fetchMyProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCasinoRelinquish = async () => {
     const c = data.casino;
     if (!c || saving || !window.confirm('Give up ownership of this casino?')) return;
@@ -71,6 +128,7 @@ export default function MyProperties() {
       toast.success('Relinquished');
       fetchMyProperties();
       setCasinoMaxBet('');
+      setCasinoBuyBack('');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -198,18 +256,62 @@ export default function MyProperties() {
                 </div>
                 <p className="text-[11px] text-mutedForeground mb-2">Max bet: {formatMoney(data.casino.max_bet)}</p>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Max bet</span>
                   <input
                     type="text"
                     value={casinoMaxBet}
                     onChange={(e) => setCasinoMaxBet(e.target.value)}
-                    placeholder="Max bet $"
-                    className="w-32 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                    placeholder="e.g. 500000000"
+                    className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleCasinoSetMaxBet} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
-                    {saving ? '...' : 'Set max bet'}
+                    {saving ? '...' : 'Set'}
                   </button>
                 </div>
-                <div className="flex gap-2 flex-wrap">
+                {(data.casino.type === 'dice' || data.casino.type === 'blackjack') && (
+                  <div className="flex flex-wrap gap-2 items-center mb-2">
+                    <span className="text-[11px] text-mutedForeground w-16 shrink-0">Buy-back (pts)</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={casinoBuyBack}
+                      onChange={(e) => setCasinoBuyBack(e.target.value)}
+                      placeholder="0"
+                      className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                    />
+                    <button type="button" onClick={handleCasinoSetBuyBack} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                      {saving ? '...' : 'Set'}
+                    </button>
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Transfer</span>
+                  <input
+                    type="text"
+                    value={casinoTransferUsername}
+                    onChange={(e) => setCasinoTransferUsername(e.target.value)}
+                    placeholder="Username"
+                    className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                  />
+                  <button type="button" onClick={handleCasinoTransfer} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                    {saving ? '...' : 'Send'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Sell (pts)</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={casinoSellPoints}
+                    onChange={(e) => setCasinoSellPoints(e.target.value)}
+                    placeholder="Points"
+                    className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                  />
+                  <button type="button" onClick={handleCasinoSell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                    {saving ? '...' : 'List'}
+                  </button>
+                </div>
+                <div className="flex gap-2 flex-wrap pt-1 border-t border-zinc-700/30 mt-2">
                   <Link to={CASINO_PATHS[data.casino.type] || '/casino'} className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
                     <LinkIcon size={12} /> Open table
                   </Link>
@@ -239,7 +341,8 @@ export default function MyProperties() {
                   <span className="font-heading font-bold text-foreground">Airport</span>
                   <span className="text-mutedForeground text-sm">· {data.property.state}</span>
                 </div>
-                <p className="text-[11px] text-mutedForeground mb-2">Price per travel: {data.property.price_per_travel ?? 10} pts</p>
+                <p className="text-[11px] text-mutedForeground mb-1">Price per travel: {data.property.price_per_travel ?? 10} pts</p>
+                <p className="text-[11px] text-amber-400/90 mb-2">Profit: {(data.property.total_earnings ?? 0).toLocaleString()} pts</p>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <input
                     type="number"
