@@ -216,7 +216,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
           : 'border-border hover:border-primary/30 hover:shadow-sm'
       }`}
     >
-      <div className="w-full aspect-square rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
+      <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
         {car.image ? (
           <img
             src={car.image}
@@ -226,7 +226,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Car size={24} className="text-primary/30" />
+            <Car size={32} className="text-primary/30" />
           </div>
         )}
         {!isCustom && (

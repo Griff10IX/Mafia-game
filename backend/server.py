@@ -3224,7 +3224,60 @@ async def admin_get_rate_limits(current_user: dict = Depends(get_current_user)):
     
     return {
         "rate_limits": security_module.RATE_LIMIT_CONFIG,
-        "note": "Edit backend/security.py RATE_LIMIT_CONFIG to modify these settings"
+        "note": "Rate limits are loaded in-memory. Changes apply immediately."
+    }
+
+
+@api_router.post("/admin/security/rate-limits/toggle")
+async def admin_toggle_rate_limit(
+    endpoint: str,
+    enabled: bool,
+    current_user: dict = Depends(get_current_user)
+):
+    """Toggle rate limiting on/off for a specific endpoint."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if endpoint not in security_module.RATE_LIMIT_CONFIG:
+        raise HTTPException(status_code=404, detail=f"Endpoint '{endpoint}' not found in rate limit config")
+    
+    # Update the config (in-memory)
+    limit, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
+    security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, enabled)
+    
+    return {
+        "message": f"Rate limit for '{endpoint}' {'enabled' if enabled else 'disabled'}",
+        "endpoint": endpoint,
+        "limit": limit,
+        "enabled": enabled
+    }
+
+
+@api_router.post("/admin/security/rate-limits/update")
+async def admin_update_rate_limit(
+    endpoint: str,
+    limit: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update the rate limit value (requests per minute) for a specific endpoint."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    if endpoint not in security_module.RATE_LIMIT_CONFIG:
+        raise HTTPException(status_code=404, detail=f"Endpoint '{endpoint}' not found in rate limit config")
+    
+    if limit < 1 or limit > 1000:
+        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000 requests per minute")
+    
+    # Update the config (in-memory)
+    _, enabled = security_module.RATE_LIMIT_CONFIG[endpoint]
+    security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, enabled)
+    
+    return {
+        "message": f"Rate limit for '{endpoint}' updated to {limit} requests/min",
+        "endpoint": endpoint,
+        "limit": limit,
+        "enabled": enabled
     }
 
 

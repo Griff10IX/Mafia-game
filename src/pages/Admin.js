@@ -55,6 +55,8 @@ export default function Admin() {
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
   const [securityLoading, setSecurityLoading] = useState(false);
+  const [rateLimits, setRateLimits] = useState(null);
+  const [rateLimitEdits, setRateLimitEdits] = useState({});
 
   const toggleSection = (key) => {
     setCollapsed(prev => {
@@ -336,6 +338,46 @@ export default function Admin() {
       setSecuritySummary(null);
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
     finally { setSecurityLoading(false); }
+  };
+
+  const handleViewRateLimits = async () => {
+    setSecurityLoading(true);
+    try {
+      const response = await api.get('/admin/security/rate-limits');
+      setRateLimits(response.data);
+      setRateLimitEdits({});
+      toast.success('Rate limits loaded');
+    } catch (e) { 
+      toast.error(e.response?.data?.detail || 'Failed to fetch rate limits'); 
+      setRateLimits(null);
+    }
+    finally { setSecurityLoading(false); }
+  };
+
+  const handleToggleRateLimit = async (endpoint, currentEnabled) => {
+    try {
+      const response = await api.post(`/admin/security/rate-limits/toggle?endpoint=${encodeURIComponent(endpoint)}&enabled=${!currentEnabled}`);
+      toast.success(response.data.message);
+      // Refresh the rate limits
+      await handleViewRateLimits();
+    } catch (e) { 
+      toast.error(e.response?.data?.detail || 'Failed to toggle rate limit'); 
+    }
+  };
+
+  const handleUpdateRateLimit = async (endpoint, newLimit) => {
+    if (!newLimit || newLimit < 1 || newLimit > 1000) {
+      toast.error('Limit must be between 1 and 1000');
+      return;
+    }
+    try {
+      const response = await api.post(`/admin/security/rate-limits/update?endpoint=${encodeURIComponent(endpoint)}&limit=${newLimit}`);
+      toast.success(response.data.message);
+      // Refresh the rate limits
+      await handleViewRateLimits();
+    } catch (e) { 
+      toast.error(e.response?.data?.detail || 'Failed to update rate limit'); 
+    }
   };
 
   if (loading) {
@@ -728,6 +770,66 @@ export default function Admin() {
                       ))}
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            <ActionRow icon={Shield} label="View Rate Limits" description="See rate limiting configuration">
+              <BtnPrimary onClick={handleViewRateLimits} disabled={securityLoading}>
+                {securityLoading ? '...' : 'View'}
+              </BtnPrimary>
+            </ActionRow>
+
+            {rateLimits && rateLimits.rate_limits && (
+              <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50 space-y-2">
+                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Rate Limit Configuration:</div>
+                <div className="max-h-64 overflow-y-auto space-y-1.5">
+                  {Object.entries(rateLimits.rate_limits).map(([endpoint, [limit, enabled]]) => {
+                    const editValue = rateLimitEdits[endpoint] !== undefined ? rateLimitEdits[endpoint] : limit;
+                    const hasChanged = editValue !== limit;
+                    
+                    return (
+                      <div key={endpoint} className="flex flex-col gap-2 text-[10px] p-2 rounded bg-zinc-800/50 border border-zinc-700/30 hover:border-primary/30 transition-colors">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-foreground font-mono text-[11px] truncate mb-0.5">{endpoint}</div>
+                          </div>
+                          <button
+                            onClick={() => handleToggleRateLimit(endpoint, enabled)}
+                            className={`shrink-0 px-2 py-1 rounded text-[9px] font-bold transition-all ${
+                              enabled 
+                                ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30' 
+                                : 'bg-zinc-700/50 text-mutedForeground hover:bg-zinc-700 border border-zinc-600/30'
+                            }`}
+                          >
+                            {enabled ? 'ON' : 'OFF'}
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            max="1000"
+                            value={editValue}
+                            onChange={(e) => setRateLimitEdits({...rateLimitEdits, [endpoint]: parseInt(e.target.value) || 1})}
+                            className="flex-1 bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
+                          />
+                          <span className="text-mutedForeground text-[9px] whitespace-nowrap">req/min</span>
+                          {hasChanged && (
+                            <button
+                              onClick={() => handleUpdateRateLimit(endpoint, editValue)}
+                              className="px-2 py-1 rounded text-[9px] font-bold bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30 transition-all"
+                            >
+                              SAVE
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {rateLimits.note && (
+                  <p className="text-[9px] text-mutedForeground italic mt-2">💡 {rateLimits.note}</p>
                 )}
               </div>
             )}
