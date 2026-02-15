@@ -154,8 +154,19 @@ export default function Admin() {
   };
 
   const handleChangeRank = async () => {
+    const username = (formData.targetUsername || '').trim();
+    const rank = formData.newRank != null ? parseInt(formData.newRank, 10) : NaN;
+    if (!username) {
+      toast.error('Enter a target username');
+      return;
+    }
+    const maxRank = ranks.length > 0 ? Math.max(...ranks.map((r) => r.id)) : 11;
+    if (Number.isNaN(rank) || rank < 1 || rank > maxRank) {
+      toast.error(`Select a valid rank (1–${maxRank})`);
+      return;
+    }
     try {
-      const response = await api.post(`/admin/change-rank?target_username=${formData.targetUsername}&new_rank=${formData.newRank}`);
+      const response = await api.post(`/admin/change-rank?target_username=${encodeURIComponent(username)}&new_rank=${rank}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };

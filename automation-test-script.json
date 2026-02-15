@@ -1,0 +1,253 @@
+{
+  "Name": "crimes",
+  "CreationDate": "2026-2-15",
+  "Commands": [
+    {
+      "Command": "store",
+      "Target": "true",
+      "Value": "!errorignore",
+      "Description": "Ignore errors so script continues"
+    },
+    {
+      "Command": "store",
+      "Target": "baseUrl",
+      "Value": "http://178.128.38.68",
+      "Description": "Change this to your server URL (e.g. localhost:5173 for dev)"
+    },
+    {
+      "Command": "while",
+      "Target": "true",
+      "Value": "",
+      "Description": "Loop start"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/",
+      "Value": "",
+      "Description": "Open login page"
+    },
+    {
+      "Command": "click",
+      "Target": "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div/input",
+      "Value": "",
+      "Targets": [
+        "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div/input",
+        "xpath=//input[@value='']",
+        "xpath=//input",
+        "css=#root > div > div > div.relative.z-10.min-h-screen.flex.items-center.justify-center.px-4 > div > div.noir_panel__CohR3.rounded-sm.overflow-hidden.shadow-2xl.shadow-primary/10 > form > div:nth-child(1) > input"
+      ],
+      "Description": "Focus email input"
+    },
+    {
+      "Command": "type",
+      "Target": "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div/input",
+      "Value": "enteremailhere",
+      "Targets": [
+        "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div/input",
+        "xpath=//input[@value='enteremailhere']",
+        "xpath=//input",
+        "css=#root > div > div > div.relative.z-10.min-h-screen.flex.items-center.justify-center.px-4 > div > div.noir_panel__CohR3.rounded-sm.overflow-hidden.shadow-2xl.shadow-primary/10 > form > div:nth-child(1) > input"
+      ],
+      "Description": "Enter email"
+    },
+    {
+      "Command": "click",
+      "Target": "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div[2]/input",
+      "Value": "",
+      "Targets": [
+        "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div[2]/input",
+        "xpath=//input[@value='']",
+        "xpath=//div[2]/input",
+        "css=#root > div > div > div.relative.z-10.min-h-screen.flex.items-center.justify-center.px-4 > div > div.noir_panel__CohR3.rounded-sm.overflow-hidden.shadow-2xl.shadow-primary/10 > form > div:nth-child(2) > input"
+      ],
+      "Description": "Focus password input"
+    },
+    {
+      "Command": "type",
+      "Target": "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div[2]/input",
+      "Value": "enterpasswordhere",
+      "Targets": [
+        "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/div[2]/input",
+        "xpath=//input[@value='enterpasswordhere']",
+        "xpath=//div[2]/input",
+        "css=#root > div > div > div.relative.z-10.min-h-screen.flex.items-center.justify-center.px-4 > div > div.noir_panel__CohR3.rounded-sm.overflow-hidden.shadow-2xl.shadow-primary/10 > form > div:nth-child(2) > input"
+      ],
+      "Description": "Enter password"
+    },
+    {
+      "Command": "click",
+      "Target": "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/button",
+      "Value": "",
+      "Targets": [
+        "xpath=//*[@id=\"root\"]/div/div/div[2]/div/div[2]/form/button",
+        "xpath=//button[@type='submit']",
+        "xpath=//form/button",
+        "css=#root > div > div > div.relative.z-10.min-h-screen.flex.items-center.justify-center.px-4 > div > div.noir_panel__CohR3.rounded-sm.overflow-hidden.shadow-2xl.shadow-primary/10 > form > button"
+      ],
+      "Description": "Submit login"
+    },
+    {
+      "Command": "pause",
+      "Target": "1500",
+      "Value": "",
+      "Description": "Wait for redirect after login"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/crimes",
+      "Value": "",
+      "Description": "Open Crimes page"
+    },
+    {
+      "Command": "pause",
+      "Target": "1000",
+      "Value": "",
+      "Description": "Wait for crimes to load"
+    },
+    {
+      "Command": "click",
+      "Target": "xpath=//*[@id=\"root\"]/div/div/main/div/div[2]/div/button",
+      "Value": "",
+      "Targets": [
+        "xpath=//*[@id=\"root\"]/div/div/main/div/div[2]/div/button",
+        "xpath=//div[2]/div/button",
+        "css=#root > div > div > main > div > div.noir_panel__CohR3.rounded-md.overflow-hidden.border.border-primary/20 > div.px-3.py-2.bg-primary/10.border-b.border-primary/30.flex.items-center.justify-between > button",
+        "id=commit-crime-petty_1",
+        "xpath=//button[contains(., 'Commit')]"
+      ],
+      "Description": "Commit first crime (Commit button in crimes panel)"
+    },
+    {
+      "Command": "pause",
+      "Target": "2000",
+      "Value": "",
+      "Description": "Wait for crime result toast"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/gta",
+      "Value": "",
+      "Description": "Open GTA page"
+    },
+    {
+      "Command": "pause",
+      "Target": "1000",
+      "Value": "",
+      "Description": "Wait for GTA options to load"
+    },
+    {
+      "Command": "click",
+      "Target": "xpath=//*[@id=\"root\"]/div/div/main/div/div[3]/div[2]/div/div[6]/button",
+      "Value": "",
+      "Targets": [
+        "xpath=//*[@id=\"root\"]/div/div/main/div/div[3]/div[2]/div/div[6]/button",
+        "xpath=//div[6]/button",
+        "css=#root > div > div > main > div > div:nth-child(3) > div.p-2.space-y-1 > div.flex.items-center.justify-between.gap-3.px-3.py-2.rounded-md.transition-all.bg-zinc-800/30.border.border-transparent.hover:border-primary/20.hover:bg-zinc-800/50 > div:nth-child(6) > button",
+        "xpath=//button[contains(., 'Attempt')]"
+      ],
+      "Description": "Click GTA attempt (6th option)"
+    },
+    {
+      "Command": "pause",
+      "Target": "2000",
+      "Value": "",
+      "Description": "Wait for GTA result"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/jail",
+      "Value": "",
+      "Description": "Open Jail page"
+    },
+    {
+      "Command": "pause",
+      "Target": "1500",
+      "Value": "",
+      "Description": "Wait for jail players to load"
+    },
+    {
+      "Command": "click",
+      "Target": "xpath=//button[contains(., 'Bust')]",
+      "Value": "",
+      "Targets": [
+        "xpath=//button[contains(., 'Bust')]",
+        "id=bust-out-0",
+        "xpath=//*[@data-testid='bust-out-0']",
+        "xpath=//main//button[contains(text(), 'Bust')]"
+      ],
+      "Description": "Bust first jailed player (if any)"
+    },
+    {
+      "Command": "pause",
+      "Target": "2000",
+      "Value": "",
+      "Description": "Wait for bust result"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/booze-run",
+      "Value": "",
+      "Description": "Open Booze Run page"
+    },
+    {
+      "Command": "pause",
+      "Target": "1500",
+      "Value": "",
+      "Description": "Wait for booze run to load (view routes/prices)"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/organised-crime",
+      "Value": "",
+      "Description": "Open Organised Crime page"
+    },
+    {
+      "Command": "pause",
+      "Target": "1500",
+      "Value": "",
+      "Description": "Wait for OC to load"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/travel",
+      "Value": "",
+      "Description": "Open Travel page"
+    },
+    {
+      "Command": "pause",
+      "Target": "1000",
+      "Value": "",
+      "Description": "Wait for travel to load"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/states",
+      "Value": "",
+      "Description": "Open States (cities / properties)"
+    },
+    {
+      "Command": "pause",
+      "Target": "1000",
+      "Value": "",
+      "Description": "Wait for states to load"
+    },
+    {
+      "Command": "open",
+      "Target": "${baseUrl}/dashboard",
+      "Value": "",
+      "Description": "Return to dashboard"
+    },
+    {
+      "Command": "pause",
+      "Target": "1000",
+      "Value": "",
+      "Description": "Pause before loop end"
+    },
+    {
+      "Command": "end",
+      "Target": "",
+      "Value": "",
+      "Description": "End while loop"
+    }
+  ]
+}

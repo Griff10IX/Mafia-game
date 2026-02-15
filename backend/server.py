@@ -3492,6 +3492,8 @@ async def admin_act_as_normal(acting: bool, current_user: dict = Depends(get_cur
 async def admin_change_rank(target_username: str, new_rank: int, current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
+    if not (1 <= new_rank <= len(RANKS)):
+        raise HTTPException(status_code=400, detail=f"new_rank must be 1–{len(RANKS)}")
     
     # Case-insensitive username lookup
     username_pattern = _username_pattern(target_username)
@@ -3499,12 +3501,15 @@ async def admin_change_rank(target_username: str, new_rank: int, current_user: d
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Rank is derived from rank_points everywhere; set rank_points to this rank's required_points
+    rank_def = RANKS[new_rank - 1]
+    required_pts = int(rank_def["required_points"])
     await db.users.update_one(
         {"id": target["id"]},
-        {"$set": {"rank": new_rank}}
+        {"$set": {"rank": new_rank, "rank_points": required_pts}}
     )
     
-    return {"message": f"Changed {target_username}'s rank to {new_rank}"}
+    return {"message": f"Changed {target['username']}'s rank to {rank_def['name']} (rank_points set to {required_pts:,})"}
 
 @api_router.post("/admin/add-points")
 async def admin_add_points(target_username: str, points: int, current_user: dict = Depends(get_current_user)):
