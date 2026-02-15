@@ -69,6 +69,7 @@ from server import (
     get_current_user,
     get_rank_info,
     get_effective_event,
+    log_activity,
     CrimeResponse,
     CommitCrimeResponse,
 )
@@ -240,6 +241,12 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             "$inc": {"attempts": 1, "successes": 1 if success else 0}
         },
         upsert=True,
+    )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "crime",
+        {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward},
     )
     return CommitCrimeResponse(
         success=success,

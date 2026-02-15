@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, _is_admin
+from server import db, get_current_user, _is_admin, log_activity
 
 
 class TopicCreate(BaseModel):
@@ -95,6 +95,12 @@ async def create_topic(
         "is_locked": False,
     }
     await db.forum_topics.insert_one(doc)
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "forum_topic",
+        {"topic_id": topic_id, "title": title},
+    )
     return {"id": topic_id, "message": "Topic created", "topic": {**doc, "_id": 0}}
 
 
@@ -104,7 +110,7 @@ async def add_comment(
     current_user: dict = Depends(get_current_user),
 ):
     """Add a comment to a topic. Fails if topic is locked."""
-    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "is_locked": 1})
+    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "is_locked": 1, "title": 1})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
     if topic.get("is_locked"):
@@ -132,6 +138,12 @@ async def add_comment(
     await db.forum_topics.update_one(
         {"id": topic_id},
         {"$set": {"updated_at": now}},
+    )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "forum_comment",
+        {"topic_id": topic_id, "topic_title": topic.get("title") if topic else None, "comment_id": comment_id, "has_gif": bool(gif_url)},
     )
     return {"id": comment_id, "message": "Comment posted", "comment": {**doc, "liked": False}}
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -57,6 +57,17 @@ export default function Admin() {
   const [securityLoading, setSecurityLoading] = useState(false);
   const [rateLimits, setRateLimits] = useState(null);
   const [rateLimitEdits, setRateLimitEdits] = useState({});
+
+  // Activity & Gambling logs
+  const [activityLog, setActivityLog] = useState({ entries: [] });
+  const [activityLogLoading, setActivityLogLoading] = useState(false);
+  const [activityLogUsername, setActivityLogUsername] = useState('');
+  const [gamblingLog, setGamblingLog] = useState({ entries: [] });
+  const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
+  const [gamblingLogUsername, setGamblingLogUsername] = useState('');
+  const [gamblingLogGameType, setGamblingLogGameType] = useState('');
+  const [clearGamblingDays, setClearGamblingDays] = useState(30);
+  const [clearGamblingLoading, setClearGamblingLoading] = useState(false);
 
   const toggleSection = (key) => {
     setCollapsed(prev => {
@@ -328,6 +339,51 @@ export default function Admin() {
       setSecuritySummary(null);
     }
     finally { setSecurityLoading(false); }
+  };
+
+  const fetchActivityLog = async () => {
+    setActivityLogLoading(true);
+    try {
+      const params = { limit: 100 };
+      if (activityLogUsername.trim()) params.username = activityLogUsername.trim();
+      const res = await api.get('/admin/activity-log', { params });
+      setActivityLog(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load activity log');
+      setActivityLog({ entries: [] });
+    } finally {
+      setActivityLogLoading(false);
+    }
+  };
+
+  const fetchGamblingLog = async () => {
+    setGamblingLogLoading(true);
+    try {
+      const params = { limit: 100 };
+      if (gamblingLogUsername.trim()) params.username = gamblingLogUsername.trim();
+      if (gamblingLogGameType.trim()) params.game_type = gamblingLogGameType.trim();
+      const res = await api.get('/admin/gambling-log', { params });
+      setGamblingLog(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load gambling log');
+      setGamblingLog({ entries: [] });
+    } finally {
+      setGamblingLogLoading(false);
+    }
+  };
+
+  const handleClearGamblingLog = async () => {
+    if (!window.confirm(`Delete gambling log entries older than ${clearGamblingDays} days?`)) return;
+    setClearGamblingLoading(true);
+    try {
+      const res = await api.post('/admin/gambling-log/clear', null, { params: { days: clearGamblingDays } });
+      toast.success(res.data?.message || 'Cleared');
+      fetchGamblingLog();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear');
+    } finally {
+      setClearGamblingLoading(false);
+    }
   };
 
   const handleClearOldFlags = async () => {
@@ -860,6 +916,130 @@ export default function Admin() {
                 {securityLoading ? '...' : 'Clear'}
               </BtnDanger>
             </ActionRow>
+          </div>
+        )}
+      </div>
+
+      {/* Activity Log */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <SectionHeader
+          icon={ScrollText}
+          title="Activity Log"
+          badge={activityLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{activityLog.entries.length} entries</span>}
+          isCollapsed={collapsed.activityLog}
+          onToggle={() => toggleSection('activityLog')}
+        />
+        {!collapsed.activityLog && (
+          <div className="p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={activityLogUsername}
+                onChange={(e) => setActivityLogUsername(e.target.value)}
+                placeholder="Filter by username"
+                className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <BtnPrimary onClick={fetchActivityLog} disabled={activityLogLoading}>
+                {activityLogLoading ? '...' : 'Load'}
+              </BtnPrimary>
+            </div>
+            <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/50">
+              <table className="w-full text-[10px] font-heading">
+                <thead className="bg-zinc-800/50 sticky top-0">
+                  <tr>
+                    <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
+                    <th className="text-left p-2 text-mutedForeground uppercase">User</th>
+                    <th className="text-left p-2 text-mutedForeground uppercase">Action</th>
+                    <th className="text-left p-2 text-mutedForeground uppercase">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activityLog.entries || []).map((e) => (
+                    <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                      <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                      <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
+                      <td className="p-2">{e.action || '—'}</td>
+                      <td className="p-2 text-mutedForeground max-w-[200px] truncate" title={JSON.stringify(e.details || {})}>{e.details ? JSON.stringify(e.details) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {(activityLog.entries || []).length === 0 && !activityLogLoading && <p className="text-xs text-mutedForeground">Load to see crimes, forum topics/comments.</p>}
+          </div>
+        )}
+      </div>
+
+      {/* Gambling Log */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <SectionHeader
+          icon={Dice5}
+          title="Gambling Log"
+          badge={gamblingLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{gamblingLog.entries.length} entries</span>}
+          isCollapsed={collapsed.gamblingLog}
+          onToggle={() => toggleSection('gamblingLog')}
+        />
+        {!collapsed.gamblingLog && (
+          <div className="p-3 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={gamblingLogUsername}
+                onChange={(e) => setGamblingLogUsername(e.target.value)}
+                placeholder="Filter by username"
+                className="min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <select
+                value={gamblingLogGameType}
+                onChange={(e) => setGamblingLogGameType(e.target.value)}
+                className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+              >
+                <option value="">All games</option>
+                <option value="dice">Dice</option>
+                <option value="blackjack">Blackjack</option>
+                <option value="sports_bet">Sports</option>
+              </select>
+              <BtnPrimary onClick={fetchGamblingLog} disabled={gamblingLogLoading}>
+                {gamblingLogLoading ? '...' : 'Load'}
+              </BtnPrimary>
+            </div>
+            <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/50">
+              <table className="w-full text-[10px] font-heading">
+                <thead className="bg-zinc-800/50 sticky top-0">
+                  <tr>
+                    <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
+                    <th className="text-left p-2 text-mutedForeground uppercase">User</th>
+                    <th className="text-left p-2 text-mutedForeground uppercase">Game</th>
+                    <th className="text-left p-2 text-mutedForeground uppercase">Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(gamblingLog.entries || []).map((e) => (
+                    <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                      <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                      <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
+                      <td className="p-2">{e.game_type || '—'}</td>
+                      <td className="p-2 text-mutedForeground max-w-[220px] truncate" title={JSON.stringify(e.details || {})}>{e.details ? JSON.stringify(e.details) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-700/30">
+              <span className="text-[10px] text-mutedForeground">Clear logs older than</span>
+              <input
+                type="number"
+                min={1}
+                value={clearGamblingDays}
+                onChange={(e) => setClearGamblingDays(parseInt(e.target.value) || 30)}
+                className="w-14 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+              />
+              <span className="text-[10px] text-mutedForeground">days</span>
+              <BtnDanger onClick={handleClearGamblingLog} disabled={clearGamblingLoading}>
+                {clearGamblingLoading ? '...' : 'Clear old'}
+              </BtnDanger>
+            </div>
+            {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see dice, blackjack, sports bets.</p>}
           </div>
         )}
       </div>

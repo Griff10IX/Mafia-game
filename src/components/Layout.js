@@ -540,58 +540,13 @@ export default function Layout({ children }) {
             </div>
           </nav>
 
-          {/* User Info */}
+          {/* Logout */}
           {user && (
-            <div className={`p-3 border-t ${styles.borderGoldLight} bg-gradient-to-t from-noir-bg to-transparent`}>
-              <div className={`${styles.userBox} p-3 rounded-sm`}>
-                <div className={`flex items-center gap-2 mb-2 pb-2 border-b ${styles.borderGoldLight}`}>
-                  <User size={14} style={{ color: 'var(--gm-gold)' }} />
-                  <span className={`text-sm font-heading font-bold ${styles.sidebarHeaderTitle}`} data-testid="user-username">{user.username}</span>
-                </div>
-                <div className="text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Rank:</span>
-                    <span className={`${styles.sidebarHeaderTitle} font-heading font-bold`} data-testid="user-rank">{user.rank_name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Wealth:</span>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className={`${styles.sidebarHeaderTitle} font-heading cursor-default underline decoration-dotted underline-offset-1`} style={{ textDecorationColor: 'var(--gm-gold)' }} data-testid="user-wealth-rank">{user.wealth_rank_name ?? '—'}</span>
-                        </TooltipTrigger>
-                        <TooltipContent side="left" className={`${styles.surface} ${styles.textGold} ${styles.borderGold} rounded-sm px-3 py-2 text-sm font-heading shadow-lg`}>
-                          {user.wealth_rank_range ?? '$0'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Money:</span>
-                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-money">${user.money.toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Points:</span>
-                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-points">{user.points}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Health:</span>
-                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-health">{user.health ?? 100}%</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Armour:</span>
-                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-armour">Lv.{user.armour_level ?? 0}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className={`${styles.sidebarHeaderSub} font-heading`}>Bullets:</span>
-                    <span className={`${styles.sidebarHeaderTitle} font-heading`} data-testid="user-bullets">{user.bullets ?? 0}</span>
-                  </div>
-                </div>
-              </div>
+            <div className={`p-3 border-t ${styles.borderGoldLight} mt-auto`}>
               <button
                 onClick={handleLogout}
                 data-testid="logout-button"
-                className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-xs font-heading font-bold"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-xs font-heading font-bold"
               >
                 <LogOut size={14} />
                 Logout

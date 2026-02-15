@@ -2087,6 +2087,7 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
         "status": "open",
         "created_at": now,
     })
+    await log_gambling(current_user["id"], current_user.get("username") or "?", "sports_bet", {"bet_id": bet_id, "event_name": ev.get("name"), "option_name": opt.get("name"), "odds": float(opt.get("odds", 1)), "stake": stake, "status": "open"})
     return {"message": f"Bet placed: ${stake:,} on {opt.get('name')}", "bet_id": bet_id}
 
 
@@ -2831,12 +2832,14 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
     )
     cursor = db.sports_bets.find(
         {"event_id": event_id, "status": "open"},
-        {"_id": 0, "id": 1, "user_id": 1, "option_id": 1, "stake": 1, "odds": 1},
+        {"_id": 0, "id": 1, "user_id": 1, "option_id": 1, "stake": 1, "odds": 1, "event_name": 1, "option_name": 1},
     )
     for b in await cursor.to_list(1000):
         won = b.get("option_id") == winning_option_id
         new_status = "won" if won else "lost"
         await db.sports_bets.update_one({"id": b["id"]}, {"$set": {"status": new_status, "settled_at": now}})
+        u = await db.users.find_one({"id": b["user_id"]}, {"_id": 0, "username": 1})
+        await log_gambling(b["user_id"], u.get("username") if u else "?", "sports_bet", {"bet_id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "stake": b.get("stake"), "odds": b.get("odds"), "status": new_status, "settled_at": now})
         if won:
             stake = int(b.get("stake") or 0)
             odds = float(b.get("odds") or 1)
@@ -3173,6 +3176,37 @@ async def sell_armour(current_user: dict = Depends(get_current_user)):
 
 # Admin endpoints
 ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
+
+
+async def log_activity(user_id: str, username: str, action: str, details: dict):
+    """Append to activity_log for admin monitoring (crimes, forum, etc.)."""
+    try:
+        await db.activity_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "username": username,
+            "action": action,
+            "details": details,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
+
+async def log_gambling(user_id: str, username: str, game_type: str, details: dict):
+    """Append to gambling_log for admin anti-cheat monitoring."""
+    try:
+        await db.gambling_log.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "username": username,
+            "game_type": game_type,
+            "details": details,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
 
 def _is_admin(user: dict) -> bool:
     """True if user has admin email and is not currently acting as normal user."""
@@ -3814,6 +3848,62 @@ async def admin_check(current_user: dict = Depends(get_current_user)):
     is_admin = _is_admin(current_user)
     has_admin_email = (current_user.get("email") or "") in ADMIN_EMAILS
     return {"is_admin": is_admin, "has_admin_email": has_admin_email}
+
+
+@api_router.get("/admin/activity-log")
+async def admin_activity_log(
+    limit: int = 100,
+    username: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Recent user activity (crimes, forum topics/comments) for monitoring. Admin only."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    limit = min(max(1, limit), 500)
+    query = {}
+    if username and username.strip():
+        uname_pattern = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
+        query["username"] = uname_pattern
+    cursor = db.activity_log.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+    entries = await cursor.to_list(limit)
+    return {"entries": entries, "count": len(entries)}
+
+
+@api_router.get("/admin/gambling-log")
+async def admin_gambling_log(
+    limit: int = 100,
+    username: Optional[str] = None,
+    game_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user),
+):
+    """Recent gambling activity (dice, blackjack, sports) for anti-cheat. Admin only."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    limit = min(max(1, limit), 500)
+    query = {}
+    if username and username.strip():
+        uname_pattern = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
+        query["username"] = uname_pattern
+    if game_type and game_type.strip():
+        query["game_type"] = game_type.strip().lower()
+    cursor = db.gambling_log.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+    entries = await cursor.to_list(limit)
+    return {"entries": entries, "count": len(entries)}
+
+
+@api_router.post("/admin/gambling-log/clear")
+async def admin_gambling_log_clear(
+    days: int = 30,
+    current_user: dict = Depends(get_current_user),
+):
+    """Delete gambling log entries older than the given days. Admin only."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if days < 1:
+        days = 1
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    res = await db.gambling_log.delete_many({"created_at": {"$lt": cutoff}})
+    return {"message": f"Cleared {res.deleted_count} gambling log entries older than {days} days", "deleted_count": res.deleted_count}
 
 
 @api_router.get("/admin/find-duplicates")
@@ -6709,9 +6799,11 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
             await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake}})
+        await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": actual_sides, "chosen": chosen, "roll": roll, "win": False, "payout": 0})
         return {"roll": roll, "win": False, "payout": 0, "actual_payout": 0, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
     if not owner_id:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout_full - stake}})
+        await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": actual_sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full})
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": payout_full, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
     owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
     owner_money = int((owner.get("money") or 0) or 0)
@@ -6752,6 +6844,7 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
     else:
         await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
         await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
+    await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": actual_sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
     return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer}
 
 
@@ -7556,7 +7649,7 @@ def _blackjack_dealer_visible_total(hand):
     return int(v) if v else 0
 
 
-async def _blackjack_settle_and_save_history(user_id: str, city: str, bet: int, result: str, payout: int, player_hand: list, dealer_hand: list, player_total: int, dealer_total: int):
+async def _blackjack_settle_and_save_history(user_id: str, username: str, city: str, bet: int, result: str, payout: int, player_hand: list, dealer_hand: list, player_total: int, dealer_total: int):
     await db.blackjack_games.delete_many({"user_id": user_id})
     history_entry = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -7572,6 +7665,7 @@ async def _blackjack_settle_and_save_history(user_id: str, city: str, bet: int, 
         {"id": user_id},
         {"$push": {"blackjack_history": {"$each": [history_entry], "$position": 0, "$slice": BLACKJACK_HISTORY_MAX}}}
     )
+    await log_gambling(user_id, username or "?", "blackjack", {"city": city, "bet": bet, "result": result, "payout": payout, "player_total": player_total, "dealer_total": dealer_total})
 
 
 @api_router.post("/casino/blackjack/start")
@@ -7614,7 +7708,7 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
             payout = bet
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
             await _blackjack_settle_and_save_history(
-                current_user["id"], city, bet, "push", payout, player_hand, dealer_hand, player_total, dealer_total
+                current_user["id"], current_user.get("username"), city, bet, "push", payout, player_hand, dealer_hand, player_total, dealer_total
             )
             return {
                 "status": "done",
@@ -7671,7 +7765,7 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
         else:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
         await _blackjack_settle_and_save_history(
-            current_user["id"], city, bet, "blackjack", actual_payout, player_hand, dealer_hand, player_total, dealer_total
+            current_user["id"], current_user.get("username"), city, bet, "blackjack", actual_payout, player_hand, dealer_hand, player_total, dealer_total
         )
         new_balance = (user.get("money", 0) or 0) - bet + actual_payout
         return {
@@ -7698,7 +7792,7 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
             await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet, "profit": bet}})
         await _blackjack_settle_and_save_history(
-            current_user["id"], city, bet, "lose", 0, player_hand, dealer_hand, player_total, dealer_total
+            current_user["id"], current_user.get("username"), city, bet, "lose", 0, player_hand, dealer_hand, player_total, dealer_total
         )
         return {
             "status": "done",
@@ -7763,7 +7857,7 @@ async def casino_blackjack_hit(current_user: dict = Depends(get_current_user)):
                 {"$inc": {"total_earnings": bet, "profit": bet}}
             )
         await _blackjack_settle_and_save_history(
-            current_user["id"], game.get("city"), bet, "bust", 0, player_hand, game.get("dealer_hand", []), player_total, _blackjack_hand_total(game.get("dealer_hand", []))
+            current_user["id"], current_user.get("username"), game.get("city"), bet, "bust", 0, player_hand, game.get("dealer_hand", []), player_total, _blackjack_hand_total(game.get("dealer_hand", []))
         )
         await db.blackjack_games.delete_one({"user_id": current_user["id"]})
         return {
@@ -7871,7 +7965,7 @@ async def casino_blackjack_stand(current_user: dict = Depends(get_current_user))
     user = await db.users.find_one({"id": current_user["id"]})
     new_balance = (user.get("money", 0) or 0)
     await _blackjack_settle_and_save_history(
-        current_user["id"], bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
+        current_user["id"], current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
     )
     await db.blackjack_games.delete_one({"user_id": current_user["id"]})
     return {
