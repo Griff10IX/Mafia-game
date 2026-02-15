@@ -73,7 +73,7 @@ export default function CarProfile() {
         </Link>
       </div>
 
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 max-w-lg`}>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 max-w-lg mx-auto`}>
         <div className="aspect-video sm:aspect-[2/1] bg-secondary/50 border-b border-primary/20">
           {car.image ? (
             <img src={car.image} alt={car.name} className="w-full h-full object-contain bg-secondary" />
