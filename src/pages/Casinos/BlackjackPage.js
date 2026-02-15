@@ -46,15 +46,15 @@ function Card({ card, hidden, index = 0 }) {
   
   return (
     <div
-      className={`w-14 h-20 sm:w-16 sm:h-24 rounded-lg border-2 bg-white shadow-lg relative ${
+      className={`w-14 h-20 sm:w-16 sm:h-24 rounded-lg border-2 bg-white shadow-lg relative overflow-hidden ${
         isRed ? 'border-red-200' : 'border-gray-300'
       }`}
       style={{ animationDelay: `${index * 0.08}s` }}
     >
       {/* Top left corner */}
-      <div className={`absolute top-1 left-1 text-center ${textColor}`}>
-        <div className="text-xs sm:text-sm font-bold leading-none">{card.value}</div>
-        <div className="text-sm sm:text-base leading-none">{s.sym}</div>
+      <div className={`absolute top-0.5 left-1 sm:top-1 sm:left-1.5 text-center leading-tight ${textColor}`}>
+        <div className="text-[11px] sm:text-sm font-bold">{card.value}</div>
+        <div className="text-[10px] sm:text-xs -mt-0.5">{s.sym}</div>
       </div>
       
       {/* Center suit - larger */}
@@ -62,10 +62,10 @@ function Card({ card, hidden, index = 0 }) {
         <span className="text-3xl sm:text-4xl">{s.sym}</span>
       </div>
       
-      {/* Bottom right corner (rotated) */}
-      <div className={`absolute bottom-1 right-1 text-center rotate-180 ${textColor}`}>
-        <div className="text-xs sm:text-sm font-bold leading-none">{card.value}</div>
-        <div className="text-sm sm:text-base leading-none">{s.sym}</div>
+      {/* Bottom right corner */}
+      <div className={`absolute bottom-0.5 right-1 sm:bottom-1 sm:right-1.5 text-center leading-tight scale-[-1] ${textColor}`}>
+        <div className="text-[11px] sm:text-sm font-bold">{card.value}</div>
+        <div className="text-[10px] sm:text-xs -mt-0.5">{s.sym}</div>
       </div>
     </div>
   );
