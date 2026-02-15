@@ -758,6 +758,11 @@ class DiceSendToUserRequest(BaseModel):
     target_username: str
 
 
+class DiceSellOnTradeRequest(BaseModel):
+    city: str
+    points: int
+
+
 class EventsToggleRequest(BaseModel):
     enabled: bool
 

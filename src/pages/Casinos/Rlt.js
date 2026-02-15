@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
@@ -107,7 +108,7 @@ const OwnershipCard = ({ ownership, onClaim, onRelinquish, loading }) => {
   );
 };
 
-const OwnerControlsCard = ({ ownership, config, onSetMaxBet, onTransfer, loading, newMaxBet, setNewMaxBet, transferUsername, setTransferUsername }) => (
+const OwnerControlsCard = ({ ownership, config, onSetMaxBet, onTransfer, onSellOnTrade, loading, newMaxBet, setNewMaxBet, transferUsername, setTransferUsername, sellPoints, setSellPoints }) => (
   <div className="bg-card rounded-md overflow-hidden border-2 border-primary/40">
     <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
       <h3 className="text-lg font-heading font-bold text-primary">Owner Controls</h3>
@@ -181,13 +182,28 @@ const OwnerControlsCard = ({ ownership, config, onSetMaxBet, onTransfer, loading
         </div>
       </div>
 
-      <button
-        onClick={() => window.location.href = '/quick-trade'}
-        className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-md py-2.5 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-all touch-manipulation"
-      >
-        <ArrowRightLeft size={16} />
-        Sell on Quick Trade
-      </button>
+      <div>
+        <label className="block text-sm font-heading text-mutedForeground uppercase tracking-wider mb-2">
+          Sell on Quick Trade (Points)
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="10000"
+            value={sellPoints}
+            onChange={(e) => setSellPoints(e.target.value)}
+            className="flex-1 bg-input border border-border rounded-md h-10 px-3 text-foreground text-sm focus:border-primary/50 focus:outline-none"
+          />
+          <button
+            onClick={onSellOnTrade}
+            disabled={loading}
+            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground px-6 rounded-md font-bold text-sm border border-yellow-600/50 transition-all disabled:opacity-50 touch-manipulation"
+          >
+            Set
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 );
@@ -472,6 +488,7 @@ const BettingTable = ({ onAddBet }) => (
 
 // Main component
 export default function Rlt() {
+  const navigate = useNavigate();
   const [config, setConfig] = useState({ max_bet: 50_000_000 });
   const [ownership, setOwnership] = useState(null);
   const [selectedChip, setSelectedChip] = useState(1_000_000);
@@ -489,6 +506,7 @@ export default function Rlt() {
   // Owner panel state
   const [newMaxBet, setNewMaxBet] = useState('');
   const [transferUsername, setTransferUsername] = useState('');
+  const [sellPoints, setSellPoints] = useState('');
   const [ownerLoading, setOwnerLoading] = useState(false);
 
   const COLLAPSED_KEY = 'mafia_rlt_collapsed';
