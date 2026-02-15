@@ -47,17 +47,19 @@ function RouletteWheel({ rotationDeg, size = 200 }) {
   const numSize = Math.max(12, size * 0.08);
   
   return (
-    <div className="relative rounded-full bg-zinc-900 border-4 border-zinc-600 shadow-xl" style={{ width: size, height: size }}>
+    <div className="relative rounded-full bg-zinc-900 border-4 border-zinc-600 shadow-xl overflow-hidden" style={{ width: size, height: size }}>
       {/* Inner dark circle */}
-      <div className="absolute rounded-full bg-zinc-950 border-2 border-zinc-700" style={{ width: size * 0.45, height: size * 0.45, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }} />
+      <div className="absolute rounded-full bg-zinc-950 border-2 border-zinc-700 z-20" style={{ width: size * 0.45, height: size * 0.45, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }} />
       {/* Ball pointer at top */}
-      <div className="absolute left-1/2 z-10 w-3 h-3 rounded-full bg-white border-2 border-zinc-400 shadow-lg" style={{ top: 4, transform: 'translateX(-50%)' }} />
+      <div className="absolute left-1/2 z-30 w-3 h-3 rounded-full bg-white border-2 border-zinc-400 shadow-lg" style={{ top: 4, transform: 'translateX(-50%)' }} />
       {/* Rotating wheel track */}
       <div 
-        className="absolute inset-0 rounded-full"
+        className="absolute inset-0 rounded-full z-10"
         style={{ 
           transform: `rotate(${rotationDeg}deg)`, 
-          transition: 'transform 4s cubic-bezier(0.2, 0.8, 0.3, 1)' 
+          transformOrigin: '50% 50%',
+          transition: 'transform 4s cubic-bezier(0.2, 0.8, 0.3, 1)',
+          willChange: 'transform'
         }}
       >
         {WHEEL_ORDER.map((num, i) => {
