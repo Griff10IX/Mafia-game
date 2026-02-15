@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Lock, Users, AlertCircle, Zap, DoorOpen } from 'lucide-react';
+import { Lock, Users, AlertCircle, DoorOpen } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -175,7 +175,6 @@ const JailStatusCard = ({
 };
 
 const JailedPlayerRow = ({ player, index, onBust, loading, userInJail }) => {
-  const successRate = player.bust_success_rate ?? (player.is_npc ? 50 : 70);
   const rp = player.rp_reward ?? (player.is_npc ? 25 : 15);
 
   return (
@@ -212,14 +211,8 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail }) => {
         ) : null}
       </div>
 
-      {/* Stats */}
+      {/* Stats: RP and cash reward only (bust chance is your skill, not per-target) */}
       <div className="flex items-center gap-3 text-xs font-heading shrink-0">
-        <div className="flex items-center gap-1">
-          {player.is_npc && <Zap size={10} className="text-amber-400" />}
-          <span className={player.is_npc ? 'text-amber-400 font-bold' : 'text-mutedForeground'}>
-            {successRate}%
-          </span>
-        </div>
         <span className="text-primary font-bold">+{rp} RP</span>
         <span className="text-mutedForeground w-16 text-right">
           {player.bust_reward_cash > 0 ? `$${Number(player.bust_reward_cash).toLocaleString()}` : '—'}
@@ -261,11 +254,11 @@ const InfoSection = () => (
         </li>
         <li className="flex items-start gap-1.5">
           <span className="text-primary shrink-0">•</span>
-          <span>NPCs: 50% success, 25 RP reward</span>
+          <span>Success chance = your bust skill (more busts = higher %)</span>
         </li>
         <li className="flex items-start gap-1.5">
           <span className="text-primary shrink-0">•</span>
-          <span>Players: 70% success, 15 RP reward</span>
+          <span>NPCs: 25 RP · Players: 15 RP (+ cash if they set a reward)</span>
         </li>
         <li className="flex items-start gap-1.5">
           <span className="text-primary shrink-0">•</span>

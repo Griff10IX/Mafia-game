@@ -88,7 +88,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
 // RACKETS TAB
 // ============================================================================
 
-const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, event, eventsEnabled }) => {
+const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnlock, event, eventsEnabled }) => {
   const maxLevel = config?.racket_max_level ?? 5;
   const readyCount = rackets.filter(r => r.level > 0 && (!formatTimeLeft(r.next_collect_at) || formatTimeLeft(r.next_collect_at) === 'Ready')).length;
 
@@ -99,6 +99,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, event, 
           <span className="text-primary font-bold">✨ {event.name}</span> <span className="text-mutedForeground">{event.message}</span>
         </div>
       )}
+      <p className="text-[10px] text-mutedForeground px-1">Unlock one racket at a time — fully upgrade the previous racket first (passive income).</p>
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
@@ -116,20 +117,27 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, event, 
               const onCooldown = timeLeft && timeLeft !== 'Ready';
               const isReady = r.level > 0 && !onCooldown;
               const income = r.effective_income_per_collect ?? r.income_per_collect;
+              const locked = r.locked || r.level <= 0;
               return (
-                <tr key={r.id} className={isReady ? 'bg-primary/5' : ''}>
-                  <td className="py-1.5 px-2 font-heading font-bold text-foreground">{r.name}</td>
+                <tr key={r.id} className={isReady ? 'bg-primary/5' : locked ? 'opacity-70' : ''}>
+                  <td className="py-1.5 px-2 font-heading font-bold text-foreground">
+                    {r.name}
+                    {locked && r.required_racket_name && (
+                      <div className="text-[9px] text-mutedForeground font-normal">Requires {r.required_racket_name} at max</div>
+                    )}
+                  </td>
                   <td className="py-1.5 px-2 text-center text-mutedForeground">{r.level}/{maxLevel}</td>
-                  <td className="py-1.5 px-2 text-right text-primary font-bold">{formatMoney(income)}</td>
+                  <td className="py-1.5 px-2 text-right text-primary font-bold">{locked ? '—' : formatMoney(income)}</td>
                   <td className="py-1.5 px-2 text-center">
-                    {r.level === 0 ? <span className="text-zinc-500">—</span> : onCooldown ? (
+                    {r.level === 0 ? <span className="text-zinc-500">Locked</span> : onCooldown ? (
                       <span className="text-mutedForeground flex items-center justify-center gap-0.5"><Clock size={10} />{timeLeft}</span>
                     ) : <span className="text-emerald-400 font-bold">Ready</span>}
                   </td>
                   <td className="py-1.5 px-2 text-right">
                     <div className="flex justify-end gap-1">
                       {r.level > 0 && <button onClick={() => onCollect(r.id)} disabled={onCooldown} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-yellow-600/50 disabled:opacity-40">💰</button>}
-                      {canUpgrade && r.level < maxLevel && <button onClick={() => onUpgrade(r.id)} className="bg-zinc-700/50 text-foreground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50">{r.level === 0 ? '🔓' : '⬆️'}</button>}
+                      {canUpgrade && locked && r.can_unlock && <button onClick={() => onUnlock(r.id)} className="bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-primary/50" title={r.unlock_cost ? `Unlock: ${formatMoney(r.unlock_cost)}` : ''}>🔓 Unlock</button>}
+                      {canUpgrade && !locked && r.level < maxLevel && <button onClick={() => onUpgrade(r.id)} className="bg-zinc-700/50 text-foreground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50">⬆️</button>}
                     </div>
                   </td>
                 </tr>
@@ -140,6 +148,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, event, 
       </div>
       <div className="text-[10px] text-mutedForeground px-1">
         {readyCount > 0 && <span className="text-emerald-400 font-bold">{readyCount} ready</span>}
+        {config?.racket_unlock_cost && <span className="ml-2">Unlock next: {formatMoney(config.racket_unlock_cost)}</span>}
         {config?.racket_upgrade_cost && <span className="ml-2">Upgrade: {formatMoney(config.racket_upgrade_cost)}</span>}
       </div>
     </div>
@@ -543,6 +552,7 @@ export default function FamilyPage() {
   const handleWithdraw = async (e) => { e.preventDefault(); const amount = parseInt(withdrawAmount.replace(/\D/g, ''), 10); if (!amount) { toast.error('Enter amount'); return; } try { await api.post('/families/withdraw', { amount }); toast.success('Withdrew'); setWithdrawAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const collectRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/collect`); toast.success(res.data?.message || 'Collected'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const upgradeRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/upgrade`); toast.success(res.data?.message || 'Upgraded'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const unlockRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/unlock`); toast.success(res.data?.message || 'Unlocked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const attackFamilyRacket = async (familyId, racketId) => { setRacketAttackLoading(`${familyId}-${racketId}`); try { const res = await api.post('/families/attack-racket', { family_id: familyId, racket_id: racketId }); res.data?.success ? toast.success(res.data?.message || 'Success!') : toast.error(res.data?.message || 'Failed'); fetchRacketAttackTargets(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } finally { setRacketAttackLoading(null); } };
   const handleOfferTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/offer', { war_id: entry.war.id }); toast.success('Truce offered'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAcceptTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/accept', { war_id: entry.war.id }); toast.success('Truce accepted'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
@@ -612,7 +622,7 @@ export default function FamilyPage() {
           {/* Tab Content */}
           <div className="p-3">
             {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
-            {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onUpgrade={upgradeRacket} event={event} eventsEnabled={eventsEnabled} />}
+            {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
             {activeTab === 'raid' && <RaidTab targets={racketAttackTargets} loading={racketAttackLoading} onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />}
             {activeTab === 'roster' && <RosterTab members={members} canManage={canManage} myRole={myRole} config={config} onKick={handleKick} onAssignRole={handleAssignRole} />}
             {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}

@@ -608,20 +608,21 @@ MAX_FAMILIES = 10
 FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associate"]
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
-# Rackets: 1920s-30s family businesses. Cooldown hours, base income per level.
-# ECONOMY REBALANCE: Reduced base_income by ~60% for healthier economy
+# Rackets: 1920s-30s family businesses. Order = unlock order. First unlocked pays least, last pays most.
+# Income per collect = base_income * level.
 FAMILY_RACKETS = [
-    {"id": "protection", "name": "Protection Racket", "cooldown_hours": 6, "base_income": 2000, "description": "Extortion from businesses"},
-    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": 12, "base_income": 3200, "description": "Numbers & bookmaking"},
-    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": 24, "base_income": 4800, "description": "High-interest loans"},
-    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": 8, "base_income": 2400, "description": "Union kickbacks"},
-    {"id": "distillery", "name": "Distillery", "cooldown_hours": 10, "base_income": 2600, "description": "Bootleg liquor production"},
-    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": 8, "base_income": 2000, "description": "Storage and distribution"},
-    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": 6, "base_income": 2200, "description": "Front and steady income"},
-    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": 12, "base_income": 2800, "description": "Respectable front"},
-    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": 9, "base_income": 2400, "description": "Garment district operations"},
+    {"id": "protection", "name": "Protection Racket", "cooldown_hours": 6, "base_income": 400, "description": "Extortion from businesses"},
+    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": 12, "base_income": 550, "description": "Numbers & bookmaking"},
+    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": 24, "base_income": 700, "description": "High-interest loans"},
+    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": 8, "base_income": 850, "description": "Union kickbacks"},
+    {"id": "distillery", "name": "Distillery", "cooldown_hours": 10, "base_income": 1000, "description": "Bootleg liquor production"},
+    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": 8, "base_income": 1150, "description": "Storage and distribution"},
+    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": 6, "base_income": 1300, "description": "Front and steady income"},
+    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": 12, "base_income": 1450, "description": "Respectable front"},
+    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": 9, "base_income": 1600, "description": "Garment district operations"},
 ]
 RACKET_UPGRADE_COST = 50_000
+RACKET_UNLOCK_COST = 100_000  # Treasury cost to unlock next racket (after previous is maxed)
 RACKET_MAX_LEVEL = 5
 FAMILY_RACKET_ATTACK_BASE_SUCCESS = 0.70
 FAMILY_RACKET_ATTACK_LEVEL_PENALTY = 0.10
@@ -4033,11 +4034,9 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
         boss_id = user_ids[0][0] if user_ids else None
         if not boss_id:
             continue
-        seed_rackets = SEED_RACKETS_BY_FAMILY.get(name, {})
-        rackets = {}
-        for r in FAMILY_RACKETS:
-            level = seed_rackets.get(r["id"], 1)  # default 1 so every family has every racket
-            rackets[r["id"]] = {"level": max(1, level), "last_collected_at": None}
+        # Progression: only first racket unlocked; others must be unlocked after previous is maxed
+        first_racket_id = FAMILY_RACKETS[0]["id"]
+        rackets = {first_racket_id: {"level": 1, "last_collected_at": None}}
         await db.families.insert_one({
             "id": family_id,
             "name": name,
@@ -9283,6 +9282,7 @@ async def families_config(current_user: dict = Depends(get_current_user)):
         "racket_max_level": RACKET_MAX_LEVEL,
         "rackets": FAMILY_RACKETS,
         "racket_upgrade_cost": RACKET_UPGRADE_COST,
+        "racket_unlock_cost": RACKET_UNLOCK_COST,
     }
 
 
@@ -9337,11 +9337,22 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     rackets_raw = fam.get("rackets") or {}
     rackets = []
     now = datetime.now(timezone.utc)
-    for r in FAMILY_RACKETS:
+    racket_ids_ordered = [x["id"] for x in FAMILY_RACKETS]
+    for idx, r in enumerate(FAMILY_RACKETS):
         try:
             rid = r["id"]
             state = rackets_raw.get(rid) or {}
             level = int(state.get("level", 0) or 0)
+            locked = level <= 0
+            prev_id = racket_ids_ordered[idx - 1] if idx > 0 else None
+            required_racket_name = None
+            can_unlock = False
+            if locked and prev_id:
+                required_racket_name = next((x["name"] for x in FAMILY_RACKETS if x["id"] == prev_id), prev_id)
+                prev_level = int((rackets_raw.get(prev_id) or {}).get("level", 0) or 0)
+                can_unlock = prev_level >= RACKET_MAX_LEVEL
+            elif locked and idx == 0:
+                can_unlock = True
             last_at = state.get("last_collected_at")
             income_per, cooldown_h = _racket_income_and_cooldown(rid, level, ev)
             next_collect_at = None
@@ -9359,6 +9370,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 "name": r["name"],
                 "description": r.get("description", ""),
                 "level": level,
+                "locked": locked,
+                "required_racket_name": required_racket_name,
+                "can_unlock": can_unlock,
+                "unlock_cost": RACKET_UNLOCK_COST if locked else None,
                 "cooldown_hours": r["cooldown_hours"],
                 "effective_cooldown_hours": cooldown_h,
                 "income_per_collect": income_per,
@@ -9424,6 +9439,8 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         raise HTTPException(status_code=400, detail="Name or tag already taken")
     family_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    # Only first racket unlocked at creation (passive income progression)
+    first_racket_id = FAMILY_RACKETS[0]["id"]
     await db.families.insert_one({
         "id": family_id,
         "name": name,
@@ -9431,7 +9448,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "boss_id": current_user["id"],
         "treasury": 0,
         "created_at": now,
-        "rackets": {},
+        "rackets": {first_racket_id: {"level": 1, "last_collected_at": None}},
     })
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()),
@@ -9612,9 +9629,18 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     return {"message": f"Collected ${income:,}", "amount": income}
 
 
-@api_router.post("/families/rackets/{racket_id}/upgrade")
-async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(get_current_user)):
-    """Upgrade racket level (cost from treasury). Boss/Underboss/Consigliere."""
+def _racket_previous_id(racket_id: str):
+    """Return the racket id that must be maxed before this one can be unlocked, or None for first."""
+    ids = [x["id"] for x in FAMILY_RACKETS]
+    if racket_id not in ids:
+        return None
+    i = ids.index(racket_id)
+    return ids[i - 1] if i > 0 else None
+
+
+@api_router.post("/families/rackets/{racket_id}/unlock")
+async def families_racket_unlock(racket_id: str, current_user: dict = Depends(get_current_user)):
+    """Unlock next racket (cost from treasury). Only allowed when previous racket is fully upgraded. Boss/Underboss/Consigliere."""
     role = current_user.get("family_role")
     if role not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
@@ -9629,6 +9655,53 @@ async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(g
     rackets = (fam.get("rackets") or {}).copy()
     state = rackets.get(racket_id) or {}
     level = state.get("level", 0)
+    if level >= 1:
+        raise HTTPException(status_code=400, detail="Racket already unlocked")
+    prev_id = _racket_previous_id(racket_id)
+    if prev_id:
+        prev_level = (rackets.get(prev_id) or {}).get("level", 0)
+        if prev_level < RACKET_MAX_LEVEL:
+            prev_name = next((r["name"] for r in FAMILY_RACKETS if r["id"] == prev_id), prev_id)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Fully upgrade {prev_name} (level {RACKET_MAX_LEVEL}) before unlocking this racket",
+            )
+    treasury = int((fam.get("treasury") or 0) or 0)
+    if treasury < RACKET_UNLOCK_COST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough treasury (need ${RACKET_UNLOCK_COST:,})",
+        )
+    rackets[racket_id] = {"level": 1, "last_collected_at": None}
+    await db.families.update_one(
+        {"id": family_id},
+        {"$set": {"rackets": rackets}, "$inc": {"treasury": -RACKET_UNLOCK_COST}},
+    )
+    return {"message": "Racket unlocked"}
+
+
+@api_router.post("/families/rackets/{racket_id}/upgrade")
+async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(get_current_user)):
+    """Upgrade racket level (cost from treasury). Boss/Underboss/Consigliere. Racket must be unlocked first."""
+    role = current_user.get("family_role")
+    if role not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    if racket_id not in [x["id"] for x in FAMILY_RACKETS]:
+        raise HTTPException(status_code=404, detail="Racket not found")
+    rackets = (fam.get("rackets") or {}).copy()
+    state = rackets.get(racket_id) or {}
+    level = state.get("level", 0)
+    if level <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Unlock this racket first (previous racket must be fully upgraded)",
+        )
     if level >= RACKET_MAX_LEVEL:
         raise HTTPException(status_code=400, detail="Racket already max level")
     treasury = int((fam.get("treasury") or 0) or 0)
