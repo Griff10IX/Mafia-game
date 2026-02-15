@@ -223,9 +223,9 @@ const GarageSection = ({ garage, isCollapsed, onToggle }) => {
               <div
                 key={index}
                 data-testid={`garage-car-${index}`}
-                className="bg-zinc-800/30 border border-primary/10 rounded-md p-1.5 flex flex-col items-center text-center hover:border-primary/30 transition-all"
+                className="bg-zinc-800/30 border border-primary/10 rounded-sm p-1 flex flex-col items-center text-center hover:border-primary/30 transition-all"
               >
-                <div className="w-12 h-12 rounded overflow-hidden bg-zinc-900/50 border border-primary/10 shrink-0 mb-1">
+                <div className="w-full aspect-square rounded-sm overflow-hidden bg-zinc-900/50 shrink-0 mb-0.5">
                   {car.image ? (
                     <img
                       src={car.image}
@@ -235,11 +235,11 @@ const GarageSection = ({ garage, isCollapsed, onToggle }) => {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Car size={16} className="text-primary/40" />
+                      <Car size={20} className="text-primary/40" />
                     </div>
                   )}
                 </div>
-                <div className="text-[10px] font-heading font-bold text-foreground truncate w-full">
+                <div className="text-[9px] font-heading font-bold text-primary truncate w-full leading-tight">
                   {car.car_name}
                 </div>
               </div>
