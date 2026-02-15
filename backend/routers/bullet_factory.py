@@ -20,6 +20,20 @@ BULLET_FACTORY_UNOWNED_PRICE_MIN = 2500
 BULLET_FACTORY_UNOWNED_PRICE_MAX = 4000
 
 
+class StateOptionalRequest(BaseModel):
+    state: Optional[str] = None
+
+
+class SetPriceRequest(BaseModel):
+    price_per_bullet: int
+    state: Optional[str] = None
+
+
+class BuyBulletsRequest(BaseModel):
+    amount: int
+    state: Optional[str] = None
+
+
 def _normalize_state(state: str) -> str:
     if not state or state not in STATES:
         return STATES[0] if STATES else ""
@@ -187,20 +201,6 @@ async def collect_bullets(
         "collected": accumulated,
         "new_total": (current_user.get("bullets") or 0) + accumulated,
     }
-
-
-class StateOptionalRequest(BaseModel):
-    state: Optional[str] = None
-
-
-class SetPriceRequest(BaseModel):
-    price_per_bullet: int
-    state: Optional[str] = None
-
-
-class BuyBulletsRequest(BaseModel):
-    amount: int
-    state: Optional[str] = None
 
 
 async def set_price(
