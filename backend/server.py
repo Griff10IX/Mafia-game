@@ -385,6 +385,7 @@ class UserResponse(BaseModel):
     swiss_limit: int = SWISS_BANK_LIMIT_START
     oc_timer_reduced: bool = False
     admin_ghost_mode: bool = False
+    admin_acting_as_normal: bool = False
 
 # Notification/Inbox models
 class NotificationCreate(BaseModel):
@@ -1396,6 +1397,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         swiss_limit=int(current_user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START),
         oc_timer_reduced=bool(current_user.get("oc_timer_reduced", False)),
         admin_ghost_mode=bool(current_user.get("admin_ghost_mode", False)),
+        admin_acting_as_normal=bool(current_user.get("admin_acting_as_normal", False)),
     )
 
 @api_router.get("/users/{username}/profile")
@@ -2766,7 +2768,7 @@ def _sports_template_to_response(t):
 @api_router.get("/admin/sports-betting/templates")
 async def admin_sports_templates(current_user: dict = Depends(get_current_user)):
     """Admin: list event templates from cache only. No API calls - use POST /refresh to fetch (saves free-tier quota)."""
-    if current_user.get("email") not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     categories = ["Football", "UFC", "Boxing", "Formula 1"]
     by_category = {c: [] for c in categories}
@@ -2778,7 +2780,7 @@ async def admin_sports_templates(current_user: dict = Depends(get_current_user))
 @api_router.post("/admin/sports-betting/refresh")
 async def admin_sports_refresh(current_user: dict = Depends(get_current_user)):
     """Admin: fetch latest events from The Odds API etc. (use when user clicks 'Check for events'). Uses quota."""
-    if current_user.get("email") not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     await _refresh_sports_live_cache(force=True)
     categories = ["Football", "UFC", "Boxing", "Formula 1"]
@@ -2791,7 +2793,7 @@ async def admin_sports_refresh(current_user: dict = Depends(get_current_user)):
 @api_router.post("/admin/sports-betting/events")
 async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_user: dict = Depends(get_current_user)):
     """Admin: add a live event from a template. Template must be in cache (click 'Check for events' first)."""
-    if current_user.get("email") not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     template_id = (request.template_id or "").strip()
     template = next((t for t in _get_all_sports_templates() if t["id"] == template_id), None)
@@ -2815,7 +2817,7 @@ async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_us
 @api_router.post("/admin/sports-betting/settle")
 async def admin_sports_settle(request: SportsSettleEventRequest, current_user: dict = Depends(get_current_user)):
     """Admin: settle an event, mark bets won/lost, and auto-pay winners."""
-    if current_user.get("email") not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()
     winning_option_id = (request.winning_option_id or "").strip()
@@ -2847,7 +2849,7 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
 @api_router.post("/admin/sports-betting/cancel-event")
 async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_user: dict = Depends(get_current_user)):
     """Admin: cancel an event, refund all open bets on it, and remove it from the open list."""
-    if current_user.get("email") not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()
     ev = await db.sports_events.find_one({"id": event_id, "status": "open"}, {"_id": 0, "id": 1})
@@ -3172,6 +3174,10 @@ async def sell_armour(current_user: dict = Depends(get_current_user)):
 # Admin endpoints
 ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
 
+def _is_admin(user: dict) -> bool:
+    """True if user has admin email and is not currently acting as normal user."""
+    return (user.get("email") or "") in ADMIN_EMAILS and not user.get("admin_acting_as_normal", False)
+
 @api_router.post("/admin/ghost-mode")
 async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)):
     """Toggle admin ghost mode so you do not appear in online list or as online on profile (admin only)."""
@@ -3184,9 +3190,20 @@ async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)
     )
     return {"admin_ghost_mode": new_value, "message": "Ghost mode " + ("on" if new_value else "off")}
 
+@api_router.post("/admin/act-as-normal")
+async def admin_act_as_normal(acting: bool, current_user: dict = Depends(get_current_user)):
+    """Toggle acting as normal user (no admin powers) for testing. Only available to real admin emails."""
+    if current_user.get("email") not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"admin_acting_as_normal": bool(acting)}}
+    )
+    return {"admin_acting_as_normal": bool(acting), "message": "Act as normal user " + ("on" if acting else "off")}
+
 @api_router.post("/admin/change-rank")
 async def admin_change_rank(target_username: str, new_rank: int, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Case-insensitive username lookup
@@ -3204,7 +3221,7 @@ async def admin_change_rank(target_username: str, new_rank: int, current_user: d
 
 @api_router.post("/admin/add-points")
 async def admin_add_points(target_username: str, points: int, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Case-insensitive username lookup
@@ -3223,7 +3240,7 @@ async def admin_add_points(target_username: str, points: int, current_user: dict
 @api_router.post("/admin/give-all-points")
 async def admin_give_all_points(points: int, current_user: dict = Depends(get_current_user)):
     """Give points to every alive (non-dead, non-NPC) account."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     if points < 1:
         raise HTTPException(status_code=400, detail="Points must be at least 1")
@@ -3237,7 +3254,7 @@ async def admin_give_all_points(points: int, current_user: dict = Depends(get_cu
 @api_router.post("/admin/give-all-money")
 async def admin_give_all_money(amount: int, current_user: dict = Depends(get_current_user)):
     """Give money to every alive (non-dead, non-NPC) account."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     if amount < 1:
         raise HTTPException(status_code=400, detail="Amount must be at least 1")
@@ -3251,7 +3268,7 @@ async def admin_give_all_money(amount: int, current_user: dict = Depends(get_cur
 @api_router.post("/admin/give-all-money")
 async def admin_give_all_money(amount: int, current_user: dict = Depends(get_current_user)):
     """Give money to every alive (non-dead, non-NPC) account."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     if amount < 1:
         raise HTTPException(status_code=400, detail="Amount must be at least 1")
@@ -3263,7 +3280,7 @@ async def admin_give_all_money(amount: int, current_user: dict = Depends(get_cur
 
 @api_router.post("/admin/add-bullets")
 async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     if bullets <= 0:
@@ -3284,7 +3301,7 @@ async def admin_add_bullets(target_username: str, bullets: int, current_user: di
 
 @api_router.post("/admin/add-car")
 async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Case-insensitive username lookup
@@ -3310,7 +3327,7 @@ async def admin_add_car(target_username: str, car_id: str, current_user: dict = 
 @api_router.post("/admin/bodyguards/clear")
 async def admin_clear_bodyguards(target_username: str, current_user: dict = Depends(get_current_user)):
     """Delete all bodyguard slots for a user (testing)."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1})
     if not target:
@@ -3332,7 +3349,7 @@ async def admin_clear_bodyguards(target_username: str, current_user: dict = Depe
 @api_router.post("/admin/bodyguards/drop-all-human")
 async def admin_drop_all_human_bodyguards(current_user: dict = Depends(get_current_user)):
     """Remove every bodyguard slot that is filled by a human (not robot). Robot bodyguards are left in place."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     res = await db.bodyguards.delete_many({"is_robot": {"$ne": True}})
     return {"message": f"Dropped all human bodyguards ({res.deleted_count} slot(s) cleared)", "deleted_count": res.deleted_count}
@@ -3341,7 +3358,7 @@ async def admin_drop_all_human_bodyguards(current_user: dict = Depends(get_curre
 @api_router.post("/admin/bodyguards/drop-all")
 async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_user)):
     """Remove ALL bodyguard slots from ALL users (both human and robot bodyguards)."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     res = await db.bodyguards.delete_many({})
     # Also delete all robot bodyguard user accounts
@@ -3358,7 +3375,7 @@ async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_use
 @api_router.get("/admin/security/summary")
 async def admin_security_summary(limit: int = 100, flag_type: str = None, current_user: dict = Depends(get_current_user)):
     """Get summary of security flags."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     summary = await security_module.get_security_summary(db, limit=limit, flag_type=flag_type)
@@ -3374,7 +3391,7 @@ async def admin_security_flags(
     current_user: dict = Depends(get_current_user)
 ):
     """Get detailed security flags with filtering options."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     query = {}
@@ -3392,7 +3409,7 @@ async def admin_security_flags(
 @api_router.post("/admin/security/flags/{flag_id}/resolve")
 async def admin_resolve_security_flag(flag_id: str, current_user: dict = Depends(get_current_user)):
     """Mark a security flag as resolved."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     result = await db.security_flags.update_one(
@@ -3409,7 +3426,7 @@ async def admin_resolve_security_flag(flag_id: str, current_user: dict = Depends
 @api_router.get("/admin/security/rate-limits")
 async def admin_get_rate_limits(current_user: dict = Depends(get_current_user)):
     """Get current rate limit configuration for all endpoints."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     return {
@@ -3425,7 +3442,7 @@ async def admin_toggle_rate_limit(
     current_user: dict = Depends(get_current_user)
 ):
     """Toggle rate limiting on/off for a specific endpoint."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     if endpoint not in security_module.RATE_LIMIT_CONFIG:
@@ -3450,7 +3467,7 @@ async def admin_update_rate_limit(
     current_user: dict = Depends(get_current_user)
 ):
     """Update the rate limit value (requests per minute) for a specific endpoint."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     if endpoint not in security_module.RATE_LIMIT_CONFIG:
@@ -3474,7 +3491,7 @@ async def admin_update_rate_limit(
 @api_router.post("/admin/security/rate-limits/disable-all")
 async def admin_disable_all_rate_limits(current_user: dict = Depends(get_current_user)):
     """Disable rate limiting for ALL endpoints (emergency disable)."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Disable the global toggle
@@ -3496,7 +3513,7 @@ async def admin_disable_all_rate_limits(current_user: dict = Depends(get_current
 @api_router.post("/admin/security/rate-limits/enable-all")
 async def admin_enable_all_rate_limits(current_user: dict = Depends(get_current_user)):
     """Enable rate limiting for ALL endpoints."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Enable the global toggle
@@ -3521,7 +3538,7 @@ async def admin_toggle_global_rate_limits(
     current_user: dict = Depends(get_current_user)
 ):
     """Toggle the global rate limit master switch. When OFF, all rate limits are bypassed."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     security_module.GLOBAL_RATE_LIMITS_ENABLED = enabled
@@ -3535,7 +3552,7 @@ async def admin_toggle_global_rate_limits(
 @api_router.post("/admin/security/test-telegram")
 async def admin_test_telegram(current_user: dict = Depends(get_current_user)):
     """Send a test alert to Telegram to verify configuration."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     if not security_module.TELEGRAM_ENABLED:
@@ -3559,7 +3576,7 @@ async def admin_test_telegram(current_user: dict = Depends(get_current_user)):
 @api_router.post("/admin/security/clear-user-flags")
 async def admin_clear_user_flags(user_id: str, current_user: dict = Depends(get_current_user)):
     """Clear all security flags for a specific user."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     count = await security_module.clear_user_security_flags(db, user_id)
@@ -3572,7 +3589,7 @@ async def admin_clear_user_flags(user_id: str, current_user: dict = Depends(get_
 @api_router.post("/admin/security/clear-old-flags")
 async def admin_clear_old_flags(days: int = 30, current_user: dict = Depends(get_current_user)):
     """Clear security flags older than specified days."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     count = await security_module.clear_old_security_flags(db, days)
@@ -3586,7 +3603,7 @@ async def admin_clear_old_flags(days: int = 30, current_user: dict = Depends(get
 @api_router.post("/admin/hitlist/reset-npc-timers")
 async def admin_reset_hitlist_npc_timers(current_user: dict = Depends(get_current_user)):
     """Reset everyone's hitlist NPC add timers (3-per-3h window). All users can add NPCs again as if the window just started."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     result = await db.users.update_many(
         {},
@@ -3598,7 +3615,7 @@ async def admin_reset_hitlist_npc_timers(current_user: dict = Depends(get_curren
 @api_router.post("/admin/bodyguards/generate")
 async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, current_user: dict = Depends(get_current_user)):
     """Generate 1–4 robot bodyguards for a user (testing)."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     target_username = (request.target_username or "").strip()
@@ -3653,7 +3670,7 @@ async def admin_force_online(current_user: dict = Depends(get_current_user)):
     Force offline (but alive) users to appear online for 1 hour.
     This affects the Users Online list and profile status.
     """
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
 
     now = datetime.now(timezone.utc)
@@ -3689,7 +3706,7 @@ async def admin_force_online(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/admin/lock-player")
 async def admin_lock_player(target_username: str, lock_minutes: int, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Case-insensitive username lookup
@@ -3709,7 +3726,7 @@ async def admin_lock_player(target_username: str, lock_minutes: int, current_use
 
 @api_router.post("/admin/kill-player")
 async def admin_kill_player(target_username: str, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # Case-insensitive username lookup
@@ -3735,7 +3752,7 @@ async def admin_kill_player(target_username: str, current_user: dict = Depends(g
 
 @api_router.post("/admin/set-search-time")
 async def admin_set_search_time(target_username: str, search_minutes: int, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     attacker = await db.users.find_one({"username": target_username}, {"_id": 0})
@@ -3762,7 +3779,7 @@ async def admin_set_search_time(target_username: str, search_minutes: int, curre
 @api_router.post("/admin/set-all-search-time")
 async def admin_set_all_search_time(search_minutes: int = 5, current_user: dict = Depends(get_current_user)):
     """Set every user's search timer to the given minutes (e.g. 5). Affects all future searches and any currently searching."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     if search_minutes <= 0:
         raise HTTPException(status_code=400, detail="search_minutes must be positive")
@@ -3786,7 +3803,7 @@ async def admin_set_all_search_time(search_minutes: int = 5, current_user: dict 
 @api_router.post("/admin/clear-all-searches")
 async def admin_clear_all_searches(current_user: dict = Depends(get_current_user)):
     """Delete all attack/search documents from db.attacks. Admin only."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     res = await db.attacks.delete_many({})
     return {"message": f"Cleared all searches ({res.deleted_count} deleted)"}
@@ -3794,14 +3811,15 @@ async def admin_clear_all_searches(current_user: dict = Depends(get_current_user
 
 @api_router.get("/admin/check")
 async def admin_check(current_user: dict = Depends(get_current_user)):
-    is_admin = current_user["email"] in ADMIN_EMAILS
-    return {"is_admin": is_admin}
+    is_admin = _is_admin(current_user)
+    has_admin_email = (current_user.get("email") or "") in ADMIN_EMAILS
+    return {"is_admin": is_admin, "has_admin_email": has_admin_email}
 
 
 @api_router.get("/admin/find-duplicates")
 async def admin_find_duplicates(username: str = None, current_user: dict = Depends(get_current_user)):
     """Find duplicate or similar usernames in the database. If username provided, search for that; otherwise find all duplicates."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     if username:
@@ -3827,7 +3845,7 @@ async def admin_find_duplicates(username: str = None, current_user: dict = Depen
 @api_router.get("/admin/user-details/{user_id}")
 async def admin_user_details(user_id: str, current_user: dict = Depends(get_current_user)):
     """Get full details of a user by ID."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
@@ -3843,7 +3861,7 @@ class WipeConfirmation(BaseModel):
 @api_router.post("/admin/wipe-all-users")
 async def admin_wipe_all_users(confirm: WipeConfirmation, current_user: dict = Depends(get_current_user)):
     """DANGEROUS: Delete ALL users and related data from the game. Admin only. Requires confirmation."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     # SAFETY: Require exact confirmation text to prevent accidental wipes
@@ -3890,7 +3908,7 @@ async def admin_wipe_all_users(confirm: WipeConfirmation, current_user: dict = D
 @api_router.post("/admin/delete-user/{user_id}")
 async def admin_delete_single_user(user_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a single user and all their related data. Admin only."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
@@ -3925,7 +3943,7 @@ async def admin_delete_single_user(user_id: str, current_user: dict = Depends(ge
 @api_router.get("/admin/events")
 async def admin_get_events(current_user: dict = Depends(get_current_user)):
     """Get current events-enabled flag and all-events-for-testing (admin)."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     enabled = await get_events_enabled()
     all_for_testing = await get_all_events_for_testing()
@@ -3936,7 +3954,7 @@ async def admin_get_events(current_user: dict = Depends(get_current_user)):
 @api_router.post("/admin/events/toggle")
 async def admin_toggle_events(request: EventsToggleRequest, current_user: dict = Depends(get_current_user)):
     """Enable or disable daily game events (admin)."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     enabled = request.enabled
     await db.game_config.update_one(
@@ -3950,7 +3968,7 @@ async def admin_toggle_events(request: EventsToggleRequest, current_user: dict =
 @api_router.post("/admin/events/all-for-testing")
 async def admin_all_events_for_testing(request: AllEventsForTestingRequest, current_user: dict = Depends(get_current_user)):
     """Enable or disable 'all events at once' for testing (admin). When on, all event multipliers are combined."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     enabled = request.enabled
     await db.game_config.update_one(
@@ -3982,7 +4000,7 @@ SEED_TEST_PASSWORD = "test1234"
 @api_router.post("/admin/seed-families")
 async def admin_seed_families(current_user: dict = Depends(get_current_user)):
     """Create 3 families with 5 members each (15 test users). Password for all: test1234."""
-    if current_user["email"] not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     password_hash = get_password_hash(SEED_TEST_PASSWORD)
     now = datetime.now(timezone.utc).isoformat()
@@ -4930,6 +4948,8 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         raise HTTPException(status_code=400, detail="Target username required")
     target = await db.users.find_one(user_filter, {"_id": 0})
     if not target:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    if target.get("email") in ADMIN_EMAILS:
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")

@@ -13,6 +13,7 @@ export default function Layout({ children }) {
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [atWar, setAtWar] = useState(false);
   const [flashNews, setFlashNews] = useState([]);
@@ -39,6 +40,12 @@ export default function Layout({ children }) {
     };
     window.addEventListener('app:refresh-user', handler);
     return () => window.removeEventListener('app:refresh-user', handler);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const handler = () => checkAdmin();
+    window.addEventListener('app:admin-changed', handler);
+    return () => window.removeEventListener('app:admin-changed', handler);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -118,10 +125,20 @@ export default function Layout({ children }) {
   const checkAdmin = async () => {
     try {
       const response = await api.get('/admin/check');
-      setIsAdmin(response.data.is_admin);
+      setIsAdmin(!!response.data.is_admin);
+      setHasAdminEmail(!!response.data.has_admin_email);
     } catch (error) {
       setIsAdmin(false);
+      setHasAdminEmail(false);
     }
+  };
+
+  const promoteToAdmin = async () => {
+    try {
+      await api.post('/admin/act-as-normal', null, { params: { acting: false } });
+      await checkAdmin();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (_) {}
   };
 
   const fetchRankingCounts = async () => {
@@ -176,7 +193,7 @@ export default function Layout({ children }) {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    navigate('/');
+    window.location.href = '/';
   };
 
   const formatInt = (n) => {
@@ -488,7 +505,7 @@ export default function Layout({ children }) {
                   </Link>
                 );
               })}
-              
+
               {/* Admin Section */}
               {adminNavItems.map((item) => {
                 const Icon = item.icon;
@@ -497,7 +514,7 @@ export default function Layout({ children }) {
                   <Link
                     key={item.path}
                     to={item.path}
-                    data-testid={`nav-${item.label.toLowerCase()}`}
+                    data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                     className={`flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth border-t border-primary/20 mt-2 pt-2 ${
                       isActive
                         ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
@@ -510,6 +527,16 @@ export default function Layout({ children }) {
                   </Link>
                 );
               })}
+              {hasAdminEmail && !isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => { promoteToAdmin(); setSidebarOpen(false); }}
+                  className="flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth border-t border-primary/20 mt-2 pt-2 w-full text-left text-amber-400 hover:bg-amber-500/10"
+                >
+                  <Shield size={16} />
+                  <span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
+                </button>
+              )}
             </div>
           </nav>
 

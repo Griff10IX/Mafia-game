@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, ADMIN_EMAILS
+from server import db, get_current_user, _is_admin
 
 
 class TopicCreate(BaseModel):
@@ -162,7 +162,7 @@ async def update_topic(
     current_user: dict = Depends(get_current_user),
 ):
     """Admin only: set sticky, important, or locked on a topic."""
-    if current_user.get("email") not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
@@ -189,7 +189,7 @@ async def delete_topic(
     current_user: dict = Depends(get_current_user),
 ):
     """Admin only: delete a topic and all its comments."""
-    if current_user.get("email") not in ADMIN_EMAILS:
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:

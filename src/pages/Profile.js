@@ -382,6 +382,7 @@ export default function Profile() {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasAdminEmail, setHasAdminEmail] = useState(false);
 
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
@@ -403,6 +404,7 @@ export default function Profile() {
         ]);
         setMe(meRes.data);
         setIsAdmin(!!adminRes.data?.is_admin);
+        setHasAdminEmail(!!adminRes.data?.has_admin_email);
       } catch (e) {
         toast.error('Failed to load your account');
       } finally {
@@ -483,6 +485,31 @@ export default function Profile() {
     }
   };
 
+  const refetchAdmin = async () => {
+    try {
+      const r = await api.get('/admin/check');
+      setIsAdmin(!!r.data?.is_admin);
+      setHasAdminEmail(!!r.data?.has_admin_email);
+      window.dispatchEvent(new CustomEvent('app:admin-changed'));
+    } catch (_) {}
+  };
+
+  const toggleActAsNormal = async () => {
+    try {
+      const acting = !me?.admin_acting_as_normal;
+      await api.post('/admin/act-as-normal', null, { params: { acting } });
+      toast.success(acting ? 'Acting as normal user — admin powers off' : 'Admin powers on');
+      await refetchMe();
+      await refetchAdmin();
+      if (isMe && username) {
+        const p = await api.get(`/users/${encodeURIComponent(username)}/profile`);
+        setProfile(p.data);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle');
+    }
+  };
+
   if (loading && !profile) {
     return <LoadingSpinner />;
   }
@@ -520,28 +547,57 @@ export default function Profile() {
           onAddToSearch={addToAttackSearches} 
         />
 
-        {isMe && isAdmin && (
-          <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Ghost className="w-5 h-5 text-primary" />
-                <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Admin ghost mode</span>
+        {isMe && hasAdminEmail && (
+          <>
+            {isAdmin && (
+              <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
+                <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Ghost className="w-5 h-5 text-primary" />
+                    <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Admin ghost mode</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleGhostMode}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${me?.admin_ghost_mode ? 'bg-primary' : 'bg-secondary'}`}
+                    role="switch"
+                    aria-checked={!!me?.admin_ghost_mode}
+                    title={me?.admin_ghost_mode ? 'You appear offline. Click to show online.' : 'You appear online. Click to hide (ghost).'}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${me?.admin_ghost_mode ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                <p className="px-4 py-2 text-xs text-mutedForeground font-heading">
+                  When on, you won&apos;t appear in the online list or as &quot;Online&quot; on your profile.
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={toggleGhostMode}
-                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${me?.admin_ghost_mode ? 'bg-primary' : 'bg-secondary'}`}
-                role="switch"
-                aria-checked={!!me?.admin_ghost_mode}
-                title={me?.admin_ghost_mode ? 'You appear offline. Click to show online.' : 'You appear online. Click to hide (ghost).'}
-              >
-                <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${me?.admin_ghost_mode ? 'translate-x-5' : 'translate-x-0.5'}`} />
-              </button>
+            )}
+            <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
+              <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">
+                    {me?.admin_acting_as_normal ? 'Acting as normal user' : 'Admin powers'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleActAsNormal}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${me?.admin_acting_as_normal ? 'bg-secondary' : 'bg-primary'}`}
+                  role="switch"
+                  aria-checked={!!me?.admin_acting_as_normal}
+                  title={me?.admin_acting_as_normal ? 'Click to use admin powers again' : 'Click to act as normal user (test without admin)'}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${me?.admin_acting_as_normal ? 'translate-x-0.5' : 'translate-x-5'}`} />
+                </button>
+              </div>
+              <p className="px-4 py-2 text-xs text-mutedForeground font-heading">
+                {me?.admin_acting_as_normal
+                  ? 'Admin powers are off. Turn on to access Admin page and admin-only actions.'
+                  : 'Turn off to test the game as a normal user (e.g. with others).'}
+              </p>
             </div>
-            <p className="px-4 py-2 text-xs text-mutedForeground font-heading">
-              When on, you won&apos;t appear in the online list or as &quot;Online&quot; on your profile.
-            </p>
-          </div>
+          </>
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
