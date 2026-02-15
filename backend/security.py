@@ -232,54 +232,56 @@ def validate_positive_int(value: Any, field_name: str, max_value: int = None) ->
 # You can enable/disable rate limiting per endpoint here
 RATE_LIMIT_CONFIG = {
     # Format: "endpoint_pattern": (max_requests_per_minute, enabled)
+    # NOTE: Paths must include /api/ prefix to match actual request paths
     
     # Money & economy (protect against rapid exploits)
-    "/bank/transfer": (10, True),
-    "/bank/interest/deposit": (20, True),
-    "/bank/swiss/deposit": (30, True),
-    "/bank/swiss/withdraw": (30, True),
+    "/api/bank/transfer": (10, True),
+    "/api/bank/interest/deposit": (20, True),
+    "/api/bank/interest/claim": (20, True),
+    "/api/bank/swiss/deposit": (30, True),
+    "/api/bank/swiss/withdraw": (30, True),
     
     # Game actions (prevent bot-like rapid fire)
-    "/crimes/": (40, True),
-    "/gta/attempt": (30, True),
-    "/oc/start": (10, True),
-    "/attack/": (40, True),
+    "/api/crimes/": (40, True),
+    "/api/gta/attempt": (30, True),
+    "/api/oc/start": (10, True),
+    "/api/attack/": (40, True),
     
     # Hitlist (prevent spam)
-    "/hitlist/add": (15, True),
-    "/hitlist/buy-off": (20, True),
+    "/api/hitlist/add": (15, True),
+    "/api/hitlist/buy-off": (20, True),
     
     # Store purchases (prevent rapid buying exploits)
-    "/store/": (30, True),
-    "/weapons/": (40, True),
-    "/armour/": (40, True),
+    "/api/store/": (30, True),
+    "/api/weapons/": (40, True),
+    "/api/armour/": (40, True),
     
     # Properties & racket (moderate)
-    "/properties/": (40, False),  # Disabled by default
-    "/racket/": (40, False),      # Disabled by default
+    "/api/properties/": (40, False),  # Disabled by default
+    "/api/racket/": (40, False),      # Disabled by default
     
     # Bodyguards (prevent spam invites)
-    "/bodyguards/": (30, True),
+    "/api/bodyguards/": (30, True),
     
     # Casino/gambling (prevent rapid betting exploits)
-    "/dice/": (50, True),
-    "/roulette/": (50, True),
-    "/blackjack/": (50, True),
-    "/horseracing/": (50, True),
-    "/sports-betting/": (50, True),
+    "/api/dice/": (50, True),
+    "/api/roulette/": (50, True),
+    "/api/blackjack/": (50, True),
+    "/api/horseracing/": (50, True),
+    "/api/sports-betting/": (50, True),
     
     # Admin endpoints (no rate limit - admins need full access)
-    "/admin/": (1000, False),
+    "/api/admin/": (1000, False),
     
     # Auth & profile (light limits)
-    "/auth/login": (20, True),
-    "/auth/register": (10, True),
-    "/auth/me": (120, False),  # Frequent polling is OK
+    "/api/auth/login": (20, True),
+    "/api/auth/register": (10, True),
+    "/api/auth/me": (120, False),  # Frequent polling is OK
     
     # Meta & read-only (light or disabled)
-    "/meta/": (120, False),
-    "/users/": (80, False),
-    "/leaderboard/": (60, False),
+    "/api/meta/": (120, False),
+    "/api/users/": (80, False),
+    "/api/leaderboard/": (60, False),
 }
 
 # Per-endpoint rate tracking: {endpoint: {user_id: [timestamps]}}
