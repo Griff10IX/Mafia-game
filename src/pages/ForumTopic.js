@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { Lock, ThumbsUp, Send, ChevronDown, Pin, AlertCircle, Trash2, Settings } from 'lucide-react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock } from 'lucide-react';
 import api from '../utils/api';
 import GifPicker from '../components/GifPicker';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
-const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💵', '💎', '🎩', '🔫', '⚔️', '🎲', '👑', '🏆', '✨'];
+const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
 
 function getTimeAgo(iso) {
   if (!iso) return '';
@@ -31,6 +31,7 @@ export default function ForumTopic() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminBusy, setAdminBusy] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -51,13 +52,8 @@ export default function ForumTopic() {
     }
   }, [topicId, navigate]);
 
-  useEffect(() => {
-    fetchTopic();
-  }, [fetchTopic]);
-
-  useEffect(() => {
-    api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
-  }, []);
+  useEffect(() => { fetchTopic(); }, [fetchTopic]);
+  useEffect(() => { api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false)); }, []);
 
   const updateTopicFlags = async (payload) => {
     setAdminBusy(true);
@@ -66,49 +62,39 @@ export default function ForumTopic() {
       toast.success('Updated');
       fetchTopic();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to update');
+      toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setAdminBusy(false);
     }
   };
 
   const deleteTopic = async () => {
-    if (!window.confirm('Delete this topic and all comments? This cannot be undone.')) return;
+    if (!window.confirm('Delete this topic and all comments?')) return;
     setAdminBusy(true);
     try {
       await api.delete(`/forum/topics/${topicId}`);
-      toast.success('Topic deleted');
+      toast.success('Deleted');
       navigate('/forum');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to delete');
+      toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setAdminBusy(false);
     }
   };
 
-  const insertEmoji = (emoji) => {
-    setCommentText((c) => c + emoji);
-  };
-
   const postComment = async (e) => {
     e.preventDefault();
-    if (topic?.is_locked) {
-      toast.error('Topic is locked');
-      return;
-    }
+    if (topic?.is_locked) { toast.error('Topic is locked'); return; }
     const text = commentText.trim();
-    if (!text) {
-      toast.error('Enter a comment');
-      return;
-    }
+    if (!text) { toast.error('Enter a comment'); return; }
     setPosting(true);
     try {
       await api.post(`/forum/topics/${topicId}/comments`, { content: text });
       setCommentText('');
-      toast.success('Comment posted');
+      toast.success('Posted');
       fetchTopic();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to post comment');
+      toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setPosting(false);
     }
@@ -123,7 +109,7 @@ export default function ForumTopic() {
       toast.success('GIF posted');
       fetchTopic();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to post GIF');
+      toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setPosting(false);
     }
@@ -141,7 +127,7 @@ export default function ForumTopic() {
         )
       );
     } catch {
-      toast.error('Failed to update like');
+      toast.error('Failed');
     } finally {
       setLikingId(null);
     }
@@ -150,203 +136,229 @@ export default function ForumTopic() {
   if (loading && !topic) {
     return (
       <div className={`${styles.pageContent} flex items-center justify-center min-h-[40vh]`}>
-        <div className="text-primary font-heading">Loading...</div>
+        <div className="text-primary font-heading text-sm">Loading...</div>
       </div>
     );
   }
-  if (!topic) {
-    return null;
-  }
+  if (!topic) return null;
 
   const commentCount = comments.length;
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-topic-page">
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => navigate('/forum')}
-          className="text-sm text-mutedForeground hover:text-primary font-heading"
-        >
-          ← Forum
-        </button>
-        {isAdmin && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] text-amber-400 font-heading uppercase flex items-center gap-1">
-              <Settings size={12} /> Admin
-            </span>
-            <button
-              type="button"
-              title={topic.is_sticky ? 'Unsticky' : 'Sticky'}
-              onClick={() => updateTopicFlags({ is_sticky: !topic.is_sticky })}
-              disabled={adminBusy}
-              className={`p-1.5 rounded border text-xs font-heading ${topic.is_sticky ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'border-zinc-600 text-mutedForeground hover:border-amber-500/50'}`}
-            >
-              <Pin size={14} /> Sticky
-            </button>
-            <button
-              type="button"
-              title={topic.is_important ? 'Not important' : 'Important'}
-              onClick={() => updateTopicFlags({ is_important: !topic.is_important })}
-              disabled={adminBusy}
-              className={`p-1.5 rounded border text-xs font-heading ${topic.is_important ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'border-zinc-600 text-mutedForeground hover:border-amber-500/50'}`}
-            >
-              <AlertCircle size={14} /> Important
-            </button>
-            <button
-              type="button"
-              title={topic.is_locked ? 'Unlock' : 'Lock'}
-              onClick={() => updateTopicFlags({ is_locked: !topic.is_locked })}
-              disabled={adminBusy}
-              className={`p-1.5 rounded border text-xs font-heading ${topic.is_locked ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'border-zinc-600 text-mutedForeground hover:border-red-500/50'}`}
-            >
-              <Lock size={14} /> Lock
-            </button>
-            <button
-              type="button"
-              onClick={deleteTopic}
-              disabled={adminBusy}
-              className="p-1.5 rounded border border-red-500/50 text-red-400 text-xs font-heading hover:bg-red-500/20"
-            >
-              <Trash2 size={14} /> Delete
-            </button>
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link to="/forum" className="text-mutedForeground hover:text-primary transition-colors">
+            <ArrowLeft size={20} />
+          </Link>
+          <div>
+            <div className="flex items-center gap-2">
+              {topic.is_important && <AlertCircle size={14} className="text-amber-400" />}
+              {topic.is_sticky && !topic.is_important && <Pin size={14} className="text-amber-400" />}
+              <h1 className="text-lg sm:text-xl font-heading font-bold text-primary">
+                {topic.title}
+              </h1>
+              {topic.is_locked && <Lock size={14} className="text-red-400" />}
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
+              <span className="text-foreground font-bold">{topic.author_username}</span>
+              <span className="flex items-center gap-0.5"><Clock size={10} /> {getTimeAgo(topic.created_at)}</span>
+              <span className="flex items-center gap-0.5"><Eye size={10} /> {topic.views ?? 0}</span>
+              <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {commentCount}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Admin Controls */}
+      {isAdmin && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] text-amber-400 font-heading uppercase mr-1">Admin:</span>
+          <button
+            onClick={() => updateTopicFlags({ is_sticky: !topic.is_sticky })}
+            disabled={adminBusy}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
+              topic.is_sticky ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
+            }`}
+          >
+            <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
+          </button>
+          <button
+            onClick={() => updateTopicFlags({ is_important: !topic.is_important })}
+            disabled={adminBusy}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
+              topic.is_important ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
+            }`}
+          >
+            <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
+          </button>
+          <button
+            onClick={() => updateTopicFlags({ is_locked: !topic.is_locked })}
+            disabled={adminBusy}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
+              topic.is_locked ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-red-500/50'
+            }`}
+          >
+            <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
+          </button>
+          <button
+            onClick={deleteTopic}
+            disabled={adminBusy}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border border-red-500/50 text-red-400 hover:bg-red-500/20 transition-all"
+          >
+            <Trash2 size={10} /> Delete
+          </button>
+        </div>
+      )}
+
+      {/* Topic Content */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
+        </div>
+        <div className="p-3">
+          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+            {topic.content || '—'}
+          </p>
+        </div>
+      </div>
+
+      {/* Comments */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">💬 Comments</span>
+          <span className="text-[10px] text-mutedForeground">{commentCount} {commentCount === 1 ? 'reply' : 'replies'}</span>
+        </div>
+        
+        {comments.length === 0 ? (
+          <div className="p-4 text-center text-xs text-mutedForeground">No comments yet. Be the first!</div>
+        ) : (
+          <div className="divide-y divide-zinc-700/30">
+            {comments.map((c, idx) => (
+              <div key={c.id} className="p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-[10px] text-mutedForeground">
+                    <span className="text-foreground font-bold">{c.author_username}</span>
+                    <span>·</span>
+                    <span>{getTimeAgo(c.created_at)}</span>
+                    <span className="text-zinc-600">#{idx + 1}</span>
+                  </div>
+                  {c.likes > 0 && (
+                    <span className="text-[10px] text-emerald-400 flex items-center gap-0.5">
+                      <ThumbsUp size={10} /> {c.likes}
+                    </span>
+                  )}
+                </div>
+                
+                {/* GIF */}
+                {c.gif_url && (
+                  <div className="mt-2">
+                    <img src={c.gif_url} alt="GIF" className="rounded max-h-40 object-contain" loading="lazy" />
+                  </div>
+                )}
+                
+                {/* Text content */}
+                {c.content && c.content !== '(GIF)' && (
+                  <p className="mt-2 text-xs text-foreground whitespace-pre-wrap">{c.content}</p>
+                )}
+                
+                {/* Like button */}
+                <div className="mt-2">
+                  <button
+                    onClick={() => likeComment(c.id)}
+                    disabled={likingId === c.id}
+                    className={`flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded transition-all ${
+                      c.liked 
+                        ? 'bg-primary/20 text-primary' 
+                        : 'text-mutedForeground hover:text-primary hover:bg-primary/10'
+                    }`}
+                  >
+                    <ThumbsUp size={10} /> {c.liked ? 'Liked' : 'Like'}
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
 
-      {/* Topic post */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="p-4 border-b border-primary/10">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <h1 className="text-lg font-heading font-bold text-foreground">
-              {topic.title}
-            </h1>
-            <div className="flex items-center gap-2 text-xs text-mutedForeground font-heading">
-              <span>{topic.views ?? 0} Views</span>
-              <span>/</span>
-              <span>{commentCount} Comment{commentCount !== 1 ? 's' : ''}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 mt-2 text-xs text-mutedForeground font-heading">
-            <span>/ {topic.author_username}</span>
-            <span>·</span>
-            <span>{getTimeAgo(topic.created_at)}</span>
-            {topic.is_locked && (
-              <>
-                <span>·</span>
-                <Lock size={12} className="inline" />
-                <span>Locked</span>
-              </>
-            )}
-          </div>
-          <div className="mt-3 text-foreground font-heading whitespace-pre-wrap">
-            {topic.content || '—'}
-          </div>
-          {!topic.is_locked && (
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={() => document.getElementById('forum-add-comment')?.focus()}
-                className="text-xs font-heading text-primary hover:underline"
-              >
-                Add Comment
-              </button>
-            </div>
-          )}
+      {/* Add Comment */}
+      {topic.is_locked ? (
+        <div className="px-3 py-3 bg-zinc-800/30 border border-zinc-700/30 rounded-md text-center">
+          <p className="text-xs text-mutedForeground flex items-center justify-center gap-1.5">
+            <Lock size={12} /> This topic is locked
+          </p>
         </div>
-
-        {/* Comments */}
-        <div className="divide-y divide-zinc-700/50">
-          {comments.map((c) => (
-            <div key={c.id} className="p-4">
-              <div className="flex items-center gap-2 text-xs text-mutedForeground font-heading">
-                <span className="text-foreground font-bold">{c.author_username}</span>
-                <span>{getTimeAgo(c.created_at)}</span>
-                {c.likes > 0 && (
-                  <span className="text-emerald-400">+{c.likes}</span>
-                )}
-              </div>
-              <div className="mt-1 text-foreground font-heading whitespace-pre-wrap text-sm">
-                {c.gif_url && (
-                  <div className="mb-2">
-                    <img src={c.gif_url} alt="GIF" className="rounded max-h-48 object-contain" />
-                  </div>
-                )}
-                {c.content && c.content !== '(GIF)' && c.content}
-              </div>
-              <div className="mt-2 flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => likeComment(c.id)}
-                  disabled={likingId === c.id}
-                  className={`flex items-center gap-1 text-xs font-heading ${c.liked ? 'text-primary' : 'text-mutedForeground hover:text-primary'}`}
-                >
-                  <ThumbsUp size={12} />
-                  Like{c.likes > 0 ? ` (${c.likes})` : ''}
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Add comment */}
-        {!topic.is_locked && (
-          <div className="p-4 border-t border-primary/10">
-            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2">
-              Add Comment
-            </h3>
+      ) : (
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">✍️ Add Comment</span>
+          </div>
+          <div className="p-3 space-y-3">
             {showGifPicker && (
               <div className="mb-2">
-                <GifPicker
-                  onSelect={handleSendGif}
-                  onClose={() => setShowGifPicker(false)}
-                />
+                <GifPicker onSelect={handleSendGif} onClose={() => setShowGifPicker(false)} />
               </div>
             )}
+            
             <form onSubmit={postComment} className="space-y-2">
               <textarea
                 id="forum-add-comment"
-                placeholder="Enter Comment..."
+                placeholder="Write a comment..."
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 bg-zinc-800/50 border border-zinc-600/50 rounded text-foreground font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
               />
-              <div className="flex flex-wrap gap-1 items-center">
+              
+              {/* Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowGifPicker((v) => !v)}
-                  className="shrink-0 px-2 py-1 rounded border border-primary/30 text-primary text-xs font-heading hover:bg-primary/10"
-                  title="Search GIFs"
+                  className="px-2 py-1 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 transition-all"
                 >
                   GIF
                 </button>
-                {EMOJI_STRIP.map((em) => (
-                  <button
-                    key={em}
-                    type="button"
-                    onClick={() => insertEmoji(em)}
-                    className="text-base hover:scale-110 transition-transform"
-                  >
-                    {em}
-                  </button>
-                ))}
-                <button type="button" className="text-mutedForeground p-0.5">
-                  <ChevronDown size={14} />
+                <button
+                  type="button"
+                  onClick={() => setShowEmojis(!showEmojis)}
+                  className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground transition-all"
+                >
+                  😀 Emoji
+                </button>
+                
+                <div className="flex-1" />
+                
+                <button
+                  type="submit"
+                  disabled={posting}
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 disabled:opacity-50 transition-all touch-manipulation"
+                >
+                  <Send size={12} /> {posting ? '...' : 'Post'}
                 </button>
               </div>
-              <button
-                type="submit"
-                disabled={posting}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/20 border border-primary/50 text-primary font-heading font-bold uppercase tracking-wider rounded hover:bg-primary/30 disabled:opacity-50"
-              >
-                <Send size={14} />
-                {posting ? '...' : 'Post Comment'}
-              </button>
+              
+              {/* Emoji picker */}
+              {showEmojis && (
+                <div className="flex flex-wrap gap-1 pt-2 border-t border-zinc-700/30">
+                  {EMOJI_STRIP.map((em) => (
+                    <button
+                      key={em}
+                      type="button"
+                      onClick={() => setCommentText((c) => c + em)}
+                      className="text-lg hover:scale-110 transition-transform p-0.5"
+                    >
+                      {em}
+                    </button>
+                  ))}
+                </div>
+              )}
             </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

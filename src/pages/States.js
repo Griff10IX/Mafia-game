@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Calendar } from 'lucide-react';
+import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Calendar, Factory, Plane, Shield } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -206,6 +206,8 @@ const InfoCard = () => (
 export default function States() {
   const [data, setData] = useState({ cities: [], games: [] });
   const [loading, setLoading] = useState(true);
+  const [bulletFactories, setBulletFactories] = useState([]);
+  const [airports, setAirports] = useState([]);
 
   useEffect(() => {
     api.get('/states')
@@ -219,6 +221,11 @@ export default function States() {
       }))
       .catch(() => toast.error('Failed to load states'))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => {});
+    api.get('/airports').then((r) => setAirports(r.data?.airports ?? [])).catch(() => {});
   }, []);
 
   const { cities, games, dice_owners, roulette_owners, blackjack_owners, horseracing_owners } = data;
@@ -285,6 +292,77 @@ export default function States() {
             isHighestBet={isHighestBet}
           />
         ))}
+      </div>
+
+      {/* Properties: Bullet Factory, Airports, Armoury (per state / in states) */}
+      <div className="bg-card rounded-md overflow-hidden border border-primary/20" data-testid="states-properties-section">
+        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
+          <h2 className="text-base md:text-lg font-heading font-bold text-primary uppercase tracking-wide">
+            Properties
+          </h2>
+          <p className="text-xs text-mutedForeground font-heading mt-0.5">Bullet factories, airports and armoury by state</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm font-heading">
+            <thead>
+              <tr className="bg-secondary/30 text-xs uppercase tracking-wider font-heading text-primary/80 border-b border-border">
+                <th className="text-left py-2 px-4">Property</th>
+                <th className="text-left py-2 px-4">Location</th>
+                <th className="text-left py-2 px-4">Owner</th>
+                <th className="text-left py-2 px-4">Prices</th>
+                <th className="text-left py-2 px-4">Stock</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {bulletFactories.map((f) => (
+                <tr key={`bf-${f.state}`} className="hover:bg-secondary/30 transition-colors">
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                        <Factory size={14} className="text-primary" />
+                      </div>
+                      <span className="font-heading font-bold text-foreground">Bullet Factory</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4 text-primary">{f.state}</td>
+                  <td className="py-2.5 px-4 text-mutedForeground font-heading">{f.owner_username ?? 'Unclaimed'}</td>
+                  <td className="py-2.5 px-4 text-primary font-heading">{f.price_per_bullet != null ? `$${Number(f.price_per_bullet).toLocaleString()}` : '—'}</td>
+                  <td className="py-2.5 px-4 text-foreground font-heading">{f.accumulated_bullets != null ? `${f.accumulated_bullets} Bullets` : '—'}</td>
+                </tr>
+              ))}
+              {airports.map((a) => (
+                <tr key={`ap-${a.state}-${a.slot}`} className="hover:bg-secondary/30 transition-colors">
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                        <Plane size={14} className="text-primary" />
+                      </div>
+                      <span className="font-heading font-bold text-foreground">Airport #{a.slot}</span>
+                    </div>
+                  </td>
+                  <td className="py-2.5 px-4 text-primary">{a.state}</td>
+                  <td className="py-2.5 px-4 text-mutedForeground font-heading">{a.owner_username ?? 'Unclaimed'}</td>
+                  <td className="py-2.5 px-4 text-primary font-heading">{a.price_per_travel != null ? `${a.price_per_travel} pts` : '—'}</td>
+                  <td className="py-2.5 px-4 text-mutedForeground">—</td>
+                </tr>
+              ))}
+              <tr className="hover:bg-secondary/30 transition-colors bg-primary/5">
+                <td className="py-2.5 px-4">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                      <Shield size={14} className="text-primary" />
+                    </div>
+                    <span className="font-heading font-bold text-foreground">Armoury</span>
+                  </div>
+                </td>
+                <td className="py-2.5 px-4 text-mutedForeground">1 per state</td>
+                <td className="py-2.5 px-4 text-mutedForeground">—</td>
+                <td className="py-2.5 px-4 text-mutedForeground">—</td>
+                <td className="py-2.5 px-4 text-amber-400/90 font-heading">Coming soon · Weapons, armour & bullet factory in one</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <InfoCard />

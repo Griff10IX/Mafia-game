@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronDown, Settings } from 'lucide-react';
+import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -22,17 +22,13 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showEmojis, setShowEmojis] = useState(false);
 
-  const insertEmoji = (emoji) => {
-    setContent((c) => c + emoji);
-  };
+  const insertEmoji = (emoji) => setContent((c) => c + emoji);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!title.trim()) {
-      toast.error('Enter a title');
-      return;
-    }
+    if (!title.trim()) { toast.error('Enter a title'); return; }
     setSubmitting(true);
     try {
       await api.post('/forum/topics', { title: title.trim(), content: content.trim() });
@@ -42,7 +38,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated }) => {
       onClose();
       onCreated();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to create topic');
+      toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setSubmitting(false);
     }
@@ -51,62 +47,147 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} w-full max-w-lg rounded-lg overflow-hidden border-2 border-primary/30 shadow-2xl`}>
-        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-          <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
-            Create New Topic
-          </h2>
+      <div className={`${styles.panel} w-full max-w-md rounded-md overflow-hidden border border-primary/30 shadow-2xl`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Create New Topic</h2>
         </div>
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-3 space-y-3">
           <input
             type="text"
-            placeholder="Enter Title..."
+            placeholder="Title..."
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3 py-2 bg-zinc-800/50 border border-zinc-600/50 rounded text-foreground font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+            className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
           />
           <textarea
-            placeholder="Enter Content..."
+            placeholder="Content..."
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            rows={5}
-            className="w-full px-3 py-2 bg-zinc-800/50 border border-zinc-600/50 rounded text-foreground font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
+            rows={4}
+            className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
           />
-          <div className="flex flex-wrap gap-1">
-            {EMOJI_STRIP.map((em) => (
-              <button
-                key={em}
-                type="button"
-                onClick={() => insertEmoji(em)}
-                className="text-lg hover:scale-110 transition-transform"
-              >
-                {em}
-              </button>
-            ))}
-            <button type="button" className="text-mutedForeground p-1">
-              <ChevronDown size={16} />
+          
+          {/* Emoji toggle */}
+          <div>
+            <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="text-[10px] text-mutedForeground hover:text-foreground">
+              {showEmojis ? 'Hide emojis' : 'Add emoji'}
             </button>
+            {showEmojis && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {EMOJI_STRIP.map((em) => (
+                  <button key={em} type="button" onClick={() => insertEmoji(em)} className="text-base hover:scale-110 transition-transform p-0.5">
+                    {em}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex justify-center pt-2">
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-6 py-2 bg-primary/20 border border-primary/50 text-primary font-heading font-bold uppercase tracking-wider rounded hover:bg-primary/30 disabled:opacity-50"
-            >
-              {submitting ? '...' : 'Create Topic'}
+          
+          <div className="flex gap-2 pt-1">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading font-bold uppercase rounded border border-zinc-600/50 hover:bg-zinc-600/50 transition-all">
+              Cancel
+            </button>
+            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 disabled:opacity-50 transition-all">
+              {submitting ? '...' : 'Create'}
             </button>
           </div>
         </form>
       </div>
-      <button
-        type="button"
-        onClick={onClose}
-        className="absolute inset-0 -z-10"
-        aria-label="Close"
-      />
+      <button type="button" onClick={onClose} className="absolute inset-0 -z-10" aria-label="Close" />
     </div>
   );
 };
+
+// Topic row for desktop with hover preview
+const TopicRowDesktop = ({ topic, isAdmin, onUpdate, updating }) => {
+  const [showPreview, setShowPreview] = useState(false);
+  
+  return (
+    <div 
+      className="hidden sm:block relative"
+      onMouseEnter={() => setShowPreview(true)}
+      onMouseLeave={() => setShowPreview(false)}
+    >
+      <div className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-zinc-800/30 transition-colors items-center text-xs">
+        <Link to={`/forum/topic/${topic.id}`} className={`flex items-center gap-1.5 min-w-0 ${isAdmin ? 'col-span-6' : 'col-span-7'}`}>
+          {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
+          {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
+          <span className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : 'text-foreground'}`}>
+            {topic.is_important ? 'IMPORTANT: ' : ''}{topic.is_sticky && !topic.is_important ? 'STICKY: ' : ''}{topic.title}
+          </span>
+          {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
+        </Link>
+        <div className="col-span-2 text-right text-mutedForeground truncate">{topic.author_username}</div>
+        <div className="col-span-1 text-right text-foreground tabular-nums">{topic.posts}</div>
+        <div className="col-span-2 text-right text-mutedForeground tabular-nums">{topic.views}</div>
+        {isAdmin && (
+          <div className="col-span-1 flex items-center justify-end gap-0.5">
+            <button type="button" title={topic.is_sticky ? 'Unsticky' : 'Sticky'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_sticky ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
+              <Pin size={12} />
+            </button>
+            <button type="button" title={topic.is_important ? 'Not important' : 'Important'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_important ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
+              <AlertCircle size={12} />
+            </button>
+            <button type="button" title={topic.is_locked ? 'Unlock' : 'Lock'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_locked ? 'text-red-400' : 'text-mutedForeground hover:text-red-400'}`}>
+              <Lock size={12} />
+            </button>
+          </div>
+        )}
+      </div>
+      
+      {/* Hover Preview */}
+      {showPreview && topic.preview && (
+        <div className="absolute left-4 right-4 top-full z-20 mt-1 p-3 bg-zinc-900 border border-primary/30 rounded-md shadow-xl">
+          <p className="text-xs text-mutedForeground line-clamp-3">{topic.preview}</p>
+          <div className="flex items-center gap-3 mt-2 pt-2 border-t border-zinc-700/30 text-[10px] text-mutedForeground">
+            <span>By <span className="text-foreground">{topic.author_username}</span></span>
+            {topic.created_at && <span>{getTimeAgo(topic.created_at)}</span>}
+            <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {topic.posts} replies</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Topic card for mobile
+const TopicRowMobile = ({ topic, isAdmin, onUpdate, updating }) => (
+  <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 hover:bg-zinc-800/30 transition-colors active:bg-zinc-800/50">
+    <div className="flex items-start justify-between gap-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5">
+          {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
+          {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
+          <span className={`text-xs font-heading truncate ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : 'text-foreground'}`}>
+            {topic.title}
+          </span>
+          {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
+        </div>
+        <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
+          <span>{topic.author_username}</span>
+          <span className="flex items-center gap-0.5"><MessageCircle size={10} /> {topic.posts}</span>
+          <span className="flex items-center gap-0.5"><Eye size={10} /> {topic.views}</span>
+        </div>
+      </div>
+      <ChevronRight size={16} className="text-mutedForeground shrink-0 mt-1" />
+    </div>
+    
+    {/* Admin controls on mobile */}
+    {isAdmin && (
+      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700/30" onClick={(e) => e.preventDefault()}>
+        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+          <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
+        </button>
+        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_important ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+          <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
+        </button>
+        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_locked ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+          <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
+        </button>
+      </div>
+    )}
+  </Link>
+);
 
 export default function Forum() {
   const [topics, setTopics] = useState([]);
@@ -127,140 +208,114 @@ export default function Forum() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchTopics();
-  }, [fetchTopics]);
+  useEffect(() => { fetchTopics(); }, [fetchTopics]);
+  useEffect(() => { api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false)); }, []);
 
-  useEffect(() => {
-    api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
-  }, []);
-
-  const updateTopicFlags = async (topicId, payload, e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const updateTopicFlags = async (topicId, payload) => {
     setUpdatingId(topicId);
     try {
       await api.patch(`/forum/topics/${topicId}`, payload);
       toast.success('Updated');
       fetchTopics();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to update');
+      toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setUpdatingId(null);
     }
   };
 
+  // Separate sticky/important topics
+  const pinnedTopics = topics.filter(t => t.is_sticky || t.is_important);
+  const regularTopics = topics.filter(t => !t.is_sticky && !t.is_important);
+
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-page">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      {/* Header */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-            <MessageSquare size={28} />
-            Main Forum
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
+            💬 Forum
           </h1>
-          <p className="text-sm text-mutedForeground font-heading mt-1">Discuss OC, crew wars, trades, and more</p>
+          <p className="text-xs text-mutedForeground">Discuss OC, crews, trades & more</p>
         </div>
         <button
-          type="button"
           onClick={() => setModalOpen(true)}
-          className="flex items-center justify-center gap-2 px-4 py-2 bg-primary/20 border border-primary/50 text-primary font-heading font-bold uppercase tracking-wider rounded hover:bg-primary/30 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 hover:from-yellow-500 hover:to-yellow-600 transition-all touch-manipulation"
         >
-          <Plus size={18} />
-          New Topic
+          <Plus size={14} /> New Topic
         </button>
       </div>
 
+      {/* Stats */}
+      <div className="flex items-center gap-4 text-xs text-mutedForeground">
+        <span>{topics.length} topics</span>
+        <span>{pinnedTopics.length} pinned</span>
+      </div>
+
+      {/* Topics List */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className={`grid gap-2 px-4 py-2 bg-primary/10 border-b border-primary/30 text-xs font-heading font-bold text-primary uppercase tracking-widest ${isAdmin ? 'grid-cols-12' : 'grid-cols-12'}`}>
-          <div className={isAdmin ? 'col-span-6' : 'col-span-7'}>Main Forum</div>
+        {/* Desktop Header */}
+        <div className={`hidden sm:grid grid-cols-12 gap-2 px-3 py-2 bg-primary/10 border-b border-primary/30 text-[10px] font-heading font-bold text-primary uppercase tracking-widest`}>
+          <div className={isAdmin ? 'col-span-6' : 'col-span-7'}>Topic</div>
           <div className="col-span-2 text-right">Author</div>
           <div className="col-span-1 text-right">Posts</div>
           <div className="col-span-2 text-right">Views</div>
           {isAdmin && <div className="col-span-1 text-right">Admin</div>}
         </div>
+        
+        {/* Mobile Header */}
+        <div className="sm:hidden px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📋 Topics</span>
+        </div>
+
         {loading ? (
-          <div className="p-8 text-center text-mutedForeground font-heading">Loading...</div>
+          <div className="p-6 text-center text-xs text-mutedForeground">Loading...</div>
         ) : topics.length === 0 ? (
-          <div className="p-8 text-center text-mutedForeground font-heading">No topics yet. Create one!</div>
+          <div className="p-6 text-center text-xs text-mutedForeground">No topics yet. Create one!</div>
         ) : (
-          <ul className="divide-y divide-zinc-700/50">
-            {topics.map((t) => (
-              <li key={t.id} className="grid grid-cols-12 gap-2 px-4 py-3 hover:bg-zinc-800/30 transition-colors items-center">
-                <Link
-                  to={`/forum/topic/${t.id}`}
-                  className={`flex items-center gap-2 min-w-0 ${isAdmin ? 'col-span-6' : 'col-span-7'}`}
-                >
-                  {t.is_important && (
-                    <span className="text-amber-400 shrink-0" title="Important">
-                      <AlertCircle size={14} />
-                    </span>
-                  )}
-                  {t.is_sticky && !t.is_important && (
-                    <span className="text-amber-400 shrink-0" title="Sticky">
-                      <Pin size={14} />
-                    </span>
-                  )}
-                  <span className={`truncate font-heading ${t.is_important || t.is_sticky ? 'text-amber-400/90' : 'text-foreground'}`}>
-                    {t.is_important ? `IMPORTANT: ` : ''}
-                    {t.is_sticky && !t.is_important ? `STICKY: ` : ''}
-                    {t.title}
-                  </span>
-                  {t.is_locked && (
-                    <Lock size={12} className="text-mutedForeground shrink-0" />
-                  )}
-                </Link>
-                <div className="col-span-2 text-right text-mutedForeground text-sm truncate">
-                  {t.author_username}
-                  {t.is_locked && <Lock size={10} className="inline ml-0.5 text-mutedForeground" />}
-                </div>
-                <div className="col-span-1 text-right text-foreground font-heading tabular-nums">
-                  {t.posts}
-                </div>
-                <div className="col-span-2 text-right text-mutedForeground font-heading tabular-nums">
-                  {t.views}
-                </div>
-                {isAdmin && (
-                  <div className="col-span-1 flex items-center justify-end gap-0.5" onClick={(e) => e.preventDefault()}>
-                    <button
-                      type="button"
-                      title={t.is_sticky ? 'Unsticky' : 'Sticky'}
-                      onClick={(e) => updateTopicFlags(t.id, { is_sticky: !t.is_sticky }, e)}
-                      disabled={updatingId === t.id}
-                      className={`p-1 rounded ${t.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}
-                    >
-                      <Pin size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      title={t.is_important ? 'Not important' : 'Important'}
-                      onClick={(e) => updateTopicFlags(t.id, { is_important: !t.is_important }, e)}
-                      disabled={updatingId === t.id}
-                      className={`p-1 rounded ${t.is_important ? 'bg-amber-500/20 text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}
-                    >
-                      <AlertCircle size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      title={t.is_locked ? 'Unlock' : 'Lock'}
-                      onClick={(e) => updateTopicFlags(t.id, { is_locked: !t.is_locked }, e)}
-                      disabled={updatingId === t.id}
-                      className={`p-1 rounded ${t.is_locked ? 'bg-red-500/20 text-red-400' : 'text-mutedForeground hover:text-red-400'}`}
-                    >
-                      <Lock size={14} />
-                    </button>
+          <div className="divide-y divide-zinc-700/30">
+            {/* Pinned topics first */}
+            {pinnedTopics.length > 0 && (
+              <>
+                {pinnedTopics.map((t) => (
+                  <div key={t.id}>
+                    <TopicRowDesktop topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                    <TopicRowMobile topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
                   </div>
+                ))}
+                {regularTopics.length > 0 && (
+                  <div className="px-3 py-1 bg-zinc-800/30 text-[10px] text-mutedForeground">Regular topics</div>
                 )}
-              </li>
+              </>
+            )}
+            
+            {/* Regular topics */}
+            {regularTopics.map((t) => (
+              <div key={t.id}>
+                <TopicRowDesktop topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                <TopicRowMobile topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </div>
 
-      <CreateTopicModal
-        isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onCreated={fetchTopics}
-      />
+      {/* Rules */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">ℹ️ Rules</span>
+        </div>
+        <div className="p-3">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Be respectful to other players</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>No real-world threats or harassment</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Keep trades in the marketplace</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>No spam or excessive posting</li>
+          </ul>
+        </div>
+      </div>
+
+      <CreateTopicModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onCreated={fetchTopics} />
     </div>
   );
 }

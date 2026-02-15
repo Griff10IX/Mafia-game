@@ -16,9 +16,11 @@ export default function BulletFactory({ me }) {
   const [priceInput, setPriceInput] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
 
+  const currentState = me?.current_state;
+
   const fetchData = useCallback(async () => {
     try {
-      const res = await api.get('/bullet-factory');
+      const res = await api.get('/bullet-factory', { params: currentState ? { state: currentState } : {} });
       setData(res.data);
     } catch {
       toast.error('Failed to load bullet factory');
@@ -26,7 +28,7 @@ export default function BulletFactory({ me }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentState]);
 
   useEffect(() => {
     fetchData();
@@ -35,7 +37,7 @@ export default function BulletFactory({ me }) {
   const claim = async () => {
     setClaiming(true);
     try {
-      await api.post('/bullet-factory/claim');
+      await api.post('/bullet-factory/claim', { state: data?.state || currentState });
       toast.success('You now own the Bullet Factory!');
       refreshUser();
       fetchData();
@@ -49,7 +51,7 @@ export default function BulletFactory({ me }) {
   const collect = async () => {
     setCollecting(true);
     try {
-      const res = await api.post('/bullet-factory/collect');
+      const res = await api.post('/bullet-factory/collect', { state: data?.state || currentState });
       toast.success(res.data?.message || 'Bullets collected');
       refreshUser();
       fetchData();
@@ -69,7 +71,7 @@ export default function BulletFactory({ me }) {
     }
     setSettingPrice(true);
     try {
-      await api.post('/bullet-factory/set-price', { price_per_bullet: p });
+      await api.post('/bullet-factory/set-price', { price_per_bullet: p, state: data?.state || currentState });
       toast.success('Price updated');
       setPriceInput('');
       fetchData();
@@ -89,7 +91,7 @@ export default function BulletFactory({ me }) {
     }
     setBuying(true);
     try {
-      const res = await api.post('/bullet-factory/buy', { amount });
+      const res = await api.post('/bullet-factory/buy', { amount, state: data?.state || currentState });
       toast.success(res.data?.message || 'Bullets purchased');
       refreshUser();
       setBuyAmount('');
@@ -131,14 +133,17 @@ export default function BulletFactory({ me }) {
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
           <Factory size={18} className="text-primary" />
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-            Bullet Factory
+            Bullet Factory {data?.state ? `— ${data.state}` : ''}
           </span>
         </div>
         <div className="p-4 space-y-4">
           <p className="text-xs text-mutedForeground font-heading">
-            Produces <strong className="text-foreground">{production.toLocaleString()}</strong> bullets per hour.
+            Produces <strong className="text-foreground">{production.toLocaleString()}</strong> bullets per hour (even when unclaimed).
             {!hasOwner && claimCost > 0 && (
               <span> Pay <strong className="text-primary">${claimCost.toLocaleString()}</strong> to claim and become owner.</span>
+            )}
+            {!hasOwner && accumulated > 0 && (
+              <span> Unclaimed price: <strong className="text-primary">${(data?.price_per_bullet ?? 0).toLocaleString()}</strong> per bullet.</span>
             )}
           </p>
 
@@ -155,9 +160,9 @@ export default function BulletFactory({ me }) {
             <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800/30 rounded border border-zinc-700/50">
               <Package size={16} className="text-primary shrink-0" />
               <div>
-                <div className="text-[10px] text-mutedForeground uppercase font-heading">Ready to collect</div>
+                <div className="text-[10px] text-mutedForeground uppercase font-heading">{hasOwner ? 'Ready to collect' : 'Available'}</div>
                 <div className="text-sm font-heading font-bold text-foreground">
-                  {hasOwner ? accumulated.toLocaleString() : '—'}
+                  {accumulated.toLocaleString()}
                 </div>
               </div>
             </div>
@@ -225,12 +230,12 @@ export default function BulletFactory({ me }) {
             </div>
           )}
 
-          {/* Non-owner: buy bullets */}
+          {/* Non-owner or unclaimed: buy bullets */}
           {canBuy && pricePerBullet != null && (
             <div className="pt-3 border-t border-primary/10">
               <div className="text-[10px] text-mutedForeground font-heading uppercase mb-2 flex items-center gap-1">
                 <ShoppingCart size={12} />
-                Buy from factory — owner gets the profit
+                {hasOwner ? 'Buy from factory — owner gets the profit' : 'Buy from factory (unclaimed — system price)'}
               </div>
               <form onSubmit={buyBullets} className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">

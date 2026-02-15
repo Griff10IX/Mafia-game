@@ -84,7 +84,8 @@ const DestinationCard = ({
   onTravel, 
   travelInfo 
 }) => {
-  const canUseAirport = !travelInfo.carrying_booze && travelInfo.user_points >= travelInfo.airport_cost;
+  const airports = travelInfo.airports || [];
+  const hasAirports = airports.length > 0;
   
   return (
     <div className="bg-card rounded-md overflow-hidden border border-primary/20" data-testid={`dest-${destination}`}>
@@ -94,26 +95,52 @@ const DestinationCard = ({
         </h3>
       </div>
       <div className="p-3 md:p-4 space-y-2">
-        {/* Airport Option */}
-        <button
-          onClick={() => onTravel(destination, 'airport')}
-          disabled={!canUseAirport}
-          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md border-2 transition-all touch-manipulation ${
-            canUseAirport
-              ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50 hover:from-primary/30 hover:via-yellow-600/30 hover:to-primary/30 active:scale-95'
-              : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
-          }`}
-          data-testid={`airport-${destination}`}
-          title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : ''}
-        >
-          <span className="flex items-center gap-2">
-            <Plane size={18} className="text-primary" />
-            <span className="text-sm font-heading font-bold text-foreground">Airport</span>
-          </span>
-          <span className="text-xs text-mutedForeground font-heading">
-            {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost}pts
-          </span>
-        </button>
+        {/* Airport options: 4 per state, ownable; show each with owner & price */}
+        {hasAirports ? airports.map((ap) => {
+          const canUse = !travelInfo.carrying_booze && travelInfo.user_points >= ap.price_per_travel;
+          return (
+            <button
+              key={ap.slot}
+              onClick={() => onTravel(destination, 'airport', ap.slot)}
+              disabled={!canUse}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md border-2 transition-all touch-manipulation ${
+                canUse
+                  ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50 hover:from-primary/30 hover:via-yellow-600/30 hover:to-primary/30 active:scale-95'
+                  : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
+              }`}
+              data-testid={`airport-${destination}-${ap.slot}`}
+              title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${ap.owner_username} · ${ap.price_per_travel} pts`}
+            >
+              <span className="flex items-center gap-2">
+                <Plane size={18} className="text-primary" />
+                <span className="text-sm font-heading font-bold text-foreground">Airport #{ap.slot}</span>
+                <span className="text-[10px] text-mutedForeground font-heading truncate max-w-[80px]">{ap.owner_username}</span>
+              </span>
+              <span className="text-xs text-mutedForeground font-heading">
+                {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {ap.price_per_travel}pts
+              </span>
+            </button>
+          );
+        }) : (
+          <button
+            onClick={() => onTravel(destination, 'airport', 1)}
+            disabled={!(!travelInfo.carrying_booze && travelInfo.user_points >= (travelInfo.airport_cost ?? 10))}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md border-2 transition-all ${
+              !travelInfo.carrying_booze && travelInfo.user_points >= (travelInfo.airport_cost ?? 10)
+                ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50'
+                : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
+            }`}
+            data-testid={`airport-${destination}`}
+          >
+            <span className="flex items-center gap-2">
+              <Plane size={18} className="text-primary" />
+              <span className="text-sm font-heading font-bold text-foreground">Airport</span>
+            </span>
+            <span className="text-xs text-mutedForeground font-heading">
+              {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost ?? 10}pts
+            </span>
+          </button>
+        )}
         
         {travelInfo.carrying_booze && (
           <p className="text-xs text-amber-400 font-heading text-center">
@@ -273,14 +300,13 @@ export default function Travel() {
     }
   }, [travelTime, selectedDest, fetchTravelInfo]);
 
-  const handleTravel = async (destination, method) => {
+  const handleTravel = async (destination, method, airportSlot = 1) => {
     setTraveling(true);
     setSelectedDest(destination);
     try {
-      const response = await api.post('/travel', {
-        destination,
-        travel_method: method
-      });
+      const payload = { destination, travel_method: method };
+      if (method === 'airport' && airportSlot != null) payload.airport_slot = airportSlot;
+      const response = await api.post('/travel', payload);
       const tt = response.data.travel_time;
       if (tt <= 0) {
         setTraveling(false);

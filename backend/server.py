@@ -299,7 +299,9 @@ TRAVEL_TIMES = {
     "airport": 0   # Airport (instant)
 }
 
-AIRPORT_COST = 10  # Points per airport travel
+AIRPORT_COST = 10  # Default points per airport travel when unowned
+AIRPORT_PRICE_MAX = 50  # Max points per travel owner can set
+AIRPORT_SLOTS_PER_STATE = 4
 MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25  # Points for 5 extra travels
 
@@ -411,6 +413,7 @@ class AdminBodyguardsGenerateRequest(BaseModel):
 class TravelRequest(BaseModel):
     destination: str
     travel_method: str  # car_id or "airport"
+    airport_slot: Optional[int] = None  # 1-4 when travel_method == "airport"
 
 class CustomCarPurchase(BaseModel):
     car_name: str
@@ -8330,6 +8333,15 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         except Exception:
             pass
     carrying_booze = _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0
+    # Airports: 4 per state, ownable; owner gets points (max 50 per travel)
+    airports = []
+    for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):
+        doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
+        if not doc:
+            await db.airport_ownership.insert_one({"state": current_state, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
+            doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
+        price = min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
+        airports.append({"slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price})
     return {
         "current_location": current_state,
         "traveling_to": traveling_to if seconds_remaining is not None and seconds_remaining > 0 else None,
@@ -8339,6 +8351,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "max_travels": max_travels,
         "airport_cost": AIRPORT_COST,
         "airport_time": TRAVEL_TIMES["airport"],
+        "airports": airports,
         "extra_airmiles_cost": EXTRA_AIRMILES_COST,
         "cars": cars_with_travel_times,
         "custom_car": custom_car,
@@ -8376,14 +8389,28 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
     if request.travel_method == "airport":
         if _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0:
             raise HTTPException(status_code=400, detail="Cannot use airport while carrying booze. Use a car.")
-        if current_user["points"] < AIRPORT_COST:
-            raise HTTPException(status_code=400, detail="Insufficient points for airport")
+        airport_slot = request.airport_slot if request.airport_slot is not None else 1
+        if airport_slot < 1 or airport_slot > AIRPORT_SLOTS_PER_STATE:
+            raise HTTPException(status_code=400, detail=f"Invalid airport slot (1–{AIRPORT_SLOTS_PER_STATE})")
+        airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": airport_slot}, {"_id": 0})
+        if not airport_doc:
+            await db.airport_ownership.insert_one({"state": current_location, "slot": airport_slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
+            airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": airport_slot}, {"_id": 0})
+        airport_price = min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
+        if current_user["points"] < airport_price:
+            raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
         travel_time = TRAVEL_TIMES["airport"]
-        method_name = "Airport"
+        method_name = f"Airport #{airport_slot}"
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"points": -AIRPORT_COST}}
+            {"$inc": {"points": -airport_price}}
         )
+        owner_id = airport_doc.get("owner_id")
+        if owner_id:
+            await db.users.update_one(
+                {"id": owner_id},
+                {"$inc": {"points": airport_price}}
+            )
     elif request.travel_method == "custom":
         first_custom = await db.user_cars.find_one(
             {"user_id": current_user["id"], "car_id": "car_custom"},
@@ -8460,6 +8487,66 @@ async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):
     
     new_total = current_airmiles + to_add
     return {"message": f"Purchased {to_add} extra airmiles for {EXTRA_AIRMILES_COST} points. Total: {new_total}/{MAX_EXTRA_AIRMILES}"}
+
+
+# ============ AIRPORTS (4 per state, ownable; owner gets points, max 50/travel) ============
+class AirportClaimRequest(BaseModel):
+    state: str
+    slot: int  # 1-4
+
+class AirportSetPriceRequest(BaseModel):
+    state: str
+    slot: int
+    price_per_travel: int  # points, max 50
+
+@api_router.get("/airports")
+async def list_airports(current_user: dict = Depends(get_current_user)):
+    """List all airport slots (4 per state) for overview tables."""
+    result = []
+    for state in STATES:
+        for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):
+            doc = await db.airport_ownership.find_one({"state": state, "slot": slot}, {"_id": 0})
+            if not doc:
+                await db.airport_ownership.insert_one({"state": state, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
+                doc = await db.airport_ownership.find_one({"state": state, "slot": slot}, {"_id": 0})
+            price = min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
+            result.append({"state": state, "slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price})
+    return {"airports": result}
+
+@api_router.post("/airports/claim")
+async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(get_current_user)):
+    if req.state not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid state")
+    if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
+        raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
+    doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
+    if not doc:
+        await db.airport_ownership.insert_one({"state": req.state, "slot": req.slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
+        doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
+    if doc.get("owner_id"):
+        raise HTTPException(status_code=400, detail="This airport slot is already owned")
+    await db.airport_ownership.update_one(
+        {"state": req.state, "slot": req.slot},
+        {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "price_per_travel": AIRPORT_COST}}
+    )
+    return {"message": f"You now own Airport #{req.slot} in {req.state}. Set price (max {AIRPORT_PRICE_MAX} pts) and earn points when players fly from here.", "state": req.state, "slot": req.slot}
+
+@api_router.post("/airports/set-price")
+async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = Depends(get_current_user)):
+    if req.state not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid state")
+    if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
+        raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
+    if req.price_per_travel < 0 or req.price_per_travel > AIRPORT_PRICE_MAX:
+        raise HTTPException(status_code=400, detail=f"Price must be 0–{AIRPORT_PRICE_MAX} points per travel")
+    doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this airport slot")
+    await db.airport_ownership.update_one(
+        {"state": req.state, "slot": req.slot},
+        {"$set": {"price_per_travel": req.price_per_travel}}
+    )
+    return {"message": f"Airport #{req.slot} in {req.state} set to {req.price_per_travel} points per travel", "state": req.state, "slot": req.slot, "price_per_travel": req.price_per_travel}
 
 
 # ============ BOOZE RUN ENDPOINTS ============
