@@ -4626,13 +4626,6 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         if not hitlist_npc:
             raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
 
-    # Allow multiple concurrent attacks, but prevent duplicates for the same target
-    existing_attack_for_target = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "target_id": target["id"], "status": {"$in": ["searching", "found"]}},
-        {"_id": 0}
-    )
-    if existing_attack_for_target:
-        raise HTTPException(status_code=400, detail="You already have an active search/attack for this target")
     
     now = datetime.now(timezone.utc)
     override_minutes = current_user.get("search_minutes_override")
