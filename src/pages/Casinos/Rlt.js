@@ -43,13 +43,23 @@ function betLabel(type, selection) {
 function RouletteWheel({ rotationDeg, size = 200 }) {
   const r = size / 2;
   const segmentAngle = 360 / WHEEL_ORDER.length;
-  const innerR = r - 18;
+  const innerR = r * 0.75;
+  const numSize = Math.max(12, size * 0.08);
   
   return (
     <div className="relative rounded-full bg-zinc-900 border-4 border-zinc-600 shadow-xl" style={{ width: size, height: size }}>
-      <div className="absolute rounded-full bg-zinc-950 border-2 border-zinc-700" style={{ width: size * 0.5, height: size * 0.5, left: size * 0.25, top: size * 0.25 }} />
-      <div className="absolute left-1/2 z-10 w-3 h-3 rounded-full bg-white border-2 border-zinc-400 shadow-lg" style={{ top: 2, transform: 'translateX(-50%)' }} />
-      <div className="absolute rounded-full overflow-visible" style={{ width: size, height: size, transform: `rotate(${rotationDeg}deg)`, transition: 'transform 4s cubic-bezier(0.2, 0.8, 0.3, 1)' }}>
+      {/* Inner dark circle */}
+      <div className="absolute rounded-full bg-zinc-950 border-2 border-zinc-700" style={{ width: size * 0.45, height: size * 0.45, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }} />
+      {/* Ball pointer at top */}
+      <div className="absolute left-1/2 z-10 w-3 h-3 rounded-full bg-white border-2 border-zinc-400 shadow-lg" style={{ top: 4, transform: 'translateX(-50%)' }} />
+      {/* Rotating wheel track */}
+      <div 
+        className="absolute inset-0 rounded-full"
+        style={{ 
+          transform: `rotate(${rotationDeg}deg)`, 
+          transition: 'transform 4s cubic-bezier(0.2, 0.8, 0.3, 1)' 
+        }}
+      >
         {WHEEL_ORDER.map((num, i) => {
           const deg = i * segmentAngle;
           const rad = ((deg - 90) * Math.PI) / 180;
@@ -58,11 +68,18 @@ function RouletteWheel({ rotationDeg, size = 200 }) {
           return (
             <div
               key={`${num}-${i}`}
-              className="absolute flex items-center justify-center text-[8px] font-bold"
+              className="absolute flex items-center justify-center font-bold"
               style={{
-                width: 14, height: 14, left: x - 7, top: y - 7, borderRadius: '50%',
+                width: numSize,
+                height: numSize,
+                left: x,
+                top: y,
+                transform: 'translate(-50%, -50%)',
+                borderRadius: '50%',
+                fontSize: Math.max(7, size * 0.045),
                 background: num === 0 ? '#059669' : isRed(num) ? '#dc2626' : '#18181b',
-                color: '#fff', border: '1px solid rgba(255,255,255,0.3)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.3)',
               }}
             >
               {num}
