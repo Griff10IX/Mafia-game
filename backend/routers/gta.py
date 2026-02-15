@@ -21,6 +21,33 @@ from server import (
 )
 
 
+# Progress bar: 10-92%. Success +2%. Fail -2% or -3%; once hit 92%, floor is 77% (same as crimes)
+GTA_PROGRESS_MIN = 10
+GTA_PROGRESS_MAX = 92
+GTA_PROGRESS_GAIN_ON_SUCCESS = 2
+GTA_PROGRESS_DROP_PER_FAIL_MIN = 2
+GTA_PROGRESS_DROP_PER_FAIL_MAX = 3
+GTA_PROGRESS_MAX_DROP_FROM_PEAK = 15
+
+
+def _gta_progress_from_attempts(gta_attempts: int) -> int:
+    """Migrate old attempts-based progress to bar value (10-92)."""
+    if gta_attempts < 100:
+        return 10
+    elif gta_attempts < 300:
+        return 25
+    elif gta_attempts < 600:
+        return 40
+    elif gta_attempts < 1200:
+        return 55
+    elif gta_attempts < 2500:
+        return 70
+    elif gta_attempts < 5000:
+        return 82
+    else:
+        return 92
+
+
 async def get_gta_options(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
@@ -35,6 +62,19 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
             global_cooldown_until = cooldown_doc["cooldown_until"]
     result = []
     for opt in GTA_OPTIONS:
+        user_gta = await db.user_gta.find_one(
+            {"user_id": current_user["id"], "option_id": opt["id"]},
+            {"_id": 0},
+        )
+        attempts = int((user_gta or {}).get("attempts", 0) or 0)
+        successes = int((user_gta or {}).get("successes", 0) or 0)
+        stored = (user_gta or {}).get("progress")
+        progress = (
+            int(stored)
+            if stored is not None and GTA_PROGRESS_MIN <= int(stored) <= GTA_PROGRESS_MAX
+            else _gta_progress_from_attempts(attempts)
+        )
+        
         row = dict(opt)
         row["unlocked"] = user_rank >= opt["min_rank"]
         row["min_rank_name"] = next(
@@ -42,6 +82,9 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
             f"Rank {opt['min_rank']}",
         )
         row["cooldown_until"] = global_cooldown_until
+        row["attempts"] = attempts
+        row["successes"] = successes
+        row["progress"] = progress
         result.append(row)
     return result
 
@@ -82,14 +125,63 @@ async def attempt_gta(
             raise HTTPException(
                 status_code=400, detail=f"GTA cooldown: try again in {secs}s"
             )
+    
+    # PROGRESS BAR: 10-92%. Success +2%. Fail -2% or -3%; once hit 92%, floor 77%
+    user_gta = await db.user_gta.find_one(
+        {"user_id": current_user["id"], "option_id": option["id"]},
+        {"_id": 0},
+    )
+    gta_attempts = int((user_gta or {}).get("attempts", 0) or 0)
+    stored = (user_gta or {}).get("progress")
+    progress_max = (user_gta or {}).get("progress_max")
+    progress = (
+        int(stored)
+        if stored is not None and GTA_PROGRESS_MIN <= int(stored) <= GTA_PROGRESS_MAX
+        else _gta_progress_from_attempts(gta_attempts)
+    )
+    if progress_max is not None:
+        progress_max = int(progress_max)
+    else:
+        progress_max = max(progress, _gta_progress_from_attempts(gta_attempts))
+    
     ev = await get_effective_event()
-    gta_rate = option["success_rate"] * ev.get("gta_success", 1.0)
+    success_rate = progress / 100.0
+    gta_rate = success_rate * ev.get("gta_success", 1.0)
     success = random.random() < min(1.0, gta_rate)
+    
+    if success:
+        progress_after = min(GTA_PROGRESS_MAX, progress + GTA_PROGRESS_GAIN_ON_SUCCESS)
+        progress_max = max(progress_max, progress_after)
+    else:
+        drop = random.randint(
+            GTA_PROGRESS_DROP_PER_FAIL_MIN,
+            GTA_PROGRESS_DROP_PER_FAIL_MAX
+        )
+        floor = (
+            max(GTA_PROGRESS_MIN, GTA_PROGRESS_MAX - GTA_PROGRESS_MAX_DROP_FROM_PEAK)
+            if progress_max >= GTA_PROGRESS_MAX
+            else GTA_PROGRESS_MIN
+        )
+        progress_after = max(floor, progress - drop)
+    
     cooldown_until = now + timedelta(seconds=option["cooldown"])
     await db.gta_cooldowns.delete_many({"user_id": current_user["id"]})
     await db.gta_cooldowns.insert_one(
         {"user_id": current_user["id"], "cooldown_until": cooldown_until.isoformat()}
     )
+    
+    set_fields = {
+        "last_attempted": now.isoformat(),
+        "progress": progress_after,
+    }
+    if progress_max is not None:
+        set_fields["progress_max"] = progress_max
+    await db.user_gta.update_one(
+        {"user_id": current_user["id"], "option_id": option["id"]},
+        {"$set": set_fields, "$inc": {"attempts": 1, "successes": 1 if success else 0}},
+        upsert=True,
+    )
+    
     if success:
         available_cars = [
             c
@@ -129,6 +221,7 @@ async def attempt_gta(
             jailed=False,
             jail_until=None,
             rank_points_earned=rank_points,
+            progress_after=progress_after,
         )
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=option["jail_time"])
     await db.users.update_one(
@@ -142,6 +235,7 @@ async def attempt_gta(
         jailed=True,
         jail_until=jail_until.isoformat(),
         rank_points_earned=0,
+        progress_after=progress_after,
     )
 
 

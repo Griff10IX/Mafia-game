@@ -548,12 +548,16 @@ class CrimeResponse(BaseModel):
     crime_type: str
     can_commit: bool
     next_available: Optional[str]
+    attempts: int = 0
+    successes: int = 0
+    progress: int = 10  # 10-92, success rate % (bar can drop max 15% on fail)
 
 class CommitCrimeResponse(BaseModel):
     success: bool
     message: str
     reward: Optional[int]
     next_available: str
+    progress_after: Optional[int] = None  # new progress % after commit (for bar)
 
 class WeaponResponse(BaseModel):
     id: str
@@ -569,6 +573,8 @@ class WeaponResponse(BaseModel):
     owned: bool
     quantity: int
     equipped: bool = False
+    locked: bool = False
+    required_weapon_name: Optional[str] = None
 
 class WeaponBuyRequest(BaseModel):
     currency: str  # "money" or "points"
@@ -819,6 +825,7 @@ class GTAAttemptResponse(BaseModel):
     jailed: bool
     jail_until: Optional[str]
     rank_points_earned: int
+    progress_after: Optional[int] = None  # GTA success rate % after attempt (for progress bar)
 
 class ArmourBuyRequest(BaseModel):
     level: int  # 1-5
@@ -3020,6 +3027,12 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
             affordable = False
         if effective_points is not None and points < effective_points:
             affordable = False
+        
+        # PROGRESSION: Armour must be purchased in order
+        locked = False
+        if s["level"] > 1 and s["level"] > owned_max + 1:
+            locked = True
+        
         rows.append({
             "level": s["level"],
             "name": s["name"],
@@ -3031,6 +3044,7 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
             "owned": owned_max >= s["level"],
             "equipped": equipped_level == s["level"],
             "affordable": affordable,
+            "locked": locked,
         })
 
     return {
@@ -3050,6 +3064,13 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     owned_max = int(current_user.get("armour_owned_level_max", equipped_level) or 0)
     if level <= owned_max:
         raise HTTPException(status_code=400, detail="You already own this armour tier")
+    
+    # PROGRESSION: Must own previous armour level first
+    if level > 1 and level > owned_max + 1:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"You must buy armour levels in order. Buy Level {owned_max + 1} first."
+        )
 
     armour = next((a for a in ARMOUR_SETS if a["level"] == level), None)
     if not armour:
@@ -4198,11 +4219,26 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
     
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
+    weapons_dict = {w["id"]: w for w in weapons}
     result = []
     for weapon in weapons:
         quantity = weapons_map.get(weapon["id"], 0)
         pm = weapon.get("price_money")
         pp = weapon.get("price_points")
+        
+        # Check if weapon is locked (requires previous weapon)
+        locked = False
+        required_weapon_name = None
+        weapon_num = int(weapon["id"].replace("weapon", "")) if weapon["id"].startswith("weapon") else 0
+        if weapon_num > 1:
+            prev_weapon_id = f"weapon{weapon_num - 1}"
+            prev_weapon = weapons_dict.get(prev_weapon_id)
+            if prev_weapon:
+                required_weapon_name = prev_weapon["name"]
+                prev_quantity = weapons_map.get(prev_weapon_id, 0)
+                if prev_quantity < 1:
+                    locked = True
+        
         result.append(WeaponResponse(
             id=weapon["id"],
             name=weapon["name"],
@@ -4216,7 +4252,9 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
             effective_price_points=int(pp * mult) if pp is not None else None,
             owned=quantity > 0,
             quantity=quantity,
-            equipped=(quantity > 0 and equipped_weapon_id == weapon["id"])
+            equipped=(quantity > 0 and equipped_weapon_id == weapon["id"]),
+            locked=locked,
+            required_weapon_name=required_weapon_name
         ))
     
     return result
@@ -4253,6 +4291,22 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
     weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0})
     if not weapon:
         raise HTTPException(status_code=404, detail="Weapon not found")
+    
+    # PROGRESSION: Must own previous weapon first (weapon1 -> weapon2 -> weapon3, etc.)
+    weapon_num = int(weapon_id.replace("weapon", "")) if weapon_id.startswith("weapon") else 0
+    if weapon_num > 1:
+        prev_weapon_id = f"weapon{weapon_num - 1}"
+        prev_weapon = await db.weapons.find_one({"id": prev_weapon_id}, {"_id": 0, "name": 1})
+        if prev_weapon:
+            user_has_prev = await db.user_weapons.find_one(
+                {"user_id": current_user["id"], "weapon_id": prev_weapon_id, "quantity": {"$gte": 1}},
+                {"_id": 0}
+            )
+            if not user_has_prev:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"You must own {prev_weapon['name']} before buying this weapon"
+                )
 
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
@@ -5066,18 +5120,19 @@ HITLIST_NPC_NAMES = [
     "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
 ]
 # Templates: rank 1-11 (RANKS id), rewards: cash, points, rank_points, bullets, car_id, booze={booze_id: amount} (booze_run ids)
-# ECONOMY REBALANCE: Reduced rewards ~60-70% to prevent inflation
+# ECONOMY REBALANCE: Reduced rewards ~60-70%, but bullets always > cost to kill (~1.5x return)
+# Approx bullets to kill: Rank 2=6k, Rank 3=7k, Rank 4=8k, Rank 5=9k, Rank 6=10k, Rank 7=12k, Rank 8=13k
 HITLIST_NPC_TEMPLATES = [
-    {"id": "npc_1", "rank": 2, "rewards": {"cash": 15_000, "booze": {"bathtub_gin": 8}}},
-    {"id": "npc_2", "rank": 4, "rewards": {"points": 150, "car_id": "car2"}},
-    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 25, "bullets": 800}},
-    {"id": "npc_4", "rank": 3, "rewards": {"cash": 25_000, "booze": {"moonshine": 12}}},
-    {"id": "npc_5", "rank": 6, "rewards": {"points": 300, "rank_points": 18}},
-    {"id": "npc_6", "rank": 6, "rewards": {"cash": 40_000, "bullets": 600, "booze": {"rum_runners": 10}, "points": 100}},
-    {"id": "npc_7", "rank": 5, "rewards": {"cash": 50_000, "points": 200, "car_id": "car7"}},
-    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 45, "bullets": 1200, "points": 250}},
-    {"id": "npc_9", "rank": 3, "rewards": {"cash": 12_000, "booze": {"speakeasy_whiskey": 5, "needle_beer": 5}}},
-    {"id": "npc_10", "rank": 7, "rewards": {"cash": 70_000, "booze": {"jamaica_ginger": 15}, "points": 125}},
+    {"id": "npc_1", "rank": 2, "rewards": {"cash": 8_000, "bullets": 9_000, "booze": {"bathtub_gin": 5}}},
+    {"id": "npc_2", "rank": 4, "rewards": {"cash": 12_000, "bullets": 12_000, "points": 100}},
+    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 15, "bullets": 14_000}},
+    {"id": "npc_4", "rank": 3, "rewards": {"cash": 10_000, "bullets": 11_000, "booze": {"moonshine": 8}}},
+    {"id": "npc_5", "rank": 6, "rewards": {"points": 150, "bullets": 15_000, "rank_points": 12}},
+    {"id": "npc_6", "rank": 6, "rewards": {"cash": 18_000, "bullets": 16_000, "booze": {"rum_runners": 6}, "points": 80}},
+    {"id": "npc_7", "rank": 5, "rewards": {"cash": 20_000, "bullets": 14_000, "points": 120}},
+    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 25, "bullets": 20_000, "points": 150}},
+    {"id": "npc_9", "rank": 3, "rewards": {"cash": 6_000, "bullets": 11_000, "booze": {"speakeasy_whiskey": 3, "needle_beer": 3}}},
+    {"id": "npc_10", "rank": 7, "rewards": {"cash": 25_000, "bullets": 18_000, "booze": {"jamaica_ginger": 10}, "points": 80}},
 ]
 
 @api_router.post("/hitlist/add")
@@ -8250,12 +8305,22 @@ async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):
     if current_user["points"] < EXTRA_AIRMILES_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
     
+    # ECONOMY CAP: Maximum 50 extra airmiles
+    MAX_EXTRA_AIRMILES = 50
+    current_airmiles = int(current_user.get("extra_airmiles", 0) or 0)
+    if current_airmiles >= MAX_EXTRA_AIRMILES:
+        raise HTTPException(status_code=400, detail=f"Maximum {MAX_EXTRA_AIRMILES} extra airmiles already purchased")
+    
+    # Only add 5 if it doesn't exceed cap
+    to_add = min(5, MAX_EXTRA_AIRMILES - current_airmiles)
+    
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -EXTRA_AIRMILES_COST, "extra_airmiles": 5}}
+        {"$inc": {"points": -EXTRA_AIRMILES_COST, "extra_airmiles": to_add}}
     )
     
-    return {"message": f"Purchased 5 extra airmiles for {EXTRA_AIRMILES_COST} points"}
+    new_total = current_airmiles + to_add
+    return {"message": f"Purchased {to_add} extra airmiles for {EXTRA_AIRMILES_COST} points. Total: {new_total}/{MAX_EXTRA_AIRMILES}"}
 
 
 # ============ BOOZE RUN ENDPOINTS ============
@@ -9813,10 +9878,11 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail)
-from routers import crimes, gta, jail, oc
+from routers import crimes, gta, jail, oc, organised_crime
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
+organised_crime.register(api_router)
 oc.register(api_router)
 
 app.include_router(api_router)

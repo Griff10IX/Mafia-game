@@ -23,26 +23,6 @@ from server import (
 
 logger = logging.getLogger(__name__)
 
-# NPC bust success by rank (higher rank = harder to bust)
-NPC_BUST_SUCCESS_BY_RANK_NAME = {
-    "Street Thug": 0.75,
-    "Hustler": 0.70,
-    "Goon": 0.65,
-    "Made Man": 0.60,
-    "Capo": 0.55,
-    "Underboss": 0.50,
-    "Consigliere": 0.45,
-    "Boss": 0.40,
-    "Don": 0.35,
-    "Godfather": 0.30,
-    "The Commission": 0.25,
-}
-
-
-def _npc_bust_success_rate(npc_rank_name: str | None) -> float:
-    return NPC_BUST_SUCCESS_BY_RANK_NAME.get(npc_rank_name or "", 0.5)
-
-
 def _player_bust_success_rate(total_busts: int) -> float:
     """Calculate player bust success rate based on experience (total busts). SKILL-BASED PROGRESSION - 25k busts for max 85%"""
     if total_busts < 250:
@@ -178,13 +158,27 @@ async def bust_out_of_jail(
         )
     if not target.get("in_jail"):
         raise HTTPException(status_code=400, detail="Target is not in jail")
+    
+    # Check if target is UNBREAKABLE (from organised crime heist failure)
+    if target.get("unbreakable_until"):
+        try:
+            unbreakable_time = datetime.fromisoformat(target["unbreakable_until"])
+            if unbreakable_time > datetime.now(timezone.utc):
+                remaining = int((unbreakable_time - datetime.now(timezone.utc)).total_seconds())
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"This player cannot be busted out for {remaining}s (high security lockdown)"
+                )
+        except (ValueError, TypeError):
+            pass  # Invalid timestamp, allow bust
+    
     # Use player's skill-based success rate (no NPC difficulty modifier for real players)
     success = random.random() < player_success_rate
     if success:
         rank_points = 15
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {"in_jail": False, "jail_until": None}},
+            {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None}},
         )
         reward_cash = int((target.get("bust_reward_cash") or 0) or 0)
         target_money = int((target.get("money") or 0) or 0)

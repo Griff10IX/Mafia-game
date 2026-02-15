@@ -585,11 +585,11 @@ export default function Admin() {
               <BtnPrimary onClick={handleForceOnline}>Force</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">
-              <Input type="number" min="1" value={giveAllPoints} onChange={(e) => setGiveAllPoints(parseInt(e.target.value) || 1)} />
+              <Input type="number" min="1" max="999999999" value={giveAllPoints} onChange={(e) => setGiveAllPoints(parseInt(e.target.value) || 1)} />
               <BtnPrimary onClick={handleGiveAllPoints}>Give</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Gift} label="Give All Money" description="Give money to all alive accounts">
-              <Input type="number" min="1" value={giveAllMoney} onChange={(e) => setGiveAllMoney(parseInt(e.target.value) || 10000)} />
+              <Input type="number" min="1" max="999999999" value={giveAllMoney} onChange={(e) => setGiveAllMoney(parseInt(e.target.value) || 10000)} />
               <BtnPrimary onClick={handleGiveAllMoney}>Give</BtnPrimary>
             </ActionRow>
           </div>

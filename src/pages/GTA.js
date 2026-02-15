@@ -102,10 +102,10 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
   const onCooldown = option.cooldown_until && formatCooldown(option.cooldown_until);
   const unlocked = option.unlocked;
   const defaultCooldown = formatDefaultCooldown(option.cooldown);
-  
-  const successRate = eventsEnabled && event?.gta_success
-    ? Math.min(100, Math.round(option.success_rate * (event.gta_success ?? 1) * 100))
-    : (option.success_rate * 100).toFixed(0);
+  const progress = Math.min(92, Math.max(10, Number(option.progress) ?? 10));
+  const successRateDisplay = eventsEnabled && event?.gta_success
+    ? Math.min(100, Math.round(progress * (event.gta_success ?? 1)))
+    : progress;
 
   return (
     <div
@@ -137,10 +137,13 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
         </div>
       </div>
 
+      {/* Progress bar (success rate 10–92%) */}
+      <GTAProgressBar progress={option.progress} />
+
       {/* Success rate */}
       <div className="shrink-0 w-12 text-center">
         <span className={`text-xs font-bold ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
-          {successRate}%
+          {successRateDisplay}%
         </span>
       </div>
 
@@ -252,6 +255,44 @@ const GarageSection = ({ garage, isCollapsed, onToggle }) => {
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+// GTA progress bar: 10–92%, same as crimes (fail -2% or -3%; once at 92% floor 77%)
+const GTAProgressBar = ({ progress }) => {
+  const pct = Math.min(92, Math.max(10, Number(progress) ?? 10));
+  const barPct = ((pct - 10) / 82) * 100;
+  return (
+    <div
+      className="flex items-center gap-1.5 shrink-0"
+      title={`Success rate: ${pct}%. Fails drop 2–3%; once you've hit 92%, it never goes below 77%.`}
+    >
+      <div
+        style={{
+          width: 48,
+          height: 5,
+          backgroundColor: '#333333',
+          borderRadius: 9999,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: `${barPct}%`,
+            minWidth: barPct > 0 ? 4 : 0,
+            background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+            borderRadius: 9999,
+            transition: 'width 0.3s ease',
+          }}
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={10}
+          aria-valuemax={92}
+        />
+      </div>
+      <span className="text-[10px] text-primary font-heading w-7">{pct}%</span>
     </div>
   );
 };
@@ -381,7 +422,14 @@ export default function GTA() {
       } else if (response.data.success === false && response.data.message) {
         toast.error(response.data.message);
       }
-      
+
+      if (response.data?.progress_after != null) {
+        setOptions((prev) =>
+          prev.map((o) =>
+            o.id === optionId ? { ...o, progress: response.data.progress_after } : o
+          )
+        );
+      }
       fetchData();
     } catch (error) {
       const status = error.response?.status;

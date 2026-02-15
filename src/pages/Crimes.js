@@ -112,6 +112,44 @@ const EventBanner = ({ event }) => {
   );
 };
 
+// Crime progress bar: 10–92%, similar to rank bar (fail/jail drops max 15%)
+const CrimeProgressBar = ({ progress }) => {
+  const pct = Math.min(92, Math.max(10, Number(progress) || 10));
+  const barPct = ((pct - 10) / 82) * 100; // 10% = 0% fill, 92% = 100% fill
+  return (
+    <div
+      className="flex items-center gap-1.5 shrink-0"
+      title={`Crime success rate: ${pct}%. Fails drop 2–3% at a time; once you've hit 92%, it never goes below 77%.`}
+    >
+      <div
+        style={{
+          width: 48,
+          height: 5,
+          backgroundColor: '#333333',
+          borderRadius: 9999,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            height: '100%',
+            width: `${barPct}%`,
+            minWidth: barPct > 0 ? 4 : 0,
+            background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+            borderRadius: 9999,
+            transition: 'width 0.3s ease',
+          }}
+          role="progressbar"
+          aria-valuenow={pct}
+          aria-valuemin={10}
+          aria-valuemax={92}
+        />
+      </div>
+      <span className="text-[10px] text-primary font-heading w-7">{pct}%</span>
+    </div>
+  );
+};
+
 // Compact crime row
 const CrimeRow = ({ crime, onCommit }) => {
   const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
@@ -138,6 +176,9 @@ const CrimeRow = ({ crime, onCommit }) => {
           </div>
         </div>
       </div>
+
+      {/* Crime progress bar (success rate 10–92%) */}
+      <CrimeProgressBar progress={crime.progress} />
 
       {/* Risk */}
       <div className="shrink-0 w-12 text-center">
@@ -231,14 +272,22 @@ export default function Crimes() {
   const commitCrime = async (crimeId) => {
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
-      
+      const progressAfter = response.data?.progress_after;
+
       if (response.data.success) {
         toast.success(response.data.message);
         refreshUser();
       } else {
         toast.error(response.data.message);
       }
-      
+
+      if (progressAfter != null) {
+        setCrimes((prev) =>
+          prev.map((c) =>
+            c.id === crimeId ? { ...c, progress: progressAfter } : c
+          )
+        );
+      }
       await fetchCrimes();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to commit crime');
@@ -252,8 +301,9 @@ export default function Crimes() {
     const inJail = !!user?.in_jail;
 
     return crimes.map((crime) => {
-      const successRate = getSuccessRate(crime.crime_type);
-      const risk = Math.round((1 - successRate) * 100);
+      const progress = Math.min(92, Math.max(10, Number(crime.progress) ?? 10));
+      const successRate = progress / 100;
+      const risk = Math.round(100 - progress);
       const remaining = crime.next_available ? secondsUntil(crime.next_available) : null;
       
       const canCommit = !inJail && (
