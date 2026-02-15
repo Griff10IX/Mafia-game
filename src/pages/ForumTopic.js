@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Lock, ThumbsUp, Send, ChevronDown, Pin, AlertCircle, Trash2, Settings } from 'lucide-react';
 import api from '../utils/api';
+import GifPicker from '../components/GifPicker';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -29,6 +30,7 @@ export default function ForumTopic() {
   const [likingId, setLikingId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminBusy, setAdminBusy] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -107,6 +109,21 @@ export default function ForumTopic() {
       fetchTopic();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to post comment');
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleSendGif = async (gifUrl) => {
+    if (!gifUrl || posting || topic?.is_locked) return;
+    setPosting(true);
+    setShowGifPicker(false);
+    try {
+      await api.post(`/forum/topics/${topicId}/comments`, { content: '', gif_url: gifUrl });
+      toast.success('GIF posted');
+      fetchTopic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to post GIF');
     } finally {
       setPosting(false);
     }
@@ -250,7 +267,12 @@ export default function ForumTopic() {
                 )}
               </div>
               <div className="mt-1 text-foreground font-heading whitespace-pre-wrap text-sm">
-                {c.content}
+                {c.gif_url && (
+                  <div className="mb-2">
+                    <img src={c.gif_url} alt="GIF" className="rounded max-h-48 object-contain" />
+                  </div>
+                )}
+                {c.content && c.content !== '(GIF)' && c.content}
               </div>
               <div className="mt-2 flex items-center gap-3">
                 <button
@@ -273,6 +295,14 @@ export default function ForumTopic() {
             <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-2">
               Add Comment
             </h3>
+            {showGifPicker && (
+              <div className="mb-2">
+                <GifPicker
+                  onSelect={handleSendGif}
+                  onClose={() => setShowGifPicker(false)}
+                />
+              </div>
+            )}
             <form onSubmit={postComment} className="space-y-2">
               <textarea
                 id="forum-add-comment"
@@ -282,7 +312,15 @@ export default function ForumTopic() {
                 rows={3}
                 className="w-full px-3 py-2 bg-zinc-800/50 border border-zinc-600/50 rounded text-foreground font-heading placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
               />
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-1 items-center">
+                <button
+                  type="button"
+                  onClick={() => setShowGifPicker((v) => !v)}
+                  className="shrink-0 px-2 py-1 rounded border border-primary/30 text-primary text-xs font-heading hover:bg-primary/10"
+                  title="Search GIFs"
+                >
+                  GIF
+                </button>
                 {EMOJI_STRIP.map((em) => (
                   <button
                     key={em}

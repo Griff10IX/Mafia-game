@@ -18,6 +18,7 @@ class TopicCreate(BaseModel):
 
 class CommentCreate(BaseModel):
     content: str
+    gif_url: Optional[str] = None
 
 
 class TopicUpdate(BaseModel):
@@ -109,7 +110,10 @@ async def add_comment(
     if topic.get("is_locked"):
         raise HTTPException(status_code=400, detail="Topic is locked")
     content = (request.content or "").strip()
-    if not content:
+    gif_url = (request.gif_url or "").strip()
+    if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="Invalid GIF URL")
+    if not content and not gif_url:
         raise HTTPException(status_code=400, detail="Comment cannot be empty")
     comment_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
@@ -118,10 +122,12 @@ async def add_comment(
         "topic_id": topic_id,
         "author_id": current_user["id"],
         "author_username": current_user.get("username") or "?",
-        "content": content,
+        "content": content or "(GIF)",
         "created_at": now,
         "likes": 0,
     }
+    if gif_url:
+        doc["gif_url"] = gif_url
     await db.forum_comments.insert_one(doc)
     await db.forum_topics.update_one(
         {"id": topic_id},
