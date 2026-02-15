@@ -46,26 +46,26 @@ function Card({ card, hidden, index = 0 }) {
   
   return (
     <div
-      className={`w-14 h-20 sm:w-16 sm:h-24 rounded-lg border-2 bg-white shadow-lg flex flex-col justify-between p-1 sm:p-1.5 relative ${
+      className={`w-14 h-20 sm:w-16 sm:h-24 rounded-lg border-2 bg-white shadow-lg relative ${
         isRed ? 'border-red-200' : 'border-gray-300'
       }`}
       style={{ animationDelay: `${index * 0.08}s` }}
     >
-      {/* Top left */}
-      <div className={`${textColor} leading-tight`}>
-        <div className="text-xs sm:text-sm font-bold">{card.value}</div>
-        <div className="text-xs sm:text-sm -mt-1">{s.sym}</div>
+      {/* Top left corner */}
+      <div className={`absolute top-1 left-1 text-center ${textColor}`}>
+        <div className="text-xs sm:text-sm font-bold leading-none">{card.value}</div>
+        <div className="text-sm sm:text-base leading-none">{s.sym}</div>
       </div>
       
-      {/* Center suit - absolute so it doesn't affect layout */}
-      <div className={`absolute inset-0 flex items-center justify-center pointer-events-none ${textColor}`}>
-        <span className="text-2xl sm:text-3xl opacity-90">{s.sym}</span>
+      {/* Center suit - larger */}
+      <div className={`absolute inset-0 flex items-center justify-center ${textColor}`}>
+        <span className="text-3xl sm:text-4xl">{s.sym}</span>
       </div>
       
-      {/* Bottom right */}
-      <div className={`${textColor} leading-tight self-end rotate-180`}>
-        <div className="text-xs sm:text-sm font-bold">{card.value}</div>
-        <div className="text-xs sm:text-sm -mt-1">{s.sym}</div>
+      {/* Bottom right corner (rotated) */}
+      <div className={`absolute bottom-1 right-1 text-center rotate-180 ${textColor}`}>
+        <div className="text-xs sm:text-sm font-bold leading-none">{card.value}</div>
+        <div className="text-sm sm:text-base leading-none">{s.sym}</div>
       </div>
     </div>
   );
