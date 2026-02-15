@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown } from 'lucide-react';
+import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -9,6 +9,7 @@ export default function QuickTrade() {
   const [sellOffers, setSellOffers] = useState([]);
   const [buyOffers, setBuyOffers] = useState([]);
   const [properties, setProperties] = useState([]);
+  const [currentUserId, setCurrentUserId] = useState(null);
   
   // Create offer form
   const [sellPoints, setSellPoints] = useState('');
@@ -19,8 +20,18 @@ export default function QuickTrade() {
   const [hideNameBuy, setHideNameBuy] = useState(false);
 
   useEffect(() => {
+    fetchCurrentUser();
     fetchTrades();
   }, []);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await api.get('/auth/me');
+      setCurrentUserId(res.data.id);
+    } catch (e) {
+      console.error('Failed to fetch user');
+    }
+  };
 
   const fetchTrades = async () => {
     setLoading(true);
@@ -92,9 +103,30 @@ export default function QuickTrade() {
     }
   };
 
-  // Calculate per-point prices
+  const handleCancelOffer = async (offerId, type) => {
+    if (!window.confirm('Cancel this offer? The fee will be refunded.')) return;
+    try {
+      await api.delete(`/trade/${type}-offer/${offerId}`);
+      toast.success('Offer cancelled and refunded!');
+      fetchTrades();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel offer');
+    }
+  };
+
+  // Calculate per-point prices and fees (0.5% fee, minimum 1 point)
   const sellPerPoint = sellPoints && sellCost ? (parseFloat(sellCost) / parseFloat(sellPoints)).toFixed(2) : '0.00';
   const buyPerPoint = buyPoints && buyOffer ? (parseFloat(buyOffer) / parseFloat(buyPoints)).toFixed(2) : '0.00';
+  
+  const calculateFee = (points) => {
+    const fee = Math.max(1, Math.floor(parseFloat(points) * 0.005));
+    return fee;
+  };
+  
+  const sellFee = sellPoints ? calculateFee(sellPoints) : 0;
+  const buyFee = buyPoints ? calculateFee(buyPoints) : 0;
+  const sellAfterFee = sellPoints ? parseFloat(sellPoints) - sellFee : 0;
+  const buyAfterFee = buyPoints ? parseFloat(buyPoints) - buyFee : 0;
 
   if (loading) {
     return (
@@ -158,6 +190,29 @@ export default function QuickTrade() {
               )}
             </div>
 
+            {/* Fee Info */}
+            <div className="relative group">
+              <div className="flex items-center gap-2 px-3 py-2 bg-secondary/20 border border-border rounded-sm">
+                <span className="text-xs text-mutedForeground font-heading">Fee:</span>
+                <span className="text-xs text-foreground font-heading font-bold">
+                  {sellFee} {sellFee === 1 ? 'point' : 'points'}
+                </span>
+                <HelpCircle size={14} className="text-primary/60 cursor-help ml-auto" />
+              </div>
+              
+              {/* Tooltip */}
+              <div className="absolute left-0 bottom-full mb-2 w-72 bg-background border border-primary/30 rounded-md p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <p className="text-xs text-foreground font-heading mb-2">
+                  A 0.5% fee (1 point minimum) will be deducted from your offer. 
+                  It will be refunded if you cancel the offer.
+                </p>
+                <div className="space-y-1 text-[10px] text-mutedForeground font-heading">
+                  <p>E.g.) You offer to sell 50 - offer is for <span className="text-primary font-bold">49</span></p>
+                  <p>E.g.) You offer to sell 5,000 - offer is for <span className="text-primary font-bold">4,975</span></p>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -173,9 +228,11 @@ export default function QuickTrade() {
 
             <button
               onClick={handleCreateSellOffer}
-              className={`w-full ${styles.raisedHover} bg-primary/10 border border-primary/30 text-primary font-heading font-bold py-2.5 rounded-sm hover:bg-primary/20 transition-all`}
+              disabled={!sellPoints || !sellCost}
+              className={`w-full ${styles.raisedHover} bg-primary/10 border border-primary/30 text-primary font-heading font-bold py-2.5 rounded-sm hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              Add Offer - $0
+              Add Offer - ${sellCost ? parseInt(sellCost).toLocaleString() : '0'}
+              {sellPoints && <span className="text-xs ml-1">({sellAfterFee.toLocaleString()} after fee)</span>}
             </button>
           </div>
         </div>
@@ -219,6 +276,29 @@ export default function QuickTrade() {
               )}
             </div>
 
+            {/* Fee Info */}
+            <div className="relative group">
+              <div className="flex items-center gap-2 px-3 py-2 bg-secondary/20 border border-border rounded-sm">
+                <span className="text-xs text-mutedForeground font-heading">Fee:</span>
+                <span className="text-xs text-foreground font-heading font-bold">
+                  {buyFee} {buyFee === 1 ? 'point' : 'points'}
+                </span>
+                <HelpCircle size={14} className="text-primary/60 cursor-help ml-auto" />
+              </div>
+              
+              {/* Tooltip */}
+              <div className="absolute left-0 bottom-full mb-2 w-72 bg-background border border-primary/30 rounded-md p-3 shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <p className="text-xs text-foreground font-heading mb-2">
+                  A 0.5% fee (1 point minimum) will be deducted from your offer. 
+                  It will be refunded if you cancel the offer.
+                </p>
+                <div className="space-y-1 text-[10px] text-mutedForeground font-heading">
+                  <p>E.g.) You offer to buy 50 - offer is for <span className="text-primary font-bold">49</span></p>
+                  <p>E.g.) You offer to buy 5,000 - offer is for <span className="text-primary font-bold">4,975</span></p>
+                </div>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -234,9 +314,11 @@ export default function QuickTrade() {
 
             <button
               onClick={handleCreateBuyOffer}
-              className={`w-full ${styles.raisedHover} bg-primary/10 border border-primary/30 text-primary font-heading font-bold py-2.5 rounded-sm hover:bg-primary/20 transition-all`}
+              disabled={!buyPoints || !buyOffer}
+              className={`w-full ${styles.raisedHover} bg-primary/10 border border-primary/30 text-primary font-heading font-bold py-2.5 rounded-sm hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              Add Offer - $0
+              Add Offer - ${buyOffer ? parseInt(buyOffer).toLocaleString() : '0'}
+              {buyPoints && <span className="text-xs ml-1">({buyAfterFee.toLocaleString()} after fee)</span>}
             </button>
           </div>
         </div>
@@ -258,31 +340,43 @@ export default function QuickTrade() {
                 <p className="text-xs text-mutedForeground font-heading">No buy offers available</p>
               </div>
             ) : (
-              buyOffers.map((offer, idx) => (
-                <div key={idx} className="px-4 py-3 hover:bg-secondary/30 transition-colors">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Users size={14} className="text-primary" />
-                        <span className="text-xs font-heading font-bold text-foreground">
-                          {offer.hide_name ? '[Anonymous]' : offer.username}
-                        </span>
+              buyOffers.map((offer, idx) => {
+                const isMyOffer = offer.user_id === currentUserId;
+                return (
+                  <div key={idx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Users size={14} className="text-primary" />
+                          <span className="text-xs font-heading font-bold text-foreground">
+                            {isMyOffer ? 'Your Offer' : (offer.hide_name ? '[Anonymous]' : offer.username)}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-mutedForeground space-y-0.5">
+                          <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
+                          <div>Cost: <span className="text-foreground font-bold">${offer.cost?.toLocaleString()}</span></div>
+                          <div>Per Point: <span className="text-mutedForeground">${((offer.cost || 0) / (offer.points || 1)).toFixed(2)}</span></div>
+                        </div>
                       </div>
-                      <div className="text-[11px] text-mutedForeground space-y-0.5">
-                        <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
-                        <div>Cost: <span className="text-foreground font-bold">${offer.cost?.toLocaleString()}</span></div>
-                        <div>Per Point: <span className="text-mutedForeground">${((offer.cost || 0) / (offer.points || 1)).toFixed(2)}</span></div>
-                      </div>
+                      {isMyOffer ? (
+                        <button
+                          onClick={() => handleCancelOffer(offer.id, 'buy')}
+                          className={`${styles.raisedHover} px-4 py-2 bg-red-900/20 border border-red-700/30 text-red-400 text-xs font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
+                        >
+                          Cancel
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAcceptOffer(offer.id, 'buy')}
+                          className={`${styles.raisedHover} px-4 py-2 bg-primary/10 border border-primary/30 text-primary text-xs font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
+                        >
+                          Accept
+                        </button>
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleAcceptOffer(offer.id, 'buy')}
-                      className={`${styles.raisedHover} px-4 py-2 bg-primary/10 border border-primary/30 text-primary text-xs font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
-                    >
-                      Accept
-                    </button>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -301,31 +395,43 @@ export default function QuickTrade() {
                 <p className="text-xs text-mutedForeground font-heading">No sell offers available</p>
               </div>
             ) : (
-              sellOffers.map((offer, idx) => (
-                <div key={idx} className="px-4 py-3 hover:bg-secondary/30 transition-colors">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Users size={14} className="text-primary" />
-                        <span className="text-xs font-heading font-bold text-foreground">
-                          {offer.hide_name ? '[Anonymous]' : offer.username}
-                        </span>
+              sellOffers.map((offer, idx) => {
+                const isMyOffer = offer.user_id === currentUserId;
+                return (
+                  <div key={idx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Users size={14} className="text-primary" />
+                          <span className="text-xs font-heading font-bold text-foreground">
+                            {isMyOffer ? 'Your Offer' : (offer.hide_name ? '[Anonymous]' : offer.username)}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-mutedForeground space-y-0.5">
+                          <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
+                          <div>Money: <span className="text-foreground font-bold">${offer.money?.toLocaleString()}</span></div>
+                          <div>Per Point: <span className="text-mutedForeground">${((offer.money || 0) / (offer.points || 1)).toFixed(2)}</span></div>
+                        </div>
                       </div>
-                      <div className="text-[11px] text-mutedForeground space-y-0.5">
-                        <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
-                        <div>Money: <span className="text-foreground font-bold">${offer.money?.toLocaleString()}</span></div>
-                        <div>Per Point: <span className="text-mutedForeground">${((offer.money || 0) / (offer.points || 1)).toFixed(2)}</span></div>
-                      </div>
+                      {isMyOffer ? (
+                        <button
+                          onClick={() => handleCancelOffer(offer.id, 'sell')}
+                          className={`${styles.raisedHover} px-4 py-2 bg-red-900/20 border border-red-700/30 text-red-400 text-xs font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
+                        >
+                          Cancel
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleAcceptOffer(offer.id, 'sell')}
+                          className={`${styles.raisedHover} px-4 py-2 bg-primary/10 border border-primary/30 text-primary text-xs font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
+                        >
+                          Accept
+                        </button>
+                      )}
                     </div>
-                    <button
-                      onClick={() => handleAcceptOffer(offer.id, 'sell')}
-                      className={`${styles.raisedHover} px-4 py-2 bg-primary/10 border border-primary/30 text-primary text-xs font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
-                    >
-                      Accept
-                    </button>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

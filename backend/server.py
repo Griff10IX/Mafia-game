@@ -8140,7 +8140,7 @@ class CreateBuyOffer(BaseModel):
     hide_name: bool = False
 
 @api_router.get("/trade/sell-offers")
-async def get_sell_offers():
+async def get_sell_offers(current_user: dict = Depends(get_current_user)):
     """Get all active sell point offers"""
     try:
         offers = await db.trade_sell_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
@@ -8153,7 +8153,8 @@ async def get_sell_offers():
                 "points": offer["points"],
                 "money": offer["cost"],
                 "hide_name": offer.get("hide_name", False),
-                "created_at": offer.get("created_at")
+                "created_at": offer.get("created_at"),
+                "is_own": offer["user_id"] == current_user["id"]
             })
         return result
     except Exception as e:
@@ -8161,7 +8162,7 @@ async def get_sell_offers():
         return []
 
 @api_router.get("/trade/buy-offers")
-async def get_buy_offers():
+async def get_buy_offers(current_user: dict = Depends(get_current_user)):
     """Get all active buy point offers"""
     try:
         offers = await db.trade_buy_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
@@ -8174,7 +8175,8 @@ async def get_buy_offers():
                 "points": offer["points"],
                 "cost": offer["offer"],
                 "hide_name": offer.get("hide_name", False),
-                "created_at": offer.get("created_at")
+                "created_at": offer.get("created_at"),
+                "is_own": offer["user_id"] == current_user["id"]
             })
         return result
     except Exception as e:
@@ -8208,12 +8210,19 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     if user.get("points", 0) < offer.points:
         raise HTTPException(status_code=400, detail="Insufficient points")
     
+    # Calculate 0.5% fee (minimum 1 point)
+    fee = max(1, int(offer.points * 0.005))
+    points_after_fee = offer.points - fee
+    
+    # Deduct points from user
     await db.users.update_one({"id": user_id}, {"$inc": {"points": -offer.points}})
     
     new_offer = {
         "user_id": user_id,
         "username": username,
-        "points": offer.points,
+        "points": points_after_fee,  # Actual points offered after fee
+        "original_points": offer.points,  # Store original for refund
+        "fee": fee,
         "cost": offer.cost,
         "hide_name": offer.hide_name,
         "status": "active",
@@ -8221,7 +8230,7 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     }
     
     result = await db.trade_sell_offers.insert_one(new_offer)
-    return {"message": "Sell offer created successfully", "offer_id": str(result.inserted_id)}
+    return {"message": f"Sell offer created! ({points_after_fee} points after {fee} point fee)", "offer_id": str(result.inserted_id)}
 
 @api_router.post("/trade/buy-offer")
 async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(get_current_user)):
@@ -8249,12 +8258,19 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
     if user.get("cash", 0) < offer.offer:
         raise HTTPException(status_code=400, detail="Insufficient cash")
     
+    # Calculate 0.5% fee (minimum 1 point)
+    fee = max(1, int(offer.points * 0.005))
+    points_after_fee = offer.points - fee
+    
+    # Deduct cash from user
     await db.users.update_one({"id": user_id}, {"$inc": {"cash": -offer.offer}})
     
     new_offer = {
         "user_id": user_id,
         "username": username,
-        "points": offer.points,
+        "points": points_after_fee,  # Actual points offered after fee
+        "original_points": offer.points,  # Store original for refund
+        "fee": fee,
         "offer": offer.offer,
         "hide_name": offer.hide_name,
         "status": "active",
@@ -8262,7 +8278,7 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
     }
     
     result = await db.trade_buy_offers.insert_one(new_offer)
-    return {"message": "Buy offer created successfully", "offer_id": str(result.inserted_id)}
+    return {"message": f"Buy offer created! ({points_after_fee} points after {fee} point fee)", "offer_id": str(result.inserted_id)}
 
 @api_router.post("/trade/sell-offer/{offer_id}/accept")
 async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
@@ -8319,6 +8335,47 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
     )
     
     return {"message": "Trade completed successfully", "points_sold": offer["points"], "cash_received": offer["offer"]}
+
+@api_router.delete("/trade/sell-offer/{offer_id}")
+async def cancel_sell_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel a sell offer and refund points + fee"""
+    user_id = current_user["id"]
+    
+    offer = await db.trade_sell_offers.find_one({"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+    
+    # Refund original points (including fee)
+    refund_amount = offer.get("original_points", offer["points"])
+    await db.users.update_one({"id": user_id}, {"$inc": {"points": refund_amount}})
+    
+    # Mark as cancelled
+    await db.trade_sell_offers.update_one(
+        {"_id": ObjectId(offer_id)},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
+    )
+    
+    return {"message": f"Offer cancelled. {refund_amount} points refunded (including {offer.get('fee', 0)} point fee)"}
+
+@api_router.delete("/trade/buy-offer/{offer_id}")
+async def cancel_buy_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel a buy offer and refund cash"""
+    user_id = current_user["id"]
+    
+    offer = await db.trade_buy_offers.find_one({"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+    
+    # Refund cash
+    await db.users.update_one({"id": user_id}, {"$inc": {"cash": offer["offer"]}})
+    
+    # Mark as cancelled
+    await db.trade_buy_offers.update_one(
+        {"_id": ObjectId(offer_id)},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
+    )
+    
+    return {"message": f"Offer cancelled. ${offer['offer']:,} refunded"}
 
 @api_router.get("/trade/properties")
 async def get_properties_for_sale(current_user: dict = Depends(get_current_user)):
@@ -8382,6 +8439,53 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     )
     
     return {"message": "Property purchased successfully", "property_name": prop.get("name", "Property"), "points_spent": sale_price}
+
+@api_router.post("/trade/sell-offer/{offer_id}/cancel")
+async def cancel_sell_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel a sell offer and refund points + fee"""
+    user_id = current_user["id"]
+    
+    offer = await db.trade_sell_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+    
+    if offer["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="You can only cancel your own offers")
+    
+    # Refund original points (including fee)
+    original_points = offer.get("original_points", offer["points"])
+    await db.users.update_one({"id": user_id}, {"$inc": {"points": original_points}})
+    
+    # Mark as cancelled
+    await db.trade_sell_offers.update_one(
+        {"_id": ObjectId(offer_id)},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
+    )
+    
+    return {"message": f"Offer cancelled. {original_points} points refunded (including fee)"}
+
+@api_router.post("/trade/buy-offer/{offer_id}/cancel")
+async def cancel_buy_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel a buy offer and refund cash"""
+    user_id = current_user["id"]
+    
+    offer = await db.trade_buy_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already completed")
+    
+    if offer["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="You can only cancel your own offers")
+    
+    # Refund cash
+    await db.users.update_one({"id": user_id}, {"$inc": {"cash": offer["offer"]}})
+    
+    # Mark as cancelled
+    await db.trade_buy_offers.update_one(
+        {"_id": ObjectId(offer_id)},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
+    )
+    
+    return {"message": f"Offer cancelled. ${offer['offer']:,} refunded"}
 
 # ============ BODYGUARD INVITE SYSTEM ============
 
