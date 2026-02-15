@@ -85,11 +85,10 @@ export default function Dice() {
   const [ownerMaxBet, setOwnerMaxBet] = useState('');
   const [ownerBuyBack, setOwnerBuyBack] = useState('');
   const [sendToUsername, setSendToUsername] = useState('');
+  const [sellPoints, setSellPoints] = useState('');
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
-  const [showSellModal, setShowSellModal] = useState(false);
-  const [sellPoints, setSellPoints] = useState('');
 
   // Refs
   const rollIntervalRef = useRef(null);
@@ -397,33 +396,26 @@ export default function Dice() {
     }
   };
 
-  const handleSellOnQuickTrade = async () => {
-    if (!sellPoints || parseInt(sellPoints) <= 0) {
-      toast.error('Enter a valid points amount');
-      return;
-    }
-    
+  const sellOnQuickTrade = async () => {
     const city = ownership?.current_city;
-    if (!city) {
-      toast.error('No city ownership found');
+    if (!city || claimLoading) return;
+    
+    const points = parseInt(sellPoints);
+    if (!points || points <= 0) {
+      toast.error('Enter a valid point amount');
       return;
     }
 
+    setClaimLoading(true);
     try {
-      await api.post('/trade/sell-offer', {
-        points: parseInt(sellPoints),
-        cost: 0, // Will be set by buyer
-        hide_name: false,
-        item_type: 'casino',
-        item_subtype: 'dice',
-        item_city: city
-      });
-      toast.success('Dice table listed on Quick Trade!');
-      setShowSellModal(false);
+      await api.post('/casino/dice/sell-on-trade', { city, points });
+      toast.success(`Listed for ${points.toLocaleString()} points on Quick Trade!`);
       setSellPoints('');
-      navigate('/quick-trade');
+      setTimeout(() => navigate('/quick-trade'), 1500);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to list');
+    } finally {
+      setClaimLoading(false);
     }
   };
 
@@ -605,30 +597,28 @@ export default function Dice() {
                 </div>
               </div>
 
-              <button
-                onClick={() => window.location.href = '/quick-trade'}
-                className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
-              >
-                <ArrowRightLeft size={16} />
-                Sell on Quick Trade
-              </button>
-
-              <button
-                onClick={() => setShowSellModal(true)}
-                className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
-              >
-                <ArrowLeftRight size={16} />
-                Sell on Quick Trade
-              </button>
-
-              <button
-                onClick={() => setShowSellModal(true)}
-                disabled={claimLoading}
-                className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                <ArrowRightLeft size={16} />
-                Sell on Quick Trade
-              </button>
+              <div>
+                <label className="block text-xs font-medium text-mutedForeground uppercase tracking-wider mb-2">
+                  Sell on Quick Trade (Points)
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="10000"
+                    value={sellPoints}
+                    onChange={(e) => setSellPoints(e.target.value)}
+                    className="flex-1 bg-input border border-border rounded-sm h-10 px-3 text-foreground text-sm"
+                  />
+                  <button
+                    onClick={sellOnQuickTrade}
+                    disabled={claimLoading}
+                    className="bg-primary text-primaryForeground px-4 rounded-sm font-bold text-sm hover:opacity-90 disabled:opacity-50"
+                  >
+                    Set
+                  </button>
+                </div>
+              </div>
 
               <button
                 onClick={resetDiceProfit}
@@ -770,52 +760,6 @@ export default function Dice() {
           </div>
         </div>
       </div>
-
-      {/* Sell on Quick Trade Modal */}
-      {showSellModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" onClick={() => setShowSellModal(false)}>
-          <div className={`${styles.panel} rounded-md max-w-md w-full`} onClick={(e) => e.stopPropagation()}>
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-              <h3 className="text-lg font-heading font-bold text-primary">Sell Dice Table on Quick Trade</h3>
-              <p className="text-xs text-mutedForeground mt-1">City: {currentCity}</p>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-mutedForeground uppercase tracking-wider mb-2">
-                  Price (Points Only)
-                </label>
-                <input
-                  type="number"
-                  placeholder="Enter points amount"
-                  value={sellPoints}
-                  onChange={(e) => setSellPoints(e.target.value)}
-                  className="w-full bg-input border border-border rounded-sm h-10 px-3 text-foreground text-sm"
-                  autoFocus
-                />
-                <p className="text-xs text-mutedForeground mt-1">
-                  Casino tables can only be sold for points
-                </p>
-              </div>
-              
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowSellModal(false)}
-                  className="flex-1 bg-secondary border border-border text-foreground hover:bg-secondary/80 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSellOnQuickTrade}
-                  disabled={!sellPoints || parseInt(sellPoints) <= 0}
-                  className="flex-1 bg-primary text-primaryForeground hover:opacity-90 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider disabled:opacity-50"
-                >
-                  List for Sale
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
