@@ -6191,7 +6191,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         u = user_map.get(d["owner_id"], {})
         money = int((u.get("money") or 0) or 0)
         _, wealth_rank_name = get_wealth_rank(money)
-        rlt_max = d.get("max_bet") if d.get("max_bet") is not None else RLT_MAX_BET
+        rlt_max = d.get("max_bet") if d.get("max_bet") is not None else ROULETTE_MAX_BET
         roulette_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": rlt_max}
     
     for d in blackjack_docs:
@@ -6209,7 +6209,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         u = user_map.get(d["owner_id"], {})
         money = int((u.get("money") or 0) or 0)
         _, wealth_rank_name = get_wealth_rank(money)
-        hr_max = d.get("max_bet") if d.get("max_bet") is not None else HR_MAX_BET
+        hr_max = d.get("max_bet") if d.get("max_bet") is not None else HORSERACING_MAX_BET
         horseracing_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": hr_max}
     
     return {
