@@ -17,6 +17,7 @@ export default function Layout({ children }) {
   const [atWar, setAtWar] = useState(false);
   const [flashNews, setFlashNews] = useState([]);
   const [flashIndex, setFlashIndex] = useState(0);
+  const [travelStatus, setTravelStatus] = useState(null); // { traveling: bool, destination, seconds_remaining }
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -148,6 +149,30 @@ export default function Layout({ children }) {
       // silent failure; badges are optional
     }
   };
+
+  const fetchTravelStatus = async () => {
+    try {
+      const res = await api.get('/travel/status');
+      const data = res.data || {};
+      if (data.traveling && data.seconds_remaining > 0) {
+        setTravelStatus({
+          traveling: true,
+          destination: data.destination || data.current_state || '?',
+          seconds_remaining: data.seconds_remaining
+        });
+      } else {
+        setTravelStatus(null);
+      }
+    } catch {
+      setTravelStatus(null);
+    }
+  };
+
+  useEffect(() => {
+    fetchTravelStatus();
+    const id = setInterval(fetchTravelStatus, 1000);
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -584,6 +609,23 @@ export default function Layout({ children }) {
             </div>
           ) : null}
         </div>
+
+        {/* Travel Countdown Indicator */}
+        {travelStatus && travelStatus.traveling && travelStatus.seconds_remaining > 0 && (
+          <div 
+            className="flex items-center gap-1.5 bg-amber-900/40 border border-amber-500/40 px-2 py-1 rounded-sm animate-pulse cursor-pointer shrink-0"
+            onClick={() => navigate('/travel')}
+            title={`Traveling to ${travelStatus.destination}`}
+          >
+            <span className="text-base">🚗</span>
+            <span className="font-heading text-xs text-amber-400 font-bold">
+              {travelStatus.seconds_remaining}s
+            </span>
+            <span className="hidden sm:inline font-heading text-[10px] text-amber-300/80 truncate max-w-[80px]">
+              → {travelStatus.destination}
+            </span>
+          </div>
+        )}
 
         {user && (
           <div className="flex items-center gap-1.5 shrink-0">
