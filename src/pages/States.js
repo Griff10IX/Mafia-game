@@ -43,9 +43,11 @@ const CityCard = ({
   onToggle,
   onClaimAirport,
   claimingCity,
+  userCurrentCity,
 }) => {
   const bf = bulletFactory;
   const ap = airportSlot1;
+  const canClaimAirport = !ap?.owner_username && userCurrentCity === city;
   
   // Count owned casinos
   const ownedCount = games.filter(g => (allOwners[g.id] || {})[city]?.username).length;
@@ -141,7 +143,7 @@ const CityCard = ({
                     <span className="text-mutedForeground">{ap.owner_username}</span>
                     <span className="text-primary font-bold">{ap.price_per_travel} pts</span>
                   </>
-                ) : onClaimAirport ? (
+                ) : canClaimAirport && onClaimAirport ? (
                   <button
                     type="button"
                     onClick={() => onClaimAirport(city)}
@@ -151,7 +153,12 @@ const CityCard = ({
                     {claimingCity === city ? '...' : 'Take over'}
                   </button>
                 ) : (
-                  <span className="text-zinc-500">Unclaimed</span>
+                  <span className="text-[10px]">
+                    <span className="text-zinc-500">Unclaimed</span>
+                    {!ap?.owner_username && userCurrentCity && userCurrentCity !== city && (
+                      <span className="text-zinc-600 ml-1">(Must be in {city})</span>
+                    )}
+                  </span>
                 )}
               </div>
             </div>
@@ -216,6 +223,11 @@ export default function States() {
   const [airports, setAirports] = useState([]);
   const [expandedCities, setExpandedCities] = useState({});
   const [claimingCity, setClaimingCity] = useState(null);
+  const [userCurrentCity, setUserCurrentCity] = useState(null);
+
+  useEffect(() => {
+    api.get('/auth/me').then((r) => setUserCurrentCity(r.data?.current_state ?? null)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     api.get('/states')
@@ -371,6 +383,7 @@ export default function States() {
             onToggle={() => toggleCity(city)}
             onClaimAirport={handleClaimAirport}
             claimingCity={claimingCity}
+            userCurrentCity={userCurrentCity}
           />
         ))}
       </div>

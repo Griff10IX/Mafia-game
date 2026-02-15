@@ -8611,6 +8611,10 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
         raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
+    # Must be in the same city to claim its airport
+    user_location = (current_user.get("current_state") or "").strip()
+    if user_location != req.state:
+        raise HTTPException(status_code=400, detail=f"You must be in {req.state} to claim this airport. Travel there first.")
     doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if not doc:
         await db.airport_ownership.insert_one({"state": req.state, "slot": req.slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})

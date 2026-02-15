@@ -9,7 +9,7 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, send_notification_to_all, _is_admin, CARS
+from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, CARS
 
 AUTO_ROLL_AFTER_SECONDS = 60
 ENTERTAINER_CONFIG_KEY = "entertainer_config"
@@ -123,6 +123,69 @@ async def _give_random_reward(user_id: str) -> dict:
     return desc
 
 
+def _format_reward_desc(desc: dict) -> str:
+    """Turn reward description dict into a short readable string."""
+    if not desc:
+        return "Nothing"
+    parts = []
+    if desc.get("money"):
+        parts.append(f"${desc['money']:,}")
+    if desc.get("points"):
+        parts.append(f"{desc['points']} pts")
+    if desc.get("bullets"):
+        parts.append(f"{desc['bullets']} bullets")
+    if desc.get("cars"):
+        parts.append(", ".join(desc["cars"]))
+    return ", ".join(parts) if parts else "Nothing"
+
+
+async def _settle_game(game: dict):
+    """Run payout (random rewards) and mark game completed. Idempotent if already completed."""
+    if game.get("status") == "completed":
+        return
+    participants = game.get("participants") or []
+    now = datetime.now(timezone.utc).isoformat()
+    result = None
+    if participants:
+        if game.get("game_type") == "dice":
+            result = await _run_dice_payout(game)
+        else:
+            result = await _run_gbox_payout(game)
+    await db.entertainer_games.update_one(
+        {"id": game["id"]},
+        {"$set": {"status": "completed", "completed_at": now, "result": result}},
+    )
+    # Notify each participant with their winnings
+    if result and participants:
+        game_type = game.get("game_type") or "dice"
+        pot = game.get("pot") or 0
+        for p in participants:
+            uid = p.get("user_id")
+            if not uid:
+                continue
+            try:
+                if game_type == "dice":
+                    winner_id = (result or {}).get("winner_id")
+                    reward = (result or {}).get("reward")
+                    if uid == winner_id and reward:
+                        msg = f"You won! Winnings: {_format_reward_desc(reward)}. Pot was ${pot:,}."
+                    else:
+                        winner_name = (result or {}).get("winner_username") or "Someone"
+                        msg = f"Game over. Winner: {winner_name}. Pot was ${pot:,}. Better luck next time!"
+                    await send_notification(uid, "🎲 E-Game results", msg, "system")
+                else:
+                    # gbox: each player got a reward
+                    rewards = (result or {}).get("rewards_by_user") or {}
+                    reward = rewards.get(uid)
+                    if reward:
+                        msg = f"You won: {_format_reward_desc(reward)}. Pot was ${pot:,}."
+                    else:
+                        msg = f"Game over. Pot was ${pot:,}."
+                    await send_notification(uid, "🎁 E-Game results", msg, "system")
+            except Exception:
+                pass
+
+
 class CreateGameRequest(BaseModel):
     game_type: str  # "dice" | "gbox"
     max_players: int = 10
@@ -167,24 +230,6 @@ async def _run_gbox_payout(game: dict):
     return {"rewards_by_user": rewards_by_user}
 
 
-async def _settle_game(game: dict):
-    """Run payout (random rewards) and mark game completed. Idempotent if already completed."""
-    if game.get("status") == "completed":
-        return
-    participants = game.get("participants") or []
-    now = datetime.now(timezone.utc).isoformat()
-    result = None
-    if participants:
-        if game.get("game_type") == "dice":
-            result = await _run_dice_payout(game)
-        else:
-            result = await _run_gbox_payout(game)
-    await db.entertainer_games.update_one(
-        {"id": game["id"]},
-        {"$set": {"status": "completed", "completed_at": now, "result": result}},
-    )
-
-
 async def _maybe_auto_settle_open_games():
     """Settle any open game older than AUTO_ROLL_AFTER_SECONDS."""
     cutoff = (datetime.now(timezone.utc) - timedelta(seconds=AUTO_ROLL_AFTER_SECONDS)).isoformat()
@@ -194,6 +239,21 @@ async def _maybe_auto_settle_open_games():
     ).to_list(50)
     for g in open_old:
         await _settle_game(g)
+
+
+async def get_prizes(current_user: dict = Depends(get_current_user)):
+    """Return possible prizes for E-Games (for display: cash/points/bullets ranges and cars that can be won)."""
+    prize_cars = [
+        {"name": c.get("name", c["id"]), "rarity": c.get("rarity", "common")}
+        for c in CARS
+        if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")
+    ]
+    return {
+        "cash": {"min": 100, "max": 2000},
+        "points": {"min": 5, "max": 50},
+        "bullets": {"min": 1, "max": 25},
+        "cars": prize_cars,
+    }
 
 
 async def list_games(
@@ -210,6 +270,41 @@ async def list_games(
         query["status"] = status
     games = await db.entertainer_games.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
     return {"games": games, "auto_roll_after_seconds": AUTO_ROLL_AFTER_SECONDS}
+
+
+async def games_history(current_user: dict = Depends(get_current_user)):
+    """Last 10 completed games with pot and winners for the entertainer forum."""
+    games = await db.entertainer_games.find(
+        {"status": "completed"},
+        {"_id": 0, "id": 1, "game_type": 1, "pot": 1, "completed_at": 1, "result": 1, "participants": 1},
+    ).sort("completed_at", -1).limit(10).to_list(10)
+    out = []
+    for g in games:
+        r = g.get("result") or {}
+        pot = g.get("pot") or 0
+        if g.get("game_type") == "dice":
+            winner = r.get("winner_username") or "—"
+            reward = r.get("reward")
+            reward_text = _format_reward_desc(reward) if reward else None
+            out.append({
+                "id": g["id"], "game_type": "dice", "pot": pot, "completed_at": g.get("completed_at"),
+                "winner": winner, "reward_text": reward_text,
+            })
+        else:
+            rewards = r.get("rewards_by_user") or {}
+            participants = g.get("participants") or []
+            winner_names = [p.get("username") or "?" for p in participants if p.get("user_id") in rewards]
+            # Per-player reward summary for display (e.g. "Bob: $500, 10 pts")
+            reward_summaries = []
+            for p in participants:
+                uid, name = p.get("user_id"), p.get("username") or "?"
+                if uid in rewards:
+                    reward_summaries.append(f"{name}: {_format_reward_desc(rewards[uid])}")
+            out.append({
+                "id": g["id"], "game_type": "gbox", "pot": pot, "completed_at": g.get("completed_at"),
+                "winners": winner_names, "reward_text": ", ".join(reward_summaries) if reward_summaries else None,
+            })
+    return {"games": out}
 
 
 async def get_game(game_id: str, current_user: dict = Depends(get_current_user)):
@@ -329,15 +424,15 @@ async def update_entertainer_config(
 
 
 # ---------- Admin: create 3–5 system games now and notify all ----------
-async def _create_system_game(game_type: str, max_players: int, join_fee: int) -> dict:
-    """Create one open game with no creator (system). Participants join and pay."""
+async def _create_system_game(game_type: str, max_players: int) -> dict:
+    """Create one open game with no creator (system). Free to join; winnings are random (points, cash, bullets, cars)."""
     game_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": game_id,
         "game_type": game_type,
         "max_players": max_players,
-        "join_fee": join_fee,
+        "join_fee": 0,
         "pot": 0,
         "creator_id": "system",
         "creator_username": "System",
@@ -356,13 +451,11 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     n = random.randint(3, 5)
-    join_fee_options = [0, 100, 250, 500, 1000, 2500]
     created = []
     for _ in range(n):
         game_type = random.choice(["dice", "gbox"])
         max_players = random.randint(2, 10)
-        join_fee = random.choice(join_fee_options)
-        g = await _create_system_game(game_type, max_players, join_fee)
+        g = await _create_system_game(game_type, max_players)
         created.append(g)
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.game_config.update_one(
@@ -370,11 +463,14 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
         {"$set": {"key": ENTERTAINER_CONFIG_KEY, "last_auto_create_at": now_iso}},
         upsert=True,
     )
-    await send_notification_to_all(
-        "🎲 New E-Games",
-        f"{len(created)} new dice & gbox games are open in the Entertainer Forum! Join now.",
-        "system",
-    )
+    try:
+        await send_notification_to_all(
+            "🎲 New E-Games",
+            f"{len(created)} new dice & gbox games are open in the Entertainer Forum! Join now.",
+            "system",
+        )
+    except Exception:
+        pass  # Don't fail the request if notification fails; games were already created
     return {"message": f"Created {len(created)} games", "count": len(created), "games": created}
 
 
@@ -384,12 +480,10 @@ async def run_auto_create_if_enabled():
     if not doc or not doc.get("auto_create_enabled"):
         return
     n = random.randint(3, 5)
-    join_fee_options = [0, 100, 250, 500, 1000, 2500]
     for _ in range(n):
         game_type = random.choice(["dice", "gbox"])
         max_players = random.randint(2, 10)
-        join_fee = random.choice(join_fee_options)
-        await _create_system_game(game_type, max_players, join_fee)
+        await _create_system_game(game_type, max_players)
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.game_config.update_one(
         {"key": ENTERTAINER_CONFIG_KEY},
@@ -404,8 +498,10 @@ async def run_auto_create_if_enabled():
 
 
 def register(router):
+    router.add_api_route("/forum/entertainer/prizes", get_prizes, methods=["GET"])
     router.add_api_route("/forum/entertainer/games", list_games, methods=["GET"])
     router.add_api_route("/forum/entertainer/games", create_game, methods=["POST"])
+    router.add_api_route("/forum/entertainer/games/history", games_history, methods=["GET"])
     router.add_api_route("/forum/entertainer/games/{game_id}", get_game, methods=["GET"])
     router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"])
     router.add_api_route("/forum/entertainer/games/{game_id}/roll", admin_roll_game, methods=["POST"])

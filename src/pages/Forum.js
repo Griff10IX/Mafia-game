@@ -111,22 +111,16 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
 const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   const [gameType, setGameType] = useState('dice');
   const [maxPlayers, setMaxPlayers] = useState(10);
-  const [joinFee, setJoinFee] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const fee = Math.max(0, parseInt(joinFee, 10) || 0);
-    if (fee > (me?.money ?? 0)) {
-      toast.error('Insufficient cash');
-      return;
-    }
     setSubmitting(true);
     try {
       await api.post('/forum/entertainer/games', {
         game_type: gameType,
         max_players: Math.max(1, Math.min(10, parseInt(maxPlayers, 10) || 10)),
-        join_fee: fee,
+        join_fee: 0,
       });
       toast.success('Game created');
       onClose();
@@ -156,16 +150,11 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
                 <Package size={14} /> Gbox
               </button>
             </div>
-            <p className="text-[10px] text-mutedForeground mt-1">{gameType === 'dice' ? 'Highest roll wins pot' : 'Pot split equally between all players'}</p>
+            <p className="text-[10px] text-mutedForeground mt-1">Free to join. Winnings: random — points, cash, bullets, or cars.</p>
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Players (1–10)</label>
             <input type="number" min={1} max={10} value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm" />
-          </div>
-          <div>
-            <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Join fee ($)</label>
-            <input type="number" min={0} value={joinFee} onChange={(e) => setJoinFee(e.target.value)} className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm" />
-            <p className="text-[10px] text-mutedForeground mt-1">Your cash: ${Number(me?.money ?? 0).toLocaleString()}</p>
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading uppercase rounded border border-zinc-600/50">Cancel</button>
@@ -281,6 +270,8 @@ export default function Forum() {
   const [modalOpen, setModalOpen] = useState(false);
   const [gameModalOpen, setGameModalOpen] = useState(false);
   const [entertainerGames, setEntertainerGames] = useState([]);
+  const [entertainerHistory, setEntertainerHistory] = useState([]);
+  const [entertainerPrizes, setEntertainerPrizes] = useState(null);
   const [gamesLoading, setGamesLoading] = useState(false);
   const [entertainerConfig, setEntertainerConfig] = useState({ auto_create_enabled: false, last_auto_create_at: null });
   const [user, setUser] = useState(null);
@@ -317,6 +308,24 @@ export default function Forum() {
     }
   }, []);
 
+  const fetchEntertainerHistory = useCallback(async () => {
+    try {
+      const res = await api.get('/forum/entertainer/games/history');
+      setEntertainerHistory(res.data?.games ?? []);
+    } catch {
+      setEntertainerHistory([]);
+    }
+  }, []);
+
+  const fetchEntertainerPrizes = useCallback(async () => {
+    try {
+      const res = await api.get('/forum/entertainer/prizes');
+      setEntertainerPrizes(res.data ?? null);
+    } catch {
+      setEntertainerPrizes(null);
+    }
+  }, []);
+
   const fetchEntertainerConfig = useCallback(async () => {
     try {
       const res = await api.get('/forum/entertainer/admin/config');
@@ -330,10 +339,12 @@ export default function Forum() {
   useEffect(() => {
     if (activeTab === 'entertainer') {
       fetchEntertainerGames();
+      fetchEntertainerHistory();
+      fetchEntertainerPrizes();
       fetchEntertainerConfig();
       api.get('/auth/me').then((r) => setUser(r.data)).catch(() => setUser(null));
     }
-  }, [activeTab, fetchEntertainerGames, fetchEntertainerConfig]);
+  }, [activeTab, fetchEntertainerGames, fetchEntertainerHistory, fetchEntertainerPrizes, fetchEntertainerConfig]);
   useEffect(() => {
     if (activeTab === 'entertainer') {
       const id = setInterval(fetchEntertainerGames, 10000);
@@ -367,6 +378,7 @@ export default function Forum() {
       const res = await api.post('/forum/entertainer/admin/auto-create');
       toast.success(res.data?.message || 'Games created');
       fetchEntertainerGames();
+      fetchEntertainerHistory();
       fetchEntertainerConfig();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
@@ -382,6 +394,7 @@ export default function Forum() {
       await api.post(`/forum/entertainer/games/${gameId}/roll`);
       toast.success('Game rolled');
       fetchEntertainerGames();
+      fetchEntertainerHistory();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
@@ -414,6 +427,7 @@ export default function Forum() {
       await api.post(`/forum/entertainer/games/${gameId}/join`);
       toast.success('Joined');
       fetchEntertainerGames();
+      fetchEntertainerHistory();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to join');
@@ -502,10 +516,58 @@ export default function Forum() {
             </div>
           )}
 
+          {/* What you can win */}
+          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+            <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎁 What you can win</span>
+            </div>
+            <div className="p-3 text-[11px]">
+              {entertainerPrizes ? (
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                    <div className="rounded bg-zinc-800/40 border border-zinc-700/30 px-2 py-1.5">
+                      <span className="text-mutedForeground">Cash</span>
+                      <span className="ml-2 text-primary font-heading font-bold">${entertainerPrizes.cash?.min?.toLocaleString()} – ${entertainerPrizes.cash?.max?.toLocaleString()}</span>
+                    </div>
+                    <div className="rounded bg-zinc-800/40 border border-zinc-700/30 px-2 py-1.5">
+                      <span className="text-mutedForeground">Points</span>
+                      <span className="ml-2 text-primary font-heading font-bold">{entertainerPrizes.points?.min} – {entertainerPrizes.points?.max}</span>
+                    </div>
+                    <div className="rounded bg-zinc-800/40 border border-zinc-700/30 px-2 py-1.5">
+                      <span className="text-mutedForeground">Bullets</span>
+                      <span className="ml-2 text-primary font-heading font-bold">{entertainerPrizes.bullets?.min} – {entertainerPrizes.bullets?.max}</span>
+                    </div>
+                  </div>
+                  {entertainerPrizes.cars?.length > 0 && (
+                    <div>
+                      <div className="text-mutedForeground uppercase tracking-wider mb-1.5">Cars you can win</div>
+                      <div className="space-y-1">
+                        {["common", "uncommon", "rare"].map((rarity) => {
+                          const list = (entertainerPrizes.cars || []).filter((c) => c.rarity === rarity);
+                          if (!list.length) return null;
+                          return (
+                            <div key={rarity} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className={`font-heading font-bold capitalize shrink-0 ${rarity === 'rare' ? 'text-amber-400' : rarity === 'uncommon' ? 'text-blue-400' : 'text-zinc-300'}`}>
+                                {rarity}:
+                              </span>
+                              <span className="text-foreground">{list.map((c) => c.name).join(', ')}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-mutedForeground">Loading prizes…</div>
+              )}
+            </div>
+          </div>
+
           <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
             <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between flex-wrap gap-1">
               <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Auto games</span>
-              <span className="text-[10px] text-mutedForeground">When full or after 60s, rolls / splits automatically</span>
+              <span className="text-[10px] text-mutedForeground">Free to join · Win random: points, cash, bullets, cars · Rolls when full or after 60s</span>
             </div>
             {gamesLoading ? (
               <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
@@ -528,7 +590,7 @@ export default function Forum() {
                           <span className="text-[10px] text-mutedForeground ml-2">
                             <Users size={10} className="inline" /> {participants.length}/{g.max_players}
                           </span>
-                          <span className="text-primary text-[10px] ml-2">${(g.pot || 0).toLocaleString()} pot</span>
+                          <span className="text-primary text-[10px] ml-2">Winnings: points, cash, bullets, cars</span>
                           {secsLeft > 0 && (
                             <span className="text-[10px] text-amber-400/90 ml-2">Rolls in {secsLeft}s</span>
                           )}
@@ -538,10 +600,10 @@ export default function Forum() {
                         {!isIn && g.status === 'open' && (
                           <button
                             onClick={() => handleJoinGame(g.id)}
-                            disabled={joiningId === g.id || (user?.money ?? 0) < (g.join_fee || 0)}
+                            disabled={joiningId === g.id}
                             className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 disabled:opacity-50"
                           >
-                            {joiningId === g.id ? '...' : `Join ($${(g.join_fee || 0).toLocaleString()})`}
+                            {joiningId === g.id ? '...' : 'Join free'}
                           </button>
                         )}
                         {isIn && <span className="text-[10px] text-mutedForeground">You're in</span>}
@@ -559,6 +621,43 @@ export default function Forum() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          {/* Last 10 Games */}
+          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+            <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📜 Last 10 games</span>
+            </div>
+            {entertainerHistory.length === 0 ? (
+              <div className="p-3 text-center text-[11px] text-mutedForeground">No completed games yet.</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="border-b border-zinc-700/30 text-left text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
+                      <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Winner(s)</th>
+                      <th className="px-3 py-2">Rewards</th>
+                      <th className="px-3 py-2 text-right">When</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entertainerHistory.map((h) => (
+                      <tr key={h.id} className="border-b border-zinc-700/20 hover:bg-zinc-800/20">
+                        <td className="px-3 py-1.5 font-heading capitalize">{h.game_type}</td>
+                        <td className="px-3 py-1.5 text-mutedForeground">
+                          {h.winner != null ? h.winner : (h.winners && h.winners.length ? h.winners.join(', ') : '—')}
+                        </td>
+                        <td className="px-3 py-1.5 text-primary text-[10px] max-w-[240px] break-words">
+                          {h.reward_text || '—'}
+                        </td>
+                        <td className="px-3 py-1.5 text-right text-mutedForeground">{h.completed_at ? getTimeAgo(h.completed_at) : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
