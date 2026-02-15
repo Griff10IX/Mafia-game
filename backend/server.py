@@ -1174,9 +1174,19 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
         return total_bullets
     return 0
 
+def _client_ip(request: Request) -> str:
+    """Get client IP (supports X-Forwarded-For behind proxy)."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host or ""
+    return ""
+
+
 # Auth endpoints
 @api_router.post("/auth/register")
-async def register(user_data: UserRegister):
+async def register(user_data: UserRegister, request: Request):
     try:
         # Case-insensitive checks for existing email/username
         email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
@@ -1239,7 +1249,9 @@ async def register(user_data: UserRegister):
             "points_at_death": None,
             "retrieval_used": False,
             "last_seen": datetime.now(timezone.utc).isoformat(),
-            "created_at": datetime.now(timezone.utc).isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "registration_ip": _client_ip(request),
+            "login_ips": [_client_ip(request)] if _client_ip(request) else [],
         }
         
         # Insert the user document
@@ -1269,7 +1281,7 @@ async def register(user_data: UserRegister):
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @api_router.post("/auth/login")
-async def login(user_data: UserLogin):
+async def login(user_data: UserLogin, request: Request):
     # Case-insensitive email lookup
     email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
     user = await db.users.find_one({"email": email_pattern}, {"_id": 0})
@@ -1280,6 +1292,17 @@ async def login(user_data: UserLogin):
             status_code=403,
             detail="This account is dead and cannot be used. Create a new account. You may retrieve a portion of your points via Dead > Alive."
         )
+    # Track login IP for cheat detection
+    ip = _client_ip(request)
+    if ip:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"last_login_ip": ip}, "$addToSet": {"login_ips": ip}},
+        )
+        doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "login_ips": 1})
+        ips = doc.get("login_ips") or []
+        if len(ips) > 20:
+            await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": ips[-20:]}})
     token = create_access_token({"sub": user["id"]})
     return {"token": token, "user": {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}}
 
@@ -3936,6 +3959,69 @@ async def admin_find_duplicates(username: str = None, current_user: dict = Depen
     ]
     duplicates = await db.users.aggregate(pipeline).to_list(20)
     return {"duplicates": duplicates}
+
+
+@api_router.get("/admin/cheat-detection/same-ip")
+async def admin_cheat_same_ip(current_user: dict = Depends(get_current_user)):
+    """Find accounts that share an IP (registration or login). Admin only."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    users = await db.users.find(
+        {"is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "created_at": 1},
+    ).to_list(5000)
+    ip_to_users = {}
+    for u in users:
+        summary = {"id": u["id"], "username": u.get("username"), "email": u.get("email"), "created_at": u.get("created_at")}
+        reg_ip = (u.get("registration_ip") or "").strip()
+        if reg_ip:
+            ip_to_users.setdefault(reg_ip, []).append({**summary, "source": "registration"})
+        for lip in (u.get("login_ips") or []):
+            lip = (lip or "").strip()
+            if lip and lip != reg_ip:
+                ip_to_users.setdefault(lip, []).append({**summary, "source": "login"})
+    groups = [{"ip": ip, "count": len(accs), "accounts": accs} for ip, accs in ip_to_users.items() if len(accs) >= 2]
+    groups.sort(key=lambda g: -g["count"])
+    return {"groups": groups[:100], "total_groups": len(groups)}
+
+
+@api_router.get("/admin/cheat-detection/duplicate-suspects")
+async def admin_cheat_duplicate_suspects(
+    username: str = Query(None, description="Optional: filter by username contains"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Find potential duplicate accounts: similar usernames, same email domain. Admin only."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    query = {"is_dead": {"$ne": True}}
+    if username and username.strip():
+        query["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
+    users = await db.users.find(
+        query,
+        {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "created_at": 1},
+    ).to_list(2000)
+    # Group by email domain (e.g. gmail.com) - multiple accounts same domain can be suspicious
+    domain_to_users = {}
+    for u in users:
+        email = (u.get("email") or "").strip()
+        if "@" in email:
+            domain = email.split("@")[-1].lower()
+            domain_to_users.setdefault(domain, []).append(u)
+    domain_groups = [{"domain": d, "count": len(accs), "accounts": accs} for d, accs in domain_to_users.items() if len(accs) >= 2]
+    domain_groups.sort(key=lambda g: -g["count"])
+    # Similar usernames: strip digits, group by base
+    base_to_users = {}
+    for u in users:
+        uname = (u.get("username") or "").strip()
+        base = re.sub(r"\d+", "", uname).lower() or uname.lower()
+        if len(base) >= 2:
+            base_to_users.setdefault(base, []).append(u)
+    name_groups = [{"base": b, "count": len(accs), "accounts": accs} for b, accs in base_to_users.items() if len(accs) >= 2]
+    name_groups.sort(key=lambda g: -g["count"])
+    return {
+        "by_domain": domain_groups[:50],
+        "by_similar_username": name_groups[:50],
+    }
 
 
 @api_router.get("/admin/user-details/{user_id}")

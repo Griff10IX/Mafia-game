@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5 } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -68,6 +68,12 @@ export default function Admin() {
   const [gamblingLogGameType, setGamblingLogGameType] = useState('');
   const [clearGamblingDays, setClearGamblingDays] = useState(30);
   const [clearGamblingLoading, setClearGamblingLoading] = useState(false);
+
+  // Cheat detection
+  const [cheatSameIp, setCheatSameIp] = useState(null);
+  const [cheatDuplicates, setCheatDuplicates] = useState(null);
+  const [cheatLoading, setCheatLoading] = useState(false);
+  const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
 
   const toggleSection = (key) => {
     setCollapsed(prev => {
@@ -268,6 +274,37 @@ export default function Admin() {
       setSearchResults(res.data);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setDbLoading(false); }
+  };
+
+  const handleFetchSameIp = async () => {
+    setCheatLoading(true);
+    setCheatSameIp(null);
+    try {
+      const res = await api.get('/admin/cheat-detection/same-ip');
+      setCheatSameIp(res.data);
+      toast.success(res.data?.total_groups ? `${res.data.total_groups} IP group(s) with 2+ accounts` : 'No shared IPs found');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setCheatLoading(false);
+    }
+  };
+
+  const handleFetchDuplicateSuspects = async () => {
+    setCheatLoading(true);
+    setCheatDuplicates(null);
+    try {
+      const url = duplicateSuspectsUsername.trim()
+        ? '/admin/cheat-detection/duplicate-suspects?username=' + encodeURIComponent(duplicateSuspectsUsername.trim())
+        : '/admin/cheat-detection/duplicate-suspects';
+      const res = await api.get(url);
+      setCheatDuplicates(res.data);
+      toast.success('Duplicate suspects loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setCheatLoading(false);
+    }
   };
 
   const handleDeleteUser = async () => {
@@ -760,6 +797,104 @@ export default function Admin() {
                 {dropHumanBgLoading ? '...' : 'Drop All'}
               </BtnDanger>
             </ActionRow>
+          </div>
+        )}
+      </div>
+
+      {/* Cheat Detection */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
+        <SectionHeader
+          icon={AlertTriangle}
+          title="Cheat Detection"
+          badge={
+            ((cheatSameIp?.total_groups ?? 0) > 0 || ((cheatDuplicates?.by_domain?.length ?? 0) + (cheatDuplicates?.by_similar_username?.length ?? 0)) > 0) && (
+              <span className="text-[10px] font-heading text-amber-400">Review below</span>
+            )
+          }
+          isCollapsed={collapsed.cheat}
+          onToggle={() => toggleSection('cheat')}
+        />
+        {!collapsed.cheat && (
+          <div className="p-3 space-y-4">
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Accounts on same IP</div>
+              <p className="text-xs text-mutedForeground mb-2">Find users who registered or logged in from the same IP (possible multi-accounts).</p>
+              <BtnPrimary onClick={handleFetchSameIp} disabled={cheatLoading}>Load same-IP report</BtnPrimary>
+              {cheatSameIp && (
+                <div className="mt-3 max-h-64 overflow-y-auto space-y-2">
+                  {cheatSameIp.total_groups === 0 ? (
+                    <p className="text-xs text-mutedForeground">No IP shared by 2+ accounts.</p>
+                  ) : (
+                    cheatSameIp.groups?.slice(0, 30).map((g, i) => (
+                      <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
+                        <div className="text-[10px] font-heading text-amber-400 mb-1">IP: {g.ip} — {g.count} account(s)</div>
+                        <div className="space-y-0.5">
+                          {g.accounts.map((a, j) => (
+                            <div key={j} className="flex justify-between text-[10px]">
+                              <span className="text-foreground font-bold">{a.username}</span>
+                              <span className="text-mutedForeground">{a.email}</span>
+                              <span className="text-mutedForeground">{a.source}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Duplicate account suspects</div>
+              <p className="text-xs text-mutedForeground mb-2">Same email domain or similar usernames (e.g. name1, name2).</p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={duplicateSuspectsUsername}
+                  onChange={(e) => setDuplicateSuspectsUsername(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs w-40"
+                  placeholder="Filter by username"
+                />
+                <BtnPrimary onClick={handleFetchDuplicateSuspects} disabled={cheatLoading}>Load duplicate suspects</BtnPrimary>
+              </div>
+              {cheatDuplicates && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                  <div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Same email domain</div>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {(cheatDuplicates.by_domain || []).length === 0 ? (
+                        <p className="text-xs text-mutedForeground">None</p>
+                      ) : (
+                        (cheatDuplicates.by_domain || []).map((g, i) => (
+                          <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading">{g.domain} — {g.count}</div>
+                            {g.accounts?.slice(0, 5).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Similar usernames</div>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {(cheatDuplicates.by_similar_username || []).length === 0 ? (
+                        <p className="text-xs text-mutedForeground">None</p>
+                      ) : (
+                        (cheatDuplicates.by_similar_username || []).map((g, i) => (
+                          <div key={i} className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/30">
+                            <div className="text-[10px] text-amber-400 font-heading">"{g.base}" — {g.count}</div>
+                            {g.accounts?.slice(0, 5).map((a, j) => (
+                              <div key={j} className="text-[10px] pl-1">{a.username} · {a.email}</div>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

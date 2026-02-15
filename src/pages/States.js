@@ -41,6 +41,8 @@ const CityCard = ({
   airportSlot1,
   expanded,
   onToggle,
+  onClaimAirport,
+  claimingCity,
 }) => {
   const bf = bulletFactory;
   const ap = airportSlot1;
@@ -90,10 +92,10 @@ const CityCard = ({
                   <div className="flex items-center gap-2">
                     <Icon size={12} className={color} />
                     <span className="text-xs font-heading font-bold text-foreground">{game.name}</span>
-                    {owner && (
-                      <span className="text-[10px] text-mutedForeground">
-                        · {owner.username}
-                      </span>
+                    {owner ? (
+                      <span className="text-[10px] text-mutedForeground">· {owner.username}</span>
+                    ) : (
+                      <span className="text-[10px] text-zinc-500">Unclaimed</span>
                     )}
                   </div>
                   <span className={`text-xs font-heading font-bold tabular-nums ${isTop ? 'text-primary' : 'text-foreground'}`}>
@@ -139,11 +141,17 @@ const CityCard = ({
                     <span className="text-mutedForeground">{ap.owner_username}</span>
                     <span className="text-primary font-bold">{ap.price_per_travel} pts</span>
                   </>
+                ) : onClaimAirport ? (
+                  <button
+                    type="button"
+                    onClick={() => onClaimAirport(city)}
+                    disabled={claimingCity === city}
+                    className="px-2 py-0.5 rounded bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
+                  >
+                    {claimingCity === city ? '...' : 'Take over'}
+                  </button>
                 ) : (
-                  <>
-                    <span className="text-zinc-500">Unclaimed</span>
-                    <span className="text-mutedForeground">10 pts</span>
-                  </>
+                  <span className="text-zinc-500">Unclaimed</span>
                 )}
               </div>
             </div>
@@ -207,6 +215,7 @@ export default function States() {
   const [bulletFactories, setBulletFactories] = useState([]);
   const [airports, setAirports] = useState([]);
   const [expandedCities, setExpandedCities] = useState({});
+  const [claimingCity, setClaimingCity] = useState(null);
 
   useEffect(() => {
     api.get('/states')
@@ -297,6 +306,21 @@ export default function States() {
 
   const collapseAll = () => setExpandedCities({});
 
+  const handleClaimAirport = async (state) => {
+    setClaimingCity(state);
+    try {
+      await api.post('/airports/claim', { state, slot: 1 });
+      toast.success('You now own this airport. Set price in Travel or States.');
+      const r = await api.get('/airports');
+      setAirports(r.data?.airports ?? []);
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to claim');
+    } finally {
+      setClaimingCity(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -345,6 +369,8 @@ export default function States() {
             airportSlot1={airportSlot1ByState[city]}
             expanded={!!expandedCities[city]}
             onToggle={() => toggleCity(city)}
+            onClaimAirport={handleClaimAirport}
+            claimingCity={claimingCity}
           />
         ))}
       </div>
