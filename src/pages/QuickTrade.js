@@ -92,6 +92,10 @@ export default function QuickTrade() {
     }
   };
 
+  // Calculate per-point prices
+  const sellPerPoint = sellPoints && sellCost ? (parseFloat(sellCost) / parseFloat(sellPoints)).toFixed(2) : '0.00';
+  const buyPerPoint = buyPoints && buyOffer ? (parseFloat(buyOffer) / parseFloat(buyPoints)).toFixed(2) : '0.00';
+
   if (loading) {
     return (
       <div className={`${styles.pageContent} ${styles.page}`}>
@@ -147,6 +151,11 @@ export default function QuickTrade() {
                 placeholder="Price in cash"
                 className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
+              {sellPoints && sellCost && (
+                <p className="text-xs text-mutedForeground mt-1">
+                  Per Point: <span className="text-primary font-bold">${sellPerPoint}</span>
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -203,6 +212,11 @@ export default function QuickTrade() {
                 placeholder="How much you'll pay"
                 className="w-full bg-input border border-border rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
+              {buyPoints && buyOffer && (
+                <p className="text-xs text-mutedForeground mt-1">
+                  Per Point: <span className="text-primary font-bold">${buyPerPoint}</span>
+                </p>
+              )}
             </div>
 
             <div className="flex items-center gap-2">

@@ -8190,6 +8190,17 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     if offer.points <= 0 or offer.cost <= 0:
         raise HTTPException(status_code=400, detail="Points and cost must be positive")
     
+    # Check offer limits
+    active_offers = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active"})
+    if offer.hide_name:
+        hidden_count = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": True})
+        if hidden_count >= 5:
+            raise HTTPException(status_code=400, detail="Maximum 5 hidden offers allowed")
+    else:
+        non_hidden_count = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": False})
+        if non_hidden_count >= 10:
+            raise HTTPException(status_code=400, detail="Maximum 10 regular offers allowed")
+    
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -8220,6 +8231,16 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
     
     if offer.points <= 0 or offer.offer <= 0:
         raise HTTPException(status_code=400, detail="Points and offer must be positive")
+    
+    # Check offer limits
+    if offer.hide_name:
+        hidden_count = await db.trade_buy_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": True})
+        if hidden_count >= 5:
+            raise HTTPException(status_code=400, detail="Maximum 5 hidden offers allowed")
+    else:
+        non_hidden_count = await db.trade_buy_offers.count_documents({"user_id": user_id, "status": "active", "hide_name": False})
+        if non_hidden_count >= 10:
+            raise HTTPException(status_code=400, detail="Maximum 10 regular offers allowed")
     
     user = await db.users.find_one({"id": user_id})
     if not user:
