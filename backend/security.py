@@ -241,10 +241,7 @@ RATE_LIMIT_CONFIG = {
     "/api/bank/swiss/deposit": (30, True),
     "/api/bank/swiss/withdraw": (30, True),
     
-    # Game actions (prevent bot-like rapid fire)
-    "/api/crimes/": (40, True),
-    "/api/gta/attempt": (30, True),
-    "/api/oc/start": (10, True),
+    # Attack system
     "/api/attack/": (40, True),
     
     # Hitlist (prevent spam)
@@ -264,11 +261,21 @@ RATE_LIMIT_CONFIG = {
     "/api/bodyguards/": (30, True),
     
     # Casino/gambling (prevent rapid betting exploits)
-    "/api/dice/": (50, True),
-    "/api/roulette/": (50, True),
-    "/api/blackjack/": (50, True),
-    "/api/horseracing/": (50, True),
+    "/api/casino/dice/": (50, True),
+    "/api/casino/roulette/": (50, True),
+    "/api/casino/blackjack/": (50, True),
+    "/api/casino/horseracing/": (50, True),
     "/api/sports-betting/": (50, True),
+    
+    # Travel & Booze Run
+    "/api/travel": (20, True),
+    "/api/booze-run/": (30, True),
+    
+    # Families
+    "/api/families/": (40, False),  # Disabled by default
+    
+    # Notifications (prevent spam)
+    "/api/notifications/send": (20, True),
     
     # Admin endpoints (no rate limit - admins need full access)
     "/api/admin/": (1000, False),

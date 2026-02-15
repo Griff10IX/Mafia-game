@@ -3281,6 +3281,24 @@ async def admin_update_rate_limit(
     }
 
 
+@api_router.post("/admin/security/rate-limits/disable-all")
+async def admin_disable_all_rate_limits(current_user: dict = Depends(get_current_user)):
+    """Disable rate limiting for ALL endpoints (emergency disable)."""
+    if current_user["email"] not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    count = 0
+    for endpoint in security_module.RATE_LIMIT_CONFIG:
+        limit, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
+        security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, False)
+        count += 1
+    
+    return {
+        "message": f"Disabled rate limiting for all {count} endpoints",
+        "count": count
+    }
+
+
 @api_router.post("/admin/security/test-telegram")
 async def admin_test_telegram(current_user: dict = Depends(get_current_user)):
     """Send a test alert to Telegram to verify configuration."""

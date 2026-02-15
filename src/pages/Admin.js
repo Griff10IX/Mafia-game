@@ -380,6 +380,20 @@ export default function Admin() {
     }
   };
 
+  const handleDisableAllLimits = async () => {
+    if (!window.confirm('⚠️ Disable ALL rate limits? This removes all protection against spam and exploits.')) return;
+    setSecurityLoading(true);
+    try {
+      const response = await api.post('/admin/security/rate-limits/disable-all');
+      toast.success(response.data.message);
+      // Refresh the rate limits
+      await handleViewRateLimits();
+    } catch (e) { 
+      toast.error(e.response?.data?.detail || 'Failed to disable rate limits'); 
+    }
+    finally { setSecurityLoading(false); }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -778,6 +792,12 @@ export default function Admin() {
               <BtnPrimary onClick={handleViewRateLimits} disabled={securityLoading}>
                 {securityLoading ? '...' : 'View'}
               </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Shield} label="Disable All Limits" description="Emergency: Turn off all rate limiting" color="text-red-400">
+              <BtnDanger onClick={handleDisableAllLimits} disabled={securityLoading}>
+                {securityLoading ? '...' : 'Disable All'}
+              </BtnDanger>
             </ActionRow>
 
             {rateLimits && rateLimits.rate_limits && (
