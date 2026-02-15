@@ -478,7 +478,7 @@ const HistoryCard = ({ history }) => (
   </div>
 );
 
-const InfoCard = ({ rotationHours }) => (
+const InfoCard = ({ rotationHours, dailyEstimateRough }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
@@ -497,8 +497,14 @@ const InfoCard = ({ rotationHours }) => (
         </li>
         <li className="flex items-start gap-1.5">
           <span className="text-primary shrink-0">•</span>
-          <span>Upgrade capacity in Points Store</span>
+          <span>Capacity goes up each rank; upgrade more in Points Store</span>
         </li>
+        {dailyEstimateRough != null && dailyEstimateRough > 0 && (
+          <li className="flex items-start gap-1.5">
+            <span className="text-emerald-400 shrink-0">•</span>
+            <span>Rough 24h (custom car, best route, non-stop): <strong className="text-foreground">~${Number(dailyEstimateRough).toLocaleString()}</strong></span>
+          </li>
+        )}
         <li className="flex items-start gap-1.5">
           <span className="text-amber-400 shrink-0">⚠️</span>
           <span className="text-amber-400">Higher amounts = higher risk!</span>
@@ -676,7 +682,7 @@ export default function BoozeRun() {
 
       <HistoryCard history={historyList} />
 
-      <InfoCard rotationHours={config.rotation_hours} />
+      <InfoCard rotationHours={config.rotation_hours} dailyEstimateRough={config.daily_estimate_rough} />
     </div>
   );
 }

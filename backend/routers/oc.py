@@ -33,13 +33,26 @@ OC_ROLES = [
     {"id": "hacker", "name": "Hacker"},
 ]
 
-# Jobs: harder = better rewards, lower success chance
+# Setup cost paid by creator when running (so reward always exceeds cost even when split)
+OC_SETUP_COST = 1_000_000
+
+# Jobs: harder = better rewards, lower success chance. Cash = total pool on success (split by team).
+# Every job reward > OC_SETUP_COST + max equipment cost (2M) so the run is always profitable on success.
 OC_JOBS = [
-    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.65, "cash": 60_000, "rp": 120},
-    {"id": "state_bank", "name": "State Bank", "success_rate": 0.50, "cash": 140_000, "rp": 280},
-    {"id": "city_bank", "name": "City Bank", "success_rate": 0.35, "cash": 280_000, "rp": 560},
-    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.20, "cash": 550_000, "rp": 1100},
+    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.65, "cash": 2_200_000, "rp": 120},
+    {"id": "state_bank", "name": "State Bank", "success_rate": 0.50, "cash": 2_800_000, "rp": 280},
+    {"id": "city_bank", "name": "City Bank", "success_rate": 0.35, "cash": 3_800_000, "rp": 560},
+    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.20, "cash": 5_500_000, "rp": 1100},
 ]
+
+# Equipment (must match organised_crime EQUIPMENT_TIERS): used to boost success rate when running heist
+OC_EQUIPMENT_BY_ID = {
+    "basic": {"cost": 0, "success_bonus": 0.0},
+    "upgraded": {"cost": 400_000, "success_bonus": 0.10},
+    "professional": {"cost": 700_000, "success_bonus": 0.20},
+    "elite": {"cost": 900_000, "success_bonus": 0.30},
+    "master": {"cost": 1_000_000, "success_bonus": 0.40},
+}
 
 OC_COOLDOWN_HOURS = 6
 OC_COOLDOWN_HOURS_REDUCED = 4
@@ -453,7 +466,24 @@ async def execute_oc(
     ev = await get_effective_event()
     rank_mult = float(ev.get("rank_points", 1.0))
     cash_mult = float(ev.get("kill_cash", 1.0))
-    success_rate = min(1.0, job["success_rate"])
+    # Equipment (from Organised Crime page) boosts success chance; cap 92%
+    user_oc = await db.user_organised_crime.find_one({"user_id": uid}, {"_id": 0, "selected_equipment": 1})
+    selected_id = (user_oc or {}).get("selected_equipment", "basic")
+    equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
+    total_cost = OC_SETUP_COST + equip["cost"]
+    creator_money = int(current_user.get("money") or 0)
+    if creator_money < total_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Not enough money. Need ${total_cost:,} (${OC_SETUP_COST:,} setup + ${equip['cost']:,} equipment)",
+        )
+    # Charge creator upfront (setup + equipment); reward pool is always > cost so split is still profitable
+    await db.users.update_one(
+        {"id": uid},
+        {"$inc": {"money": -total_cost}},
+    )
+
+    success_rate = min(0.92, job["success_rate"] + equip["success_bonus"])
     success = random.random() < success_rate
 
     new_cooldown_until = now + timedelta(hours=cooldown_hours)

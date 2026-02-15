@@ -175,13 +175,13 @@ const JobCard = ({ job, selected, onSelect }) => (
       <span className="text-sm font-heading font-bold text-foreground truncate">{job.name}</span>
     </div>
     <div className="flex items-center justify-between gap-2 text-xs font-heading">
-      <span className={`${selected ? 'text-foreground' : 'text-mutedForeground'}`}>
+      <span className={`${selected ? 'text-foreground' : 'text-mutedForeground'}`} title="Base success chance; equipment adds more">
         {(job.success_rate * 100).toFixed(0)}%
       </span>
       <span className="text-primary font-bold">${(job.cash || 0).toLocaleString()}</span>
     </div>
-    <div className="text-xs font-heading text-primary/80 mt-1">
-      +{job.rp || 0} RP
+    <div className="text-[10px] text-mutedForeground font-heading mt-0.5">
+      Reward on success · +{job.rp || 0} RP
     </div>
   </button>
 );
@@ -716,6 +716,9 @@ export default function OrganisedCrime() {
           </span>
         </div>
         <div className="p-3">
+          <p className="text-[10px] text-mutedForeground font-heading mb-2">
+            Cash shown is your reward if the heist succeeds. Equipment above raises success chance (max 92%).
+          </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {(config.jobs || []).map((job) => (
               <JobCard key={job.id} job={job} selected={selectedJobId === job.id} onSelect={setSelectedJobId} />

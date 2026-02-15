@@ -6403,10 +6403,10 @@ BOOZE_TYPES = [
     {"id": "needle_beer", "name": "Needle Beer"},
     {"id": "jamaica_ginger", "name": "Jamaica Ginger"},
 ]
-# Base capacity: 50 at rank 1, then +5% to +10% per rank (we use 7.5% so each rank increases limit).
+# Base capacity at rank 1; each rank up adds extra (so rank directly increases limit).
 # Store upgrade: +100 per purchase for 30 points, bonus capped at 1000 total.
 BOOZE_CAPACITY_BASE_RANK1 = 50
-BOOZE_CAPACITY_PCT_PER_RANK = 0.075  # 7.5% more per rank (in 5–10% range)
+BOOZE_CAPACITY_EXTRA_PER_RANK = 25  # each time you rank up you get this much extra booze limit
 BOOZE_CAPACITY_UPGRADE_COST = 30   # points per +100 capacity
 BOOZE_CAPACITY_UPGRADE_AMOUNT = 100  # +100 units per store purchase
 BOOZE_CAPACITY_BONUS_MAX = 1000  # cap on booze_capacity_bonus from store
@@ -6439,8 +6439,8 @@ def _booze_prices_for_rotation():
         for booze_i in range(n_booze):
             # Deterministic: no random module
             base = 200 + (loc_i * 100) + (booze_i * 80) + (idx % 17) * 20
-            # ECONOMY REBALANCE: Reduced profit spread by ~60% (was 150-350, now 60-140)
-            spread = 60 + (idx + loc_i + booze_i) % 80
+            # ECONOMY: Low profit spread so booze runs don't dominate (spread ~8-22 per unit)
+            spread = 8 + (idx + loc_i + booze_i) % 15
             buy = min(2000, max(100, base))
             sell = buy + spread
             out[(loc_i, booze_i)] = (buy, sell)
@@ -8332,10 +8332,10 @@ async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):
 
 def _booze_user_capacity(current_user: dict) -> int:
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    # Base capacity scales 5–10% per rank (use 7.5%): rank 1 = 50, each rank multiplies by 1.075
-    base = int(round(BOOZE_CAPACITY_BASE_RANK1 * ((1 + BOOZE_CAPACITY_PCT_PER_RANK) ** (rank_id - 1))))
+    # Base from rank: rank 1 = BASE, each rank up adds EXTRA_PER_RANK
+    capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    return base + bonus
+    return max(1, capacity_from_rank + bonus)
 
 
 def _booze_user_carrying_total(carrying: dict) -> int:
@@ -8349,6 +8349,8 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     loc_index = STATES.index(current_state) if current_state in STATES else 0
     prices_map = _booze_prices_for_rotation()
     carrying = current_user.get("booze_carrying") or {}
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     capacity = _booze_user_capacity(current_user)
     # Prices at current location only (front can show "buy here / sell here")
     prices_at_location = []
@@ -8379,6 +8381,12 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     history = (current_user.get("booze_run_history") or [])[:BOOZE_RUN_HISTORY_MAX]
 
     capacity_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
+    # Rough 24h estimate: custom car (20s per leg = 40s per run), best route, non-stop
+    _secs_per_run_custom = 40  # 20s travel to buy city + 20s to sell city
+    _runs_per_day = 86400 // _secs_per_run_custom  # 2160
+    _jail_reduction = 0.95  # ~5% of runs lose time to jail
+    _avg_profit_per_unit = 15  # spread ~8–22 per unit (reduced so profits stay modest)
+    daily_estimate_rough = int(_runs_per_day * _jail_reduction * capacity * _avg_profit_per_unit)
     return {
         "locations": list(STATES),
         "booze_types": list(BOOZE_TYPES),
@@ -8387,6 +8395,8 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "all_prices_by_location": all_prices,
         "carrying": carrying,
         "capacity": capacity,
+        "capacity_from_rank": capacity_from_rank,
+        "capacity_extra_per_rank": BOOZE_CAPACITY_EXTRA_PER_RANK,
         "capacity_bonus": capacity_bonus,
         "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX,
         "carrying_total": _booze_user_carrying_total(carrying),
@@ -8396,6 +8406,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "profit_total": profit_total,
         "runs_count": runs_count,
         "history": history,
+        "daily_estimate_rough": daily_estimate_rough,
     }
 
 
@@ -9957,12 +9968,13 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail)
-from routers import crimes, gta, jail, oc, organised_crime
+from routers import crimes, gta, jail, oc, organised_crime, forum
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
 organised_crime.register(api_router)
 oc.register(api_router)
+forum.register(api_router)
 
 app.include_router(api_router)
 

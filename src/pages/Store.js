@@ -396,12 +396,17 @@ export default function Store() {
             </div>
             <div className="p-6">
               <p className="text-xs font-heading text-mutedForeground mb-4">
-                Carry more units on supply runs. Higher rank also increases base capacity.
+                Carry more units on supply runs. Each time you rank up you get extra booze limit.
               </p>
               <div className="flex items-center justify-between text-sm font-heading mb-2">
                 <span className="text-mutedForeground">Current capacity:</span>
                 <span className="text-primary font-bold">{boozeConfig?.capacity ?? '—'} units</span>
               </div>
+              {(boozeConfig?.capacity_from_rank != null) && (
+                <div className="text-xs text-mutedForeground font-heading mb-1">
+                  Base from rank: {boozeConfig.capacity_from_rank} (+{boozeConfig.capacity_extra_per_rank ?? 25} per rank up)
+                </div>
+              )}
               {(boozeConfig?.capacity_bonus_max != null) && (
                 <div className="text-xs text-mutedForeground font-heading mb-4">
                   Bonus from store: {boozeConfig.capacity_bonus ?? 0} / {boozeConfig.capacity_bonus_max} (max)

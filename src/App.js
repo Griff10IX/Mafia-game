@@ -36,6 +36,8 @@ import States from "./pages/States";
 import BoozeRun from "./pages/BoozeRun.js";
 import Inbox from "./pages/Inbox";
 import InboxChat from "./pages/InboxChat";
+import Forum from "./pages/Forum";
+import ForumTopic from "./pages/ForumTopic";
 import DeadAlive from "./pages/DeadAlive";
 import Profile from "./pages/Profile";
 import Stats from "./pages/Stats";
@@ -468,6 +470,30 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <BoozeRun />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/forum"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Forum />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/forum/topic/:topicId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ForumTopic />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
