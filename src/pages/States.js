@@ -47,7 +47,8 @@ const CityCard = ({
 }) => {
   const bf = bulletFactory;
   const ap = airportSlot1;
-  const canClaimAirport = !ap?.owner_username && userCurrentCity === city;
+  const airportUnclaimed = !ap?.owner_username || ap.owner_username === 'Unclaimed';
+  const canClaimAirport = airportUnclaimed && (userCurrentCity === city || userCurrentCity === null);
   
   // Count owned casinos
   const ownedCount = games.filter(g => (allOwners[g.id] || {})[city]?.username).length;
@@ -138,7 +139,7 @@ const CityCard = ({
                 <span className="text-xs font-heading text-foreground">Airport</span>
               </div>
               <div className="flex items-center gap-2 text-[10px]">
-                {ap?.owner_username ? (
+                {ap?.owner_username && ap.owner_username !== 'Unclaimed' ? (
                   <>
                     <span className="text-mutedForeground">{ap.owner_username}</span>
                     <span className="text-primary font-bold">{ap.price_per_travel} pts</span>
@@ -155,7 +156,7 @@ const CityCard = ({
                 ) : (
                   <span className="text-[10px]">
                     <span className="text-zinc-500">Unclaimed</span>
-                    {!ap?.owner_username && userCurrentCity && userCurrentCity !== city && (
+                    {airportUnclaimed && userCurrentCity && userCurrentCity !== city && (
                       <span className="text-zinc-600 ml-1">(Must be in {city})</span>
                     )}
                   </span>
@@ -225,9 +226,15 @@ export default function States() {
   const [claimingCity, setClaimingCity] = useState(null);
   const [userCurrentCity, setUserCurrentCity] = useState(null);
 
-  useEffect(() => {
-    api.get('/auth/me').then((r) => setUserCurrentCity(r.data?.current_state ?? null)).catch(() => {});
+  const fetchUserCity = useCallback(() => {
+    api.get('/auth/me').then((r) => setUserCurrentCity(r.data?.current_state ?? null)).catch(() => setUserCurrentCity(null));
   }, []);
+  useEffect(() => { fetchUserCity(); }, [fetchUserCity]);
+  useEffect(() => {
+    const onFocus = () => fetchUserCity();
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [fetchUserCity]);
 
   useEffect(() => {
     api.get('/states')
@@ -325,6 +332,7 @@ export default function States() {
       toast.success('You now own this airport. Set price in Travel or States.');
       const r = await api.get('/airports');
       setAirports(r.data?.airports ?? []);
+      fetchUserCity();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to claim');

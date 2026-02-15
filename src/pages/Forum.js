@@ -381,7 +381,7 @@ export default function Forum() {
       fetchEntertainerHistory();
       fetchEntertainerConfig();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
+      toast.error(err.response?.data?.detail || 'Could not create games. Try again.');
     } finally {
       setCreatingGames(false);
     }

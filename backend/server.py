@@ -10139,23 +10139,20 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         success_chance = max(FAMILY_RACKET_ATTACK_MIN_SUCCESS, FAMILY_RACKET_ATTACK_BASE_SUCCESS - level * FAMILY_RACKET_ATTACK_LEVEL_PENALTY)
         success = random.random() < success_chance
         now_iso = datetime.now(timezone.utc).isoformat()
+        # Record this raid attempt (one doc per attempt so count = raids in window, not distinct rackets)
+        await db.family_racket_attacks.insert_one({
+            "attacker_family_id": my_family_id,
+            "target_family_id": request.family_id,
+            "target_racket_id": request.racket_id,
+            "last_at": now_iso,
+        })
         if success and take > 0:
             treasury = int((target_fam.get("treasury") or 0) or 0)
             actual = min(take, treasury)
             if actual > 0:
                 await db.families.update_one({"id": request.family_id}, {"$inc": {"treasury": -actual}})
                 await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
-            await db.family_racket_attacks.update_one(
-                {"attacker_family_id": my_family_id, "target_family_id": request.family_id, "target_racket_id": request.racket_id},
-                {"$set": {"last_at": now_iso}},
-                upsert=True,
-            )
             return {"success": True, "message": f"Raid successful! Took ${actual:,}.", "amount": actual}
-        await db.family_racket_attacks.update_one(
-            {"attacker_family_id": my_family_id, "target_family_id": request.family_id, "target_racket_id": request.racket_id},
-            {"$set": {"last_at": now_iso}},
-            upsert=True,
-        )
         return {"success": False, "message": "Raid failed.", "amount": 0}
 
 

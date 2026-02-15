@@ -10,11 +10,11 @@ from fastapi import Depends, HTTPException
 logger = logging.getLogger(__name__)
 
 
-# Progress bar: 10-92%. Success +3-5%. Fail -1-3%; once you've hit max, floor is 77% (never drop more than 15% from max)
+# Progress bar: 10-92%. Success +6-8%. Fail -1-3%; once you've hit max, floor is 77% (never drop more than 15% from max)
 CRIME_PROGRESS_MIN = 10
 CRIME_PROGRESS_MAX = 92
-CRIME_PROGRESS_GAIN_MIN = 3
-CRIME_PROGRESS_GAIN_MAX = 5
+CRIME_PROGRESS_GAIN_MIN = 6
+CRIME_PROGRESS_GAIN_MAX = 8
 CRIME_PROGRESS_DROP_PER_FAIL_MIN = 1
 CRIME_PROGRESS_DROP_PER_FAIL_MAX = 3
 CRIME_PROGRESS_MAX_DROP_FROM_PEAK = 15    # once hit 92%, can never go below 77%
@@ -156,7 +156,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 detail=f"Crime on cooldown until {user_crime['cooldown_until']}",
             )
     
-    # PROGRESS BAR: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor is 77%
+    # PROGRESS BAR: 10-92%. Success +6-8%. Fail -1-3%; once hit 92%, floor is 77%
     stored = (user_crime or {}).get("progress")
     progress_max = (user_crime or {}).get("progress_max")
     crime_attempts = int((user_crime or {}).get("attempts", 0) or 0)
@@ -226,7 +226,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     else:
         cooldown_seconds = int(float(cooldown_seconds))
     cooldown_until = (now + timedelta(seconds=cooldown_seconds)).isoformat()
-    # Track attempts, successes, progress (success +3-5%; fail -1-3%; once at 92% floor is 77%)
+    # Track attempts, successes, progress (success +6-8%; fail -1-3%; once at 92% floor is 77%)
     set_fields = {
         "last_committed": now.isoformat(),
         "cooldown_until": cooldown_until,
