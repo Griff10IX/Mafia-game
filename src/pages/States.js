@@ -35,134 +35,185 @@ const PageHeader = () => (
   </div>
 );
 
-const CityCard = ({ 
-  city, 
-  games, 
-  allOwners, 
-  getEffectiveMaxBet, 
-  isHighestBet 
-}) => (
-  <div 
-    className="bg-card rounded-md overflow-hidden border border-primary/20"
-    data-testid={`state-card-${city.replace(/\s+/g, '-').toLowerCase()}`}
-  >
-    {/* Header */}
-    <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="flex items-center gap-2">
-          <MapPin size={18} className="text-primary" />
-          <h2 className="text-base md:text-lg font-heading font-bold text-primary uppercase tracking-wide">
-            {city}
-          </h2>
+const CityCard = ({
+  city,
+  games,
+  allOwners,
+  getEffectiveMaxBet,
+  isHighestBet,
+  bulletFactory,
+  airportSlot1,
+}) => {
+  const bf = bulletFactory;
+  const ap = airportSlot1;
+  return (
+    <div
+      className="bg-card rounded-md overflow-hidden border border-primary/20"
+      data-testid={`state-card-${city.replace(/\s+/g, '-').toLowerCase()}`}
+    >
+      {/* Header */}
+      <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center gap-2">
+            <MapPin size={18} className="text-primary" />
+            <h2 className="text-base md:text-lg font-heading font-bold text-primary uppercase tracking-wide">
+              {city}
+            </h2>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-mutedForeground font-heading">
+          <div className="flex items-center gap-1.5">
+            <Users size={14} className="text-primary/60" />
+            <span>Residents: —</span>
+          </div>
+          <span className="text-primary/30">•</span>
+          <div className="flex items-center gap-1.5">
+            <Calendar size={14} className="text-primary/60" />
+            <span>Event: —</span>
+          </div>
         </div>
       </div>
-      <div className="flex items-center gap-3 text-xs text-mutedForeground font-heading">
-        <div className="flex items-center gap-1.5">
-          <Users size={14} className="text-primary/60" />
-          <span>Residents: —</span>
-        </div>
-        <span className="text-primary/30">•</span>
-        <div className="flex items-center gap-1.5">
-          <Calendar size={14} className="text-primary/60" />
-          <span>Event: —</span>
-        </div>
-      </div>
-    </div>
 
-    {/* Desktop: Table */}
-    <div className="hidden md:block overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-secondary/30 text-xs uppercase tracking-wider font-heading text-primary/80 border-b border-border">
-            <th className="text-left py-2 px-4">Casino</th>
-            <th className="text-left py-2 px-4">Owner</th>
-            <th className="text-left py-2 px-4">Wealth</th>
-            <th className="text-right py-2 px-4">Max Bet</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-border">
-          {games.map((game) => {
-            const Icon = GAME_ICONS[game.id] || Dice5;
-            const owner = (allOwners[game.id] || {})[city] || null;
-            const effectiveBet = getEffectiveMaxBet(game, city);
-            const isTop = isHighestBet(game, city);
-            
-            return (
-              <tr
-                key={game.id}
-                className="hover:bg-secondary/30 transition-colors"
-                data-testid={`game-${game.id}-${city.replace(/\s+/g, '-').toLowerCase()}`}
-              >
-                <td className="py-2.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                      <Icon size={14} className="text-primary" />
+      {/* Casino */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-secondary/30 text-xs uppercase tracking-wider font-heading text-primary/80 border-b border-border">
+              <th className="text-left py-2 px-4">Casino</th>
+              <th className="text-left py-2 px-4">Owner</th>
+              <th className="text-left py-2 px-4">Wealth</th>
+              <th className="text-right py-2 px-4">Max Bet</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {games.map((game) => {
+              const Icon = GAME_ICONS[game.id] || Dice5;
+              const owner = (allOwners[game.id] || {})[city] || null;
+              const effectiveBet = getEffectiveMaxBet(game, city);
+              const isTop = isHighestBet(game, city);
+              return (
+                <tr
+                  key={game.id}
+                  className="hover:bg-secondary/30 transition-colors"
+                  data-testid={`game-${game.id}-${city.replace(/\s+/g, '-').toLowerCase()}`}
+                >
+                  <td className="py-2.5 px-4">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
+                        <Icon size={14} className="text-primary" />
+                      </div>
+                      <span className="font-heading font-bold text-foreground">{game.name}</span>
                     </div>
-                    <span className="font-heading font-bold text-foreground">{game.name}</span>
+                  </td>
+                  <td className="py-2.5 px-4 text-mutedForeground font-heading">{owner?.username ?? '—'}</td>
+                  <td className="py-2.5 px-4 text-mutedForeground font-heading">{owner?.wealth_rank_name ?? '—'}</td>
+                  <td className={`py-2.5 px-4 text-right font-heading font-bold tabular-nums ${isTop ? 'text-primary' : 'text-foreground'}`}>
+                    {formatMaxBet(effectiveBet)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile: Casino cards */}
+      <div className="md:hidden divide-y divide-border">
+        {games.map((game) => {
+          const Icon = GAME_ICONS[game.id] || Dice5;
+          const owner = (allOwners[game.id] || {})[city] || null;
+          const effectiveBet = getEffectiveMaxBet(game, city);
+          const isTop = isHighestBet(game, city);
+          return (
+            <div
+              key={game.id}
+              className="p-4 space-y-2 hover:bg-secondary/30 transition-colors"
+              data-testid={`game-${game.id}-${city.replace(/\s+/g, '-').toLowerCase()}`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-md bg-primary/20 border border-primary/30">
+                    <Icon size={16} className="text-primary" />
+                  </div>
+                  <span className="font-heading font-bold text-foreground">{game.name}</span>
+                </div>
+                <span className={`font-heading font-bold text-sm tabular-nums ${isTop ? 'text-primary' : 'text-foreground'}`}>
+                  {formatMaxBet(effectiveBet)}
+                </span>
+              </div>
+              {owner && (
+                <div className="flex items-center gap-4 text-sm text-mutedForeground font-heading pl-10">
+                  <div>Owner: <span className="text-foreground">{owner.username}</span></div>
+                  <div>{owner.wealth_rank_name}</div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Property: 1 Bullet Factory, 1 Airport, 1 Armoury per state — our style */}
+      <div className="border-t border-primary/30">
+        <div className="px-4 py-2 bg-primary/5 border-b border-primary/20">
+          <h3 className="text-xs font-heading font-bold text-primary/90 uppercase tracking-widest">Property</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm font-heading">
+            <thead>
+              <tr className="bg-secondary/20 text-xs uppercase tracking-wider text-primary/80 border-b border-border">
+                <th className="text-left py-1.5 px-3">Property</th>
+                <th className="text-left py-1.5 px-3">Owner</th>
+                <th className="text-left py-1.5 px-3">Prices</th>
+                <th className="text-left py-1.5 px-3">Stock</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              <tr className="hover:bg-secondary/20 transition-colors">
+                <td className="py-2 px-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-primary/20 border border-primary/30">
+                      <Factory size={12} className="text-primary" />
+                    </div>
+                    <span className="font-heading font-bold text-foreground">Bullet Factory</span>
                   </div>
                 </td>
-                <td className="py-2.5 px-4 text-mutedForeground font-heading">
-                  {owner?.username ?? '—'}
-                </td>
-                <td className="py-2.5 px-4 text-mutedForeground font-heading">
-                  {owner?.wealth_rank_name ?? '—'}
-                </td>
-                <td className={`py-2.5 px-4 text-right font-heading font-bold tabular-nums ${
-                  isTop ? 'text-primary' : 'text-foreground'
-                }`}>
-                  {formatMaxBet(effectiveBet)}
-                </td>
+                <td className="py-2 px-3 text-mutedForeground font-heading">{bf?.owner_username ?? 'Unclaimed'}</td>
+                <td className="py-2 px-3 text-primary font-heading">{bf?.price_per_bullet != null ? `$${Number(bf.price_per_bullet).toLocaleString()}` : '—'}</td>
+                <td className="py-2 px-3 text-foreground font-heading">{bf?.accumulated_bullets != null ? `${bf.accumulated_bullets} Bullets` : '—'}</td>
               </tr>
-            );
-          })}
-        </tbody>
-      </table>
+              <tr className="hover:bg-secondary/20 transition-colors">
+                <td className="py-2 px-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-primary/20 border border-primary/30">
+                      <Plane size={12} className="text-primary" />
+                    </div>
+                    <span className="font-heading font-bold text-foreground">Airport</span>
+                  </div>
+                </td>
+                <td className="py-2 px-3 text-mutedForeground font-heading">{ap?.owner_username ?? 'Unclaimed'}</td>
+                <td className="py-2 px-3 text-primary font-heading">{ap?.price_per_travel != null ? `${ap.price_per_travel} pts` : '10 pts'}</td>
+                <td className="py-2 px-3 text-mutedForeground">—</td>
+              </tr>
+              <tr className="hover:bg-secondary/20 transition-colors bg-primary/5">
+                <td className="py-2 px-3">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1 rounded bg-primary/20 border border-primary/30">
+                      <Shield size={12} className="text-primary" />
+                    </div>
+                    <span className="font-heading font-bold text-foreground">Armoury</span>
+                  </div>
+                </td>
+                <td className="py-2 px-3 text-mutedForeground">—</td>
+                <td className="py-2 px-3 text-mutedForeground">—</td>
+                <td className="py-2 px-3 text-amber-400/90 text-xs font-heading">Coming soon</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-
-    {/* Mobile: Cards */}
-    <div className="md:hidden divide-y divide-border">
-      {games.map((game) => {
-        const Icon = GAME_ICONS[game.id] || Dice5;
-        const owner = (allOwners[game.id] || {})[city] || null;
-        const effectiveBet = getEffectiveMaxBet(game, city);
-        const isTop = isHighestBet(game, city);
-        
-        return (
-          <div 
-            key={game.id} 
-            className="p-4 space-y-2 hover:bg-secondary/30 transition-colors"
-            data-testid={`game-${game.id}-${city.replace(/\s+/g, '-').toLowerCase()}`}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-md bg-primary/20 border border-primary/30">
-                  <Icon size={16} className="text-primary" />
-                </div>
-                <span className="font-heading font-bold text-foreground">{game.name}</span>
-              </div>
-              <span className={`font-heading font-bold text-sm tabular-nums ${
-                isTop ? 'text-primary' : 'text-foreground'
-              }`}>
-                {formatMaxBet(effectiveBet)}
-              </span>
-            </div>
-            
-            {owner && (
-              <div className="flex items-center gap-4 text-sm text-mutedForeground font-heading pl-10">
-                <div>
-                  Owner: <span className="text-foreground">{owner.username}</span>
-                </div>
-                <div>
-                  {owner.wealth_rank_name}
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  </div>
-);
+  );
+};
 
 const InfoCard = () => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
@@ -269,9 +320,22 @@ export default function States() {
     const bet = getEffectiveMaxBet(game, city);
     const info = highestBets[game.id];
     if (!info) return false;
-    // Gold only if this bet equals the max AND it's not the same across ALL cities
     return bet === info.max && info.count < cities.length;
   };
+
+  // 1 per state: bullet factory and airport (slot 1) for each city
+  const bulletFactoryByState = useMemo(() => {
+    const map = {};
+    (bulletFactories || []).forEach((f) => { map[f.state] = f; });
+    return map;
+  }, [bulletFactories]);
+  const airportSlot1ByState = useMemo(() => {
+    const map = {};
+    (airports || []).forEach((a) => {
+      if (a.slot === 1) map[a.state] = a;
+    });
+    return map;
+  }, [airports]);
 
   if (loading) {
     return <LoadingSpinner />;
@@ -290,79 +354,10 @@ export default function States() {
             allOwners={allOwners}
             getEffectiveMaxBet={getEffectiveMaxBet}
             isHighestBet={isHighestBet}
+            bulletFactory={bulletFactoryByState[city]}
+            airportSlot1={airportSlot1ByState[city]}
           />
         ))}
-      </div>
-
-      {/* Properties: Bullet Factory, Airports, Armoury (per state / in states) */}
-      <div className="bg-card rounded-md overflow-hidden border border-primary/20" data-testid="states-properties-section">
-        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-          <h2 className="text-base md:text-lg font-heading font-bold text-primary uppercase tracking-wide">
-            Properties
-          </h2>
-          <p className="text-xs text-mutedForeground font-heading mt-0.5">Bullet factories, airports and armoury by state</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm font-heading">
-            <thead>
-              <tr className="bg-secondary/30 text-xs uppercase tracking-wider font-heading text-primary/80 border-b border-border">
-                <th className="text-left py-2 px-4">Property</th>
-                <th className="text-left py-2 px-4">Location</th>
-                <th className="text-left py-2 px-4">Owner</th>
-                <th className="text-left py-2 px-4">Prices</th>
-                <th className="text-left py-2 px-4">Stock</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {bulletFactories.map((f) => (
-                <tr key={`bf-${f.state}`} className="hover:bg-secondary/30 transition-colors">
-                  <td className="py-2.5 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                        <Factory size={14} className="text-primary" />
-                      </div>
-                      <span className="font-heading font-bold text-foreground">Bullet Factory</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-4 text-primary">{f.state}</td>
-                  <td className="py-2.5 px-4 text-mutedForeground font-heading">{f.owner_username ?? 'Unclaimed'}</td>
-                  <td className="py-2.5 px-4 text-primary font-heading">{f.price_per_bullet != null ? `$${Number(f.price_per_bullet).toLocaleString()}` : '—'}</td>
-                  <td className="py-2.5 px-4 text-foreground font-heading">{f.accumulated_bullets != null ? `${f.accumulated_bullets} Bullets` : '—'}</td>
-                </tr>
-              ))}
-              {airports.map((a) => (
-                <tr key={`ap-${a.state}-${a.slot}`} className="hover:bg-secondary/30 transition-colors">
-                  <td className="py-2.5 px-4">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                        <Plane size={14} className="text-primary" />
-                      </div>
-                      <span className="font-heading font-bold text-foreground">Airport #{a.slot}</span>
-                    </div>
-                  </td>
-                  <td className="py-2.5 px-4 text-primary">{a.state}</td>
-                  <td className="py-2.5 px-4 text-mutedForeground font-heading">{a.owner_username ?? 'Unclaimed'}</td>
-                  <td className="py-2.5 px-4 text-primary font-heading">{a.price_per_travel != null ? `${a.price_per_travel} pts` : '—'}</td>
-                  <td className="py-2.5 px-4 text-mutedForeground">—</td>
-                </tr>
-              ))}
-              <tr className="hover:bg-secondary/30 transition-colors bg-primary/5">
-                <td className="py-2.5 px-4">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                      <Shield size={14} className="text-primary" />
-                    </div>
-                    <span className="font-heading font-bold text-foreground">Armoury</span>
-                  </div>
-                </td>
-                <td className="py-2.5 px-4 text-mutedForeground">1 per state</td>
-                <td className="py-2.5 px-4 text-mutedForeground">—</td>
-                <td className="py-2.5 px-4 text-mutedForeground">—</td>
-                <td className="py-2.5 px-4 text-amber-400/90 font-heading">Coming soon · Weapons, armour & bullet factory in one</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </div>
 
       <InfoCard />
