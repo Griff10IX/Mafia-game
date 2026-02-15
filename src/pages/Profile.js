@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon } from 'lucide-react';
+import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -381,16 +381,28 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
+
+  const refetchMe = async () => {
+    try {
+      const meRes = await api.get('/auth/me');
+      setMe(meRes.data);
+    } catch (_) {}
+  };
 
   useEffect(() => {
     const run = async () => {
       setLoading(true);
       try {
-        const meRes = await api.get('/auth/me');
+        const [meRes, adminRes] = await Promise.all([
+          api.get('/auth/me'),
+          api.get('/admin/check').catch(() => ({ data: {} })),
+        ]);
         setMe(meRes.data);
+        setIsAdmin(!!adminRes.data?.is_admin);
       } catch (e) {
         toast.error('Failed to load your account');
       } finally {
@@ -456,6 +468,21 @@ export default function Profile() {
     }
   };
 
+  const toggleGhostMode = async () => {
+    try {
+      const res = await api.post('/admin/ghost-mode');
+      const enabled = res.data?.admin_ghost_mode ?? false;
+      toast.success(enabled ? 'Ghost mode on — you won\'t appear online' : 'Ghost mode off');
+      await refetchMe();
+      if (isMe && username) {
+        const p = await api.get(`/users/${encodeURIComponent(username)}/profile`);
+        setProfile(p.data);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle ghost mode');
+    }
+  };
+
   if (loading && !profile) {
     return <LoadingSpinner />;
   }
@@ -492,6 +519,30 @@ export default function Profile() {
           isMe={isMe} 
           onAddToSearch={addToAttackSearches} 
         />
+
+        {isMe && isAdmin && (
+          <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
+            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Ghost className="w-5 h-5 text-primary" />
+                <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Admin ghost mode</span>
+              </div>
+              <button
+                type="button"
+                onClick={toggleGhostMode}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${me?.admin_ghost_mode ? 'bg-primary' : 'bg-secondary'}`}
+                role="switch"
+                aria-checked={!!me?.admin_ghost_mode}
+                title={me?.admin_ghost_mode ? 'You appear offline. Click to show online.' : 'You appear online. Click to hide (ghost).'}
+              >
+                <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${me?.admin_ghost_mode ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+            <p className="px-4 py-2 text-xs text-mutedForeground font-heading">
+              When on, you won&apos;t appear in the online list or as &quot;Online&quot; on your profile.
+            </p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <HonoursCard honours={honours} />

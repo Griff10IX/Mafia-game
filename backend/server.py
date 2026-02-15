@@ -384,6 +384,7 @@ class UserResponse(BaseModel):
     swiss_balance: int = 0
     swiss_limit: int = SWISS_BANK_LIMIT_START
     oc_timer_reduced: bool = False
+    admin_ghost_mode: bool = False
 
 # Notification/Inbox models
 class NotificationCreate(BaseModel):
@@ -1357,6 +1358,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     )
     
     rank_id, rank_name = get_rank_info(current_user.get("rank_points", 0))
+    if current_user.get("email") in ADMIN_EMAILS:
+        rank_name = "Admin"
     wealth_id, wealth_name = get_wealth_rank(current_user.get("money", 0))
     wealth_range = get_wealth_rank_range(current_user.get("money", 0))
     return UserResponse(
@@ -1392,6 +1395,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         swiss_balance=int(current_user.get("swiss_balance", 0) or 0),
         swiss_limit=int(current_user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START),
         oc_timer_reduced=bool(current_user.get("oc_timer_reduced", False)),
+        admin_ghost_mode=bool(current_user.get("admin_ghost_mode", False)),
     )
 
 @api_router.get("/users/{username}/profile")
@@ -1403,6 +1407,8 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="User not found")
 
     rank_id, rank_name = get_rank_info(user.get("rank_points", 0))
+    if user.get("email") in ADMIN_EMAILS:
+        rank_name = "Admin"
     wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))
     is_dead = bool(user.get("is_dead"))
     online = False
@@ -1425,6 +1431,8 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
                 online = datetime.now(timezone.utc) < fu
             except Exception:
                 pass
+    if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
+        online = False
     wealth_range = get_wealth_rank_range(user.get("money", 0))
     user_id = user["id"]
 
@@ -1581,7 +1589,11 @@ async def get_online_users(current_user: dict = Depends(get_current_user)):
     
     users_data = []
     for user in users:
+        if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
+            continue
         rank_id, rank_name = get_rank_info(user.get("rank_points", 0))
+        if user.get("email") in ADMIN_EMAILS:
+            rank_name = "Admin"
         users_data.append({
             "username": user["username"],
             "rank": rank_id,
@@ -3159,6 +3171,18 @@ async def sell_armour(current_user: dict = Depends(get_current_user)):
 
 # Admin endpoints
 ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
+
+@api_router.post("/admin/ghost-mode")
+async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)):
+    """Toggle admin ghost mode so you do not appear in online list or as online on profile (admin only)."""
+    if current_user.get("email") not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    new_value = not current_user.get("admin_ghost_mode", False)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"admin_ghost_mode": new_value}}
+    )
+    return {"admin_ghost_mode": new_value, "message": "Ghost mode " + ("on" if new_value else "off")}
 
 @api_router.post("/admin/change-rank")
 async def admin_change_rank(target_username: str, new_rank: int, current_user: dict = Depends(get_current_user)):
