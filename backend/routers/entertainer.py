@@ -140,7 +140,7 @@ def _format_reward_desc(desc: dict) -> str:
 
 
 async def _settle_game(game: dict):
-    """Run payout (random rewards) and mark game completed. Idempotent if already completed."""
+    """Run payout (random rewards + pot) and mark game completed. Idempotent if already completed."""
     if game.get("status") == "completed":
         return
     participants = game.get("participants") or []
@@ -151,6 +151,20 @@ async def _settle_game(game: dict):
             result = await _run_dice_payout(game)
         else:
             result = await _run_gbox_payout(game)
+    pot = int(game.get("pot") or 0)
+    if pot > 0 and participants:
+        if game.get("game_type") == "dice" and result and result.get("winner_id"):
+            await db.users.update_one({"id": result["winner_id"]}, {"$inc": {"money": pot}})
+        elif game.get("game_type") == "gbox":
+            n = len(participants)
+            each = pot // n
+            remainder = pot - (each * n)
+            for i, p in enumerate(participants):
+                uid = p.get("user_id")
+                if uid:
+                    amt = each + (remainder if i == 0 else 0)
+                    if amt > 0:
+                        await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
     await db.entertainer_games.update_one(
         {"id": game["id"]},
         {"$set": {"status": "completed", "completed_at": now, "result": result}},
@@ -189,7 +203,8 @@ async def _settle_game(game: dict):
 class CreateGameRequest(BaseModel):
     game_type: str  # "dice" | "gbox"
     max_players: int = 10
-    join_fee: int = 0  # ignored; games are free
+    join_fee: int = 0  # entry fee per player (added to pot when they join)
+    pot: int = 0  # creator-funded pot (deducted from creator on create)
     manual_roll: bool = False  # if True, creator rolls when ready (no auto-settle by time)
     topic_id: Optional[str] = None  # optional; when created from a topic
 
@@ -321,12 +336,19 @@ async def create_game(
     request: CreateGameRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a dice or gbox game (normal user only). Admins can only enable auto-create system games."""
-    if _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admins can only enable auto-create (hourly system games). Normal users create games here.")
+    """Create a dice or gbox game. Admins can only create manual-roll games (auto games use admin auto-create)."""
+    if _is_admin(current_user) and not bool(request.manual_roll):
+        raise HTTPException(status_code=403, detail="Admins can only create manual-roll games here. Use admin auto-create for system games.")
     if request.game_type not in ("dice", "gbox"):
         raise HTTPException(status_code=400, detail="game_type must be dice or gbox")
     max_players = max(1, min(10, request.max_players))
+    join_fee = max(0, int(request.join_fee or 0))
+    pot = max(0, int(request.pot or 0))
+    if pot > 0:
+        user_money = int(current_user.get("money") or 0)
+        if user_money < pot:
+            raise HTTPException(status_code=400, detail=f"You need ${pot:,} to fund the pot (you have ${user_money:,})")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -pot}})
     game_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     participants = []
@@ -336,8 +358,8 @@ async def create_game(
         "id": game_id,
         "game_type": request.game_type,
         "max_players": max_players,
-        "join_fee": 0,
-        "pot": 0,
+        "join_fee": join_fee,
+        "pot": pot,
         "creator_id": current_user["id"],
         "creator_username": current_user.get("username") or "?",
         "participants": participants,
@@ -353,7 +375,7 @@ async def create_game(
 
 
 async def join_game(game_id: str, current_user: dict = Depends(get_current_user)):
-    """Join an open game. Free. If full after join, run random-reward payout automatically."""
+    """Join an open game. Pay join_fee if set (added to pot). If full after join, run payout automatically."""
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -365,17 +387,24 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
     max_players = game.get("max_players", 10)
     if len(participants) >= max_players:
         raise HTTPException(status_code=400, detail="Game is full")
+    join_fee = int(game.get("join_fee") or 0)
+    if join_fee > 0:
+        user_money = int(current_user.get("money") or 0)
+        if user_money < join_fee:
+            raise HTTPException(status_code=400, detail=f"Entry fee is ${join_fee:,} (you have ${user_money:,})")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -join_fee}})
     new_participants = participants + [{"user_id": current_user["id"], "username": current_user.get("username") or "?"}]
     is_full = len(new_participants) >= max_players
+    current_pot = int(game.get("pot") or 0) + join_fee
     updates = {
         "participants": new_participants,
-        "pot": 0,
+        "pot": current_pot,
         "status": "full" if is_full else "open",
     }
     if is_full:
         now = datetime.now(timezone.utc).isoformat()
         updates["completed_at"] = now
-        updated_game = {**game, "participants": new_participants, "pot": 0}
+        updated_game = {**game, "participants": new_participants, "pot": current_pot}
         if game.get("game_type") == "dice":
             res = await _run_dice_payout(updated_game)
             updates["result"] = res

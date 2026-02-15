@@ -35,6 +35,8 @@ export default function ForumTopic() {
   const [createGameType, setCreateGameType] = useState('dice');
   const [createGameMaxPlayers, setCreateGameMaxPlayers] = useState(10);
   const [createGameManualRoll, setCreateGameManualRoll] = useState(true);
+  const [createGamePot, setCreateGamePot] = useState(0);
+  const [createGameJoinFee, setCreateGameJoinFee] = useState(0);
   const [createGameSubmitting, setCreateGameSubmitting] = useState(false);
 
   const fetchTopic = useCallback(async () => {
@@ -127,7 +129,8 @@ export default function ForumTopic() {
       await api.post('/forum/entertainer/games', {
         game_type: createGameType,
         max_players: Math.max(1, Math.min(10, parseInt(createGameMaxPlayers, 10) || 10)),
-        join_fee: 0,
+        join_fee: Math.max(0, parseInt(createGameJoinFee, 10) || 0),
+        pot: Math.max(0, parseInt(createGamePot, 10) || 0),
         manual_roll: createGameManualRoll,
         topic_id: topicId || undefined,
       });
@@ -272,6 +275,14 @@ export default function ForumTopic() {
               <div>
                 <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Max players (1–10)</label>
                 <input type="number" min={1} max={10} value={createGameMaxPlayers} onChange={(e) => setCreateGameMaxPlayers(e.target.value)} className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Pot ($ you put in)</label>
+                <input type="number" min={0} value={createGamePot} onChange={(e) => setCreateGamePot(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Entry fee ($ per player to join)</label>
+                <input type="number" min={0} value={createGameJoinFee} onChange={(e) => setCreateGameJoinFee(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={createGameManualRoll} onChange={(e) => setCreateGameManualRoll(e.target.checked)} className="w-4 h-4 accent-primary" />

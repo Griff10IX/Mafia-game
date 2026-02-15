@@ -111,6 +111,9 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
 const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   const [gameType, setGameType] = useState('dice');
   const [maxPlayers, setMaxPlayers] = useState(10);
+  const [pot, setPot] = useState(0);
+  const [joinFee, setJoinFee] = useState(0);
+  const [manualRoll, setManualRoll] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -120,7 +123,9 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
       await api.post('/forum/entertainer/games', {
         game_type: gameType,
         max_players: Math.max(1, Math.min(10, parseInt(maxPlayers, 10) || 10)),
-        join_fee: 0,
+        join_fee: Math.max(0, parseInt(joinFee, 10) || 0),
+        pot: Math.max(0, parseInt(pot, 10) || 0),
+        manual_roll: manualRoll,
       });
       toast.success('Game created');
       onClose();
@@ -150,12 +155,24 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
                 <Package size={14} /> Gbox
               </button>
             </div>
-            <p className="text-[10px] text-mutedForeground mt-1">Free to join. Winnings: random — points, cash, bullets, or cars.</p>
+            <p className="text-[10px] text-mutedForeground mt-1">Winnings: random — points, cash, bullets, or cars. Optional pot & entry fee.</p>
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Players (1–10)</label>
-            <input type="number" min={1} max={10} value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm" />
+            <input type="number" min={1} max={10} value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
           </div>
+          <div>
+            <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Pot ($ you put in)</label>
+            <input type="number" min={0} value={pot} onChange={(e) => setPot(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Entry fee ($ per player)</label>
+            <input type="number" min={0} value={joinFee} onChange={(e) => setJoinFee(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={manualRoll} onChange={(e) => setManualRoll(e.target.checked)} className="w-4 h-4 accent-primary" />
+            <span className="text-xs font-heading text-foreground">Manual roll (I roll when ready)</span>
+          </label>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading uppercase rounded border border-zinc-600/50">Cancel</button>
             <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading uppercase rounded border border-yellow-600/50 disabled:opacity-50">{submitting ? '...' : 'Create'}</button>

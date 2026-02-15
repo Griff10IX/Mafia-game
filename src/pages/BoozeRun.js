@@ -146,8 +146,8 @@ const RouteItem = ({ r }) => (
         <span className="text-foreground">{formatMoney(r.bestSellPrice)}</span>
       </div>
     </div>
-    <div className="mt-1 text-emerald-400 font-heading font-bold text-sm">
-      +{formatMoney(r.profit)}/unit
+    <div className={`mt-1 font-heading font-bold text-sm ${(r.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+      {(r.profit ?? 0) >= 0 ? '+' : ''}{formatMoney(r.profit)}/unit
     </div>
   </div>
 );
@@ -714,16 +714,17 @@ export default function BoozeRun() {
   const best3Forward = bestRoutes
     .filter((r) => r.bestBuyCity === cityA && r.bestSellCity === cityB)
     .slice(0, 3);
+  // Return leg: buy in cityB (e.g. AC), sell in cityA (e.g. Chicago). Show top 3 by profit (best first), even if loss
   const best3Reverse = (config.booze_types || [])
     .map((bt) => {
       const buyItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
       const sellItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
       const buyPrice = buyItem?.buy_price ?? Infinity;
       const sellPrice = sellItem?.sell_price ?? -1;
-      const profit = sellPrice > buyPrice ? sellPrice - buyPrice : 0;
+      const profit = (typeof sellPrice === 'number' && typeof buyPrice === 'number') ? sellPrice - buyPrice : -Infinity;
       return { booze: bt, bestBuyCity: cityB, bestBuyPrice: buyPrice, bestSellCity: cityA, bestSellPrice: sellPrice, profit };
     })
-    .filter((r) => r.profit > 0)
+    .filter((r) => r.bestBuyCity && r.bestSellCity && r.bestSellPrice >= 0 && r.bestBuyPrice < Infinity)
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 3);
 
