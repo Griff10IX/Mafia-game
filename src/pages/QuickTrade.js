@@ -369,6 +369,17 @@ export default function QuickTrade() {
                   const isMyOffer = firstOffer.user_id === currentUserId;
                   const totalOffers = userOffers.length;
                   
+                  // Further group by identical offers (same points and money)
+                  const stackedOffers = userOffers.reduce((acc, offer) => {
+                    const key = `${offer.points}-${offer.money}`;
+                    if (!acc[key]) {
+                      acc[key] = { ...offer, ids: [], count: 0 };
+                    }
+                    acc[key].ids.push(offer.id);
+                    acc[key].count++;
+                    return acc;
+                  }, {});
+                  
                   return (
                     <div key={groupIdx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
                       <div className="flex items-center justify-between gap-3 mb-2">
@@ -386,28 +397,34 @@ export default function QuickTrade() {
                       </div>
                       
                       <div className="space-y-2">
-                        {userOffers.map((offer, offerIdx) => (
+                        {Object.values(stackedOffers).map((offer, offerIdx) => (
                           <div key={offerIdx} className="flex items-center justify-between gap-3 pl-4 border-l-2 border-primary/20">
                             <div className="flex-1 text-[11px] text-mutedForeground space-y-0.5">
                               <div>Points: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
                               <div>Money: <span className="text-foreground font-bold">${formatNumber(offer.money)}</span></div>
-                              <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span></div>
+                              <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
                             </div>
-                            {isMyOffer ? (
-                              <button
-                                onClick={() => handleCancelOffer(offer.id, 'sell')}
-                                className={`${styles.raisedHover} px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
-                              >
-                                Cancel
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleAcceptOffer(offer.id, 'sell')}
-                                className={`${styles.raisedHover} px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-[10px] font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
-                              >
-                                Accept
-                              </button>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {offer.ids.map((id, idIdx) => (
+                                isMyOffer ? (
+                                  <button
+                                    key={idIdx}
+                                    onClick={() => handleCancelOffer(id, 'sell')}
+                                    className={`${styles.raisedHover} px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
+                                  >
+                                    Cancel
+                                  </button>
+                                ) : (
+                                  <button
+                                    key={idIdx}
+                                    onClick={() => handleAcceptOffer(id, 'sell')}
+                                    className={`${styles.raisedHover} px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-[10px] font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
+                                  >
+                                    Accept
+                                  </button>
+                                )
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -447,6 +464,17 @@ export default function QuickTrade() {
                   const isMyOffer = firstOffer.user_id === currentUserId;
                   const totalOffers = userOffers.length;
                   
+                  // Further group by identical offers (same points and cost)
+                  const stackedOffers = userOffers.reduce((acc, offer) => {
+                    const key = `${offer.points}-${offer.cost}`;
+                    if (!acc[key]) {
+                      acc[key] = { ...offer, ids: [], count: 0 };
+                    }
+                    acc[key].ids.push(offer.id);
+                    acc[key].count++;
+                    return acc;
+                  }, {});
+                  
                   return (
                     <div key={groupIdx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
                       <div className="flex items-center justify-between gap-3 mb-2">
@@ -464,28 +492,34 @@ export default function QuickTrade() {
                       </div>
                       
                       <div className="space-y-2">
-                        {userOffers.map((offer, offerIdx) => (
+                        {Object.values(stackedOffers).map((offer, offerIdx) => (
                           <div key={offerIdx} className="flex items-center justify-between gap-3 pl-4 border-l-2 border-primary/20">
                             <div className="flex-1 text-[11px] text-mutedForeground space-y-0.5">
                               <div>Points: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
                               <div>Cost: <span className="text-foreground font-bold">${formatNumber(offer.cost)}</span></div>
-                              <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span></div>
+                              <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
                             </div>
-                            {isMyOffer ? (
-                              <button
-                                onClick={() => handleCancelOffer(offer.id, 'buy')}
-                                className={`${styles.raisedHover} px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
-                              >
-                                Cancel
-                              </button>
-                            ) : (
-                              <button
-                                onClick={() => handleAcceptOffer(offer.id, 'buy')}
-                                className={`${styles.raisedHover} px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-[10px] font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
-                              >
-                                Accept
-                              </button>
-                            )}
+                            <div className="flex flex-col gap-1">
+                              {offer.ids.map((id, idIdx) => (
+                                isMyOffer ? (
+                                  <button
+                                    key={idIdx}
+                                    onClick={() => handleCancelOffer(id, 'buy')}
+                                    className={`${styles.raisedHover} px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
+                                  >
+                                    Cancel
+                                  </button>
+                                ) : (
+                                  <button
+                                    key={idIdx}
+                                    onClick={() => handleAcceptOffer(id, 'buy')}
+                                    className={`${styles.raisedHover} px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-[10px] font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
+                                  >
+                                    Accept
+                                  </button>
+                                )
+                              ))}
+                            </div>
                           </div>
                         ))}
                       </div>
