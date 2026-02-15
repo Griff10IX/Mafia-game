@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Shield, Swords, Check, Lock } from 'lucide-react';
+import { Shield, Swords, Check, Lock, Factory } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
+import BulletFactory from './BulletFactory';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -297,9 +298,13 @@ export default function ArmourWeapons() {
           <Tab active={activeTab === 'armour'} onClick={() => setActiveTab('armour')} icon={Shield}>
             Armour
           </Tab>
+          <Tab active={activeTab === 'bullet-factory'} onClick={() => setActiveTab('bullet-factory')} icon={Factory}>
+            Bullet Factory
+          </Tab>
         </div>
 
         <div className="p-3">
+          {activeTab === 'bullet-factory' && <BulletFactory me={me} />}
           {activeTab === 'weapons' && (
             <div className="space-y-1">
               {/* Table Header */}

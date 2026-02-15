@@ -178,6 +178,24 @@ async def update_topic(
     return {"message": "Topic updated", "topic": updated}
 
 
+async def delete_topic(
+    topic_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin only: delete a topic and all its comments."""
+    if current_user.get("email") not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin only")
+    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0, "id": 1}).to_list(500)
+    comment_ids = [c["id"] for c in comments]
+    await db.forum_comment_likes.delete_many({"comment_id": {"$in": comment_ids}})
+    await db.forum_comments.delete_many({"topic_id": topic_id})
+    await db.forum_topics.delete_one({"id": topic_id})
+    return {"message": "Topic deleted"}
+
+
 def register(router):
     router.add_api_route("/forum/topics", get_topics, methods=["GET"])
     router.add_api_route("/forum/topics", create_topic, methods=["POST"])
@@ -185,3 +203,4 @@ def register(router):
     router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/like", like_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}", update_topic, methods=["PATCH"])
+    router.add_api_route("/forum/topics/{topic_id}", delete_topic, methods=["DELETE"])

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MessageSquare, Lock, ThumbsUp, Reply, Send, ChevronDown } from 'lucide-react';
+import { Lock, ThumbsUp, Send, ChevronDown, Pin, AlertCircle, Trash2, Settings } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -27,6 +27,8 @@ export default function ForumTopic() {
   const [commentText, setCommentText] = useState('');
   const [posting, setPosting] = useState(false);
   const [likingId, setLikingId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminBusy, setAdminBusy] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -50,6 +52,37 @@ export default function ForumTopic() {
   useEffect(() => {
     fetchTopic();
   }, [fetchTopic]);
+
+  useEffect(() => {
+    api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
+  }, []);
+
+  const updateTopicFlags = async (payload) => {
+    setAdminBusy(true);
+    try {
+      await api.patch(`/forum/topics/${topicId}`, payload);
+      toast.success('Updated');
+      fetchTopic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update');
+    } finally {
+      setAdminBusy(false);
+    }
+  };
+
+  const deleteTopic = async () => {
+    if (!window.confirm('Delete this topic and all comments? This cannot be undone.')) return;
+    setAdminBusy(true);
+    try {
+      await api.delete(`/forum/topics/${topicId}`);
+      toast.success('Topic deleted');
+      navigate('/forum');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to delete');
+    } finally {
+      setAdminBusy(false);
+    }
+  };
 
   const insertEmoji = (emoji) => {
     setCommentText((c) => c + emoji);
@@ -112,14 +145,56 @@ export default function ForumTopic() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-topic-page">
-      <div className="flex items-center gap-2 text-sm text-mutedForeground">
+      <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={() => navigate('/forum')}
-          className="hover:text-primary font-heading"
+          className="text-sm text-mutedForeground hover:text-primary font-heading"
         >
           ← Forum
         </button>
+        {isAdmin && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] text-amber-400 font-heading uppercase flex items-center gap-1">
+              <Settings size={12} /> Admin
+            </span>
+            <button
+              type="button"
+              title={topic.is_sticky ? 'Unsticky' : 'Sticky'}
+              onClick={() => updateTopicFlags({ is_sticky: !topic.is_sticky })}
+              disabled={adminBusy}
+              className={`p-1.5 rounded border text-xs font-heading ${topic.is_sticky ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'border-zinc-600 text-mutedForeground hover:border-amber-500/50'}`}
+            >
+              <Pin size={14} /> Sticky
+            </button>
+            <button
+              type="button"
+              title={topic.is_important ? 'Not important' : 'Important'}
+              onClick={() => updateTopicFlags({ is_important: !topic.is_important })}
+              disabled={adminBusy}
+              className={`p-1.5 rounded border text-xs font-heading ${topic.is_important ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'border-zinc-600 text-mutedForeground hover:border-amber-500/50'}`}
+            >
+              <AlertCircle size={14} /> Important
+            </button>
+            <button
+              type="button"
+              title={topic.is_locked ? 'Unlock' : 'Lock'}
+              onClick={() => updateTopicFlags({ is_locked: !topic.is_locked })}
+              disabled={adminBusy}
+              className={`p-1.5 rounded border text-xs font-heading ${topic.is_locked ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'border-zinc-600 text-mutedForeground hover:border-red-500/50'}`}
+            >
+              <Lock size={14} /> Lock
+            </button>
+            <button
+              type="button"
+              onClick={deleteTopic}
+              disabled={adminBusy}
+              className="p-1.5 rounded border border-red-500/50 text-red-400 text-xs font-heading hover:bg-red-500/20"
+            >
+              <Trash2 size={14} /> Delete
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Topic post */}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronDown } from 'lucide-react';
+import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronDown, Settings } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -112,6 +112,8 @@ export default function Forum() {
   const [topics, setTopics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [updatingId, setUpdatingId] = useState(null);
 
   const fetchTopics = useCallback(async () => {
     try {
@@ -128,6 +130,25 @@ export default function Forum() {
   useEffect(() => {
     fetchTopics();
   }, [fetchTopics]);
+
+  useEffect(() => {
+    api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
+  }, []);
+
+  const updateTopicFlags = async (topicId, payload, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setUpdatingId(topicId);
+    try {
+      await api.patch(`/forum/topics/${topicId}`, payload);
+      toast.success('Updated');
+      fetchTopics();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to update');
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-page">
@@ -150,11 +171,12 @@ export default function Forum() {
       </div>
 
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-primary/10 border-b border-primary/30 text-xs font-heading font-bold text-primary uppercase tracking-widest">
-          <div className="col-span-7">Main Forum</div>
+        <div className={`grid gap-2 px-4 py-2 bg-primary/10 border-b border-primary/30 text-xs font-heading font-bold text-primary uppercase tracking-widest ${isAdmin ? 'grid-cols-12' : 'grid-cols-12'}`}>
+          <div className={isAdmin ? 'col-span-6' : 'col-span-7'}>Main Forum</div>
           <div className="col-span-2 text-right">Author</div>
           <div className="col-span-1 text-right">Posts</div>
           <div className="col-span-2 text-right">Views</div>
+          {isAdmin && <div className="col-span-1 text-right">Admin</div>}
         </div>
         {loading ? (
           <div className="p-8 text-center text-mutedForeground font-heading">Loading...</div>
@@ -163,42 +185,71 @@ export default function Forum() {
         ) : (
           <ul className="divide-y divide-zinc-700/50">
             {topics.map((t) => (
-              <li key={t.id}>
+              <li key={t.id} className="grid grid-cols-12 gap-2 px-4 py-3 hover:bg-zinc-800/30 transition-colors items-center">
                 <Link
                   to={`/forum/topic/${t.id}`}
-                  className="grid grid-cols-12 gap-2 px-4 py-3 hover:bg-zinc-800/30 transition-colors flex items-center"
+                  className={`flex items-center gap-2 min-w-0 ${isAdmin ? 'col-span-6' : 'col-span-7'}`}
                 >
-                  <div className="col-span-7 flex items-center gap-2 min-w-0">
-                    {t.is_important && (
-                      <span className="text-amber-400 shrink-0" title="Important">
-                        <AlertCircle size={14} />
-                      </span>
-                    )}
-                    {t.is_sticky && !t.is_important && (
-                      <span className="text-amber-400 shrink-0" title="Sticky">
-                        <Pin size={14} />
-                      </span>
-                    )}
-                    <span className={`truncate font-heading ${t.is_important || t.is_sticky ? 'text-amber-400/90' : 'text-foreground'}`}>
-                      {t.is_important ? `IMPORTANT: ` : ''}
-                      {t.is_sticky && !t.is_important ? `STICKY: ` : ''}
-                      {t.title}
+                  {t.is_important && (
+                    <span className="text-amber-400 shrink-0" title="Important">
+                      <AlertCircle size={14} />
                     </span>
-                    {t.is_locked && (
-                      <Lock size={12} className="text-mutedForeground shrink-0" />
-                    )}
-                  </div>
-                  <div className="col-span-2 text-right text-mutedForeground text-sm truncate">
-                    {t.author_username}
-                    {t.is_locked && <Lock size={10} className="inline ml-0.5 text-mutedForeground" />}
-                  </div>
-                  <div className="col-span-1 text-right text-foreground font-heading tabular-nums">
-                    {t.posts}
-                  </div>
-                  <div className="col-span-2 text-right text-mutedForeground font-heading tabular-nums">
-                    {t.views}
-                  </div>
+                  )}
+                  {t.is_sticky && !t.is_important && (
+                    <span className="text-amber-400 shrink-0" title="Sticky">
+                      <Pin size={14} />
+                    </span>
+                  )}
+                  <span className={`truncate font-heading ${t.is_important || t.is_sticky ? 'text-amber-400/90' : 'text-foreground'}`}>
+                    {t.is_important ? `IMPORTANT: ` : ''}
+                    {t.is_sticky && !t.is_important ? `STICKY: ` : ''}
+                    {t.title}
+                  </span>
+                  {t.is_locked && (
+                    <Lock size={12} className="text-mutedForeground shrink-0" />
+                  )}
                 </Link>
+                <div className="col-span-2 text-right text-mutedForeground text-sm truncate">
+                  {t.author_username}
+                  {t.is_locked && <Lock size={10} className="inline ml-0.5 text-mutedForeground" />}
+                </div>
+                <div className="col-span-1 text-right text-foreground font-heading tabular-nums">
+                  {t.posts}
+                </div>
+                <div className="col-span-2 text-right text-mutedForeground font-heading tabular-nums">
+                  {t.views}
+                </div>
+                {isAdmin && (
+                  <div className="col-span-1 flex items-center justify-end gap-0.5" onClick={(e) => e.preventDefault()}>
+                    <button
+                      type="button"
+                      title={t.is_sticky ? 'Unsticky' : 'Sticky'}
+                      onClick={(e) => updateTopicFlags(t.id, { is_sticky: !t.is_sticky }, e)}
+                      disabled={updatingId === t.id}
+                      className={`p-1 rounded ${t.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}
+                    >
+                      <Pin size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      title={t.is_important ? 'Not important' : 'Important'}
+                      onClick={(e) => updateTopicFlags(t.id, { is_important: !t.is_important }, e)}
+                      disabled={updatingId === t.id}
+                      className={`p-1 rounded ${t.is_important ? 'bg-amber-500/20 text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}
+                    >
+                      <AlertCircle size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      title={t.is_locked ? 'Unlock' : 'Lock'}
+                      onClick={(e) => updateTopicFlags(t.id, { is_locked: !t.is_locked }, e)}
+                      disabled={updatingId === t.id}
+                      className={`p-1 rounded ${t.is_locked ? 'bg-red-500/20 text-red-400' : 'text-mutedForeground hover:text-red-400'}`}
+                    >
+                      <Lock size={14} />
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>
