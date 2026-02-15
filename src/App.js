@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import Landing from "./pages/Landing";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import UsersOnline from "./pages/UsersOnline";
 import Ranking from "./pages/Ranking";
@@ -75,6 +77,14 @@ function App() {
                 <Landing setIsAuthenticated={setIsAuthenticated} />
               )
             }
+          />
+          <Route
+            path="/forgot-password"
+            element={<ForgotPassword />}
+          />
+          <Route
+            path="/reset-password"
+            element={<ResetPassword />}
           />
           <Route
             path="/dashboard"

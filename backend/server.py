@@ -343,6 +343,13 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
+
 class UserResponse(BaseModel):
     id: str
     email: str
@@ -1146,7 +1153,10 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
 @api_router.post("/auth/register")
 async def register(user_data: UserRegister):
     try:
-        existing = await db.users.find_one({"$or": [{"email": user_data.email}, {"username": user_data.username}]}, {"_id": 0})
+        # Case-insensitive checks for existing email/username
+        email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
+        username_pattern = re.compile("^" + re.escape(user_data.username.strip()) + "$", re.IGNORECASE)
+        existing = await db.users.find_one({"$or": [{"email": email_pattern}, {"username": username_pattern}]}, {"_id": 0})
         if existing:
             if existing.get("is_dead"):
                 # Dead account — free up the email/username so they can re-register
@@ -1163,8 +1173,8 @@ async def register(user_data: UserRegister):
         user_id = str(uuid.uuid4())
         user_doc = {
             "id": user_id,
-            "email": str(user_data.email),
-            "username": str(user_data.username),
+            "email": str(user_data.email.strip().lower()),  # Store email in lowercase
+            "username": str(user_data.username.strip()),  # Preserve username case
             "password_hash": get_password_hash(user_data.password),
             "rank": 1,
             "money": 1000.0,
@@ -1235,7 +1245,9 @@ async def register(user_data: UserRegister):
 
 @api_router.post("/auth/login")
 async def login(user_data: UserLogin):
-    user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
+    # Case-insensitive email lookup
+    email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
+    user = await db.users.find_one({"email": email_pattern}, {"_id": 0})
     if not user or not verify_password(user_data.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if user.get("is_dead"):
@@ -1245,6 +1257,83 @@ async def login(user_data: UserLogin):
         )
     token = create_access_token({"sub": user["id"]})
     return {"token": token, "user": {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}}
+
+@api_router.post("/auth/password-reset/request")
+async def request_password_reset(data: PasswordResetRequest):
+    """
+    Request a password reset. Generates a token that expires in 1 hour.
+    NOTE: In production, this should send an email with the reset link.
+    For now, it returns the token in the response for testing.
+    """
+    # Case-insensitive email lookup
+    email_pattern = re.compile("^" + re.escape(data.email.strip()) + "$", re.IGNORECASE)
+    user = await db.users.find_one({"email": email_pattern}, {"_id": 0, "id": 1, "email": 1, "username": 1})
+    
+    # Always return success even if email not found (security best practice)
+    if not user:
+        return {
+            "message": "If an account exists with that email, a password reset link has been sent.",
+            "token": None  # Don't reveal that user doesn't exist
+        }
+    
+    # Generate secure reset token
+    reset_token = str(uuid.uuid4())
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store reset token in database
+    await db.password_resets.insert_one({
+        "token": reset_token,
+        "user_id": user["id"],
+        "email": user["email"],
+        "username": user["username"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "used": False
+    })
+    
+    # TODO: Send email with reset link
+    # For now, return the token in the response (remove this in production)
+    return {
+        "message": "If an account exists with that email, a password reset link has been sent.",
+        "token": reset_token,  # REMOVE THIS IN PRODUCTION - only for testing
+        "expires_in_minutes": 60
+    }
+
+@api_router.post("/auth/password-reset/confirm")
+async def confirm_password_reset(data: PasswordResetConfirm):
+    """Reset password using a valid reset token."""
+    # Find the reset token
+    reset_record = await db.password_resets.find_one({"token": data.token}, {"_id": 0})
+    
+    if not reset_record:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    if reset_record.get("used"):
+        raise HTTPException(status_code=400, detail="This reset token has already been used")
+    
+    # Check if token is expired
+    expires_at = datetime.fromisoformat(reset_record["expires_at"].replace("Z", "+00:00"))
+    if datetime.now(timezone.utc) > expires_at:
+        raise HTTPException(status_code=400, detail="Reset token has expired")
+    
+    # Validate new password
+    if len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Update user's password
+    new_password_hash = get_password_hash(data.new_password)
+    await db.users.update_one(
+        {"id": reset_record["user_id"]},
+        {"$set": {"password_hash": new_password_hash}}
+    )
+    
+    # Mark token as used
+    await db.password_resets.update_one(
+        {"token": data.token},
+        {"$set": {"used": True, "used_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": "Password has been reset successfully. You can now login with your new password."}
 
 @api_router.get("/auth/me")
 async def get_me(current_user: dict = Depends(get_current_user)):
@@ -1295,7 +1384,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 @api_router.get("/users/{username}/profile")
 async def get_user_profile(username: str, current_user: dict = Depends(get_current_user)):
     """View a user's profile (requires auth)."""
-    user = await db.users.find_one({"username": username}, {"_id": 0, "password_hash": 0})
+    username_pattern = _username_pattern(username)
+    user = await db.users.find_one({"username": username_pattern}, {"_id": 0, "password_hash": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -1429,7 +1519,9 @@ async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depen
 @api_router.post("/dead-alive/retrieve")
 async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user)):
     """Retrieve a % of points from a dead account into your current account. One-time per dead account."""
-    dead_user = await db.users.find_one({"username": request.dead_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(request.dead_username)
+    dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not dead_user:
         raise HTTPException(status_code=404, detail="No account found with that username")
     if not dead_user.get("is_dead"):
@@ -1823,13 +1915,16 @@ async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depe
     to_username = (request.to_username or "").strip()
     if not to_username:
         raise HTTPException(status_code=400, detail="Recipient username required")
-    if to_username == current_user["username"]:
+    # Case-insensitive username comparison
+    if to_username.lower() == current_user["username"].lower():
         raise HTTPException(status_code=400, detail="Cannot send money to yourself")
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-    recipient = await db.users.find_one({"username": to_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(to_username)
+    recipient = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not recipient:
         raise HTTPException(status_code=404, detail="Recipient not found")
     if recipient.get("is_dead"):
@@ -3023,7 +3118,9 @@ async def admin_change_rank(target_username: str, new_rank: int, current_user: d
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -3039,7 +3136,9 @@ async def admin_add_points(target_username: str, points: int, current_user: dict
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -3099,7 +3198,9 @@ async def admin_add_bullets(target_username: str, bullets: int, current_user: di
     if bullets <= 0:
         raise HTTPException(status_code=400, detail="Bullets must be greater than 0")
 
-    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -3115,7 +3216,9 @@ async def admin_add_car(target_username: str, car_id: str, current_user: dict = 
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -3434,7 +3537,9 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
     if count < 1 or count > 4:
         raise HTTPException(status_code=400, detail="Count must be between 1 and 4")
 
-    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -3516,7 +3621,9 @@ async def admin_lock_player(target_username: str, lock_minutes: int, current_use
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -3534,7 +3641,9 @@ async def admin_kill_player(target_username: str, current_user: dict = Depends(g
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    target = await db.users.find_one({"username": target_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target.get("is_dead"):
@@ -4634,7 +4743,10 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
 
 
 
-# Attack endpoints
+# Username lookup helpers
+# NOTE: All username lookups should be case-insensitive to prevent issues with
+# login, transfers, attacks, and other username-based operations.
+# Use _username_pattern() for all username queries to ensure consistency.
 def _find_user_by_username_case_insensitive(username_raw: str):
     """Return a find_one filter for users by username (case-insensitive match)."""
     raw = (username_raw or "").strip()
@@ -4642,6 +4754,15 @@ def _find_user_by_username_case_insensitive(username_raw: str):
         return None
     pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
     return {"username": pattern}
+
+def _username_pattern(username: str):
+    """
+    Create case-insensitive regex pattern for username lookups.
+    Use this for all username-based queries to ensure case-insensitive matching.
+    """
+    if not username:
+        return None
+    return re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
 
 
 @api_router.post("/attack/search", response_model=AttackSearchResponse)
@@ -6619,7 +6740,9 @@ async def casino_dice_send_to_user(request: DiceSendToUserRequest, current_user:
     stored_city, doc = await _get_dice_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
+    # Case-insensitive username lookup
+    target_username_pattern = _username_pattern(request.target_username.strip())
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target["username"]}})
@@ -6827,7 +6950,9 @@ async def casino_roulette_send_to_user(request: RouletteSendToUserRequest, curre
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
     
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
+    # Case-insensitive username lookup
+    target_username_pattern = _username_pattern(request.target_username.strip())
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -7203,7 +7328,9 @@ async def casino_blackjack_send_to_user(request: RouletteSendToUserRequest, curr
     stored_city, doc = await _get_blackjack_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
+    # Case-insensitive username lookup
+    target_username_pattern = _username_pattern(request.target_username.strip())
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target.get("username")}})
@@ -7745,7 +7872,9 @@ async def casino_horseracing_send_to_user(request: RouletteSendToUserRequest, cu
     stored_city, doc = await _get_horseracing_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this track")
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
+    # Case-insensitive username lookup
+    target_username_pattern = _username_pattern(request.target_username.strip())
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
     if not target or target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Invalid target user")
     await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target.get("username")}})

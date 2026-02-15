@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { getBaseURL } from '../utils/api';
 import styles from '../styles/noir.module.css';
 
 export default function Landing({ setIsAuthenticated }) {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [formData, setFormData] = useState({
     email: '',
@@ -129,7 +131,18 @@ export default function Landing({ setIsAuthenticated }) {
               )}
 
               <div>
-                <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider mb-1.5">Password</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider">Password</label>
+                  {isLogin && (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/forgot-password')}
+                      className="text-[10px] text-primary/70 hover:text-primary font-heading uppercase tracking-wider"
+                    >
+                      Forgot?
+                    </button>
+                  )}
+                </div>
                 <input
                   type="password"
                   data-testid="password-input"

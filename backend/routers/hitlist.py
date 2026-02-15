@@ -99,7 +99,10 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
         if cost_points > 0 and (current_user.get("points") or 0) < cost_points:
             raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
 
-    target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
+    # Case-insensitive username lookup
+    import re
+    username_pattern = re.compile("^" + re.escape(target_username.strip()) + "$", re.IGNORECASE)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):

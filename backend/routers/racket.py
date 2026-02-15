@@ -21,7 +21,10 @@ PROPERTY_ATTACK_HOURS = 12
 
 
 async def extort_property(request: ProtectionRacketRequest, current_user: dict = Depends(get_current_user)):
-    target = await db.users.find_one({"username": request.target_username}, {"_id": 0, "money": 1, "id": 1, "username": 1, "is_dead": 1})
+    # Case-insensitive username lookup
+    import re
+    username_pattern = re.compile("^" + re.escape(request.target_username.strip()) + "$", re.IGNORECASE)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "money": 1, "id": 1, "username": 1, "is_dead": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):

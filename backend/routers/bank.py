@@ -188,13 +188,19 @@ async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depe
     to_username = (request.to_username or "").strip()
     if not to_username:
         raise HTTPException(status_code=400, detail="Recipient username required")
-    if to_username == current_user["username"]:
+    
+    # Case-insensitive username comparison
+    if to_username.lower() == current_user["username"].lower():
         raise HTTPException(status_code=400, detail="Cannot send money to yourself")
+    
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
 
-    recipient = await db.users.find_one({"username": to_username}, {"_id": 0})
+    # Case-insensitive username lookup
+    import re
+    username_pattern = re.compile("^" + re.escape(to_username) + "$", re.IGNORECASE)
+    recipient = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not recipient:
         raise HTTPException(status_code=404, detail="Recipient not found")
     if recipient.get("is_dead"):
