@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight } from 'lucide-react';
 import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import styles from '../styles/noir.module.css';
@@ -188,6 +188,7 @@ export default function Layout({ children }) {
     { path: '/armour-weapons', icon: Sword, label: 'Armour & Weapons' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
+    { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
     { path: '/dead-alive', icon: Skull, label: 'Dead > Alive' },
   ];
 

@@ -37,6 +37,7 @@ import InboxChat from "./pages/InboxChat";
 import DeadAlive from "./pages/DeadAlive";
 import Profile from "./pages/Profile";
 import Stats from "./pages/Stats";
+import QuickTrade from "./pages/QuickTrade";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import "@/App.css";
@@ -409,6 +410,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Store />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/quick-trade"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <QuickTrade />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

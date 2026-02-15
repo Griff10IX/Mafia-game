@@ -27,6 +27,9 @@ import certifi
 # Import security module (anti-cheat and monitoring)
 import security as security_module
 
+# Import quicktrade module
+import quicktrade
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 # Also load project root .env if present (e.g. when running from root)
@@ -8995,6 +8998,11 @@ jail.register(api_router)
 oc.register(api_router)
 
 app.include_router(api_router)
+
+# Inject dependencies into quicktrade module
+quicktrade.db = db
+quicktrade.get_current_user = get_current_user
+app.include_router(quicktrade.router)
 
 # CORS: with credentials=True you must list explicit origins (not "*").
 # Set CORS_ORIGINS on Render to your Vercel URL, e.g. https://your-app.vercel.app
