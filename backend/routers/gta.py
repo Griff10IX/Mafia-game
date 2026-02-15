@@ -34,6 +34,19 @@ GTA_PROGRESS_MAX_DROP_FROM_PEAK = 15
 # On GTA failure, this chance you get caught (jail); otherwise you get away with no car
 GTA_CAUGHT_CHANCE = 0.5
 
+GTA_SUCCESS_MESSAGES = [
+    "Success! You stole a {car_name}!",
+    "Clean getaway. You got the {car_name}!",
+    "No heat. The {car_name} is yours.",
+    "Smooth run. You stole a {car_name}!",
+    "Done. You're rolling in a {car_name}.",
+    "Score. The {car_name} is in your garage.",
+    "Nice work. You nabbed a {car_name}!",
+    "The take: a {car_name}. You're clear.",
+    "You got away with the {car_name}!",
+    "Wheels acquired. {car_name}.",
+]
+
 GTA_FAIL_CAUGHT_MESSAGES = [
     "Busted! The cops got you — {seconds}s in the slammer.",
     "Caught red-handed. {seconds}s behind bars.",
@@ -250,9 +263,10 @@ async def attempt_gta(
             await update_objectives_progress(current_user["id"], "gta", 1)
         except Exception:
             pass
+        msg = random.choice(GTA_SUCCESS_MESSAGES).format(car_name=car["name"])
         return GTAAttemptResponse(
             success=True,
-            message=f"Success! You stole a {car['name']}!",
+            message=msg,
             car=car,
             jailed=False,
             jail_until=None,

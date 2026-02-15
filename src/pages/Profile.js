@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
@@ -135,6 +136,9 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
       valueClass: 'text-red-400 font-heading font-bold' 
     },
   ];
+
+  const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
+  const avatarSrc = isRobotBodyguard ? null : profile.avatar_url;
 
   return (
     <div className="bg-card rounded-md overflow-hidden border border-primary/20">
@@ -419,53 +423,77 @@ const AvatarCard = ({
   uploading, 
   onPickFile, 
   onUpload 
-}) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
-        📸 Profile Picture
-      </h3>
-    </div>
-    <div className="p-3 space-y-3">
-      <div className="aspect-video max-h-64 w-full max-w-lg mx-auto rounded-md overflow-hidden border-2 border-primary/20 bg-secondary/20 flex items-center justify-center">
-        {avatarSrc ? (
-          <img src={avatarSrc} alt="Profile" className="w-full h-full object-contain" />
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-mutedForeground">
-            <UserIcon size={48} className="md:w-16 md:h-16 text-primary/30" />
-            <span className="text-[11px] md:text-sm font-heading">No picture uploaded</span>
+}) => {
+  const [imageUrl, setImageUrl] = React.useState('');
+  const [localPreview, setLocalPreview] = React.useState(avatarSrc || '');
+
+  const handleUpdateImage = () => {
+    if (!imageUrl.trim()) return;
+    
+    // Extract URL from [img]URL[/img] format if present
+    const urlMatch = imageUrl.match(/\[img\](.*?)\[\/img\]/i);
+    const finalUrl = urlMatch ? urlMatch[1] : imageUrl;
+    
+    setLocalPreview(finalUrl);
+    // Here you would call your API to save the image URL
+    // For now we just update the preview
+  };
+
+  return (
+    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+        <h3 class="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+          📸 Profile Picture
+        </h3>
+      </div>
+      <div className="p-3 md:p-4 space-y-3">
+        {/* Image Preview with square aspect ratio */}
+        <div className="aspect-square max-h-64 w-full max-w-sm mx-auto rounded-md overflow-hidden border-2 border-primary/20 bg-secondary/20 flex items-center justify-center">
+          {localPreview ? (
+            <img src={localPreview} alt="Profile" className="w-full h-full object-cover" />
+          ) : (
+            <div className="flex flex-col items-center gap-2 text-mutedForeground">
+              <svg className="w-12 h-12 md:w-16 md:h-16 text-primary/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              <span className="text-[11px] md:text-sm font-heading">No picture uploaded</span>
+            </div>
+          )}
+        </div>
+        
+        {isMe && (
+          <div className="space-y-2.5">
+            <div className="text-[11px] md:text-sm text-mutedForeground font-heading mb-2">
+              Enter image URL or use <code className="text-primary bg-primary/10 px-1 rounded">[img]URL[/img]</code>
+            </div>
+            
+            {/* Image URL Input */}
+            <textarea
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="https://example.com/image.jpg or [img]https://example.com/image.jpg[/img]"
+              className="w-full px-3 py-2.5 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono resize-none"
+              rows={3}
+            />
+            
+            {/* Update Button */}
+            <button
+              onClick={handleUpdateImage}
+              disabled={!imageUrl.trim()}
+              className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg font-heading font-bold uppercase tracking-wide px-6 py-2.5 text-[11px] md:text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
+            >
+              📤 Update Profile Picture
+            </button>
+            
+            <p className="text-[10px] md:text-xs text-mutedForeground font-heading italic text-center">
+              💡 Square images work best for profile pictures
+            </p>
           </div>
         )}
       </div>
-      
-      {isMe && (
-        <div className="space-y-2.5">
-          <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-center">
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(e) => onPickFile(e.target.files?.[0])}
-              className="text-[11px] md:text-sm bg-input border border-border rounded-md px-2.5 py-2 focus:border-primary/50 focus:outline-none file:mr-2 file:bg-primary/20 file:text-primary file:border-0 file:rounded-md file:px-2.5 file:py-1 file:text-[10px] file:font-heading file:font-bold file:cursor-pointer cursor-pointer transition-colors"
-              data-testid="avatar-file"
-            />
-            <button
-              onClick={onUpload}
-              disabled={!preview || uploading}
-              className="w-full sm:w-auto bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg font-heading font-bold uppercase tracking-wide px-5 py-2 text-[11px] md:text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1.5 touch-manipulation"
-              data-testid="avatar-upload"
-            >
-              <Upload size={14} className="md:w-4 md:h-4" />
-              {uploading ? 'Uploading...' : 'Upload'}
-            </button>
-          </div>
-          <p className="text-[10px] md:text-xs text-mutedForeground font-heading italic text-center">
-            💡 Square images work best. File will be automatically resized.
-          </p>
-        </div>
-      )}
     </div>
-  </div>
-);
+  );
+};
 
 // Main component
 export default function Profile() {
@@ -694,6 +722,17 @@ export default function Profile() {
           onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
         />
 
+        {isMe && (
+          <AvatarCard
+            avatarSrc={avatarSrc}
+            isMe={isMe}
+            preview={preview}
+            uploading={uploading}
+            onPickFile={onPickFile}
+            onUpload={onUpload}
+          />
+        )}
+
         {isMe && hasAdminEmail && (
           <>
             {isAdmin && (
@@ -755,15 +794,6 @@ export default function Profile() {
         {!isMe && profile.admin_stats && (
           <AdminStatsCard adminStats={profile.admin_stats} />
         )}
-
-        <AvatarCard
-          avatarSrc={avatarSrc}
-          isMe={isMe}
-          preview={preview}
-          uploading={uploading}
-          onPickFile={onPickFile}
-          onUpload={onUpload}
-        />
 
         <div className="bg-card rounded-md overflow-hidden border border-border">
           <div className="px-3 py-2 md:px-4 md:py-2.5 bg-secondary/30 border-b border-border text-center">

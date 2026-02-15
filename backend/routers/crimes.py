@@ -19,6 +19,18 @@ CRIME_PROGRESS_DROP_PER_FAIL_MIN = 1
 CRIME_PROGRESS_DROP_PER_FAIL_MAX = 3
 CRIME_PROGRESS_MAX_DROP_FROM_PEAK = 15    # once hit 92%, can never go below 77%
 
+CRIME_SUCCESS_MESSAGES = [
+    "Success! You earned ${reward:,} and {rank_points} rank points",
+    "Clean score. ${reward:,} and {rank_points} rank points in your pocket.",
+    "The job went smooth. You earned ${reward:,} and {rank_points} rank points.",
+    "Nice work. ${reward:,} and {rank_points} rank points.",
+    "No heat. You got away with ${reward:,} and {rank_points} rank points.",
+    "Smooth run. ${reward:,} and {rank_points} rank points earned.",
+    "Done. ${reward:,} and {rank_points} rank points.",
+    "Clean getaway. ${reward:,} and {rank_points} rank points.",
+    "Score. ${reward:,} and {rank_points} rank points.",
+    "The take is yours. ${reward:,} and {rank_points} rank points.",
+]
 CRIME_FAIL_MESSAGES = [
     "The job went sideways. Better luck next time.",
     "Someone talked. The heat was waiting — no score this time.",
@@ -226,7 +238,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 await update_objectives_progress(current_user["id"], "crimes_in_city", 1, city=city)
         except Exception:
             pass
-        message = f"Success! You earned ${reward:,} and {rank_points} rank points"
+        message = random.choice(CRIME_SUCCESS_MESSAGES).format(reward=reward, rank_points=rank_points)
     else:
         reward = None
         message = random.choice(CRIME_FAIL_MESSAGES)

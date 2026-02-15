@@ -652,6 +652,32 @@ FAMILY_RACKET_ATTACK_REVENUE_PCT = 0.25
 FAMILY_RACKET_ATTACK_MAX_PER_CREW = 2
 FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
 
+# Varied success/failure messages for family racket raid
+FAMILY_RACKET_RAID_SUCCESS_MESSAGES = [
+    "Raid successful! Took ${amount:,} from {family_name}'s {racket_name}.",
+    "Clean score. ${amount:,} from {family_name}'s racket.",
+    "You hit their {racket_name}. ${amount:,} to your treasury.",
+    "Raid successful. ${amount:,} from {family_name}.",
+    "The take: ${amount:,} from {family_name}'s {racket_name}.",
+    "No heat. ${amount:,} from their {racket_name}.",
+    "Done. ${amount:,} taken from {family_name}.",
+    "Smooth run. ${amount:,} from {family_name}'s racket.",
+    "Score. ${amount:,} from {family_name}'s {racket_name}.",
+    "Raid paid off. ${amount:,}.",
+]
+FAMILY_RACKET_RAID_FAIL_MESSAGES = [
+    "Raid failed.",
+    "No dice. {family_name}'s {racket_name} held.",
+    "They were ready. Raid failed.",
+    "The crew at {family_name} pushed back. No take.",
+    "Raid blown. {family_name}'s racket didn't give.",
+    "Wrong move. Raid failed.",
+    "Their muscle held the line. No score.",
+    "Raid failed. {family_name} was buttoned up.",
+    "No score. Try again when the heat's off.",
+    "The raid didn't stick. No payout.",
+]
+
 class FamilyCreateRequest(BaseModel):
     name: str
     tag: str
@@ -4523,6 +4549,33 @@ PROPERTY_ATTACK_MIN_SUCCESS = 0.10
 PROPERTY_ATTACK_REVENUE_PCT = 0.25  # 25% of revenue (12h worth)
 PROPERTY_ATTACK_HOURS = 12
 
+# Varied success messages for racket extort
+RACKET_SUCCESS_MESSAGES = [
+    "Raid successful! You took ${amount:,} (25% of revenue) from {target_username}'s {prop_name}.",
+    "Clean score. ${amount:,} from {target_username}'s {prop_name}.",
+    "You shook them down. ${amount:,} from {prop_name}.",
+    "No heat. ${amount:,} from {target_username}'s {prop_name}.",
+    "Done. ${amount:,} taken from {prop_name}.",
+    "The take: ${amount:,} from {target_username}'s {prop_name}.",
+    "Raid successful. ${amount:,} from {prop_name}.",
+    "Smooth run. ${amount:,} from {target_username}'s {prop_name}.",
+    "You got paid. ${amount:,} from {prop_name}.",
+    "Score. ${amount:,} from {target_username}'s {prop_name}.",
+]
+# Varied failure messages for racket extort (like crimes / GTA)
+RACKET_FAIL_MESSAGES = [
+    "Raid failed. {prop_name} is well defended (level {defender_level}). Try again later.",
+    "No dice. The guards at {prop_name} were ready — level {defender_level} security held.",
+    "They saw you coming. {prop_name} didn't give up a cent. Better luck next time.",
+    "The muscle at {prop_name} pushed back. You got out clean but empty-handed.",
+    "Wrong move. {prop_name} is locked down (level {defender_level}). Live to shake them another day.",
+    "The place was hot. You had to walk from {prop_name} with nothing.",
+    "Raid blown. {prop_name}'s crew held the line. Try again when the heat's off.",
+    "No score. {prop_name} is tougher than it looked — level {defender_level}.",
+    "They had backup. You slipped away from {prop_name} with your skin, that's it.",
+    "The take was a no-go. {prop_name} stayed buttoned up. Next time.",
+]
+
 
 @api_router.post("/racket/extort")
 async def extort_property(request: ProtectionRacketRequest, current_user: dict = Depends(get_current_user)):
@@ -4583,15 +4636,19 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             {"$set": {"timestamp": datetime.now(timezone.utc).isoformat(), "amount": extortion_amount}},
             upsert=True
         )
+        msg = random.choice(RACKET_SUCCESS_MESSAGES).format(
+            amount=extortion_amount, target_username=target["username"], prop_name=prop["name"]
+        )
         return {
             "success": True,
-            "message": f"Raid successful! You took ${extortion_amount:,} ({PROPERTY_ATTACK_REVENUE_PCT*100:.0f}% of revenue) from {target['username']}'s {prop['name']}.",
+            "message": msg,
             "amount": extortion_amount,
             "rank_points_earned": rank_points,
         }
+    fail_msg = random.choice(RACKET_FAIL_MESSAGES).format(prop_name=prop["name"], defender_level=defender_level)
     return {
         "success": False,
-        "message": f"Raid failed. {prop['name']} is well defended (level {defender_level}). Try again later.",
+        "message": fail_msg,
         "amount": 0,
         "rank_points_earned": 0,
     }
@@ -4968,8 +5025,15 @@ def _camelize(name: str) -> str:
     return "".join(t[:1].upper() + t[1:] for t in tokens)
 
 async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
-    """Create a unique robot user record. Returns (user_id, username)."""
-    robot_names = ["Iron Tony", "Steel Sal", "Chrome Carlo", "Titanium Vito", "Metal Marco", "Copper Carmine", "Bronze Bruno", "Alloy Angelo"]
+    """Create a unique robot user record. Returns (user_id, username). 1920s–30s American mafia style (Name + numeric suffix)."""
+    robot_names = [
+        "Al Capone", "Lucky Luciano", "Frank Nitti", "Johnny Torrio", "Bugsy Siegel",
+        "Meyer Lansky", "Vito Genovese", "Joe Masseria", "Salvatore Maranzano", "Dutch Schultz",
+        "Waxey Gordon", "Legs Diamond", "Vincent Coll", "Frank Costello", "Albert Anastasia",
+        "Joe Adonis", "Tony Accardo", "Paul Ricca", "Jake Guzik", "Machine Gun Jack",
+        "Scarface Al", "Big Jim Colosimo", "Diamond Joe", "Nails Morton", "Bugs Moran",
+        "Lefty Louie", "Tony the Rat", "Mad Dog Coll", "Pretty Amberg", "Broadway Charlie",
+    ]
     base = _camelize(random.choice(robot_names))
 
     # Random rank (based on existing ranks)
@@ -5548,11 +5612,17 @@ HITLIST_REVEAL_COST_POINTS = 5000
 HITLIST_NPC_COOLDOWN_HOURS = 3
 HITLIST_NPC_MAX_PER_WINDOW = 3
 
-# Hitlist NPCs: jail-style names (same as jail page), RANKS for rank, rewards like booze run (booze_id from BOOZE_TYPES)
+# Hitlist NPCs: 1920s–30s American mafia style (same vibe as jail page), RANKS for rank, rewards like booze run
 HITLIST_NPC_NAMES = [
     "Tony the Rat", "Vinny the Snake", "Lucky Lou", "Mad Dog Mike",
     "Scarface Sam", "Big Al", "Johnny Two-Times", "Knuckles McGee",
     "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
+    "Dutch Schultz", "Waxey Gordon", "Legs Diamond", "Machine Gun Jack",
+    "Nails Morton", "Bugs Moran", "Diamond Joe", "Broadway Charlie",
+    "Pretty Amberg", "Mad Dog Coll", "Big Jim Colosimo", "Jake the Barber",
+    "Trigger Mike", "Three-Finger Brown", "Sleepy Sam", "Cockeyed Lou",
+    "Bottles Capone", "Fats McCarthy", "Greasy Thumb Guzik", "Terrible Tommy",
+    "The Enforcer", "Ice Pick Willie", "Slippery Sal", "Cement Charlie",
 ]
 # Templates: rank 1-11 (RANKS id), rewards: cash, points, rank_points, bullets, car_id, booze={booze_id: amount} (booze_run ids)
 # ECONOMY REBALANCE: Reduced rewards ~60-70%, but bullets always > cost to kill (~1.5x return)
@@ -10025,6 +10095,21 @@ async def families_config(current_user: dict = Depends(get_current_user)):
     }
 
 
+# Varied success messages for family racket collect
+FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES = [
+    "Collected ${income:,}",
+    "Your cut: ${income:,}",
+    "Racket paid out. ${income:,} to the family.",
+    "Collected ${income:,} from the racket.",
+    "The take: ${income:,}.",
+    "Payout collected. ${income:,}.",
+    "${income:,} in the bag.",
+    "Racket income: ${income:,}.",
+    "Collected ${income:,}. Clean.",
+    "Your share: ${income:,}.",
+]
+
+
 def _racket_income_and_cooldown(racket_id: str, level: int, ev: dict):
     """Income per collect and cooldown hours for a racket (with event modifiers)."""
     r = next((x for x in FAMILY_RACKETS if x["id"] == racket_id), None)
@@ -10365,7 +10450,8 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     now_iso = now.isoformat()
     rackets[racket_id] = {**state, "level": level, "last_collected_at": now_iso}
     await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": income}})
-    return {"message": f"Collected ${income:,}", "amount": income}
+    msg = random.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income)
+    return {"message": msg, "amount": income}
 
 
 def _racket_previous_id(racket_id: str):
@@ -10551,14 +10637,23 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
             "target_racket_id": request.racket_id,
             "last_at": now_iso,
         })
+        r_def = next((x for x in FAMILY_RACKETS if x["id"] == request.racket_id), None)
+        racket_name = r_def["name"] if r_def else request.racket_id
+        family_name = target_fam.get("name") or "Enemy"
         if success and take > 0:
             treasury = int((target_fam.get("treasury") or 0) or 0)
             actual = min(take, treasury)
             if actual > 0:
                 await db.families.update_one({"id": request.family_id}, {"$inc": {"treasury": -actual}})
                 await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
-            return {"success": True, "message": f"Raid successful! Took ${actual:,}.", "amount": actual}
-        return {"success": False, "message": "Raid failed.", "amount": 0}
+            msg = random.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(
+                amount=actual, family_name=family_name, racket_name=racket_name
+            )
+            return {"success": True, "message": msg, "amount": actual}
+        fail_msg = random.choice(FAMILY_RACKET_RAID_FAIL_MESSAGES).format(
+            family_name=family_name, racket_name=racket_name
+        )
+        return {"success": False, "message": fail_msg, "amount": 0}
 
 
 @api_router.get("/families/war/stats")

@@ -53,6 +53,45 @@ EQUIPMENT_TIERS = [
     }
 ]
 
+# Varied success messages for heist
+OC_HEIST_SUCCESS_MESSAGES = [
+    "Heist successful! You earned ${reward:,} and {rank_points} rank points!",
+    "Clean score. ${reward:,} and {rank_points} rank points.",
+    "The job went smooth. You earned ${reward:,} and {rank_points} rank points!",
+    "No heat. ${reward:,} and {rank_points} rank points in your pocket.",
+    "Done. ${reward:,} and {rank_points} rank points earned.",
+    "Smooth run. You got ${reward:,} and {rank_points} rank points!",
+    "The take is yours. ${reward:,} and {rank_points} rank points!",
+    "Heist successful. ${reward:,} and {rank_points} rank points.",
+    "Score. ${reward:,} and {rank_points} rank points.",
+    "You got away clean. ${reward:,} and {rank_points} rank points!",
+]
+# Varied failure messages (like crimes / GTA / jail / rackets)
+OC_HEIST_FAIL_CAUGHT_MESSAGES = [
+    "Heist failed and you got caught! {jail_time}s jail (unbreakable for 60s)",
+    "Busted! The heat was waiting. {jail_time}s in the slammer (unbreakable 60s).",
+    "No getaway. They threw the book at you — {jail_time}s jail (unbreakable 60s).",
+    "The job blew up. You're in the can for {jail_time}s (unbreakable 60s).",
+    "Wrong place, wrong time. {jail_time}s behind bars (unbreakable 60s).",
+    "They had the block covered. {jail_time}s in lockup (unbreakable 60s).",
+    "Heist failed — you're caught. {jail_time}s jail (unbreakable 60s).",
+    "The feds were onto you. Enjoy {jail_time}s in the clink (unbreakable 60s).",
+    "No clean escape. {jail_time}s in the joint (unbreakable 60s).",
+    "Blown cover. {jail_time}s in the slammer (unbreakable 60s).",
+]
+OC_HEIST_FAIL_ESCAPED_MESSAGES = [
+    "Heist failed, but you escaped!",
+    "No score — the job fell through. You got away clean.",
+    "The heist went sideways. You slipped out with nothing.",
+    "Wrong move. You bailed in time — no rewards, no cuffs.",
+    "Something spooked the crew. You escaped empty-handed.",
+    "The job blew up. You got away, but came up empty.",
+    "No dice. You melted into the crowd with nothing.",
+    "Heist failed. You're free, but the take is gone.",
+    "The heat was too much. You walked with your skin, that's it.",
+    "Clean getaway, but no payout. Live to heist another day.",
+]
+
 # Heist jobs with different risk/reward
 HEIST_JOBS = [
     {
@@ -289,9 +328,12 @@ async def run_heist(
             upsert=True
         )
         
+        msg = random.choice(OC_HEIST_SUCCESS_MESSAGES).format(
+            reward=job["reward"], rank_points=job["rank_points"]
+        )
         return HeistResponse(
             success=True,
-            message=f"Heist successful! You earned ${job['reward']:,} and {job['rank_points']} rank points!",
+            message=msg,
             reward=job["reward"],
             rank_points=job["rank_points"],
             jailed=False
@@ -327,9 +369,10 @@ async def run_heist(
                 }
             )
             
+            msg = random.choice(OC_HEIST_FAIL_CAUGHT_MESSAGES).format(jail_time=job["jail_time"])
             return HeistResponse(
                 success=False,
-                message=f"Heist failed and you got caught! {job['jail_time']}s jail (unbreakable for 60s)",
+                message=msg,
                 jailed=True,
                 jail_until=jail_until.isoformat(),
                 unbreakable=True
@@ -341,10 +384,10 @@ async def run_heist(
                 {"id": current_user["id"]},
                 {"$inc": {"total_heists": 1}}
             )
-            
+            msg = random.choice(OC_HEIST_FAIL_ESCAPED_MESSAGES)
             return HeistResponse(
                 success=False,
-                message="Heist failed, but you escaped!",
+                message=msg,
                 jailed=False
             )
 

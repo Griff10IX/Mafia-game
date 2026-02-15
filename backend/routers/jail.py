@@ -25,6 +25,34 @@ from server import (
 
 logger = logging.getLogger(__name__)
 
+# Varied success messages when bust succeeds
+JAIL_BUST_SUCCESS_MESSAGES = [
+    "Successfully busted out {target_username}!",
+    "Clean breakout. {target_username} is free!",
+    "You got them out. {target_username} is on the street.",
+    "Bust successful! {target_username} is out.",
+    "No heat. {target_username} is clear.",
+    "Done. {target_username} busted out!",
+    "Smooth work. {target_username} is free.",
+    "You sprung {target_username}!",
+    "Breakout complete. {target_username} is out.",
+    "The screws never saw you. {target_username} is free.",
+]
+# Varied failure messages when bust attempt fails and you get caught (like crimes / GTA / rackets)
+JAIL_BUST_FAIL_MESSAGES = [
+    "Bust failed! You got caught and sent to jail.",
+    "The guards were onto you. You're in the slammer for 30 seconds.",
+    "No dice — they nabbed you at the gate. Enjoy the clink.",
+    "Bust blown. The screws got you. 30 seconds in lockup.",
+    "Wrong move. You're behind bars now. Better luck next time.",
+    "They were waiting. Bust failed — 30 seconds in jail.",
+    "The heat was too much. You're in the can.",
+    "No breakout this time. You got caught. 30 seconds.",
+    "The guards had the block covered. Bust failed — see you in 30s.",
+    "Sloppy work. They threw you in. 30 seconds to think it over.",
+]
+
+
 def _player_bust_success_rate(total_attempts: int) -> float:
     """Calculate player bust success rate based on experience (total attempts, not just successes). Softer curve: higher base rates, lower thresholds for max 90%."""
     if total_attempts < 150:
@@ -138,9 +166,10 @@ async def bust_out_of_jail(
                 await update_objectives_progress(current_user["id"], "busts", 1)
             except Exception:
                 pass
+            msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=request.target_username)
             return {
                 "success": True,
-                "message": f"Successfully busted out {request.target_username}!",
+                "message": msg,
                 "rank_points_earned": rank_points,
                 "cash_reward": bust_reward_cash,
             }
@@ -151,7 +180,7 @@ async def bust_out_of_jail(
         )
         return {
             "success": False,
-            "message": "Bust failed! You got caught and sent to jail.",
+            "message": random.choice(JAIL_BUST_FAIL_MESSAGES),
             "jail_time": 30,
         }
     if not username_ci:
@@ -206,9 +235,10 @@ async def bust_out_of_jail(
             await update_objectives_progress(current_user["id"], "busts", 1)
         except Exception:
             pass
+        msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target["username"])
         return {
             "success": True,
-            "message": f"Successfully busted out {target['username']}!",
+            "message": msg,
             "rank_points_earned": rank_points,
             "cash_reward": cash_to_pay,
         }
@@ -219,7 +249,7 @@ async def bust_out_of_jail(
     )
     return {
         "success": False,
-        "message": "Bust failed! You got caught and sent to jail.",
+        "message": random.choice(JAIL_BUST_FAIL_MESSAGES),
         "jail_time": 30,
     }
 
@@ -354,6 +384,12 @@ async def spawn_jail_npcs():
         "Tony the Rat", "Vinny the Snake", "Lucky Lou", "Mad Dog Mike",
         "Scarface Sam", "Big Al", "Johnny Two-Times", "Knuckles McGee",
         "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
+        "Dutch Schultz", "Waxey Gordon", "Legs Diamond", "Machine Gun Jack",
+        "Nails Morton", "Bugs Moran", "Diamond Joe", "Broadway Charlie",
+        "Pretty Amberg", "Mad Dog Coll", "Big Jim Colosimo", "Jake the Barber",
+        "Trigger Mike", "Three-Finger Brown", "Sleepy Sam", "Cockeyed Lou",
+        "Bottles Capone", "Fats McCarthy", "Greasy Thumb Guzik", "Terrible Tommy",
+        "The Enforcer", "Ice Pick Willie", "Slippery Sal", "Cement Charlie",
     ]
     while True:
         try:

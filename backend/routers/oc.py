@@ -61,6 +61,33 @@ NPC_PAYOUT_MULTIPLIER = 0.35  # Each NPC gets 35% of a full share for total pool
 OC_INVITE_EXPIRY_MINUTES = 5
 ROLE_KEYS = ["driver", "weapons", "explosives", "hacker"]
 
+# Varied success messages for team heist
+OC_TEAM_HEIST_SUCCESS_MESSAGES = [
+    "Heist successful! {job_name}.",
+    "Clean score. {job_name}.",
+    "The job went smooth. {job_name}.",
+    "No heat. {job_name} — payout split.",
+    "Done. {job_name}.",
+    "Smooth run. {job_name}.",
+    "The take is in. {job_name}.",
+    "Heist successful. {job_name}.",
+    "Score. {job_name}.",
+    "You got away clean. {job_name}.",
+]
+# Varied failure messages for team heist (like crimes / GTA / jail / rackets)
+OC_TEAM_HEIST_FAIL_MESSAGES = [
+    "The heist failed. No rewards.",
+    "No score — the job went sideways. No rewards.",
+    "The crew came up empty. Heist failed.",
+    "Wrong move. The take was a no-go. No rewards.",
+    "Something blew up. Heist failed — no payout.",
+    "The heat was too much. No rewards this time.",
+    "Heist failed. The team got away clean but empty-handed.",
+    "No dice. The job fell through. No rewards.",
+    "The heist blew up. No payout.",
+    "Clean getaway, but no score. No rewards.",
+]
+
 
 class OCExecuteRequest(BaseModel):
     job_id: str
@@ -503,7 +530,7 @@ async def execute_oc(
     if not success:
         return {
             "success": False,
-            "message": "The heist failed. No rewards.",
+            "message": random.choice(OC_TEAM_HEIST_FAIL_MESSAGES),
             "cooldown_until": new_cooldown_until.isoformat(),
         }
 
@@ -538,9 +565,10 @@ async def execute_oc(
             },
         )
 
+    msg = random.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
     return {
         "success": True,
-        "message": f"Heist successful! {job['name']}.",
+        "message": msg,
         "cash_earned": cash_each,
         "rp_earned": rp_each,
         "cooldown_until": new_cooldown_until.isoformat(),
