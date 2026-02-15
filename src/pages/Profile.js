@@ -121,7 +121,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
       value: profile.messages_sent != null 
         ? `${profile.messages_sent} sent / ${profile.messages_received ?? 0} received` 
         : `${profile.messages_received ?? 0} received`, 
-      valueClass: 'text-foreground font-heading text-xs md:text-sm' 
+      valueClass: 'text-foreground font-heading text-[10px] md:text-sm' 
     },
     { 
       label: 'Jailbusts', 
@@ -138,14 +138,14 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
 
   return (
     <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-      <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
-        <h2 className="text-base md:text-lg font-heading font-bold text-primary uppercase tracking-wider truncate">
+      <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
+        <h2 className="text-sm md:text-base lg:text-lg font-heading font-bold text-primary uppercase tracking-wider truncate">
           {profile.username}
         </h2>
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 border-primary/50 bg-primary/20">
-            <Shield className="text-primary" size={16} />
-            <span className="text-xs font-heading font-bold text-primary uppercase">
+        <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
+          <div className="flex items-center gap-1 md:gap-1.5 px-2 py-1 md:px-3 md:py-1.5 rounded-md border-2 border-primary/50 bg-primary/20">
+            <Shield className="text-primary" size={14} />
+            <span className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase">
               {profile.rank_name || '—'}
             </span>
           </div>
@@ -154,32 +154,32 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
               <button
                 type="button"
                 onClick={onAddToSearch}
-                className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                className="inline-flex items-center justify-center h-8 w-8 md:h-9 md:w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
                 title="Add to Attack searches"
                 aria-label="Add to Attack searches"
                 data-testid="profile-add-to-search"
               >
-                <Search size={16} />
+                <Search size={14} className="md:w-4 md:h-4" />
               </button>
               {profile.id && (
                 <button
                   type="button"
                   onClick={() => onSendMessage?.()}
-                  className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                  className="inline-flex items-center justify-center h-8 w-8 md:h-9 md:w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
                   title="Send message"
                   aria-label="Send message"
                 >
-                  <MessageCircle size={16} />
+                  <MessageCircle size={14} className="md:w-4 md:h-4" />
                 </button>
               )}
               <button
                 type="button"
                 onClick={() => onSendMoney?.()}
-                className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                className="inline-flex items-center justify-center h-8 w-8 md:h-9 md:w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
                 title="Send money"
                 aria-label="Send money"
               >
-                <DollarSign size={16} />
+                <DollarSign size={14} className="md:w-4 md:h-4" />
               </button>
             </>
           )}
@@ -192,13 +192,13 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
           return (
             <div 
               key={row.label} 
-              className={`grid grid-cols-12 gap-3 px-4 py-3 hover:bg-secondary/20 transition-colors ${
+              className={`grid grid-cols-12 gap-2 md:gap-3 px-3 py-2 md:px-4 md:py-3 hover:bg-secondary/20 transition-colors ${
                 row.highlight ? 'border-l-4 border-l-primary/50' : ''
               }`}
             >
-              <div className="col-span-5 sm:col-span-4 flex items-center gap-2">
-                {Icon && <Icon size={16} className="text-primary/60 shrink-0" />}
-                <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
+              <div className="col-span-5 sm:col-span-4 flex items-center gap-1.5 md:gap-2">
+                {Icon && <Icon size={14} className="md:w-4 md:h-4 text-primary/60 shrink-0" />}
+                <span className="text-[10px] md:text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
                   {row.label}
                 </span>
               </div>
@@ -206,7 +206,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
                 {row.component != null ? (
                   row.component
                 ) : row.isStatus ? (
-                  <span className="font-heading text-sm">
+                  <span className="font-heading text-[11px] md:text-sm">
                     {row.isDead && <span className="text-red-400">💀 Dead (Offline)</span>}
                     {!row.isDead && row.isOnline && (
                       <span>
@@ -228,8 +228,8 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
       </div>
 
       {profile.is_npc && (
-        <div className="px-4 py-2 border-t border-border bg-secondary/20">
-          <span className="inline-flex items-center px-2 py-1 rounded-md text-xs uppercase tracking-wider font-heading font-bold bg-secondary text-mutedForeground border border-border">
+        <div className="px-3 py-2 md:px-4 border-t border-border bg-secondary/20">
+          <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] md:text-xs uppercase tracking-wider font-heading font-bold bg-secondary text-mutedForeground border border-border">
             🤖 NPC
           </span>
         </div>
@@ -240,33 +240,33 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
 
 const HonoursCard = ({ honours }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-2">
-        <Trophy size={16} />
+    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-1.5">
+        <Trophy size={14} className="md:w-4 md:h-4" />
         Honours ({honours.length})
       </h3>
     </div>
-    <div className="p-4">
+    <div className="p-3">
       {honours.length === 0 ? (
-        <div className="text-center py-8">
-          <Trophy size={48} className="mx-auto text-primary/30 mb-3" />
-          <p className="text-sm text-mutedForeground font-heading">
+        <div className="text-center py-6">
+          <Trophy size={40} className="md:w-12 md:h-12 mx-auto text-primary/30 mb-2" />
+          <p className="text-[11px] md:text-sm text-mutedForeground font-heading">
             No leaderboard rankings yet
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {honours.map((h, i) => (
             <div 
               key={i} 
-              className="flex items-center gap-3 rounded-md border border-primary/20 px-4 py-3 bg-primary/5 hover:bg-primary/10 transition-colors"
+              className="flex items-center gap-2.5 rounded-md border border-primary/20 px-3 py-2 bg-primary/5 hover:bg-primary/10 transition-colors"
             >
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/20 border border-primary/30 shrink-0">
-                <span className="text-primary font-heading font-bold text-sm">
+              <div className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-full bg-primary/20 border border-primary/30 shrink-0">
+                <span className="text-primary font-heading font-bold text-[11px] md:text-sm">
                   #{h.rank}
                 </span>
               </div>
-              <span className="text-foreground font-heading text-sm flex-1">
+              <span className="text-foreground font-heading text-[11px] md:text-sm flex-1 leading-tight">
                 {h.label}
               </span>
             </div>
@@ -284,35 +284,35 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
 
   return (
     <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-      <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-        <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-2">
-          <Building2 size={16} />
+      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+        <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-1.5">
+          <Building2 size={14} className="md:w-4 md:h-4" />
           Properties
         </h3>
       </div>
-      <div className="p-4">
+      <div className="p-3">
         {isEmpty ? (
-          <div className="text-center py-8">
-            <Building2 size={48} className="mx-auto text-primary/30 mb-3" />
-            <p className="text-sm text-mutedForeground font-heading">
+          <div className="text-center py-6">
+            <Building2 size={40} className="md:w-12 md:h-12 mx-auto text-primary/30 mb-2" />
+            <p className="text-[11px] md:text-sm text-mutedForeground font-heading">
               No casinos or properties owned
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {hasCasinos && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="space-y-2.5">
                 {ownedCasinos.map((c, i) => {
                   const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type || 'Casino';
                   const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : '🎰';
                   return (
-                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-3">
-                      <span className="text-2xl shrink-0 mt-0.5" aria-hidden>{typeEmoji}</span>
+                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-3 py-2 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-2.5">
+                      <span className="text-xl md:text-2xl shrink-0 mt-0.5" aria-hidden>{typeEmoji}</span>
                       <div className="min-w-0 flex-1">
-                        <div className="font-heading font-bold text-foreground text-base">
+                        <div className="font-heading font-bold text-foreground text-[13px] md:text-base leading-tight">
                           {c.city} {typeLabel}
                         </div>
-                        <div className="space-y-1 text-sm font-heading mt-1">
+                        <div className="space-y-0.5 text-[11px] md:text-sm font-heading mt-1">
                           <div className="flex justify-between gap-2">
                             <span className="text-mutedForeground shrink-0">Max bet:</span>
                             <span className="text-primary font-bold">${Number(c.max_bet || 0).toLocaleString()}</span>
@@ -331,20 +331,20 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
               </div>
             )}
             {property?.type === 'airport' && (
-              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-3">
-                <Plane size={24} className="text-primary shrink-0 mt-0.5" />
+              <div className="rounded-md border border-primary/20 px-3 py-2 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-2.5">
+                <Plane size={20} className="md:w-6 md:h-6 text-primary shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <div className="font-heading font-bold text-foreground text-base">
+                  <div className="font-heading font-bold text-foreground text-[13px] md:text-base leading-tight">
                     ✈️ Airport — {property.state ?? '—'} (Slot {property.slot ?? 1})
                   </div>
-                  <div className="space-y-1 text-sm font-heading mt-1">
+                  <div className="space-y-0.5 text-[11px] md:text-sm font-heading mt-1">
                     <div className="flex justify-between gap-2">
-                      <span className="text-mutedForeground">Price per travel:</span>
+                      <span className="text-mutedForeground shrink-0">Price per travel:</span>
                       <span className="text-primary font-bold">{Number(property.price_per_travel ?? 0).toLocaleString()} pts</span>
                     </div>
                     {isOwner && (
                       <div className="flex justify-between gap-2">
-                        <span className="text-mutedForeground">Total earnings:</span>
+                        <span className="text-mutedForeground shrink-0">Total earnings:</span>
                         <span className="text-primary font-bold">{Number(property.total_earnings ?? 0).toLocaleString()} pts</span>
                       </div>
                     )}
@@ -353,14 +353,14 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
               </div>
             )}
             {property?.type === 'bullet_factory' && (
-              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-3">
-                <Factory size={24} className="text-primary shrink-0 mt-0.5" />
+              <div className="rounded-md border border-primary/20 px-3 py-2 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-2.5">
+                <Factory size={20} className="md:w-6 md:h-6 text-primary shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <div className="font-heading font-bold text-foreground text-base">
+                  <div className="font-heading font-bold text-foreground text-[13px] md:text-base leading-tight">
                     Bullet factory — {property.state ?? '—'}
                   </div>
                   {property.price_per_bullet != null && (
-                    <div className="text-sm font-heading mt-1">
+                    <div className="text-[11px] md:text-sm font-heading mt-1">
                       <span className="text-mutedForeground">Price per bullet: </span>
                       <span className="text-primary font-bold">${Number(property.price_per_bullet).toLocaleString()}</span>
                     </div>
@@ -377,12 +377,12 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
 
 const AdminStatsCard = ({ adminStats }) => (
   <div className="bg-card rounded-md overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10">
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
         🔐 Admin Info
       </h3>
     </div>
-    <div className="p-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+    <div className="p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
       {[
         { label: 'Cash', value: `$${Number(adminStats.money ?? 0).toLocaleString()}` },
         { label: 'Points', value: Number(adminStats.points ?? 0).toLocaleString() },
@@ -393,11 +393,11 @@ const AdminStatsCard = ({ adminStats }) => (
         { label: 'Location', value: adminStats.current_state ?? '—', isLocation: true },
         { label: 'In Jail', value: adminStats.in_jail ? 'Yes' : 'No', isJail: true, jailed: adminStats.in_jail },
       ].map((stat) => (
-        <div key={stat.label} className="space-y-1">
-          <div className="text-xs text-mutedForeground font-heading uppercase tracking-wider">
+        <div key={stat.label} className="space-y-0.5">
+          <div className="text-[10px] md:text-xs text-mutedForeground font-heading uppercase tracking-wider">
             {stat.label}
           </div>
-          <div className={`text-sm font-heading font-bold ${
+          <div className={`text-[11px] md:text-sm font-heading font-bold leading-tight ${
             stat.isJail && stat.jailed 
               ? 'text-red-400' 
               : stat.isLocation 
@@ -421,44 +421,44 @@ const AvatarCard = ({
   onUpload 
 }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+      <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
         📸 Profile Picture
       </h3>
     </div>
-    <div className="p-4 space-y-4">
+    <div className="p-3 space-y-3">
       <div className="aspect-video max-h-64 w-full max-w-lg mx-auto rounded-md overflow-hidden border-2 border-primary/20 bg-secondary/20 flex items-center justify-center">
         {avatarSrc ? (
           <img src={avatarSrc} alt="Profile" className="w-full h-full object-contain" />
         ) : (
-          <div className="flex flex-col items-center gap-3 text-mutedForeground">
-            <UserIcon size={64} className="text-primary/30" />
-            <span className="text-sm font-heading">No picture uploaded</span>
+          <div className="flex flex-col items-center gap-2 text-mutedForeground">
+            <UserIcon size={48} className="md:w-16 md:h-16 text-primary/30" />
+            <span className="text-[11px] md:text-sm font-heading">No picture uploaded</span>
           </div>
         )}
       </div>
       
       {isMe && (
-        <div className="space-y-3">
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-center">
+        <div className="space-y-2.5">
+          <div className="flex flex-col sm:flex-row gap-2.5 items-center justify-center">
             <input
               type="file"
               accept="image/*"
               onChange={(e) => onPickFile(e.target.files?.[0])}
-              className="text-sm bg-input border border-border rounded-md px-3 py-2 focus:border-primary/50 focus:outline-none file:mr-2 file:bg-primary/20 file:text-primary file:border-0 file:rounded-md file:px-3 file:py-1 file:text-xs file:font-heading file:font-bold file:cursor-pointer cursor-pointer transition-colors"
+              className="text-[11px] md:text-sm bg-input border border-border rounded-md px-2.5 py-2 focus:border-primary/50 focus:outline-none file:mr-2 file:bg-primary/20 file:text-primary file:border-0 file:rounded-md file:px-2.5 file:py-1 file:text-[10px] file:font-heading file:font-bold file:cursor-pointer cursor-pointer transition-colors"
               data-testid="avatar-file"
             />
             <button
               onClick={onUpload}
               disabled={!preview || uploading}
-              className="w-full sm:w-auto bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg font-heading font-bold uppercase tracking-wide px-6 py-2.5 text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
+              className="w-full sm:w-auto bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg font-heading font-bold uppercase tracking-wide px-5 py-2 text-[11px] md:text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1.5 touch-manipulation"
               data-testid="avatar-upload"
             >
-              <Upload size={16} />
+              <Upload size={14} className="md:w-4 md:h-4" />
               {uploading ? 'Uploading...' : 'Upload'}
             </button>
           </div>
-          <p className="text-xs text-mutedForeground font-heading italic text-center">
+          <p className="text-[10px] md:text-xs text-mutedForeground font-heading italic text-center">
             💡 Square images work best. File will be automatically resized.
           </p>
         </div>
@@ -698,10 +698,10 @@ export default function Profile() {
           <>
             {isAdmin && (
               <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
-                <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <Ghost className="w-5 h-5 text-primary" />
-                    <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Admin ghost mode</span>
+                <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 md:gap-2">
+                    <Ghost className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                    <span className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-wider">Admin ghost mode</span>
                   </div>
                   <button
                     type="button"
@@ -714,16 +714,16 @@ export default function Profile() {
                     <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${me?.admin_ghost_mode ? 'translate-x-5' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
-                <p className="px-4 py-2 text-xs text-mutedForeground font-heading">
+                <p className="px-3 py-2 md:px-4 text-[10px] md:text-xs text-mutedForeground font-heading">
                   When on, you won&apos;t appear in the online list or as &quot;Online&quot; on your profile.
                 </p>
               </div>
             )}
             <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
-              <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-5 h-5 text-primary" />
-                  <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">
+              <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 md:gap-2">
+                  <Shield className="w-4 h-4 md:w-5 md:h-5 text-primary" />
+                  <span className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-wider">
                     {me?.admin_acting_as_normal ? 'Acting as normal user' : 'Admin powers'}
                   </span>
                 </div>
@@ -738,7 +738,7 @@ export default function Profile() {
                   <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${me?.admin_acting_as_normal ? 'translate-x-0.5' : 'translate-x-5'}`} />
                 </button>
               </div>
-              <p className="px-4 py-2 text-xs text-mutedForeground font-heading">
+              <p className="px-3 py-2 md:px-4 text-[10px] md:text-xs text-mutedForeground font-heading">
                 {me?.admin_acting_as_normal
                   ? 'Admin powers are off. Turn on to access Admin page and admin-only actions.'
                   : 'Turn off to test the game as a normal user (e.g. with others).'}
@@ -766,12 +766,12 @@ export default function Profile() {
         />
 
         <div className="bg-card rounded-md overflow-hidden border border-border">
-          <div className="px-4 py-2.5 bg-secondary/30 border-b border-border text-center">
-            <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
+          <div className="px-3 py-2 md:px-4 md:py-2.5 bg-secondary/30 border-b border-border text-center">
+            <span className="text-[10px] md:text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
               Account Created
             </span>
           </div>
-          <div className="px-4 py-3 text-foreground font-heading text-sm text-center">
+          <div className="px-3 py-2 md:px-4 md:py-3 text-foreground font-heading text-[11px] md:text-sm text-center">
             {formatDateTime(profile.created_at)}
           </div>
         </div>
