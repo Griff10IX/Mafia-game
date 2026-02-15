@@ -42,7 +42,7 @@ const ObjectiveRow = ({ obj }) => {
             />
           </div>
           <span className="text-xs font-heading font-bold text-primary tabular-nums shrink-0">
-            {obj.current}/{obj.target}
+            {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
           </span>
         </div>
         {obj.reward && (
