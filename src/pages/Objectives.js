@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ListChecks, Calendar, CalendarDays, CheckCircle2, Circle, Gift } from 'lucide-react';
+import { ListChecks, Calendar, CalendarDays, CalendarRange, CheckCircle2, Circle, Gift } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -57,21 +57,32 @@ export default function Objectives() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const [claiming, setClaiming] = useState(null);
+
   const fetchObjectives = async () => {
     setLoading(true);
     try {
       const res = await api.get('/objectives');
       setData(res.data);
-      if (res.data?.daily?.claim_reward && Object.keys(res.data.daily.claim_reward).length) {
-        toast.success('Daily objectives complete! Rewards claimed.');
-      }
-      if (res.data?.weekly?.claim_reward && Object.keys(res.data.weekly.claim_reward).length) {
-        toast.success('Weekly objectives complete! Rewards claimed.');
-      }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load objectives');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleClaim = async (type) => {
+    setClaiming(type);
+    try {
+      const res = await api.post('/objectives/claim', { type });
+      if (res.data?.claimed && res.data?.reward) {
+        toast.success(`Rewards claimed! ${formatReward(res.data.reward)}`);
+      }
+      await fetchObjectives();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to claim');
+    } finally {
+      setClaiming(null);
     }
   };
 
@@ -93,6 +104,16 @@ export default function Objectives() {
 
   const daily = data?.daily ?? {};
   const weekly = data?.weekly ?? {};
+  const monthly = data?.monthly ?? {};
+
+  const formatMonthStart = (str) => {
+    if (!str) return '—';
+    try {
+      const [y, m] = str.split('-');
+      const d = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+      return d.toLocaleString(undefined, { month: 'long', year: 'numeric' });
+    } catch { return str; }
+  };
 
   return (
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="objectives-page">
@@ -100,11 +121,11 @@ export default function Objectives() {
         <ListChecks className="w-8 h-8 text-primary" />
         <div>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary">Objectives</h1>
-          <p className="text-sm text-mutedForeground">Complete daily and weekly goals for extra rewards.</p>
+          <p className="text-sm text-mutedForeground">Complete daily, weekly, and monthly goals for extra rewards.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
         {/* Today */}
         <section className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0`}>
           <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3 shrink-0">
@@ -118,7 +139,20 @@ export default function Objectives() {
             {daily.claimed && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/30 text-sm font-heading text-primary">
                 <Gift className="w-4 h-4 shrink-0" />
-                <span>All daily objectives complete. Rewards were added automatically.</span>
+                <span>All daily objectives complete. Rewards claimed.</span>
+              </div>
+            )}
+            {!daily.claimed && daily.all_complete && daily.claim_reward && Object.keys(daily.claim_reward).length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/30">
+                <span className="text-sm font-heading text-foreground">Reward: {formatReward(daily.claim_reward)}</span>
+                <button
+                  type="button"
+                  onClick={() => handleClaim('daily')}
+                  disabled={claiming === 'daily'}
+                  className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-heading font-bold hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {claiming === 'daily' ? 'Claiming...' : 'Claim'}
+                </button>
               </div>
             )}
             {daily.objectives?.length ? (
@@ -142,13 +176,63 @@ export default function Objectives() {
             {weekly.claimed && (
               <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/30 text-sm font-heading text-primary">
                 <Gift className="w-4 h-4 shrink-0" />
-                <span>All weekly objectives complete. Rewards were added automatically.</span>
+                <span>All weekly objectives complete. Rewards claimed.</span>
+              </div>
+            )}
+            {!weekly.claimed && weekly.all_complete && weekly.claim_reward && Object.keys(weekly.claim_reward).length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/30">
+                <span className="text-sm font-heading text-foreground">Reward: {formatReward(weekly.claim_reward)}</span>
+                <button
+                  type="button"
+                  onClick={() => handleClaim('weekly')}
+                  disabled={claiming === 'weekly'}
+                  className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-heading font-bold hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {claiming === 'weekly' ? 'Claiming...' : 'Claim'}
+                </button>
               </div>
             )}
             {weekly.objectives?.length ? (
               weekly.objectives.map((obj) => <ObjectiveRow key={obj.id + obj.label} obj={obj} />)
             ) : (
               <p className="text-sm text-mutedForeground">No objectives for this week.</p>
+            )}
+          </div>
+        </section>
+
+        {/* This month */}
+        <section className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0`}>
+          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3 shrink-0">
+            <div className="flex items-center gap-2">
+              <CalendarRange className="w-5 h-5 text-primary" />
+              <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">This month</h2>
+            </div>
+            <span className="text-xs text-mutedForeground font-heading shrink-0">{formatMonthStart(monthly.month_start)}</span>
+          </div>
+          <div className="p-4 space-y-2 flex-1 min-h-0 overflow-auto">
+            {monthly.claimed && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/30 text-sm font-heading text-primary">
+                <Gift className="w-4 h-4 shrink-0" />
+                <span>All monthly objectives complete. Rewards claimed.</span>
+              </div>
+            )}
+            {!monthly.claimed && monthly.all_complete && monthly.claim_reward && Object.keys(monthly.claim_reward).length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/30">
+                <span className="text-sm font-heading text-foreground">Reward: {formatReward(monthly.claim_reward)}</span>
+                <button
+                  type="button"
+                  onClick={() => handleClaim('monthly')}
+                  disabled={claiming === 'monthly'}
+                  className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-heading font-bold hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {claiming === 'monthly' ? 'Claiming...' : 'Claim'}
+                </button>
+              </div>
+            )}
+            {monthly.objectives?.length ? (
+              monthly.objectives.map((obj) => <ObjectiveRow key={obj.id + obj.label} obj={obj} />)
+            ) : (
+              <p className="text-sm text-mutedForeground">No objectives for this month.</p>
             )}
           </div>
         </section>

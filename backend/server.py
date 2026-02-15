@@ -963,24 +963,34 @@ def _objectives_week_start(dt: datetime) -> str:
     return start.strftime("%Y-%m-%d")
 
 
+def _objectives_month_start(dt: datetime) -> str:
+    """First day of month 00:00 UTC; return YYYY-MM-DD."""
+    d = dt.date()
+    return datetime(d.year, d.month, 1, tzinfo=timezone.utc).strftime("%Y-%m-%d")
+
+
 async def update_objectives_progress(user_id: str, objective_type: str, amount: int = 1, city: Optional[str] = None):
-    """Increment daily/weekly objectives progress. Call after crimes, GTA, busts, booze sell, interest deposit, hitlist NPC kill.
+    """Increment daily/weekly/monthly objectives progress. Call after crimes, GTA, busts, booze sell, interest deposit, hitlist NPC kill.
     objective_type: crimes, gta, busts, booze_runs, crimes_in_city, deposit_interest, hitlist_npc_kills.
     For crimes_in_city pass city= (e.g. Chicago). For deposit_interest pass amount= dollars deposited."""
     now = datetime.now(timezone.utc)
     today_str = now.strftime("%Y-%m-%d")
     week_start_str = _objectives_week_start(now)
+    month_start_str = _objectives_month_start(now)
     user = await db.users.find_one(
         {"id": user_id},
         {"_id": 0, "objectives_daily_date": 1, "objectives_daily_progress": 1,
-         "objectives_weekly_start": 1, "objectives_weekly_progress": 1}
+         "objectives_weekly_start": 1, "objectives_weekly_progress": 1,
+         "objectives_monthly_start": 1, "objectives_monthly_progress": 1}
     )
     if not user:
         return
     daily_date = user.get("objectives_daily_date")
     weekly_start = user.get("objectives_weekly_start")
+    monthly_start = user.get("objectives_monthly_start")
     daily_progress = dict(user.get("objectives_daily_progress") or {})
     weekly_progress = dict(user.get("objectives_weekly_progress") or {})
+    monthly_progress = dict(user.get("objectives_monthly_progress") or {})
 
     if daily_date == today_str:
         if objective_type == "crimes_in_city" and city:
@@ -1001,6 +1011,16 @@ async def update_objectives_progress(user_id: str, objective_type: str, amount: 
         await db.users.update_one(
             {"id": user_id},
             {"$set": {"objectives_weekly_progress": weekly_progress}}
+        )
+    if monthly_start == month_start_str:
+        if objective_type == "crimes_in_city" and city:
+            key = f"crimes_in_{city.lower().replace(' ', '_')}"
+            monthly_progress[key] = monthly_progress.get(key, 0) + amount
+        else:
+            monthly_progress[objective_type] = monthly_progress.get(objective_type, 0) + amount
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"objectives_monthly_progress": monthly_progress}}
         )
 
 

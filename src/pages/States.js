@@ -270,19 +270,14 @@ export default function States() {
     api.get('/airports').then((r) => setAirports(r.data?.airports ?? [])).catch(() => {});
   }, []);
 
-  const cities = Array.isArray(data.cities) ? data.cities : [];
-  const games = Array.isArray(data.games) ? data.games : [];
-  const dice_owners = data.dice_owners || {};
-  const roulette_owners = data.roulette_owners || {};
-  const blackjack_owners = data.blackjack_owners || {};
-  const horseracing_owners = data.horseracing_owners || {};
-
-  const allOwners = {
-    dice: dice_owners || {},
-    roulette: roulette_owners || {},
-    blackjack: blackjack_owners || {},
-    horseracing: horseracing_owners || {},
-  };
+  const cities = useMemo(() => (Array.isArray(data.cities) ? data.cities : []), [data.cities]);
+  const games = useMemo(() => (Array.isArray(data.games) ? data.games : []), [data.games]);
+  const allOwners = useMemo(() => ({
+    dice: data.dice_owners || {},
+    roulette: data.roulette_owners || {},
+    blackjack: data.blackjack_owners || {},
+    horseracing: data.horseracing_owners || {},
+  }), [data.dice_owners, data.roulette_owners, data.blackjack_owners, data.horseracing_owners]);
 
   const highestBets = useMemo(() => {
     const map = {};

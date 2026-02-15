@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -55,11 +55,11 @@ export default function HorseRacingPage() {
   const [skipAnimation, setSkipAnimation] = useState(false);
   const raceEndRef = useRef(null);
 
-  const fetchHistory = () => {
+  const fetchHistory = useCallback(() => {
     api.get('/casino/horseracing/history').then((r) => setHistory(r.data?.history || [])).catch(() => {});
-  };
+  }, []);
 
-  const fetchConfigAndOwnership = () => {
+  const fetchConfigAndOwnership = useCallback(() => {
     api.get('/casino/horseracing/config').then((r) => {
       const data = r.data || {};
       setConfig({
@@ -68,12 +68,16 @@ export default function HorseRacingPage() {
         house_edge: data.house_edge ?? 0.05,
         claim_cost: data.claim_cost ?? 500_000_000,
       });
-      if (!selectedHorseId && (data.horses || []).length) setSelectedHorseId(data.horses[0].id);
+      setSelectedHorseId((prev) => {
+        if (prev) return prev;
+        const horses = data.horses || [];
+        return horses.length ? horses[0].id : null;
+      });
     }).catch(() => {});
     api.get('/casino/horseracing/ownership').then((r) => setOwnership(r.data || null)).catch(() => setOwnership(null));
-  };
+  }, []);
 
-  useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); }, []);
+  useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); }, [fetchConfigAndOwnership, fetchHistory]);
 
   const handleClaim = async () => {
     const city = ownership?.current_city;
