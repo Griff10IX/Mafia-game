@@ -51,6 +51,10 @@ export default function Admin() {
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
+  
+  // Security state
+  const [securitySummary, setSecuritySummary] = useState(null);
+  const [securityLoading, setSecurityLoading] = useState(false);
 
   const toggleSection = (key) => {
     setCollapsed(prev => {
@@ -298,6 +302,40 @@ export default function Admin() {
       const res = await api.post(`/admin/give-all-money?amount=${giveAllMoney}`);
       toast.success(res.data?.message || 'Done');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  // Security handlers
+  const handleTestTelegram = async () => {
+    setSecurityLoading(true);
+    try {
+      const response = await api.post('/admin/security/test-telegram');
+      toast.success(response.data.message || 'Test alert sent to Telegram!');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to send test alert'); }
+    finally { setSecurityLoading(false); }
+  };
+
+  const handleFetchSecuritySummary = async () => {
+    setSecurityLoading(true);
+    try {
+      const response = await api.get('/admin/security/summary?limit=50');
+      setSecuritySummary(response.data);
+      toast.success('Security summary loaded');
+    } catch (e) { 
+      toast.error(e.response?.data?.detail || 'Failed to fetch security summary'); 
+      setSecuritySummary(null);
+    }
+    finally { setSecurityLoading(false); }
+  };
+
+  const handleClearOldFlags = async () => {
+    if (!window.confirm('Clear security flags older than 30 days?')) return;
+    setSecurityLoading(true);
+    try {
+      const response = await api.post('/admin/security/clear-old-flags', { days: 30 });
+      toast.success(response.data.message || 'Old flags cleared');
+      setSecuritySummary(null);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setSecurityLoading(false); }
   };
 
   if (loading) {
@@ -607,6 +645,96 @@ export default function Admin() {
             <ActionRow icon={Trash2} label="Drop ALL Bodyguards" description="Remove from every user" color="text-red-400">
               <BtnDanger onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading}>
                 {dropHumanBgLoading ? '...' : 'Drop All'}
+              </BtnDanger>
+            </ActionRow>
+          </div>
+        )}
+      </div>
+
+      {/* Security & Anti-Cheat */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <SectionHeader
+          icon={Shield}
+          title="Security & Anti-Cheat"
+          badge={
+            securitySummary && (
+              <span className="text-[10px] font-heading text-mutedForeground">
+                {securitySummary.total_flags || 0} flags · {securitySummary.unique_users_flagged || 0} users
+              </span>
+            )
+          }
+          isCollapsed={collapsed.security}
+          onToggle={() => toggleSection('security')}
+        />
+        {!collapsed.security && (
+          <div className="p-2 space-y-1">
+            <ActionRow icon={Shield} label="Test Telegram" description="Send test alert to Telegram">
+              <BtnPrimary onClick={handleTestTelegram} disabled={securityLoading}>
+                {securityLoading ? '...' : 'Test'}
+              </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Shield} label="View Security Summary" description="Load recent security flags">
+              <BtnPrimary onClick={handleFetchSecuritySummary} disabled={securityLoading}>
+                {securityLoading ? '...' : 'Load'}
+              </BtnPrimary>
+            </ActionRow>
+
+            {securitySummary && (
+              <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50 space-y-2">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-mutedForeground">Total Flags:</span>
+                    <span className="ml-2 text-foreground font-bold">{securitySummary.total_flags}</span>
+                  </div>
+                  <div>
+                    <span className="text-mutedForeground">Users Flagged:</span>
+                    <span className="ml-2 text-foreground font-bold">{securitySummary.unique_users_flagged}</span>
+                  </div>
+                  <div>
+                    <span className="text-mutedForeground">Telegram:</span>
+                    <span className={`ml-2 font-bold ${securitySummary.telegram_configured ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {securitySummary.telegram_configured ? 'Active' : 'Not Configured'}
+                    </span>
+                  </div>
+                </div>
+
+                {securitySummary.by_type && Object.keys(securitySummary.by_type).length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Flags by Type:</div>
+                    <div className="space-y-1">
+                      {Object.entries(securitySummary.by_type).map(([type, count]) => (
+                        <div key={type} className="flex justify-between text-[10px]">
+                          <span className="text-foreground">{type}</span>
+                          <span className="text-primary font-bold">{count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {securitySummary.recent_flags && securitySummary.recent_flags.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Recent Flags:</div>
+                    <div className="max-h-32 overflow-y-auto space-y-1">
+                      {securitySummary.recent_flags.slice(0, 10).map((flag, i) => (
+                        <div key={i} className="text-[10px] p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                          <div className="flex justify-between mb-1">
+                            <span className="text-primary font-bold">{flag.username}</span>
+                            <span className="text-mutedForeground">{flag.flag_type}</span>
+                          </div>
+                          <div className="text-mutedForeground">{flag.reason}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <ActionRow icon={Trash2} label="Clear Old Flags" description="Remove flags older than 30 days" color="text-red-400">
+              <BtnDanger onClick={handleClearOldFlags} disabled={securityLoading}>
+                {securityLoading ? '...' : 'Clear'}
               </BtnDanger>
             </ActionRow>
           </div>
