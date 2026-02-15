@@ -681,40 +681,35 @@ export default function BoozeRun() {
   const historyList = config.history || [];
   const pricesAtLocation = config.prices_at_location || [];
 
-  // Best route per booze: city with lowest buy, city with highest sell, profit/unit (global)
+  // Consider all 4 cities: for every (buy city, sell city) pair compute best profit and pick the best pair overall.
   const allByLocation = config.all_prices_by_location || {};
   const currentLocation = config.current_location || '';
-  const bestRoutes = (config.booze_types || []).map((bt) => {
-    let bestBuyCity = null;
-    let bestBuyPrice = Infinity;
-    let bestSellCity = null;
-    let bestSellPrice = -1;
-    Object.entries(allByLocation).forEach(([city, list]) => {
-      const item = list.find((p) => p.booze_id === bt.id);
-      if (item) {
-        if (item.buy_price < bestBuyPrice) {
-          bestBuyPrice = item.buy_price;
-          bestBuyCity = city;
-        }
-        if (item.sell_price > bestSellPrice) {
-          bestSellPrice = item.sell_price;
-          bestSellCity = city;
-        }
-      }
-    });
-    const profit = (bestBuyCity && bestSellCity && bestSellPrice > bestBuyPrice)
-      ? bestSellPrice - bestBuyPrice
-      : 0;
-    return { booze: bt, bestBuyCity, bestBuyPrice, bestSellCity, bestSellPrice, profit };
-  }).filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
+  const cities = Object.keys(allByLocation);
 
-  // Best 3 for each direction: e.g. top 3 Chicago→AC and top 3 AC→Chicago
-  const cityA = bestRoutes[0]?.bestBuyCity ?? '';
-  const cityB = bestRoutes[0]?.bestSellCity ?? '';
-  const best3Forward = bestRoutes
-    .filter((r) => r.bestBuyCity === cityA && r.bestSellCity === cityB)
-    .slice(0, 3);
-  // Return leg: buy in cityB (e.g. AC), sell in cityA (e.g. Chicago). Show top 3 by profit (best first), even if loss
+  const pairBestProfit = {}; // (cityA,cityB) -> { maxProfit, routes: [...] }
+  cities.forEach((cityA) => {
+    cities.forEach((cityB) => {
+      if (cityA === cityB) return;
+      const routes = (config.booze_types || []).map((bt) => {
+        const buyItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
+        const sellItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
+        const buyPrice = buyItem?.buy_price ?? Infinity;
+        const sellPrice = sellItem?.sell_price ?? -1;
+        const profit = (typeof sellPrice === 'number' && typeof buyPrice === 'number' && sellPrice > buyPrice)
+          ? sellPrice - buyPrice
+          : -Infinity;
+        return { booze: bt, bestBuyCity: cityA, bestBuyPrice: buyPrice, bestSellCity: cityB, bestSellPrice: sellPrice, profit };
+      }).filter((r) => r.profit > 0);
+      const maxProfit = routes.length ? Math.max(...routes.map((r) => r.profit)) : -1;
+      if (maxProfit > 0) pairBestProfit[`${cityA}\t${cityB}`] = { maxProfit, routes: routes.sort((a, b) => b.profit - a.profit) };
+    });
+  });
+  const bestPairKey = Object.keys(pairBestProfit).sort((a, b) => pairBestProfit[b].maxProfit - pairBestProfit[a].maxProfit)[0];
+  const cityA = bestPairKey ? bestPairKey.split('\t')[0] : '';
+  const cityB = bestPairKey ? bestPairKey.split('\t')[1] : '';
+  const best3Forward = (pairBestProfit[bestPairKey]?.routes ?? []).slice(0, 3);
+
+  // Return leg: buy in cityB, sell in cityA. Show top 3 by profit (best first), even if loss
   const best3Reverse = (config.booze_types || [])
     .map((bt) => {
       const buyItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);

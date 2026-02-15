@@ -6864,7 +6864,9 @@ def _booze_rotation_ends_at():
 
 
 def _booze_prices_for_rotation():
-    """Per (location_index, booze_index): (buy_price, sell_price). Deterministic from rotation."""
+    """Per (location_index, booze_index): (buy_price, sell_price). Deterministic from rotation.
+    Ensures at least one booze is profitable on the return leg (buy in highest-sell city, sell in lowest-buy city).
+    """
     idx = _booze_rotation_index()
     n_locs = 4  # len(STATES) - avoid forward ref
     n_booze = len(BOOZE_TYPES)
@@ -6878,6 +6880,18 @@ def _booze_prices_for_rotation():
             buy = min(2000, max(100, base))
             sell = buy + spread
             out[(loc_i, booze_i)] = (buy, sell)
+    # Guarantee at least one profitable return route: buy in loc 3 (e.g. Atlantic City), sell in loc 0 (e.g. Chicago).
+    # Pick one booze per rotation so return is profitable for that booze.
+    return_booze_i = idx % n_booze
+    sell_at_0 = out[(0, return_booze_i)][1]
+    buy_at_3, sell_at_3 = out[(3, return_booze_i)]
+    return_profit_desired = 10
+    if sell_at_0 <= buy_at_3:
+        buy_at_3_new = min(buy_at_3, sell_at_0 - return_profit_desired)
+        buy_at_3_new = max(100, min(2000, buy_at_3_new))
+        spread_3 = sell_at_3 - buy_at_3
+        sell_at_3_new = min(2000, max(buy_at_3_new + spread_3, buy_at_3_new + 8))
+        out[(3, return_booze_i)] = (buy_at_3_new, sell_at_3_new)
     return out
 
 
