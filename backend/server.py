@@ -9002,6 +9002,13 @@ class OPTIONSResponder(BaseHTTPMiddleware):
             return Response(status_code=200, headers=headers)
         return await call_next(request)
 
+# Import security middleware
+try:
+    from security_middleware import SecurityMiddleware
+    app.add_middleware(SecurityMiddleware, db=db)
+except ImportError:
+    print("Warning: security_middleware.py not found - rate limiting disabled")
+
 app.add_middleware(OPTIONSResponder)
 app.add_middleware(
     CORSMiddleware,

@@ -4,6 +4,8 @@ from starlette.responses import JSONResponse
 from fastapi import Request
 import logging
 import hashlib
+import os
+from jose import jwt, JWTError
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +43,20 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(p) for p in skip_paths):
             return await call_next(request)
         
-        # Get current user from request state (set by get_current_user dependency)
-        current_user = getattr(request.state, "current_user", None)
+        # Try to extract user from JWT token
+        current_user = None
+        try:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+                SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
+                payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+                user_id = payload.get("sub")
+                username = payload.get("username", "Unknown")
+                if user_id:
+                    current_user = {"id": user_id, "username": username}
+        except (JWTError, Exception):
+            pass  # If token invalid, just skip security checks
         
         if not current_user:
             # No user = unauthenticated request, skip checks
@@ -67,15 +81,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                     status_code=429,
                     content={"detail": "Rate limit exceeded for this action. Please wait."}
                 )
-            
-            # 3. Check for duplicate requests (exploit detection)
-            # Create hash of request params to detect duplicates
-            body = await request.body()
-            params_hash = hashlib.md5(f"{path}{body}".encode()).hexdigest()[:8]
-            
-            if await self.check_duplicate_request(user_id, path, params_hash, self.db, username):
-                logger.warning(f"DUPLICATE REQUEST: {username} - {path}")
-                # Don't block, just flag (might be legitimate double-click)
             
         except Exception as e:
             logger.exception(f"Security middleware error: {e}")
