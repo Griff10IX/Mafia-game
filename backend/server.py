@@ -3459,13 +3459,13 @@ async def admin_resolve_security_flag(flag_id: str, current_user: dict = Depends
 
 @api_router.get("/admin/security/rate-limits")
 async def admin_get_rate_limits(current_user: dict = Depends(get_current_user)):
-    """Get current rate limit configuration for all endpoints."""
+    """Get current rate limit configuration (min sec between clicks per endpoint)."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     return {
         "rate_limits": security_module.RATE_LIMIT_CONFIG,
-        "note": "Rate limits are loaded in-memory. Changes apply immediately."
+        "note": "Min seconds between clicks per endpoint. Rate limits are in-memory; changes apply immediately."
     }
 
 
@@ -3482,14 +3482,13 @@ async def admin_toggle_rate_limit(
     if endpoint not in security_module.RATE_LIMIT_CONFIG:
         raise HTTPException(status_code=404, detail=f"Endpoint '{endpoint}' not found in rate limit config")
     
-    # Update the config (in-memory)
-    limit, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
-    security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, enabled)
+    interval, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
+    security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, enabled)
     
     return {
         "message": f"Rate limit for '{endpoint}' {'enabled' if enabled else 'disabled'}",
         "endpoint": endpoint,
-        "limit": limit,
+        "min_interval_sec": interval,
         "enabled": enabled
     }
 
@@ -3497,27 +3496,26 @@ async def admin_toggle_rate_limit(
 @api_router.post("/admin/security/rate-limits/update")
 async def admin_update_rate_limit(
     endpoint: str,
-    limit: int,
+    min_interval_sec: float,
     current_user: dict = Depends(get_current_user)
 ):
-    """Update the rate limit value (requests per minute) for a specific endpoint."""
+    """Update the min seconds between clicks for a specific endpoint."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
     if endpoint not in security_module.RATE_LIMIT_CONFIG:
         raise HTTPException(status_code=404, detail=f"Endpoint '{endpoint}' not found in rate limit config")
     
-    if limit < 1 or limit > 1000:
-        raise HTTPException(status_code=400, detail="Limit must be between 1 and 1000 requests per minute")
+    if min_interval_sec < 0.1 or min_interval_sec > 60:
+        raise HTTPException(status_code=400, detail="Min interval must be between 0.1 and 60 seconds")
     
-    # Update the config (in-memory)
     _, enabled = security_module.RATE_LIMIT_CONFIG[endpoint]
-    security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, enabled)
+    security_module.RATE_LIMIT_CONFIG[endpoint] = (min_interval_sec, enabled)
     
     return {
-        "message": f"Rate limit for '{endpoint}' updated to {limit} requests/min",
+        "message": f"Rate limit for '{endpoint}' updated to {min_interval_sec}s between clicks",
         "endpoint": endpoint,
-        "limit": limit,
+        "min_interval_sec": min_interval_sec,
         "enabled": enabled
     }
 
@@ -3528,13 +3526,12 @@ async def admin_disable_all_rate_limits(current_user: dict = Depends(get_current
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Disable the global toggle
     security_module.GLOBAL_RATE_LIMITS_ENABLED = False
     
     count = 0
     for endpoint in security_module.RATE_LIMIT_CONFIG:
-        limit, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
-        security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, False)
+        interval, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
+        security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, False)
         count += 1
     
     return {
@@ -3550,13 +3547,12 @@ async def admin_enable_all_rate_limits(current_user: dict = Depends(get_current_
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     
-    # Enable the global toggle
     security_module.GLOBAL_RATE_LIMITS_ENABLED = True
     
     count = 0
     for endpoint in security_module.RATE_LIMIT_CONFIG:
-        limit, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
-        security_module.RATE_LIMIT_CONFIG[endpoint] = (limit, True)
+        interval, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
+        security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, True)
         count += 1
     
     return {

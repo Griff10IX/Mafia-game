@@ -226,130 +226,119 @@ def validate_positive_int(value: Any, field_name: str, max_value: int = None) ->
         raise ValueError(f"Invalid {field_name}: {e}")
 
 
-# ====== CONFIGURABLE RATE LIMITING PER ENDPOINT ======
+# ====== CONFIGURABLE RATE LIMITING PER ENDPOINT (SPEED / CLICKS) ======
 
 # GLOBAL TOGGLE - When False, ALL rate limits are bypassed regardless of per-endpoint settings
 GLOBAL_RATE_LIMITS_ENABLED = True
 
-# Rate limit configuration: endpoint_pattern -> (requests_per_minute, enabled)
-# You can enable/disable rate limiting per endpoint here
+# Rate limit configuration: endpoint_pattern -> (min_interval_seconds, enabled)
+# Limit is "minimum seconds between clicks" - e.g. 1.0 = max 1 click/sec, 0.5 = max 2 clicks/sec
 RATE_LIMIT_CONFIG = {
-    # Format: "endpoint_pattern": (max_requests_per_minute, enabled)
+    # Format: "endpoint_pattern": (min_interval_sec, enabled)
     # NOTE: Paths must include /api/ prefix to match actual request paths
     
     # Money & economy (protect against rapid exploits)
-    "/api/bank/transfer": (10, True),
-    "/api/bank/interest/deposit": (20, True),
-    "/api/bank/interest/claim": (20, True),
-    "/api/bank/swiss/deposit": (30, True),
-    "/api/bank/swiss/withdraw": (30, True),
+    "/api/bank/transfer": (6.0, True),
+    "/api/bank/interest/deposit": (3.0, True),
+    "/api/bank/interest/claim": (3.0, True),
+    "/api/bank/swiss/deposit": (2.0, True),
+    "/api/bank/swiss/withdraw": (2.0, True),
     
     # Attack system
-    "/api/attack/": (40, True),
+    "/api/attack/": (1.5, True),
     
     # Hitlist (prevent spam)
-    "/api/hitlist/add": (15, True),
-    "/api/hitlist/buy-off": (20, True),
+    "/api/hitlist/add": (4.0, True),
+    "/api/hitlist/buy-off": (3.0, True),
     
     # Store purchases (prevent rapid buying exploits)
-    "/api/store/": (30, True),
-    "/api/weapons/": (40, True),
-    "/api/armour/": (40, True),
+    "/api/store/": (2.0, True),
+    "/api/weapons/": (1.5, True),
+    "/api/armour/": (1.5, True),
     
     # Properties & racket (moderate)
-    "/api/properties/": (40, False),  # Disabled by default
-    "/api/racket/": (40, False),      # Disabled by default
+    "/api/properties/": (1.5, False),
+    "/api/racket/": (1.5, False),
     
     # Bodyguards (prevent spam invites)
-    "/api/bodyguards/": (30, True),
+    "/api/bodyguards/": (2.0, True),
     
     # Casino/gambling (prevent rapid betting exploits)
-    "/api/casino/dice/": (50, True),
-    "/api/casino/roulette/": (50, True),
-    "/api/casino/blackjack/": (50, True),
-    "/api/casino/horseracing/": (50, True),
-    "/api/sports-betting/": (50, True),
+    "/api/casino/dice/": (1.2, True),
+    "/api/casino/roulette/": (1.2, True),
+    "/api/casino/blackjack/": (1.2, True),
+    "/api/casino/horseracing/": (1.2, True),
+    "/api/sports-betting/": (1.2, True),
     
     # Travel & Booze Run
-    "/api/travel": (20, True),
-    "/api/booze-run/": (30, True),
+    "/api/travel": (3.0, True),
+    "/api/booze-run/": (2.0, True),
     
     # Families
-    "/api/families/": (40, False),  # Disabled by default
+    "/api/families/": (1.5, False),
     
     # Notifications (prevent spam)
-    "/api/notifications/send": (20, True),
+    "/api/notifications/send": (3.0, True),
     
     # Admin endpoints (no rate limit - admins need full access)
-    "/api/admin/": (1000, False),
+    "/api/admin/": (0.0, False),
     
     # Auth & profile (light limits)
-    "/api/auth/login": (20, True),
-    "/api/auth/register": (10, True),
-    "/api/auth/me": (120, False),  # Frequent polling is OK
+    "/api/auth/login": (3.0, True),
+    "/api/auth/register": (6.0, True),
+    "/api/auth/me": (0.5, False),  # Frequent polling is OK
     
     # Meta & read-only (light or disabled)
-    "/api/meta/": (120, False),
-    "/api/users/": (80, False),
-    "/api/leaderboard/": (60, False),
+    "/api/meta/": (0.5, False),
+    "/api/users/": (0.75, False),
+    "/api/leaderboard/": (1.0, False),
 }
 
-# Per-endpoint rate tracking: {endpoint: {user_id: [timestamps]}}
-endpoint_user_requests = defaultdict(lambda: defaultdict(list))
+# Per-endpoint last request time: key -> user_id -> datetime (for min-interval-between-clicks)
+endpoint_user_last_request = defaultdict(dict)
 
 
-def get_rate_limit_for_path(path: str) -> tuple[int, bool]:
-    """Get (max_requests_per_minute, enabled) for a given path."""
-    # Check exact matches first, then prefixes
-    for pattern, (limit, enabled) in RATE_LIMIT_CONFIG.items():
+def get_rate_limit_for_path(path: str) -> tuple[float, bool]:
+    """Get (min_interval_seconds, enabled) for a given path. Based on speed per click, not requests per minute."""
+    for pattern, (interval, enabled) in RATE_LIMIT_CONFIG.items():
         if pattern.endswith("/"):
-            # Prefix match
             if path.startswith(pattern):
-                return (limit, enabled)
+                return (interval, enabled)
         else:
-            # Exact match
             if path == pattern:
-                return (limit, enabled)
-    
-    # Default: 60 requests per minute, disabled
-    return (60, False)
+                return (interval, enabled)
+    return (1.0, False)
 
 
 async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) -> bool:
     """
-    Check if user exceeded rate limit for specific endpoint.
-    Returns True if limit exceeded and user should be blocked.
+    Check if user is clicking too fast (min interval between clicks).
+    Returns True if request should be blocked (clicked too soon).
     """
-    # Check global toggle first
     if not GLOBAL_RATE_LIMITS_ENABLED:
-        return False  # All rate limits disabled globally
+        return False
     
-    max_rpm, enabled = get_rate_limit_for_path(path)
+    min_interval_sec, enabled = get_rate_limit_for_path(path)
     
-    if not enabled:
-        return False  # Rate limiting disabled for this endpoint
+    if not enabled or min_interval_sec <= 0:
+        return False
     
     now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(minutes=1)
-    
-    # Clean old timestamps for this endpoint/user combo
     key = f"{path}"
-    endpoint_user_requests[key][user_id] = [
-        ts for ts in endpoint_user_requests[key][user_id] if ts > cutoff
-    ]
-    endpoint_user_requests[key][user_id].append(now)
+    last = endpoint_user_last_request.get(key, {}).get(user_id)
     
-    count = len(endpoint_user_requests[key][user_id])
+    if last is not None:
+        elapsed = (now - last).total_seconds()
+        if elapsed < min_interval_sec:
+            await flag_user_suspicious(
+                db, user_id, username,
+                "endpoint_rate_limit",
+                f"Too many clicks on {path}: need {min_interval_sec}s between requests (got {elapsed:.2f}s)",
+                {"path": path, "min_interval_sec": min_interval_sec, "elapsed_sec": round(elapsed, 2)}
+            )
+            return True
     
-    if count > max_rpm:
-        await flag_user_suspicious(
-            db, user_id, username,
-            "endpoint_rate_limit",
-            f"Rate limit exceeded on {path}: {count}/{max_rpm} per minute",
-            {"path": path, "count": count, "limit": max_rpm}
-        )
-        return True
-    
+    endpoint_user_last_request[key][user_id] = now
     return False
 
 
@@ -463,7 +452,7 @@ async def get_security_summary(db, limit: int = 100, flag_type: str = None) -> d
         "recent_flags": flags,
         "telegram_enabled": TELEGRAM_ENABLED,
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
-        "rate_limit_config": {path: {"limit": limit, "enabled": enabled} for path, (limit, enabled) in RATE_LIMIT_CONFIG.items()}
+        "rate_limit_config": {path: {"min_interval_sec": interval, "enabled": enabled} for path, (interval, enabled) in RATE_LIMIT_CONFIG.items()}
     }
 
 

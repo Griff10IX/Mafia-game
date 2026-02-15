@@ -29,7 +29,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Skip security checks for certain paths
         path = request.url.path
         
-        # Always allow these without checks
+        # Always allow these without checks (request.url.path includes /api when using api_router prefix)
         skip_paths = [
             "/",
             "/docs",
@@ -37,7 +37,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             "/api/auth/login",
             "/api/auth/register",
             "/api/auth/me",
-            "/admin/",  # Admins bypass rate limits
+            "/api/admin/",  # Admin tools: bypass spam + rate limits so security/anti-cheat UI works
+            "/admin/",
         ]
         
         if any(path.startswith(p) for p in skip_paths):
