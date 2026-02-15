@@ -285,9 +285,11 @@ export default function Travel() {
       if (tt <= 0) {
         setTraveling(false);
         fetchTravelInfo();
+        refreshUser();
         toast.success(`Arrived at ${destination}!`);
       } else {
         setTravelTime(tt);
+        refreshUser();
         toast.info(response.data.message);
       }
     } catch (error) {
