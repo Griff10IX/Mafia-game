@@ -38,7 +38,7 @@ const PageHeader = () => (
 const CityCard = ({ 
   city, 
   games, 
-  diceOwners, 
+  allOwners, 
   getEffectiveMaxBet, 
   isHighestBet 
 }) => (
@@ -83,7 +83,7 @@ const CityCard = ({
         <tbody className="divide-y divide-border">
           {games.map((game) => {
             const Icon = GAME_ICONS[game.id] || Dice5;
-            const owner = game.id === 'dice' ? (diceOwners || {})[city] : null;
+            const owner = (allOwners[game.id] || {})[city] || null;
             const effectiveBet = getEffectiveMaxBet(game, city);
             const isTop = isHighestBet(game, city);
             
@@ -123,7 +123,7 @@ const CityCard = ({
     <div className="md:hidden divide-y divide-border">
       {games.map((game) => {
         const Icon = GAME_ICONS[game.id] || Dice5;
-        const owner = game.id === 'dice' ? (diceOwners || {})[city] : null;
+        const owner = (allOwners[game.id] || {})[city] || null;
         const effectiveBet = getEffectiveMaxBet(game, city);
         const isTop = isHighestBet(game, city);
         
@@ -213,12 +213,23 @@ export default function States() {
         cities: res.data?.cities ?? [],
         games: res.data?.games ?? [],
         dice_owners: res.data?.dice_owners ?? {},
+        roulette_owners: res.data?.roulette_owners ?? {},
+        blackjack_owners: res.data?.blackjack_owners ?? {},
+        horseracing_owners: res.data?.horseracing_owners ?? {},
       }))
       .catch(() => toast.error('Failed to load states'))
       .finally(() => setLoading(false));
   }, []);
 
-  const { cities, games, dice_owners } = data;
+  const { cities, games, dice_owners, roulette_owners, blackjack_owners, horseracing_owners } = data;
+
+  // Map game IDs to their owner data
+  const allOwners = {
+    dice: dice_owners || {},
+    roulette: roulette_owners || {},
+    blackjack: blackjack_owners || {},
+    horseracing: horseracing_owners || {},
+  };
 
   // For each game, find the highest max_bet across all cities.
   // A city gets gold text only if its max_bet is strictly the highest (not tied).
@@ -226,8 +237,9 @@ export default function States() {
     const map = {}; // gameId -> { max, count }
     for (const game of games) {
       const bets = cities.map((city) => {
-        if (game.id === 'dice' && dice_owners?.[city]?.max_bet != null) {
-          return dice_owners[city].max_bet;
+        const ownerMap = allOwners[game.id] || {};
+        if (ownerMap[city]?.max_bet != null) {
+          return ownerMap[city].max_bet;
         }
         return game.max_bet;
       });
@@ -236,11 +248,12 @@ export default function States() {
       map[game.id] = { max, count };
     }
     return map;
-  }, [cities, games, dice_owners]);
+  }, [cities, games, allOwners]);
 
   const getEffectiveMaxBet = (game, city) => {
-    if (game.id === 'dice' && dice_owners?.[city]?.max_bet != null) {
-      return dice_owners[city].max_bet;
+    const ownerMap = allOwners[game.id] || {};
+    if (ownerMap[city]?.max_bet != null) {
+      return ownerMap[city].max_bet;
     }
     return game.max_bet;
   };
@@ -267,7 +280,7 @@ export default function States() {
             key={city}
             city={city}
             games={games}
-            diceOwners={dice_owners}
+            allOwners={allOwners}
             getEffectiveMaxBet={getEffectiveMaxBet}
             isHighestBet={isHighestBet}
           />
