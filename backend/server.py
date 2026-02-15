@@ -7120,13 +7120,14 @@ async def casino_blackjack_buy_back_accept(request: BlackjackBuyBackAcceptReques
     points_offered = int(offer.get("points_offered") or 0)
     if not city or not from_owner_id:
         raise HTTPException(status_code=400, detail="Invalid offer")
-    from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1})
+    from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
     from_points = int((from_user.get("points") or 0) or 0)
     if from_points < points_offered:
         raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
     await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
-    await db.blackjack_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id}})
+    from_username = from_user.get("username") if from_user else None
+    await db.blackjack_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username}})
     await db.blackjack_buy_back_offers.delete_one({"id": request.offer_id})
     return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
@@ -7149,10 +7150,10 @@ async def casino_blackjack_send_to_user(request: RouletteSendToUserRequest, curr
     stored_city, doc = await _get_blackjack_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1})
+    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
+    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target.get("username")}})
     return {"message": "Ownership transferred."}
 
 
@@ -7293,7 +7294,7 @@ async def casino_blackjack_start(request: BlackjackStartRequest, current_user: d
                     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -actual_owner_pay}})
                 else:
                     ownership_transferred = True
-                    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": current_user["id"]}})
+                    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username")}})
                     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                     offer_id = str(uuid.uuid4())
                     await db.blackjack_buy_back_offers.insert_one({
@@ -7490,7 +7491,7 @@ async def casino_blackjack_stand(current_user: dict = Depends(get_current_user))
                     await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
                 else:
                     ownership_transferred = True
-                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": {"owner_id": current_user["id"]}})
+                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username")}})
                     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                     offer_id = str(uuid.uuid4())
                     await db.blackjack_buy_back_offers.insert_one({
@@ -7691,10 +7692,10 @@ async def casino_horseracing_send_to_user(request: RouletteSendToUserRequest, cu
     stored_city, doc = await _get_horseracing_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this track")
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1})
+    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
     if not target or target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Invalid target user")
-    await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
+    await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target.get("username")}})
     return {"message": f"Track ownership transferred to {target.get('username', '?')}."}
 
 
@@ -7779,7 +7780,7 @@ async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: 
             if shortfall > 0:
                 await db.horseracing_ownership.update_one(
                     {"city": stored_city or city},
-                    {"$set": {"owner_id": None}}
+                    {"$set": {"owner_id": None, "owner_username": None}}
                 )
         else:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
@@ -8624,7 +8625,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if city:
             await db.blackjack_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id}},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
     elif prop_type == "casino_horseracing":
@@ -8632,7 +8633,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if city:
             await db.horseracing_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id}},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
     
