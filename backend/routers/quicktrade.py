@@ -1,14 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
-from typing import Optional
+# Quick Trade endpoints: sell/buy points and properties
 from datetime import datetime
+from pydantic import BaseModel
+from fastapi import Depends, HTTPException
 from bson import ObjectId
 
-router = APIRouter(prefix="/api/trade", tags=["Quick Trade"])
-
-# These will be injected by server.py
-get_current_user = None
-db = None
+from server import db, get_current_user
 
 # Pydantic models
 class CreateSellOffer(BaseModel):
@@ -29,12 +25,11 @@ def serialize_offer(offer):
     return offer
 
 # GET all sell offers
-@router.get("/sell-offers")
 async def get_sell_offers():
     """Get all active sell point offers"""
     try:
         # Get from database
-        offers = list(db.trade_sell_offers.find({"status": "active"}).sort("created_at", -1))
+        offers = list(await db.trade_sell_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100))
         
         # Serialize
         result = []
@@ -55,12 +50,11 @@ async def get_sell_offers():
         return []
 
 # GET all buy offers
-@router.get("/buy-offers")
 async def get_buy_offers():
     """Get all active buy point offers"""
     try:
         # Get from database
-        offers = list(db.trade_buy_offers.find({"status": "active"}).sort("created_at", -1))
+        offers = list(await db.trade_buy_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100))
         
         # Serialize
         result = []
@@ -81,8 +75,7 @@ async def get_buy_offers():
         return []
 
 # POST create sell offer
-@router.post("/sell-offer")
-async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends(lambda: get_current_user)):
+async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends(get_current_user)):
     """Create a new sell point offer"""
     try:
         user_id = current_user["id"]
@@ -93,7 +86,7 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
             raise HTTPException(status_code=400, detail="Points and cost must be positive")
         
         # Check user has enough points
-        user = db.users.find_one({"_id": ObjectId(user_id)})
+        user = await db.users.find_one({"id": user_id})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -101,14 +94,14 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
             raise HTTPException(status_code=400, detail="Insufficient points")
         
         # Deduct points from user
-        db.users.update_one(
-            {"_id": ObjectId(user_id)},
+        await db.users.update_one(
+            {"id": user_id},
             {"$inc": {"points": -offer.points}}
         )
         
         # Create offer
         new_offer = {
-            "user_id": ObjectId(user_id),
+            "user_id": user_id,
             "username": username,
             "points": offer.points,
             "cost": offer.cost,
@@ -117,7 +110,7 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
             "created_at": datetime.utcnow()
         }
         
-        result = db.trade_sell_offers.insert_one(new_offer)
+        result = await db.trade_sell_offers.insert_one(new_offer)
         
         return {
             "message": "Sell offer created successfully",
@@ -131,8 +124,7 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
         raise HTTPException(status_code=500, detail="Failed to create sell offer")
 
 # POST create buy offer
-@router.post("/buy-offer")
-async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(lambda: get_current_user)):
+async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(get_current_user)):
     """Create a new buy point offer"""
     try:
         user_id = current_user["id"]
@@ -143,7 +135,7 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(l
             raise HTTPException(status_code=400, detail="Points and offer must be positive")
         
         # Check user has enough money
-        user = db.users.find_one({"_id": ObjectId(user_id)})
+        user = await db.users.find_one({"id": user_id})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -151,14 +143,14 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(l
             raise HTTPException(status_code=400, detail="Insufficient cash")
         
         # Deduct cash from user
-        db.users.update_one(
-            {"_id": ObjectId(user_id)},
+        await db.users.update_one(
+            {"id": user_id},
             {"$inc": {"cash": -offer.offer}}
         )
         
         # Create offer
         new_offer = {
-            "user_id": ObjectId(user_id),
+            "user_id": user_id,
             "username": username,
             "points": offer.points,
             "offer": offer.offer,
@@ -167,7 +159,7 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(l
             "created_at": datetime.utcnow()
         }
         
-        result = db.trade_buy_offers.insert_one(new_offer)
+        result = await db.trade_buy_offers.insert_one(new_offer)
         
         return {
             "message": "Buy offer created successfully",
@@ -181,14 +173,13 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(l
         raise HTTPException(status_code=500, detail="Failed to create buy offer")
 
 # POST accept sell offer
-@router.post("/sell-offer/{offer_id}/accept")
-async def accept_sell_offer(offer_id: str, current_user: dict = Depends(lambda: get_current_user)):
+async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
     """Accept a sell point offer (buy points from someone)"""
     try:
         buyer_id = current_user["id"]
         
         # Get offer
-        offer = db.trade_sell_offers.find_one({
+        offer = await db.trade_sell_offers.find_one({
             "_id": ObjectId(offer_id),
             "status": "active"
         })
@@ -197,11 +188,11 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(lambda: 
             raise HTTPException(status_code=404, detail="Offer not found or already completed")
         
         # Can't accept own offer
-        if str(offer["user_id"]) == buyer_id:
+        if offer["user_id"] == buyer_id:
             raise HTTPException(status_code=400, detail="Cannot accept your own offer")
         
         # Get buyer
-        buyer = db.users.find_one({"_id": ObjectId(buyer_id)})
+        buyer = await db.users.find_one({"id": buyer_id})
         if not buyer:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -211,8 +202,8 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(lambda: 
         
         # Process transaction
         # Buyer: -cash, +points
-        db.users.update_one(
-            {"_id": ObjectId(buyer_id)},
+        await db.users.update_one(
+            {"id": buyer_id},
             {
                 "$inc": {
                     "cash": -offer["cost"],
@@ -222,18 +213,18 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(lambda: 
         )
         
         # Seller: +cash
-        db.users.update_one(
-            {"_id": offer["user_id"]},
+        await db.users.update_one(
+            {"id": offer["user_id"]},
             {"$inc": {"cash": offer["cost"]}}
         )
         
         # Mark offer as completed
-        db.trade_sell_offers.update_one(
+        await db.trade_sell_offers.update_one(
             {"_id": ObjectId(offer_id)},
             {
                 "$set": {
                     "status": "completed",
-                    "buyer_id": ObjectId(buyer_id),
+                    "buyer_id": buyer_id,
                     "completed_at": datetime.utcnow()
                 }
             }
@@ -252,14 +243,13 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(lambda: 
         raise HTTPException(status_code=500, detail="Failed to complete trade")
 
 # POST accept buy offer
-@router.post("/buy-offer/{offer_id}/accept")
-async def accept_buy_offer(offer_id: str, current_user: dict = Depends(lambda: get_current_user)):
+async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
     """Accept a buy point offer (sell points to someone)"""
     try:
         seller_id = current_user["id"]
         
         # Get offer
-        offer = db.trade_buy_offers.find_one({
+        offer = await db.trade_buy_offers.find_one({
             "_id": ObjectId(offer_id),
             "status": "active"
         })
@@ -268,11 +258,11 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(lambda: g
             raise HTTPException(status_code=404, detail="Offer not found or already completed")
         
         # Can't accept own offer
-        if str(offer["user_id"]) == seller_id:
+        if offer["user_id"] == seller_id:
             raise HTTPException(status_code=400, detail="Cannot accept your own offer")
         
         # Get seller
-        seller = db.users.find_one({"_id": ObjectId(seller_id)})
+        seller = await db.users.find_one({"id": seller_id})
         if not seller:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -282,8 +272,8 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(lambda: g
         
         # Process transaction
         # Seller: -points, +cash
-        db.users.update_one(
-            {"_id": ObjectId(seller_id)},
+        await db.users.update_one(
+            {"id": seller_id},
             {
                 "$inc": {
                     "points": -offer["points"],
@@ -293,18 +283,18 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(lambda: g
         )
         
         # Buyer: +points
-        db.users.update_one(
-            {"_id": offer["user_id"]},
+        await db.users.update_one(
+            {"id": offer["user_id"]},
             {"$inc": {"points": offer["points"]}}
         )
         
         # Mark offer as completed
-        db.trade_buy_offers.update_one(
+        await db.trade_buy_offers.update_one(
             {"_id": ObjectId(offer_id)},
             {
                 "$set": {
                     "status": "completed",
-                    "seller_id": ObjectId(seller_id),
+                    "seller_id": seller_id,
                     "completed_at": datetime.utcnow()
                 }
             }
@@ -323,12 +313,11 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(lambda: g
         raise HTTPException(status_code=500, detail="Failed to complete trade")
 
 # GET properties for sale
-@router.get("/properties")
-async def get_properties_for_sale(current_user: dict = Depends(lambda: get_current_user)):
+async def get_properties_for_sale(current_user: dict = Depends(get_current_user)):
     """Get all properties listed for sale"""
     try:
         # Get properties with for_sale flag
-        properties = list(db.properties.find({"for_sale": True}).sort("created_at", -1))
+        properties = list(await db.properties.find({"for_sale": True}).sort("created_at", -1).to_list(length=100))
         
         # Serialize
         result = []
@@ -349,18 +338,14 @@ async def get_properties_for_sale(current_user: dict = Depends(lambda: get_curre
         return []
 
 # POST buy property
-@router.post("/property/{property_id}/accept")
-async def buy_property(
-    property_id: str,
-    current_user: dict = Depends(lambda: get_current_user)
-):
+async def buy_property(property_id: str, current_user: dict = Depends(get_current_user)):
     """Buy a property listed for sale"""
     try:
         buyer_id = current_user["id"]
         buyer_username = current_user.get("username", "Unknown")
         
         # Get property
-        prop = db.properties.find_one({
+        prop = await db.properties.find_one({
             "_id": ObjectId(property_id),
             "for_sale": True
         })
@@ -373,7 +358,7 @@ async def buy_property(
             raise HTTPException(status_code=400, detail="Cannot buy your own property")
         
         # Get buyer
-        buyer = db.users.find_one({"_id": ObjectId(buyer_id)})
+        buyer = await db.users.find_one({"id": buyer_id})
         if not buyer:
             raise HTTPException(status_code=404, detail="User not found")
         
@@ -385,24 +370,24 @@ async def buy_property(
         
         # Process transaction
         # Buyer: -points, become owner
-        db.users.update_one(
-            {"_id": ObjectId(buyer_id)},
+        await db.users.update_one(
+            {"id": buyer_id},
             {"$inc": {"points": -sale_price}}
         )
         
         # Seller: +points
         if prop.get("owner_id"):
-            db.users.update_one(
-                {"_id": prop["owner_id"]},
+            await db.users.update_one(
+                {"id": prop["owner_id"]},
                 {"$inc": {"points": sale_price}}
             )
         
         # Update property ownership
-        db.properties.update_one(
+        await db.properties.update_one(
             {"_id": ObjectId(property_id)},
             {
                 "$set": {
-                    "owner_id": ObjectId(buyer_id),
+                    "owner_id": buyer_id,
                     "owner_username": buyer_username,
                     "for_sale": False,
                     "sale_price": 0,
