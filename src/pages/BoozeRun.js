@@ -131,6 +131,27 @@ const StatsCard = ({ config, timer }) => {
   );
 };
 
+const RouteItem = ({ r }) => (
+  <div className="bg-secondary/50 rounded-md p-2 border border-border hover:border-primary/30 transition-colors">
+    <div className="font-heading font-bold text-foreground text-sm mb-1">{r.booze.name}</div>
+    <div className="text-xs text-mutedForeground font-heading space-y-0.5">
+      <div>
+        Buy in <span className="text-primary font-bold">{r.bestBuyCity}</span>
+        <span className="mx-1">→</span>
+        <span className="text-foreground">{formatMoney(r.bestBuyPrice)}</span>
+      </div>
+      <div>
+        Sell in <span className="text-primary font-bold">{r.bestSellCity}</span>
+        <span className="mx-1">→</span>
+        <span className="text-foreground">{formatMoney(r.bestSellPrice)}</span>
+      </div>
+    </div>
+    <div className="mt-1 text-emerald-400 font-heading font-bold text-sm">
+      +{formatMoney(r.profit)}/unit
+    </div>
+  </div>
+);
+
 const BestRoutesCard = ({ routes, title }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
@@ -142,24 +163,7 @@ const BestRoutesCard = ({ routes, title }) => (
       {routes.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
           {routes.map((r) => (
-            <div key={r.booze.id} className="bg-secondary/50 rounded-md p-2 border border-border hover:border-primary/30 transition-colors">
-              <div className="font-heading font-bold text-foreground text-sm mb-1">{r.booze.name}</div>
-              <div className="text-xs text-mutedForeground font-heading space-y-0.5">
-                <div>
-                  Buy in <span className="text-primary font-bold">{r.bestBuyCity}</span>
-                  <span className="mx-1">→</span>
-                  <span className="text-foreground">{formatMoney(r.bestBuyPrice)}</span>
-                </div>
-                <div>
-                  Sell in <span className="text-primary font-bold">{r.bestSellCity}</span>
-                  <span className="mx-1">→</span>
-                  <span className="text-foreground">{formatMoney(r.bestSellPrice)}</span>
-                </div>
-              </div>
-              <div className="mt-1 text-emerald-400 font-heading font-bold text-sm">
-                +{formatMoney(r.profit)}/unit
-              </div>
-            </div>
+            <RouteItem key={r.booze.id} r={r} />
           ))}
         </div>
       ) : (
@@ -167,6 +171,47 @@ const BestRoutesCard = ({ routes, title }) => (
           No profitable routes this rotation
         </p>
       )}
+    </div>
+  </div>
+);
+
+/** One combined card: "Sell in [cityA]" (3) + "Run back" buy cityA → sell cityB (3) */
+const BestRoutesCombinedCard = ({ cityA, cityB, sellInCityARoutes, runBackRoutes }) => (
+  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+        🗺️ Best routes: sell in {cityA} & run to {cityB}
+      </h2>
+    </div>
+    <div className="p-2 space-y-4">
+      <div>
+        <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-2">
+          Sell in {cityA} (buy elsewhere → sell {cityA})
+        </h3>
+        {sellInCityARoutes.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {sellInCityARoutes.map((r) => (
+              <RouteItem key={`sell-${r.booze.id}`} r={r} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-mutedForeground font-heading py-2">No profitable routes this rotation</p>
+        )}
+      </div>
+      <div>
+        <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-2">
+          Buy {cityA} → sell {cityB}
+        </h3>
+        {runBackRoutes.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {runBackRoutes.map((r) => (
+              <RouteItem key={`back-${r.booze.id}`} r={r} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-mutedForeground font-heading py-2">No profitable routes this rotation</p>
+        )}
+      </div>
     </div>
   </div>
 );
@@ -682,32 +727,6 @@ export default function BoozeRun() {
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 3);
 
-  // Best routes FROM current city: buy here, sell in the city that pays most (for return trips), top 3
-  const bestRoutesFromHere = (config.booze_types || []).map((bt) => {
-    const hereList = allByLocation[currentLocation];
-    const hereItem = hereList?.find((p) => p.booze_id === bt.id);
-    const buyHere = hereItem?.buy_price ?? Infinity;
-    let bestSellCity = null;
-    let bestSellPrice = -1;
-    Object.entries(allByLocation).forEach(([city, list]) => {
-      if (city === currentLocation) return;
-      const item = list.find((p) => p.booze_id === bt.id);
-      if (item && item.sell_price > bestSellPrice) {
-        bestSellPrice = item.sell_price;
-        bestSellCity = city;
-      }
-    });
-    const profit = (bestSellCity && bestSellPrice > buyHere) ? bestSellPrice - buyHere : 0;
-    return {
-      booze: bt,
-      bestBuyCity: currentLocation,
-      bestBuyPrice: buyHere,
-      bestSellCity,
-      bestSellPrice,
-      profit,
-    };
-  }).filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, 3);
-
   // Per-city summary: lowest buy and highest sell (any booze) for quick scan
   const citySummary = Object.entries(allByLocation).map(([city, list]) => {
     const minBuy = Math.min(...list.map((p) => p.buy_price));
@@ -723,23 +742,13 @@ export default function BoozeRun() {
 
       <StatsCard config={config} timer={timer} />
 
-      {currentLocation && (
-        <BestRoutesCard
-          routes={bestRoutesFromHere}
-          title={`🗺️ Best routes from ${currentLocation} (buy here → sell there)`}
-        />
-      )}
       {cityA && cityB && (
-        <>
-          <BestRoutesCard
-            routes={best3Forward}
-            title={`🗺️ Best 3: ${cityA} → ${cityB}`}
-          />
-          <BestRoutesCard
-            routes={best3Reverse}
-            title={`🗺️ Best 3: ${cityB} → ${cityA}`}
-          />
-        </>
+        <BestRoutesCombinedCard
+          cityA={cityA}
+          cityB={cityB}
+          sellInCityARoutes={best3Reverse}
+          runBackRoutes={best3Forward}
+        />
       )}
 
       <CityPricesCard citySummary={citySummary} />

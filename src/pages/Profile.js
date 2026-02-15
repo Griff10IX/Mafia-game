@@ -306,25 +306,24 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
                   const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type || 'Casino';
                   const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : '🎰';
                   return (
-                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors">
-                      <div className="font-heading font-bold text-foreground text-base mb-2">
-                        {typeEmoji} {c.city} {typeLabel}
-                      </div>
-                      <div className="space-y-1 text-sm font-heading">
-                        <div className="flex justify-between">
-                          <span className="text-mutedForeground">Max Bet:</span>
-                          <span className="text-primary font-bold">
-                            ${Number(c.max_bet || 0).toLocaleString()}
-                          </span>
+                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-center gap-3">
+                      <span className="text-2xl shrink-0" aria-hidden>{typeEmoji}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-heading font-bold text-foreground text-base">
+                          {c.city} {typeLabel}
                         </div>
-                        {c.buy_back_reward != null && c.buy_back_reward > 0 && (
-                          <div className="flex justify-between">
-                            <span className="text-mutedForeground">Buyback:</span>
-                            <span className="text-primary font-bold">
-                              {Number(c.buy_back_reward).toLocaleString()} pts
-                            </span>
+                        <div className="space-y-1 text-sm font-heading mt-1">
+                          <div className="flex justify-between gap-2">
+                            <span className="text-mutedForeground shrink-0">Max bet:</span>
+                            <span className="text-primary font-bold">${Number(c.max_bet || 0).toLocaleString()}</span>
                           </div>
-                        )}
+                          {c.buy_back_reward != null && c.buy_back_reward > 0 && (
+                            <div className="flex justify-between gap-2">
+                              <span className="text-mutedForeground shrink-0">Buyback:</span>
+                              <span className="text-primary font-bold">{Number(c.buy_back_reward).toLocaleString()} pts</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
