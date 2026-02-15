@@ -131,11 +131,11 @@ const StatsCard = ({ config, timer }) => {
   );
 };
 
-const BestRoutesCard = ({ routes }) => (
+const BestRoutesCard = ({ routes, title }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-        🗺️ Best Routes (Buy Low → Sell High)
+        {title}
       </h2>
     </div>
     <div className="p-2">
@@ -636,8 +636,9 @@ export default function BoozeRun() {
   const historyList = config.history || [];
   const pricesAtLocation = config.prices_at_location || [];
 
-  // Best route per booze: city with lowest buy, city with highest sell, profit/unit
+  // Best route per booze: city with lowest buy, city with highest sell, profit/unit (global)
   const allByLocation = config.all_prices_by_location || {};
+  const currentLocation = config.current_location || '';
   const bestRoutes = (config.booze_types || []).map((bt) => {
     let bestBuyCity = null;
     let bestBuyPrice = Infinity;
@@ -662,6 +663,51 @@ export default function BoozeRun() {
     return { booze: bt, bestBuyCity, bestBuyPrice, bestSellCity, bestSellPrice, profit };
   }).filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit);
 
+  // Best 3 for each direction: e.g. top 3 Chicago→AC and top 3 AC→Chicago
+  const cityA = bestRoutes[0]?.bestBuyCity ?? '';
+  const cityB = bestRoutes[0]?.bestSellCity ?? '';
+  const best3Forward = bestRoutes
+    .filter((r) => r.bestBuyCity === cityA && r.bestSellCity === cityB)
+    .slice(0, 3);
+  const best3Reverse = (config.booze_types || [])
+    .map((bt) => {
+      const buyItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
+      const sellItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
+      const buyPrice = buyItem?.buy_price ?? Infinity;
+      const sellPrice = sellItem?.sell_price ?? -1;
+      const profit = sellPrice > buyPrice ? sellPrice - buyPrice : 0;
+      return { booze: bt, bestBuyCity: cityB, bestBuyPrice: buyPrice, bestSellCity: cityA, bestSellPrice: sellPrice, profit };
+    })
+    .filter((r) => r.profit > 0)
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 3);
+
+  // Best routes FROM current city: buy here, sell in the city that pays most (for return trips), top 3
+  const bestRoutesFromHere = (config.booze_types || []).map((bt) => {
+    const hereList = allByLocation[currentLocation];
+    const hereItem = hereList?.find((p) => p.booze_id === bt.id);
+    const buyHere = hereItem?.buy_price ?? Infinity;
+    let bestSellCity = null;
+    let bestSellPrice = -1;
+    Object.entries(allByLocation).forEach(([city, list]) => {
+      if (city === currentLocation) return;
+      const item = list.find((p) => p.booze_id === bt.id);
+      if (item && item.sell_price > bestSellPrice) {
+        bestSellPrice = item.sell_price;
+        bestSellCity = city;
+      }
+    });
+    const profit = (bestSellCity && bestSellPrice > buyHere) ? bestSellPrice - buyHere : 0;
+    return {
+      booze: bt,
+      bestBuyCity: currentLocation,
+      bestBuyPrice: buyHere,
+      bestSellCity,
+      bestSellPrice,
+      profit,
+    };
+  }).filter((r) => r.profit > 0).sort((a, b) => b.profit - a.profit).slice(0, 3);
+
   // Per-city summary: lowest buy and highest sell (any booze) for quick scan
   const citySummary = Object.entries(allByLocation).map(([city, list]) => {
     const minBuy = Math.min(...list.map((p) => p.buy_price));
@@ -677,7 +723,24 @@ export default function BoozeRun() {
 
       <StatsCard config={config} timer={timer} />
 
-      <BestRoutesCard routes={bestRoutes} />
+      {currentLocation && (
+        <BestRoutesCard
+          routes={bestRoutesFromHere}
+          title={`🗺️ Best routes from ${currentLocation} (buy here → sell there)`}
+        />
+      )}
+      {cityA && cityB && (
+        <>
+          <BestRoutesCard
+            routes={best3Forward}
+            title={`🗺️ Best 3: ${cityA} → ${cityB}`}
+          />
+          <BestRoutesCard
+            routes={best3Reverse}
+            title={`🗺️ Best 3: ${cityB} → ${cityA}`}
+          />
+        </>
+      )}
 
       <CityPricesCard citySummary={citySummary} />
 

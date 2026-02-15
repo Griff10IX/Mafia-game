@@ -190,6 +190,8 @@ class CreateGameRequest(BaseModel):
     game_type: str  # "dice" | "gbox"
     max_players: int = 10
     join_fee: int = 0  # ignored; games are free
+    manual_roll: bool = False  # if True, creator rolls when ready (no auto-settle by time)
+    topic_id: Optional[str] = None  # optional; when created from a topic
 
 
 async def _run_dice_payout(game: dict):
@@ -231,10 +233,10 @@ async def _run_gbox_payout(game: dict):
 
 
 async def _maybe_auto_settle_open_games():
-    """Settle any open game older than AUTO_ROLL_AFTER_SECONDS."""
+    """Settle any open game older than AUTO_ROLL_AFTER_SECONDS. Skip manual_roll games (creator rolls)."""
     cutoff = (datetime.now(timezone.utc) - timedelta(seconds=AUTO_ROLL_AFTER_SECONDS)).isoformat()
     open_old = await db.entertainer_games.find(
-        {"status": "open", "created_at": {"$lt": cutoff}},
+        {"status": "open", "created_at": {"$lt": cutoff}, "manual_roll": {"$ne": True}},
         {"_id": 0},
     ).to_list(50)
     for g in open_old:
@@ -328,6 +330,8 @@ async def create_game(
     game_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     participants = []
+    manual_roll = bool(request.manual_roll)
+    topic_id = (request.topic_id or "").strip() or None
     doc = {
         "id": game_id,
         "game_type": request.game_type,
@@ -341,6 +345,8 @@ async def create_game(
         "created_at": now,
         "completed_at": None,
         "result": None,
+        "manual_roll": manual_roll,
+        "topic_id": topic_id,
     }
     await db.entertainer_games.insert_one(doc)
     return {"id": game_id, "message": "Game created", "game": {**doc, "participants": participants}}
@@ -382,16 +388,18 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
     return {"message": "Joined game" + (" — rewards rolled!" if is_full else ""), "game": updated}
 
 
-# ---------- Admin: manual roll ----------
+# ---------- Manual roll: admin or creator (for manual_roll games) ----------
 async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current_user)):
-    """Admin only: force settle (roll) an open game now."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Force settle (roll) an open game now. Admin can always roll; creator can roll if game is manual_roll."""
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     if game.get("status") == "completed":
         raise HTTPException(status_code=400, detail="Game already completed")
+    is_admin = _is_admin(current_user)
+    is_creator = game.get("creator_id") == current_user["id"] and game.get("creator_id") != "system"
+    if not is_admin and not (is_creator and game.get("manual_roll")):
+        raise HTTPException(status_code=403, detail="Only the game creator can roll manual games; admins can roll any game.")
     await _settle_game(game)
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     return {"message": "Game rolled", "game": updated}

@@ -724,7 +724,19 @@ export default function Attack() {
   const [loading, setLoading] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [show, setShow] = useState('all');
-  const [killUsername, setKillUsername] = useState('');
+  const [killUsername, setKillUsernameState] = useState(() => {
+    try {
+      return sessionStorage.getItem('attack-kill-username') || '';
+    } catch {
+      return '';
+    }
+  });
+  const setKillUsername = (value) => {
+    setKillUsernameState(value);
+    try {
+      if (value != null) sessionStorage.setItem('attack-kill-username', String(value));
+    } catch (_) {}
+  };
   const [deathMessage, setDeathMessage] = useState('');
   const [makePublic, setMakePublic] = useState(false);
   const [inflationPct, setInflationPct] = useState(0);
@@ -741,11 +753,13 @@ export default function Attack() {
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
 
-  // Pre-fill search from hitlist link
+  // Pre-fill search and kill form from hitlist link
   useEffect(() => {
     const t = searchParams.get('target');
     if (t && typeof t === 'string' && t.trim()) {
-      setTargetUsername(t.trim());
+      const trimmed = t.trim();
+      setTargetUsername(trimmed);
+      setKillUsername(trimmed);
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.delete('target');

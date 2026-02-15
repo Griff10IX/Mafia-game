@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -264,8 +264,12 @@ const FORUM_TABS = [
 ];
 
 export default function Forum() {
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState('general');
   const [topics, setTopics] = useState([]);
+  useEffect(() => {
+    if (location.state?.category === 'entertainer') setActiveTab('entertainer');
+  }, [location.state?.category]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [gameModalOpen, setGameModalOpen] = useState(false);
@@ -591,7 +595,10 @@ export default function Forum() {
                             <Users size={10} className="inline" /> {participants.length}/{g.max_players}
                           </span>
                           <span className="text-primary text-[10px] ml-2">Winnings: points, cash, bullets, cars</span>
-                          {secsLeft > 0 && (
+                          {g.manual_roll && (
+                            <span className="text-[10px] text-mutedForeground ml-2">Manual roll</span>
+                          )}
+                          {secsLeft > 0 && !g.manual_roll && (
                             <span className="text-[10px] text-amber-400/90 ml-2">Rolls in {secsLeft}s</span>
                           )}
                         </div>
@@ -607,14 +614,15 @@ export default function Forum() {
                           </button>
                         )}
                         {isIn && <span className="text-[10px] text-mutedForeground">You're in</span>}
-                        {isAdmin && g.status === 'open' && (
+                        {((isAdmin || (g.manual_roll && user && g.creator_id === user.id)) && g.status === 'open') && (
                           <button
                             type="button"
                             onClick={() => handleRollGame(g.id)}
                             disabled={rollingId === g.id}
                             className="px-2 py-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-red-500/30 disabled:opacity-50"
+                            title={g.manual_roll ? 'Roll when ready' : 'Force roll (admin)'}
                           >
-                            {rollingId === g.id ? '...' : 'Roll'}
+                            {rollingId === g.id ? '...' : 'Roll now'}
                           </button>
                         )}
                       </div>

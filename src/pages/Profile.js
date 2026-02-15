@@ -277,7 +277,7 @@ const HonoursCard = ({ honours }) => (
   </div>
 );
 
-const PropertiesCard = ({ ownedCasinos, property }) => {
+const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
   const hasCasinos = ownedCasinos?.length > 0;
   const hasProperty = property && (property.type === 'airport' || property.type === 'bullet_factory');
   const isEmpty = !hasCasinos && !hasProperty;
@@ -302,29 +302,33 @@ const PropertiesCard = ({ ownedCasinos, property }) => {
           <div className="space-y-4">
             {hasCasinos && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {ownedCasinos.map((c, i) => (
-                  <div key={i} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors">
-                    <div className="font-heading font-bold text-foreground text-base mb-2">
-                      🎲 {c.city} Dice
-                    </div>
-                    <div className="space-y-1 text-sm font-heading">
-                      <div className="flex justify-between">
-                        <span className="text-mutedForeground">Max Bet:</span>
-                        <span className="text-primary font-bold">
-                          ${Number(c.max_bet || 0).toLocaleString()}
-                        </span>
+                {ownedCasinos.map((c, i) => {
+                  const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type || 'Casino';
+                  const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : '🎰';
+                  return (
+                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors">
+                      <div className="font-heading font-bold text-foreground text-base mb-2">
+                        {typeEmoji} {c.city} {typeLabel}
                       </div>
-                      {c.buy_back_reward != null && c.buy_back_reward > 0 && (
+                      <div className="space-y-1 text-sm font-heading">
                         <div className="flex justify-between">
-                          <span className="text-mutedForeground">Buyback:</span>
+                          <span className="text-mutedForeground">Max Bet:</span>
                           <span className="text-primary font-bold">
-                            {Number(c.buy_back_reward).toLocaleString()} pts
+                            ${Number(c.max_bet || 0).toLocaleString()}
                           </span>
                         </div>
-                      )}
+                        {c.buy_back_reward != null && c.buy_back_reward > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-mutedForeground">Buyback:</span>
+                            <span className="text-primary font-bold">
+                              {Number(c.buy_back_reward).toLocaleString()} pts
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {property?.type === 'airport' && (
@@ -339,7 +343,7 @@ const PropertiesCard = ({ ownedCasinos, property }) => {
                       <span className="text-mutedForeground">Price per travel:</span>
                       <span className="text-primary font-bold">{Number(property.price_per_travel ?? 0).toLocaleString()} pts</span>
                     </div>
-                    {property.total_earnings != null && (
+                    {isOwner && property.total_earnings != null && (
                       <div className="flex justify-between gap-2">
                         <span className="text-mutedForeground">Total earnings:</span>
                         <span className="text-primary font-bold">{Number(property.total_earnings).toLocaleString()} pts</span>
@@ -746,7 +750,7 @@ export default function Profile() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <HonoursCard honours={honours} />
-          <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} />
+          <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} isOwner={isMe} />
         </div>
 
         {!isMe && profile.admin_stats && (

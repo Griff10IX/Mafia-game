@@ -54,6 +54,7 @@ def make_user_doc(user_id: str, username: str, email: str, password_hash: str) -
         "bullets": 0,
         "avatar_url": None,
         "jail_busts": 0,
+        "jail_bust_attempts": 0,
         "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
         "total_crimes": 0,
         "crime_profit": 0,

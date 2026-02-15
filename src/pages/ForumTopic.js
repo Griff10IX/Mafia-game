@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock } from 'lucide-react';
+import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package } from 'lucide-react';
 import api from '../utils/api';
 import GifPicker from '../components/GifPicker';
 import { toast } from 'sonner';
@@ -32,6 +32,10 @@ export default function ForumTopic() {
   const [adminBusy, setAdminBusy] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [createGameType, setCreateGameType] = useState('dice');
+  const [createGameMaxPlayers, setCreateGameMaxPlayers] = useState(10);
+  const [createGameManualRoll, setCreateGameManualRoll] = useState(true);
+  const [createGameSubmitting, setCreateGameSubmitting] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -112,6 +116,27 @@ export default function ForumTopic() {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setPosting(false);
+    }
+  };
+
+  const createGameInTopic = async (e) => {
+    e.preventDefault();
+    if (topic?.is_locked) return;
+    setCreateGameSubmitting(true);
+    try {
+      await api.post('/forum/entertainer/games', {
+        game_type: createGameType,
+        max_players: Math.max(1, Math.min(10, parseInt(createGameMaxPlayers, 10) || 10)),
+        join_fee: 0,
+        manual_roll: createGameManualRoll,
+        topic_id: topicId || undefined,
+      });
+      toast.success(createGameManualRoll ? 'Game created — roll it when ready from the Entertainer Forum.' : 'Game created');
+      navigate('/forum', { state: { category: 'entertainer' } });
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to create game');
+    } finally {
+      setCreateGameSubmitting(false);
     }
   };
 
@@ -223,6 +248,44 @@ export default function ForumTopic() {
           </p>
         </div>
       </div>
+
+      {/* Entertainer: Create dice / gbox game (manual roll when ready) */}
+      {topic.category === 'entertainer' && !topic.is_locked && (
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Create Game</span>
+          </div>
+          <div className="p-3">
+            <p className="text-xs text-mutedForeground mb-3">Start a dice or gbox game linked to this topic. Use manual roll to roll it yourself when everyone has joined.</p>
+            <form onSubmit={createGameInTopic} className="space-y-3">
+              <div>
+                <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Type</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setCreateGameType('dice')} className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded border text-xs font-heading ${createGameType === 'dice' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-600/50 text-mutedForeground'}`}>
+                    <Dice5 size={14} /> Dice
+                  </button>
+                  <button type="button" onClick={() => setCreateGameType('gbox')} className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded border text-xs font-heading ${createGameType === 'gbox' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-600/50 text-mutedForeground'}`}>
+                    <Package size={14} /> Gbox
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Max players (1–10)</label>
+                <input type="number" min={1} max={10} value={createGameMaxPlayers} onChange={(e) => setCreateGameMaxPlayers(e.target.value)} className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={createGameManualRoll} onChange={(e) => setCreateGameManualRoll(e.target.checked)} className="w-4 h-4 accent-primary" />
+                <span className="text-xs font-heading text-foreground">Manual roll — I&apos;ll roll when ready (no auto-roll)</span>
+              </label>
+              <div className="flex gap-2 pt-1">
+                <button type="submit" disabled={createGameSubmitting} className="px-4 py-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 disabled:opacity-50">
+                  {createGameSubmitting ? '...' : 'Create game'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Comments */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>

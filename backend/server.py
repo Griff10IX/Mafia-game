@@ -1308,6 +1308,7 @@ async def register(user_data: UserRegister, request: Request):
             "bullets": 0,
             "avatar_url": None,
             "jail_busts": 0,
+            "jail_bust_attempts": 0,
             "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
             "total_crimes": 0,
             "crime_profit": 0,
@@ -1594,19 +1595,23 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
         {"rank": jail_rank, "label": "Most Jail Busts"},
     ]
 
-    # Casinos (dice tables) owned by this user: city, max_bet, buy_back_reward
-    dice_owned = await db.dice_ownership.find(
-        {"owner_id": user_id},
-        {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1}
-    ).to_list(20)
-    owned_casinos = [
-        {
-            "city": d.get("city", "?"),
-            "max_bet": int(d.get("max_bet") or 0),
-            "buy_back_reward": int(d.get("buy_back_reward") or 0),
-        }
-        for d in dice_owned
-    ]
+    # Casinos owned by this user: dice, roulette, blackjack, horseracing (city, max_bet, buy_back_reward where applicable)
+    owned_casinos = []
+    for game_type, coll in [
+        ("dice", db.dice_ownership),
+        ("roulette", db.roulette_ownership),
+        ("blackjack", db.blackjack_ownership),
+        ("horseracing", db.horseracing_ownership),
+    ]:
+        cursor = coll.find(
+            {"owner_id": user_id},
+            {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1},
+        )
+        async for d in cursor:
+            item = {"type": game_type, "city": d.get("city", "?"), "max_bet": int(d.get("max_bet") or 0)}
+            if d.get("buy_back_reward") is not None:
+                item["buy_back_reward"] = int(d.get("buy_back_reward") or 0)
+            owned_casinos.append(item)
 
     # Property (airport or bullet factory; max one per user)
     property_ = await _user_owns_any_property(user_id)
@@ -4418,6 +4423,7 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
                 "bullets": 0,
                 "avatar_url": None,
                 "jail_busts": 0,
+                "jail_bust_attempts": 0,
                 "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
                 "total_crimes": 0,
                 "crime_profit": 0,
@@ -4994,6 +5000,7 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "bullets": 0,
         "avatar_url": None,
         "jail_busts": 0,
+        "jail_bust_attempts": 0,
         "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
         "total_crimes": 0,
         "crime_profit": 0,
@@ -6307,7 +6314,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     pass
                 now_iso = datetime.now(timezone.utc).isoformat()
                 await db.users.update_one({"id": victim_id}, {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0}, "$inc": {"total_deaths": 1}})
-                await db.attacks.update_one({"id": attack["id"]}, {"$set": {"status": "completed", "result": "success", "rewards": rewards}})
+                # Remove all of this attacker's searches for this target (incl. duplicate entries for same NPC)
+                await db.attacks.delete_many({"attacker_id": killer_id, "target_id": victim_id})
                 reward_parts = []
                 if inc.get("money"): reward_parts.append(f"${inc['money']:,} cash")
                 if inc.get("points"): reward_parts.append(f"{inc['points']} pts")
@@ -6445,20 +6453,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             except Exception:
                 pass
         
-        await db.attacks.update_one(
-            {"id": attack["id"]},
-            {"$set": {
-                "status": "completed",
-                "result": "success",
-                "rewards": {
-                    "money": cash_loot,
-                    "rank_points": rank_points,
-                    "cars_taken": victim_cars_count,
-                    "properties_taken": victim_props_count,
-                    "exclusive_cars": exclusive_car_count
-                }
-            }}
-        )
+        # Remove all of this attacker's searches for this target (incl. duplicate entries)
+        await db.attacks.delete_many({"attacker_id": killer_id, "target_id": victim_id})
         await send_notification(killer_id, "Kill", success_message, "attack", category="attacks")
 
         # Witness statements: how many go out depends on weapon (worse gun = more) and silencer (reduces). Sent to random users (victim may or may not get one).

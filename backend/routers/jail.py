@@ -25,28 +25,28 @@ from server import (
 
 logger = logging.getLogger(__name__)
 
-def _player_bust_success_rate(total_busts: int) -> float:
-    """Calculate player bust success rate based on experience (total busts). SKILL-BASED PROGRESSION - 25k busts for max 85%"""
-    if total_busts < 250:
-        return 0.03  # 3% - Everyone starts here
-    elif total_busts < 500:
-        return 0.08  # 8%
-    elif total_busts < 1000:
-        return 0.12  # 12%
-    elif total_busts < 2000:
-        return 0.18  # 18%
-    elif total_busts < 4000:
-        return 0.25  # 25%
-    elif total_busts < 7000:
-        return 0.35  # 35%
-    elif total_busts < 12000:
-        return 0.45  # 45%
-    elif total_busts < 18000:
-        return 0.60  # 60%
-    elif total_busts < 25000:
-        return 0.75  # 75%
+def _player_bust_success_rate(total_attempts: int) -> float:
+    """Calculate player bust success rate based on experience (total attempts, not just successes). Softer curve: higher base rates, lower thresholds for max 90%."""
+    if total_attempts < 150:
+        return 0.06  # 6% - Everyone starts here (was 3% at 250)
+    elif total_attempts < 350:
+        return 0.12  # 12% (was 8% at 500)
+    elif total_attempts < 700:
+        return 0.20  # 20% (was 12% at 1000)
+    elif total_attempts < 1500:
+        return 0.28  # 28% (was 18% at 2000)
+    elif total_attempts < 3000:
+        return 0.38  # 38% (was 25% at 4000)
+    elif total_attempts < 5500:
+        return 0.50  # 50% (was 35% at 7000)
+    elif total_attempts < 9500:
+        return 0.62  # 62% (was 45% at 12000)
+    elif total_attempts < 14500:
+        return 0.72  # 72% (was 60% at 18000)
+    elif total_attempts < 20000:
+        return 0.82  # 82% (was 75% at 25000)
     else:
-        return 0.85  # 85% - Master buster at 25k
+        return 0.90  # 90% - Master buster (was 85% at 25k)
 
 
 async def get_jailed_players(current_user: dict = Depends(get_current_user)):
@@ -109,9 +109,9 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
 async def bust_out_of_jail(
     request: BustOutRequest, current_user: dict = Depends(get_current_user)
 ):
-    # Get player's bust skill level (total successful busts)
-    total_busts = int(current_user.get("jail_busts", 0) or 0)
-    player_success_rate = _player_bust_success_rate(total_busts)
+    # Success rate based on total attempts (not just successes) – more attempts = higher rate
+    total_attempts = int(current_user.get("jail_bust_attempts", 0) or 0)
+    player_success_rate = _player_bust_success_rate(total_attempts)
     
     target_name = (request.target_username or "").strip()
     username_ci = re.compile("^" + re.escape(target_name) + "$", re.IGNORECASE) if target_name else None
@@ -126,7 +126,7 @@ async def bust_out_of_jail(
         if success:
             new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
             record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
-            updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
+            updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
             if bust_reward_cash > 0:
                 updates["$inc"]["money"] = bust_reward_cash
             await db.users.update_one(
@@ -147,7 +147,7 @@ async def bust_out_of_jail(
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
+            {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
         )
         return {
             "success": False,
@@ -200,7 +200,7 @@ async def bust_out_of_jail(
         record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"rank_points": rank_points, "jail_busts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
+            {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
         )
         try:
             await update_objectives_progress(current_user["id"], "busts", 1)
@@ -215,7 +215,7 @@ async def bust_out_of_jail(
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
+        {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
     )
     return {
         "success": False,
