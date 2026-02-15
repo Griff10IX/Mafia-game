@@ -124,39 +124,48 @@ code {
   transition: all 0.3s ease;
 }
 
-/* Dice roll animation */
+/* Dice animations */
 @keyframes dice-roll {
   0% { transform: rotate(0deg) scale(1); }
-  25% { transform: rotate(90deg) scale(1.15); }
-  50% { transform: rotate(180deg) scale(0.95); }
-  75% { transform: rotate(270deg) scale(1.1); }
-  100% { transform: rotate(360deg) scale(1); }
+  25% { transform: rotate(-15deg) scale(1.1); }
+  50% { transform: rotate(10deg) scale(0.95); }
+  75% { transform: rotate(-8deg) scale(1.05); }
+  100% { transform: rotate(0deg) scale(1); }
 }
 
-@keyframes dice-reveal {
+@keyframes dice-number-roll {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+  25% { transform: translateY(-3px) scale(1.02); opacity: 0.9; }
+  50% { transform: translateY(2px) scale(0.98); opacity: 1; }
+  75% { transform: translateY(-1px) scale(1.01); opacity: 0.95; }
+}
+
+@keyframes dice-win {
   0% { transform: scale(0.5); opacity: 0; }
-  50% { transform: scale(1.2); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 30px 8px rgba(16, 185, 129, 0.3); }
 }
 
-@keyframes dice-number-shake {
-  0%, 100% { transform: translateX(0); }
-  20% { transform: translateX(-4px); }
-  40% { transform: translateX(4px); }
-  60% { transform: translateX(-2px); }
-  80% { transform: translateX(2px); }
+@keyframes dice-lose {
+  0% { transform: scale(0.5); opacity: 0; }
+  60% { transform: scale(1.1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 20px 4px rgba(239, 68, 68, 0.25); }
 }
 
 .animate-dice-roll {
-  animation: dice-roll 0.6s ease-in-out infinite;
+  animation: dice-roll 0.4s ease-in-out infinite;
 }
 
-.animate-dice-reveal {
-  animation: dice-reveal 0.4s ease-out forwards;
+.animate-dice-number {
+  animation: dice-number-roll 0.15s ease-in-out infinite;
 }
 
-.animate-dice-shake {
-  animation: dice-number-shake 0.5s ease-in-out;
+.animate-dice-win {
+  animation: dice-win 0.5s ease-out forwards;
+}
+
+.animate-dice-lose {
+  animation: dice-lose 0.5s ease-out forwards;
 }
 
 /* Roulette wheel & ball */
@@ -172,39 +181,6 @@ code {
 
 .animate-roulette-reveal {
   animation: roulette-reveal 0.5s ease-out forwards;
-}
-
-/* Dice: rolling icon + win/lose result */
-@keyframes dice-roll {
-  0% { transform: rotate(0deg) scale(1); opacity: 1; }
-  25% { transform: rotate(-12deg) scale(1.05); opacity: 0.9; }
-  50% { transform: rotate(8deg) scale(1.02); opacity: 1; }
-  75% { transform: rotate(-5deg) scale(0.98); opacity: 0.95; }
-  100% { transform: rotate(0deg) scale(1); opacity: 1; }
-}
-
-@keyframes dice-win {
-  0% { transform: scale(0.5); opacity: 0; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-  50% { transform: scale(1.15); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 20px 4px rgba(16, 185, 129, 0.25); }
-}
-
-@keyframes dice-lose {
-  0% { transform: scale(0.5); opacity: 0; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  50% { transform: scale(1.1); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; box-shadow: 0 0 20px 4px rgba(239, 68, 68, 0.25); }
-}
-
-.animate-dice-roll {
-  animation: dice-roll 0.6s ease-in-out infinite;
-}
-
-.animate-dice-win {
-  animation: dice-win 0.5s ease-out forwards;
-}
-
-.animate-dice-lose {
-  animation: dice-lose 0.5s ease-out forwards;
 }
 
 /* Blackjack cards */

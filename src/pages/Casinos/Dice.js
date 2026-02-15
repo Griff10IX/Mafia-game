@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Dices, ArrowRightLeft, ArrowLeftRight } from 'lucide-react';
+import { Dices } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
@@ -21,10 +21,10 @@ function DiceDisplay({ isRolling, result, rollingNumber }) {
       {isRolling ? (
         <>
           <Dices className="text-primary animate-dice-roll w-16 h-16 md:w-20 md:h-20 mb-3" aria-hidden />
-          <p className="text-xs md:text-sm text-primary/80 uppercase tracking-widest font-heading mb-2">
+          <p className="text-xs md:text-sm text-primary/80 uppercase tracking-widest font-heading mb-2 animate-pulse">
             Rolling...
           </p>
-          <div className="text-5xl md:text-6xl font-heading font-bold text-primary tabular-nums animate-pulse">
+          <div className="text-5xl md:text-6xl font-heading font-bold text-primary tabular-nums animate-dice-number">
             {rollingNumber ?? '?'}
           </div>
         </>
@@ -34,10 +34,10 @@ function DiceDisplay({ isRolling, result, rollingNumber }) {
             You rolled
           </p>
           <div
-            className={`flex items-center justify-center w-24 h-24 md:w-28 md:h-28 rounded-xl font-heading font-bold text-5xl md:text-6xl tabular-nums border-4 transition-all shadow-2xl ${
+            className={`flex items-center justify-center w-24 h-24 md:w-28 md:h-28 rounded-xl font-heading font-bold text-5xl md:text-6xl tabular-nums border-4 ${
               result.win
-                ? 'bg-gradient-to-br from-emerald-600/40 to-emerald-900/40 text-emerald-300 border-emerald-500/70 shadow-emerald-500/30 animate-dice-win'
-                : 'bg-gradient-to-br from-red-600/40 to-red-900/40 text-red-300 border-red-500/70 shadow-red-500/30 animate-dice-lose'
+                ? 'bg-gradient-to-br from-emerald-600/40 to-emerald-900/40 text-emerald-300 border-emerald-500/70 animate-dice-win'
+                : 'bg-gradient-to-br from-red-600/40 to-red-900/40 text-red-300 border-red-500/70 animate-dice-lose'
             }`}
           >
             {result.roll}
