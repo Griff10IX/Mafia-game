@@ -49,6 +49,12 @@ export default function MyProperties() {
 
   useEffect(() => { fetchMyProperties(); }, [fetchMyProperties]);
 
+  useEffect(() => {
+    const onRefresh = () => fetchMyProperties();
+    window.addEventListener('app:refresh-user', onRefresh);
+    return () => window.removeEventListener('app:refresh-user', onRefresh);
+  }, [fetchMyProperties]);
+
   const handleCasinoSetMaxBet = async () => {
     const c = data.casino;
     if (!c || saving) return;
@@ -254,7 +260,13 @@ export default function MyProperties() {
                   <span className="font-heading font-bold text-foreground">{CASINO_NAMES[data.casino.type] || data.casino.type}</span>
                   <span className="text-mutedForeground text-sm">· {data.casino.city}</span>
                 </div>
-                <p className="text-[11px] text-mutedForeground mb-2">Max bet: {formatMoney(data.casino.max_bet)}</p>
+                <p className="text-[11px] text-mutedForeground mb-1">Max bet: {formatMoney(data.casino.max_bet)}</p>
+                <p className="text-[11px] mb-2">
+                  <span style={{ color: '#303030' }} className="font-heading">Profit: </span>
+                  <span className={`font-heading font-bold ${(data.casino.profit ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                    {(data.casino.profit ?? 0) >= 0 ? '' : '-'}{formatMoney(Math.abs(data.casino.profit ?? 0))}
+                  </span>
+                </p>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Max bet</span>
                   <input
@@ -342,8 +354,14 @@ export default function MyProperties() {
                   <span className="text-mutedForeground text-sm">· {data.property.state}</span>
                 </div>
                 <p className="text-[11px] text-mutedForeground mb-1">Price per travel: {data.property.price_per_travel ?? 10} pts</p>
-                <p className="text-[11px] text-amber-400/90 mb-2">Profit: {(data.property.total_earnings ?? 0).toLocaleString()} pts</p>
+                <p className="text-[11px] mb-2">
+                  <span style={{ color: '#303030' }} className="font-heading">Profit: </span>
+                  <span className={`font-heading font-bold ${(data.property.total_earnings ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                    {(data.property.total_earnings ?? 0).toLocaleString()} pts
+                  </span>
+                </p>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Set price</span>
                   <input
                     type="number"
                     min={0}
@@ -351,10 +369,10 @@ export default function MyProperties() {
                     value={airportPrice}
                     onChange={(e) => setAirportPrice(e.target.value)}
                     placeholder="0–50 pts"
-                    className="w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                    className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleAirportSetPrice} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
-                    {saving ? '...' : 'Set price'}
+                    {saving ? '...' : 'Set'}
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
@@ -364,7 +382,7 @@ export default function MyProperties() {
                     value={airportTransferUsername}
                     onChange={(e) => setAirportTransferUsername(e.target.value)}
                     placeholder="Username"
-                    className="w-28 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                    className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleAirportTransfer} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
                     {saving ? '...' : 'Send'}
@@ -378,15 +396,17 @@ export default function MyProperties() {
                     value={airportSellPoints}
                     onChange={(e) => setAirportSellPoints(e.target.value)}
                     placeholder="Points"
-                    className="w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                    className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleAirportSell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
                     {saving ? '...' : 'List'}
                   </button>
                 </div>
-                <Link to="/travel" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
-                  <LinkIcon size={12} /> Travel
-                </Link>
+                <div className="pt-1 border-t border-zinc-700/30 mt-2">
+                  <Link to="/travel" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
+                    <LinkIcon size={12} /> Travel
+                  </Link>
+                </div>
               </>
             ) : data.property?.type === 'bullet_factory' ? (
               <>

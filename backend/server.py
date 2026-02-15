@@ -388,6 +388,8 @@ class UserResponse(BaseModel):
     oc_timer_reduced: bool = False
     admin_ghost_mode: bool = False
     admin_acting_as_normal: bool = False
+    casino_profit: int = 0  # $ from owned casino table
+    property_profit: int = 0  # points from owned property (e.g. airport)
 
 # Notification/Inbox models
 class NotificationCreate(BaseModel):
@@ -1396,6 +1398,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         rank_name = "Admin"
     wealth_id, wealth_name = get_wealth_rank(current_user.get("money", 0))
     wealth_range = get_wealth_rank_range(current_user.get("money", 0))
+    casino_cash, property_pts = await _get_casino_property_profit(current_user["id"])
     return UserResponse(
         id=current_user["id"],
         email=current_user["email"],
@@ -1431,6 +1434,8 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         oc_timer_reduced=bool(current_user.get("oc_timer_reduced", False)),
         admin_ghost_mode=bool(current_user.get("admin_ghost_mode", False)),
         admin_acting_as_normal=bool(current_user.get("admin_acting_as_normal", False)),
+        casino_profit=casino_cash,
+        property_profit=property_pts,
     )
 
 @api_router.get("/users/{username}/profile")
@@ -6752,19 +6757,39 @@ async def get_states(current_user: dict = Depends(get_current_user)):
 
 
 # ============ My Properties (1 casino + 1 property max) ============
+async def _get_casino_property_profit(user_id: str):
+    """Return (casino_profit_cash, property_profit_points) for header display."""
+    casino_cash = 0
+    for _game_type, coll in [
+        ("dice", db.dice_ownership),
+        ("roulette", db.roulette_ownership),
+        ("blackjack", db.blackjack_ownership),
+        ("horseracing", db.horseracing_ownership),
+    ]:
+        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1})
+        if doc:
+            casino_cash = int(doc.get("total_earnings") or doc.get("profit") or 0)
+            break
+    prop = await _user_owns_any_property(user_id)
+    property_pts = int(prop.get("total_earnings") or 0) if prop else 0
+    return (casino_cash, property_pts)
+
+
 async def _user_owns_any_casino(user_id: str):
-    """Return first casino owned by user: {type, city, max_bet, buy_back_reward?} or None. Rule: 1 casino only."""
+    """Return first casino owned by user: {type, city, max_bet, buy_back_reward?, profit?} or None. Rule: 1 casino only. profit is $ (total_earnings or profit field)."""
     for game_type, coll in [
         ("dice", db.dice_ownership),
         ("roulette", db.roulette_ownership),
         ("blackjack", db.blackjack_ownership),
         ("horseracing", db.horseracing_ownership),
     ]:
-        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1})
+        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1, "total_earnings": 1, "profit": 1})
         if doc:
             out = {"type": game_type, "city": doc.get("city"), "max_bet": doc.get("max_bet")}
             if doc.get("buy_back_reward") is not None:
                 out["buy_back_reward"] = doc.get("buy_back_reward")
+            profit_val = doc.get("total_earnings") if doc.get("total_earnings") is not None else doc.get("profit")
+            out["profit"] = int(profit_val or 0)
             return out
     return None
 

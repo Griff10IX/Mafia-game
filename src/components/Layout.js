@@ -5,10 +5,24 @@ import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import styles from '../styles/noir.module.css';
 
+const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
+const DEFAULT_STAT_ORDER = ['rank', 'bullets', 'kills', 'money', 'points', 'property', 'notifications'];
+
+function loadStatOrder() {
+  try {
+    const raw = localStorage.getItem(TOPBAR_STAT_ORDER_KEY);
+    if (!raw) return DEFAULT_STAT_ORDER;
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed) && parsed.length) return parsed;
+  } catch (_) {}
+  return DEFAULT_STAT_ORDER;
+}
+
 export default function Layout({ children }) {
   const [user, setUser] = useState(null);
   const [rankProgress, setRankProgress] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [statOrder, setStatOrder] = useState(loadStatOrder);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
@@ -647,10 +661,33 @@ export default function Layout({ children }) {
           </div>
         )}
 
-        {user && (
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Rank Progress Mini Bar */}
-            {rankProgress && (() => {
+        {user && (() => {
+          const handleDragStart = (e, statId) => {
+            e.dataTransfer.setData('text/plain', statId);
+            e.dataTransfer.effectAllowed = 'move';
+          };
+          const handleDragOver = (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+          };
+          const handleDrop = (e, targetId) => {
+            e.preventDefault();
+            const draggedId = e.dataTransfer.getData('text/plain');
+            if (!draggedId || draggedId === targetId) return;
+            setStatOrder((prev) => {
+              const next = prev.filter((id) => id !== draggedId);
+              const idx = next.indexOf(targetId);
+              next.splice(idx < 0 ? next.length : idx, 0, draggedId);
+              try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
+              return next;
+            });
+          };
+          const casinoProfit = user.casino_profit ?? 0;
+          const propertyProfit = user.property_profit ?? 0;
+          const renderStat = (statId) => {
+            const chipClass = 'flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm shrink-0 cursor-grab active:cursor-grabbing';
+            if (statId === 'rank') {
+              if (!rankProgress) return null;
               const pct = Number(rankProgress.rank_points_progress);
               const current = Number(rankProgress.rank_points_current) || 0;
               const needed = Number(rankProgress.rank_points_needed) || 0;
@@ -659,152 +696,133 @@ export default function Layout({ children }) {
                 ? Math.min(100, Math.max(0, pct))
                 : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
               return (
-                <div
-                  className="flex items-center gap-1.5 sm:gap-2 bg-noir-surface/90 border border-primary/20 px-1.5 py-1 sm:px-2 sm:py-1 rounded-sm min-w-0"
-                  title={`Rank progress: ${progress.toFixed(2)}%`}
-                >
+                <div className={`${chipClass} gap-1.5 sm:gap-2 px-1.5 py-1 sm:px-2 sm:py-1 min-w-0`} title={`Rank progress: ${progress.toFixed(2)}%`}>
                   <TrendingUp size={12} className="text-primary shrink-0" />
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                    <div
-                      style={{
-                        position: 'relative',
-                        width: 64,
-                        height: 6,
-                        backgroundColor: '#333333',
-                        borderRadius: 9999,
-                        overflow: 'hidden',
-                        marginTop: 2
-                      }}
-                    >
-                      <div
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          bottom: 0,
-                          width: `${progress}%`,
-                          minWidth: progress > 0 ? 4 : 0,
-                          background: 'linear-gradient(to right, #d4af37, #ca8a04)',
-                          borderRadius: 9999,
-                          transition: 'width 0.3s ease'
-                        }}
-                        role="progressbar"
-                        aria-valuenow={progress}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                      />
+                    <div style={{ position: 'relative', width: 64, height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, #d4af37, #ca8a04)', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
-                  <span className="text-[10px] text-primary font-heading shrink-0">
-                    {progress.toFixed(0)}%
-                  </span>
+                  <span className="text-[10px] text-primary font-heading shrink-0">{progress.toFixed(0)}%</span>
                 </div>
               );
-            })()}
-            
-            {/* Bullets */}
-            <div className="hidden md:flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Bullets">
-              <Crosshair size={12} className="text-red-400" />
-              <span className="font-heading text-xs text-foreground" data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
-            </div>
-            
-            {/* Kills */}
-            <div className="hidden md:flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Kills">
-              <Skull size={12} className="text-red-400" />
-              <span className="font-heading text-xs text-foreground" data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
-            </div>
-            
-            {/* Money */}
-            <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Cash">
-              <DollarSign size={12} className="text-primary" />
-              <span className="font-heading text-xs text-primary" data-testid="topbar-money">{formatMoney(user.money)}</span>
-            </div>
-            
-            {/* Points */}
-            <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm" title="Premium Points">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary"></div>
-              <span className="font-heading text-xs text-foreground" data-testid="topbar-points">{formatInt(user.points)}</span>
-            </div>
-
-            {/* Notification bell - same size as other pills */}
-            <div className="relative" ref={notificationPanelRef}>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
-                className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors"
-                aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
-              >
-                <Bell size={12} strokeWidth={2} />
-                {unreadCount > 0 && (
-                  <span className="min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-noir-bg text-[10px] font-heading font-bold">
-                    {unreadCount > 99 ? '99+' : unreadCount}
-                  </span>
-                )}
-              </button>
-              {notificationPanelOpen && (
-                <div
-                  className="absolute top-full right-0 mt-1 w-[320px] max-h-[400px] flex flex-col rounded border shadow-xl z-50"
-                  style={{
-                    backgroundColor: 'var(--noir-content)',
-                    borderColor: 'var(--noir-border-mid)'
-                  }}
-                >
-                  <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-                    <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>
-                      Notifications
-                    </h3>
-                    <p className="text-xs mt-0.5 font-heading" style={{ color: 'var(--noir-muted)' }}>
-                      View & manage your notifications
-                    </p>
-                  </div>
-                  <div className="overflow-y-auto flex-1 min-h-0">
-                    {notificationList.length === 0 ? (
-                      <div className="p-4 text-center font-heading text-sm" style={{ color: 'var(--noir-muted)' }}>
-                        No notifications
-                      </div>
-                    ) : (
-                      notificationList.slice(0, 12).map((n) => (
-                        <button
-                          key={n.id}
-                          type="button"
-                          onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
-                          className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
-                          style={{
-                            borderColor: 'var(--noir-border)',
-                            color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)',
-                            backgroundColor: n.read ? 'transparent' : 'rgba(212, 175, 55, 0.06)'
-                          }}
-                        >
-                          <span className="font-semibold block truncate">{n.title}</span>
-                          <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                  <div className="p-2 border-t shrink-0 flex gap-2" style={{ borderColor: 'var(--noir-border)' }}>
-                    <button
-                      type="button"
-                      onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
-                      className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors"
-                      style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}
-                    >
-                      View all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { markAllNotificationsRead(); }}
-                      className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors"
-                      style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}
-                    >
-                      Clear all
-                    </button>
-                  </div>
+            }
+            if (statId === 'bullets') {
+              return (
+                <div className={`${chipClass} hidden md:flex`} title="Bullets">
+                  <Crosshair size={12} className="text-red-400" />
+                  <span className="font-heading text-xs text-foreground" data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
                 </div>
-              )}
+              );
+            }
+            if (statId === 'kills') {
+              return (
+                <div className={`${chipClass} hidden md:flex`} title="Kills">
+                  <Skull size={12} className="text-red-400" />
+                  <span className="font-heading text-xs text-foreground" data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
+                </div>
+              );
+            }
+            if (statId === 'money') {
+              return (
+                <div className={chipClass} title="Cash">
+                  <DollarSign size={12} className="text-primary" />
+                  <span className="font-heading text-xs text-primary" data-testid="topbar-money">{formatMoney(user.money)}</span>
+                </div>
+              );
+            }
+            if (statId === 'points') {
+              return (
+                <div className={chipClass} title="Premium Points">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  <span className="font-heading text-xs text-foreground" data-testid="topbar-points">{formatInt(user.points)}</span>
+                </div>
+              );
+            }
+            if (statId === 'property') {
+              const parts = [];
+              if (casinoProfit > 0) parts.push(`$${Number(casinoProfit).toLocaleString()}`);
+              if (propertyProfit > 0) parts.push(`${Number(propertyProfit).toLocaleString()} pts`);
+              const label = parts.length ? parts.join(' / ') : '$0';
+              return (
+                <div className={chipClass} title="Casino & property profit">
+                  <Building2 size={12} className="text-emerald-400" />
+                  <span className="font-heading text-xs text-foreground">{label}</span>
+                </div>
+              );
+            }
+            if (statId === 'notifications') {
+              return null;
+            }
+            return null;
+          };
+          return (
+            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+              {statOrder.map((statId) => {
+                if (statId === 'notifications') {
+                  return (
+                    <div key="notifications" className="relative shrink-0 cursor-grab active:cursor-grabbing" ref={notificationPanelRef} draggable onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')}>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
+                        className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors"
+                        aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
+                      >
+                        <Bell size={12} strokeWidth={2} />
+                        {unreadCount > 0 && (
+                          <span className="min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-noir-bg text-[10px] font-heading font-bold">
+                            {unreadCount > 99 ? '99+' : unreadCount}
+                          </span>
+                        )}
+                      </button>
+                      {notificationPanelOpen && (
+                        <div
+                          className="absolute top-full right-0 mt-1 w-[320px] max-h-[400px] flex flex-col rounded border shadow-xl z-50"
+                          style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
+                        >
+                          <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+                            <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>Notifications</h3>
+                            <p className="text-xs mt-0.5 font-heading" style={{ color: 'var(--noir-muted)' }}>View & manage your notifications</p>
+                          </div>
+                          <div className="overflow-y-auto flex-1 min-h-0">
+                            {notificationList.length === 0 ? (
+                              <div className="p-4 text-center font-heading text-sm" style={{ color: 'var(--noir-muted)' }}>No notifications</div>
+                            ) : (
+                              notificationList.slice(0, 12).map((n) => (
+                                <button
+                                  key={n.id}
+                                  type="button"
+                                  onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
+                                  className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
+                                  style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(212, 175, 55, 0.06)' }}
+                                >
+                                  <span className="font-semibold block truncate">{n.title}</span>
+                                  <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
+                                </button>
+                              ))
+                            )}
+                          </div>
+                          <div className="p-2 border-t shrink-0 flex gap-2" style={{ borderColor: 'var(--noir-border)' }}>
+                            <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View all</button>
+                            <button type="button" onClick={() => { markAllNotificationsRead(); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                const content = renderStat(statId);
+                if (!content) return null;
+                return (
+                  <div key={statId} draggable onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} className="shrink-0 cursor-grab active:cursor-grabbing">
+                    {content}
+                  </div>
+                );
+              })}
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {/* Main content */}
