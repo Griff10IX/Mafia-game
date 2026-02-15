@@ -9231,11 +9231,6 @@ oc.register(api_router)
 
 app.include_router(api_router)
 
-# Inject dependencies into quicktrade module
-quicktrade.db = db
-quicktrade.get_current_user = get_current_user
-app.include_router(quicktrade.router)
-
 # CORS: with credentials=True you must list explicit origins (not "*").
 # Set CORS_ORIGINS on Render to your Vercel URL, e.g. https://your-app.vercel.app
 _cors_origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', '*').split(',') if o.strip()]
