@@ -40,9 +40,9 @@ export default function CarProfile() {
 
   if (loading) {
     return (
-      <div className={`${styles.pageContent} ${styles.page}`}>
+      <div className={`${styles.pageContent}`}>
         <div className="flex items-center justify-center min-h-[40vh]">
-          <span className="text-primary font-heading">Loading...</span>
+          <span className="text-primary font-heading font-bold">Loading...</span>
         </div>
       </div>
     );
@@ -50,12 +50,12 @@ export default function CarProfile() {
 
   if (!car) {
     return (
-      <div className={`${styles.pageContent} ${styles.page}`}>
+      <div className={`${styles.pageContent}`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
           <Car className="text-primary/40" size={48} />
           <p className="text-mutedForeground font-heading">Car not found</p>
-          <Link to="/garage" className={`${styles.surface} ${styles.raisedHover} border border-primary/30 text-primary font-heading px-4 py-2 rounded-sm flex items-center gap-2`}>
-            <ArrowLeft size={16} /> Back to Garage
+          <Link to="/garage" className="bg-zinc-800/50 border border-primary/30 text-primary font-heading text-xs px-3 py-1.5 rounded flex items-center gap-1.5 hover:bg-zinc-700/50 transition-all">
+            <ArrowLeft size={14} /> Back to Garage
           </Link>
         </div>
       </div>
@@ -66,68 +66,108 @@ export default function CarProfile() {
   const rarityColor = RARITY_COLORS[car.rarity] || 'text-mutedForeground';
 
   return (
-    <div className={`${styles.pageContent} ${styles.page}`}>
-      <div className="mb-4">
-        <Link to="/garage" className={`inline-flex items-center gap-2 text-sm font-heading text-mutedForeground hover:text-primary transition-colors`}>
-          <ArrowLeft size={16} /> Back to Garage
-        </Link>
-      </div>
-
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 max-w-lg mx-auto`}>
-        <div className="aspect-[4/3] bg-secondary/50 border-b border-primary/20">
-          {car.image ? (
-            <img src={car.image} alt={car.name} className="w-full h-full object-cover bg-secondary" />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Car className="text-primary/30" size={64} />
-            </div>
-          )}
-        </div>
-        <div className="p-4 sm:p-5 space-y-4">
+    <div className={`space-y-4 ${styles.pageContent}`}>
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Link 
+            to="/garage" 
+            className="text-mutedForeground hover:text-primary transition-colors"
+          >
+            <ArrowLeft size={20} />
+          </Link>
           <div>
-            <span className={`text-xs font-heading font-bold uppercase tracking-wider ${rarityColor}`}>
+            <span className={`text-[10px] font-heading font-bold uppercase tracking-wider ${rarityColor}`}>
               {rarityLabel}
             </span>
-            <h1 className="text-xl sm:text-2xl font-heading font-bold text-foreground mt-1">
+            <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2">
+              <Car className="w-5 h-5 sm:w-6 sm:h-6" />
               {car.name}
             </h1>
           </div>
+        </div>
+        
+        {/* Quick stats */}
+        <div className="flex items-center gap-3 text-xs font-heading">
+          <div className="flex items-center gap-1">
+            <DollarSign size={12} className="text-primary" />
+            <span className="text-primary font-bold">${(car.value || 0).toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
 
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className={`${styles.surface} rounded-sm border border-primary/20 p-3 flex items-center gap-2`}>
-              <DollarSign size={18} className="text-primary shrink-0" />
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Value</div>
-                <div className="font-heading font-bold text-primary">${(car.value || 0).toLocaleString()}</div>
+      {/* Main content */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+            🚗 Vehicle Details
+          </span>
+        </div>
+        
+        <div className="p-3">
+          <div className="flex flex-col sm:flex-row gap-4">
+            {/* Image - compact */}
+            <div className="sm:w-48 shrink-0">
+              <div className="aspect-[4/3] rounded-md overflow-hidden bg-zinc-800/50 border border-zinc-700/50">
+                {car.image ? (
+                  <img src={car.image} alt={car.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Car className="text-primary/30" size={48} />
+                  </div>
+                )}
               </div>
             </div>
-            <div className={`${styles.surface} rounded-sm border border-primary/20 p-3 flex items-center gap-2`}>
-              <Clock size={18} className="text-primary shrink-0" />
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Travel time</div>
-                <div className="font-heading font-bold text-foreground">
-                  {car.travel_time != null && car.travel_time >= 0
-                    ? `${car.travel_time}s`
-                    : '—'}
+            
+            {/* Stats grid */}
+            <div className="flex-1 grid grid-cols-2 gap-2">
+              <div className="bg-zinc-800/30 rounded-md p-3 border border-zinc-700/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign size={14} className="text-primary" />
+                  <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Value</span>
+                </div>
+                <div className="font-heading font-bold text-primary text-lg">${(car.value || 0).toLocaleString()}</div>
+              </div>
+              
+              <div className="bg-zinc-800/30 rounded-md p-3 border border-zinc-700/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <Clock size={14} className="text-primary" />
+                  <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Travel Time</span>
+                </div>
+                <div className="font-heading font-bold text-foreground text-lg">
+                  {car.travel_time != null && car.travel_time >= 0 ? `${car.travel_time}s` : '—'}
                 </div>
               </div>
-            </div>
-            <div className={`${styles.surface} rounded-sm border border-primary/20 p-3 flex items-center gap-2`}>
-              <Shield size={18} className="text-primary shrink-0" />
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Difficulty</div>
-                <div className="font-heading font-bold text-foreground">{car.min_difficulty ?? '—'}</div>
+              
+              <div className="bg-zinc-800/30 rounded-md p-3 border border-zinc-700/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <Shield size={14} className="text-primary" />
+                  <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Difficulty</span>
+                </div>
+                <div className="font-heading font-bold text-foreground text-lg">{car.min_difficulty ?? '—'}</div>
               </div>
-            </div>
-            <div className={`${styles.surface} rounded-sm border border-primary/20 p-3 flex items-center gap-2`}>
-              <Sparkles size={18} className="text-primary shrink-0" />
-              <div>
-                <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Rarity</div>
-                <div className={`font-heading font-bold ${rarityColor}`}>{rarityLabel}</div>
+              
+              <div className="bg-zinc-800/30 rounded-md p-3 border border-zinc-700/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <Sparkles size={14} className="text-primary" />
+                  <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Rarity</span>
+                </div>
+                <div className={`font-heading font-bold text-lg capitalize ${rarityColor}`}>{rarityLabel}</div>
               </div>
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Back button */}
+      <div className="flex justify-center">
+        <Link 
+          to="/garage" 
+          className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide border border-zinc-600/50 transition-all inline-flex items-center gap-1.5 touch-manipulation"
+        >
+          <ArrowLeft size={14} />
+          Back to Garage
+        </Link>
       </div>
     </div>
   );

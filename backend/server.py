@@ -1743,6 +1743,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     await db.bank_deposits.insert_one({
         "id": deposit_id,
         "user_id": current_user["id"],
+        "user_username": current_user.get("username"),
         "principal": int(amount),
         "duration_hours": hours,
         "interest_rate": rate,
@@ -4658,6 +4659,7 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     await db.attacks.insert_one({
         "id": attack_id,
         "attacker_id": current_user["id"],
+        "attacker_username": current_user["username"],
         "target_id": target["id"],
         "target_username": target["username"],
         "note": note,
@@ -6375,8 +6377,9 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
     if not owner_id:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout_full - stake}})
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": payout_full, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
-    owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+    owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
     owner_money = int((owner.get("money") or 0) or 0)
+    owner_username = owner.get("username") if owner else None
     actual_payout = min(payout_full, owner_money)
     shortfall = payout_full - actual_payout
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout - stake}})
@@ -6399,7 +6402,9 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
                 "id": offer_id,
                 "city": db_city,
                 "from_owner_id": owner_id,
+                "from_owner_username": owner_username,
                 "to_user_id": current_user["id"],
+                "to_username": current_user.get("username"),
                 "points_offered": points_offered,
                 "amount_shortfall": shortfall,
                 "owner_paid": actual_payout,
