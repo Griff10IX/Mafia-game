@@ -434,6 +434,13 @@ export default function Blackjack() {
                 </button>
               </div>
             </div>
+            <button
+              onClick={() => window.location.href = '/quick-trade'}
+              className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
+            >
+              <ArrowRightLeft size={16} />
+              Sell on Quick Trade
+            </button>
           </div>
         </div>
       )}

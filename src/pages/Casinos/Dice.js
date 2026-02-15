@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { Dices } from 'lucide-react';
+import { Dices, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
@@ -570,6 +571,14 @@ export default function Dice() {
                   </button>
                 </div>
               </div>
+
+              <button
+                onClick={() => window.location.href = '/quick-trade'}
+                className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
+              >
+                <ArrowRightLeft size={16} />
+                Sell on Quick Trade
+              </button>
 
               <button
                 onClick={resetDiceProfit}
