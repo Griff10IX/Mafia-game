@@ -42,6 +42,7 @@ import ForumTopic from "./pages/ForumTopic";
 import DeadAlive from "./pages/DeadAlive";
 import Profile from "./pages/Profile";
 import Stats from "./pages/Stats";
+import Objectives from "./pages/Objectives";
 import QuickTrade from "./pages/QuickTrade";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -155,6 +156,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <OrganisedCrime />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/objectives"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Objectives />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

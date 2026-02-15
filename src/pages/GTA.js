@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -124,12 +123,9 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
           <Lock className="text-mutedForeground/50 w-4 h-4 shrink-0" />
         )}
         <div className="min-w-0">
-          <Link
-            to={`/gta/car/${option.id}`}
-            className="text-sm font-heading font-bold text-foreground hover:text-primary truncate block"
-          >
+          <span className="text-sm font-heading font-bold text-foreground truncate block">
             {option.name}
-          </Link>
+          </span>
           <div className="text-[10px] text-mutedForeground truncate">
             Difficulty {option.difficulty}/5
             {!unlocked && ` • ${option.min_rank_name}`}

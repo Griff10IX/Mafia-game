@@ -15,6 +15,7 @@ from server import (
     TRAVEL_TIMES,
     GTA_OPTIONS,
     DEFAULT_GARAGE_BATCH_LIMIT,
+    update_objectives_progress,
     GTAAttemptRequest,
     GTAAttemptResponse,
     GTAMeltRequest,
@@ -245,6 +246,10 @@ async def attempt_gta(
             {"id": current_user["id"]},
             {"$inc": {"money": car["value"], "rank_points": rank_points, "total_gta": 1}},
         )
+        try:
+            await update_objectives_progress(current_user["id"], "gta", 1)
+        except Exception:
+            pass
         return GTAAttemptResponse(
             success=True,
             message=f"Success! You stole a {car['name']}!",

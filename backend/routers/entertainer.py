@@ -172,7 +172,7 @@ async def _settle_game(game: dict):
                     else:
                         winner_name = (result or {}).get("winner_username") or "Someone"
                         msg = f"Game over. Winner: {winner_name}. Pot was ${pot:,}. Better luck next time!"
-                    await send_notification(uid, "🎲 E-Game results", msg, "system")
+                    await send_notification(uid, "🎲 E-Game results", msg, "system", category="ent_games")
                 else:
                     # gbox: each player got a reward
                     rewards = (result or {}).get("rewards_by_user") or {}
@@ -181,7 +181,7 @@ async def _settle_game(game: dict):
                         msg = f"You won: {_format_reward_desc(reward)}. Pot was ${pot:,}."
                     else:
                         msg = f"Game over. Pot was ${pot:,}."
-                    await send_notification(uid, "🎁 E-Game results", msg, "system")
+                    await send_notification(uid, "🎁 E-Game results", msg, "system", category="ent_games")
             except Exception:
                 pass
 
@@ -468,6 +468,7 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
             "🎲 New E-Games",
             f"{len(created)} new dice & gbox games are open in the Entertainer Forum! Join now.",
             "system",
+            category="ent_games",
         )
     except Exception:
         pass  # Don't fail the request if notification fails; games were already created
@@ -494,6 +495,7 @@ async def run_auto_create_if_enabled():
         "🎲 New E-Games",
         f"{n} new dice & gbox games are open in the Entertainer Forum! Join now.",
         "system",
+        category="ent_games",
     )
 
 

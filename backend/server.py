@@ -439,6 +439,18 @@ class DeadAliveRetrieveRequest(BaseModel):
 class AvatarUpdateRequest(BaseModel):
     avatar_data: str  # data URL: data:image/...;base64,...
 
+class NotificationPreferencesRequest(BaseModel):
+    """Optional; only include keys you want to update. True = receive, False = mute."""
+    ent_games: Optional[bool] = None
+    oc_invites: Optional[bool] = None
+    attacks: Optional[bool] = None
+    system: Optional[bool] = None
+    messages: Optional[bool] = None
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 class BankInterestDepositRequest(BaseModel):
     amount: int
     duration_hours: int
@@ -908,8 +920,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             pass
     return user
 
-async def send_notification(user_id: str, title: str, message: str, notification_type: str, **extra):
-    """Send a notification to user's inbox. Optional extra fields (e.g. oc_invite_id) are merged in."""
+async def send_notification(user_id: str, title: str, message: str, notification_type: str, category: Optional[str] = None, **extra):
+    """Send a notification to user's inbox. If category is set, user's notification_preferences can mute it."""
+    if category:
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "notification_preferences": 1})
+        prefs = (user or {}).get("notification_preferences") or {}
+        if prefs.get(category) is False:
+            return None
     notification = {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -924,18 +941,67 @@ async def send_notification(user_id: str, title: str, message: str, notification
     return notification
 
 
-async def send_notification_to_family(family_id: str, title: str, message: str, notification_type: str):
+async def send_notification_to_family(family_id: str, title: str, message: str, notification_type: str, category: Optional[str] = None):
     """Notify every member of a family."""
     members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
     for m in members:
-        await send_notification(m["user_id"], title, message, notification_type)
+        await send_notification(m["user_id"], title, message, notification_type, category=category, **{})
 
 
-async def send_notification_to_all(title: str, message: str, notification_type: str = "system"):
-    """Notify all users (e.g. new E-Games available)."""
+async def send_notification_to_all(title: str, message: str, notification_type: str = "system", category: Optional[str] = None):
+    """Notify all users (e.g. new E-Games available). Respects each user's notification_preferences when category is set."""
     user_ids = await db.users.distinct("id")
     for uid in user_ids:
-        await send_notification(uid, title, message, notification_type)
+        await send_notification(uid, title, message, notification_type, category=category)
+
+
+def _objectives_week_start(dt: datetime) -> str:
+    """Monday 00:00 UTC as start of week; return YYYY-MM-DD."""
+    d = dt.date()
+    days_since_monday = (d.weekday()) % 7
+    start = d - timedelta(days=days_since_monday)
+    return start.strftime("%Y-%m-%d")
+
+
+async def update_objectives_progress(user_id: str, objective_type: str, amount: int = 1, city: Optional[str] = None):
+    """Increment daily/weekly objectives progress. Call after crimes, GTA, busts, booze sell, interest deposit, hitlist NPC kill.
+    objective_type: crimes, gta, busts, booze_runs, crimes_in_city, deposit_interest, hitlist_npc_kills.
+    For crimes_in_city pass city= (e.g. Chicago). For deposit_interest pass amount= dollars deposited."""
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+    week_start_str = _objectives_week_start(now)
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "objectives_daily_date": 1, "objectives_daily_progress": 1,
+         "objectives_weekly_start": 1, "objectives_weekly_progress": 1}
+    )
+    if not user:
+        return
+    daily_date = user.get("objectives_daily_date")
+    weekly_start = user.get("objectives_weekly_start")
+    daily_progress = dict(user.get("objectives_daily_progress") or {})
+    weekly_progress = dict(user.get("objectives_weekly_progress") or {})
+
+    if daily_date == today_str:
+        if objective_type == "crimes_in_city" and city:
+            key = f"crimes_in_{city.lower().replace(' ', '_')}"
+            daily_progress[key] = daily_progress.get(key, 0) + amount
+        else:
+            daily_progress[objective_type] = daily_progress.get(objective_type, 0) + amount
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"objectives_daily_progress": daily_progress}}
+        )
+    if weekly_start == week_start_str:
+        if objective_type == "crimes_in_city" and city:
+            key = f"crimes_in_{city.lower().replace(' ', '_')}"
+            weekly_progress[key] = weekly_progress.get(key, 0) + amount
+        else:
+            weekly_progress[objective_type] = weekly_progress.get(objective_type, 0) + amount
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"objectives_weekly_progress": weekly_progress}}
+        )
 
 
 async def _family_war_start(family_a_id: str, family_b_id: str):
@@ -1170,7 +1236,8 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
             user_id,
             f"🎉 Ranked Up to {new_rank_name}!",
             f"Congratulations! You've reached {new_rank_name} (Rank {new_rank}). You've been rewarded with {total_bullets} bullets!",
-            "rank_up"
+            "rank_up",
+            category="system",
         )
         
         return total_bullets
@@ -1576,6 +1643,42 @@ async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depen
         {"$set": {"avatar_url": avatar}}
     )
     return {"message": "Avatar updated"}
+
+DEFAULT_NOTIFICATION_PREFS = {"ent_games": True, "oc_invites": True, "attacks": True, "system": True, "messages": True}
+
+@api_router.get("/profile/preferences")
+async def get_profile_preferences(current_user: dict = Depends(get_current_user)):
+    """Get current user's notification preferences (for profile settings)."""
+    prefs = current_user.get("notification_preferences") or {}
+    out = {k: prefs.get(k, v) for k, v in DEFAULT_NOTIFICATION_PREFS.items()}
+    return {"notification_preferences": out}
+
+@api_router.patch("/profile/preferences")
+async def update_profile_preferences(request: NotificationPreferencesRequest, current_user: dict = Depends(get_current_user)):
+    """Update notification preferences. Only provided keys are updated."""
+    updates = {k: v for k, v in request.model_dump().items() if v is not None}
+    if not updates:
+        return {"message": "No preferences to update", "notification_preferences": current_user.get("notification_preferences") or DEFAULT_NOTIFICATION_PREFS}
+    new_prefs = {**(current_user.get("notification_preferences") or DEFAULT_NOTIFICATION_PREFS), **updates}
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"notification_preferences": new_prefs}}
+    )
+    return {"message": "Preferences updated", "notification_preferences": new_prefs}
+
+@api_router.post("/profile/change-password")
+async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    """Change password for the logged-in user. Requires current password."""
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "password_hash": 1})
+    if not user or not verify_password(request.current_password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"password_hash": get_password_hash(request.new_password)}}
+    )
+    return {"message": "Password changed successfully"}
 
 @api_router.post("/dead-alive/retrieve")
 async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user)):
@@ -3401,7 +3504,10 @@ async def admin_clear_bodyguards(target_username: str, current_user: dict = Depe
     """Delete all bodyguard slots for a user (testing)."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
-    target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1})
+    username_pattern = _username_pattern(target_username)
+    if not username_pattern:
+        raise HTTPException(status_code=404, detail="User not found")
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -3822,8 +3928,10 @@ async def admin_kill_player(target_username: str, current_user: dict = Depends(g
 async def admin_set_search_time(target_username: str, search_minutes: int, current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    attacker = await db.users.find_one({"username": target_username}, {"_id": 0})
+    username_pattern = _username_pattern(target_username)
+    if not username_pattern:
+        raise HTTPException(status_code=404, detail="User not found")
+    attacker = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not attacker:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -4331,7 +4439,10 @@ PROPERTY_ATTACK_HOURS = 12
 
 @api_router.post("/racket/extort")
 async def extort_property(request: ProtectionRacketRequest, current_user: dict = Depends(get_current_user)):
-    target = await db.users.find_one({"username": request.target_username}, {"_id": 0, "money": 1})
+    username_pattern = _username_pattern((request.target_username or "").strip())
+    if not username_pattern:
+        raise HTTPException(status_code=400, detail="Target username required")
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "money": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):
@@ -5142,8 +5253,8 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot attack yourself")
-    # NPCs on the hitlist are personal: you can only attack NPCs you added
-    if target.get("is_npc"):
+    # Hitlist NPCs (added via Hitlist) are personal: you can only attack those you added. Robot bodyguards can be attacked when going after a player's guards.
+    if target.get("is_npc") and not target.get("is_bodyguard"):
         hitlist_npc = await db.hitlist.find_one(
             {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
             {"_id": 1}
@@ -5410,7 +5521,10 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
         if cost_points > 0 and (current_user.get("points") or 0) < cost_points:
             raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
 
-    target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
+    target_username_pattern = _username_pattern(target_username)
+    if not target_username_pattern:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):
@@ -5688,7 +5802,10 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
     target_username = (request.target_username or "").strip()
     if not target_username:
         raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1, "username": 1})
+    target_username_pattern = _username_pattern(target_username)
+    if not target_username_pattern:
+        raise HTTPException(status_code=404, detail="User not found")
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:
@@ -6106,6 +6223,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 if car_id and next((c for c in CARS if c.get("id") == car_id), None):
                     await db.user_cars.insert_one({"id": str(uuid.uuid4()), "user_id": killer_id, "car_id": car_id, "acquired_at": datetime.now(timezone.utc).isoformat()})
                 await db.hitlist.delete_one({"target_id": victim_id, "target_type": "npc"})
+                try:
+                    await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
+                except Exception:
+                    pass
                 now_iso = datetime.now(timezone.utc).isoformat()
                 await db.users.update_one({"id": victim_id}, {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0}, "$inc": {"total_deaths": 1}})
                 await db.attacks.update_one({"id": attack["id"]}, {"$set": {"status": "completed", "result": "success", "rewards": rewards}})
@@ -6128,6 +6249,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         "target_health_after": 0.0,
                         "is_npc_kill": True,
                     })
+                except Exception:
+                    pass
+                try:
+                    await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
                 except Exception:
                     pass
                 return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
@@ -6255,7 +6380,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 }
             }}
         )
-        await send_notification(killer_id, "Kill", success_message, "attack")
+        await send_notification(killer_id, "Kill", success_message, "attack", category="attacks")
 
         # Witness statements: how many go out depends on weapon (worse gun = more) and silencer (reduces). Sent to random users (victim may or may not get one).
         max_statements = max(0, min(6, 7 - (best_damage // 20)))
@@ -6275,7 +6400,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             if recipient_ids:
                 to_send = min(number_to_send, len(recipient_ids))
                 for uid in random.sample(recipient_ids, to_send):
-                    await send_notification(uid, "Witness statement", witness_msg, "attack")
+                    await send_notification(uid, "Witness statement", witness_msg, "attack", category="attacks")
 
         victim_family_id = target.get("family_id")
         killer_family_id = current_user.get("family_id")
@@ -6511,10 +6636,13 @@ async def send_message_to_user(request: SendMessageRequest, current_user: dict =
     target_username = (request.target_username or "").strip()
     if not target_username:
         raise HTTPException(status_code=400, detail="Enter a username")
-    if target_username == (current_user.get("username") or ""):
+    if (target_username or "").lower() == (current_user.get("username") or "").lower():
         raise HTTPException(status_code=400, detail="You cannot message yourself")
+    target_username_pattern = _username_pattern(target_username)
+    if not target_username_pattern:
+        raise HTTPException(status_code=404, detail="User not found")
     target = await db.users.find_one(
-        {"username": target_username},
+        {"username": target_username_pattern},
         {"_id": 0, "id": 1, "username": 1}
     )
     if not target:
@@ -6531,7 +6659,7 @@ async def send_message_to_user(request: SendMessageRequest, current_user: dict =
     extra = {"sender_id": current_user["id"], "sender_username": sender_username}
     if gif_url:
         extra["gif_url"] = gif_url
-    await send_notification(target["id"], title, message, "user_message", **extra)
+    await send_notification(target["id"], title, message, "user_message", category="messages", **extra)
     # Store a copy for the sender so thread view can show "You: ..."
     sent_copy = {
         "id": str(uuid.uuid4()),
@@ -8752,7 +8880,10 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
     target_username = (req.target_username or "").strip()
     if not target_username:
         raise HTTPException(status_code=400, detail="Enter a username")
-    target = await db.users.find_one({"$or": [{"username": target_username}, {"username": target_username.lower()}]}, {"_id": 0, "id": 1, "username": 1})
+    target_username_pattern = _username_pattern(target_username)
+    if not target_username_pattern:
+        raise HTTPException(status_code=404, detail="User not found")
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:
@@ -9029,6 +9160,10 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
         updates["$inc"][f"booze_carrying.{request.booze_id}"] = -request.amount
         updates["$inc"][f"booze_carrying_cost.{request.booze_id}"] = -cost_of_sold
     await db.users.update_one({"id": current_user["id"]}, updates)
+    try:
+        await update_objectives_progress(current_user["id"], "booze_runs", 1)
+    except Exception:
+        pass
     return {"message": f"Sold {request.amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val}
 
 
@@ -9515,7 +9650,10 @@ async def cancel_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
 
 @api_router.post("/bodyguards/invite")
 async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict = Depends(get_current_user)):
-    target = await db.users.find_one({"username": request.target_username}, {"_id": 0})
+    username_pattern = _username_pattern((request.target_username or "").strip())
+    if not username_pattern:
+        raise HTTPException(status_code=400, detail="Target username required")
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     
@@ -10465,7 +10603,7 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
@@ -10474,6 +10612,7 @@ oc.register(api_router)
 forum.register(api_router)
 entertainer.register(api_router)
 bullet_factory.register(api_router)
+objectives.register(api_router)
 
 app.include_router(api_router)
 

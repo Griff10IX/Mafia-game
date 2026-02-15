@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost } from 'lucide-react';
+import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import styles from '../styles/noir.module.css';
 
 function formatDateTime(iso) {
@@ -26,12 +27,33 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ username }) => (
+const PageHeader = ({ username, isMe, onOpenSettings }) => (
   <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <UserIcon className="w-8 h-8 md:w-10 md:h-10" />
-      Profile
-    </h1>
+    <div className="flex items-center justify-between gap-3 mb-1 md:mb-2">
+      <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary flex items-center gap-3">
+        <UserIcon className="w-8 h-8 md:w-10 md:h-10" />
+        Profile
+      </h1>
+      {isMe && onOpenSettings && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="p-2 rounded-md text-mutedForeground hover:text-primary hover:bg-primary/10 border border-transparent hover:border-primary/30 transition-colors"
+                aria-label="Profile settings"
+              >
+                <Settings className="w-5 h-5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p>Profile settings</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
     <p className="text-sm text-mutedForeground">
       {username ? `Viewing ${username}'s profile` : 'User profile'}
     </p>
@@ -383,6 +405,11 @@ export default function Profile() {
   const [preview, setPreview] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
@@ -430,6 +457,51 @@ export default function Profile() {
     };
     run();
   }, [username]);
+
+  const openSettings = () => setSettingsOpen(true);
+  const fetchPrefs = async () => {
+    try {
+      const res = await api.get('/profile/preferences');
+      setPrefs(res.data?.notification_preferences || { ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
+    } catch (_) {
+      setPrefs({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
+    }
+  };
+  useEffect(() => {
+    if (settingsOpen && isMe) fetchPrefs();
+  }, [settingsOpen, isMe]);
+
+  const updatePref = (key, value) => {
+    const next = { ...prefs, [key]: value };
+    setPrefs(next);
+    setSavingPrefs(true);
+    api.patch('/profile/preferences', next).then(() => {
+      toast.success('Notification preferences saved');
+    }).catch((e) => {
+      toast.error(e.response?.data?.detail || 'Failed to save preferences');
+    }).finally(() => setSavingPrefs(false));
+  };
+
+  const changePassword = async () => {
+    if (passwordForm.new !== passwordForm.confirm) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (passwordForm.new.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await api.post('/profile/change-password', { current_password: passwordForm.current, new_password: passwordForm.new });
+      toast.success('Password changed successfully');
+      setPasswordForm({ current: '', new: '', confirm: '' });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
 
   const onPickFile = (file) => {
     if (!file) return;
@@ -538,7 +610,7 @@ export default function Profile() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="profile-page">
-      <PageHeader username={profile.username} />
+      <PageHeader username={profile.username} isMe={isMe} onOpenSettings={openSettings} />
 
       <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
         <ProfileInfoCard 
@@ -629,6 +701,80 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {isMe && (
+        <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+          <DialogContent className="max-w-md bg-card border-primary/20">
+            <DialogHeader>
+              <DialogTitle className="font-heading text-primary">Profile settings</DialogTitle>
+              <DialogDescription>Notifications and account options.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Notifications</h3>
+                <p className="text-xs text-mutedForeground mb-3">Choose which inbox notifications you receive. Off = no new notifications for that type.</p>
+                <div className="space-y-2">
+                  {[
+                    { key: 'ent_games', label: 'E-Games (dice & gbox results, new games)' },
+                    { key: 'oc_invites', label: 'OC Heist invites' },
+                    { key: 'attacks', label: 'Kills & attack alerts' },
+                    { key: 'system', label: 'System (rank ups, rewards)' },
+                    { key: 'messages', label: 'Direct messages' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between gap-3 py-1">
+                      <span className="text-sm text-foreground">{label}</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={!!prefs[key]}
+                        disabled={savingPrefs}
+                        onClick={() => updatePref(key, !prefs[key])}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs[key] ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingPrefs ? 'opacity-60' : ''}`}
+                      >
+                        <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="border-t border-border pt-4">
+                <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Change password</h3>
+                <div className="space-y-2">
+                  <input
+                    type="password"
+                    placeholder="Current password"
+                    value={passwordForm.current}
+                    onChange={(e) => setPasswordForm((f) => ({ ...f, current: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <input
+                    type="password"
+                    placeholder="New password (min 6 characters)"
+                    value={passwordForm.new}
+                    onChange={(e) => setPasswordForm((f) => ({ ...f, new: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <input
+                    type="password"
+                    placeholder="Confirm new password"
+                    value={passwordForm.confirm}
+                    onChange={(e) => setPasswordForm((f) => ({ ...f, confirm: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={changePassword}
+                    disabled={changingPassword || !passwordForm.current || !passwordForm.new || !passwordForm.confirm}
+                    className="mt-2 w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {changingPassword ? 'Changing...' : 'Change password'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

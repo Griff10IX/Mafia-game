@@ -1,6 +1,7 @@
 # Organised Crime: team heists (Driver, Weapons, Explosives, Hacker), 4 job types, 6h/4h cooldown
 from datetime import datetime, timezone, timedelta
 import random
+import re
 import os
 import sys
 import logging
@@ -221,8 +222,13 @@ async def send_invites_oc(
     creator_username = current_user.get("username") or "Someone"
     invites_out = []
     for role, username in invite_slots:
+        uname = (username or "").strip()
+        username_ci = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE) if uname else None
+        criteria = [{"id": username}]
+        if username_ci:
+            criteria.append({"username": username_ci})
         target = await db.users.find_one(
-            {"$or": [{"username": username}, {"id": username}]},
+            {"$or": criteria},
             {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
         )
         if not target:
@@ -254,6 +260,7 @@ async def send_invites_oc(
             "OC Heist invite",
             msg,
             "system",
+            category="oc_invites",
             oc_invite_id=invite_id,
             oc_role=role,
             oc_job_name=job_name,
@@ -377,6 +384,7 @@ async def oc_pending_set_slot(
         "OC Heist invite",
         f"{current_user.get('username') or 'Someone'} invited you to an Organised Crime heist as {request.role.replace('_', ' ').capitalize()} ({job_name}). Accept or decline in your inbox. Expires in {OC_INVITE_EXPIRY_MINUTES} min.",
         "system",
+        category="oc_invites",
         oc_invite_id=invite_id,
         oc_role=request.role,
         oc_job_name=job_name,

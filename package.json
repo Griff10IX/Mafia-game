@@ -61,7 +61,8 @@
     "start": "cross-env NODE_OPTIONS=--openssl-legacy-provider craco start",
     "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider CI=false craco build",
     "serve": "npm run build; npx serve -s build",
-    "test": "craco test"
+    "test": "craco test",
+    "overnight": "node scripts/run-overnight.js"
   },
   "browserslist": {
     "production": [">0.2%", "not dead", "not op_mini all"],

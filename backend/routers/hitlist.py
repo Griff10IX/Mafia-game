@@ -1,6 +1,7 @@
 # Hitlist endpoints: place bounties, list, buy off (self/other), reveal, NPCs
 from datetime import datetime, timezone, timedelta
 import logging
+import re
 import random
 import uuid
 from typing import Optional
@@ -371,7 +372,8 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
     target_username = (request.target_username or "").strip()
     if not target_username:
         raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one({"username": target_username}, {"_id": 0, "id": 1, "username": 1})
+    username_pattern = re.compile("^" + re.escape(target_username) + "$", re.IGNORECASE)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:

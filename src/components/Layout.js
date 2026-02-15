@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks } from 'lucide-react';
 import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import styles from '../styles/noir.module.css';
@@ -23,6 +23,7 @@ export default function Layout({ children }) {
   const [rankProgress, setRankProgress] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [statOrder, setStatOrder] = useState(loadStatOrder);
+  const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
@@ -260,6 +261,7 @@ export default function Layout({ children }) {
   // Order: Home → You → Money → Combat → Travel → Social → Ranking → Assets → Casino → Shop → Other
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
+    { path: '/objectives', icon: ListChecks, label: 'Objectives' },
     { path: '/profile', icon: User, label: 'Profile' },
     { path: '/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/bank', icon: Landmark, label: 'Bank' },
@@ -665,6 +667,11 @@ export default function Layout({ children }) {
           const handleDragStart = (e, statId) => {
             e.dataTransfer.setData('text/plain', statId);
             e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.dropEffect = 'move';
+            setDraggingStatId(statId);
+          };
+          const handleDragEnd = () => {
+            setDraggingStatId(null);
           };
           const handleDragOver = (e) => {
             e.preventDefault();
@@ -681,6 +688,7 @@ export default function Layout({ children }) {
               try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
               return next;
             });
+            setDraggingStatId(null);
           };
           const casinoProfit = user.casino_profit ?? 0;
           const propertyProfit = user.property_profit ?? 0;
@@ -741,14 +749,18 @@ export default function Layout({ children }) {
               );
             }
             if (statId === 'property') {
-              const parts = [];
-              if (casinoProfit > 0) parts.push(`$${Number(casinoProfit).toLocaleString()}`);
-              if (propertyProfit > 0) parts.push(`${Number(propertyProfit).toLocaleString()} pts`);
-              const label = parts.length ? parts.join(' / ') : '$0';
+              const casinoStr = `$${Number(casinoProfit).toLocaleString()}`;
+              const propertyStr = `${Number(propertyProfit).toLocaleString()} pts`;
               return (
-                <div className={chipClass} title="Casino & property profit">
-                  <Building2 size={12} className="text-emerald-400" />
-                  <span className="font-heading text-xs text-foreground">{label}</span>
+                <div className={chipClass} title="Casino profit ($) · Property profit (pts)">
+                  <Building2 size={12} className="text-emerald-400 shrink-0" />
+                  <span className="font-heading text-[11px] text-foreground whitespace-nowrap">
+                    <span className="text-mutedForeground">Casino </span>
+                    <span className={casinoProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}>{casinoStr}</span>
+                    <span className="text-mutedForeground mx-0.5">·</span>
+                    <span className="text-mutedForeground">Property </span>
+                    <span className={propertyProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}>{propertyStr}</span>
+                  </span>
                 </div>
               );
             }
@@ -762,7 +774,7 @@ export default function Layout({ children }) {
               {statOrder.map((statId) => {
                 if (statId === 'notifications') {
                   return (
-                    <div key="notifications" className="relative shrink-0 cursor-grab active:cursor-grabbing" ref={notificationPanelRef} draggable onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')}>
+                    <div key="notifications" className={`relative shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out ${draggingStatId === 'notifications' ? 'opacity-50 scale-95' : ''}`} ref={notificationPanelRef} draggable onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')} onDragEnd={handleDragEnd}>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
@@ -815,7 +827,7 @@ export default function Layout({ children }) {
                 const content = renderStat(statId);
                 if (!content) return null;
                 return (
-                  <div key={statId} draggable onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} className="shrink-0 cursor-grab active:cursor-grabbing">
+                  <div key={statId} draggable onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
                     {content}
                   </div>
                 );

@@ -137,6 +137,11 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
         "matures_at": matures.isoformat(),
         "claimed_at": None,
     })
+    try:
+        if update_objectives_progress:
+            await update_objectives_progress(current_user["id"], "deposit_interest", amount)
+    except Exception:
+        pass
     return {"message": f"Deposited ${amount:,} for {hours}h", "deposit_id": deposit_id, "interest": interest, "matures_at": matures.isoformat()}
 
 
@@ -242,15 +247,18 @@ async def bank_transfer(request: MoneyTransferRequest, current_user: dict = Depe
     return {"message": f"Sent ${amount:,} to {recipient['username']}"}
 
 
+update_objectives_progress = None
+
 def register(router):
     """Register bank routes. Must be called after server module is fully loaded."""
     # Import here to avoid circular dependency
     import server as srv
-    global db, get_current_user, SWISS_BANK_LIMIT_START, BANK_INTEREST_OPTIONS
+    global db, get_current_user, SWISS_BANK_LIMIT_START, BANK_INTEREST_OPTIONS, update_objectives_progress
     db = srv.db
     get_current_user = srv.get_current_user
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     BANK_INTEREST_OPTIONS = srv.BANK_INTEREST_OPTIONS
+    update_objectives_progress = srv.update_objectives_progress
     
     router.add_api_route("/bank/meta", bank_meta, methods=["GET"])
     router.add_api_route("/bank/overview", bank_overview, methods=["GET"])

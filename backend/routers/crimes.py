@@ -70,6 +70,7 @@ from server import (
     get_rank_info,
     get_effective_event,
     log_activity,
+    update_objectives_progress,
     CrimeResponse,
     CommitCrimeResponse,
 )
@@ -218,6 +219,13 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         await db.crime_earnings.insert_one(
             {"user_id": current_user["id"], "amount": reward, "at": now}
         )
+        try:
+            await update_objectives_progress(current_user["id"], "crimes", 1)
+            city = (current_user.get("current_state") or "").strip()
+            if city:
+                await update_objectives_progress(current_user["id"], "crimes_in_city", 1, city=city)
+        except Exception:
+            pass
         message = f"Success! You earned ${reward:,} and {rank_points} rank points"
     else:
         reward = None

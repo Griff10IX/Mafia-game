@@ -1,6 +1,7 @@
 # Jail endpoints: list players (incl. jail NPCs), bust out, status; NPC admin & list; jail NPC spawner
 import asyncio
 import logging
+import re
 import random
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -13,6 +14,7 @@ from server import (
     db,
     get_current_user,
     get_rank_info,
+    update_objectives_progress,
     BustOutRequest,
     JailSetBustRewardRequest,
     ADMIN_EMAILS,
@@ -111,9 +113,11 @@ async def bust_out_of_jail(
     total_busts = int(current_user.get("jail_busts", 0) or 0)
     player_success_rate = _player_bust_success_rate(total_busts)
     
+    target_name = (request.target_username or "").strip()
+    username_ci = re.compile("^" + re.escape(target_name) + "$", re.IGNORECASE) if target_name else None
     npc = await db.jail_npcs.find_one(
-        {"username": request.target_username}, {"_id": 0}
-    )
+        {"username": username_ci}, {"_id": 0}
+    ) if username_ci else None
     if npc:
         # Use player skill directly for NPCs (no difficulty modifier)
         success = random.random() < player_success_rate
@@ -129,7 +133,11 @@ async def bust_out_of_jail(
                 {"id": current_user["id"]},
                 updates,
             )
-            await db.jail_npcs.delete_one({"username": request.target_username})
+            await db.jail_npcs.delete_one({"username": npc["username"]})
+            try:
+                await update_objectives_progress(current_user["id"], "busts", 1)
+            except Exception:
+                pass
             return {
                 "success": True,
                 "message": f"Successfully busted out {request.target_username}!",
@@ -146,8 +154,10 @@ async def bust_out_of_jail(
             "message": "Bust failed! You got caught and sent to jail.",
             "jail_time": 30,
         }
+    if not username_ci:
+        raise HTTPException(status_code=400, detail="Target username required")
     target = await db.users.find_one(
-        {"username": request.target_username}, {"_id": 0}
+        {"username": username_ci}, {"_id": 0}
     )
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
@@ -192,6 +202,10 @@ async def bust_out_of_jail(
             {"id": current_user["id"]},
             {"$inc": {"rank_points": rank_points, "jail_busts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
         )
+        try:
+            await update_objectives_progress(current_user["id"], "busts", 1)
+        except Exception:
+            pass
         return {
             "success": True,
             "message": f"Successfully busted out {target['username']}!",
