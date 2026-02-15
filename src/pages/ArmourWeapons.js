@@ -183,17 +183,29 @@ export default function ArmourWeapons() {
   const armourRows = useMemo(() => {
     return (armourData.options || []).map((o) => ({
       ...o,
-      canBuy: !o.owned && o.affordable,
+      canBuy: !o.owned && !o.locked && o.affordable,
     }));
   }, [armourData.options]);
 
   const weaponRows = useMemo(() => {
-    return (weapons || []).map((w) => ({
-      ...w,
-      canBuyMoney: w.price_money != null,
-      canBuyPoints: w.price_points != null,
-    }));
-  }, [weapons]);
+    const money = Number(me?.money ?? 0);
+    const points = Number(me?.points ?? 0);
+    return (weapons || []).map((w) => {
+      const priceMoney = w.effective_price_money ?? w.price_money ?? 0;
+      const pricePoints = w.effective_price_points ?? w.price_points ?? 0;
+      const canAffordMoney = w.price_money != null && money >= priceMoney;
+      const canAffordPoints = w.price_points != null && points >= pricePoints;
+      const canBuy = !w.owned && !w.locked && (canAffordMoney || canAffordPoints);
+      return {
+        ...w,
+        canBuyMoney: w.price_money != null,
+        canBuyPoints: w.price_points != null,
+        canAffordMoney,
+        canAffordPoints,
+        canBuy,
+      };
+    });
+  }, [weapons, me?.money, me?.points]);
 
   const equippedWeapon = useMemo(() => weapons.find((w) => w?.equipped), [weapons]);
   const bestOwned = useMemo(() => {
@@ -303,8 +315,9 @@ export default function ArmourWeapons() {
                 {weaponRows.map((w) => {
                   const isEquipped = !!w.equipped;
                   const isOwned = !!w.owned;
-                  const canBuy = !isOwned && (w.canBuyMoney || w.canBuyPoints);
-                  const usingPoints = w.canBuyPoints;
+                  const canBuy = !!w.canBuy;
+                  const usingPoints = w.canBuyPoints && (canBuy ? w.canAffordPoints : w.price_points != null);
+                  const buyDisabled = !canBuy || buyingId != null;
 
                   return (
                     <div
@@ -318,6 +331,9 @@ export default function ArmourWeapons() {
                         <div className="min-w-0">
                           <div className="text-sm font-heading font-bold text-foreground truncate">{w.name}</div>
                           {isOwned && <div className="text-[10px] text-mutedForeground">Owned ×{w.quantity}</div>}
+                          {!isOwned && w.locked && w.required_weapon_name && (
+                            <div className="text-[9px] text-zinc-500">Requires {w.required_weapon_name}</div>
+                          )}
                         </div>
                       </div>
                       <span className="text-xs text-primary font-bold text-right">{w.damage}</span>
@@ -350,18 +366,19 @@ export default function ArmourWeapons() {
                               Sell
                             </button>
                           </>
-                        ) : canBuy ? (
-                          <button
-                            onClick={() => buyWeapon(w.id, usingPoints ? 'points' : 'money')}
-                            disabled={buyingId != null}
-                            className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[9px] font-bold uppercase border border-yellow-600/50 disabled:opacity-50"
-                          >
-                            {buyingId === w.id ? '...' : 'Buy'}
-                          </button>
                         ) : (
-                          <span className="text-[9px] text-zinc-500 flex items-center gap-0.5">
-                            <Lock size={10} /> Locked
-                          </span>
+                          <button
+                            onClick={() => !buyDisabled && buyWeapon(w.id, usingPoints ? 'points' : 'money')}
+                            disabled={buyDisabled}
+                            title={w.locked ? `Requires ${w.required_weapon_name ?? 'previous weapon'}` : !canBuy ? 'Not enough cash or points' : ''}
+                            className={`rounded px-2 py-1 text-[9px] font-bold uppercase border ${
+                              canBuy && buyingId == null
+                                ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50'
+                                : 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 opacity-60 cursor-not-allowed'
+                            } disabled:opacity-60 disabled:cursor-not-allowed`}
+                          >
+                            {buyingId === w.id ? '...' : w.locked ? <span className="flex items-center gap-1"><Lock size={10} /> Buy</span> : 'Buy'}
+                          </button>
                         )}
                       </div>
                     </div>
@@ -387,6 +404,7 @@ export default function ArmourWeapons() {
                   const isEquipped = !!o.equipped;
                   const isOwned = !!o.owned;
                   const canSell = isOwned && o.level === armourData.owned_max && armourData.owned_max >= 1;
+                  const buyDisabled = !o.canBuy || buyingLevel != null;
 
                   return (
                     <div
@@ -401,6 +419,9 @@ export default function ArmourWeapons() {
                           <div className="text-sm font-heading font-bold text-foreground truncate">{o.name}</div>
                           {isOwned && !isEquipped && <div className="text-[10px] text-mutedForeground">Owned</div>}
                           {isEquipped && <div className="text-[10px] text-emerald-400">Equipped</div>}
+                          {!isOwned && o.locked && o.required_armour_name && (
+                            <div className="text-[9px] text-zinc-500">Requires {o.required_armour_name}</div>
+                          )}
                         </div>
                       </div>
                       <span className="text-xs text-primary font-bold text-center">Lv.{o.level}</span>
@@ -436,18 +457,19 @@ export default function ArmourWeapons() {
                               </button>
                             )}
                           </>
-                        ) : o.canBuy ? (
-                          <button
-                            onClick={() => buyArmour(o.level)}
-                            disabled={buyingLevel != null}
-                            className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[9px] font-bold uppercase border border-yellow-600/50 disabled:opacity-50"
-                          >
-                            {buyingLevel === o.level ? '...' : 'Buy'}
-                          </button>
                         ) : (
-                          <span className="text-[9px] text-zinc-500 flex items-center gap-0.5">
-                            <Lock size={10} /> Locked
-                          </span>
+                          <button
+                            onClick={() => !buyDisabled && buyArmour(o.level)}
+                            disabled={buyDisabled}
+                            title={o.locked ? `Requires ${o.required_armour_name ?? 'previous armour'}` : !o.affordable ? 'Not enough cash or points' : ''}
+                            className={`rounded px-2 py-1 text-[9px] font-bold uppercase border ${
+                              o.canBuy && buyingLevel == null
+                                ? 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50'
+                                : 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 opacity-60 cursor-not-allowed'
+                            } disabled:opacity-60 disabled:cursor-not-allowed`}
+                          >
+                            {buyingLevel === o.level ? '...' : o.locked ? <span className="flex items-center gap-1"><Lock size={10} /> Buy</span> : 'Buy'}
+                          </button>
                         )}
                       </div>
                     </div>

@@ -551,6 +551,7 @@ class CrimeResponse(BaseModel):
     attempts: int = 0
     successes: int = 0
     progress: int = 10  # 10-92, success rate % (bar can drop max 15% on fail)
+    unlocked: bool = True  # rank requirement met (progress bar only shown when unlocked)
 
 class CommitCrimeResponse(BaseModel):
     success: bool
@@ -3031,8 +3032,12 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
         
         # PROGRESSION: Armour must be purchased in order
         locked = False
+        required_armour_name = None
         if s["level"] > 1 and s["level"] > owned_max + 1:
             locked = True
+            prev = next((x for x in ARMOUR_SETS if x["level"] == s["level"] - 1), None)
+            if prev:
+                required_armour_name = prev.get("name", f"Level {s['level'] - 1}")
         
         rows.append({
             "level": s["level"],
@@ -3046,6 +3051,7 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
             "equipped": equipped_level == s["level"],
             "affordable": affordable,
             "locked": locked,
+            "required_armour_name": required_armour_name,
         })
 
     return {

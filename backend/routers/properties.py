@@ -1,6 +1,7 @@
 # Properties endpoints: list, buy, collect income
+# Progression: buy in order; first property pays least, last pays most. Must max previous to unlock next.
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
@@ -18,10 +19,40 @@ class PropertyResponse(BaseModel):
     owned: bool
     level: int
     available_income: float
+    locked: bool = False
+    required_property_name: Optional[str] = None
+
+
+def _property_order(properties: list) -> list:
+    """Return properties in progression order (first = worst pay, last = best)."""
+    by_id = {p["id"]: p for p in properties}
+    ordered = []
+    next_id = None
+    for _ in range(len(properties) + 1):
+        if next_id is None:
+            for p in properties:
+                if p.get("required_property_id") is None:
+                    ordered.append(p)
+                    next_id = p["id"]
+                    break
+        else:
+            for p in properties:
+                if p.get("required_property_id") == next_id:
+                    ordered.append(p)
+                    next_id = p["id"]
+                    break
+            else:
+                break
+    # Append any not in chain (e.g. legacy props)
+    for p in properties:
+        if p not in ordered:
+            ordered.append(p)
+    return ordered
 
 
 async def get_properties(current_user: dict = Depends(get_current_user)):
     properties = await db.properties.find({}, {"_id": 0}).to_list(100)
+    properties = _property_order(properties)
     user_properties = await db.user_properties.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(100)
     properties_map = {up["property_id"]: up for up in user_properties}
     result = []
@@ -34,6 +65,15 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             last_collected = datetime.fromisoformat(user_prop["last_collected"])
             hours_passed = (datetime.now(timezone.utc) - last_collected).total_seconds() / 3600
             available_income = min(hours_passed * prop["income_per_hour"] * level, prop["income_per_hour"] * level * 24)
+        required_property_id = prop.get("required_property_id")
+        required_property_name = None
+        locked = False
+        if required_property_id:
+            req_prop = next((p for p in properties if p["id"] == required_property_id), None)
+            required_property_name = req_prop["name"] if req_prop else required_property_id
+            req_user = properties_map.get(required_property_id)
+            if not req_user or req_user["level"] < (req_prop["max_level"] if req_prop else 0):
+                locked = True
         result.append(PropertyResponse(
             id=prop["id"],
             name=prop["name"],
@@ -43,7 +83,9 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             max_level=prop["max_level"],
             owned=owned,
             level=level,
-            available_income=available_income
+            available_income=available_income,
+            locked=locked,
+            required_property_name=required_property_name,
         ))
     return result
 
@@ -61,6 +103,20 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             raise HTTPException(status_code=400, detail="Property already at max level")
         cost = prop["price"] * (user_prop["level"] + 1)
     else:
+        # First-time buy: must have previous property at max level
+        required_property_id = prop.get("required_property_id")
+        if required_property_id:
+            req_prop = await db.properties.find_one({"id": required_property_id}, {"_id": 0, "name": 1, "max_level": 1})
+            req_user = await db.user_properties.find_one(
+                {"user_id": current_user["id"], "property_id": required_property_id},
+                {"_id": 0, "level": 1}
+            )
+            if not req_user or req_user["level"] < (req_prop["max_level"] if req_prop else 0):
+                name = req_prop["name"] if req_prop else required_property_id
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Max out {name} (reach max level) to unlock this property.",
+                )
         cost = prop["price"]
     if current_user["money"] < cost:
         raise HTTPException(status_code=400, detail="Insufficient money")

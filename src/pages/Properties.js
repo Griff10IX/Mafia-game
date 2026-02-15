@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building, TrendingUp, DollarSign, Crosshair, Shield } from 'lucide-react';
+import { Building, TrendingUp, DollarSign, Lock } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -134,6 +134,12 @@ export default function Properties() {
                     ${property.income_per_hour.toLocaleString()}
                   </span>
                 </div>
+                {property.locked && property.required_property_name && (
+                  <div className="flex items-center gap-1.5 text-[10px] text-amber-400/90 font-heading py-1 border-b border-primary/10">
+                    <Lock size={10} className="shrink-0" />
+                    <span>Requires {property.required_property_name} at max level</span>
+                  </div>
+                )}
                 {property.owned && (
                   <>
                     <div className="flex items-center justify-between text-sm py-1 border-b border-primary/10">
@@ -182,11 +188,23 @@ export default function Properties() {
                   </>
                 ) : (
                   <button
-                    onClick={() => buyProperty(property.id)}
+                    onClick={() => !property.locked && buyProperty(property.id)}
                     data-testid={`buy-property-${property.id}`}
-                    className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2 text-sm transition-smooth border border-yellow-600/50 shadow-lg shadow-primary/20"
+                    disabled={property.locked}
+                    className={`w-full rounded-sm font-heading font-bold uppercase tracking-widest py-2 text-sm transition-smooth border ${
+                      property.locked
+                        ? 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 cursor-not-allowed opacity-70'
+                        : 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 border-yellow-600/50 shadow-lg shadow-primary/20'
+                    }`}
                   >
-                    Buy Property
+                    {property.locked ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Lock size={14} />
+                        Locked
+                      </div>
+                    ) : (
+                      'Buy Property'
+                    )}
                   </button>
                 )}
               </div>
@@ -207,6 +225,7 @@ export default function Properties() {
         <div className="p-4">
           <ul className="space-y-1 text-xs text-mutedForeground font-heading">
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Properties generate passive income per hour</li>
+            <li className="flex items-center gap-2"><span className="text-primary">◆</span> Buy in order — max out each property to unlock the next; first pays least, last pays most</li>
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Upgrade properties to increase income generation</li>
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Income accumulates up to 24 hours maximum</li>
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Collect income regularly to maximize earnings</li>

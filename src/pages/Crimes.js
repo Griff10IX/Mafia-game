@@ -119,7 +119,7 @@ const CrimeProgressBar = ({ progress }) => {
   return (
     <div
       className="flex items-center gap-1.5 shrink-0"
-      title={`Crime success rate: ${pct}%. Fails drop 2–3% at a time; once you've hit 92%, it never goes below 77%.`}
+      title={`Crime success rate: ${pct}%. Success +3–5%; fail -1–3%; once you've hit 92%, it never goes below 77%.`}
     >
       <div
         style={{
@@ -177,8 +177,8 @@ const CrimeRow = ({ crime, onCommit }) => {
         </div>
       </div>
 
-      {/* Crime progress bar (success rate 10–92%) */}
-      <CrimeProgressBar progress={crime.progress} />
+      {/* Crime progress bar (only when unlocked by rank) */}
+      {crime.unlocked !== false && <CrimeProgressBar progress={crime.progress} />}
 
       {/* Risk */}
       <div className="shrink-0 w-12 text-center">

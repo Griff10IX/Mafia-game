@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight } from 'lucide-react';
+import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight, Wrench, Check } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
+
+const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
 const ROLE_IDS = ['driver', 'weapons', 'explosives', 'hacker'];
 const ROLE_ICONS = { driver: '🚗', weapons: '🔫', explosives: '💣', hacker: '💻' };
@@ -84,6 +86,70 @@ const PageHeader = ({ cooldownHours, status }) => {
           <span className="text-emerald-400 font-bold">✓ Ready</span>
         )}
         {status?.has_timer_upgrade && <span className="text-primary/60">(4h)</span>}
+      </div>
+    </div>
+  );
+};
+
+// Equipment section: select gear for next heist (cost charged when heist runs)
+const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
+  const list = equipmentData?.equipment || [];
+  const selectedId = equipmentData?.selected_equipment ?? 'basic';
+
+  if (list.length === 0) return null;
+
+  return (
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+          <Wrench size={14} />
+          Equipment
+        </span>
+      </div>
+      <div className="p-3 space-y-2">
+        <p className="text-[10px] text-mutedForeground">
+          Pick gear for your next heist. Cost is charged when you run the heist. Better gear = higher success %.
+        </p>
+        <div className="space-y-1.5">
+          {list.map((eq) => {
+            const isSelected = eq.id === selectedId;
+            const canAfford = eq.can_afford;
+            return (
+              <div
+                key={eq.id}
+                className={`flex items-center justify-between gap-2 px-3 py-2 rounded-md border ${
+                  isSelected ? 'bg-primary/10 border-primary/40' : 'bg-zinc-800/20 border-zinc-700/50'
+                }`}
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-heading font-bold text-foreground">{eq.name}</div>
+                  <div className="text-[10px] text-mutedForeground">{eq.description}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="text-xs text-primary font-bold">{formatMoney(eq.cost)}</span>
+                  {isSelected ? (
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-heading">
+                      <Check size={12} /> Selected
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onSelect(eq.id)}
+                      disabled={selecting || (eq.cost > 0 && !canAfford)}
+                      className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${
+                        selecting || (eq.cost > 0 && !canAfford)
+                          ? 'opacity-50 cursor-not-allowed bg-zinc-800/50 text-zinc-500 border-zinc-600/50'
+                          : 'bg-primary/20 text-primary border-primary/50 hover:bg-primary/30'
+                      }`}
+                    >
+                      {selecting ? '...' : 'Select'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -345,6 +411,8 @@ export default function OrganisedCrime() {
   const [sendInviteLoading, setSendInviteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pendingSlotEdit, setPendingSlotEdit] = useState({ role: null, value: '' });
+  const [equipmentData, setEquipmentData] = useState(null);
+  const [equipmentSelecting, setEquipmentSelecting] = useState(false);
   const [rulesCollapsed, setRulesCollapsed] = useState(() => {
     try { return localStorage.getItem(COLLAPSED_KEY) === 'true'; } catch { return true; }
   });
@@ -359,9 +427,10 @@ export default function OrganisedCrime() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, statusRes] = await Promise.all([
+      const [configRes, statusRes, equipmentRes] = await Promise.all([
         api.get('/oc/config'),
         api.get('/oc/status'),
+        api.get('/organised-crime/equipment').catch(() => ({ data: null })),
       ]);
       
       if (configRes.data) {
@@ -370,6 +439,10 @@ export default function OrganisedCrime() {
       
       if (statusRes.data) {
         setStatus(statusRes.data);
+      }
+      
+      if (equipmentRes.data) {
+        setEquipmentData(equipmentRes.data);
       }
       
       if (configRes.data?.jobs?.length && !selectedJobId) {
@@ -591,6 +664,20 @@ export default function OrganisedCrime() {
     }
   };
 
+  const selectEquipment = async (equipmentId) => {
+    setEquipmentSelecting(true);
+    try {
+      await api.post('/organised-crime/equipment/select', { equipment_id: equipmentId });
+      toast.success('Equipment selected for next heist');
+      const res = await api.get('/organised-crime/equipment');
+      if (res.data) setEquipmentData(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to select equipment');
+    } finally {
+      setEquipmentSelecting(false);
+    }
+  };
+
   const onCooldown = status?.cooldown_until && new Date(status.cooldown_until) > new Date();
   const cooldownStr = formatCooldown(status?.cooldown_until);
 
@@ -611,6 +698,15 @@ export default function OrganisedCrime() {
         setPendingSlotEdit={setPendingSlotEdit}
         setPendingSlot={setPendingSlot}
       />
+
+      {/* Equipment (per heist) */}
+      {equipmentData && (
+        <EquipmentSection
+          equipmentData={equipmentData}
+          onSelect={selectEquipment}
+          selecting={equipmentSelecting}
+        />
+      )}
 
       {/* Job Selection */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>

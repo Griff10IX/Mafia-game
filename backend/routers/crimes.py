@@ -10,13 +10,27 @@ from fastapi import Depends, HTTPException
 logger = logging.getLogger(__name__)
 
 
-# Progress bar: 10-92%. Success +2%. Fail drops 2-3% per fail; once you've hit max, floor is 77% (never drop more than 15% from max)
+# Progress bar: 10-92%. Success +3-5%. Fail -1-3%; once you've hit max, floor is 77% (never drop more than 15% from max)
 CRIME_PROGRESS_MIN = 10
 CRIME_PROGRESS_MAX = 92
-CRIME_PROGRESS_GAIN_ON_SUCCESS = 2       # +2% per success
-CRIME_PROGRESS_DROP_PER_FAIL_MIN = 2      # -2% or -3% per failure
+CRIME_PROGRESS_GAIN_MIN = 3
+CRIME_PROGRESS_GAIN_MAX = 5
+CRIME_PROGRESS_DROP_PER_FAIL_MIN = 1
 CRIME_PROGRESS_DROP_PER_FAIL_MAX = 3
 CRIME_PROGRESS_MAX_DROP_FROM_PEAK = 15    # once hit 92%, can never go below 77%
+
+CRIME_FAIL_MESSAGES = [
+    "The job went sideways. Better luck next time.",
+    "Someone talked. The heat was waiting — no score this time.",
+    "Sloppy work. You got away clean but came up empty.",
+    "Wrong place, wrong time. The mark got wise.",
+    "You had to ditch the take and run. Next time.",
+    "A flatfoot showed up. You slipped out with nothing.",
+    "The setup fell apart. Live to score another day.",
+    "Bad break. No payout this time.",
+    "Something didn't feel right — you walked. Smart, but broke.",
+    "The coppers were onto it. You got out with your skin, that's it.",
+]
 
 
 def _progress_from_attempts(crime_attempts: int) -> int:
@@ -87,6 +101,7 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
             else _progress_from_attempts(attempts)
         )
         
+        unlocked = crime["min_rank"] <= user_rank
         result.append(
             CrimeResponse(
                 id=crime["id"],
@@ -102,6 +117,7 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
                 attempts=attempts,
                 successes=successes,
                 progress=progress,
+                unlocked=unlocked,
             )
         )
     return result
@@ -139,7 +155,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 detail=f"Crime on cooldown until {user_crime['cooldown_until']}",
             )
     
-    # PROGRESS BAR: 10-92%. Success +2%. Fail -2% or -3%; once hit 92%, floor is 77%
+    # PROGRESS BAR: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor is 77%
     stored = (user_crime or {}).get("progress")
     progress_max = (user_crime or {}).get("progress_max")
     crime_attempts = int((user_crime or {}).get("attempts", 0) or 0)
@@ -156,7 +172,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     success = random.random() < success_rate
 
     if success:
-        progress_after = min(CRIME_PROGRESS_MAX, progress + CRIME_PROGRESS_GAIN_ON_SUCCESS)
+        gain = random.randint(CRIME_PROGRESS_GAIN_MIN, CRIME_PROGRESS_GAIN_MAX)
+        progress_after = min(CRIME_PROGRESS_MAX, progress + gain)
         progress_max = max(progress_max, progress_after)
     else:
         drop = random.randint(
@@ -200,7 +217,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         message = f"Success! You earned ${reward:,} and {rank_points} rank points"
     else:
         reward = None
-        message = "Crime failed! Better luck next time."
+        message = random.choice(CRIME_FAIL_MESSAGES)
     cooldown_min = crime.get("cooldown_minutes", 5)
     cooldown_seconds = crime.get("cooldown_seconds")
     if cooldown_seconds is None:
@@ -208,7 +225,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     else:
         cooldown_seconds = int(float(cooldown_seconds))
     cooldown_until = (now + timedelta(seconds=cooldown_seconds)).isoformat()
-    # Track attempts, successes, progress (fail drops 2-3%; once at 92% floor is 77%)
+    # Track attempts, successes, progress (success +3-5%; fail -1-3%; once at 92% floor is 77%)
     set_fields = {
         "last_committed": now.isoformat(),
         "cooldown_until": cooldown_until,

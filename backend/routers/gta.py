@@ -21,13 +21,43 @@ from server import (
 )
 
 
-# Progress bar: 10-92%. Success +2%. Fail -2% or -3%; once hit 92%, floor is 77% (same as crimes)
+# Progress bar: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor is 77% (same as crimes)
 GTA_PROGRESS_MIN = 10
 GTA_PROGRESS_MAX = 92
-GTA_PROGRESS_GAIN_ON_SUCCESS = 2
-GTA_PROGRESS_DROP_PER_FAIL_MIN = 2
+GTA_PROGRESS_GAIN_MIN = 3
+GTA_PROGRESS_GAIN_MAX = 5
+GTA_PROGRESS_DROP_PER_FAIL_MIN = 1
 GTA_PROGRESS_DROP_PER_FAIL_MAX = 3
 GTA_PROGRESS_MAX_DROP_FROM_PEAK = 15
+
+# On GTA failure, this chance you get caught (jail); otherwise you get away with no car
+GTA_CAUGHT_CHANCE = 0.5
+
+GTA_FAIL_CAUGHT_MESSAGES = [
+    "Busted! The cops got you — {seconds}s in the slammer.",
+    "Caught red-handed. {seconds}s behind bars.",
+    "The feds were waiting. Enjoy the next {seconds}s in jail.",
+    "You didn't make the getaway. {seconds}s in the clink.",
+    "Wrong car, wrong cop. {seconds}s to think it over.",
+    "They ran your plates. See you in {seconds}s.",
+    "The heat was on your tail. {seconds}s in the can.",
+    "Blown cover. {seconds}s in the joint.",
+    "No clean escape this time. {seconds}s in lockup.",
+    "They had the road blocked. {seconds}s in the slammer.",
+]
+
+GTA_FAIL_ESCAPED_MESSAGES = [
+    "No score — you had to ditch the car and run. At least you're free.",
+    "The job fell through. You got away clean, but empty-handed.",
+    "Wrong mark. You bailed in time; no car, no cuffs.",
+    "Something spooked you. You walked away with nothing.",
+    "The engine wouldn't turn over. You slipped out before the heat came.",
+    "Bad timing. You left the ride and melted into the crowd.",
+    "No dice this time. You got away — next run might be the one.",
+    "The target was hot. You skipped the take and stayed free.",
+    "Clean getaway, but no wheels. Live to steal another day.",
+    "You had to abort. No car, but no jail either.",
+]
 
 
 def _gta_progress_from_attempts(gta_attempts: int) -> int:
@@ -126,7 +156,7 @@ async def attempt_gta(
                 status_code=400, detail=f"GTA cooldown: try again in {secs}s"
             )
     
-    # PROGRESS BAR: 10-92%. Success +2%. Fail -2% or -3%; once hit 92%, floor 77%
+    # PROGRESS BAR: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor 77%
     user_gta = await db.user_gta.find_one(
         {"user_id": current_user["id"], "option_id": option["id"]},
         {"_id": 0},
@@ -150,7 +180,8 @@ async def attempt_gta(
     success = random.random() < min(1.0, gta_rate)
     
     if success:
-        progress_after = min(GTA_PROGRESS_MAX, progress + GTA_PROGRESS_GAIN_ON_SUCCESS)
+        gain = random.randint(GTA_PROGRESS_GAIN_MIN, GTA_PROGRESS_GAIN_MAX)
+        progress_after = min(GTA_PROGRESS_MAX, progress + gain)
         progress_max = max(progress_max, progress_after)
     else:
         drop = random.randint(
@@ -223,17 +254,31 @@ async def attempt_gta(
             rank_points_earned=rank_points,
             progress_after=progress_after,
         )
-    jail_until = datetime.now(timezone.utc) + timedelta(seconds=option["jail_time"])
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}},
-    )
+    # Failure: sometimes caught (jail), sometimes get away (no car, no jail)
+    caught = random.random() < GTA_CAUGHT_CHANCE
+    if caught:
+        jail_until = datetime.now(timezone.utc) + timedelta(seconds=option["jail_time"])
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}},
+        )
+        fail_msg = random.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=option["jail_time"])
+        return GTAAttemptResponse(
+            success=False,
+            message=fail_msg,
+            car=None,
+            jailed=True,
+            jail_until=jail_until.isoformat(),
+            rank_points_earned=0,
+            progress_after=progress_after,
+        )
+    fail_msg = random.choice(GTA_FAIL_ESCAPED_MESSAGES)
     return GTAAttemptResponse(
         success=False,
-        message=f"Caught! You're going to jail for {option['jail_time']} seconds.",
+        message=fail_msg,
         car=None,
-        jailed=True,
-        jail_until=jail_until.isoformat(),
+        jailed=False,
+        jail_until=None,
         rank_points_earned=0,
         progress_after=progress_after,
     )

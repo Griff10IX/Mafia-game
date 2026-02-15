@@ -137,8 +137,8 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
         </div>
       </div>
 
-      {/* Progress bar (success rate 10–92%) */}
-      <GTAProgressBar progress={option.progress} />
+      {/* Progress bar (only when unlocked) */}
+      {unlocked && <GTAProgressBar progress={option.progress} />}
 
       {/* Success rate */}
       <div className="shrink-0 w-12 text-center">
@@ -266,7 +266,7 @@ const GTAProgressBar = ({ progress }) => {
   return (
     <div
       className="flex items-center gap-1.5 shrink-0"
-      title={`Success rate: ${pct}%. Fails drop 2–3%; once you've hit 92%, it never goes below 77%.`}
+      title={`Success rate: ${pct}%. Success +3–5%; fail -1–3%; once you've hit 92%, it never goes below 77%.`}
     >
       <div
         style={{
