@@ -116,11 +116,22 @@ export default function QuickTrade() {
 
   // Calculate per-point prices and fees (0.5% fee, minimum 1 point)
   const formatCurrency = (num) => {
-    return parseFloat(num).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!num) return '0';
+    const parsed = parseFloat(num);
+    // Show decimals only if needed
+    if (parsed % 1 === 0) {
+      return parsed.toLocaleString('en-US');
+    }
+    return parsed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
   
-  const sellPerPoint = sellPoints && sellCost ? formatCurrency(parseFloat(sellCost) / parseFloat(sellPoints)) : '0.00';
-  const buyPerPoint = buyPoints && buyOffer ? formatCurrency(parseFloat(buyOffer) / parseFloat(buyPoints)) : '0.00';
+  const formatNumber = (num) => {
+    if (!num) return '0';
+    return parseFloat(num).toLocaleString('en-US');
+  };
+  
+  const sellPerPoint = sellPoints && sellCost ? (parseFloat(sellCost) / parseFloat(sellPoints)) : 0;
+  const buyPerPoint = buyPoints && buyOffer ? (parseFloat(buyOffer) / parseFloat(buyPoints)) : 0;
   
   const calculateFee = (points) => {
     const fee = Math.max(1, Math.floor(parseFloat(points) * 0.005));
