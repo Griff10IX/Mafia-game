@@ -9,6 +9,7 @@ from bson.objectid import ObjectId
 import os
 import re
 import logging
+import logging.handlers
 import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
@@ -3766,11 +3767,24 @@ async def admin_user_details(user_id: str, current_user: dict = Depends(get_curr
     return {"user": user, "dice_owned": dice_owned}
 
 
+class WipeConfirmation(BaseModel):
+    confirmation_text: str  # Must be exactly "WIPE ALL DATA"
+
 @api_router.post("/admin/wipe-all-users")
-async def admin_wipe_all_users(current_user: dict = Depends(get_current_user)):
-    """DANGEROUS: Delete ALL users and related data from the game. Admin only."""
+async def admin_wipe_all_users(confirm: WipeConfirmation, current_user: dict = Depends(get_current_user)):
+    """DANGEROUS: Delete ALL users and related data from the game. Admin only. Requires confirmation."""
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
+    
+    # SAFETY: Require exact confirmation text to prevent accidental wipes
+    if confirm.confirmation_text != "WIPE ALL DATA":
+        raise HTTPException(
+            status_code=400, 
+            detail='Confirmation required. Send {"confirmation_text": "WIPE ALL DATA"} to confirm database wipe.'
+        )
+    
+    # Log the wipe action
+    logging.warning(f"🚨 DATABASE WIPE initiated by {current_user['email']} ({current_user['username']})")
     
     deleted = {}
     
@@ -3794,9 +3808,13 @@ async def admin_wipe_all_users(current_user: dict = Depends(get_current_user)):
     deleted["dice_ownership"] = (await db.dice_ownership.delete_many({})).deleted_count
     deleted["dice_buy_back_offers"] = (await db.dice_buy_back_offers.delete_many({})).deleted_count
     deleted["interest_deposits"] = (await db.interest_deposits.delete_many({})).deleted_count
+    deleted["password_resets"] = (await db.password_resets.delete_many({})).deleted_count
+    deleted["money_transfers"] = (await db.money_transfers.delete_many({})).deleted_count
+    deleted["bank_deposits"] = (await db.bank_deposits.delete_many({})).deleted_count
     
     total = sum(deleted.values())
-    return {"message": f"Wiped {total} documents from the game", "details": deleted}
+    logging.warning(f"🚨 DATABASE WIPE completed by {current_user['email']}: {total} documents deleted")
+    return {"message": f"⚠️ DATABASE WIPED: {total} documents deleted from the game", "details": deleted}
 
 
 @api_router.post("/admin/delete-user/{user_id}")
@@ -9790,9 +9808,25 @@ app.add_middleware(
 )
 
 # Configure logging
+# Configure logging with both file and console output
+log_dir = ROOT_DIR / 'logs'
+log_dir.mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        # Console output
+        logging.StreamHandler(),
+        # File output (creates new file daily, keeps last 30 days)
+        logging.handlers.TimedRotatingFileHandler(
+            log_dir / 'server.log',
+            when='midnight',
+            interval=1,
+            backupCount=30,
+            encoding='utf-8'
+        )
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -9809,7 +9843,13 @@ async def shutdown_db_client():
     client.close()
 
 async def init_game_data():
+    """
+    Initialize game data on server startup.
+    NOTE: Be VERY careful with delete operations in this function as it runs on EVERY server restart!
+    """
     # Update crimes with new cooldowns (seconds instead of minutes for faster gameplay)
+    # SAFETY: Only updating crimes collection (game config), not user data
+    logging.info("🔄 Initializing game data (crimes, weapons)...")
     await db.crimes.delete_many({})
     crimes = [
         {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 50, "reward_max": 200, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
@@ -9848,3 +9888,5 @@ async def init_game_data():
             {"id": "prop4", "name": "Luxury Casino", "property_type": "casino", "price": 200000, "income_per_hour": 5000, "max_level": 5}
         ]
         await db.properties.insert_many(properties)
+    
+    logging.info("✅ Game data initialization complete (NO user data was modified)")

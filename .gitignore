@@ -22,3 +22,12 @@ build/
 frontend/build/
 .DS_Store
 *.log
+logs/
+
+# Backups
+backups/
+*.tar.gz
+backup_*/
+
+# MongoDB dumps
+dump/
