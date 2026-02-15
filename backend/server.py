@@ -917,11 +917,17 @@ async def _family_war_start(family_a_id: str, family_b_id: str):
     })
     if existing:
         return
+    fa = await db.families.find_one({"id": family_a_id}, {"_id": 0, "name": 1, "tag": 1})
+    fb = await db.families.find_one({"id": family_b_id}, {"_id": 0, "name": 1, "tag": 1})
+    family_a_name = (fa or {}).get("name") or (fa or {}).get("tag") or family_a_id
+    family_b_name = (fb or {}).get("name") or (fb or {}).get("tag") or family_b_id
     now = datetime.now(timezone.utc).isoformat()
     await db.family_wars.insert_one({
         "id": str(uuid.uuid4()),
         "family_a_id": family_a_id,
         "family_b_id": family_b_id,
+        "family_a_name": family_a_name,
+        "family_b_name": family_b_name,
         "status": "active",
         "created_at": now,
         "ended_at": None,
@@ -962,12 +968,14 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
     winner_id = war["family_b_id"] if war["family_a_id"] == victim_family_id else war["family_a_id"]
     loser_id = victim_family_id
     now = datetime.now(timezone.utc).isoformat()
-    loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0})
-    winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0})
+    loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1})
+    winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
+    winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id
+    loser_family_name = (loser_family or {}).get("name") or (loser_family or {}).get("tag") or loser_id
     if not winner_family:
         await db.family_wars.update_one(
             {"id": war["id"]},
-            {"$set": {"status": "family_a_wins" if winner_id == war["family_a_id"] else "family_b_wins", "ended_at": now, "winner_family_id": winner_id, "loser_family_id": loser_id}},
+            {"$set": {"status": "family_a_wins" if winner_id == war["family_a_id"] else "family_b_wins", "ended_at": now, "winner_family_id": winner_id, "loser_family_id": loser_id, "winner_family_name": winner_family_name, "loser_family_name": loser_family_name}},
         )
         return
     winner_boss_id = winner_family.get("boss_id")
@@ -999,6 +1007,8 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             "ended_at": now,
             "winner_family_id": winner_id,
             "loser_family_id": loser_id,
+            "winner_family_name": winner_family_name,
+            "loser_family_name": loser_family_name,
             "prize_exclusive_cars": prize_count,
             "prize_rackets": prize_rackets,
         }},
@@ -8461,6 +8471,7 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
 async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
     """Accept a sell point offer (buy points from someone)"""
     buyer_id = current_user["id"]
+    buyer_username = current_user.get("username", "Unknown")
     
     offer = await db.trade_sell_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
     if not offer:
@@ -8480,7 +8491,7 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
     # Mark completed
     await db.trade_sell_offers.update_one(
         {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "completed", "buyer_id": buyer_id, "completed_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": datetime.now(timezone.utc)}}
     )
     
     return {"message": "Trade completed successfully", "points_received": offer["points"], "cost_paid": offer["cost"]}
@@ -8489,6 +8500,7 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
 async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
     """Accept a buy point offer (sell points to someone)"""
     seller_id = current_user["id"]
+    seller_username = current_user.get("username", "Unknown")
     
     offer = await db.trade_buy_offers.find_one({"_id": ObjectId(offer_id), "status": "active"})
     if not offer:
@@ -8508,7 +8520,7 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
     # Mark completed
     await db.trade_buy_offers.update_one(
         {"_id": ObjectId(offer_id)},
-        {"$set": {"status": "completed", "seller_id": seller_id, "completed_at": datetime.now(timezone.utc)}}
+        {"$set": {"status": "completed", "seller_id": seller_id, "seller_username": seller_username, "completed_at": datetime.now(timezone.utc)}}
     )
     
     return {"message": "Trade completed successfully", "points_sold": offer["points"], "cash_received": offer["offer"]}
@@ -8898,6 +8910,10 @@ async def cleanup_dead_families():
                     
                     assets_transferred = True
                 
+                # Names for DB readability
+                winner_fam_doc = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
+                winner_family_name = (winner_fam_doc or {}).get("name") or (winner_fam_doc or {}).get("tag") or winner_id
+                loser_family_name = fam.get("name") or fam.get("tag") or loser_id
                 # Mark war as won
                 await db.family_wars.update_one(
                     {"id": active_war["id"]},
@@ -8905,6 +8921,8 @@ async def cleanup_dead_families():
                         "status": war_status,
                         "winner_family_id": winner_id,
                         "loser_family_id": loser_id,
+                        "winner_family_name": winner_family_name,
+                        "loser_family_name": loser_family_name,
                         "ended_at": now,
                         "prize_rackets": prize_rackets_list if prize_rackets_list else None,
                         "prize_treasury": prize_treasury
