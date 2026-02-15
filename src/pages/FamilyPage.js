@@ -151,53 +151,72 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, event, 
 // ============================================================================
 
 const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
-  <div className="space-y-2">
-    <div className="flex items-center justify-between px-1">
-      <span className="text-[10px] text-mutedForeground">Take 25% of their treasury. 2 raids per crew / 3h.</span>
-      <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:text-primary/80"><RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /></button>
+  <div className="space-y-3">
+    <div className="flex items-center justify-between">
+      <span className="text-[10px] text-mutedForeground">Take 25% of treasury · 2 raids per family / 3h</span>
+      <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:text-primary/80 p-1"><RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} /></button>
     </div>
+    
     {targets.length === 0 ? (
-      <p className="text-xs text-mutedForeground text-center py-4">No enemy rackets available</p>
+      <div className="text-center py-8">
+        <Crosshair size={24} className="mx-auto text-zinc-600 mb-2" />
+        <p className="text-xs text-mutedForeground">No enemy rackets available</p>
+      </div>
     ) : (
-      <div className="overflow-x-auto max-h-64 overflow-y-auto">
-        <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-card">
-            <tr className="text-[10px] text-mutedForeground uppercase border-b border-zinc-700/50">
-              <th className="text-left py-1 px-2 font-heading">Family</th>
-              <th className="text-left py-1 px-2 font-heading">Racket</th>
-              <th className="text-right py-1 px-2 font-heading w-16">Take</th>
-              <th className="text-center py-1 px-2 font-heading w-12">%</th>
-              <th className="text-right py-1 px-2 font-heading w-14"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800/30">
-            {targets.flatMap((t) => (t.rackets || []).map((r, i) => {
-              const key = `${t.family_id}-${r.racket_id}`;
-              const canRaid = (t.raids_remaining ?? 2) > 0;
-              return (
-                <tr key={key} className="hover:bg-zinc-800/30">
-                  {i === 0 && (
-                    <td className="py-1 px-2 font-heading text-foreground" rowSpan={t.rackets.length}>
-                      <div className="flex items-center gap-1">
-                        <span className="font-bold">{t.family_name}</span>
-                        <span className="text-primary text-[10px]">[{t.family_tag}]</span>
+      <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+        {targets.map((t) => {
+          const raidsLeft = (t.raids_remaining ?? 2);
+          const canRaid = raidsLeft > 0;
+          return (
+            <div key={t.family_id} className={`rounded border ${canRaid ? 'border-primary/30 bg-zinc-900/50' : 'border-zinc-700/30 bg-zinc-900/30 opacity-60'}`}>
+              {/* Family Header */}
+              <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-700/30">
+                <div className="flex items-center gap-2">
+                  <span className="font-heading font-bold text-foreground">{t.family_name}</span>
+                  <span className="text-primary text-[10px] font-mono">[{t.family_tag}]</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-heading ${canRaid ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {raidsLeft}/2 raids
+                  </span>
+                </div>
+              </div>
+              
+              {/* Rackets Grid */}
+              <div className="p-2 grid gap-1.5">
+                {(t.rackets || []).map((r) => {
+                  const key = `${t.family_id}-${r.racket_id}`;
+                  const isLoading = loading === key;
+                  return (
+                    <div key={key} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-zinc-800/40 rounded hover:bg-zinc-800/60 transition-colors">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xs text-foreground font-medium truncate">{r.racket_name}</span>
+                        <span className="text-[10px] text-zinc-500 shrink-0">L{r.level}</span>
                       </div>
-                      <div className="text-[9px] text-mutedForeground">{t.raids_used ?? 0}/2 used</div>
-                    </td>
-                  )}
-                  <td className="py-1 px-2 text-foreground">{r.racket_name} <span className="text-mutedForeground">L{r.level}</span></td>
-                  <td className="py-1 px-2 text-right text-primary font-bold">{formatMoney(r.potential_take)}</td>
-                  <td className="py-1 px-2 text-center text-mutedForeground">{r.success_chance_pct}%</td>
-                  <td className="py-1 px-2 text-right">
-                    <button onClick={() => onRaid(t.family_id, r.racket_id)} disabled={loading === key || !canRaid} className="bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase disabled:opacity-40">
-                      {loading === key ? '…' : 'Raid'}
-                    </button>
-                  </td>
-                </tr>
-              );
-            }))}
-          </tbody>
-        </table>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <div className="text-right">
+                          <div className="text-xs text-primary font-bold">{formatMoney(r.potential_take)}</div>
+                          <div className="text-[9px] text-mutedForeground">{r.success_chance_pct}% chance</div>
+                        </div>
+                        <button 
+                          onClick={() => onRaid(t.family_id, r.racket_id)} 
+                          disabled={isLoading || !canRaid}
+                          className={`w-14 py-1.5 rounded text-[10px] font-bold uppercase transition-all ${
+                            canRaid 
+                              ? 'bg-gradient-to-b from-red-600 to-red-800 text-white border border-red-500/50 hover:from-red-500 hover:to-red-700 shadow-lg shadow-red-900/20' 
+                              : 'bg-zinc-700/30 text-zinc-500 border border-zinc-600/30 cursor-not-allowed'
+                          }`}
+                        >
+                          {isLoading ? '...' : '⚔️ Raid'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
       </div>
     )}
   </div>
