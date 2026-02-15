@@ -124,6 +124,10 @@ export default function SportsBetting() {
   const [cancellingBetId, setCancellingBetId] = useState(null);
   const [cancellingAll, setCancellingAll] = useState(false);
   const [cancellingEventId, setCancellingEventId] = useState(null);
+  const [customEventName, setCustomEventName] = useState('');
+  const [customEventCategory, setCustomEventCategory] = useState('Football');
+  const [customEventOptions, setCustomEventOptions] = useState([{ name: '', odds: 2 }, { name: '', odds: 2 }]);
+  const [addingCustom, setAddingCustom] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -292,6 +296,52 @@ export default function SportsBetting() {
     } finally {
       setAddingTemplateId(null);
     }
+  };
+
+  const addCustomEvent = async () => {
+    const name = (customEventName || '').trim();
+    if (!name) {
+      toast.error('Enter event name');
+      return;
+    }
+    const opts = customEventOptions.map((o) => ({ name: (o.name || '').trim(), odds: Number(o.odds) || 2 })).filter((o) => o.name);
+    if (opts.length < 2) {
+      toast.error('Add at least 2 options with names');
+      return;
+    }
+    setAddingCustom(true);
+    try {
+      await api.post('/admin/sports-betting/custom-event', {
+        name,
+        category: customEventCategory,
+        options: opts,
+      });
+      toast.success('Custom event added');
+      setCustomEventName('');
+      setCustomEventOptions([{ name: '', odds: 2 }, { name: '', odds: 2 }]);
+      await fetchAll();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed to add custom event'));
+    } finally {
+      setAddingCustom(false);
+    }
+  };
+
+  const setCustomOption = (index, field, value) => {
+    setCustomEventOptions((prev) => {
+      const next = [...prev];
+      if (!next[index]) next[index] = { name: '', odds: 2 };
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const addCustomOptionRow = () => {
+    setCustomEventOptions((prev) => [...prev, { name: '', odds: 2 }]);
+  };
+
+  const removeCustomOptionRow = (index) => {
+    setCustomEventOptions((prev) => (prev.length <= 2 ? prev : prev.filter((_, i) => i !== index)));
   };
 
   if (loading) {
@@ -478,6 +528,70 @@ export default function SportsBetting() {
                     }
                     return out;
                   })()}
+                </div>
+                <div className="mt-4 pt-4 border-t border-primary/20">
+                  <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-3">Add custom game</h3>
+                  <p className="text-xs text-mutedForeground font-heading mb-3">Create a manual event (e.g. football match) when the API has no games.</p>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-heading text-mutedForeground mb-1">Event name</label>
+                      <input
+                        type="text"
+                        value={customEventName}
+                        onChange={(e) => setCustomEventName(e.target.value)}
+                        placeholder="e.g. Team A vs Team B"
+                        className="w-full bg-zinc-800 border border-primary/30 rounded-sm px-2 py-1.5 text-sm font-heading text-foreground placeholder:text-mutedForeground"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-heading text-mutedForeground mb-1">Category</label>
+                      <select
+                        value={customEventCategory}
+                        onChange={(e) => setCustomEventCategory(e.target.value)}
+                        className="w-full bg-zinc-800 border border-primary/30 rounded-sm px-2 py-1.5 text-sm font-heading text-foreground"
+                      >
+                        <option value="Football">Football</option>
+                        <option value="UFC">UFC</option>
+                        <option value="Boxing">Boxing</option>
+                        <option value="Formula 1">Formula 1</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-heading text-mutedForeground mb-1">Options (min 2)</label>
+                      {customEventOptions.map((opt, idx) => (
+                        <div key={idx} className="flex gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={opt.name}
+                            onChange={(e) => setCustomOption(idx, 'name', e.target.value)}
+                            placeholder="Option name"
+                            className="flex-1 bg-zinc-800 border border-primary/30 rounded-sm px-2 py-1.5 text-sm font-heading text-foreground placeholder:text-mutedForeground"
+                          />
+                          <input
+                            type="number"
+                            min={1.01}
+                            max={100}
+                            step={0.01}
+                            value={opt.odds}
+                            onChange={(e) => setCustomOption(idx, 'odds', e.target.value)}
+                            className="w-20 bg-zinc-800 border border-primary/30 rounded-sm px-2 py-1.5 text-sm font-heading text-foreground"
+                          />
+                          {customEventOptions.length > 2 ? (
+                            <button type="button" onClick={() => removeCustomOptionRow(idx)} className="text-red-400 hover:text-red-300 px-1" title="Remove option">×</button>
+                          ) : null}
+                        </div>
+                      ))}
+                      <button type="button" onClick={addCustomOptionRow} className="text-xs font-heading text-primary hover:underline">+ Add option</button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addCustomEvent}
+                      disabled={addingCustom}
+                      className="inline-flex items-center gap-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-3 py-1.5 rounded-sm text-sm font-heading font-bold border border-yellow-600/50 hover:opacity-90 disabled:opacity-50"
+                    >
+                      {addingCustom ? 'Adding…' : 'Create custom event'}
+                    </button>
+                  </div>
                 </div>
               </div>
             </section>

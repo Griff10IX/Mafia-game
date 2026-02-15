@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings } from 'lucide-react';
+import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -83,7 +83,7 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
   );
 };
 
-const ProfileInfoCard = ({ profile, isMe, onAddToSearch }) => {
+const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney }) => {
   const profileRows = [
     { 
       label: 'Username', 
@@ -150,16 +150,38 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch }) => {
             </span>
           </div>
           {!isMe && (
-            <button
-              type="button"
-              onClick={onAddToSearch}
-              className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
-              title="Add to Attack searches"
-              aria-label="Add to Attack searches"
-              data-testid="profile-add-to-search"
-            >
-              <Search size={16} />
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={onAddToSearch}
+                className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                title="Add to Attack searches"
+                aria-label="Add to Attack searches"
+                data-testid="profile-add-to-search"
+              >
+                <Search size={16} />
+              </button>
+              {profile.id && (
+                <button
+                  type="button"
+                  onClick={() => onSendMessage?.()}
+                  className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                  title="Send message"
+                  aria-label="Send message"
+                >
+                  <MessageCircle size={16} />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onSendMoney?.()}
+                className="inline-flex items-center justify-center h-9 w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                title="Send money"
+                aria-label="Send money"
+              >
+                <DollarSign size={16} />
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -255,52 +277,100 @@ const HonoursCard = ({ honours }) => (
   </div>
 );
 
-const PropertiesCard = ({ ownedCasinos }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-2">
-        <Building2 size={16} />
-        Properties
-      </h3>
-    </div>
-    <div className="p-4">
-      {ownedCasinos.length === 0 ? (
-        <div className="text-center py-8">
-          <Building2 size={48} className="mx-auto text-primary/30 mb-3" />
-          <p className="text-sm text-mutedForeground font-heading">
-            No casinos owned
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {ownedCasinos.map((c, i) => (
-            <div key={i} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors">
-              <div className="font-heading font-bold text-foreground text-base mb-2">
-                🎲 {c.city} Dice
-              </div>
-              <div className="space-y-1 text-sm font-heading">
-                <div className="flex justify-between">
-                  <span className="text-mutedForeground">Max Bet:</span>
-                  <span className="text-primary font-bold">
-                    ${Number(c.max_bet || 0).toLocaleString()}
-                  </span>
-                </div>
-                {c.buy_back_reward != null && c.buy_back_reward > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-mutedForeground">Buyback:</span>
-                    <span className="text-primary font-bold">
-                      {Number(c.buy_back_reward).toLocaleString()} pts
-                    </span>
+const PropertiesCard = ({ ownedCasinos, property }) => {
+  const hasCasinos = ownedCasinos?.length > 0;
+  const hasProperty = property && (property.type === 'airport' || property.type === 'bullet_factory');
+  const isEmpty = !hasCasinos && !hasProperty;
+
+  return (
+    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+      <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
+        <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-2">
+          <Building2 size={16} />
+          Properties
+        </h3>
+      </div>
+      <div className="p-4">
+        {isEmpty ? (
+          <div className="text-center py-8">
+            <Building2 size={48} className="mx-auto text-primary/30 mb-3" />
+            <p className="text-sm text-mutedForeground font-heading">
+              No casinos or properties owned
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {hasCasinos && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {ownedCasinos.map((c, i) => (
+                  <div key={i} className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors">
+                    <div className="font-heading font-bold text-foreground text-base mb-2">
+                      🎲 {c.city} Dice
+                    </div>
+                    <div className="space-y-1 text-sm font-heading">
+                      <div className="flex justify-between">
+                        <span className="text-mutedForeground">Max Bet:</span>
+                        <span className="text-primary font-bold">
+                          ${Number(c.max_bet || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      {c.buy_back_reward != null && c.buy_back_reward > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-mutedForeground">Buyback:</span>
+                          <span className="text-primary font-bold">
+                            {Number(c.buy_back_reward).toLocaleString()} pts
+                          </span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
+            {property?.type === 'airport' && (
+              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-center gap-3">
+                <Plane size={24} className="text-primary shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-heading font-bold text-foreground text-base">
+                    ✈️ Airport — {property.state ?? '—'} (Slot {property.slot ?? 1})
+                  </div>
+                  <div className="space-y-1 text-sm font-heading mt-1">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-mutedForeground">Price per travel:</span>
+                      <span className="text-primary font-bold">{Number(property.price_per_travel ?? 0).toLocaleString()} pts</span>
+                    </div>
+                    {property.total_earnings != null && (
+                      <div className="flex justify-between gap-2">
+                        <span className="text-mutedForeground">Total earnings:</span>
+                        <span className="text-primary font-bold">{Number(property.total_earnings).toLocaleString()} pts</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            {property?.type === 'bullet_factory' && (
+              <div className="rounded-md border border-primary/20 px-4 py-3 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-center gap-3">
+                <Factory size={24} className="text-primary shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-heading font-bold text-foreground text-base">
+                    Bullet factory — {property.state ?? '—'}
+                  </div>
+                  {property.price_per_bullet != null && (
+                    <div className="text-sm font-heading mt-1">
+                      <span className="text-mutedForeground">Price per bullet: </span>
+                      <span className="text-primary font-bold">${Number(property.price_per_bullet).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const AdminStatsCard = ({ adminStats }) => (
   <div className="bg-card rounded-md overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10">
@@ -616,7 +686,9 @@ export default function Profile() {
         <ProfileInfoCard 
           profile={profile} 
           isMe={isMe} 
-          onAddToSearch={addToAttackSearches} 
+          onAddToSearch={addToAttackSearches}
+          onSendMessage={profile.id ? () => navigate(`/inbox/chat/${profile.id}`) : undefined}
+          onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
         />
 
         {isMe && hasAdminEmail && (
@@ -674,7 +746,7 @@ export default function Profile() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
           <HonoursCard honours={honours} />
-          <PropertiesCard ownedCasinos={ownedCasinos} />
+          <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} />
         </div>
 
         {!isMe && profile.admin_stats && (

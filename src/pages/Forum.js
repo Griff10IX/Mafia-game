@@ -137,7 +137,7 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className={`${styles.panel} w-full max-w-sm rounded-md overflow-hidden border border-primary/30 shadow-2xl`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Create Auto Game</h2>
+          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Create Game</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-3 space-y-3">
           <div>
@@ -449,7 +449,7 @@ export default function Forum() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {activeTab === 'entertainer' && (
+          {activeTab === 'entertainer' && !isAdmin && (
             <button
               onClick={() => setGameModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 border border-primary/50 text-primary text-xs font-heading font-bold uppercase rounded hover:bg-primary/30 transition-all"

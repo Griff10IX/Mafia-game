@@ -1608,11 +1608,15 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
         for d in dice_owned
     ]
 
+    # Property (airport or bullet factory; max one per user)
+    property_ = await _user_owns_any_property(user_id)
+
     # Inbox: received = notifications for this user (we don't track sent per user)
     messages_received = await db.notifications.count_documents({"user_id": user_id})
     messages_sent = 0
 
     out = {
+        "id": user_id,
         "username": user["username"],
         "rank": rank_id,
         "rank_name": rank_name,
@@ -1631,6 +1635,7 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
         "family_name": family_name,
         "honours": honours,
         "owned_casinos": owned_casinos,
+        "property": property_,
         "messages_sent": messages_sent,
         "messages_received": messages_received,
     }
@@ -2369,6 +2374,17 @@ class AdminCancelEventRequest(BaseModel):
     event_id: str
 
 
+class AdminCustomEventOption(BaseModel):
+    name: str
+    odds: Optional[float] = 2.0
+
+
+class AdminAddCustomSportsEventRequest(BaseModel):
+    name: str
+    category: str  # Football, UFC, Boxing, Formula 1
+    options: List[AdminCustomEventOption]  # at least 2
+
+
 # Live sports data cache - all templates from APIs only (no hardcoded events)
 _sports_live_cache = {"football": [], "ufc": [], "boxing": [], "f1": [], "updated_at": 0.0}
 SPORTS_LIVE_CACHE_TTL = 6 * 3600  # 6 hours
@@ -2974,6 +2990,48 @@ async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_us
     }
     await db.sports_events.insert_one(ev)
     return {"message": f"Added event: {template['name']}", "event_id": ev["id"]}
+
+
+@api_router.post("/admin/sports-betting/custom-event")
+async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventRequest, current_user: dict = Depends(get_current_user)):
+    """Admin: create a custom sports event (e.g. when no API games available). Same flow as template events."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    name = (request.name or "").strip()
+    category = (request.category or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Event name required")
+    valid_categories = ("Football", "UFC", "Boxing", "Formula 1")
+    if category not in valid_categories:
+        raise HTTPException(status_code=400, detail=f"category must be one of: {', '.join(valid_categories)}")
+    opts = list(request.options or [])
+    if len(opts) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 options required")
+    now = datetime.now(timezone.utc)
+    start_time = (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    options = []
+    for i, o in enumerate(opts):
+        opt_name = (o.name or "").strip()
+        if not opt_name:
+            raise HTTPException(status_code=400, detail=f"Option {i + 1} name required")
+        try:
+            odds = float(o.odds if o.odds is not None else 2.0)
+        except (TypeError, ValueError):
+            odds = 2.0
+        odds = max(1.01, min(100.0, round(odds, 2)))
+        opt_id = (opt_name.lower().replace(" ", "_").replace(".", "")[:24] or f"opt_{i}") + f"_{uuid.uuid4().hex[:6]}"
+        options.append({"id": opt_id, "name": opt_name, "odds": odds})
+    ev = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "category": category,
+        "start_time": start_time,
+        "options": options,
+        "is_special": False,
+        "status": "open",
+    }
+    await db.sports_events.insert_one(ev)
+    return {"message": f"Added custom event: {name}", "event_id": ev["id"]}
 
 
 @api_router.post("/admin/sports-betting/settle")
@@ -6275,6 +6333,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
                 except Exception:
                     pass
+                await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
                 return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
 
         victim_money = int(target.get("money", 0))
@@ -9097,6 +9156,7 @@ async def booze_run_buy(request: BoozeBuyRequest, current_user: dict = Depends(g
         {"id": current_user["id"]},
         {
             "$inc": {"money": -cost, f"booze_carrying.{request.booze_id}": request.amount, f"booze_carrying_cost.{request.booze_id}": cost},
+            "$set": {f"booze_buy_location.{request.booze_id}": current_state},
             "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
         }
     )
@@ -9147,13 +9207,17 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
     new_val = have - request.amount
     new_cost = total_cost_stored - cost_of_sold
     booze_name = BOOZE_TYPES[booze_index]["name"]
+    # Only count as a "run" (and add to profit/runs/objectives) when selling in a *different* city than where this booze was bought
+    buy_location = (current_user.get("booze_buy_location") or {}).get(request.booze_id)
+    is_run = buy_location is not None and buy_location != current_state
+
     today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     profit_today = current_user.get("booze_profit_today", 0)
     profit_today_date = current_user.get("booze_profit_today_date")
     if profit_today_date != today_utc:
         profit_today = 0
-    new_profit_today = profit_today + profit
-    new_profit_total = current_user.get("booze_profit_total", 0) + profit
+    new_profit_today = profit_today + profit if is_run else profit_today
+    new_profit_total = (current_user.get("booze_profit_total", 0) + profit) if is_run else current_user.get("booze_profit_total", 0)
     history_entry = {
         "at": datetime.now(timezone.utc).isoformat(),
         "action": "sell",
@@ -9161,30 +9225,33 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
         "amount": request.amount,
         "unit_price": sell_price,
         "total": revenue,
-        "profit": profit,
+        "profit": profit if is_run else None,
         "location": current_state,
+        "is_run": is_run,
     }
     updates = {
-        "$inc": {
-            "money": revenue,
-            "booze_profit_today": profit,
-            "booze_profit_total": profit,
-            "booze_runs_count": 1,
-        },
-        "$set": {"booze_profit_today_date": today_utc},
+        "$inc": {"money": revenue},
         "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
     }
+    if is_run:
+        updates["$inc"]["booze_profit_today"] = profit
+        updates["$inc"]["booze_profit_total"] = profit
+        updates["$inc"]["booze_runs_count"] = 1
+        updates["$set"] = {"booze_profit_today_date": today_utc}
     if new_val == 0:
-        updates["$unset"] = {f"booze_carrying.{request.booze_id}": "", f"booze_carrying_cost.{request.booze_id}": ""}
+        updates.setdefault("$unset", {})[f"booze_carrying.{request.booze_id}"] = ""
+        updates["$unset"][f"booze_carrying_cost.{request.booze_id}"] = ""
+        updates["$unset"][f"booze_buy_location.{request.booze_id}"] = ""
     else:
         updates["$inc"][f"booze_carrying.{request.booze_id}"] = -request.amount
         updates["$inc"][f"booze_carrying_cost.{request.booze_id}"] = -cost_of_sold
     await db.users.update_one({"id": current_user["id"]}, updates)
-    try:
-        await update_objectives_progress(current_user["id"], "booze_runs", 1)
-    except Exception:
-        pass
-    return {"message": f"Sold {request.amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val}
+    if is_run:
+        try:
+            await update_objectives_progress(current_user["id"], "booze_runs", 1)
+        except Exception:
+            pass
+    return {"message": f"Sold {request.amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
 
 
 @api_router.post("/store/buy-booze-capacity")

@@ -18,7 +18,7 @@ from server import (
 # Objective types and their progress keys (daily: slightly more to do, slightly higher rewards)
 OBJECTIVE_TYPES_DAILY = [
     {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes", "target_range": (8, 22), "reward_rank_points": (5, 14), "reward_cash": (800, 3200)},
-    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTA heists", "target_range": (2, 7), "reward_rank_points": (8, 22), "reward_cash": (500, 1800)},
+    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs", "target_range": (2, 7), "reward_rank_points": (8, 22), "reward_cash": (500, 1800)},
     {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs out of jail", "target_range": (2, 6), "reward_rank_points": (8, 18), "reward_cash": (400, 1200)},
     {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze run(s) (sell delivery)", "target_range": (2, 6), "reward_rank_points": (4, 10), "reward_cash": (600, 2000)},
     {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city}", "target_range": (4, 14), "reward_rank_points": (6, 16), "reward_cash": (500, 2400), "needs_city": True},
@@ -29,7 +29,7 @@ OBJECTIVE_TYPES_DAILY = [
 # Weekly: more objectives and much higher targets/rewards
 OBJECTIVE_TYPES_WEEKLY = [
     {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes this week", "target_range": (100, 220), "reward_rank_points": (50, 120), "reward_cash": (12000, 35000)},
-    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTA heists this week", "target_range": (20, 45), "reward_rank_points": (80, 180), "reward_cash": (8000, 22000)},
+    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs this week", "target_range": (20, 45), "reward_rank_points": (80, 180), "reward_cash": (8000, 22000)},
     {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs this week", "target_range": (15, 35), "reward_rank_points": (60, 140), "reward_cash": (5000, 16000)},
     {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze runs this week", "target_range": (25, 55), "reward_rank_points": (45, 100), "reward_cash": (8000, 22000)},
     {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city} this week", "target_range": (30, 80), "reward_rank_points": (40, 90), "reward_cash": (4000, 12000), "needs_city": True},
@@ -40,7 +40,7 @@ OBJECTIVE_TYPES_WEEKLY = [
 # Monthly: big targets, big rewards
 OBJECTIVE_TYPES_MONTHLY = [
     {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes this month", "target_range": (400, 900), "reward_rank_points": (200, 450), "reward_cash": (50000, 140000)},
-    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTA heists this month", "target_range": (80, 180), "reward_rank_points": (320, 700), "reward_cash": (35000, 90000)},
+    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs this month", "target_range": (80, 180), "reward_rank_points": (320, 700), "reward_cash": (35000, 90000)},
     {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs this month", "target_range": (60, 140), "reward_rank_points": (250, 550), "reward_cash": (22000, 65000)},
     {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze runs this month", "target_range": (100, 220), "reward_rank_points": (180, 400), "reward_cash": (35000, 90000)},
     {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city} this month", "target_range": (120, 320), "reward_rank_points": (160, 360), "reward_cash": (18000, 50000), "needs_city": True},

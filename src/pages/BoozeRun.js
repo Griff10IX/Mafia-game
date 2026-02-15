@@ -238,8 +238,12 @@ const SuppliesCard = ({
   setBuyAmount, 
   setSellAmount, 
   handleBuy, 
-  handleSell 
-}) => (
+  handleSell,
+  capacity = 0,
+  carryingTotal = 0,
+}) => {
+  const maxBuy = Math.max(0, capacity - carryingTotal);
+  return (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
@@ -281,6 +285,7 @@ const SuppliesCard = ({
                     placeholder="Buy"
                     value={buyAmounts[row.booze_id] ?? ''}
                     onChange={(e) => setBuyAmount(row.booze_id, e.target.value)}
+                    onFocus={() => setBuyAmount(row.booze_id, String(maxBuy))}
                     className="w-12 text-right bg-input border border-border rounded px-1.5 py-0.5 text-xs font-heading focus:border-primary/50 focus:outline-none"
                   />
                   <input
@@ -289,6 +294,7 @@ const SuppliesCard = ({
                     placeholder="Sell"
                     value={sellAmounts[row.booze_id] ?? ''}
                     onChange={(e) => setSellAmount(row.booze_id, e.target.value)}
+                    onFocus={() => setSellAmount(row.booze_id, String(row.carrying ?? 0))}
                     className="w-12 text-right bg-input border border-border rounded px-1.5 py-0.5 text-xs font-heading focus:border-primary/50 focus:outline-none"
                   />
                 </div>
@@ -340,6 +346,7 @@ const SuppliesCard = ({
               placeholder="Buy qty"
               value={buyAmounts[row.booze_id] ?? ''}
               onChange={(e) => setBuyAmount(row.booze_id, e.target.value)}
+              onFocus={() => setBuyAmount(row.booze_id, String(maxBuy))}
               className="flex-1 bg-input border border-border rounded px-2 py-1.5 text-xs font-heading focus:border-primary/50 focus:outline-none"
             />
             <input
@@ -348,6 +355,7 @@ const SuppliesCard = ({
               placeholder="Sell qty"
               value={sellAmounts[row.booze_id] ?? ''}
               onChange={(e) => setSellAmount(row.booze_id, e.target.value)}
+              onFocus={() => setSellAmount(row.booze_id, String(row.carrying ?? 0))}
               className="flex-1 bg-input border border-border rounded px-2 py-1.5 text-xs font-heading focus:border-primary/50 focus:outline-none"
             />
           </div>
@@ -371,7 +379,8 @@ const SuppliesCard = ({
       ))}
     </div>
   </div>
-);
+  );
+};
 
 const HistoryCard = ({ history }) => (
   <div className="bg-card rounded-md overflow-hidden border border-primary/20">
@@ -556,7 +565,8 @@ export default function BoozeRun() {
   };
 
   const handleBuy = async (boozeId) => {
-    const amount = buyAmounts[boozeId];
+    const maxBuy = Math.max(0, (config?.capacity ?? 0) - (config?.carrying_total ?? 0));
+    const amount = buyAmounts[boozeId] ?? maxBuy;
     if (!amount || amount <= 0) {
       toast.error('Enter a valid amount');
       return;
@@ -587,7 +597,9 @@ export default function BoozeRun() {
   };
 
   const handleSell = async (boozeId) => {
-    const amount = sellAmounts[boozeId];
+    const row = config?.prices_at_location?.find((p) => p.booze_id === boozeId);
+    const maxSell = row?.carrying ?? 0;
+    const amount = sellAmounts[boozeId] ?? maxSell;
     if (!amount || amount <= 0) {
       toast.error('Enter a valid amount');
       return;
@@ -678,6 +690,8 @@ export default function BoozeRun() {
         setSellAmount={setSellAmount}
         handleBuy={handleBuy}
         handleSell={handleSell}
+        capacity={config.capacity ?? 0}
+        carryingTotal={config.carrying_total ?? 0}
       />
 
       <HistoryCard history={historyList} />

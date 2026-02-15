@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../utils/api';
@@ -350,7 +351,8 @@ export default function Bank() {
   const [durationHours, setDurationHours] = useState(24);
 
   const [swissAmount, setSwissAmount] = useState('');
-  const [transferTo, setTransferTo] = useState('');
+  const location = useLocation();
+  const [transferTo, setTransferTo] = useState(location.state?.transferTo ?? '');
   const [transferAmount, setTransferAmount] = useState('');
 
   const COLLAPSED_KEY = 'mafia_bank_collapsed';
@@ -392,6 +394,14 @@ export default function Bank() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  useEffect(() => {
+    const to = location.state?.transferTo;
+    if (to && typeof to === 'string') {
+      setTransferTo(to);
+      setCollapsedSections((prev) => ({ ...prev, sendMoney: false }));
+    }
+  }, [location.state?.transferTo]);
 
   const option = useMemo(() => {
     const opts = Array.isArray(meta?.interest_options) ? meta.interest_options : [];

@@ -319,7 +319,9 @@ async def create_game(
     request: CreateGameRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a dice or gbox game. Free to enter. Creator does not join automatically."""
+    """Create a dice or gbox game (normal user only). Admins can only enable auto-create system games."""
+    if _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admins can only enable auto-create (hourly system games). Normal users create games here.")
     if request.game_type not in ("dice", "gbox"):
         raise HTTPException(status_code=400, detail="game_type must be dice or gbox")
     max_players = max(1, min(10, request.max_players))

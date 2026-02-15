@@ -121,19 +121,22 @@ export default function Objectives() {
         <ListChecks className="w-8 h-8 text-primary" />
         <div>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary">Objectives</h1>
-          <p className="text-sm text-mutedForeground">Complete daily, weekly, and monthly goals for extra rewards.</p>
+          <p className="text-sm text-mutedForeground">Complete daily, weekly, and monthly goals for extra rewards. When each period resets, new objectives and rewards are generated.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Today */}
         <section className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0`}>
-          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-primary" />
-              <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">Today</h2>
+          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary" />
+                <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">Today</h2>
+              </div>
+              <span className="text-xs text-mutedForeground font-heading shrink-0">{daily.date ?? '—'}</span>
             </div>
-            <span className="text-xs text-mutedForeground font-heading shrink-0">{daily.date ?? '—'}</span>
+            <p className="text-[10px] text-mutedForeground font-heading mt-1">Resets midnight UTC · New objectives & rewards each day</p>
           </div>
           <div className="p-4 space-y-2 flex-1 min-h-0 overflow-auto">
             {daily.claimed && (
@@ -165,12 +168,15 @@ export default function Objectives() {
 
         {/* This week */}
         <section className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0`}>
-          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="w-5 h-5 text-primary" />
-              <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">This week</h2>
+          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CalendarDays className="w-5 h-5 text-primary" />
+                <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">This week</h2>
+              </div>
+              <span className="text-xs text-mutedForeground font-heading shrink-0">Week of {weekly.week_start ?? '—'}</span>
             </div>
-            <span className="text-xs text-mutedForeground font-heading shrink-0">Week of {weekly.week_start ?? '—'}</span>
+            <p className="text-[10px] text-mutedForeground font-heading mt-1">Resets Monday 00:00 UTC · New objectives & rewards each week</p>
           </div>
           <div className="p-4 space-y-2 flex-1 min-h-0 overflow-auto">
             {weekly.claimed && (
@@ -200,14 +206,17 @@ export default function Objectives() {
           </div>
         </section>
 
-        {/* This month */}
-        <section className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0`}>
-          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <CalendarRange className="w-5 h-5 text-primary" />
-              <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">This month</h2>
+        {/* This month - full width below Today & Week */}
+        <section className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 md:col-span-2`}>
+          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CalendarRange className="w-5 h-5 text-primary" />
+                <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">This month</h2>
+              </div>
+              <span className="text-xs text-mutedForeground font-heading shrink-0">{formatMonthStart(monthly.month_start)}</span>
             </div>
-            <span className="text-xs text-mutedForeground font-heading shrink-0">{formatMonthStart(monthly.month_start)}</span>
+            <p className="text-[10px] text-mutedForeground font-heading mt-1">Resets 1st of month 00:00 UTC · New objectives & rewards each month</p>
           </div>
           <div className="p-4 space-y-2 flex-1 min-h-0 overflow-auto">
             {monthly.claimed && (

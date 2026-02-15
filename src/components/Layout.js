@@ -126,6 +126,8 @@ export default function Layout({ children }) {
       ]);
       setUser(userRes.data);
       setRankProgress(progressRes.data);
+      // Trigger objectives endpoint so backend can auto-reset daily/weekly/monthly without user opening Objectives page
+      api.get('/objectives').catch(() => {});
     } catch (error) {
       console.error('Failed to fetch user:', error);
       localStorage.removeItem('token');
