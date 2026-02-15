@@ -80,11 +80,10 @@ export default function Dice() {
   const [lastResult, setLastResult] = useState(null);
   const [rollingNumber, setRollingNumber] = useState(null);
 
-  // Owner state
-  const [claimLoading, setClaimLoading] = useState(false);
-  const [ownerMaxBet, setOwnerMaxBet] = useState('');
-  const [ownerBuyBack, setOwnerBuyBack] = useState('');
-  const [sendToUsername, setSendToUsername] = useState('');
+  // Owner state (aligned with Blackjack/RLT)
+  const [ownerLoading, setOwnerLoading] = useState(false);
+  const [newMaxBet, setNewMaxBet] = useState('');
+  const [transferUsername, setTransferUsername] = useState('');
   const [sellPoints, setSellPoints] = useState('');
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
@@ -108,10 +107,6 @@ export default function Dice() {
           setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
         } else {
           setBuyBackOffer(null);
-        }
-        if (data.is_owner) {
-          setOwnerMaxBet(data.max_bet != null ? String(data.max_bet) : '');
-          setOwnerBuyBack(data.buy_back_reward != null ? String(data.buy_back_reward) : '');
         }
       })
       .catch(() => {});
@@ -262,72 +257,95 @@ export default function Dice() {
     }
   };
 
-  // Owner actions
-  const claimDice = async () => {
+  // Owner actions (identical pattern to Blackjack/RLT)
+  const handleClaim = async () => {
     const city = ownership?.current_city;
-    if (!city || claimLoading) return;
-    setClaimLoading(true);
+    if (!city || ownerLoading) return;
+    setOwnerLoading(true);
     try {
       const res = await api.post('/casino/dice/claim', { city });
-      toast.success(res.data?.message || 'You now own the dice table!');
+      toast.success(res.data?.message || 'You own this table!');
       fetchConfigAndOwnership();
       refreshUser();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to claim');
+      toast.error(e.response?.data?.detail || 'Failed');
     } finally {
-      setClaimLoading(false);
+      setOwnerLoading(false);
     }
   };
 
-  const relinquishDice = async () => {
+  const handleRelinquish = async () => {
     const city = ownership?.current_city;
-    if (!city || claimLoading) return;
-    if (!window.confirm(`Relinquish ownership of the dice table in ${city}?`)) return;
-    setClaimLoading(true);
+    if (!city || ownerLoading) return;
+    if (!window.confirm('Give up ownership?')) return;
+    setOwnerLoading(true);
     try {
       await api.post('/casino/dice/relinquish', { city });
-      toast.success('Ownership relinquished');
+      toast.success('Relinquished');
       fetchConfigAndOwnership();
-      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
-      setClaimLoading(false);
+      setOwnerLoading(false);
     }
   };
 
-  const setMaxBet = async () => {
+  const handleSetMaxBet = async () => {
     const city = ownership?.current_city;
-    const val = parseInt(String(ownerMaxBet || '').replace(/[^\d]/g, ''), 10);
-    if (!city || claimLoading || Number.isNaN(val) || val < 1000000) {
-      toast.error('Minimum max bet is $1,000,000');
+    if (!city) return;
+    const val = parseInt(String(newMaxBet).replace(/\D/g, ''), 10);
+    if (!val || val < 1000000) {
+      toast.error('Min $1,000,000');
       return;
     }
-    setClaimLoading(true);
+    setOwnerLoading(true);
     try {
       await api.post('/casino/dice/set-max-bet', { city, max_bet: val });
-      toast.success(`Max bet set to ${formatMoney(val)}`);
+      toast.success('Updated');
       fetchConfigAndOwnership();
+      setNewMaxBet('');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
-      setClaimLoading(false);
+      setOwnerLoading(false);
     }
   };
 
-  const setBuyBackReward = async () => {
+  const handleTransfer = async () => {
     const city = ownership?.current_city;
-    const val = parseInt(String(ownerBuyBack || '').replace(/[^\d]/g, ''), 10);
-    if (!city || claimLoading || Number.isNaN(val) || val < 0) return;
-    setClaimLoading(true);
+    if (!city || !transferUsername.trim() || ownerLoading) return;
+    if (!window.confirm(`Transfer to ${transferUsername.trim()}?`)) return;
+    setOwnerLoading(true);
     try {
-      await api.post('/casino/dice/set-buy-back-reward', { city, amount: val });
-      toast.success(`Buy-back reward set to ${val.toLocaleString()} points`);
+      await api.post('/casino/dice/send-to-user', { city, target_username: transferUsername.trim() });
+      toast.success('Transferred');
       fetchConfigAndOwnership();
+      setTransferUsername('');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
-      setClaimLoading(false);
+      setOwnerLoading(false);
+    }
+  };
+
+  const handleSellOnTrade = async () => {
+    const city = ownership?.current_city;
+    if (!city || ownerLoading) return;
+    const points = parseInt(sellPoints, 10);
+    if (!points || points <= 0) {
+      toast.error('Enter valid points');
+      return;
+    }
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/dice/sell-on-trade', { city, points });
+      toast.success(`Listed for ${points.toLocaleString()} pts!`);
+      setSellPoints('');
+      setTimeout(() => navigate('/quick-trade'), 1500);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setOwnerLoading(false);
     }
   };
 
@@ -362,116 +380,32 @@ export default function Dice() {
     }
   };
 
-  const sendToUser = async () => {
-    const city = ownership?.current_city;
-    const username = sendToUsername?.trim();
-    if (!city || !username || claimLoading) return;
-    setClaimLoading(true);
-    try {
-      await api.post('/casino/dice/send-to-user', { city, target_username: username });
-      toast.success(`Transferred to ${username}`);
-      setSendToUsername('');
-      fetchConfigAndOwnership();
-      refreshUser();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setClaimLoading(false);
-    }
-  };
-
-  const resetDiceProfit = async () => {
-    const city = ownership?.current_city;
-    if (!city || claimLoading) return;
-    if (!window.confirm('Reset profit/loss to zero?')) return;
-    setClaimLoading(true);
-    try {
-      await api.post('/casino/dice/reset-profit', { city });
-      toast.success('Profit reset');
-      fetchConfigAndOwnership();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setClaimLoading(false);
-    }
-  };
-
-  const sellOnQuickTrade = async () => {
-    const city = ownership?.current_city;
-    if (!city || claimLoading) return;
-    
-    const points = parseInt(sellPoints);
-    if (!points || points <= 0) {
-      toast.error('Enter a valid point amount');
-      return;
-    }
-
-    setClaimLoading(true);
-    try {
-      await api.post('/casino/dice/sell-on-trade', { city, points });
-      toast.success(`Listed for ${points.toLocaleString()} points on Quick Trade!`);
-      setSellPoints('');
-      setTimeout(() => navigate('/quick-trade'), 1500);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to list');
-    } finally {
-      setClaimLoading(false);
-    }
-  };
-
   const isOwner = !!ownership?.is_owner;
   const canClaim = ownership?.current_city && !ownership?.owner;
   const currentCity = ownership?.current_city || '—';
+  const maxBet = ownership?.max_bet ?? config.max_bet ?? 5_000_000;
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="dice-page">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2">
-          Dice
-        </h1>
-        <p className="text-sm text-mutedForeground">
-          Pick 1-{actualSidesNum}. Match the roll to win. Playing in {currentCity}.
-        </p>
-
-        {ownership?.current_city && (
-          <div className="mt-3 p-3 bg-card border border-border rounded-sm text-sm">
-            {isOwner ? (
-              <p className="text-foreground">
-                You own this table: you profit when players lose and pay when they win.
-              </p>
-            ) : ownership?.owner ? (
-              <p className="text-mutedForeground">
-                Owned by <span className="text-foreground font-medium">{ownership.owner?.username ?? 'Unknown'}</span>.
-                The owner earns 5% house edge.
-              </p>
-            ) : (
-              <p className="text-mutedForeground">No owner. Wins and losses are against the house.</p>
-            )}
-            <div className="flex gap-2 mt-3 flex-wrap">
-              {canClaim && (
-                <button
-                  type="button"
-                  onClick={claimDice}
-                  disabled={claimLoading}
-                  className="bg-primary text-primaryForeground hover:opacity-90 rounded-sm px-4 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-50 touch-manipulation"
-                >
-                  {claimLoading ? '...' : 'Claim Ownership'}
-                </button>
-              )}
-              {isOwner && (
-                <button
-                  type="button"
-                  onClick={relinquishDice}
-                  disabled={claimLoading}
-                  className="bg-secondary border border-border text-foreground hover:bg-secondary/80 rounded-sm px-4 py-2 text-xs font-bold uppercase tracking-wider disabled:opacity-50 touch-manipulation"
-                >
-                  {claimLoading ? '...' : 'Relinquish'}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+      {/* Header (identical to Blackjack/RLT) */}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
+            🎲 Dice
+          </h1>
+          <p className="text-xs text-mutedForeground">
+            Playing in <span className="text-primary font-bold">{currentCity}</span>
+            {ownership?.owner?.username && !isOwner && <span> · Owned by <span className="text-foreground">{ownership.owner.username}</span></span>}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs font-heading">
+          <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(maxBet)}</span></span>
+          {canClaim && (
+            <button onClick={handleClaim} disabled={ownerLoading} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase border border-yellow-600/50 disabled:opacity-50">
+              Claim
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Buy-back offer */}
@@ -507,130 +441,42 @@ export default function Dice() {
         </div>
       )}
 
-      {/* Main content - responsive grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-
-        {/* Left panel - Betting or Owner Controls */}
-        {isOwner ? (
-          <div className={`${styles.panel} rounded-md overflow-hidden`}>
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-              <h3 className="text-lg font-heading font-semibold text-primary">Owner Controls</h3>
-              <p className="text-sm text-mutedForeground">Manage your dice table in {currentCity}</p>
-              <p className="text-xs text-red-400 mt-1">You cannot play at your own table.</p>
-              {ownership?.profit != null && (
-                <p className={`text-xl font-heading font-bold mt-2 ${
-                  (ownership?.profit || 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
-                }`}>
-                  {(ownership?.profit || 0) >= 0 ? '+' : ''}{formatMoney(ownership?.profit ?? 0)}
-                </p>
-              )}
+      {/* Owner Controls (identical to Blackjack/RLT) */}
+      {isOwner && (
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/30`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">👑 Owner Controls</span>
+            <span className={`text-xs font-heading font-bold ${(ownership?.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              P/L: {formatMoney(ownership?.profit ?? ownership?.total_earnings ?? 0)}
+            </span>
+          </div>
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
+              <input type="text" placeholder="e.g. 100000000" value={newMaxBet} onChange={(e) => setNewMaxBet(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+              <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase border border-yellow-600/50 disabled:opacity-50">Set</button>
             </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-mutedForeground uppercase tracking-wider mb-2">
-                  Max Bet
-                </label>
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary text-sm">$</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder={String(ownership?.max_bet ?? '')}
-                      value={ownerMaxBet}
-                      onChange={(e) => setOwnerMaxBet(e.target.value)}
-                      className="w-full bg-input border border-border rounded-sm h-10 pl-7 pr-3 text-foreground text-sm"
-                    />
-                  </div>
-                  <button
-                    onClick={setMaxBet}
-                    disabled={claimLoading}
-                    className="bg-primary text-primaryForeground px-4 rounded-sm font-bold text-sm hover:opacity-90 disabled:opacity-50"
-                  >
-                    Set
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-mutedForeground uppercase tracking-wider mb-2">
-                  Buy-Back Reward (Points)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder={ownership?.buy_back_reward != null ? String(ownership.buy_back_reward) : '0'}
-                    value={ownerBuyBack}
-                    onChange={(e) => setOwnerBuyBack(e.target.value)}
-                    className="flex-1 bg-input border border-border rounded-sm h-10 px-3 text-foreground text-sm"
-                  />
-                  <button
-                    onClick={setBuyBackReward}
-                    disabled={claimLoading}
-                    className="bg-primary text-primaryForeground px-4 rounded-sm font-bold text-sm hover:opacity-90 disabled:opacity-50"
-                  >
-                    Set
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-mutedForeground uppercase tracking-wider mb-2">
-                  Transfer Ownership
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Username"
-                    value={sendToUsername}
-                    onChange={(e) => setSendToUsername(e.target.value)}
-                    className="flex-1 bg-input border border-border rounded-sm h-10 px-3 text-foreground text-sm"
-                  />
-                  <button
-                    onClick={sendToUser}
-                    disabled={claimLoading || !sendToUsername?.trim()}
-                    className="bg-secondary text-foreground px-4 rounded-sm font-bold text-sm hover:opacity-90 disabled:opacity-50"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-mutedForeground uppercase tracking-wider mb-2">
-                  Sell on Quick Trade (Points)
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="10000"
-                    value={sellPoints}
-                    onChange={(e) => setSellPoints(e.target.value)}
-                    className="flex-1 bg-input border border-border rounded-sm h-10 px-3 text-foreground text-sm"
-                  />
-                  <button
-                    onClick={sellOnQuickTrade}
-                    disabled={claimLoading}
-                    className="bg-primary text-primaryForeground px-4 rounded-sm font-bold text-sm hover:opacity-90 disabled:opacity-50"
-                  >
-                    Set
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={resetDiceProfit}
-                disabled={claimLoading}
-                className="w-full bg-secondary border border-border text-foreground hover:bg-secondary/80 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider disabled:opacity-50"
-              >
-                Reset Profit
-              </button>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-mutedForeground w-20 shrink-0">Transfer</span>
+              <input type="text" placeholder="Username" value={transferUsername} onChange={(e) => setTransferUsername(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+              <button onClick={handleTransfer} disabled={ownerLoading || !transferUsername.trim()} className="bg-zinc-700/50 text-foreground rounded px-2 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 disabled:opacity-50">Send</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-mutedForeground w-20 shrink-0">Sell (pts)</span>
+              <input type="text" inputMode="numeric" placeholder="10000" value={sellPoints} onChange={(e) => setSellPoints(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+              <button onClick={handleSellOnTrade} disabled={ownerLoading} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase border border-yellow-600/50 disabled:opacity-50">List</button>
+            </div>
+            <div className="flex justify-end">
+              <button onClick={handleRelinquish} disabled={ownerLoading} className="text-[10px] text-red-400 hover:text-red-300 font-heading">Relinquish</button>
             </div>
           </div>
-        ) : (
-          <div className={`${styles.panel} rounded-md overflow-hidden`}>
+        </div>
+      )}
+
+      {/* Game Area */}
+      {!isOwner && (
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+        <div className={`${styles.panel} rounded-md overflow-hidden`}>
             <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
               <h3 className="text-lg font-heading font-semibold text-primary">Place Your Bet</h3>
             </div>
@@ -721,7 +567,6 @@ export default function Dice() {
               </button>
             </div>
           </div>
-        )}
 
         {/* Right panel - Result Display */}
         <div className={`${styles.panel} rounded-md overflow-hidden`}>
@@ -760,6 +605,13 @@ export default function Dice() {
           </div>
         </div>
       </div>
+      )}
+
+      {isOwner && (
+        <div className="px-3 py-4 bg-zinc-800/30 border border-zinc-700/30 rounded-md text-center">
+          <p className="text-xs text-mutedForeground">You cannot play at your own table. Travel to another city.</p>
+        </div>
+      )}
     </div>
   );
 }
