@@ -20,6 +20,8 @@ export default function MyProperties() {
   const [saving, setSaving] = useState(false);
   const [casinoMaxBet, setCasinoMaxBet] = useState('');
   const [airportPrice, setAirportPrice] = useState('');
+  const [airportTransferUsername, setAirportTransferUsername] = useState('');
+  const [airportSellPoints, setAirportSellPoints] = useState('');
   const [bulletPrice, setBulletPrice] = useState('');
 
   const fetchMyProperties = useCallback(async () => {
@@ -85,6 +87,42 @@ export default function MyProperties() {
     try {
       await api.post('/airports/set-price', { state: p.state, slot: p.slot ?? 1, price_per_travel: val });
       toast.success('Airport price updated');
+      fetchMyProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAirportTransfer = async () => {
+    const p = data.property;
+    if (!p || p.type !== 'airport' || saving) return;
+    const username = (airportTransferUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setSaving(true);
+    try {
+      await api.post('/airports/transfer', { state: p.state, slot: p.slot ?? 1, target_username: username });
+      toast.success('Airport transferred');
+      setAirportTransferUsername('');
+      fetchMyProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAirportSell = async () => {
+    const p = data.property;
+    if (!p || p.type !== 'airport' || saving) return;
+    const pts = parseInt(String(airportSellPoints).replace(/\D/g, ''), 10);
+    if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
+    setSaving(true);
+    try {
+      await api.post('/airports/sell-on-trade', { state: p.state, slot: p.slot ?? 1, points: pts });
+      toast.success('Airport listed on Quick Trade');
+      setAirportSellPoints('');
       fetchMyProperties();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
@@ -214,6 +252,33 @@ export default function MyProperties() {
                   />
                   <button type="button" onClick={handleAirportSetPrice} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
                     {saving ? '...' : 'Set price'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Transfer</span>
+                  <input
+                    type="text"
+                    value={airportTransferUsername}
+                    onChange={(e) => setAirportTransferUsername(e.target.value)}
+                    placeholder="Username"
+                    className="w-28 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                  />
+                  <button type="button" onClick={handleAirportTransfer} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                    {saving ? '...' : 'Send'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Sell (pts)</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={airportSellPoints}
+                    onChange={(e) => setAirportSellPoints(e.target.value)}
+                    placeholder="Points"
+                    className="w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                  />
+                  <button type="button" onClick={handleAirportSell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                    {saving ? '...' : 'List'}
                   </button>
                 </div>
                 <Link to="/travel" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">

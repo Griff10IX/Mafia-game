@@ -92,7 +92,7 @@ const CityCard = ({
                   key={game.id}
                   className={`flex items-center justify-between px-2 py-1.5 rounded transition-colors ${isTop ? 'bg-primary/10' : 'bg-zinc-800/30'}`}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Icon size={12} className={color} />
                     <span className="text-xs font-heading font-bold text-foreground">{game.name}</span>
                     {owner ? (
@@ -100,8 +100,11 @@ const CityCard = ({
                     ) : (
                       <span className="text-[10px] text-zinc-500">Unclaimed</span>
                     )}
+                    {(game.id === 'dice' || game.id === 'blackjack') && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
+                      <span className="text-[9px] text-amber-400/90">Buy-back: {Number(owner.buy_back_reward).toLocaleString()} pts</span>
+                    )}
                   </div>
-                  <span className={`text-xs font-heading font-bold tabular-nums ${isTop ? 'text-primary' : 'text-foreground'}`}>
+                  <span className={`text-xs font-heading font-bold tabular-nums shrink-0 ${isTop ? 'text-primary' : 'text-foreground'}`}>
                     {formatMaxBet(effectiveBet)}
                   </span>
                 </div>

@@ -6688,9 +6688,9 @@ CASINO_GAMES = [
 async def get_states(current_user: dict = Depends(get_current_user)):
     """List all cities (travel destinations), casino games with max bet, and casino owners per city."""
     # Fetch all casino ownerships
-    dice_docs = await db.dice_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
+    dice_docs = await db.dice_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
     rlt_docs = await db.roulette_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
-    blackjack_docs = await db.blackjack_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
+    blackjack_docs = await db.blackjack_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
     horseracing_docs = await db.horseracing_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
     
     # Collect all unique owner IDs
@@ -6712,7 +6712,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         money = int((u.get("money") or 0) or 0)
         _, wealth_rank_name = get_wealth_rank(money)
         dice_max = d.get("max_bet") if d.get("max_bet") is not None else DICE_MAX_BET
-        dice_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": dice_max}
+        dice_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": dice_max, "buy_back_reward": d.get("buy_back_reward")}
     
     for d in rlt_docs:
         if not d.get("owner_id"):
@@ -6730,7 +6730,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         money = int((u.get("money") or 0) or 0)
         _, wealth_rank_name = get_wealth_rank(money)
         bj_max = d.get("max_bet") if d.get("max_bet") is not None else BLACKJACK_MAX_BET
-        blackjack_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": bj_max}
+        blackjack_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": bj_max, "buy_back_reward": d.get("buy_back_reward")}
     
     for d in horseracing_docs:
         if not d.get("owner_id"):
@@ -8640,6 +8640,16 @@ class AirportSetPriceRequest(BaseModel):
     slot: int
     price_per_travel: int  # points, max 50
 
+class AirportTransferRequest(BaseModel):
+    state: str
+    slot: int
+    target_username: str
+
+class AirportSellRequest(BaseModel):
+    state: str
+    slot: int
+    points: int
+
 @api_router.get("/airports")
 async def list_airports(current_user: dict = Depends(get_current_user)):
     """List all airports (1 per state) for overview tables."""
@@ -8695,6 +8705,64 @@ async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = De
         {"$set": {"price_per_travel": req.price_per_travel}}
     )
     return {"message": f"Airport #{req.slot} in {req.state} set to {req.price_per_travel} points per travel", "state": req.state, "slot": req.slot, "price_per_travel": req.price_per_travel}
+
+
+@api_router.post("/airports/transfer")
+async def airport_transfer(req: AirportTransferRequest, current_user: dict = Depends(get_current_user)):
+    """Transfer airport ownership to another user (owner only)."""
+    if req.state not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid state")
+    if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
+        raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
+    doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this airport slot")
+    target_username = (req.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Enter a username")
+    target = await db.users.find_one({"$or": [{"username": target_username}, {"username": target_username.lower()}]}, {"_id": 0, "id": 1, "username": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["id"] == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    # Check target doesn't already own a property (1 property per player)
+    owned = await _user_owns_any_property(target["id"])
+    if owned:
+        raise HTTPException(status_code=400, detail="That user already owns a property")
+    await db.airport_ownership.update_one(
+        {"state": req.state, "slot": req.slot},
+        {"$set": {"owner_id": target["id"], "owner_username": target.get("username", target_username)}}
+    )
+    return {"message": f"Airport #{req.slot} in {req.state} transferred to {target.get('username', target_username)}"}
+
+
+@api_router.post("/airports/sell-on-trade")
+async def airport_sell_on_trade(req: AirportSellRequest, current_user: dict = Depends(get_current_user)):
+    """List airport for sale on Quick Trade (owner only)."""
+    if req.state not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid state")
+    if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
+        raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
+    if req.points < 0:
+        raise HTTPException(status_code=400, detail="Points must be non-negative")
+    doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this airport slot")
+    listing = {
+        "_id": ObjectId(),
+        "type": "airport",
+        "state": req.state,
+        "slot": req.slot,
+        "location": f"{req.state} #{req.slot}",
+        "name": f"Airport #{req.slot} ({req.state})",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": req.points,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.properties.insert_one(listing)
+    return {"message": f"Airport #{req.slot} in {req.state} listed for {req.points:,} points on Quick Trade"}
 
 
 # ============ BOOZE RUN ENDPOINTS ============
@@ -9303,6 +9371,12 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     if buyer.get("points", 0) < sale_price:
         raise HTTPException(status_code=400, detail="Insufficient points")
     
+    # Airport: buyer may only own one property
+    if prop.get("type") == "airport":
+        owned = await _user_owns_any_property(buyer_id)
+        if owned:
+            raise HTTPException(status_code=400, detail="You may only own one property. Relinquish it first.")
+    
     # Buyer: -points
     await db.users.update_one({"id": buyer_id}, {"$inc": {"points": -sale_price}})
     # Seller: +points
@@ -9343,8 +9417,17 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                 {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
+    elif prop_type == "airport":
+        state = prop.get("state")
+        slot = prop.get("slot")
+        if state and slot is not None:
+            await db.airport_ownership.update_one(
+                {"state": state, "slot": slot},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
+                upsert=True
+            )
     
-    # Remove from properties (casino listings are one-time)
+    # Remove from properties (casino/airport listings are one-time)
     await db.properties.delete_one({"_id": ObjectId(property_id)})
     
     return {"message": "Property purchased successfully", "property_name": prop.get("name", "Property"), "points_spent": sale_price}

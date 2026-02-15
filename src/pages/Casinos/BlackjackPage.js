@@ -117,6 +117,7 @@ export default function Blackjack() {
   const [newMaxBet, setNewMaxBet] = useState('');
   const [transferUsername, setTransferUsername] = useState('');
   const [sellPoints, setSellPoints] = useState('');
+  const [ownerBuyBack, setOwnerBuyBack] = useState('');
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
@@ -127,6 +128,7 @@ export default function Blackjack() {
     api.get('/casino/blackjack/ownership').then((r) => {
       const data = r.data || null;
       setOwnership(data);
+      if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
       } else {
@@ -215,6 +217,20 @@ export default function Blackjack() {
       await api.post('/casino/blackjack/set-max-bet', { city, max_bet: val });
       toast.success('Max bet updated');
       setNewMaxBet('');
+      fetchConfigAndOwnership();
+    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    finally { setOwnerLoading(false); }
+  };
+
+  const handleSetBuyBackReward = async () => {
+    const city = ownership?.current_city;
+    if (!city || ownerLoading) return;
+    const amount = parseInt(String(ownerBuyBack).replace(/\D/g, ''), 10);
+    if (Number.isNaN(amount) || amount < 0) { toast.error('Enter 0 or more points'); return; }
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/blackjack/set-buy-back-reward', { amount });
+      toast.success('Buy-back reward updated');
       fetchConfigAndOwnership();
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setOwnerLoading(false); }
@@ -380,6 +396,12 @@ export default function Blackjack() {
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
               <input type="text" placeholder="e.g. 100000000" value={newMaxBet} onChange={(e) => setNewMaxBet(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
               <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase border border-yellow-600/50 disabled:opacity-50">Set</button>
+            </div>
+            {/* Buy-back (points when you can't pay a win) */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-mutedForeground w-20 shrink-0">Buy-back (pts)</span>
+              <input type="text" inputMode="numeric" placeholder="0" value={ownerBuyBack} onChange={(e) => setOwnerBuyBack(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+              <button onClick={handleSetBuyBackReward} disabled={ownerLoading} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase border border-yellow-600/50 disabled:opacity-50">Set</button>
             </div>
             {/* Transfer */}
             <div className="flex items-center gap-2">
