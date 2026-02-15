@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Factory, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -51,10 +51,10 @@ const CityCard = ({
   const canClaimAirport = airportUnclaimed && (userCurrentCity === city || userCurrentCity === null);
   
   // Count owned casinos
-  const ownedCount = games.filter(g => (allOwners[g.id] || {})[city]?.username).length;
+  const ownedCount = games.filter(g => g && (allOwners[g.id] || {})[city]?.username).length;
   
-  // Find highest max bet in this city
-  const highestBet = Math.max(...games.map(g => getEffectiveMaxBet(g, city)));
+  // Find highest max bet in this city (guard empty games)
+  const highestBet = games.length ? Math.max(...games.map(g => getEffectiveMaxBet(g, city))) : 0;
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
@@ -236,7 +236,8 @@ export default function States() {
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchUserCity]);
 
-  useEffect(() => {
+  const fetchStates = useCallback(() => {
+    setLoading(true);
     api.get('/states')
       .then((res) => {
         setData({
@@ -259,12 +260,19 @@ export default function States() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => { fetchStates(); }, [fetchStates]);
+
   useEffect(() => {
     api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => {});
     api.get('/airports').then((r) => setAirports(r.data?.airports ?? [])).catch(() => {});
   }, []);
 
-  const { cities, games, dice_owners, roulette_owners, blackjack_owners, horseracing_owners } = data;
+  const cities = Array.isArray(data.cities) ? data.cities : [];
+  const games = Array.isArray(data.games) ? data.games : [];
+  const dice_owners = data.dice_owners || {};
+  const roulette_owners = data.roulette_owners || {};
+  const blackjack_owners = data.blackjack_owners || {};
+  const horseracing_owners = data.horseracing_owners || {};
 
   const allOwners = {
     dice: dice_owners || {},
@@ -276,12 +284,13 @@ export default function States() {
   const highestBets = useMemo(() => {
     const map = {};
     for (const game of games) {
+      if (!game || !game.id) continue;
       const bets = cities.map((city) => {
         const ownerMap = allOwners[game.id] || {};
         if (ownerMap[city]?.max_bet != null) return ownerMap[city].max_bet;
-        return game.max_bet;
+        return game.max_bet ?? 0;
       });
-      const max = Math.max(...bets);
+      const max = bets.length ? Math.max(...bets) : 0;
       const count = bets.filter((b) => b === max).length;
       map[game.id] = { max, count };
     }
@@ -289,9 +298,10 @@ export default function States() {
   }, [cities, games, allOwners]);
 
   const getEffectiveMaxBet = (game, city) => {
+    if (!game) return 0;
     const ownerMap = allOwners[game.id] || {};
     if (ownerMap[city]?.max_bet != null) return ownerMap[city].max_bet;
-    return game.max_bet;
+    return game.max_bet ?? 0;
   };
 
   const isHighestBet = (game, city) => {
@@ -345,6 +355,20 @@ export default function States() {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-primary text-sm font-heading">Loading...</div>
+      </div>
+    );
+  }
+
+  if (cities.length === 0) {
+    return (
+      <div className={`space-y-3 ${styles.pageContent}`} data-testid="states-page">
+        <h1 className="text-xl font-heading font-bold text-primary">🗺️ States & Cities</h1>
+        <div className="p-6 rounded-md border border-primary/20 bg-zinc-800/30 text-center">
+          <p className="text-sm text-mutedForeground mb-3">Couldn&apos;t load states. Make sure you&apos;re logged in.</p>
+          <button type="button" onClick={fetchStates} className="px-4 py-2 rounded bg-primary/20 border border-primary/50 text-primary text-sm font-heading uppercase hover:bg-primary/30">
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
