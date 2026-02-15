@@ -6430,6 +6430,39 @@ async def casino_dice_reset_profit(request: DiceClaimRequest, current_user: dict
     return {"message": "Profit reset to zero."}
 
 
+@api_router.post("/casino/dice/sell-on-trade")
+async def casino_dice_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    """List your dice table for sale on Quick Trade (points only)."""
+    city = _normalize_city_for_dice((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    
+    if request.points <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
+    
+    stored_city, doc = await _get_dice_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    
+    # Create property-style listing for the casino
+    casino_property = {
+        "_id": ObjectId(),
+        "type": "casino_dice",
+        "location": city,
+        "name": f"Dice Table ({city})",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": request.points,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    # Add to properties collection (or create casino_listings collection if preferred)
+    await db.properties.insert_one(casino_property)
+    
+    return {"message": f"Dice table listed for {request.points:,} points on Quick Trade"}
+
+
 @api_router.post("/casino/dice/buy-back/accept")
 async def casino_dice_buy_back_accept(request: DiceBuyBackAcceptRequest, current_user: dict = Depends(get_current_user)):
     """Accept a buy-back offer: receive points and transfer ownership back to previous owner."""
@@ -6694,6 +6727,36 @@ async def casino_roulette_send_to_user(request: RouletteSendToUserRequest, curre
     
     await db.roulette_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
     return {"message": "Ownership transferred."}
+
+
+@api_router.post("/casino/roulette/sell-on-trade")
+async def casino_roulette_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    """List your roulette table for sale on Quick Trade (points only)."""
+    city = _normalize_city_for_roulette((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    
+    if request.points <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
+    
+    stored_city, doc = await _get_roulette_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    
+    casino_property = {
+        "_id": ObjectId(),
+        "type": "casino_rlt",
+        "location": city,
+        "name": f"Roulette Table ({city})",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": request.points,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.properties.insert_one(casino_property)
+    return {"message": f"Roulette table listed for {request.points:,} points on Quick Trade"}
 
 
 @api_router.post("/casino/roulette/spin")
@@ -7038,6 +7101,36 @@ async def casino_blackjack_send_to_user(request: RouletteSendToUserRequest, curr
         raise HTTPException(status_code=404, detail="User not found")
     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
     return {"message": "Ownership transferred."}
+
+
+@api_router.post("/casino/blackjack/sell-on-trade")
+async def casino_blackjack_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    """List your blackjack table for sale on Quick Trade (points only)."""
+    city = _normalize_city_for_blackjack((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    
+    if request.points <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
+    
+    stored_city, doc = await _get_blackjack_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this table")
+    
+    casino_property = {
+        "_id": ObjectId(),
+        "type": "casino_blackjack",
+        "location": city,
+        "name": f"Blackjack Table ({city})",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": request.points,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.properties.insert_one(casino_property)
+    return {"message": f"Blackjack table listed for {request.points:,} points on Quick Trade"}
 
 
 def _blackjack_dealer_visible_total(hand):
@@ -7550,6 +7643,36 @@ async def casino_horseracing_send_to_user(request: RouletteSendToUserRequest, cu
         raise HTTPException(status_code=400, detail="Invalid target user")
     await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
     return {"message": f"Track ownership transferred to {target.get('username', '?')}."}
+
+
+@api_router.post("/casino/horseracing/sell-on-trade")
+async def casino_horseracing_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    """List your horseracing track for sale on Quick Trade (points only)."""
+    city = _normalize_city_for_horseracing((request.city or "").strip())
+    if not city or city not in STATES:
+        raise HTTPException(status_code=400, detail="Invalid city")
+    
+    if request.points <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
+    
+    stored_city, doc = await _get_horseracing_ownership_doc(city)
+    if not doc or doc.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own this track")
+    
+    casino_property = {
+        "_id": ObjectId(),
+        "type": "casino_horseracing",
+        "location": city,
+        "name": f"Horse Racing Track ({city})",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": request.points,
+        "created_at": datetime.now(timezone.utc)
+    }
+    
+    await db.properties.insert_one(casino_property)
+    return {"message": f"Horse racing track listed for {request.points:,} points on Quick Trade"}
 
 
 @api_router.post("/casino/horseracing/race")
@@ -8408,7 +8531,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found or not for sale")
     
-    if str(prop.get("owner_id")) == buyer_id:
+    if prop.get("owner_id") == buyer_id:
         raise HTTPException(status_code=400, detail="Cannot buy your own property")
     
     buyer = await db.users.find_one({"id": buyer_id})
@@ -8424,19 +8547,44 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     # Seller: +points
     if prop.get("owner_id"):
         await db.users.update_one({"id": prop["owner_id"]}, {"$inc": {"points": sale_price}})
-    # Transfer ownership
-    await db.properties.update_one(
-        {"_id": ObjectId(property_id)},
-        {
-            "$set": {
-                "owner_id": buyer_id,
-                "owner_username": buyer_username,
-                "for_sale": False,
-                "sale_price": 0,
-                "purchased_at": datetime.now(timezone.utc)
-            }
-        }
-    )
+    
+    # Handle casino ownership transfer
+    prop_type = prop.get("type")
+    if prop_type == "casino_dice":
+        city = prop.get("location")
+        if city:
+            await db.dice_ownership.update_one(
+                {"city": city},
+                {"$set": {"owner_id": buyer_id}},
+                upsert=True
+            )
+    elif prop_type == "casino_rlt":
+        city = prop.get("location")
+        if city:
+            await db.rlt_ownership.update_one(
+                {"city": city},
+                {"$set": {"owner_id": buyer_id}},
+                upsert=True
+            )
+    elif prop_type == "casino_blackjack":
+        city = prop.get("location")
+        if city:
+            await db.blackjack_ownership.update_one(
+                {"city": city},
+                {"$set": {"owner_id": buyer_id}},
+                upsert=True
+            )
+    elif prop_type == "casino_horseracing":
+        city = prop.get("location")
+        if city:
+            await db.horseracing_ownership.update_one(
+                {"city": city},
+                {"$set": {"owner_id": buyer_id}},
+                upsert=True
+            )
+    
+    # Remove from properties (casino listings are one-time)
+    await db.properties.delete_one({"_id": ObjectId(property_id)})
     
     return {"message": "Property purchased successfully", "property_name": prop.get("name", "Property"), "points_spent": sale_price}
 
