@@ -341,61 +341,6 @@ export default function QuickTrade() {
 
       {/* Offers Lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-        {/* Buy Points Offers */}
-        <div className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden`}>
-          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-            <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Buy Points Offers</h3>
-            <p className="text-[10px] text-mutedForeground mt-0.5">Accept offers - $0</p>
-          </div>
-          
-          <div className="divide-y divide-border">
-            {buyOffers.length === 0 ? (
-              <div className="p-8 text-center">
-                <Coins size={32} className="mx-auto text-primary/30 mb-2" />
-                <p className="text-xs text-mutedForeground font-heading">No buy offers available</p>
-              </div>
-            ) : (
-              buyOffers.map((offer, idx) => {
-                const isMyOffer = offer.user_id === currentUserId;
-                return (
-                  <div key={idx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Users size={14} className="text-primary" />
-                          <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'Your Offer' : (offer.hide_name ? '[Anonymous]' : offer.username)}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-mutedForeground space-y-0.5">
-                          <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
-                          <div>Cost: <span className="text-foreground font-bold">${offer.cost?.toLocaleString()}</span></div>
-                          <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span></div>
-                        </div>
-                      </div>
-                      {isMyOffer ? (
-                        <button
-                          onClick={() => handleCancelOffer(offer.id, 'buy')}
-                          className={`${styles.raisedHover} px-4 py-2 bg-red-900/20 border border-red-700/30 text-red-400 text-xs font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
-                        >
-                          Cancel
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleAcceptOffer(offer.id, 'buy')}
-                          className={`${styles.raisedHover} px-4 py-2 bg-primary/10 border border-primary/30 text-primary text-xs font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
-                        >
-                          Accept
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
         {/* Sell Points Offers */}
         <div className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden`}>
           <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
@@ -410,43 +355,144 @@ export default function QuickTrade() {
                 <p className="text-xs text-mutedForeground font-heading">No sell offers available</p>
               </div>
             ) : (
-              sellOffers.map((offer, idx) => {
-                const isMyOffer = offer.user_id === currentUserId;
-                return (
-                  <div key={idx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+              (() => {
+                // Group offers by user
+                const groupedOffers = sellOffers.reduce((acc, offer) => {
+                  const key = offer.user_id;
+                  if (!acc[key]) acc[key] = [];
+                  acc[key].push(offer);
+                  return acc;
+                }, {});
+                
+                return Object.values(groupedOffers).map((userOffers, groupIdx) => {
+                  const firstOffer = userOffers[0];
+                  const isMyOffer = firstOffer.user_id === currentUserId;
+                  const totalOffers = userOffers.length;
+                  
+                  return (
+                    <div key={groupIdx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
                           <Users size={14} className="text-primary" />
                           <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'Your Offer' : (offer.hide_name ? '[Anonymous]' : offer.username)}
+                            {isMyOffer ? 'Your Offers' : (firstOffer.hide_name ? '[Anonymous]' : firstOffer.username)}
                           </span>
-                        </div>
-                        <div className="text-[11px] text-mutedForeground space-y-0.5">
-                          <div>Points: <span className="text-primary font-bold">{offer.points?.toLocaleString()}</span></div>
-                          <div>Money: <span className="text-foreground font-bold">${offer.money?.toLocaleString()}</span></div>
-                          <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span></div>
+                          {totalOffers > 1 && (
+                            <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-heading font-bold">
+                              {totalOffers}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      {isMyOffer ? (
-                        <button
-                          onClick={() => handleCancelOffer(offer.id, 'sell')}
-                          className={`${styles.raisedHover} px-4 py-2 bg-red-900/20 border border-red-700/30 text-red-400 text-xs font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
-                        >
-                          Cancel
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleAcceptOffer(offer.id, 'sell')}
-                          className={`${styles.raisedHover} px-4 py-2 bg-primary/10 border border-primary/30 text-primary text-xs font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
-                        >
-                          Accept
-                        </button>
-                      )}
+                      
+                      <div className="space-y-2">
+                        {userOffers.map((offer, offerIdx) => (
+                          <div key={offerIdx} className="flex items-center justify-between gap-3 pl-4 border-l-2 border-primary/20">
+                            <div className="flex-1 text-[11px] text-mutedForeground space-y-0.5">
+                              <div>Points: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
+                              <div>Money: <span className="text-foreground font-bold">${formatNumber(offer.money)}</span></div>
+                              <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span></div>
+                            </div>
+                            {isMyOffer ? (
+                              <button
+                                onClick={() => handleCancelOffer(offer.id, 'sell')}
+                                className={`${styles.raisedHover} px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
+                              >
+                                Cancel
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleAcceptOffer(offer.id, 'sell')}
+                                className={`${styles.raisedHover} px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-[10px] font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
+                              >
+                                Accept
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                });
+              })()
+            )}
+          </div>
+        </div>
+
+        {/* Buy Points Offers */}
+        <div className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden`}>
+          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
+            <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Buy Points Offers</h3>
+            <p className="text-[10px] text-mutedForeground mt-0.5">Accept offers - $0</p>
+          </div>
+          
+          <div className="divide-y divide-border">
+            {buyOffers.length === 0 ? (
+              <div className="p-8 text-center">
+                <Coins size={32} className="mx-auto text-primary/30 mb-2" />
+                <p className="text-xs text-mutedForeground font-heading">No buy offers available</p>
+              </div>
+            ) : (
+              (() => {
+                // Group offers by user
+                const groupedOffers = buyOffers.reduce((acc, offer) => {
+                  const key = offer.user_id;
+                  if (!acc[key]) acc[key] = [];
+                  acc[key].push(offer);
+                  return acc;
+                }, {});
+                
+                return Object.values(groupedOffers).map((userOffers, groupIdx) => {
+                  const firstOffer = userOffers[0];
+                  const isMyOffer = firstOffer.user_id === currentUserId;
+                  const totalOffers = userOffers.length;
+                  
+                  return (
+                    <div key={groupIdx} className={`px-4 py-3 hover:bg-secondary/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <Users size={14} className="text-primary" />
+                          <span className="text-xs font-heading font-bold text-foreground">
+                            {isMyOffer ? 'Your Offers' : (firstOffer.hide_name ? '[Anonymous]' : firstOffer.username)}
+                          </span>
+                          {totalOffers > 1 && (
+                            <span className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-heading font-bold">
+                              {totalOffers}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        {userOffers.map((offer, offerIdx) => (
+                          <div key={offerIdx} className="flex items-center justify-between gap-3 pl-4 border-l-2 border-primary/20">
+                            <div className="flex-1 text-[11px] text-mutedForeground space-y-0.5">
+                              <div>Points: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
+                              <div>Cost: <span className="text-foreground font-bold">${formatNumber(offer.cost)}</span></div>
+                              <div>Per Point: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span></div>
+                            </div>
+                            {isMyOffer ? (
+                              <button
+                                onClick={() => handleCancelOffer(offer.id, 'buy')}
+                                className={`${styles.raisedHover} px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded-sm hover:bg-red-900/30 transition-all`}
+                              >
+                                Cancel
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleAcceptOffer(offer.id, 'buy')}
+                                className={`${styles.raisedHover} px-3 py-1.5 bg-primary/10 border border-primary/30 text-primary text-[10px] font-heading font-bold rounded-sm hover:bg-primary/20 transition-all`}
+                              >
+                                Accept
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })()
             )}
           </div>
         </div>
