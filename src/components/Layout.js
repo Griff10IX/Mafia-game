@@ -249,7 +249,7 @@ export default function Layout({ children }) {
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
       {/* Sidebar */}
       <div
-        className={`fixed left-0 top-0 h-full w-64 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
+        className={`fixed left-0 top-0 h-full w-56 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
         style={sidebarBgStyle}
@@ -566,7 +566,7 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className={`fixed top-0 right-0 left-0 md:left-64 min-h-[48px] h-12 ${styles.topBar} backdrop-blur-md z-30 flex items-center px-4 gap-3`}>
+      <div className={`fixed top-0 right-0 left-0 md:left-56 min-h-[48px] h-12 ${styles.topBar} backdrop-blur-md z-30 flex items-center px-4 gap-3`}>
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           data-testid="mobile-menu-toggle"
@@ -695,7 +695,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className="md:ml-64 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden">
+      <main className="md:ml-56 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden">
         {children}
       </main>
     </div>

@@ -10188,13 +10188,14 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail)
-from routers import crimes, gta, jail, oc, organised_crime, forum, bullet_factory
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
 organised_crime.register(api_router)
 oc.register(api_router)
 forum.register(api_router)
+entertainer.register(api_router)
 bullet_factory.register(api_router)
 
 app.include_router(api_router)

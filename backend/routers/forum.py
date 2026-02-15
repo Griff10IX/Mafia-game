@@ -11,9 +11,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, log_activity
 
 
+FORUM_CATEGORIES = ["general", "entertainer"]  # entertainer = sub-forum for dice/gbox games
+
 class TopicCreate(BaseModel):
     title: str
     content: str
+    category: Optional[str] = "general"
+    category: Optional[str] = "general"  # "general" | "entertainer"
 
 
 class CommentCreate(BaseModel):
@@ -27,9 +31,15 @@ class TopicUpdate(BaseModel):
     is_locked: Optional[bool] = None
 
 
-async def get_topics(current_user: dict = Depends(get_current_user)):
-    """List all topics: sticky/important first, then by updated_at. Include author, posts count, views."""
-    topics = await db.forum_topics.find({}, {"_id": 0}).sort([("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]).to_list(500)
+async def get_topics(category: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    """List topics, optionally filtered by category (general | entertainer). Sticky/important first, then by updated_at."""
+    query = {}
+    if category and category in FORUM_CATEGORIES:
+        if category == "general":
+            query["$or"] = [{"category": "general"}, {"category": {"$exists": False}}]
+        else:
+            query["category"] = category
+    topics = await db.forum_topics.find(query, {"_id": 0}).sort([("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]).to_list(500)
     out = []
     for t in topics:
         comment_count = await db.forum_comments.count_documents({"topic_id": t["id"]})
@@ -37,7 +47,8 @@ async def get_topics(current_user: dict = Depends(get_current_user)):
             "id": t["id"],
             "title": t["title"],
             "author_username": t.get("author_username", "?"),
-            "posts": comment_count + 1,  # +1 for the topic itself as first "post"
+            "category": t.get("category", "general"),
+            "posts": comment_count + 1,
             "views": t.get("views", 0),
             "is_sticky": t.get("is_sticky", False),
             "is_important": t.get("is_important", False),
@@ -45,7 +56,7 @@ async def get_topics(current_user: dict = Depends(get_current_user)):
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
         })
-    return {"topics": out}
+    return {"topics": out, "categories": FORUM_CATEGORIES}
 
 
 async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user)):
@@ -77,6 +88,9 @@ async def create_topic(
     """Create a new forum topic."""
     title = (request.title or "").strip()
     content = (request.content or "").strip()
+    category = (request.category or "general").strip().lower()
+    if category not in FORUM_CATEGORIES:
+        category = "general"
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
     topic_id = str(uuid.uuid4())
@@ -85,6 +99,7 @@ async def create_topic(
         "id": topic_id,
         "title": title,
         "content": content,
+        "category": category,
         "author_id": current_user["id"],
         "author_username": current_user.get("username") or "?",
         "created_at": now,
