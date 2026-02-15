@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -93,9 +94,11 @@ export default function Blackjack() {
   const [ownerLoading, setOwnerLoading] = useState(false);
   const [newMaxBet, setNewMaxBet] = useState('');
   const [transferUsername, setTransferUsername] = useState('');
+  const [sellPoints, setSellPoints] = useState('');
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  const navigate = useNavigate();
 
   const fetchConfigAndOwnership = () => {
     api.get('/casino/blackjack/config').then((r) => setConfig(r.data || { max_bet: 50_000_000 })).catch(() => {});
@@ -232,6 +235,29 @@ export default function Blackjack() {
       fetchConfigAndOwnership();
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setOwnerLoading(false);
+    }
+  };
+
+  const handleSellOnTrade = async () => {
+    const city = ownership?.current_city;
+    if (!city || ownerLoading) return;
+    
+    const points = parseInt(sellPoints);
+    if (!points || points <= 0) {
+      toast.error('Enter a valid point amount');
+      return;
+    }
+
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/blackjack/sell-on-trade', { city, points });
+      toast.success(`Listed for ${points.toLocaleString()} points on Quick Trade!`);
+      setSellPoints('');
+      setTimeout(() => navigate('/quick-trade'), 1500);
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed to list'));
     } finally {
       setOwnerLoading(false);
     }
@@ -434,13 +460,22 @@ export default function Blackjack() {
                 </button>
               </div>
             </div>
-            <button
-              onClick={() => window.location.href = '/quick-trade'}
-              className="w-full bg-primary/10 border border-primary/30 text-primary hover:bg-primary/20 rounded-sm py-2.5 text-sm font-bold uppercase tracking-wider flex items-center justify-center gap-2"
-            >
-              <ArrowRightLeft size={16} />
-              Sell on Quick Trade
-            </button>
+            <div>
+              <label className="block text-xs font-heading uppercase tracking-wider text-mutedForeground mb-2">Sell on Quick Trade (Points)</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="10000"
+                  value={sellPoints}
+                  onChange={(e) => setSellPoints(e.target.value)}
+                  className={`flex-1 ${styles.input} h-10 px-3 text-sm`}
+                />
+                <button onClick={handleSellOnTrade} disabled={ownerLoading} className="bg-primary text-primaryForeground px-4 rounded-sm font-heading font-bold text-sm hover:opacity-90 disabled:opacity-50">
+                  Set
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
