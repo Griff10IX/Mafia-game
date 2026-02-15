@@ -189,7 +189,7 @@ export default function QuickTrade() {
               />
               {sellPoints && sellCost && (
                 <p className="text-xs text-mutedForeground mt-1">
-                  Per Point: <span className="text-primary font-bold">${sellPerPoint}</span>
+                  Per Point: <span className="text-primary font-bold">${formatCurrency(sellPerPoint)}</span>
                 </p>
               )}
             </div>
@@ -199,7 +199,7 @@ export default function QuickTrade() {
               <div className="flex items-center gap-2 px-3 py-2 bg-secondary/20 border border-border rounded-sm">
                 <span className="text-xs text-mutedForeground font-heading">Fee:</span>
                 <span className="text-xs text-foreground font-heading font-bold">
-                  {sellFee} {sellFee === 1 ? 'point' : 'points'}
+                  {formatNumber(sellFee)} {sellFee === 1 ? 'point' : 'points'}
                 </span>
                 <HelpCircle size={14} className="text-primary/60 cursor-help ml-auto" />
               </div>
@@ -211,8 +211,8 @@ export default function QuickTrade() {
                   It will be refunded if you cancel the offer.
                 </p>
                 <div className="space-y-1 text-[10px] text-mutedForeground font-heading">
-                  <p>E.g.) You offer to sell 50 - offer is for <span className="text-primary font-bold">49</span></p>
-                  <p>E.g.) You offer to sell 5,000 - offer is for <span className="text-primary font-bold">4,975</span></p>
+                  <p>E.g.) You offer to sell <span className="text-foreground">50</span> - offer is for <span className="text-primary font-bold">49</span></p>
+                  <p>E.g.) You offer to sell <span className="text-foreground">5,000</span> - offer is for <span className="text-primary font-bold">4,975</span></p>
                 </div>
               </div>
             </div>
@@ -235,8 +235,8 @@ export default function QuickTrade() {
               disabled={!sellPoints || !sellCost}
               className={`w-full ${styles.raisedHover} bg-primary/10 border border-primary/30 text-primary font-heading font-bold py-2.5 rounded-sm hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              Add Offer - ${sellCost ? parseInt(sellCost).toLocaleString() : '0'}
-              {sellPoints && <span className="text-xs ml-1">({sellAfterFee.toLocaleString()} after fee)</span>}
+              Add Offer - ${sellCost ? formatNumber(sellCost) : '0'}
+              {sellPoints && <span className="text-xs ml-1">({formatNumber(sellAfterFee)} after fee)</span>}
             </button>
           </div>
         </div>
@@ -275,7 +275,7 @@ export default function QuickTrade() {
               />
               {buyPoints && buyOffer && (
                 <p className="text-xs text-mutedForeground mt-1">
-                  Per Point: <span className="text-primary font-bold">${buyPerPoint}</span>
+                  Per Point: <span className="text-primary font-bold">${formatCurrency(buyPerPoint)}</span>
                 </p>
               )}
             </div>
@@ -285,7 +285,7 @@ export default function QuickTrade() {
               <div className="flex items-center gap-2 px-3 py-2 bg-secondary/20 border border-border rounded-sm">
                 <span className="text-xs text-mutedForeground font-heading">Fee:</span>
                 <span className="text-xs text-foreground font-heading font-bold">
-                  {buyFee} {buyFee === 1 ? 'point' : 'points'}
+                  {formatNumber(buyFee)} {buyFee === 1 ? 'point' : 'points'}
                 </span>
                 <HelpCircle size={14} className="text-primary/60 cursor-help ml-auto" />
               </div>
@@ -297,8 +297,8 @@ export default function QuickTrade() {
                   It will be refunded if you cancel the offer.
                 </p>
                 <div className="space-y-1 text-[10px] text-mutedForeground font-heading">
-                  <p>E.g.) You offer to buy 50 - offer is for <span className="text-primary font-bold">49</span></p>
-                  <p>E.g.) You offer to buy 5,000 - offer is for <span className="text-primary font-bold">4,975</span></p>
+                  <p>E.g.) You offer to buy <span className="text-foreground">50</span> - offer is for <span className="text-primary font-bold">49</span></p>
+                  <p>E.g.) You offer to buy <span className="text-foreground">5,000</span> - offer is for <span className="text-primary font-bold">4,975</span></p>
                 </div>
               </div>
             </div>
@@ -321,8 +321,8 @@ export default function QuickTrade() {
               disabled={!buyPoints || !buyOffer}
               className={`w-full ${styles.raisedHover} bg-primary/10 border border-primary/30 text-primary font-heading font-bold py-2.5 rounded-sm hover:bg-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed`}
             >
-              Add Offer - ${buyOffer ? parseInt(buyOffer).toLocaleString() : '0'}
-              {buyPoints && <span className="text-xs ml-1">({buyAfterFee.toLocaleString()} after fee)</span>}
+              Add Offer - ${buyOffer ? formatNumber(buyOffer) : '0'}
+              {buyPoints && <span className="text-xs ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
             </button>
           </div>
         </div>
