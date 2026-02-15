@@ -231,7 +231,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnloc
 const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
   <div className="space-y-2">
     <div className="flex items-center justify-between px-1">
-      <span className="text-[10px] text-mutedForeground">Take 25% treasury · 2 raids/family/3h</span>
+      <span className="text-[10px] text-mutedForeground">Take 25% treasury · 2 raids per enemy family every 3h</span>
       <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:text-primary/80 p-1">
         <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
       </button>
@@ -533,6 +533,7 @@ export default function FamilyPage() {
   const [, setTick] = useState(0);
   const [racketAttackTargets, setRacketAttackTargets] = useState([]);
   const [racketAttackLoading, setRacketAttackLoading] = useState(null);
+  const [raidCooldownUntil, setRaidCooldownUntil] = useState(0);
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
 
   const family = myFamily?.family;
@@ -586,7 +587,20 @@ export default function FamilyPage() {
   const collectRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/collect`); toast.success(res.data?.message || 'Collected'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const upgradeRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/upgrade`); toast.success(res.data?.message || 'Upgraded'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const unlockRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/unlock`); toast.success(res.data?.message || 'Unlocked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
-  const attackFamilyRacket = async (familyId, racketId) => { setRacketAttackLoading(`${familyId}-${racketId}`); try { const res = await api.post('/families/attack-racket', { family_id: familyId, racket_id: racketId }); res.data?.success ? toast.success(res.data?.message || 'Success!') : toast.error(res.data?.message || 'Failed'); fetchRacketAttackTargets(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } finally { setRacketAttackLoading(null); } };
+  const attackFamilyRacket = async (familyId, racketId) => {
+    setRacketAttackLoading(`${familyId}-${racketId}`);
+    try {
+      const res = await api.post('/families/attack-racket', { family_id: familyId, racket_id: racketId });
+      res.data?.success ? toast.success(res.data?.message || 'Success!') : toast.error(res.data?.message || 'Failed');
+      fetchRacketAttackTargets();
+      fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setRacketAttackLoading(null);
+      setRaidCooldownUntil(Date.now() + 2000);
+    }
+  };
   const handleOfferTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/offer', { war_id: entry.war.id }); toast.success('Truce offered'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAcceptTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/accept', { war_id: entry.war.id }); toast.success('Accepted'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
 
@@ -663,7 +677,16 @@ export default function FamilyPage() {
             </div>
             <div className="p-3">
               {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
-              {activeTab === 'raid' && <RaidTab targets={racketAttackTargets} loading={racketAttackLoading} onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />}
+              {activeTab === 'raid' && (
+                <RaidTab
+                  targets={racketAttackTargets}
+                  loading={racketAttackLoading}
+                  raidCooldown={raidCooldownUntil > 0 && Date.now() < raidCooldownUntil}
+                  onRaid={attackFamilyRacket}
+                  onRefresh={fetchRacketAttackTargets}
+                  refreshing={targetsRefreshing}
+                />
+              )}
               {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
               {activeTab === 'roster' && <RosterTab members={members} canManage={canManage} myRole={myRole} config={config} onKick={handleKick} onAssignRole={handleAssignRole} />}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}

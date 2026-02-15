@@ -9999,6 +9999,19 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
     return {"targets": targets}
 
 
+# Serialize raid attempts per (attacker_family, target_family) to prevent race-condition spam
+_family_raid_locks: Dict[tuple, asyncio.Lock] = {}
+_family_raid_locks_guard = asyncio.Lock()
+
+
+async def _get_family_raid_lock(attacker_family_id: str, target_family_id: str) -> asyncio.Lock:
+    key = (attacker_family_id, target_family_id)
+    async with _family_raid_locks_guard:
+        if key not in _family_raid_locks:
+            _family_raid_locks[key] = asyncio.Lock()
+        return _family_raid_locks[key]
+
+
 @api_router.post("/families/attack-racket")
 async def families_attack_racket(request: FamilyAttackRacketRequest, current_user: dict = Depends(get_current_user)):
     """Raid an enemy family racket. Max 2 raids per crew every 3 hours."""
@@ -10012,38 +10025,41 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
     level = state.get("level", 0)
     if level < 1:
         raise HTTPException(status_code=400, detail="Racket not active")
-    window_start = datetime.now(timezone.utc) - timedelta(hours=FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS)
-    raids_on_crew = await db.family_racket_attacks.count_documents({
-        "attacker_family_id": my_family_id,
-        "target_family_id": request.family_id,
-        "last_at": {"$gte": window_start.isoformat()},
-    })
-    if raids_on_crew >= FAMILY_RACKET_ATTACK_MAX_PER_CREW:
-        raise HTTPException(status_code=400, detail=f"You can only raid this crew {FAMILY_RACKET_ATTACK_MAX_PER_CREW} times every {FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS}h")
-    ev = await get_effective_event()
-    income_per, _ = _racket_income_and_cooldown(request.racket_id, level, ev)
-    take = int(income_per * FAMILY_RACKET_ATTACK_REVENUE_PCT)
-    success_chance = max(FAMILY_RACKET_ATTACK_MIN_SUCCESS, FAMILY_RACKET_ATTACK_BASE_SUCCESS - level * FAMILY_RACKET_ATTACK_LEVEL_PENALTY)
-    success = random.random() < success_chance
-    now_iso = datetime.now(timezone.utc).isoformat()
-    if success and take > 0:
-        treasury = int((target_fam.get("treasury") or 0) or 0)
-        actual = min(take, treasury)
-        if actual > 0:
-            await db.families.update_one({"id": request.family_id}, {"$inc": {"treasury": -actual}})
-            await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
+
+    lock = await _get_family_raid_lock(my_family_id, request.family_id)
+    async with lock:
+        window_start = datetime.now(timezone.utc) - timedelta(hours=FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS)
+        raids_on_crew = await db.family_racket_attacks.count_documents({
+            "attacker_family_id": my_family_id,
+            "target_family_id": request.family_id,
+            "last_at": {"$gte": window_start.isoformat()},
+        })
+        if raids_on_crew >= FAMILY_RACKET_ATTACK_MAX_PER_CREW:
+            raise HTTPException(status_code=400, detail=f"Only 2 raids per family every 3 hours. You've used your raids on this crew.")
+        ev = await get_effective_event()
+        income_per, _ = _racket_income_and_cooldown(request.racket_id, level, ev)
+        take = int(income_per * FAMILY_RACKET_ATTACK_REVENUE_PCT)
+        success_chance = max(FAMILY_RACKET_ATTACK_MIN_SUCCESS, FAMILY_RACKET_ATTACK_BASE_SUCCESS - level * FAMILY_RACKET_ATTACK_LEVEL_PENALTY)
+        success = random.random() < success_chance
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if success and take > 0:
+            treasury = int((target_fam.get("treasury") or 0) or 0)
+            actual = min(take, treasury)
+            if actual > 0:
+                await db.families.update_one({"id": request.family_id}, {"$inc": {"treasury": -actual}})
+                await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
+            await db.family_racket_attacks.update_one(
+                {"attacker_family_id": my_family_id, "target_family_id": request.family_id, "target_racket_id": request.racket_id},
+                {"$set": {"last_at": now_iso}},
+                upsert=True,
+            )
+            return {"success": True, "message": f"Raid successful! Took ${actual:,}.", "amount": actual}
         await db.family_racket_attacks.update_one(
             {"attacker_family_id": my_family_id, "target_family_id": request.family_id, "target_racket_id": request.racket_id},
             {"$set": {"last_at": now_iso}},
             upsert=True,
         )
-        return {"success": True, "message": f"Raid successful! Took ${actual:,}.", "amount": actual}
-    await db.family_racket_attacks.update_one(
-        {"attacker_family_id": my_family_id, "target_family_id": request.family_id, "target_racket_id": request.racket_id},
-        {"$set": {"last_at": now_iso}},
-        upsert=True,
-    )
-    return {"success": False, "message": "Raid failed.", "amount": 0}
+        return {"success": False, "message": "Raid failed.", "amount": 0}
 
 
 @api_router.get("/families/war/stats")

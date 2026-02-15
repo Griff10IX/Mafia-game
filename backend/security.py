@@ -277,7 +277,8 @@ RATE_LIMIT_CONFIG = {
     "/api/travel": (3.0, True),
     "/api/booze-run/": (2.0, True),
     
-    # Families
+    # Families (raid: 2 per enemy family per 3h enforced in endpoint; min 3s between requests)
+    "/api/families/attack-racket": (3.0, True),
     "/api/families/": (1.5, False),
     
     # Notifications (prevent spam)
