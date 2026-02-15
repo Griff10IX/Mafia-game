@@ -3662,7 +3662,7 @@ async def admin_delete_single_user(user_id: str, current_user: dict = Depends(ge
     deleted["extortions"] = (await db.extortions.delete_many({"$or": [{"extorter_id": user_id}, {"target_id": user_id}]})).deleted_count
     deleted["sports_bets"] = (await db.sports_bets.delete_many({"user_id": user_id})).deleted_count
     deleted["blackjack_games"] = (await db.blackjack_games.delete_many({"user_id": user_id})).deleted_count
-    deleted["dice_ownership"] = (await db.dice_ownership.update_many({"owner_id": user_id}, {"$set": {"owner_id": None}})).modified_count
+    deleted["dice_ownership"] = (await db.dice_ownership.update_many({"owner_id": user_id}, {"$set": {"owner_id": None, "owner_username": None}})).modified_count
     deleted["dice_buy_back_offers"] = (await db.dice_buy_back_offers.delete_many({"$or": [{"from_owner_id": user_id}, {"to_user_id": user_id}]})).deleted_count
     deleted["interest_deposits"] = (await db.interest_deposits.delete_many({"user_id": user_id})).deleted_count
     deleted["family_war_stats"] = (await db.family_war_stats.delete_many({"user_id": user_id})).deleted_count
@@ -6382,7 +6382,7 @@ async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depend
         else:
             # Buy-back set: transfer ownership to winner, create 2-min offer; accept = return to owner, reject = keep
             ownership_transferred = True
-            await db.dice_ownership.update_one({"city": db_city}, {"$set": {"owner_id": current_user["id"]}})
+            await db.dice_ownership.update_one({"city": db_city}, {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"]}})
             expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
             offer_id = str(uuid.uuid4())
             buy_back_doc = {
@@ -6421,7 +6421,7 @@ async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depe
         raise HTTPException(status_code=400, detail="Not enough points to claim")
     await db.dice_ownership.update_one(
         {"city": city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": DICE_MAX_BET, "buy_back_reward": 0, "profit": 0}},
+        {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": DICE_MAX_BET, "buy_back_reward": 0, "profit": 0}},
         upsert=True,
     )
     if DICE_CLAIM_COST_POINTS > 0:
@@ -6438,7 +6438,7 @@ async def casino_dice_relinquish(request: DiceClaimRequest, current_user: dict =
     stored_city, doc = await _get_dice_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
-    await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None}})
+    await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
     return {"message": "You have relinquished the dice table."}
 
 
@@ -6536,13 +6536,13 @@ async def casino_dice_buy_back_accept(request: DiceBuyBackAcceptRequest, current
     points_offered = int(offer.get("points_offered") or 0)
     if not city or not from_owner_id:
         raise HTTPException(status_code=400, detail="Invalid offer")
-    from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1})
+    from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
     from_points = int((from_user.get("points") or 0) or 0)
     if from_points < points_offered:
         raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
     await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
-    await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id}})
+    await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username")}})
     await db.dice_buy_back_offers.delete_one({"id": request.offer_id})
     return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
@@ -6566,10 +6566,10 @@ async def casino_dice_send_to_user(request: DiceSendToUserRequest, current_user:
     stored_city, doc = await _get_dice_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
-    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1})
+    target = await db.users.find_one({"username": request.target_username.strip()}, {"_id": 0, "id": 1, "username": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
-    await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"]}})
+    await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target["username"]}})
     return {"message": "Ownership transferred."}
 
 
@@ -6725,7 +6725,7 @@ async def casino_roulette_claim(request: RouletteClaimRequest, current_user: dic
     
     await db.roulette_ownership.update_one(
         {"city": stored_city or city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": ROULETTE_DEFAULT_MAX_BET, "total_earnings": 0}},
+        {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": ROULETTE_DEFAULT_MAX_BET, "total_earnings": 0}},
         upsert=True
     )
     
@@ -7054,7 +7054,7 @@ async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: di
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -BLACKJACK_CLAIM_COST}})
     await db.blackjack_ownership.update_one(
         {"city": stored_city or city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0, "buy_back_reward": 0}},
+        {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": BLACKJACK_DEFAULT_MAX_BET, "total_earnings": 0, "profit": 0, "buy_back_reward": 0}},
         upsert=True,
     )
     return {"message": f"You now own the blackjack table in {city}!"}
@@ -7068,7 +7068,7 @@ async def casino_blackjack_relinquish(request: RouletteClaimRequest, current_use
     stored_city, doc = await _get_blackjack_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this table")
-    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None}})
+    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
     return {"message": "Ownership relinquished."}
 
 
@@ -7652,7 +7652,7 @@ async def casino_horseracing_claim(request: RouletteClaimRequest, current_user: 
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
     await db.horseracing_ownership.update_one(
         {"city": stored_city or city},
-        {"$set": {"owner_id": current_user["id"], "max_bet": HORSERACING_MAX_BET, "total_earnings": 0, "profit": 0}},
+        {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": HORSERACING_MAX_BET, "total_earnings": 0, "profit": 0}},
         upsert=True,
     )
     return {"message": f"You now own the race track in {city}!"}
@@ -7666,7 +7666,7 @@ async def casino_horseracing_relinquish(request: RouletteClaimRequest, current_u
     stored_city, doc = await _get_horseracing_ownership_doc(city)
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this track")
-    await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None}})
+    await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
     return {"message": "Ownership relinquished."}
 
 
@@ -8608,7 +8608,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if city:
             await db.dice_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id}},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
     elif prop_type == "casino_rlt":
