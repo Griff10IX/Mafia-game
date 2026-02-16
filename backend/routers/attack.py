@@ -21,7 +21,6 @@ from server import (
     RANKS,
     STATES,
     CARS,
-    BOOZE_TYPES,
     ARMOUR_BASE_BULLETS,
     MIN_BULLETS_TO_KILL,
     DEFAULT_HEALTH,
@@ -42,6 +41,7 @@ from server import (
     _family_war_start,
     _family_war_check_wipe_and_award,
 )
+from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
 from routers.weapons import _best_weapon_for_user
 

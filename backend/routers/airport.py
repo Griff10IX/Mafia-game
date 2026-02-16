@@ -15,8 +15,8 @@ from server import (
     TRAVEL_TIMES,
     _user_owns_any_property,
     _username_pattern,
-    _booze_user_carrying_total,
 )
+from routers.booze_run import _booze_user_carrying_total
 
 # Constants (moved from server)
 AIRPORT_COST = 10

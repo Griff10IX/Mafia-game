@@ -383,14 +383,6 @@ class NotificationCreate(BaseModel):
 class CustomCarPurchase(BaseModel):
     car_name: str
 
-class BoozeBuyRequest(BaseModel):
-    booze_id: str
-    amount: int
-
-class BoozeSellRequest(BaseModel):
-    booze_id: str
-    amount: int
-
 class DeadAliveRetrieveRequest(BaseModel):
     dead_username: str
     dead_password: str
@@ -3761,35 +3753,6 @@ async def admin_all_events_for_testing(request: AllEventsForTestingRequest, curr
     return {"message": "All events for testing " + ("enabled" if enabled else "disabled"), "all_events_for_testing": bool(enabled)}
 
 
-class AdminBoozeRotationRequest(BaseModel):
-    """Set booze run rotation interval to N seconds (admin test mode). Use null/0 to reset to normal (3h)."""
-    seconds: Optional[int] = None
-
-
-@api_router.get("/admin/booze-rotation")
-async def admin_get_booze_rotation(current_user: dict = Depends(get_current_user)):
-    """Get current booze rotation override (admin). None = normal 3h."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
-    return {"rotation_seconds": _booze_rotation_override_seconds, "normal_hours": BOOZE_ROTATION_HOURS}
-
-
-@api_router.post("/admin/booze-rotation")
-async def admin_set_booze_rotation(request: AdminBoozeRotationRequest, current_user: dict = Depends(get_current_user)):
-    """Set booze run rotation to N seconds for testing (admin). Pass seconds=15 for 15s; pass null or 0 to reset to 3h."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
-    global _booze_rotation_override_seconds
-    sec = request.seconds
-    if sec is None or sec <= 0:
-        _booze_rotation_override_seconds = None
-        return {"message": "Booze rotation reset to normal (3 hours)", "rotation_seconds": None}
-    if sec < 5 or sec > 86400:
-        raise HTTPException(status_code=400, detail="seconds must be between 5 and 86400 (1 day)")
-    _booze_rotation_override_seconds = sec
-    return {"message": f"Booze rotation set to {sec} seconds", "rotation_seconds": sec}
-
-
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
     {"name": "Baranco", "tag": "BARN", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
@@ -4274,8 +4237,8 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
 
     # Booze run: prices rotate every rotation interval. Show "Booze prices just changed!" for the first part of each rotation.
     try:
-        interval = _booze_rotation_interval_seconds()
-        rotation_index = _booze_rotation_index()
+        interval = get_booze_rotation_interval_seconds()
+        rotation_index = get_booze_rotation_index()
         rotation_start_ts = rotation_index * interval
         rotation_start_iso = datetime.fromtimestamp(rotation_start_ts, tz=timezone.utc).isoformat()
         if now_ts - rotation_start_ts < interval:  # within current rotation window
@@ -5098,123 +5061,6 @@ async def giphy_search(
             detail=data.get("meta", {}).get("msg") or "Giphy error",
         )
     return {"data": data.get("data") or []}
-
-
-# ============ BOOZE RUN (Supply Run / Prohibition) ============
-# 6 historically accurate prohibition-era booze types. Prices rotate every 3 hours per location.
-BOOZE_ROTATION_HOURS = 3
-# Admin override: when set (e.g. 15), rotation uses this many seconds instead of BOOZE_ROTATION_HOURS. None = normal.
-_booze_rotation_override_seconds = None
-BOOZE_TYPES = [
-    {"id": "bathtub_gin", "name": "Bathtub Gin"},
-    {"id": "moonshine", "name": "Moonshine"},
-    {"id": "rum_runners", "name": "Rum Runner's Rum"},
-    {"id": "speakeasy_whiskey", "name": "Speakeasy Whiskey"},
-    {"id": "needle_beer", "name": "Needle Beer"},
-    {"id": "jamaica_ginger", "name": "Jamaica Ginger"},
-]
-# Base capacity at rank 1; each rank up adds extra (so rank directly increases limit).
-# Store upgrade: +100 per purchase for 30 points, bonus capped at 1000 total.
-BOOZE_CAPACITY_BASE_RANK1 = 50
-BOOZE_CAPACITY_EXTRA_PER_RANK = 25  # each time you rank up you get this much extra booze limit
-BOOZE_CAPACITY_UPGRADE_COST = 30   # points per +100 capacity
-BOOZE_CAPACITY_UPGRADE_AMOUNT = 100  # +100 units per store purchase
-BOOZE_CAPACITY_BONUS_MAX = 1000  # cap on booze_capacity_bonus from store
-BOOZE_RUN_HISTORY_MAX = 10
-# Jail chance on buy/sell: random between 2% and 6% per action
-BOOZE_RUN_JAIL_CHANCE_MIN = 0.02
-BOOZE_RUN_JAIL_CHANCE_MAX = 0.06
-BOOZE_RUN_JAIL_SECONDS = 20
-
-
-def _booze_rotation_interval_seconds():
-    """Seconds per rotation window. Admin can override to e.g. 15 for testing."""
-    global _booze_rotation_override_seconds
-    if _booze_rotation_override_seconds is not None and _booze_rotation_override_seconds > 0:
-        return _booze_rotation_override_seconds
-    return BOOZE_ROTATION_HOURS * 3600
-
-
-def _booze_rotation_index():
-    """Current rotation window index (same for all users)."""
-    return int(datetime.now(timezone.utc).timestamp() // _booze_rotation_interval_seconds())
-
-
-def _booze_rotation_ends_at():
-    """ISO timestamp when current rotation ends."""
-    idx = _booze_rotation_index()
-    end_ts = (idx + 1) * _booze_rotation_interval_seconds()
-    return datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat()
-
-
-def _booze_round_trip_cities():
-    """The two cities that have a guaranteed profitable round-trip this rotation (buy A sell B, buy B sell A)."""
-    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
-    idx = _booze_rotation_index()
-    i, j = unordered_pairs[idx % len(unordered_pairs)]
-    return [STATES[i], STATES[j]]
-
-
-def _booze_daily_estimate_rough(capacity: int, prices_map: dict) -> int:
-    """Rough 24h profit estimate: custom car, best route this rotation, jail chance and travel time from constants."""
-    if capacity <= 0:
-        return 0
-    # Best profit per unit this rotation (round-trip pair)
-    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
-    idx = _booze_rotation_index()
-    locA, locB = unordered_pairs[idx % len(unordered_pairs)]
-    n_booze = len(BOOZE_TYPES)
-    best_ab = max(
-        prices_map.get((locB, i), 400) - prices_map.get((locA, i), 400)
-        for i in range(n_booze)
-    )
-    best_ba = max(
-        prices_map.get((locA, i), 400) - prices_map.get((locB, i), 400)
-        for i in range(n_booze)
-    )
-    profit_per_unit = max(best_ab, best_ba, 1)
-    # Time per run: 2 legs (buy city -> sell city), custom car
-    secs_per_run = 2 * TRAVEL_TIMES.get("custom", 20)
-    # Jail: each buy/sell has P(jail) in [BOOZE_RUN_JAIL_CHANCE_MIN, MAX]; use average
-    jail_per_action = (BOOZE_RUN_JAIL_CHANCE_MIN + BOOZE_RUN_JAIL_CHANCE_MAX) / 2
-    jail_per_run = 1 - (1 - jail_per_action) ** 2  # at least one of buy/sell
-    jail_seconds = BOOZE_RUN_JAIL_SECONDS
-    expected_secs_per_run = secs_per_run + jail_per_run * jail_seconds
-    runs_per_24h = 86400 / expected_secs_per_run
-    successful_run_rate = (1 - jail_per_action) ** 2  # no jail on either action
-    profitable_runs = runs_per_24h * successful_run_rate
-    return int(profitable_runs * capacity * profit_per_unit)
-
-
-def _booze_prices_for_rotation():
-    """One market price per (location_index, booze_index). Same price to buy or sell in that city — profit only by buying in a cheap city and selling in a pricier one. Guarantees one round-trip pair per rotation (both legs profitable)."""
-    idx = _booze_rotation_index()
-    n_locs = 4  # len(STATES)
-    n_booze = len(BOOZE_TYPES)
-    out = {}
-    for loc_i in range(n_locs):
-        for booze_i in range(n_booze):
-            base = 200 + (loc_i * 85) + (booze_i * 72) + (idx % 19) * 23
-            base += ((idx * 7 + loc_i * 11 + booze_i * 13) % 67) - 33
-            price = min(2000, max(100, base))
-            out[(loc_i, booze_i)] = price
-    # One round-trip per rotation: make one booze cheap in A / dear in B, another cheap in B / dear in A
-    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
-    locA, locB = unordered_pairs[idx % len(unordered_pairs)]
-    profit_min = 40
-    booze_ab = idx % n_booze
-    price_a_ab = out[(locA, booze_ab)]
-    price_b_ab = out[(locB, booze_ab)]
-    if price_b_ab <= price_a_ab + profit_min:
-        price_b_ab = min(2000, price_a_ab + profit_min + (idx % 60))
-        out[(locB, booze_ab)] = price_b_ab
-    booze_ba = (idx + 1) % n_booze
-    price_b_ba = out[(locB, booze_ba)]
-    price_a_ba = out[(locA, booze_ba)]
-    if price_a_ba <= price_b_ba + profit_min:
-        price_a_ba = min(2000, price_b_ba + profit_min + (idx % 60))
-        out[(locA, booze_ba)] = price_a_ba
-    return out
 
 
 # ============ TRAVEL ENDPOINTS ============
@@ -6982,267 +6828,6 @@ async def casino_horseracing_history(current_user: dict = Depends(get_current_us
     return {"history": list(reversed(history))}
 
 
-# ============ BOOZE RUN ENDPOINTS ============
-
-def _booze_user_capacity(current_user: dict) -> int:
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    # Base from rank: rank 1 = BASE, each rank up adds EXTRA_PER_RANK
-    capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
-    bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    return max(1, capacity_from_rank + bonus)
-
-
-def _booze_user_carrying_total(carrying: dict) -> int:
-    return sum(int(v) for v in (carrying or {}).values())
-
-
-@api_router.get("/booze-run/config")
-async def booze_run_config(current_user: dict = Depends(get_current_user)):
-    """Booze run config: locations, types, prices at current location, rotation end, carrying, capacity."""
-    current_state = current_user.get("current_state", STATES[0])
-    loc_index = STATES.index(current_state) if current_state in STATES else 0
-    prices_map = _booze_prices_for_rotation()
-    carrying = current_user.get("booze_carrying") or {}
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
-    capacity = _booze_user_capacity(current_user)
-    # Prices at current location only (one price per booze — same to buy or sell in this city)
-    prices_at_location = []
-    for i, bt in enumerate(BOOZE_TYPES):
-        price = prices_map.get((loc_index, i), 400)
-        prices_at_location.append({
-            "booze_id": bt["id"],
-            "name": bt["name"],
-            "buy_price": price,
-            "sell_price": price,
-            "carrying": int(carrying.get(bt["id"], 0)),
-        })
-    # All locations' prices for route awareness (buy in cheap city, sell in pricier city)
-    all_prices = {}
-    for loc_i, state in enumerate(STATES):
-        all_prices[state] = [
-            {"booze_id": BOOZE_TYPES[b]["id"], "name": BOOZE_TYPES[b]["name"], "buy_price": prices_map.get((loc_i, b), 400), "sell_price": prices_map.get((loc_i, b), 400)}
-            for b in range(len(BOOZE_TYPES))
-        ]
-    # Profit today (reset at UTC midnight; we show 0 if date changed, reset stored on next sell)
-    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    profit_today = current_user.get("booze_profit_today", 0)
-    profit_today_date = current_user.get("booze_profit_today_date")
-    if profit_today_date != today_utc:
-        profit_today = 0
-    profit_total = current_user.get("booze_profit_total", 0)
-    runs_count = current_user.get("booze_runs_count", 0)
-    history = (current_user.get("booze_run_history") or [])[:BOOZE_RUN_HISTORY_MAX]
-
-    capacity_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    daily_estimate_rough = _booze_daily_estimate_rough(capacity, prices_map)
-    return {
-        "locations": list(STATES),
-        "booze_types": list(BOOZE_TYPES),
-        "current_location": current_state,
-        "prices_at_location": prices_at_location,
-        "all_prices_by_location": all_prices,
-        "carrying": carrying,
-        "capacity": capacity,
-        "capacity_from_rank": capacity_from_rank,
-        "capacity_extra_per_rank": BOOZE_CAPACITY_EXTRA_PER_RANK,
-        "capacity_bonus": capacity_bonus,
-        "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX,
-        "carrying_total": _booze_user_carrying_total(carrying),
-        "rotation_ends_at": _booze_rotation_ends_at(),
-        "rotation_hours": BOOZE_ROTATION_HOURS,
-        "rotation_seconds": _booze_rotation_override_seconds,
-        "round_trip_cities": _booze_round_trip_cities(),
-        "profit_today": profit_today,
-        "profit_total": profit_total,
-        "runs_count": runs_count,
-        "history": history,
-        "daily_estimate_rough": daily_estimate_rough,
-    }
-
-
-def _booze_user_in_jail(user: dict) -> bool:
-    """True if user is currently in jail (jail_until in future)."""
-    if not user.get("in_jail"):
-        return False
-    jail_until_iso = user.get("jail_until")
-    if not jail_until_iso:
-        return False
-    jail_until = datetime.fromisoformat(jail_until_iso.replace("Z", "+00:00"))
-    if jail_until.tzinfo is None:
-        jail_until = jail_until.replace(tzinfo=timezone.utc)
-    return jail_until > datetime.now(timezone.utc)
-
-
-@api_router.post("/booze-run/buy")
-async def booze_run_buy(request: BoozeBuyRequest, current_user: dict = Depends(get_current_user)):
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    if _booze_user_in_jail(current_user):
-        raise HTTPException(status_code=400, detail="You are in jail!")
-    booze_ids = [b["id"] for b in BOOZE_TYPES]
-    if request.booze_id not in booze_ids:
-        raise HTTPException(status_code=400, detail="Invalid booze type")
-    current_state = current_user.get("current_state", STATES[0])
-    loc_index = STATES.index(current_state) if current_state in STATES else 0
-    booze_index = booze_ids.index(request.booze_id)
-    prices_map = _booze_prices_for_rotation()
-    price = prices_map.get((loc_index, booze_index), 400)
-    cost = price * request.amount
-    if current_user.get("money", 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient money")
-    carrying = dict(current_user.get("booze_carrying") or {})
-    carrying_cost = dict(current_user.get("booze_carrying_cost") or {})
-    capacity = _booze_user_capacity(current_user)
-    current_carry = _booze_user_carrying_total(carrying)
-    if current_carry + request.amount > capacity:
-        raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
-    # Roll for caught by prohibition agents: random chance between 2% and 6%
-    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
-    if random.random() < jail_chance:
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {
-                "$set": {"in_jail": True, "jail_until": jail_until.isoformat()},
-                "$unset": {"booze_carrying": "", "booze_carrying_cost": ""},
-            },
-        )
-        return {
-            "message": "Busted! Prohibition agents got you. You're going to jail.",
-            "caught": True,
-            "jail_until": jail_until.isoformat(),
-            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
-        }
-    booze_name = BOOZE_TYPES[booze_index]["name"]
-    history_entry = {
-        "at": datetime.now(timezone.utc).isoformat(),
-        "action": "buy",
-        "booze_name": booze_name,
-        "amount": request.amount,
-        "unit_price": price,
-        "total": cost,
-        "location": current_state,
-    }
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {
-            "$inc": {"money": -cost, f"booze_carrying.{request.booze_id}": request.amount, f"booze_carrying_cost.{request.booze_id}": cost},
-            "$set": {f"booze_buy_location.{request.booze_id}": current_state},
-            "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
-        }
-    )
-    new_carrying = carrying.get(request.booze_id, 0) + request.amount
-    return {"message": f"Purchased {request.amount} {booze_name}", "new_carrying": new_carrying, "spent": cost}
-
-
-@api_router.post("/booze-run/sell")
-async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends(get_current_user)):
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    if _booze_user_in_jail(current_user):
-        raise HTTPException(status_code=400, detail="You are in jail!")
-    booze_ids = [b["id"] for b in BOOZE_TYPES]
-    if request.booze_id not in booze_ids:
-        raise HTTPException(status_code=400, detail="Invalid booze type")
-    current_state = current_user.get("current_state", STATES[0])
-    loc_index = STATES.index(current_state) if current_state in STATES else 0
-    booze_index = booze_ids.index(request.booze_id)
-    prices_map = _booze_prices_for_rotation()
-    price = prices_map.get((loc_index, booze_index), 400)
-    carrying = dict(current_user.get("booze_carrying") or {})
-    carrying_cost = dict(current_user.get("booze_carrying_cost") or {})
-    have = int(carrying.get(request.booze_id, 0))
-    if have < request.amount:
-        raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
-    # Roll for caught by prohibition agents: random chance between 2% and 6%
-    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
-    if random.random() < jail_chance:
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {
-                "$set": {"in_jail": True, "jail_until": jail_until.isoformat()},
-                "$unset": {"booze_carrying": "", "booze_carrying_cost": ""},
-            },
-        )
-        return {
-            "message": "Busted! Prohibition agents got you. You're going to jail.",
-            "caught": True,
-            "jail_until": jail_until.isoformat(),
-            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
-        }
-    revenue = price * request.amount
-    total_cost_stored = int(carrying_cost.get(request.booze_id, 0))
-    cost_of_sold = (total_cost_stored * request.amount // have) if have else 0
-    profit = revenue - cost_of_sold
-    new_val = have - request.amount
-    new_cost = total_cost_stored - cost_of_sold
-    booze_name = BOOZE_TYPES[booze_index]["name"]
-    # Only count as a "run" (and add to profit/runs/objectives) when selling in a *different* city than where this booze was bought
-    buy_location = (current_user.get("booze_buy_location") or {}).get(request.booze_id)
-    is_run = buy_location is not None and buy_location != current_state
-
-    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    profit_today = current_user.get("booze_profit_today", 0)
-    profit_today_date = current_user.get("booze_profit_today_date")
-    if profit_today_date != today_utc:
-        profit_today = 0
-    new_profit_today = profit_today + profit if is_run else profit_today
-    new_profit_total = (current_user.get("booze_profit_total", 0) + profit) if is_run else current_user.get("booze_profit_total", 0)
-    history_entry = {
-        "at": datetime.now(timezone.utc).isoformat(),
-        "action": "sell",
-        "booze_name": booze_name,
-        "amount": request.amount,
-        "unit_price": price,
-        "total": revenue,
-        "profit": profit if is_run else None,
-        "location": current_state,
-        "is_run": is_run,
-    }
-    updates = {
-        "$inc": {"money": revenue},
-        "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
-    }
-    if is_run:
-        updates["$inc"]["booze_profit_today"] = profit
-        updates["$inc"]["booze_profit_total"] = profit
-        updates["$inc"]["booze_runs_count"] = 1
-        updates["$set"] = {"booze_profit_today_date": today_utc}
-    if new_val == 0:
-        updates.setdefault("$unset", {})[f"booze_carrying.{request.booze_id}"] = ""
-        updates["$unset"][f"booze_carrying_cost.{request.booze_id}"] = ""
-        updates["$unset"][f"booze_buy_location.{request.booze_id}"] = ""
-    else:
-        updates["$inc"][f"booze_carrying.{request.booze_id}"] = -request.amount
-        updates["$inc"][f"booze_carrying_cost.{request.booze_id}"] = -cost_of_sold
-    await db.users.update_one({"id": current_user["id"]}, updates)
-    if is_run:
-        try:
-            await update_objectives_progress(current_user["id"], "booze_runs", 1)
-        except Exception:
-            pass
-    return {"message": f"Sold {request.amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
-
-
-@api_router.post("/store/buy-booze-capacity")
-async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
-    """Spend points to increase booze carry capacity (+100 per purchase, bonus capped at 1000)."""
-    if current_user["points"] < BOOZE_CAPACITY_UPGRADE_COST:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
-        raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
-    add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": add_bonus}}
-    )
-    new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
-    return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
-
-
 @api_router.post("/store/buy-custom-car")
 async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
     CUSTOM_CAR_COST = 500  # Points
@@ -7284,10 +6869,11 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
+from routers.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index  # flash news
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
@@ -7304,6 +6890,7 @@ weapons.register(api_router)
 bodyguards.register(api_router)
 airport.register(api_router)
 quicktrade.register(api_router)
+booze_run.register(api_router)
 
 app.include_router(api_router)
 
