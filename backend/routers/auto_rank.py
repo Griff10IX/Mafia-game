@@ -69,6 +69,48 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     now = datetime.now(timezone.utc)
     lines = [f"**Auto Rank** — {username}", ""]
 
+    # --- Jail bust: one attempt (NPC or player) if a target is available ---
+    bust_target_username = None
+    npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
+    if npc:
+        bust_target_username = npc.get("username")
+    if not bust_target_username:
+        jailed = await db.users.find_one(
+            {"in_jail": True, "id": {"$ne": user_id}},
+            {"_id": 0, "username": 1},
+        )
+        if jailed:
+            bust_target_username = jailed.get("username")
+    if bust_target_username:
+        from routers.jail import _attempt_bust_impl
+        try:
+            bust_result = await _attempt_bust_impl(user, bust_target_username)
+            if not bust_result.get("error"):
+                if bust_result.get("success"):
+                    rp = bust_result.get("rank_points_earned") or 0
+                    cash = bust_result.get("cash_reward") or 0
+                    parts = [f"Busted {bust_target_username}! +{rp} RP"]
+                    if cash:
+                        parts.append(f"${cash:,}")
+                    lines.append("**Bust** — " + ". ".join(parts) + ".")
+                else:
+                    lines.append("**Bust** — " + (bust_result.get("message") or "Failed. Got caught."))
+        except Exception as e:
+            logger.exception("Auto rank bust for %s: %s", user_id, e)
+            lines.append("**Bust** — Error.")
+
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        lines.append("")
+        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+        return
+    if user.get("in_jail"):
+        if "**Bust**" not in "\n".join(lines):
+            lines.append("(You're in jail — no crimes/GTA this run.)")
+        lines.append("")
+        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+        return
+
     # --- Crimes: commit ALL that are off cooldown and rank-eligible (loop until none left) ---
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
     crime_success_count = 0

@@ -172,20 +172,18 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     return {"players": players_data}
 
 
-async def bust_out_of_jail(
-    request: BustOutRequest, current_user: dict = Depends(get_current_user)
-):
-    # Success rate based on total attempts (not just successes) – more attempts = higher rate
+async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
+    """Attempt to bust target (NPC or player) out of jail. Returns dict with success, message, optional rank_points_earned, cash_reward, jail_time. On validation failure returns {success: False, error: str, error_code: int}."""
+    target_name = (target_username or "").strip()
+    username_ci = re.compile("^" + re.escape(target_name) + "$", re.IGNORECASE) if target_name else None
+    if not username_ci:
+        return {"success": False, "error": "Target username required", "error_code": 400}
+
     total_attempts = int(current_user.get("jail_bust_attempts", 0) or 0)
     player_success_rate = _player_bust_success_rate(total_attempts)
-    
-    target_name = (request.target_username or "").strip()
-    username_ci = re.compile("^" + re.escape(target_name) + "$", re.IGNORECASE) if target_name else None
-    npc = await db.jail_npcs.find_one(
-        {"username": username_ci}, {"_id": 0}
-    ) if username_ci else None
+
+    npc = await db.jail_npcs.find_one({"username": username_ci}, {"_id": 0})
     if npc:
-        # Use player skill directly for NPCs (no difficulty modifier)
         success = random.random() < player_success_rate
         rank_points = 25
         bust_reward_cash = int((npc.get("bust_reward_cash") or 0) or 0)
@@ -196,10 +194,7 @@ async def bust_out_of_jail(
             updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
             if bust_reward_cash > 0:
                 updates["$inc"]["money"] = bust_reward_cash
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                updates,
-            )
+            await db.users.update_one({"id": current_user["id"]}, updates)
             try:
                 await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
             except Exception as e:
@@ -210,52 +205,31 @@ async def bust_out_of_jail(
                 await update_objectives_progress(current_user["id"], "busts", 1)
             except Exception:
                 pass
-            msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=request.target_username)
-            return {
-                "success": True,
-                "message": msg,
-                "rank_points_earned": rank_points,
-                "cash_reward": bust_reward_cash,
-            }
+            msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
+            return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash}
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
         )
-        return {
-            "success": False,
-            "message": random.choice(JAIL_BUST_FAIL_MESSAGES),
-            "jail_time": 30,
-        }
-    if not username_ci:
-        raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one(
-        {"username": username_ci}, {"_id": 0}
-    )
+        return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
+
+    target = await db.users.find_one({"username": username_ci}, {"_id": 0})
     if not target:
-        raise HTTPException(status_code=404, detail="Target user not found")
+        return {"success": False, "error": "Target user not found", "error_code": 404}
     if target["id"] == current_user["id"]:
-        raise HTTPException(
-            status_code=400,
-            detail="You cannot bust yourself out. Ask another player for help.",
-        )
+        return {"success": False, "error": "You cannot bust yourself out. Ask another player for help.", "error_code": 400}
     if not target.get("in_jail"):
-        raise HTTPException(status_code=400, detail="Target is not in jail")
-    
-    # Check if target is UNBREAKABLE (from organised crime heist failure)
+        return {"success": False, "error": "Target is not in jail", "error_code": 400}
     if target.get("unbreakable_until"):
         try:
             unbreakable_time = datetime.fromisoformat(target["unbreakable_until"])
             if unbreakable_time > datetime.now(timezone.utc):
                 remaining = int((unbreakable_time - datetime.now(timezone.utc)).total_seconds())
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"This player cannot be busted out for {remaining}s (high security lockdown)"
-                )
+                return {"success": False, "error": f"This player cannot be busted out for {remaining}s (high security lockdown)", "error_code": 400}
         except (ValueError, TypeError):
-            pass  # Invalid timestamp, allow bust
-    
-    # Use player's skill-based success rate (no NPC difficulty modifier for real players)
+            pass
+
     success = random.random() < player_success_rate
     if success:
         rank_points = 15
@@ -285,22 +259,22 @@ async def bust_out_of_jail(
         except Exception:
             pass
         msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target["username"])
-        return {
-            "success": True,
-            "message": msg,
-            "rank_points_earned": rank_points,
-            "cash_reward": cash_to_pay,
-        }
+        return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay}
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
     )
-    return {
-        "success": False,
-        "message": random.choice(JAIL_BUST_FAIL_MESSAGES),
-        "jail_time": 30,
-    }
+    return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
+
+
+async def bust_out_of_jail(
+    request: BustOutRequest, current_user: dict = Depends(get_current_user)
+):
+    result = await _attempt_bust_impl(current_user, request.target_username or "")
+    if result.get("error"):
+        raise HTTPException(status_code=result.get("error_code", 400), detail=result["error"])
+    return result
 
 
 async def get_jail_status(current_user: dict = Depends(get_current_user)):
