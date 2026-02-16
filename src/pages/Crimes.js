@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { HelpCircle, Clock, AlertCircle } from 'lucide-react';
+import { HelpCircle, Clock, AlertCircle, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -72,6 +72,17 @@ const JailNotice = () => (
   </div>
 );
 
+const AutoRankCrimesNotice = () => (
+  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+    <div className="flex items-center gap-2">
+      <Bot size={14} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80">
+        <strong className="text-amber-300">Auto Rank</strong> — Crimes are running automatically. Manual play disabled.
+      </span>
+    </div>
+  </div>
+);
+
 const EventBanner = ({ event }) => {
   if (!event?.name || (event.kill_cash === 1 && event.rank_points === 1)) {
     return null;
@@ -126,9 +137,10 @@ const CrimeProgressBar = ({ progress }) => {
 };
 
 // Compact crime row
-const CrimeRow = ({ crime, onCommit }) => {
+const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
   const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
   const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
+  const showLocked = manualPlayDisabled && crime.can_commit;
 
   return (
     <div
@@ -185,9 +197,17 @@ const CrimeRow = ({ crime, onCommit }) => {
         )}
       </div>
 
-      {/* Action (Commit / Wait / — for rank-locked / Locked) */}
+      {/* Action (Commit / Wait / — for rank-locked / Locked when Auto Rank) */}
       <div className="shrink-0 w-[72px] flex justify-end">
-        {crime.can_commit ? (
+        {showLocked ? (
+          <button
+            type="button"
+            disabled
+            className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+          >
+            Locked
+          </button>
+        ) : crime.can_commit ? (
           <button
             type="button"
             onClick={() => onCommit(crime.id)}
@@ -226,13 +246,16 @@ export default function Crimes() {
     profit_today: 0, profit_24h: 0, profit_week: 0,
   });
 
+  const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(false);
+
   const fetchCrimes = async () => {
     try {
-      const [crimesRes, meRes, eventsRes, statsRes] = await Promise.all([
+      const [crimesRes, meRes, eventsRes, statsRes, autoRankRes] = await Promise.all([
         api.get('/crimes'),
         api.get('/auth/me'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/crimes/stats').catch(() => ({ data: {} })),
+        api.get('/auto-rank/me').catch(() => ({ data: {} })),
       ]);
       
       setCrimes(crimesRes.data);
@@ -240,6 +263,8 @@ export default function Crimes() {
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
       setCrimeStats(statsRes.data || {});
+      const ar = autoRankRes.data || {};
+      setAutoRankCrimesDisabled(!!(ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec));
     } catch (error) {
       toast.error('Failed to load crimes');
       console.error('Error fetching crimes:', error);
@@ -386,6 +411,7 @@ export default function Crimes() {
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="crimes-page">
       {user?.in_jail && <JailNotice />}
+      {autoRankCrimesDisabled && <AutoRankCrimesNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
 
@@ -408,7 +434,7 @@ export default function Crimes() {
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
             Available Crimes
           </span>
-          {!user?.in_jail && commitAllCount > 0 && (
+          {!user?.in_jail && !autoRankCrimesDisabled && commitAllCount > 0 && (
             <button
               type="button"
               onClick={commitAll}
@@ -422,7 +448,7 @@ export default function Crimes() {
 
         <div className="p-2 space-y-1">
           {crimeRows.map((crime) => (
-            <CrimeRow key={crime.id} crime={crime} onCommit={commitCrime} />
+            <CrimeRow key={crime.id} crime={crime} onCommit={commitCrime} manualPlayDisabled={autoRankCrimesDisabled} />
           ))}
         </div>
       </div>

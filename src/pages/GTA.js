@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Car, Lock, ChevronDown, ChevronRight } from 'lucide-react';
+import { Car, Lock, ChevronDown, ChevronRight, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -74,8 +74,19 @@ const EventBanner = ({ event, eventsEnabled }) => {
   );
 };
 
+const AutoRankGtaNotice = () => (
+  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+    <div className="flex items-center gap-2">
+      <Bot size={14} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80">
+        <strong className="text-amber-300">Auto Rank</strong> — GTA is running automatically. Manual play disabled.
+      </span>
+    </div>
+  </div>
+);
+
 // Compact GTA row
-const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled }) => {
+const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, manualPlayDisabled }) => {
   const onCooldown = option.cooldown_until && formatCooldown(option.cooldown_until);
   const unlocked = option.unlocked;
   const defaultCooldown = formatDefaultCooldown(option.cooldown);
@@ -151,7 +162,15 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
 
       {/* Action */}
       <div className="shrink-0">
-        {unlocked && !onCooldown ? (
+        {manualPlayDisabled && unlocked && !onCooldown ? (
+          <button
+            type="button"
+            disabled
+            className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+          >
+            Locked
+          </button>
+        ) : unlocked && !onCooldown ? (
           <button
             type="button"
             onClick={() => onAttempt(option.id)}
@@ -336,13 +355,16 @@ export default function GTA() {
     });
   };
 
+  const [autoRankGtaDisabled, setAutoRankGtaDisabled] = useState(false);
+
   const fetchData = async () => {
     try {
-      const [optionsRes, garageRes, eventsRes, statsRes] = await Promise.allSettled([
+      const [optionsRes, garageRes, eventsRes, statsRes, autoRankRes] = await Promise.allSettled([
         api.get('/gta/options'),
         api.get('/gta/garage'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/gta/stats').catch(() => ({ data: {} })),
+        api.get('/auto-rank/me').catch(() => ({ data: {} })),
       ]);
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
@@ -361,6 +383,10 @@ export default function GTA() {
       if (eventsRes.status === 'fulfilled' && eventsRes.value?.data) {
         setEvent(eventsRes.value.data?.event ?? null);
         setEventsEnabled(!!eventsRes.value.data?.events_enabled);
+      }
+      if (autoRankRes.status === 'fulfilled' && autoRankRes.value?.data) {
+        const ar = autoRankRes.value.data;
+        setAutoRankGtaDisabled(!!(ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec));
       }
     } catch (error) {
       toast.error('Failed to load GTA data');
@@ -445,6 +471,7 @@ export default function GTA() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="gta-page">
+      {autoRankGtaDisabled && <AutoRankGtaNotice />}
       <EventBanner event={event} eventsEnabled={eventsEnabled} />
 
       {/* GTA stats */}
@@ -474,6 +501,7 @@ export default function GTA() {
               onAttempt={attemptGTA}
               event={event}
               eventsEnabled={eventsEnabled}
+              manualPlayDisabled={autoRankGtaDisabled}
             />
           ))}
         </div>

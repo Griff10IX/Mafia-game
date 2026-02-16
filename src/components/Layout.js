@@ -144,6 +144,7 @@ export default function Layout({ children }) {
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [atWar, setAtWar] = useState(false);
+  const [autoRankPrefs, setAutoRankPrefs] = useState({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false });
   const [flashNews, setFlashNews] = useState([]);
   const [flashIndex, setFlashIndex] = useState(0);
   const [travelStatus, setTravelStatus] = useState(null); // { traveling: bool, destination, seconds_remaining }
@@ -232,12 +233,33 @@ export default function Layout({ children }) {
     return () => window.removeEventListener('app:admin-changed', handler);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const fetchAutoRankPrefs = async () => {
+    if (!user) return;
+    try {
+      const res = await api.get('/auto-rank/me');
+      setAutoRankPrefs({
+        auto_rank_enabled: !!res.data?.auto_rank_enabled,
+        auto_rank_crimes: !!res.data?.auto_rank_crimes,
+        auto_rank_gta: !!res.data?.auto_rank_gta,
+        auto_rank_oc: !!res.data?.auto_rank_oc,
+        auto_rank_bust_every_5_sec: !!res.data?.auto_rank_bust_every_5_sec,
+      });
+    } catch {
+      setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false });
+    }
+  };
+
+  useEffect(() => {
+    if (user) fetchAutoRankPrefs();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     // Refetch on route change so top bar and sidebar badges are fresh when navigating
     fetchData();
     fetchUnreadCount();
     fetchWarStatus();
     fetchRankingCounts();
+    if (user) fetchAutoRankPrefs();
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -511,6 +533,20 @@ export default function Layout({ children }) {
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-px shrink-0" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
               <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
+              {autoRankPrefs.auto_rank_enabled && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="shrink-0 flex items-center justify-center" style={{ color: 'var(--gm-gold)' }} aria-label="Auto Rank on">
+                        <Bot size={16} />
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-[200px]">
+                      <p className="font-heading text-xs">Auto Rank is on</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
               <div className="flex-1 min-w-0 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
             </div>
             <p className={`text-[10px] mt-0.5 font-heading tracking-wider text-center ${styles.sidebarHeaderSub}`}>Chicago, 1927</p>

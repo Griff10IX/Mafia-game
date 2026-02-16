@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, Users, AlertCircle, DoorOpen } from 'lucide-react';
+import { Lock, Users, AlertCircle, DoorOpen, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -145,7 +145,18 @@ const JailStatusCard = ({
   );
 };
 
-const JailedPlayerRow = ({ player, index, onBust, loading, userInJail }) => {
+const AutoRankJailNotice = () => (
+  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+    <div className="flex items-center gap-2">
+      <Bot size={14} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80">
+        <strong className="text-amber-300">Auto Rank</strong> — Busts are running automatically. Manual play disabled.
+      </span>
+    </div>
+  </div>
+);
+
+const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPlayDisabled }) => {
   const rp = player.rp_reward ?? (player.is_npc ? 25 : 15);
 
   return (
@@ -194,6 +205,14 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail }) => {
       <div className="shrink-0">
         {player.is_self ? (
           <span className="text-xs text-mutedForeground w-16 text-center inline-block">—</span>
+        ) : manualPlayDisabled ? (
+          <button
+            type="button"
+            disabled
+            className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed inline-flex items-center gap-1"
+          >
+            Locked
+          </button>
         ) : (
           <button
             type="button"
@@ -254,16 +273,21 @@ export default function Jail() {
   const [setRewardLoading, setSetRewardLoading] = useState(false);
   const [leavingJail, setLeavingJail] = useState(false);
 
+  const [autoRankJailDisabled, setAutoRankJailDisabled] = useState(false);
+
   const fetchJailData = async () => {
     try {
-      const [jailRes, playersRes, statsRes] = await Promise.all([
+      const [jailRes, playersRes, statsRes, autoRankRes] = await Promise.all([
         api.get('/jail/status'),
         api.get('/jail/players'),
         api.get('/jail/stats').catch(() => ({ data: {} })),
+        api.get('/auto-rank/me').catch(() => ({ data: {} })),
       ]);
       setJailStatus(jailRes.data);
       setJailedPlayers(playersRes.data.players);
       setJailStats(statsRes.data || {});
+      const ar = autoRankRes.data || {};
+      setAutoRankJailDisabled(!!ar.auto_rank_bust_every_5_sec);
     } catch (error) {
       console.error('Failed to load jail data:', error);
       toast.error('Failed to load jail data');
@@ -359,6 +383,7 @@ export default function Jail() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="jail-page">
+      {autoRankJailDisabled && <AutoRankJailNotice />}
       <JailStatusCard
         inJail={jailStatus.in_jail}
         secondsRemaining={jailStatus.seconds_remaining}
@@ -410,6 +435,7 @@ export default function Jail() {
                 onBust={bustOut}
                 loading={loading}
                 userInJail={jailStatus.in_jail}
+                manualPlayDisabled={autoRankJailDisabled}
               />
             ))}
           </div>

@@ -425,7 +425,8 @@ async def run_auto_rank_oc_loop():
                             {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}},
                         )
                         continue
-                    if result.get("ran") and result.get("success"):
+                    # Only send Telegram on success; never on failure (to cut spam)
+                    if result.get("ran") is True and result.get("success") is True:
                         msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
                         await send_telegram_to_chat(chat_id, msg, bot_token)
                     if result.get("ran"):

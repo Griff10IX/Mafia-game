@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight, Wrench, Check } from 'lucide-react';
+import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronDown, ChevronRight, Wrench, Check, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -58,6 +58,17 @@ const useCooldownTicker = (cooldownUntil, onCooldownExpired) => {
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
     <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const AutoRankOCNotice = () => (
+  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+    <div className="flex items-center gap-2">
+      <Bot size={14} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80">
+        <strong className="text-amber-300">Auto Rank</strong> — Organised Crime is running automatically. Manual play disabled.
+      </span>
+    </div>
   </div>
 );
 
@@ -232,7 +243,7 @@ const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange
 );
 
 // Pending heist section
-const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, pendingSlotEdit, setPendingSlotEdit, setPendingSlot }) => {
+const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, pendingSlotEdit, setPendingSlotEdit, setPendingSlot, manualPlayDisabled }) => {
   if (!status?.pending_heist) return null;
 
   return (
@@ -315,15 +326,20 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
         
         <button
           type="button"
-          onClick={onRun}
+          onClick={manualPlayDisabled ? undefined : onRun}
           disabled={
+            manualPlayDisabled ||
             executing || onCooldown ||
             (status.pending_invites || []).some((i) => i.status === 'pending') ||
             ROLE_IDS.some((r) => status.pending_heist[r] == null || status.pending_heist[r] === '')
           }
-          className="w-full mt-2 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-4 py-2 text-xs font-bold uppercase tracking-wide shadow shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation border border-yellow-600/50"
+          className={`w-full mt-2 rounded px-4 py-2 text-xs font-bold uppercase tracking-wide touch-manipulation border ${
+            manualPlayDisabled
+              ? 'bg-zinc-700/50 text-mutedForeground border-zinc-600/50 cursor-not-allowed'
+              : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground shadow shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed border-yellow-600/50'
+          }`}
         >
-          {executing ? 'Running...' : '🎯 Run Heist'}
+          {manualPlayDisabled ? 'Locked' : executing ? 'Running...' : '🎯 Run Heist'}
         </button>
       </div>
     </div>
@@ -386,6 +402,7 @@ export default function OrganisedCrime() {
   const [rulesCollapsed, setRulesCollapsed] = useState(() => {
     try { return localStorage.getItem(COLLAPSED_KEY) === 'true'; } catch { return true; }
   });
+  const [autoRankOcDisabled, setAutoRankOcDisabled] = useState(false);
 
   const toggleRules = () => {
     setRulesCollapsed((prev) => {
@@ -397,10 +414,11 @@ export default function OrganisedCrime() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [configRes, statusRes, equipmentRes] = await Promise.all([
+      const [configRes, statusRes, equipmentRes, autoRankRes] = await Promise.all([
         api.get('/oc/config'),
         api.get('/oc/status'),
         api.get('/organised-crime/equipment').catch(() => ({ data: null })),
+        api.get('/auto-rank/me').catch(() => ({ data: {} })),
       ]);
       
       if (configRes.data) {
@@ -413,6 +431,10 @@ export default function OrganisedCrime() {
       
       if (equipmentRes.data) {
         setEquipmentData(equipmentRes.data);
+      }
+      
+      if (autoRankRes.data) {
+        setAutoRankOcDisabled(!!autoRankRes.data.auto_rank_oc);
       }
       
       if (configRes.data?.jobs?.length && !selectedJobId) {
@@ -661,6 +683,7 @@ export default function OrganisedCrime() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="organised-crime-page">
+      {autoRankOcDisabled && <AutoRankOCNotice />}
       {/* Pending Heist */}
       <PendingHeistSection
         status={status}
@@ -671,6 +694,7 @@ export default function OrganisedCrime() {
         pendingSlotEdit={pendingSlotEdit}
         setPendingSlotEdit={setPendingSlotEdit}
         setPendingSlot={setPendingSlot}
+        manualPlayDisabled={autoRankOcDisabled}
       />
 
       {/* Equipment (per heist) */}
@@ -747,15 +771,15 @@ export default function OrganisedCrime() {
       {!status?.pending_heist && (
         <button
           type="button"
-          onClick={execute}
-          disabled={!canExecute || onCooldown || executing}
+          onClick={autoRankOcDisabled ? undefined : execute}
+          disabled={autoRankOcDisabled || !canExecute || onCooldown || executing}
           className={`w-full py-3 font-heading font-bold uppercase tracking-wider text-sm transition-all touch-manipulation rounded-md ${
-            !canExecute || onCooldown || executing
+            autoRankOcDisabled || !canExecute || onCooldown || executing
               ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border border-zinc-700'
               : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground shadow-lg shadow-primary/20 border border-yellow-600/50'
           }`}
         >
-          {executing ? 'Running...' : onCooldown ? `Cooldown ${cooldownStr}` : hasInviteSlot() ? '📨 Send Invites' : '🎯 Run Heist'}
+          {autoRankOcDisabled ? 'Locked' : executing ? 'Running...' : onCooldown ? `Cooldown ${cooldownStr}` : hasInviteSlot() ? '📨 Send Invites' : '🎯 Run Heist'}
         </button>
       )}
 
