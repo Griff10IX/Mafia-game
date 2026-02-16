@@ -110,11 +110,6 @@ WEALTH_RANKS = [
     {"id": 12, "name": "Multi Trillionaire", "min_money": 10_000_000_000_000},
 ]
 
-BODYGUARD_SLOT_COSTS = [100, 200, 300, 400]
-
-# Bodyguard armour upgrades (points). armour_level: 0..5
-BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
-
 # Banking
 SWISS_BANK_LIMIT_START = 50_000_000
 # Interest bank options (duration_hours -> interest_rate)
@@ -392,21 +387,6 @@ class NotificationCreate(BaseModel):
     message: str
     notification_type: str  # rank_up, reward, bodyguard, attack, system
 
-class BodyguardInviteRequest(BaseModel):
-    target_username: str
-    payment_amount: int
-    payment_type: str  # points or money
-    duration_hours: int
-
-class BodyguardHireRequest(BaseModel):
-    slot: int
-    is_robot: bool
-
-class AdminBodyguardsGenerateRequest(BaseModel):
-    target_username: str
-    count: int = 1  # 1..4
-    replace_existing: bool = True
-
 class TravelRequest(BaseModel):
     destination: str
     travel_method: str  # car_id or "airport"
@@ -560,14 +540,6 @@ class PropertyResponse(BaseModel):
     available_income: float
     locked: bool
     required_property_name: str | None
-
-class BodyguardResponse(BaseModel):
-    slot_number: int
-    is_robot: bool
-    bodyguard_username: Optional[str]
-    bodyguard_rank_name: Optional[str] = None
-    armour_level: int = 0
-    hired_at: Optional[str]
 
 class SportsBetPlaceRequest(BaseModel):
     event_id: str
@@ -3127,55 +3099,6 @@ async def admin_add_car(target_username: str, car_id: str, current_user: dict = 
     
     return {"message": f"Added {car['name']} to {target_username}'s garage"}
 
-@api_router.post("/admin/bodyguards/clear")
-async def admin_clear_bodyguards(target_username: str, current_user: dict = Depends(get_current_user)):
-    """Delete all bodyguard slots for a user (testing)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    username_pattern = _username_pattern(target_username)
-    if not username_pattern:
-        raise HTTPException(status_code=404, detail="User not found")
-    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    # Remove bodyguard records
-    res_bg = await db.bodyguards.delete_many({"user_id": target["id"]})
-
-    # Remove robot bodyguard user docs owned by this user (keeps real human users safe)
-    res_robots = await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": target["id"]})
-
-    return {
-        "message": f"Cleared bodyguards for {target_username} (removed {res_bg.deleted_count} bodyguard record(s), {res_robots.deleted_count} robot user(s))",
-        "deleted_bodyguards": res_bg.deleted_count,
-        "deleted_robot_users": res_robots.deleted_count,
-    }
-
-
-@api_router.post("/admin/bodyguards/drop-all-human")
-async def admin_drop_all_human_bodyguards(current_user: dict = Depends(get_current_user)):
-    """Remove every bodyguard slot that is filled by a human (not robot). Robot bodyguards are left in place."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    res = await db.bodyguards.delete_many({"is_robot": {"$ne": True}})
-    return {"message": f"Dropped all human bodyguards ({res.deleted_count} slot(s) cleared)", "deleted_count": res.deleted_count}
-
-
-@api_router.post("/admin/bodyguards/drop-all")
-async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_user)):
-    """Remove ALL bodyguard slots from ALL users (both human and robot bodyguards)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-    res = await db.bodyguards.delete_many({})
-    # Also delete all robot bodyguard user accounts
-    res_robots = await db.users.delete_many({"is_bodyguard": True})
-    return {
-        "message": f"Dropped ALL bodyguards ({res.deleted_count} slot(s) cleared, {res_robots.deleted_count} robot user(s) deleted)",
-        "deleted_bodyguards": res.deleted_count,
-        "deleted_robot_users": res_robots.deleted_count
-    }
-
-
 # ===== SECURITY & ANTI-CHEAT ADMIN ENDPOINTS =====
 
 @api_router.get("/admin/security/summary")
@@ -3413,58 +3336,6 @@ async def admin_reset_hitlist_npc_timers(current_user: dict = Depends(get_curren
     )
     return {"message": f"Reset hitlist NPC timers for all users ({result.modified_count} accounts)", "modified_count": result.modified_count}
 
-
-@api_router.post("/admin/bodyguards/generate")
-async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, current_user: dict = Depends(get_current_user)):
-    """Generate 1–4 robot bodyguards for a user (testing)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    target_username = (request.target_username or "").strip()
-    if not target_username:
-        raise HTTPException(status_code=400, detail="Target username required")
-    count = int(request.count or 1)
-    if count < 1 or count > 4:
-        raise HTTPException(status_code=400, detail="Count must be between 1 and 4")
-
-    # Case-insensitive username lookup
-    username_pattern = _username_pattern(target_username)
-    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if request.replace_existing:
-        await db.bodyguards.delete_many({"user_id": target["id"]})
-        await db.users.delete_many({"is_bodyguard": True, "bodyguard_owner_id": target["id"]})
-
-    # Ensure enough slots exist
-    desired_slots = max(int(target.get("bodyguard_slots", 0) or 0), count)
-    desired_slots = min(4, desired_slots)
-    if desired_slots != int(target.get("bodyguard_slots", 0) or 0):
-        await db.users.update_one({"id": target["id"]}, {"$set": {"bodyguard_slots": desired_slots}})
-
-    # Fill slots 1..count
-    created = 0
-    for slot in range(1, count + 1):
-        exists = await db.bodyguards.find_one({"user_id": target["id"], "slot_number": slot}, {"_id": 0, "id": 1})
-        if exists:
-            continue
-        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
-        await db.bodyguards.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": target["id"],
-            "owner_username": target.get("username"),
-            "slot_number": slot,
-            "is_robot": True,
-            "robot_name": robot_username,
-            "bodyguard_user_id": robot_user_id,
-            "health": 100,
-            "armour_level": 0,
-            "hired_at": datetime.now(timezone.utc).isoformat()
-        })
-        created += 1
-
-    return {"message": f"Generated {created} robot bodyguard(s) for {target_username}", "created": created, "count_requested": count}
 
 @api_router.post("/admin/force-online")
 async def admin_force_online(current_user: dict = Depends(get_current_user)):
@@ -4382,254 +4253,6 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     )
     
     return {"message": f"Collected ${income:,.2f}"}
-
-# Bodyguards endpoints
-def _camelize(name: str) -> str:
-    parts = []
-    for ch in (name or ""):
-        if ch.isalnum() or ch == " ":
-            parts.append(ch)
-    cleaned = "".join(parts)
-    tokens = [t for t in cleaned.replace("_", " ").split(" ") if t]
-    return "".join(t[:1].upper() + t[1:] for t in tokens)
-
-async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
-    """Create a unique robot user record. Returns (user_id, username). 1920s–30s American mafia style (Name + numeric suffix)."""
-    robot_names = [
-        "Al Capone", "Lucky Luciano", "Frank Nitti", "Johnny Torrio", "Bugsy Siegel",
-        "Meyer Lansky", "Vito Genovese", "Joe Masseria", "Salvatore Maranzano", "Dutch Schultz",
-        "Waxey Gordon", "Legs Diamond", "Vincent Coll", "Frank Costello", "Albert Anastasia",
-        "Joe Adonis", "Tony Accardo", "Paul Ricca", "Jake Guzik", "Machine Gun Jack",
-        "Scarface Al", "Big Jim Colosimo", "Diamond Joe", "Nails Morton", "Bugs Moran",
-        "Lefty Louie", "Tony the Rat", "Mad Dog Coll", "Pretty Amberg", "Broadway Charlie",
-    ]
-    base = _camelize(random.choice(robot_names))
-
-    # Random rank (based on existing ranks)
-    rank = random.choice(RANKS)
-    rank_points = random.randint(int(rank["required_points"]), int(rank["required_points"]) + 500)
-
-    # Ensure unique username
-    username = None
-    for _ in range(80):
-        suffix = random.randint(100000, 9999999)
-        candidate = f"{base}{suffix}"
-        exists = await db.users.find_one({"username": candidate}, {"_id": 0, "id": 1})
-        if not exists:
-            username = candidate
-            break
-    if not username:
-        raise HTTPException(status_code=500, detail="Failed to generate unique robot name")
-
-    robot_user_id = str(uuid.uuid4())
-    now_iso = datetime.now(timezone.utc).isoformat()
-    robot_doc = {
-        "id": robot_user_id,
-        "email": f"{username.lower()}@robot.mafia",
-        "username": username,
-        "password_hash": get_password_hash(str(uuid.uuid4())),
-        "rank": int(rank["id"]),
-        "money": 0.0,
-        "points": 0,
-        "rank_points": int(rank_points),
-        "bodyguard_slots": 0,
-        "bullets": 0,
-        "avatar_url": None,
-        "jail_busts": 0,
-        "jail_bust_attempts": 0,
-        "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
-        "total_crimes": 0,
-        "crime_profit": 0,
-        "total_gta": 0,
-        "total_oc_heists": 0,
-        "oc_timer_reduced": False,
-        "current_state": owner_user.get("current_state", "Chicago"),
-        "total_kills": 0,
-        "total_deaths": 0,
-        "in_jail": False,
-        "jail_until": None,
-        "premium_rank_bar": False,
-        "custom_car_name": None,
-        "travels_this_hour": 0,
-        "travel_reset_time": now_iso,
-        "extra_airmiles": 0,
-        "health": DEFAULT_HEALTH,
-        "armour_level": 0,
-        "armour_owned_level_max": 0,
-        "equipped_weapon_id": None,
-        "kill_inflation": 0.0,
-        "kill_inflation_updated_at": now_iso,
-        "is_dead": False,
-        "dead_at": None,
-        "points_at_death": None,
-        "retrieval_used": False,
-        "last_seen": now_iso,
-        "created_at": now_iso,
-        "is_npc": True,
-        "is_bodyguard": True,
-        "bodyguard_owner_id": owner_user["id"],
-    }
-    await db.users.insert_one(robot_doc)
-    return robot_user_id, username
-
-@api_router.get("/bodyguards", response_model=List[BodyguardResponse])
-async def get_bodyguards(current_user: dict = Depends(get_current_user)):
-    bodyguards = await db.bodyguards.find({"user_id": current_user["id"]}, {"_id": 0}).to_list(10)
-    
-    result = []
-    for i in range(4):
-        bg = next((b for b in bodyguards if b["slot_number"] == i + 1), None)
-        if bg:
-            username = None
-            rank_name = None
-            if not bg["is_robot"] and bg.get("bodyguard_user_id"):
-                bg_user = await db.users.find_one(
-                    {"id": bg["bodyguard_user_id"]},
-                    {"_id": 0, "username": 1, "rank_points": 1}
-                )
-                username = bg_user["username"] if bg_user else "Unknown"
-                if bg_user:
-                    _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
-            elif bg["is_robot"]:
-                # Prefer user doc username if we created a real robot user
-                if bg.get("bodyguard_user_id"):
-                    bg_user = await db.users.find_one(
-                        {"id": bg["bodyguard_user_id"]},
-                        {"_id": 0, "username": 1, "rank_points": 1}
-                    )
-                    username = bg_user["username"] if bg_user else None
-                    if bg_user:
-                        _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
-                username = username or bg.get("robot_name") or f"Robot Guard #{i + 1}"
-            
-            result.append(BodyguardResponse(
-                slot_number=i + 1,
-                is_robot=bg["is_robot"],
-                bodyguard_username=username,
-                bodyguard_rank_name=rank_name,
-                armour_level=int(bg.get("armour_level", 0) or 0),
-                hired_at=bg["hired_at"]
-            ))
-        else:
-            result.append(BodyguardResponse(
-                slot_number=i + 1,
-                is_robot=False,
-                bodyguard_username=None,
-                bodyguard_rank_name=None,
-                armour_level=0,
-                hired_at=None
-            ))
-    
-    return result
-
-@api_router.post("/bodyguards/armour/upgrade")
-async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_current_user)):
-    """Upgrade a bodyguard's armour level (0..5). Applies to robot or human bodyguards."""
-    if slot < 1 or slot > 4:
-        raise HTTPException(status_code=400, detail="Invalid slot")
-    bg = await db.bodyguards.find_one({"user_id": current_user["id"], "slot_number": slot}, {"_id": 0})
-    if not bg or not bg.get("bodyguard_user_id"):
-        raise HTTPException(status_code=404, detail="No bodyguard in that slot")
-
-    cur_level = int(bg.get("armour_level", 0) or 0)
-    if cur_level >= 5:
-        raise HTTPException(status_code=400, detail="Bodyguard armour is already maxed")
-
-    ev = await get_effective_event()
-    cost = int(BODYGUARD_ARMOUR_UPGRADE_COSTS.get(cur_level, 0) * ev.get("bodyguard_cost", 1.0))
-    if cost <= 0:
-        raise HTTPException(status_code=400, detail="Invalid armour upgrade cost")
-    if int(current_user.get("points", 0) or 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-
-    new_level = cur_level + 1
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -cost}})
-    await db.bodyguards.update_one(
-        {"user_id": current_user["id"], "slot_number": slot},
-        {"$set": {"armour_level": new_level}}
-    )
-    # Keep the bodyguard user doc armour in sync (affects bullets-to-kill)
-    await db.users.update_one({"id": bg["bodyguard_user_id"]}, {"$set": {"armour_level": new_level}})
-
-    return {"message": f"Upgraded bodyguard armour to level {new_level} for {cost} points", "armour_level": new_level, "cost": cost}
-
-@api_router.post("/bodyguards/slot/buy")
-async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
-    if current_user["bodyguard_slots"] >= 4:
-        raise HTTPException(status_code=400, detail="All bodyguard slots already purchased")
-    
-    ev = await get_effective_event()
-    cost = int(BODYGUARD_SLOT_COSTS[current_user["bodyguard_slots"]] * ev.get("bodyguard_cost", 1.0))
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bodyguard_slots": 1}}
-    )
-    
-    return {"message": f"Bodyguard slot purchased for {cost} points"}
-
-@api_router.post("/bodyguards/hire")
-async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
-    slot = request.slot
-    is_robot = request.is_robot
-    if not is_robot:
-        raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
-    if slot < 1 or slot > current_user["bodyguard_slots"]:
-        raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
-    
-    existing = await db.bodyguards.find_one(
-        {"user_id": current_user["id"], "slot_number": slot},
-        {"_id": 0}
-    )
-    
-    if existing:
-        raise HTTPException(status_code=400, detail="Slot already occupied")
-    
-    ev = await get_effective_event()
-    base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
-    cost = int(base_cost * 1.5) if is_robot else base_cost
-    cost = int(cost * ev.get("bodyguard_cost", 1.0))
-    
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -cost}}
-    )
-    
-    robot_name = None
-    robot_user_id = None
-    if is_robot:
-        robot_user_id, robot_name = await _create_robot_bodyguard_user(current_user)
-    
-    bodyguard_doc = {
-        "id": str(uuid.uuid4()),
-        "user_id": current_user["id"],
-        "owner_username": current_user.get("username"),  # who this bodyguard is for (easy to see in DB)
-        "slot_number": slot,
-        "is_robot": is_robot,
-        "robot_name": robot_name,
-        "bodyguard_user_id": robot_user_id if is_robot else None,
-        "health": 100,
-        "armour_level": 0,
-        "hired_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.bodyguards.insert_one(bodyguard_doc)
-    
-    # Send notification
-    await send_notification(
-        current_user["id"],
-        "🛡️ Bodyguard Hired",
-        f"You've hired {robot_name if is_robot else 'a human bodyguard slot'} for {cost} points.",
-        "bodyguard"
-    )
-    
-    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {cost} points", "bodyguard_name": robot_name}
-
 
 @api_router.get("/events/active")
 async def get_active_event(current_user: dict = Depends(get_current_user)):
@@ -8445,146 +8068,12 @@ async def cancel_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
     
     return {"message": f"Offer cancelled. ${offer['offer']:,} refunded"}
 
-# ============ BODYGUARD INVITE SYSTEM ============
-
-@api_router.post("/bodyguards/invite")
-async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict = Depends(get_current_user)):
-    username_pattern = _username_pattern((request.target_username or "").strip())
-    if not username_pattern:
-        raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    if target["id"] == current_user["id"]:
-        raise HTTPException(status_code=400, detail="Cannot invite yourself")
-    
-    # Check if user has available slots
-    bodyguards = await db.bodyguards.find({"user_id": current_user["id"]}).to_list(10)
-    filled_slots = len([b for b in bodyguards if b.get("bodyguard_user_id") or b.get("is_robot")])
-    if filled_slots >= current_user["bodyguard_slots"]:
-        raise HTTPException(status_code=400, detail="No available bodyguard slots")
-    
-    # Check if already has pending invite to this user
-    existing = await db.bodyguard_invites.find_one({
-        "inviter_id": current_user["id"],
-        "invitee_id": target["id"],
-        "status": "pending"
-    })
-    if existing:
-        raise HTTPException(status_code=400, detail="Already have pending invite to this user")
-    
-    invite_id = str(uuid.uuid4())
-    await db.bodyguard_invites.insert_one({
-        "id": invite_id,
-        "inviter_id": current_user["id"],
-        "inviter_username": current_user["username"],
-        "invitee_id": target["id"],
-        "invitee_username": target["username"],
-        "payment_amount": request.payment_amount,
-        "payment_type": request.payment_type,
-        "duration_hours": request.duration_hours,
-        "status": "pending",
-        "created_at": datetime.now(timezone.utc).isoformat()
-    })
-    
-    # Notify invitee
-    await send_notification(
-        target["id"],
-        "🛡️ Bodyguard Offer",
-        f"{current_user['username']} wants to hire you as a bodyguard for {request.payment_amount} {request.payment_type}/hour for {request.duration_hours} hours.",
-        "bodyguard"
-    )
-    
-    return {"message": f"Bodyguard invite sent to {target['username']}"}
-
-@api_router.get("/bodyguards/invites")
-async def get_bodyguard_invites(current_user: dict = Depends(get_current_user)):
-    # Invites sent by user
-    sent = await db.bodyguard_invites.find(
-        {"inviter_id": current_user["id"], "status": "pending"},
-        {"_id": 0}
-    ).to_list(20)
-    
-    # Invites received by user
-    received = await db.bodyguard_invites.find(
-        {"invitee_id": current_user["id"], "status": "pending"},
-        {"_id": 0}
-    ).to_list(20)
-    
-    return {"sent": sent, "received": received}
-
-@api_router.post("/bodyguards/invites/{invite_id}/accept")
-async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
-    invite = await db.bodyguard_invites.find_one({"id": invite_id, "invitee_id": current_user["id"], "status": "pending"}, {"_id": 0})
-    if not invite:
-        raise HTTPException(status_code=404, detail="Invite not found")
-    
-    # Find an empty slot for the inviter
-    inviter = await db.users.find_one({"id": invite["inviter_id"]}, {"_id": 0})
-    if not inviter:
-        raise HTTPException(status_code=400, detail="Inviter no longer exists")
-    
-    bodyguards = await db.bodyguards.find({"user_id": inviter["id"]}).to_list(10)
-    empty_slot = None
-    for i in range(1, inviter["bodyguard_slots"] + 1):
-        slot_bg = next((b for b in bodyguards if b["slot_number"] == i), None)
-        if not slot_bg or (not slot_bg.get("bodyguard_user_id") and not slot_bg.get("is_robot")):
-            empty_slot = i
-            break
-    
-    if not empty_slot:
-        raise HTTPException(status_code=400, detail="Inviter has no available slots")
-    
-    # Create bodyguard entry
-    end_time = datetime.now(timezone.utc) + timedelta(hours=invite["duration_hours"])
-    
-    await db.bodyguards.update_one(
-        {"user_id": inviter["id"], "slot_number": empty_slot},
-        {"$set": {
-            "bodyguard_user_id": current_user["id"],
-            "is_robot": False,
-            "payment_amount": invite["payment_amount"],
-            "payment_type": invite["payment_type"],
-            "payment_due": datetime.now(timezone.utc).isoformat(),
-            "contract_end": end_time.isoformat(),
-            "hired_at": datetime.now(timezone.utc).isoformat()
-        }},
-        upsert=True
-    )
-    
-    # Update invite status
-    await db.bodyguard_invites.update_one(
-        {"id": invite_id},
-        {"$set": {"status": "accepted"}}
-    )
-    
-    # Notify inviter
-    await send_notification(
-        inviter["id"],
-        "🛡️ Bodyguard Accepted",
-        f"{current_user['username']} has accepted your bodyguard offer!",
-        "bodyguard"
-    )
-    
-    return {"message": f"You are now {inviter['username']}'s bodyguard"}
-
-@api_router.post("/bodyguards/invites/{invite_id}/decline")
-async def decline_bodyguard_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.bodyguard_invites.update_one(
-        {"id": invite_id, "invitee_id": current_user["id"], "status": "pending"},
-        {"$set": {"status": "declined"}}
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=404, detail="Invite not found")
-    
-    return {"message": "Invite declined"}
-
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
+from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
@@ -8598,6 +8087,7 @@ attack.register(api_router)
 bank.register(api_router)
 families.register(api_router)
 weapons.register(api_router)
+bodyguards.register(api_router)
 
 app.include_router(api_router)
 
