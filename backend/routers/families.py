@@ -3,10 +3,19 @@ from datetime import datetime, timezone, timedelta
 import asyncio
 import logging
 import random
+import time
 import uuid
 import os
 import sys
 from typing import Optional, Dict
+
+# Caching: config is static; list and my have short TTL, invalidated on mutations
+_config_cache: Optional[dict] = None
+_list_cache: Optional[tuple] = None  # (payload, expires_at)
+_list_cache_ttl_sec = 20
+_my_cache: Dict[str, tuple] = {}  # user_id -> (payload, expires_at)
+_my_cache_ttl_sec = 10
+_my_cache_max_entries = 2000
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Body
@@ -239,8 +248,21 @@ async def _get_family_raid_lock(attacker_family_id: str, target_family_id: str) 
         return _family_raid_locks[key]
 
 
+# ============ Cache helpers ============
+def _invalidate_list_cache():
+    global _list_cache
+    _list_cache = None
+
+
+def _invalidate_my_cache(user_id: str):
+    _my_cache.pop(user_id, None)
+
+
 # ============ Routes ============
 async def families_list(current_user: dict = Depends(get_current_user)):
+    now_ts = time.monotonic()
+    if _list_cache is not None and _list_cache[1] > now_ts:
+        return _list_cache[0]
     await cleanup_dead_families()
     cursor = db.families.find({}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1})
     fams = await cursor.to_list(MAX_FAMILIES * 2)
@@ -257,11 +279,16 @@ async def families_list(current_user: dict = Depends(get_current_user)):
                 "id": f["id"], "name": f["name"], "tag": f["tag"],
                 "member_count": living_count, "treasury": f.get("treasury", 0),
             })
+    global _list_cache
+    _list_cache = (out, now_ts + _list_cache_ttl_sec)
     return out
 
 
 async def families_config(current_user: dict = Depends(get_current_user)):
-    return {
+    global _config_cache
+    if _config_cache is not None:
+        return _config_cache
+    _config_cache = {
         "max_families": MAX_FAMILIES,
         "roles": FAMILY_ROLES,
         "racket_max_level": RACKET_MAX_LEVEL,
@@ -269,9 +296,15 @@ async def families_config(current_user: dict = Depends(get_current_user)):
         "racket_upgrade_cost": RACKET_UPGRADE_COST,
         "racket_unlock_cost": RACKET_UNLOCK_COST,
     }
+    return _config_cache
 
 
 async def families_my(current_user: dict = Depends(get_current_user)):
+    uid = current_user["id"]
+    now_ts = time.monotonic()
+    entry = _my_cache.get(uid)
+    if entry is not None and entry[1] > now_ts:
+        return entry[0]
     family_id = current_user.get("family_id")
     if not family_id:
         return {"family": None, "members": [], "rackets": [], "my_role": None}
@@ -348,7 +381,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     if family_id:
         app_cursor = db.family_crew_oc_applications.find({"family_id": family_id}, {"_id": 0}).sort("created_at", -1)
         crew_oc_applications = await app_cursor.to_list(50)
-    return {
+    payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
             "treasury": fam.get("treasury", 0), "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
@@ -359,6 +392,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
         "crew_oc_applications": crew_oc_applications,
     }
+    if len(_my_cache) >= _my_cache_max_entries:
+        _my_cache.clear()
+    _my_cache[uid] = (payload, now_ts + _my_cache_ttl_sec)
+    return payload
 
 
 async def families_lookup(tag: str = None, current_user: dict = Depends(get_current_user)):
@@ -436,6 +473,8 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "role": "boss", "joined_at": now,
     })
     await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": family_id, "family_role": "boss"}})
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Family created", "family_id": family_id}
 
 
@@ -454,6 +493,8 @@ async def families_join(request: FamilyJoinRequest, current_user: dict = Depends
         "role": "associate", "joined_at": now,
     })
     await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": request.family_id, "family_role": "associate"}})
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Joined family"}
 
 
@@ -466,6 +507,8 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Boss must transfer leadership or dissolve family first")
     await db.family_members.delete_one({"family_id": family_id, "user_id": current_user["id"]})
     await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": None, "family_role": None}})
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Left family"}
 
 
@@ -484,6 +527,9 @@ async def families_kick(request: FamilyKickRequest, current_user: dict = Depends
         raise HTTPException(status_code=400, detail="Cannot kick the Boss")
     await db.family_members.delete_one({"family_id": family_id, "user_id": request.user_id})
     await db.users.update_one({"id": request.user_id}, {"$set": {"family_id": None, "family_role": None}})
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(request.user_id)
     return {"message": "Member kicked"}
 
 
@@ -512,6 +558,8 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
         await db.families.update_one({"id": family_id}, {"$set": {"boss_id": request.user_id}})
         await db.family_members.update_one({"family_id": family_id, "user_id": current_user["id"]}, {"$set": {"role": "underboss"}})
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_role": "underboss"}})
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(request.user_id)
     return {"message": "Role updated"}
 
 
@@ -527,6 +575,7 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
         raise HTTPException(status_code=400, detail="Not enough cash")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": amount}})
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Deposited to treasury"}
 
 
@@ -545,6 +594,7 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
         raise HTTPException(status_code=400, detail="Not enough treasury")
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": -amount}})
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Withdrew from treasury"}
 
 
@@ -558,6 +608,7 @@ async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_u
     if fee < 0:
         raise HTTPException(status_code=400, detail="Fee cannot be negative")
     await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_join_fee": fee}})
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC join fee updated.", "fee": fee}
 
 
@@ -584,6 +635,7 @@ async def families_crew_oc_advertise(current_user: dict = Depends(get_current_us
     }
     await db.forum_topics.insert_one(doc)
     await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_forum_topic_id": topic_id}})
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC topic created.", "topic_id": topic_id, "title": title}
 
 
@@ -615,12 +667,14 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
         })
         await send_notification(uid, "Crew OC – You're in", f"You paid ${fee:,} and joined {fam.get('name')} [{fam.get('tag')}] Crew OC for their next run.", "reward", category="crew_oc")
         await send_notification_to_family(family_id, "Crew OC – New crew member", f"{current_user.get('username') or '?'} paid ${fee:,} and joined your Crew OC for the next run.", "reward", category="oc_invites")
+        _invalidate_my_cache(current_user["id"])
         return {"message": "You paid and joined the crew. You'll get rewards when they commit.", "status": "accepted", "amount_paid": fee}
     await db.family_crew_oc_applications.insert_one({
         "id": application_id, "family_id": family_id, "user_id": uid,
         "username": current_user.get("username") or "?", "status": "pending", "amount_paid": 0, "created_at": now,
     })
     await send_notification_to_family(family_id, "Crew OC – New application", f"{current_user.get('username') or '?'} applied to join your Crew OC. Accept or reject in Families → Crew OC.", "system", category="oc_invites")
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Application sent. The family will accept or reject.", "status": "pending"}
 
 
@@ -648,6 +702,8 @@ async def families_crew_oc_accept(application_id: str, current_user: dict = Depe
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1})
     fam_name = (fam or {}).get("name") or (fam or {}).get("tag") or "the family"
     await send_notification(app["user_id"], "Crew OC – Accepted", f"Your application to join {fam_name} Crew OC was accepted. You'll get rewards when they commit.", "reward", category="crew_oc")
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(app["user_id"])
     return {"message": "Application accepted."}
 
 
@@ -663,6 +719,7 @@ async def families_crew_oc_reject(application_id: str, current_user: dict = Depe
     if app.get("status") != "pending":
         raise HTTPException(status_code=400, detail="Application already processed")
     await db.family_crew_oc_applications.update_one({"id": application_id}, {"$set": {"status": "rejected"}})
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Application rejected."}
 
 
@@ -711,6 +768,7 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
     await db.family_crew_oc_applications.delete_many({"family_id": family_id})
     for uid in living_ids:
         await send_notification(uid, "Crew OC committed", f"Your crew committed Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{CREW_OC_REWARD_POINTS} points, +{CREW_OC_REWARD_BOOZE} booze. Treasury +${CREW_OC_TREASURY_LUMP:,}.", "reward", category="crew_oc")
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC committed. All crew rewarded.", "crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours}
 
 
@@ -746,6 +804,7 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     rackets[racket_id] = {**state, "level": level, "last_collected_at": now_iso}
     await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": income}})
     msg = random.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income)
+    _invalidate_my_cache(current_user["id"])
     return {"message": msg, "amount": income}
 
 
@@ -776,6 +835,7 @@ async def families_racket_unlock(racket_id: str, current_user: dict = Depends(ge
         raise HTTPException(status_code=400, detail=f"Not enough treasury (need ${RACKET_UNLOCK_COST:,})")
     rackets[racket_id] = {"level": 1, "last_collected_at": None}
     await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": -RACKET_UNLOCK_COST}})
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Racket unlocked"}
 
 
@@ -802,6 +862,7 @@ async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Not enough treasury")
     rackets[racket_id] = {**state, "level": level + 1, "last_collected_at": state.get("last_collected_at")}
     await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": -RACKET_UPGRADE_COST}})
+    _invalidate_my_cache(current_user["id"])
     return {"message": f"Upgraded to level {level + 1}"}
 
 
@@ -868,6 +929,8 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
                 await db.families.update_one({"id": request.family_id}, {"$inc": {"treasury": -actual}})
                 await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
             msg = random.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(amount=actual, family_name=family_name, racket_name=racket_name)
+            _invalidate_list_cache()
+            _invalidate_my_cache(current_user["id"])
             return {"success": True, "message": msg, "amount": actual}
         fail_msg = random.choice(FAMILY_RACKET_RAID_FAIL_MESSAGES).format(family_name=family_name, racket_name=racket_name)
         return {"success": False, "message": fail_msg, "amount": 0}
@@ -927,6 +990,8 @@ async def families_war_truce_offer(request: WarTruceRequest, current_user: dict 
         raise HTTPException(status_code=403, detail="Not your war")
     await db.family_wars.update_one({"id": request.war_id}, {"$set": {"status": "truce_offered", "truce_offered_by_family_id": family_id}})
     await send_notification_to_family(war["family_a_id"] if war["family_b_id"] == family_id else war["family_b_id"], "Truce offered", "The enemy family has offered a truce. Boss or Underboss can accept.", "system")
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Truce offered"}
 
 
@@ -947,6 +1012,8 @@ async def families_war_truce_accept(request: WarTruceRequest, current_user: dict
     await db.family_wars.update_one({"id": request.war_id}, {"$set": {"status": "truce", "ended_at": now}})
     await send_notification_to_family(war["family_a_id"], "🤝 Truce accepted", "The war has ended by truce.", "system")
     await send_notification_to_family(war["family_b_id"], "🤝 Truce accepted", "The war has ended by truce.", "system")
+    _invalidate_list_cache()
+    _invalidate_my_cache(current_user["id"])
     return {"message": "Truce accepted. War ended."}
 
 

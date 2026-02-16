@@ -35,7 +35,6 @@ from server import (
     _find_user_by_username_case_insensitive,
     _apply_kill_inflation_decay,
     _increase_kill_inflation_on_kill,
-    _best_weapon_for_user,
     _get_active_war_between,
     _get_active_war_for_family,
     _record_war_stats_bodyguard_kill,
@@ -44,6 +43,7 @@ from server import (
     _family_war_check_wipe_and_award,
 )
 from routers.objectives import update_objectives_progress
+from routers.weapons import _best_weapon_for_user
 
 # ---------------------------------------------------------------------------
 # Request/Response models
