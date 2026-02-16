@@ -272,15 +272,27 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
 
 
-async def run_auto_rank_cycle():
-    """One cycle: find all auto_rank users with telegram_chat_id; for each, commit all crimes (off cooldown) + one GTA, send to Telegram."""
+async def run_auto_rank_due_users():
+    """Find users whose auto_rank_next_run_at is due (or unset), run each once, set their next_run_at = now + interval. Per-user cycles so everyone gets the interval they expect."""
     import server as srv
     db = srv.db
+    now = datetime.now(timezone.utc)
+    interval = await get_auto_rank_interval_seconds(db)
     cursor = db.users.find(
-        {"auto_rank_enabled": True, "telegram_chat_id": {"$exists": True, "$nin": [None, ""]}},
+        {
+            "auto_rank_enabled": True,
+            "telegram_chat_id": {"$exists": True, "$nin": [None, ""]},
+            "$or": [
+                {"auto_rank_next_run_at": {"$exists": False}},
+                {"auto_rank_next_run_at": None},
+                {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
+            ],
+        },
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1},
     )
     users = await cursor.to_list(500)
+    next_run = (now.timestamp() + interval)
+    next_run_iso = datetime.fromtimestamp(next_run, tz=timezone.utc).isoformat()
     for u in users:
         chat_id = (u.get("telegram_chat_id") or "").strip()
         if not chat_id:
@@ -289,7 +301,11 @@ async def run_auto_rank_cycle():
             await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id)
         except Exception as e:
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
-        await asyncio.sleep(0.5)  # Slight stagger between users
+        await db.users.update_one(
+            {"id": u["id"]},
+            {"$set": {"auto_rank_next_run_at": next_run_iso}},
+        )
+        await asyncio.sleep(0.5)
 
 
 async def run_bust_5sec_loop():
@@ -325,8 +341,10 @@ async def run_bust_5sec_loop():
         await asyncio.sleep(BUST_EVERY_5SEC_INTERVAL)
 
 
+LOOP_WAKE_SECONDS = 15  # How often we check who's due for a run
+
 async def run_auto_rank_loop():
-    """Background loop: when enabled, run full cycle then wait interval; when stopped, wait and re-check."""
+    """Background loop: wake every LOOP_WAKE_SECONDS, process any user whose next_run_at is due. Each user has their own cycle (next run = now + interval)."""
     import server as srv
     db = srv.db
     await asyncio.sleep(60)  # Delay first run 1 min after startup
@@ -335,13 +353,10 @@ async def run_auto_rank_loop():
             await asyncio.sleep(10)
             continue
         try:
-            await run_auto_rank_cycle()
+            await run_auto_rank_due_users()
         except Exception as e:
-            logger.exception("Auto rank cycle failed: %s", e)
-        if not await get_auto_rank_enabled(db):
-            continue
-        interval = await get_auto_rank_interval_seconds(db)
-        await asyncio.sleep(interval)
+            logger.exception("Auto rank due-users run failed: %s", e)
+        await asyncio.sleep(LOOP_WAKE_SECONDS)
 
 
 def register(router):
