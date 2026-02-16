@@ -117,6 +117,21 @@ export default function QuickTrade() {
     }
   };
 
+  const handleCancelAllOffers = async (type, ids) => {
+    if (!ids.length) return;
+    if (!window.confirm(`Cancel all ${ids.length} offer(s)? Fees will be refunded.`)) return;
+    try {
+      for (const id of ids) {
+        await api.delete(`/trade/${type}-offer/${id}`);
+      }
+      toast.success(`All ${ids.length} offer(s) cancelled and refunded!`);
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel some offers');
+    }
+  };
+
   const formatCurrency = (num) => {
     if (!num) return '0';
     const parsed = parseFloat(num);
@@ -324,6 +339,7 @@ export default function QuickTrade() {
                     return acc;
                   }, {});
                   
+                  const mySellIds = isMyOffer ? userOffers.map((o) => o.id) : [];
                   return (
                     <div key={groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
                       <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -339,20 +355,20 @@ export default function QuickTrade() {
                       </div>
                       <div className="space-y-1.5">
                         {Object.values(stackedOffers).map((offer, offerIdx) => (
-                          <div key={offerIdx} className="flex items-center justify-between gap-2 pl-3 border-l-2 border-primary/20">
-                            <div className="flex-1 text-[10px] text-mutedForeground space-y-0.5">
+                          <div key={offerIdx} className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
+                            <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
                               <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
                               <div>$: <span className="text-foreground font-bold">{formatNumber(offer.money)}</span></div>
                               <div>Per: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
                             </div>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-1 shrink-0 items-stretch">
                               {offer.ids.map((id, idIdx) => (
                                 isMyOffer ? (
-                                  <button key={idIdx} onClick={() => handleCancelOffer(id, 'sell')} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30">
+                                  <button key={idIdx} onClick={() => handleCancelOffer(id, 'sell')} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap">
                                     Cancel
                                   </button>
                                 ) : (
-                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'sell')} className="px-2.5 py-1 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90">
+                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'sell')} className="px-2.5 py-1 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90 whitespace-nowrap">
                                     Accept
                                   </button>
                                 )
@@ -361,6 +377,13 @@ export default function QuickTrade() {
                           </div>
                         ))}
                       </div>
+                      {isMyOffer && mySellIds.length > 1 && (
+                        <div className="mt-2 pt-2 border-t border-zinc-700/30">
+                          <button type="button" onClick={() => handleCancelAllOffers('sell', mySellIds)} className="text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-1 rounded">
+                            Cancel all
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 });
@@ -404,6 +427,7 @@ export default function QuickTrade() {
                     return acc;
                   }, {});
                   
+                  const myBuyIds = isMyOffer ? userOffers.map((o) => o.id) : [];
                   return (
                     <div key={groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
                       <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -419,20 +443,20 @@ export default function QuickTrade() {
                       </div>
                       <div className="space-y-1.5">
                         {Object.values(stackedOffers).map((offer, offerIdx) => (
-                          <div key={offerIdx} className="flex items-center justify-between gap-2 pl-3 border-l-2 border-primary/20">
-                            <div className="flex-1 text-[10px] text-mutedForeground space-y-0.5">
+                          <div key={offerIdx} className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
+                            <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
                               <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
                               <div>Cost: <span className="text-foreground font-bold">${formatNumber(offer.cost)}</span></div>
                               <div>Per: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
                             </div>
-                            <div className="flex flex-col gap-1">
+                            <div className="flex flex-col gap-1 shrink-0 items-stretch">
                               {offer.ids.map((id, idIdx) => (
                                 isMyOffer ? (
-                                  <button key={idIdx} onClick={() => handleCancelOffer(id, 'buy')} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30">
+                                  <button key={idIdx} onClick={() => handleCancelOffer(id, 'buy')} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap">
                                     Cancel
                                   </button>
                                 ) : (
-                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'buy')} className="px-2.5 py-1 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90">
+                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'buy')} className="px-2.5 py-1 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90 whitespace-nowrap">
                                     Accept
                                   </button>
                                 )
@@ -441,6 +465,13 @@ export default function QuickTrade() {
                           </div>
                         ))}
                       </div>
+                      {isMyOffer && myBuyIds.length > 1 && (
+                        <div className="mt-2 pt-2 border-t border-zinc-700/30">
+                          <button type="button" onClick={() => handleCancelAllOffers('buy', myBuyIds)} className="text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-1 rounded">
+                            Cancel all
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 });

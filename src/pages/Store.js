@@ -43,7 +43,7 @@ const Tab = ({ active, onClick, children }) => (
 
 const StoreCard = ({ title, Icon, desc, price, owned, onBuy, loading, disabled, children }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2">
+    <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
       <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider truncate">{title}</span>
       {Icon && <Icon className="text-primary shrink-0" size={14} />}
     </div>
@@ -57,7 +57,7 @@ const StoreCard = ({ title, Icon, desc, price, owned, onBuy, loading, disabled, 
           type="button"
           onClick={onBuy}
           disabled={loading || disabled}
-          className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded border bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50 disabled:opacity-50"
+          className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
         >
           {loading ? '...' : `${price} pts`}
         </button>
@@ -161,22 +161,28 @@ export default function Store() {
   }
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="store-page">
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary uppercase tracking-wider">Store</h1>
+    <div className={`space-y-6 ${styles.pageContent}`} data-testid="store-page">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <ShoppingBag className="w-8 h-8 text-primary shrink-0" />
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary">Store</h1>
+            <p className="text-sm text-mutedForeground">Points, upgrades, bullets & bodyguards</p>
+          </div>
+        </div>
         {user != null && (
           <span className="text-sm font-heading font-bold text-primary">{user.points} pts</span>
         )}
       </div>
 
       {eventsEnabled && event?.name && (
-        <div className="px-3 py-2 rounded-md border border-primary/20 bg-primary/5">
+        <div className="px-4 py-3 rounded-md border border-primary/20 bg-primary/10 border-b border-primary/30">
           <p className="text-xs font-heading font-bold text-primary">{event.name}</p>
-          <p className="text-[10px] text-mutedForeground font-heading">{event.message}</p>
+          <p className="text-[10px] text-mutedForeground font-heading mt-0.5">{event.message}</p>
         </div>
       )}
 
-      <div className="flex border-b border-primary/20 bg-zinc-900/30 overflow-x-auto">
+      <div className="flex border-b border-primary/30 bg-zinc-900/50 overflow-x-auto">
         <Tab active={activeTab === 'points'} onClick={() => setActiveTab('points')}>Points</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => setActiveTab('bullets')}>Bullets</Tab>
@@ -191,7 +197,7 @@ export default function Store() {
                 key={pkg.id}
                 data-testid={`package-${pkg.id}`}
                 className={`relative rounded-md border p-3 transition-all ${
-                  pkg.popular ? 'border-primary/50 bg-primary/5' : 'border-primary/20 bg-zinc-800/30'
+                  pkg.popular ? 'border-primary/50 bg-primary/10' : 'border-primary/20 bg-zinc-900/50'
                 }`}
               >
                 {pkg.popular && (
@@ -207,7 +213,7 @@ export default function Store() {
                   onClick={() => handlePurchase(pkg.id)}
                   data-testid={`buy-package-${pkg.id}`}
                   disabled={loading}
-                  className="w-full mt-2 py-1.5 text-[10px] font-heading font-bold uppercase rounded border bg-primary/20 text-primary border-primary/50 disabled:opacity-50"
+                  className="w-full mt-2 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
                 >
                   {loading ? '...' : 'Buy'}
                 </button>
@@ -243,7 +249,7 @@ export default function Store() {
           })}
           {/* Custom Car */}
           <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center justify-between gap-2">
+            <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Custom Car</span>
               <Car className="text-primary shrink-0" size={14} />
             </div>
@@ -271,7 +277,7 @@ export default function Store() {
                       apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
                     }}
                     disabled={!user || user.points < 500 || !customCarName.trim()}
-                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded border bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50 disabled:opacity-50"
+                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
                   >
                     500 pts
                   </button>
@@ -293,7 +299,7 @@ export default function Store() {
                 type="button"
                 onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
                 disabled={!user || user.points < pack.cost}
-                className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded border bg-primary/20 text-primary border-primary/50 disabled:opacity-50"
+                className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
               >
                 Buy
               </button>
@@ -305,12 +311,12 @@ export default function Store() {
       {activeTab === 'bodyguards' && user && (
         <div className="space-y-3">
           {user.bodyguard_slots < 4 && (
-            <div className="flex items-center justify-between p-2.5 rounded-md border border-primary/20 bg-zinc-800/30">
+            <div className="flex items-center justify-between p-2.5 rounded-md border border-primary/20 bg-zinc-900/50">
               <span className="text-xs font-heading text-foreground">Slots: {user.bodyguard_slots}/4</span>
               <button
                 type="button"
                 onClick={() => apiBuy('/bodyguards/slot/buy', {}, 'Slot purchased')}
-                className="py-1.5 px-3 text-[10px] font-heading font-bold uppercase rounded border bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50"
+                className="py-1.5 px-3 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90"
               >
                 Buy slot ({getSlotCost(user.bodyguard_slots + 1)} pts)
               </button>
@@ -319,7 +325,7 @@ export default function Store() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {bodyguards.map((bg) => (
               <div key={bg.slot_number} className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden`}>
-                <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center justify-between">
+                <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
                   <span className="text-[10px] font-heading font-bold text-primary">Slot {bg.slot_number}</span>
                   <Shield size={14} className="text-primary" />
                 </div>
@@ -333,14 +339,14 @@ export default function Store() {
                       <button
                         type="button"
                         onClick={() => apiBuy('/bodyguards/hire', { slot: bg.slot_number, is_robot: false }, 'Hired')}
-                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded border border-zinc-600/50 bg-zinc-800/50"
+                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-zinc-800/50 border border-zinc-700/50 text-foreground hover:bg-zinc-700/50"
                       >
                         Human ({getHireCost(bg.slot_number, false)})
                       </button>
                       <button
                         type="button"
                         onClick={() => apiBuy('/bodyguards/hire', { slot: bg.slot_number, is_robot: true }, 'Hired')}
-                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded border bg-primary/20 text-primary border-primary/50"
+                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90"
                       >
                         Robot ({getHireCost(bg.slot_number, true)})
                       </button>
@@ -355,7 +361,7 @@ export default function Store() {
         </div>
       )}
 
-      <div className="px-3 py-2 rounded-md border border-primary/10 bg-zinc-800/20">
+      <div className="px-4 py-3 rounded-md border border-primary/20 bg-zinc-900/50">
         <p className="text-[10px] text-mutedForeground font-heading">
           Payments via Stripe. Points added after purchase.
         </p>
