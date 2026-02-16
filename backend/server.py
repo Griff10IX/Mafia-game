@@ -901,75 +901,6 @@ async def send_notification_to_all(title: str, message: str, notification_type: 
         await send_notification(uid, title, message, notification_type, category=category)
 
 
-def _objectives_week_start(dt: datetime) -> str:
-    """Monday 00:00 UTC as start of week; return YYYY-MM-DD."""
-    d = dt.date()
-    days_since_monday = (d.weekday()) % 7
-    start = d - timedelta(days=days_since_monday)
-    return start.strftime("%Y-%m-%d")
-
-
-def _objectives_month_start(dt: datetime) -> str:
-    """First day of month 00:00 UTC; return YYYY-MM-DD."""
-    d = dt.date()
-    return datetime(d.year, d.month, 1, tzinfo=timezone.utc).strftime("%Y-%m-%d")
-
-
-async def update_objectives_progress(user_id: str, objective_type: str, amount: int = 1, city: Optional[str] = None):
-    """Increment daily/weekly/monthly objectives progress. Call after crimes, GTA, busts, booze sell, interest deposit, hitlist NPC kill.
-    objective_type: crimes, gta, busts, booze_runs, crimes_in_city, deposit_interest, hitlist_npc_kills.
-    For crimes_in_city pass city= (e.g. Chicago). For deposit_interest pass amount= dollars deposited."""
-    now = datetime.now(timezone.utc)
-    today_str = now.strftime("%Y-%m-%d")
-    week_start_str = _objectives_week_start(now)
-    month_start_str = _objectives_month_start(now)
-    user = await db.users.find_one(
-        {"id": user_id},
-        {"_id": 0, "objectives_daily_date": 1, "objectives_daily_progress": 1,
-         "objectives_weekly_start": 1, "objectives_weekly_progress": 1,
-         "objectives_monthly_start": 1, "objectives_monthly_progress": 1}
-    )
-    if not user:
-        return
-    daily_date = user.get("objectives_daily_date")
-    weekly_start = user.get("objectives_weekly_start")
-    monthly_start = user.get("objectives_monthly_start")
-    daily_progress = dict(user.get("objectives_daily_progress") or {})
-    weekly_progress = dict(user.get("objectives_weekly_progress") or {})
-    monthly_progress = dict(user.get("objectives_monthly_progress") or {})
-
-    if daily_date == today_str:
-        if objective_type == "crimes_in_city" and city:
-            key = f"crimes_in_{city.lower().replace(' ', '_')}"
-            daily_progress[key] = daily_progress.get(key, 0) + amount
-        else:
-            daily_progress[objective_type] = daily_progress.get(objective_type, 0) + amount
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {"objectives_daily_progress": daily_progress}}
-        )
-    if weekly_start == week_start_str:
-        if objective_type == "crimes_in_city" and city:
-            key = f"crimes_in_{city.lower().replace(' ', '_')}"
-            weekly_progress[key] = weekly_progress.get(key, 0) + amount
-        else:
-            weekly_progress[objective_type] = weekly_progress.get(objective_type, 0) + amount
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {"objectives_weekly_progress": weekly_progress}}
-        )
-    if monthly_start == month_start_str:
-        if objective_type == "crimes_in_city" and city:
-            key = f"crimes_in_{city.lower().replace(' ', '_')}"
-            monthly_progress[key] = monthly_progress.get(key, 0) + amount
-        else:
-            monthly_progress[objective_type] = monthly_progress.get(objective_type, 0) + amount
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {"objectives_monthly_progress": monthly_progress}}
-        )
-
-
 async def _family_war_start(family_a_id: str, family_b_id: str):
     """Start or ensure an active war between two families. Idempotent."""
     if not family_a_id or not family_b_id or family_a_id == family_b_id:
@@ -3214,21 +3145,6 @@ async def buy_silencer(current_user: dict = Depends(get_current_user)):
         {"$inc": {"points": -SILENCER_COST_POINTS}, "$set": {"has_silencer": True}}
     )
     return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": SILENCER_COST_POINTS}
-
-OC_TIMER_COST_POINTS = 300
-
-@api_router.post("/store/buy-oc-timer")
-async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
-    """Reduce Organised Crime cooldown from 6 hours to 4 hours. One-time purchase."""
-    if current_user.get("oc_timer_reduced", False):
-        raise HTTPException(status_code=400, detail="You already have the reduced OC timer (4h)")
-    if (current_user.get("points") or 0) < OC_TIMER_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}}
-    )
-    return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
 
 @api_router.post("/store/upgrade-garage-batch")
 async def upgrade_garage_batch_limit(current_user: dict = Depends(get_current_user)):
@@ -10431,6 +10347,7 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
 from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack
+from routers.objectives import update_objectives_progress
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)

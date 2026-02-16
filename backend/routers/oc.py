@@ -61,6 +61,9 @@ NPC_PAYOUT_MULTIPLIER = 0.35  # Each NPC gets 35% of a full share for total pool
 OC_INVITE_EXPIRY_MINUTES = 5
 ROLE_KEYS = ["driver", "weapons", "explosives", "hacker"]
 
+# Store: one-time purchase to reduce heist cooldown from 6h to 4h
+OC_TIMER_COST_POINTS = 300
+
 # Varied success messages for team heist
 OC_TEAM_HEIST_SUCCESS_MESSAGES = [
     "Heist successful! {job_name}.",
@@ -117,6 +120,19 @@ class OCSendInvitesRequest(BaseModel):
 async def get_oc_config(current_user: dict = Depends(get_current_user)):
     """Return jobs and roles for Organised Crime."""
     return {"jobs": OC_JOBS, "roles": OC_ROLES}
+
+
+async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
+    """Reduce Organised Crime heist cooldown from 6 hours to 4 hours. One-time purchase."""
+    if current_user.get("oc_timer_reduced", False):
+        raise HTTPException(status_code=400, detail="You already have the reduced OC timer (4h)")
+    if (current_user.get("points") or 0) < OC_TIMER_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}},
+    )
+    return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
 
 
 async def get_oc_status(current_user: dict = Depends(get_current_user)):
@@ -595,6 +611,7 @@ async def execute_oc(
 
 def register(router):
     router.add_api_route("/oc/config", get_oc_config, methods=["GET"])
+    router.add_api_route("/store/buy-oc-timer", buy_oc_timer, methods=["POST"])
     router.add_api_route("/oc/status", get_oc_status, methods=["GET"])
     router.add_api_route("/oc/send-invites", send_invites_oc, methods=["POST"])
     router.add_api_route("/oc/invite/{invite_id}/accept", oc_invite_accept, methods=["POST"])
