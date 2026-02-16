@@ -464,6 +464,49 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
 };
 
 // ============================================================================
+// CREW OC TAB (separate from heist OC: one button, boss/underboss/capo commit)
+// ============================================================================
+
+const CrewOCTab = ({ family, myRole, crewOCCooldownUntil, committerHasTimer, onCommit, committing }) => {
+  const canCommit = ['boss', 'underboss', 'capo'].includes(myRole?.toLowerCase());
+  const cooldownHours = committerHasTimer ? 6 : 8;
+  const now = Date.now();
+  const until = family?.crew_oc_cooldown_until ? new Date(family.crew_oc_cooldown_until).getTime() : 0;
+  const onCooldown = until > now;
+  const timeLeft = onCooldown ? formatTimeLeft(family.crew_oc_cooldown_until) : 'Ready';
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[10px] text-mutedForeground font-heading">
+        When Boss, Underboss, or Capo commits, every living family member gets: XP, cash, bullets, points, booze. Family treasury gets a lump sum. Once every {cooldownHours}h{committerHasTimer ? ' (you have the timer)' : ''}.
+      </p>
+      <div className="flex items-center justify-between px-3 py-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
+        <span className="text-[10px] text-mutedForeground">Next commit</span>
+        <span className={`text-xs font-heading font-bold ${onCooldown ? 'text-amber-400' : 'text-emerald-400'}`}>
+          {timeLeft}
+        </span>
+      </div>
+      {canCommit ? (
+        <button
+          type="button"
+          onClick={onCommit}
+          disabled={onCooldown || committing}
+          className={`w-full py-2.5 font-heading font-bold uppercase tracking-wider text-xs rounded-md border transition-all ${
+            onCooldown || committing
+              ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border-zinc-700'
+              : 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50 hover:opacity-90'
+          }`}
+        >
+          {committing ? 'Committing...' : onCooldown ? `Cooldown ${timeLeft}` : 'Commit Crew OC'}
+        </button>
+      ) : (
+        <p className="text-[10px] text-mutedForeground">Only Boss, Underboss, or Capo can commit.</p>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
 // NO FAMILY VIEW
 // ============================================================================
 
@@ -535,6 +578,7 @@ export default function FamilyPage() {
   const [racketAttackLoading, setRacketAttackLoading] = useState(null);
   const [raidCooldownUntil, setRaidCooldownUntil] = useState(0);
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
+  const [crewOCCommitting, setCrewOCCommitting] = useState(false);
 
   const family = myFamily?.family;
   const members = myFamily?.members || [];
@@ -603,6 +647,19 @@ export default function FamilyPage() {
   };
   const handleOfferTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/offer', { war_id: entry.war.id }); toast.success('Truce offered'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAcceptTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/accept', { war_id: entry.war.id }); toast.success('Accepted'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleCrewOCCommit = async () => {
+    setCrewOCCommitting(true);
+    try {
+      const res = await api.post('/families/crew-oc/commit');
+      toast.success(res.data?.message || 'Crew OC committed.');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setCrewOCCommitting(false);
+    }
+  };
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
@@ -670,6 +727,7 @@ export default function FamilyPage() {
             <div className="flex border-b border-primary/20 bg-zinc-900/30">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')}>💰 Rackets</Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')}>⚔️ Raid</Tab>
+              <Tab active={activeTab === 'crewoc'} onClick={() => setActiveTab('crewoc')}>🎯 Crew OC</Tab>
               <Tab active={activeTab === 'treasury'} onClick={() => setActiveTab('treasury')}>💵 Treasury</Tab>
               <Tab active={activeTab === 'roster'} onClick={() => setActiveTab('roster')}>👥 Roster</Tab>
               <Tab active={activeTab === 'families'} onClick={() => setActiveTab('families')}>🏛️ All</Tab>
@@ -677,6 +735,16 @@ export default function FamilyPage() {
             </div>
             <div className="p-3">
               {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
+              {activeTab === 'crewoc' && (
+                <CrewOCTab
+                  family={family}
+                  myRole={myRole}
+                  crewOCCooldownUntil={family?.crew_oc_cooldown_until}
+                  committerHasTimer={myFamily?.crew_oc_committer_has_timer}
+                  onCommit={handleCrewOCCommit}
+                  committing={crewOCCommitting}
+                />
+              )}
               {activeTab === 'raid' && (
                 <RaidTab
                   targets={racketAttackTargets}

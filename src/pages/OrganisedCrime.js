@@ -585,13 +585,16 @@ export default function OrganisedCrime() {
             <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP</span>
           ),
         });
+        refreshUser();
       } else {
         toast.error(res.data.message || 'Heist failed');
       }
+      refreshUser();
       fetchData();
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
       toast.error(typeof msg === 'string' ? msg : 'Heist request failed');
+      refreshUser();
       fetchData();
     } finally {
       setExecuting(false);
@@ -630,13 +633,16 @@ export default function OrganisedCrime() {
             <span className="text-xs">+${res.data.cash_earned?.toLocaleString()} cash, +{res.data.rp_earned} RP</span>
           ),
         });
+        refreshUser();
       } else {
         toast.error(res.data.message || 'Heist failed');
       }
+      refreshUser();
       fetchData();
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
       toast.error(typeof msg === 'string' ? msg : 'Run failed');
+      refreshUser();
       fetchData();
     } finally {
       setExecuting(false);

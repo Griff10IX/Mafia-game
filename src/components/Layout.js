@@ -37,6 +37,8 @@ export default function Layout({ children }) {
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [notificationList, setNotificationList] = useState([]);
   const notificationPanelRef = useRef(null);
+  const notificationPanelOpenRef = useRef(false);
+  notificationPanelOpenRef.current = notificationPanelOpen;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -58,7 +60,7 @@ export default function Layout({ children }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const handler = (event) => {
+    const handler = async (event) => {
       const detail = event.detail || {};
       if (detail.money != null && detail.money !== undefined) {
         setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
@@ -66,6 +68,15 @@ export default function Layout({ children }) {
       fetchData();
       fetchUnreadCount();
       fetchWarStatus();
+      fetchRankingCounts();
+      if (notificationPanelOpenRef.current) {
+        try {
+          const response = await api.get('/notifications');
+          setNotificationList(response.data.notifications || []);
+        } catch {
+          // keep existing list
+        }
+      }
     };
     window.addEventListener('app:refresh-user', handler);
     return () => window.removeEventListener('app:refresh-user', handler);
@@ -78,10 +89,11 @@ export default function Layout({ children }) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // Refetch on route change so top bar is fresh when navigating
+    // Refetch on route change so top bar and sidebar badges are fresh when navigating
     fetchData();
     fetchUnreadCount();
     fetchWarStatus();
+    fetchRankingCounts();
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -94,6 +106,23 @@ export default function Layout({ children }) {
     // Lightweight polling so the sidebar badges stay fresh
     fetchRankingCounts();
     const id = setInterval(fetchRankingCounts, 15000);
+    return () => clearInterval(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    const pollNotifications = async () => {
+      try {
+        const response = await api.get('/notifications');
+        setUnreadCount(response.data.unread_count ?? 0);
+        if (notificationPanelOpenRef.current) {
+          setNotificationList(response.data.notifications || []);
+        }
+      } catch {
+        // keep existing state
+      }
+    };
+    pollNotifications();
+    const id = setInterval(pollNotifications, 5000);
     return () => clearInterval(id);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

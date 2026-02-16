@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ListChecks, Calendar, CalendarDays, CalendarRange, CheckCircle2, Circle, Gift } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -77,6 +77,7 @@ export default function Objectives() {
       const res = await api.post('/objectives/claim', { type });
       if (res.data?.claimed && res.data?.reward) {
         toast.success(`Rewards claimed! ${formatReward(res.data.reward)}`);
+        refreshUser();
       }
       await fetchObjectives();
     } catch (e) {

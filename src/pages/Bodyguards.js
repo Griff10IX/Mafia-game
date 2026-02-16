@@ -41,6 +41,7 @@ export default function Bodyguards() {
     try {
       const response = await api.post('/bodyguards/slot/buy');
       toast.success(response.data.message);
+      refreshUser();
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to buy slot');
@@ -51,6 +52,7 @@ export default function Bodyguards() {
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response.data.message);
+      refreshUser();
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to hire bodyguard');
@@ -61,6 +63,7 @@ export default function Bodyguards() {
     try {
       const res = await api.post(`/bodyguards/armour/upgrade?slot=${slot}`);
       toast.success(res.data?.message || 'Armour upgraded');
+      refreshUser();
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to upgrade armour');

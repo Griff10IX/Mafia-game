@@ -161,6 +161,17 @@ export default function Store() {
     }
   };
 
+  const buyCrewOcTimer = async () => {
+    try {
+      await api.post('/store/buy-crew-oc-timer');
+      toast.success('Crew OC timer purchased! Family Crew OC cooldown 6h when you commit.');
+      refreshUser();
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to buy Crew OC timer');
+    }
+  };
+
   const upgradeGarageBatch = async () => {
     try {
       const response = await api.post('/store/upgrade-garage-batch');
@@ -360,6 +371,36 @@ export default function Store() {
                   className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
                 >
                   Buy for 300 Points
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Crew OC Timer (family: 6h cooldown when you commit) */}
+          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
+            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center justify-between">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Crew OC Timer</span>
+              <Clock className="text-primary" size={20} />
+            </div>
+            <div className="p-6">
+              <p className="text-xs font-heading text-mutedForeground mb-4">
+                When you commit Crew OC (Families → Crew OC), family cooldown is 6 hours instead of 8. One-time purchase.
+              </p>
+              <div className="space-y-2 mb-6 font-heading text-xs text-mutedForeground">
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> 6h cooldown instead of 8h</div>
+                <div className="flex items-center gap-2"><Check size={14} className="text-primary shrink-0" /> Only applies when you press Commit</div>
+              </div>
+              {user?.crew_oc_timer_reduced ? (
+                <div className={`${styles.surface} border border-primary/20 rounded-sm py-3 text-center text-primary font-heading font-bold uppercase tracking-wider`}>
+                  Owned
+                </div>
+              ) : (
+                <button
+                  onClick={buyCrewOcTimer}
+                  disabled={loading}
+                  className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-yellow-600/50 transition-smooth disabled:opacity-50"
+                >
+                  Buy for 350 Points
                 </button>
               )}
             </div>

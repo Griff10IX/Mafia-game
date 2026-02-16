@@ -22,6 +22,7 @@ from server import (
 # Store-only constants
 SILENCER_COST_POINTS = 150
 OC_TIMER_COST_POINTS = 300
+CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
 BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
 CUSTOM_CAR_COST = 500
 
@@ -68,6 +69,19 @@ async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
         {"$inc": {"points": -OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}}
     )
     return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
+
+
+async def buy_crew_oc_timer(current_user: dict = Depends(get_current_user)):
+    """Crew OC (family): when you commit, cooldown is 6h instead of 8h."""
+    if current_user.get("crew_oc_timer_reduced", False):
+        raise HTTPException(status_code=400, detail="You already have the Crew OC timer (6h)")
+    if (current_user.get("points") or 0) < CREW_OC_TIMER_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {CREW_OC_TIMER_COST_POINTS})")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -CREW_OC_TIMER_COST_POINTS}, "$set": {"crew_oc_timer_reduced": True}}
+    )
+    return {"message": "Crew OC timer purchased! When you commit, family Crew OC cooldown is 6h instead of 8h.", "cost": CREW_OC_TIMER_COST_POINTS}
 
 
 async def upgrade_garage_batch_limit(current_user: dict = Depends(get_current_user)):
@@ -146,6 +160,7 @@ def register(router):
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-silencer", buy_silencer, methods=["POST"])
     router.add_api_route("/store/buy-oc-timer", buy_oc_timer, methods=["POST"])
+    router.add_api_route("/store/buy-crew-oc-timer", buy_crew_oc_timer, methods=["POST"])
     router.add_api_route("/store/upgrade-garage-batch", upgrade_garage_batch_limit, methods=["POST"])
     router.add_api_route("/store/buy-booze-capacity", buy_booze_capacity, methods=["POST"])
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])

@@ -480,6 +480,7 @@ export default function Inbox() {
     try {
       await api.post(`/notifications/${notificationId}/read`);
       fetchNotifications();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (error) {
       toast.error('Failed to mark as read');
     }
@@ -489,6 +490,7 @@ export default function Inbox() {
     try {
       await api.post('/notifications/read-all');
       fetchNotifications();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
       toast.success('All notifications marked as read');
     } catch (error) {
       toast.error('Failed to mark all as read');
@@ -502,6 +504,7 @@ export default function Inbox() {
         setSelectedNotification(null);
       }
       fetchNotifications();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
       toast.success('Message deleted');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to delete message');
@@ -514,6 +517,7 @@ export default function Inbox() {
       const res = await api.delete('/notifications');
       setSelectedNotification(null);
       fetchNotifications();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
       toast.success(res.data?.message || 'All messages deleted');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to delete all');

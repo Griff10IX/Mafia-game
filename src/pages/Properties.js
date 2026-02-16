@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Building, TrendingUp, DollarSign, Lock } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -49,6 +49,7 @@ export default function Properties() {
       const data = res.data || {};
       if (data.success) {
         toast.success(data.message || `Took ${formatMoney(data.amount)}!`);
+        refreshUser();
       } else {
         toast.error(data.message || 'Raid failed.');
       }
@@ -65,6 +66,7 @@ export default function Properties() {
     try {
       const response = await api.post(`/properties/${propertyId}/buy`);
       toast.success(response.data.message);
+      refreshUser();
       fetchProperties();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to buy property');
@@ -75,6 +77,7 @@ export default function Properties() {
     try {
       const response = await api.post(`/properties/${propertyId}/collect`);
       toast.success(response.data.message);
+      refreshUser();
       fetchProperties();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to collect income');

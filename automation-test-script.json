@@ -10,9 +10,9 @@
     },
     {
       "Command": "store",
-      "Target": "baseUrl",
-      "Value": "http://178.128.38.68",
-      "Description": "Change this to your server URL (e.g. localhost:5173 for dev)"
+      "Target": "http://178.128.38.68",
+      "Value": "baseUrl",
+      "Description": "Change Target to your server URL (e.g. http://localhost:5173); variable name is baseUrl"
     },
     {
       "Command": "while",

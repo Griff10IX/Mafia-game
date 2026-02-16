@@ -466,6 +466,7 @@ export default function Garage() {
       const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'bullets' });
       toast.success(response.data.message);
       setSelectedCars([]);
+      refreshUser();
       fetchGarage();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to melt cars');
@@ -478,6 +479,7 @@ export default function Garage() {
       const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'cash' });
       toast.success(response.data.message);
       setSelectedCars([]);
+      refreshUser();
       fetchGarage();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to scrap cars');

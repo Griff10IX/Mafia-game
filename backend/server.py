@@ -386,6 +386,7 @@ class UserResponse(BaseModel):
     swiss_balance: int = 0
     swiss_limit: int = SWISS_BANK_LIMIT_START
     oc_timer_reduced: bool = False
+    crew_oc_timer_reduced: bool = False
     admin_ghost_mode: bool = False
     admin_acting_as_normal: bool = False
     casino_profit: int = 0  # $ from owned casino table
@@ -651,6 +652,16 @@ FAMILY_RACKET_ATTACK_MIN_SUCCESS = 0.10
 FAMILY_RACKET_ATTACK_REVENUE_PCT = 0.25
 FAMILY_RACKET_ATTACK_MAX_PER_CREW = 2
 FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
+
+# Crew Organised Crime: boss/underboss/capo press Commit; all family members get rewards, treasury gets lump sum. 8h cooldown (6h with store item).
+CREW_OC_COOLDOWN_HOURS = 8
+CREW_OC_COOLDOWN_HOURS_REDUCED = 6
+CREW_OC_REWARD_RP = 80
+CREW_OC_REWARD_CASH = 40_000
+CREW_OC_REWARD_BULLETS = 100
+CREW_OC_REWARD_POINTS = 3
+CREW_OC_REWARD_BOOZE = 10
+CREW_OC_TREASURY_LUMP = 200_000
 
 # Varied success/failure messages for family racket raid
 FAMILY_RACKET_RAID_SUCCESS_MESSAGES = [
@@ -1547,6 +1558,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         swiss_balance=int(current_user.get("swiss_balance", 0) or 0),
         swiss_limit=int(current_user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START),
         oc_timer_reduced=bool(current_user.get("oc_timer_reduced", False)),
+        crew_oc_timer_reduced=bool(current_user.get("crew_oc_timer_reduced", False)),
         admin_ghost_mode=bool(current_user.get("admin_ghost_mode", False)),
         admin_acting_as_normal=bool(current_user.get("admin_acting_as_normal", False)),
         casino_profit=casino_cash,
@@ -10212,10 +10224,17 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         except Exception:
             continue
     return {
-        "family": {"id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0)},
+        "family": {
+            "id": fam["id"],
+            "name": fam["name"],
+            "tag": fam["tag"],
+            "treasury": fam.get("treasury", 0),
+            "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
+        },
         "members": members,
         "rackets": rackets,
         "my_role": my_role,
+        "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
     }
 
 
@@ -10420,6 +10439,72 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": -amount}})
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
     return {"message": "Withdrew from treasury"}
+
+
+@api_router.post("/families/crew-oc/commit")
+async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)):
+    """Boss, Underboss, or Capo commits Crew OC: all living family members get XP, cash, bullets, points, booze; treasury gets a lump sum. Cooldown 8h (6h if committer has Crew OC Timer from store)."""
+    role = (current_user.get("family_role") or "").strip().lower()
+    if role not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can commit Crew OC")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "crew_oc_cooldown_until": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    now = datetime.now(timezone.utc)
+    cooldown_until = fam.get("crew_oc_cooldown_until")
+    if cooldown_until:
+        try:
+            until = datetime.fromisoformat(str(cooldown_until).replace("Z", "+00:00"))
+            if until > now:
+                secs = int((until - now).total_seconds())
+                raise HTTPException(status_code=400, detail=f"Crew OC on cooldown. Try again in {secs}s")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    has_timer = bool(current_user.get("crew_oc_timer_reduced", False))
+    cooldown_hours = CREW_OC_COOLDOWN_HOURS_REDUCED if has_timer else CREW_OC_COOLDOWN_HOURS
+    new_cooldown_until = now + timedelta(hours=cooldown_hours)
+
+    members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
+    user_ids = [m["user_id"] for m in members]
+    living = await db.users.find({"id": {"$in": user_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1}).to_list(100)
+    living_ids = [u["id"] for u in living]
+    if not living_ids:
+        raise HTTPException(status_code=400, detail="No living family members")
+
+    for uid in living_ids:
+        await db.users.update_one(
+            {"id": uid},
+            {
+                "$inc": {
+                    "rank_points": CREW_OC_REWARD_RP,
+                    "money": CREW_OC_REWARD_CASH,
+                    "bullets": CREW_OC_REWARD_BULLETS,
+                    "points": CREW_OC_REWARD_POINTS,
+                    "booze": CREW_OC_REWARD_BOOZE,
+                }
+            },
+        )
+    await db.families.update_one(
+        {"id": family_id},
+        {"$inc": {"treasury": CREW_OC_TREASURY_LUMP}, "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()}},
+    )
+    await send_notification_to_family(
+        family_id,
+        "Crew OC committed",
+        f"Your family committed Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{CREW_OC_REWARD_POINTS} points, +{CREW_OC_REWARD_BOOZE} booze. Treasury +${CREW_OC_TREASURY_LUMP:,}.",
+        "reward",
+        category="crew_oc",
+    )
+    return {
+        "message": "Crew OC committed. All members rewarded.",
+        "crew_oc_cooldown_until": new_cooldown_until.isoformat(),
+        "cooldown_hours": cooldown_hours,
+    }
 
 
 @api_router.post("/families/rackets/{racket_id}/collect")
