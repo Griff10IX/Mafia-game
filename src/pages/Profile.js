@@ -868,17 +868,32 @@ export default function Profile() {
               </div>
               <div className="border-t border-border pt-4">
                 <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Game theme settings</h3>
-                <p className="text-xs text-mutedForeground mb-3">Accent colour applied to all pages (buttons, links, headers, rackets, treasury).</p>
-                <select
-                  value={gameTheme}
-                  onChange={(e) => setGameThemeAndSave(e.target.value)}
-                  className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  data-testid="game-theme-select"
-                >
+                <p className="text-xs text-mutedForeground mb-3">Accent colour applied to all pages. Click a swatch to apply.</p>
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-1">
                   {GAME_THEME_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setGameThemeAndSave(opt.value)}
+                      data-testid={`game-theme-${opt.value}`}
+                      className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 transition-all text-left ${
+                        gameTheme === opt.value
+                          ? 'border-foreground bg-secondary ring-2 ring-primary/50'
+                          : 'border-transparent bg-secondary/50 hover:bg-secondary hover:border-zinc-600'
+                      }`}
+                      title={opt.label}
+                    >
+                      <span
+                        className="w-10 h-10 rounded-full shrink-0 border-2 border-white/20 shadow-inner"
+                        style={{ backgroundColor: opt.color }}
+                        aria-hidden
+                      />
+                      <span className="text-[10px] font-heading font-bold text-foreground truncate w-full text-center">
+                        {opt.label}
+                      </span>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
               <div className="border-t border-border pt-4">
                 <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Change password</h3>
