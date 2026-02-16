@@ -29,17 +29,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ username, rankName, currentState }) => (
-  <div>
-    <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-primary mb-0.5 md:mb-1" data-testid="dashboard-title">
-      Welcome, {username}
-    </h1>
-    <p className="text-xs text-mutedForeground">
-      {rankName ?? '—'} · {currentState ?? '—'}
-    </p>
-  </div>
-);
-
 const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
   const current = Number(rankProgress.rank_points_current) || 0;
   const needed = Number(rankProgress.rank_points_needed) || 0;
@@ -300,12 +289,6 @@ export default function Dashboard() {
 
   return (
     <div className={`space-y-3 md:space-y-4 ${styles.pageContent}`} data-testid="dashboard-page">
-      <PageHeader 
-        username={user?.username} 
-        rankName={user?.rank_name} 
-        currentState={user?.current_state} 
-      />
-
       {rankProgress && (
         <RankProgressCard 
           rankProgress={rankProgress} 

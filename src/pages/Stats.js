@@ -38,18 +38,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <TrendingUp className="w-8 h-8 md:w-10 md:h-10" />
-      Stats
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Economy · Users · Ranks · Recent Kills
-    </p>
-  </div>
-);
-
 const StatCard = ({ title, rows }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
   
@@ -343,8 +331,6 @@ export default function Stats() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="stats-page">
-      <PageHeader />
-
       {/* Stats grid — items-start so short cards (Game Capital, Vehicle Stats) don't stretch */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
         <StatCard title="Game Capital" rows={gameCapitalRows} />

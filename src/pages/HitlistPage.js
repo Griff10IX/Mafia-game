@@ -12,18 +12,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Target className="w-8 h-8 md:w-10 md:h-10" />
-      Hitlist
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Place bounties on users or bodyguards · Add NPCs for target practice
-    </p>
-  </div>
-);
-
 const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
   if (!npcStatus) return null;
   
@@ -702,8 +690,6 @@ export default function HitlistPage() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`}>
-      <PageHeader />
-
       <AddNpcCard
         npcStatus={npcStatus}
         addingNpc={addingNpc}

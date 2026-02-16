@@ -35,25 +35,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ totalCount }) => (
-  <div className="flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-        <Car className="w-6 h-6 sm:w-7 sm:h-7" />
-        Garage
-      </h1>
-      <p className="text-xs text-mutedForeground">
-        Manage your stolen vehicles
-      </p>
-    </div>
-    <div className="flex items-center gap-1.5 text-xs font-heading">
-      <span className="text-mutedForeground">Total:</span>
-      <span className="text-primary font-bold text-lg">{totalCount}</span>
-      <span className="text-mutedForeground">cars</span>
-    </div>
-  </div>
-);
-
 const EmptyGarageCard = () => (
   <div className={`${styles.panel} rounded-md border border-border py-12 text-center`}>
     <Car size={48} className="mx-auto text-primary/30 mb-3" />
@@ -561,8 +542,6 @@ export default function Garage() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`}>
-      <PageHeader totalCount={cars.length} />
-
       {cars.length === 0 ? (
         <EmptyGarageCard />
       ) : (

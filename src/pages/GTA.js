@@ -59,28 +59,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ garageCount }) => (
-  <div className="flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-        <Car className="w-6 h-6 sm:w-7 sm:h-7" />
-        GTA
-      </h1>
-      <p className="text-xs text-mutedForeground">
-        Grand Theft Auto — steal prohibition-era vehicles
-      </p>
-    </div>
-    
-    {/* Stats inline */}
-    <div className="flex items-center gap-4 text-xs font-heading">
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Garage:</span>
-        <span className="text-primary font-bold">{garageCount} cars</span>
-      </div>
-    </div>
-  </div>
-);
-
 const EventBanner = ({ event, eventsEnabled }) => {
   if (!eventsEnabled || !event?.name || (event.gta_success === 1 && event.rank_points === 1)) {
     return null;
@@ -452,8 +430,6 @@ export default function GTA() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="gta-page">
-      <PageHeader garageCount={garage.length} />
-
       <EventBanner event={event} eventsEnabled={eventsEnabled} />
 
       {/* GTA options list */}

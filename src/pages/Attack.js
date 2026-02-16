@@ -27,18 +27,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Crosshair className="w-8 h-8 md:w-10 md:h-10" />
-      Attack
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Search, track, travel, and execute hits
-    </p>
-  </div>
-);
-
 const EventBanner = ({ event }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
@@ -1024,8 +1012,6 @@ export default function Attack() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="attack-page">
-      <PageHeader />
-
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
         <EventBanner event={event} />
       )}

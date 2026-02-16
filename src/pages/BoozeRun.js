@@ -43,18 +43,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-      <Wine className="w-6 h-6 sm:w-7 sm:h-7" />
-      Booze Run
-    </h1>
-    <p className="text-xs text-mutedForeground">
-      Prohibition-era smuggling · Buy low, travel, sell high
-    </p>
-  </div>
-);
-
 const StatsCard = ({ config, timer }) => {
   const capacity = config.capacity ?? 0;
   const carryingTotal = config.carrying_total ?? 0;
@@ -734,8 +722,6 @@ export default function BoozeRun() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="booze-run-page">
-      <PageHeader />
-
       <StatsCard config={config} timer={timer} />
 
       {cityA && cityB && (

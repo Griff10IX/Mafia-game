@@ -29,18 +29,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Crosshair className="w-8 h-8 md:w-10 md:h-10" />
-      Attempts
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Attack history · Successful kills & failed attempts
-    </p>
-  </div>
-);
-
 const AttemptRow = ({ attempt }) => {
   const outgoingRow = attempt.direction === 'outgoing';
   const killed = attempt.outcome === 'killed';
@@ -198,8 +186,6 @@ export default function Attempts() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="attempts-page">
-      <PageHeader />
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <AttemptsCard
           title="My Attempts"

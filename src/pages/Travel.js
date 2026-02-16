@@ -13,18 +13,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <MapPin className="w-8 h-8 md:w-10 md:h-10" />
-      Travel
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Move between cities · Find new opportunities
-    </p>
-  </div>
-);
-
 const TravelingScreen = ({ destination, timeLeft }) => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] space-y-6" data-testid="traveling-screen">
     <div className="text-6xl md:text-8xl animate-bounce">🚗</div>
@@ -346,8 +334,6 @@ export default function Travel() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="travel-page">
-      <PageHeader />
-
       <CurrentLocationCard
         location={travelInfo?.current_location}
         travelsUsed={travelInfo?.travels_this_hour}

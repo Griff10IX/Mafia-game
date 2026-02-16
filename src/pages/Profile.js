@@ -28,39 +28,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ username, isMe, onOpenSettings }) => (
-  <div>
-    <div className="flex items-center justify-between gap-3 mb-1 md:mb-2">
-      <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary flex items-center gap-3">
-        <UserIcon className="w-8 h-8 md:w-10 md:h-10" />
-        Profile
-      </h1>
-      {isMe && onOpenSettings && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="p-2 rounded-md text-mutedForeground hover:text-primary hover:bg-primary/10 border border-transparent hover:border-primary/30 transition-colors"
-                aria-label="Profile settings"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="left">
-              <p>Profile settings</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
-    </div>
-    <p className="text-sm text-mutedForeground">
-      {username ? `Viewing ${username}'s profile` : 'User profile'}
-    </p>
-  </div>
-);
-
 const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
   const value = wealthRankName ?? '—';
   const rangeStr = wealthRankRange ?? '—';
@@ -689,7 +656,6 @@ export default function Profile() {
   if (!profile) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
-        <PageHeader username={null} />
         <div className={`${styles.panel} rounded-md border border-border py-16 text-center`}>
           <UserIcon size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">
@@ -710,8 +676,6 @@ export default function Profile() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="profile-page">
-      <PageHeader username={profile.username} isMe={isMe} onOpenSettings={openSettings} />
-
       <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
         <ProfileInfoCard 
           profile={profile} 

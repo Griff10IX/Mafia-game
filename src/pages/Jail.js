@@ -16,36 +16,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ jailStatus }) => (
-  <div className="flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-        <Lock className="w-6 h-6 sm:w-7 sm:h-7" />
-        Jail
-      </h1>
-      <p className="text-xs text-mutedForeground">
-        Bust out players for rank points
-      </p>
-    </div>
-    
-    {/* Stats inline */}
-    <div className="flex items-center gap-4 text-xs font-heading">
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Busts:</span>
-        <span className="text-primary font-bold">{jailStatus.jail_busts ?? 0}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Streak:</span>
-        <span className="text-foreground font-bold">{jailStatus.current_consecutive_busts ?? 0}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Record:</span>
-        <span className="text-primary/80 font-bold">{jailStatus.consecutive_busts_record ?? 0}</span>
-      </div>
-    </div>
-  </div>
-);
-
 const JailStatusCard = ({ 
   inJail, 
   secondsRemaining, 
@@ -382,8 +352,6 @@ export default function Jail() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="jail-page">
-      <PageHeader jailStatus={jailStatus} />
-
       <JailStatusCard
         inJail={jailStatus.in_jail}
         secondsRemaining={jailStatus.seconds_remaining}

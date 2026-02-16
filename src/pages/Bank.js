@@ -52,17 +52,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2">
-      Bank
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      Interest · Swiss · Send Money
-    </p>
-  </div>
-);
-
 const InterestBankCard = ({ 
   overview, 
   meta, 
@@ -505,8 +494,6 @@ export default function Bank() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="bank-page">
-      <PageHeader />
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
         <div className="rounded-md overflow-hidden border border-primary/20">
           <button

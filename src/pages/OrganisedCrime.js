@@ -61,36 +61,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ cooldownHours, status }) => {
-  const onCooldown = status?.cooldown_until && new Date(status.cooldown_until) > new Date();
-  const cooldownStr = formatCooldown(status?.cooldown_until);
-
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-          <Users className="w-6 h-6 sm:w-7 sm:h-7" />
-          Organised Crime
-        </h1>
-        <p className="text-xs text-mutedForeground">
-          Team of 4 — Once every {cooldownHours ?? 6}h
-        </p>
-      </div>
-      
-      {/* Status */}
-      <div className="flex items-center gap-2 text-xs font-heading">
-        <Clock size={14} className="text-primary" />
-        {onCooldown ? (
-          <span className="text-mutedForeground">Next in <span className="text-primary font-bold">{cooldownStr}</span></span>
-        ) : (
-          <span className="text-emerald-400 font-bold">✓ Ready</span>
-        )}
-        {status?.has_timer_upgrade && <span className="text-primary/60">(4h)</span>}
-      </div>
-    </div>
-  );
-};
-
 // Equipment section: select gear for next heist (cost charged when heist runs)
 const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
   const list = equipmentData?.equipment || [];
@@ -691,8 +661,6 @@ export default function OrganisedCrime() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="organised-crime-page">
-      <PageHeader cooldownHours={status?.cooldown_hours} status={status} />
-
       {/* Pending Heist */}
       <PendingHeistSection
         status={status}

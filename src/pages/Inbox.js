@@ -42,18 +42,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ unreadCount }) => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 flex items-center gap-3">
-      <Mail className="w-8 h-8 md:w-10 md:h-10" />
-      Inbox
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      {unreadCount > 0 ? `${unreadCount} unread` : 'All caught up'}
-    </p>
-  </div>
-);
-
 const ComposeModal = ({ 
   isOpen,
   onClose,
@@ -607,8 +595,6 @@ export default function Inbox() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="inbox-page">
-      <PageHeader unreadCount={unreadCount} />
-
       <ComposeModal
         isOpen={showCompose}
         onClose={() => setShowCompose(false)}

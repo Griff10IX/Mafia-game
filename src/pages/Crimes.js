@@ -61,43 +61,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = ({ totalCrimes = 0, crimeProfit = 0, profitLastHour = 0, profitToday = 0, profitLast7Days = 0 }) => (
-  <div className="flex flex-wrap items-end justify-between gap-4">
-    <div>
-      <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-        💰 Crimes
-      </h1>
-      <p className="text-xs text-mutedForeground">
-        Commit crimes to earn cash and rank points
-      </p>
-    </div>
-    
-    {/* Stats inline */}
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-heading">
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Total:</span>
-        <span className="text-primary font-bold">{totalCrimes.toLocaleString()}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Profit:</span>
-        <span className="text-primary font-bold">${Number(crimeProfit).toLocaleString()}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Last hour:</span>
-        <span className="text-primary font-bold">${Number(profitLastHour).toLocaleString()}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Today:</span>
-        <span className="text-primary font-bold">${Number(profitToday).toLocaleString()}</span>
-      </div>
-      <div className="flex items-center gap-1.5">
-        <span className="text-mutedForeground">Last 7 days:</span>
-        <span className="text-primary font-bold">${Number(profitLast7Days).toLocaleString()}</span>
-      </div>
-    </div>
-  </div>
-);
-
 const JailNotice = () => (
   <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
     <div className="flex items-center gap-2">
@@ -410,14 +373,6 @@ export default function Crimes() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="crimes-page">
-      <PageHeader
-        totalCrimes={user?.total_crimes}
-        crimeProfit={user?.crime_profit}
-        profitLastHour={crimeStats.profit_last_hour}
-        profitToday={crimeStats.profit_today}
-        profitLast7Days={crimeStats.profit_last_7_days}
-      />
-
       {user?.in_jail && <JailNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}

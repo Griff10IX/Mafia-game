@@ -25,18 +25,6 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const PageHeader = () => (
-  <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2 flex items-center gap-3">
-      <Users className="w-8 h-8 md:w-10 md:h-10" />
-      Users Online
-    </h1>
-    <p className="text-sm text-mutedForeground">
-      See who's currently active
-    </p>
-  </div>
-);
-
 const OnlineCountCard = ({ totalOnline }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
@@ -299,8 +287,6 @@ export default function UsersOnline() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="users-online-page">
-      <PageHeader />
-
       <OnlineCountCard totalOnline={totalOnline} />
 
       {users.length === 0 ? (
