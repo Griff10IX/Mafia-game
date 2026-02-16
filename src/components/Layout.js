@@ -21,14 +21,8 @@ function getMobileBottomNavItems(isAdmin) {
         { path: '/profile', label: 'Profile' },
         { path: '/stats', label: 'Stats' },
         { path: '/dead-alive', label: 'Dead > Alive' },
+        { path: '/bank', label: 'Bank' },
       ],
-    },
-    {
-      type: 'group',
-      id: 'money',
-      icon: Landmark,
-      label: 'Money',
-      items: [{ path: '/bank', label: 'Bank' }],
     },
     {
       type: 'group',

@@ -1,4 +1,5 @@
 # Organised Crime endpoints: equipment, heists, team management
+import logging
 from datetime import datetime, timezone, timedelta
 import random
 import uuid
@@ -6,13 +7,15 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
+logger = logging.getLogger(__name__)
+
 import os
 import sys
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
-from server import db, get_current_user, get_rank_info
+from server import db, get_current_user, get_rank_info, maybe_process_rank_up
 
 # Equipment tiers for Organised Crime
 EQUIPMENT_TIERS = [
@@ -306,17 +309,23 @@ async def run_heist(
     
     if success:
         # Success - award money and rank points
+        rp_before = int(current_user.get("rank_points") or 0)
+        rp_added = int(job.get("rank_points") or 0)
         await db.users.update_one(
             {"id": current_user["id"]},
             {
                 "$inc": {
                     "money": job["reward"],
-                    "rank_points": job["rank_points"],
+                    "rank_points": rp_added,
                     "total_heists": 1,
                     "successful_heists": 1
                 }
             }
         )
+        try:
+            await maybe_process_rank_up(current_user["id"], rp_before, rp_added, current_user.get("username", ""))
+        except Exception as e:
+            logger.exception("Rank-up notification (OC): %s", e)
         
         # Track heist stats
         await db.user_organised_crime.update_one(

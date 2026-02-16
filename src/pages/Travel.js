@@ -86,7 +86,9 @@ const DestinationCard = ({
       <div className="p-3 md:p-4 space-y-2">
         {/* One airport option per destination (city) */}
         {hasAirports ? (() => {
-          const canUse = !travelInfo.carrying_booze && travelInfo.user_points >= airport.price_per_travel;
+          const fullPrice = airport.price_per_travel ?? 10;
+          const displayPrice = airport.you_own ? Math.max(1, Math.round(fullPrice * 0.95)) : fullPrice;
+          const canUse = !travelInfo.carrying_booze && travelInfo.user_points >= displayPrice;
           return (
             <button
               key={airport.slot}
@@ -98,7 +100,7 @@ const DestinationCard = ({
                   : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
               }`}
               data-testid={`airport-${destination}-${airport.slot}`}
-              title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${airport.owner_username} · ${airport.price_per_travel} pts`}
+              title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${airport.owner_username} · ${displayPrice} pts${airport.you_own ? ' (5% owner discount)' : ''}`}
             >
               <span className="flex items-center gap-2">
                 <Plane size={18} className="text-primary" />
@@ -106,7 +108,8 @@ const DestinationCard = ({
                 <span className="text-[10px] text-mutedForeground font-heading truncate max-w-[80px]">{airport.owner_username}</span>
               </span>
               <span className="text-xs text-mutedForeground font-heading">
-                {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {airport.price_per_travel}pts
+                {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {displayPrice}pts
+                {airport.you_own && <span className="text-emerald-400 ml-0.5">(5% off)</span>}
               </span>
             </button>
           );

@@ -1324,6 +1324,18 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
         return total_bullets
     return 0
 
+
+async def maybe_process_rank_up(user_id: str, rank_points_before: int, rank_points_added: int, username: str = ""):
+    """If rank increased after adding rank_points_added to rank_points_before, grant rewards and send notification."""
+    if rank_points_added <= 0:
+        return
+    new_total = rank_points_before + rank_points_added
+    old_rank_id, _ = get_rank_info(rank_points_before)
+    new_rank_id, _ = get_rank_info(new_total)
+    if new_rank_id > old_rank_id:
+        await check_and_process_rank_up(user_id, old_rank_id, new_rank_id, username)
+
+
 def _client_ip(request: Request) -> str:
     """Get client IP (supports X-Forwarded-For behind proxy)."""
     forwarded = request.headers.get("x-forwarded-for")
@@ -4698,6 +4710,7 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             extortion_amount = target_money
         rank_points = 10
         if extortion_amount > 0:
+            rp_before = int(current_user.get("rank_points") or 0)
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$inc": {"money": extortion_amount, "rank_points": rank_points}}
@@ -4706,6 +4719,10 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
                 {"id": target["id"]},
                 {"$inc": {"money": -extortion_amount}}
             )
+            try:
+                await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+            except Exception as e:
+                logging.exception("Rank-up notification (racket): %s", e)
         await db.extortions.update_one(
             {"extorter_id": current_user["id"], "target_id": target["id"], "property_id": request.property_id},
             {"$set": {"timestamp": datetime.now(timezone.utc).isoformat(), "amount": extortion_amount}},
@@ -6442,7 +6459,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             hitlist_entry = await db.hitlist.find_one({"target_id": victim_id, "target_type": "npc"}, {"_id": 0, "npc_rewards": 1})
             if hitlist_entry:
                 rewards = hitlist_entry.get("npc_rewards") or {}
-                inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": int(rewards.get("rank_points", 0) or 0), "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1}
+                rp_added = int(rewards.get("rank_points", 0) or 0)
+                inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1}
                 booze = rewards.get("booze")
                 if isinstance(booze, dict) and booze:
                     booze_ids = [b["id"] for b in BOOZE_TYPES]
@@ -6451,7 +6469,13 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                             inc[f"booze_carrying.{bid}"] = int(amt)
                             inc[f"booze_carrying_cost.{bid}"] = 0
                 if inc:
+                    rp_before = int(current_user.get("rank_points") or 0)
                     await db.users.update_one({"id": killer_id}, {"$inc": inc})
+                    if rp_added > 0:
+                        try:
+                            await maybe_process_rank_up(killer_id, rp_before, rp_added, current_user.get("username", ""))
+                        except Exception as e:
+                            logging.exception("Rank-up notification (hitlist NPC): %s", e)
                 car_id = (rewards.get("car_id") or "").strip()
                 if car_id and next((c for c in CARS if c.get("id") == car_id), None):
                     await db.user_cars.insert_one({"id": str(uuid.uuid4()), "user_id": killer_id, "car_id": car_id, "acquired_at": datetime.now(timezone.utc).isoformat()})
@@ -6516,10 +6540,16 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             if p:
                 prop_names.append(p["name"])
         
+        killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1})
+        killer_rp_before = int((killer_doc or {}).get("rank_points") or 0)
         await db.users.update_one(
             {"id": killer_id},
             {"$inc": {"money": cash_loot, "total_kills": 1, "rank_points": rank_points}}
         )
+        try:
+            await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""))
+        except Exception as e:
+            logging.exception("Rank-up notification (kill): %s", e)
         await db.user_cars.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
         await db.user_properties.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
         
@@ -8875,7 +8905,8 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             await db.airport_ownership.insert_one({"state": current_state, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
             doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
         price = min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
-        airports.append({"slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price})
+        you_own = doc.get("owner_id") == current_user.get("id")
+        airports.append({"slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price, "you_own": you_own})
     return {
         "current_location": current_state,
         "traveling_to": traveling_to if seconds_remaining is not None and seconds_remaining > 0 else None,
@@ -8931,6 +8962,10 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
             await db.airport_ownership.insert_one({"state": current_location, "slot": airport_slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
             airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": airport_slot}, {"_id": 0})
         airport_price = min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
+        # 5% discount when you own the airport you're using
+        owner_id = airport_doc.get("owner_id")
+        if owner_id and owner_id == current_user["id"]:
+            airport_price = max(1, round(airport_price * 0.95))
         if current_user["points"] < airport_price:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
         travel_time = TRAVEL_TIMES["airport"]
@@ -8939,7 +8974,6 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
             {"id": current_user["id"]},
             {"$inc": {"points": -airport_price}}
         )
-        owner_id = airport_doc.get("owner_id")
         if owner_id:
             await db.users.update_one(
                 {"id": owner_id},

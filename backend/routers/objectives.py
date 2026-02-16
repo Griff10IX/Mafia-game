@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from server import (
     db,
     get_current_user,
+    maybe_process_rank_up,
     send_notification,
     STATES,
 )
@@ -386,7 +387,14 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["money"] = reward.get("money", 0) + DAILY_COMPLETION_BONUS.get("money", 0)
         reward["points"] = reward.get("points", 0) + DAILY_COMPLETION_BONUS.get("points", 0)
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
+        rp_before = int(user.get("rank_points") or 0)
+        rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_daily_claimed": True}, "$inc": inc})
+        if rp_added > 0:
+            try:
+                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
+            except Exception:
+                pass
         return {"claimed": True, "type": "daily", "reward": reward}
 
     if claim_type == "weekly":
@@ -404,7 +412,14 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["money"] = reward.get("money", 0) + WEEKLY_COMPLETION_BONUS.get("money", 0)
         reward["points"] = reward.get("points", 0) + WEEKLY_COMPLETION_BONUS.get("points", 0)
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
+        rp_before = int(user.get("rank_points") or 0)
+        rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_weekly_claimed": True}, "$inc": inc})
+        if rp_added > 0:
+            try:
+                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
+            except Exception:
+                pass
         return {"claimed": True, "type": "weekly", "reward": reward}
 
     if claim_type == "monthly":
@@ -422,7 +437,14 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["money"] = reward.get("money", 0) + MONTHLY_COMPLETION_BONUS.get("money", 0)
         reward["points"] = reward.get("points", 0) + MONTHLY_COMPLETION_BONUS.get("points", 0)
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
+        rp_before = int(user.get("rank_points") or 0)
+        rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_monthly_claimed": True}, "$inc": inc})
+        if rp_added > 0:
+            try:
+                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
+            except Exception:
+                pass
         return {"claimed": True, "type": "monthly", "reward": reward}
 
     raise HTTPException(status_code=400, detail="Invalid type")

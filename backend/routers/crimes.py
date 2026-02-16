@@ -82,6 +82,7 @@ from server import (
     get_rank_info,
     get_effective_event,
     log_activity,
+    maybe_process_rank_up,
     update_objectives_progress,
     CrimeResponse,
     CommitCrimeResponse,
@@ -217,6 +218,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         ev = await get_effective_event()
         reward = int(reward * ev.get("kill_cash", 1.0))
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
+        rp_before = int(current_user.get("rank_points") or 0)
         await db.users.update_one(
             {"id": current_user["id"]},
             {
@@ -228,6 +230,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 }
             },
         )
+        try:
+            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+        except Exception as e:
+            logger.exception("Rank-up notification (crimes): %s", e)
         await db.crime_earnings.insert_one(
             {"user_id": current_user["id"], "amount": reward, "at": now}
         )

@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user
+from server import db, get_current_user, maybe_process_rank_up
 
 
 class ProtectionRacketRequest(BaseModel):
@@ -60,6 +60,7 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             extortion_amount = target_money
         rank_points = 10
         if extortion_amount > 0:
+            rp_before = int(current_user.get("rank_points") or 0)
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$inc": {"money": extortion_amount, "rank_points": rank_points}}
@@ -68,6 +69,10 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
                 {"id": target["id"]},
                 {"$inc": {"money": -extortion_amount}}
             )
+            try:
+                await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+            except Exception:
+                pass
         await db.extortions.update_one(
             {"extorter_id": current_user["id"], "target_id": target["id"], "property_id": request.property_id},
             {"$set": {"timestamp": datetime.now(timezone.utc).isoformat(), "amount": extortion_amount}},

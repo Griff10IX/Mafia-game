@@ -1,15 +1,19 @@
 # GTA endpoints: options, attempt, garage, melt
+import logging
 from datetime import datetime, timezone, timedelta
 import random
 import uuid
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
+logger = logging.getLogger(__name__)
+
 from server import (
     db,
     get_current_user,
     get_rank_info,
     get_effective_event,
+    maybe_process_rank_up,
     RANKS,
     CARS,
     TRAVEL_TIMES,
@@ -255,10 +259,15 @@ async def attempt_gta(
                 "acquired_at": datetime.now(timezone.utc).isoformat(),
             }
         )
+        rp_before = int(current_user.get("rank_points") or 0)
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": {"money": car["value"], "rank_points": rank_points, "total_gta": 1}},
         )
+        try:
+            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+        except Exception as e:
+            logger.exception("Rank-up notification (GTA): %s", e)
         try:
             await update_objectives_progress(current_user["id"], "gta", 1)
         except Exception:
