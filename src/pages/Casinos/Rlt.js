@@ -100,7 +100,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
         style={{
           inset: 14,
           transform: `rotate(${rotationDeg}deg)`,
-          transition: spinning ? `transform ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.6, 0.15, 1)` : 'none',
+          transition: spinning ? `transform ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.0, 0.18, 1.0)` : 'none',
           willChange: 'transform',
         }}
       >
@@ -250,7 +250,6 @@ export default function Rlt() {
   const [useAnimation, setUseAnimation] = useState(true);
   const [spinning, setSpinning] = useState(false);
   const [lastResult, setLastResult] = useState(null);
-  const [wheelTargetResult, setWheelTargetResult] = useState(null);
   const [wheelRotation, setWheelRotation] = useState(0);
   const [recentNumbers, setRecentNumbers] = useState([]);
   const [showWin, setShowWin] = useState(false);
@@ -276,13 +275,16 @@ export default function Rlt() {
 
   useEffect(() => () => { if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current); }, []);
 
-  useEffect(() => {
-    if (wheelTargetResult == null) return;
-    const idx = WHEEL_ORDER.indexOf(wheelTargetResult);
-    if (idx < 0) return;
-    const finalRotation = 12 * 360 - idx * SEG;
-    requestAnimationFrame(() => requestAnimationFrame(() => setWheelRotation(finalRotation)));
-  }, [wheelTargetResult]);
+  const startWheelSpin = (resultNum) => {
+    const idx = WHEEL_ORDER.indexOf(resultNum);
+    const finalRotation = 10 * 360 - (idx >= 0 ? idx : 0) * SEG;
+    setSpinning(true);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setWheelRotation(finalRotation);
+      });
+    });
+  };
 
   const chipValue = customChip ? (parseInt(String(customChip).replace(/\D/g, ''), 10) || 0) : selectedChip;
   const totalBet = bets.reduce((s, b) => s + b.amount, 0);
@@ -322,7 +324,6 @@ export default function Rlt() {
     if (!canSpin) return;
     setLastResult(null);
     setShowWin(false);
-    setWheelTargetResult(null);
     setSpinning(false);
     setWheelRotation(0);
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
@@ -335,19 +336,14 @@ export default function Rlt() {
       if (!useAnimation) { applyResult(data); return; }
 
       pendingResultRef.current = data;
-      setSpinning(true);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setWheelTargetResult(data.result);
-        });
-      });
+      await new Promise((r) => setTimeout(r, 60));
+      startWheelSpin(data.result);
       spinTimeoutRef.current = setTimeout(() => {
         spinTimeoutRef.current = null;
         if (pendingResultRef.current) applyResult(pendingResultRef.current);
-      }, SPIN_DURATION_MS + 80);
+      }, SPIN_DURATION_MS + 200);
     } catch (e) {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
-      setWheelTargetResult(null);
       toast.error(e.response?.data?.detail || 'Spin failed');
       setSpinning(false);
     }
