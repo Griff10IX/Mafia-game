@@ -107,6 +107,7 @@ export default function BuyCars() {
         owner: 'Dealer',
         rarity: c.rarity || 'common',
         canBuy: c.can_buy && (userMoney ?? 0) >= (c.dealer_price ?? 0),
+        damage_percent: 0,
       });
     });
     marketplaceListings.forEach((l) => {
@@ -120,6 +121,7 @@ export default function BuyCars() {
         owner: l.seller_username ?? '?',
         rarity: l.rarity || 'common',
         canBuy: (userMoney ?? 0) >= (l.sale_price ?? 0),
+        damage_percent: l.damage_percent ?? 0,
       });
     });
     return rows;
@@ -226,7 +228,7 @@ export default function BuyCars() {
       </div>
 
       <p className="text-[10px] text-mutedForeground font-heading">
-        Dealer stock replenishes in 1–2 hours. Dealer prices are inflated; check marketplace for player listings.
+        Dealer stock replenishes in 1–2 hours; dealer prices are inflated. Player listings appear in the table below (Owner shows seller).
       </p>
 
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
@@ -278,6 +280,7 @@ export default function BuyCars() {
                 </th>
                 <th className="text-left py-1 px-2">Car</th>
                 <th className="text-right py-1 px-2">Price</th>
+                <th className="text-right py-1 px-2">Damage</th>
                 <th className="text-right py-1 px-2">Speed</th>
                 <th className="text-right py-1 px-2">Owner</th>
               </tr>
@@ -302,10 +305,19 @@ export default function BuyCars() {
                     <span className={`font-heading font-bold ${RARITY_COLOR[row.rarity] || 'text-foreground'}`}>
                       {RARITY_LABELS[row.rarity] || row.rarity}:
                     </span>{' '}
-                    <span className="font-heading text-foreground">{row.name}</span>
+                    {row.source === 'listing' && row.userCarId ? (
+                      <Link to={`/view-car?id=${encodeURIComponent(row.userCarId)}`} className="font-heading text-foreground hover:text-primary transition-colors">
+                        {row.name}
+                      </Link>
+                    ) : (
+                      <span className="font-heading text-foreground">{row.name}</span>
+                    )}
                   </td>
                   <td className="py-1 px-2 text-right font-heading font-bold text-emerald-400">
                     ${(row.price || 0).toLocaleString()}
+                  </td>
+                  <td className="py-1 px-2 text-right text-mutedForeground font-heading">
+                    {row.source === 'dealer' ? '—' : `${row.damage_percent ?? 0}%`}
                   </td>
                   <td className="py-1 px-2 text-right text-mutedForeground font-heading">{row.speed} secs</td>
                   <td className="py-1 px-2 text-right font-heading text-foreground">{row.owner}</td>

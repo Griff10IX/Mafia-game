@@ -238,12 +238,16 @@ export default function SellCars() {
                         </button>
                       )}
                     </td>
-                    <td className="py-1 px-2 font-heading text-foreground">{car.name}</td>
+                    <td className="py-1 px-2 font-heading">
+                      <Link to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`} className="text-foreground hover:text-primary transition-colors">
+                        {car.name}
+                      </Link>
+                    </td>
                     <td className="py-1 px-2 text-right font-heading text-emerald-400">
                       {isListed ? `$${(car.sale_price ?? 0).toLocaleString()}` : '—'}
                     </td>
                     <td className="py-1 px-2 text-right text-mutedForeground font-heading">{bullets}</td>
-                    <td className="py-1 px-2 text-right text-mutedForeground font-heading">—</td>
+                    <td className="py-1 px-2 text-right font-heading">{car.damage_percent != null ? `${car.damage_percent}%` : '—'}</td>
                     <td className="py-1 px-2 text-right text-mutedForeground font-heading">{speed} secs</td>
                   </tr>
                 );

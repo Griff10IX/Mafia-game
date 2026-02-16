@@ -145,8 +145,14 @@ const DestinationCard = ({
         {/* Custom Car */}
         {travelInfo?.custom_car && (
           <button
-            onClick={() => onTravel(destination, 'custom')}
-            className="w-full flex items-center justify-between bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 px-3 py-2.5 rounded-md transition-all active:scale-95 touch-manipulation"
+            onClick={() => travelInfo.custom_car?.can_travel !== false && onTravel(destination, 'custom')}
+            disabled={travelInfo.custom_car?.can_travel === false}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-all touch-manipulation ${
+              travelInfo.custom_car?.can_travel !== false
+                ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
+                : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
+            }`}
+            title={travelInfo.custom_car?.can_travel === false ? 'Too damaged — repair in garage' : undefined}
           >
             <span className="flex items-center gap-2">
               <Zap size={18} className="text-primary" />
@@ -154,6 +160,11 @@ const DestinationCard = ({
             </span>
             <span className="text-xs text-mutedForeground font-heading">
               {travelInfo.custom_car.travel_time}s
+              {travelInfo.custom_car?.damage_percent != null && (
+                <span className={travelInfo.custom_car.damage_percent >= 100 ? ' text-red-400' : ''}>
+                  {' '}· {travelInfo.custom_car.damage_percent}%
+                </span>
+              )}
             </span>
           </button>
         )}
@@ -162,15 +173,22 @@ const DestinationCard = ({
         {travelInfo?.cars?.slice(0, 3).map(car => (
           <button
             key={car.user_car_id}
-            onClick={() => onTravel(destination, car.user_car_id)}
-            className="w-full flex items-center justify-between bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 px-3 py-2.5 rounded-md transition-all active:scale-95 touch-manipulation"
+            onClick={() => car.can_travel !== false && onTravel(destination, car.user_car_id)}
+            disabled={car.can_travel === false}
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-all touch-manipulation ${
+              car.can_travel !== false
+                ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
+                : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
+            }`}
+            title={car.can_travel === false ? 'Too damaged — repair in garage' : undefined}
           >
             <span className="flex items-center gap-2 min-w-0 flex-1">
               <Car size={18} className="text-primary shrink-0" />
               <span className="text-sm font-heading truncate">{car.name}</span>
             </span>
-            <span className="text-xs text-mutedForeground font-heading whitespace-nowrap ml-2">
+            <span className={`text-xs font-heading whitespace-nowrap ml-2 ${car.can_travel === false ? 'text-red-400' : 'text-mutedForeground'}`}>
               {car.travel_time}s
+              {car.damage_percent != null && ` · ${car.damage_percent}%`}
             </span>
           </button>
         ))}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Image as ImageIcon } from 'lucide-react';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Image as ImageIcon, Wrench } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -195,9 +195,11 @@ const ActionsBar = ({
   </div>
 );
 
-const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor }) => {
+const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repairingCarId, getRarityColor }) => {
   const isCustom = car.car_id === 'car_custom';
   const isListed = car.listed_for_sale;
+  const damage = car.damage_percent ?? 0;
+  const isRepairing = repairingCarId === car.user_car_id;
   const handleClick = () => {
     if (isCustom) onOpenCustomModal(car);
     else if (!isListed) onToggle(car.user_car_id);
@@ -245,7 +247,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
       </div>
       
       <Link
-        to={`/gta/car/${car.car_id}`}
+        to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
         onClick={(e) => e.stopPropagation()}
         className="text-[11px] font-heading font-bold text-foreground hover:text-primary transition-colors truncate block mb-0.5"
       >
@@ -255,6 +257,24 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
       <div className="text-[10px] text-primary font-heading font-bold">
         ${car.value.toLocaleString()}
       </div>
+      {damage >= 100 ? (
+        <p className="text-[9px] font-heading text-red-400 mt-0.5">100% — scrap/melt only</p>
+      ) : damage > 0 && !isListed && (
+        <div className="flex items-center justify-between gap-1 mt-1">
+          <span className="text-[9px] font-heading text-mutedForeground">{damage}% damage</span>
+          {onRepair && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onRepair(car); }}
+              disabled={isRepairing}
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/50 text-[8px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
+            >
+              <Wrench size={10} />
+              {isRepairing ? '...' : 'Repair'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -416,6 +436,7 @@ export default function Garage() {
   const [meltScrapRarities, setMeltScrapRarities] = useState(() => loadMeltScrapRarities());
   const [meltScrapSettingsOpen, setMeltScrapSettingsOpen] = useState(false);
   const [meltScrapSettingsDraft, setMeltScrapSettingsDraft] = useState([]);
+  const [repairingCarId, setRepairingCarId] = useState(null);
 
   useEffect(() => {
     fetchGarage();
@@ -441,6 +462,21 @@ export default function Garage() {
   const openCustomCarModal = (car) => {
     setCustomCarModal(car);
     setCustomCarImageUrl(car.image || '');
+  };
+
+  const handleRepair = async (car) => {
+    if (!car?.user_car_id) return;
+    setRepairingCarId(car.user_car_id);
+    try {
+      const res = await api.post('/gta/repair-car', { user_car_id: car.user_car_id });
+      toast.success(res.data?.message || 'Repaired');
+      refreshUser();
+      fetchGarage();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Repair failed');
+    } finally {
+      setRepairingCarId(null);
+    }
   };
 
   const saveCustomCarImage = async () => {
@@ -595,6 +631,8 @@ export default function Garage() {
                 isSelected={selectedCars.includes(car.user_car_id)}
                 onToggle={toggleSelect}
                 onOpenCustomModal={openCustomCarModal}
+                onRepair={handleRepair}
+                repairingCarId={repairingCarId}
                 getRarityColor={getRarityColor}
               />
             ))}

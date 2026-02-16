@@ -38,6 +38,8 @@ export default function AutoRank() {
     total_cash: 0,
     running_seconds: 0,
     best_cars: [],
+    total_booze_runs: 0,
+    next_oc_at: null,
   });
 
   const formatRunningTime = (seconds) => {
@@ -50,6 +52,26 @@ export default function AutoRank() {
     if (h > 0) parts.push(`${h}h`);
     if (m > 0 || parts.length === 0) parts.push(`${m}m`);
     return parts.join(' ');
+  };
+
+  const formatNextOcAt = (iso) => {
+    if (!iso) return { text: 'Ready', at: null };
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return { text: 'Ready', at: null };
+      const now = Date.now();
+      if (d.getTime() <= now) return { text: 'Ready', at: null };
+      const secs = Math.floor((d.getTime() - now) / 1000);
+      const h = Math.floor(secs / 3600);
+      const m = Math.floor((secs % 3600) / 60);
+      const parts = [];
+      if (h > 0) parts.push(`${h}h`);
+      if (m > 0 || parts.length === 0) parts.push(`${m}m`);
+      const atStr = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      return { text: parts.join(' '), at: atStr };
+    } catch {
+      return { text: 'Ready', at: null };
+    }
   };
 
   useEffect(() => {
@@ -82,6 +104,8 @@ export default function AutoRank() {
             total_cash: statsRes.data.total_cash ?? 0,
             running_seconds: statsRes.data.running_seconds ?? 0,
             best_cars: statsRes.data.best_cars ?? [],
+            total_booze_runs: statsRes.data.total_booze_runs ?? 0,
+            next_oc_at: statsRes.data.next_oc_at ?? null,
           });
         }
         if (checkRes.data?.is_admin) {
@@ -382,6 +406,23 @@ export default function AutoRank() {
                   <Clock className="w-4 h-4 text-primary" />
                   <span className="text-mutedForeground">Running:</span>
                   <span className="text-foreground font-medium">{formatRunningTime(stats.running_seconds)}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Briefcase className="w-4 h-4 text-primary" />
+                  <span className="text-mutedForeground">Next OC:</span>
+                  <span className="text-foreground font-medium">
+                    {stats.next_oc_at
+                      ? (() => {
+                          const { text, at } = formatNextOcAt(stats.next_oc_at);
+                          return at ? `in ${text} (at ${at})` : text;
+                        })()
+                      : 'Ready'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Wine className="w-4 h-4 text-primary" />
+                  <span className="text-mutedForeground">Booze runs:</span>
+                  <span className="text-foreground font-medium">{stats.total_booze_runs.toLocaleString()}</span>
                 </div>
               </div>
               {stats.best_cars && stats.best_cars.length > 0 && (

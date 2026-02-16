@@ -5,7 +5,7 @@ from datetime import datetime, timezone, timedelta
 import random
 import uuid
 from typing import List, Optional, Dict
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from bson.objectid import ObjectId
 from pydantic import BaseModel
 
@@ -48,6 +48,10 @@ class GTADelistCarRequest(BaseModel):
 
 
 class GTABuyListedCarRequest(BaseModel):
+    user_car_id: str
+
+
+class GTARepairCarRequest(BaseModel):
     user_car_id: str
 
 
@@ -280,6 +284,11 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         if not available_cars:
             available_cars = [c for c in CARS if c["min_difficulty"] == 1]
         car = random.choice(available_cars)
+        # Stolen car damage: 15–77% common; 0–14% uncommon but possible
+        if random.random() < 0.08:
+            damage_percent = random.randint(0, 14)
+        else:
+            damage_percent = random.randint(15, 77)
         rank_points_map = {
             "common": 5,
             "uncommon": 10,
@@ -296,6 +305,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
                 "car_id": car["id"],
                 "car_name": car["name"],
                 "acquired_at": datetime.now(timezone.utc).isoformat(),
+                "damage_percent": damage_percent,
             }
         )
         rp_before = int(current_user.get("rank_points") or 0)
@@ -461,6 +471,7 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
                 "car_id": car_id,
                 "car_name": user_car.get("car_name"),
                 "acquired_at": user_car.get("acquired_at"),
+                "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
                 **car_info,
             }
             if user_car.get("listed_for_sale"):
@@ -594,6 +605,7 @@ async def buy_car(
         "car_id": request.car_id,
         "car_name": car_info.get("name"),
         "acquired_at": now.isoformat(),
+        "damage_percent": 0,
     }
     await db.user_cars.insert_one(doc)
     await db.users.update_one(
@@ -613,7 +625,7 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
     """List cars that other players have listed for sale (cash). Excludes current user's own listings."""
     cursor = db.user_cars.find(
         {"listed_for_sale": True, "user_id": {"$ne": current_user["id"]}},
-        {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "sale_price": 1, "listed_at": 1},
+        {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1},
     ).sort("listed_at", -1)
     listings = await cursor.to_list(200)
     out = []
@@ -634,6 +646,7 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
             "image": car_info.get("image"),
             "sale_price": uc.get("sale_price", 0),
             "listed_at": uc.get("listed_at"),
+            "damage_percent": min(100, max(0, float(uc.get("damage_percent", 0)))),
         })
     return {"listings": out}
 
@@ -738,6 +751,49 @@ async def buy_listed_car(
     }
 
 
+# Repair cost = (damage% / 100) * (car value * 0.2) — 100% damage = 20% of value
+REPAIR_COST_FRACTION = 0.2
+
+
+async def repair_car(
+    request: GTARepairCarRequest, current_user: dict = Depends(get_current_user)
+):
+    """Repair a car in the garage (pay cash to set damage to 0)."""
+    user_car = await db.user_cars.find_one(
+        {"user_id": current_user["id"], "id": request.user_car_id}
+    )
+    if not user_car:
+        try:
+            user_car = await db.user_cars.find_one(
+                {"user_id": current_user["id"], "_id": ObjectId(request.user_car_id)}
+            )
+        except Exception:
+            user_car = None
+    if not user_car:
+        raise HTTPException(status_code=404, detail="Car not found in your garage")
+    damage = min(100, max(0, float(user_car.get("damage_percent", 0))))
+    if damage <= 0:
+        return {"message": "No repair needed", "damage_percent": 0}
+    car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
+    if not car_info:
+        raise HTTPException(status_code=400, detail="Car type not found")
+    value = int(car_info.get("value", 0))
+    cost = max(1, round((damage / 100) * value * REPAIR_COST_FRACTION))
+    if current_user.get("money", 0) < cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient money. Repair costs ${cost:,}.")
+    if user_car.get("_id") is not None:
+        q = {"_id": user_car["_id"]}
+    else:
+        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+    await db.user_cars.update_one(q, {"$set": {"damage_percent": 0}})
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+    return {
+        "message": f"Repaired for ${cost:,}. Damage 0%.",
+        "damage_percent": 0,
+        "cost": cost,
+    }
+
+
 async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
     """Return full car details by id (for profile page)."""
     car = next((c for c in CARS if c.get("id") == car_id), None)
@@ -750,6 +806,54 @@ async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
         out["travel_time"] = TRAVEL_TIMES.get("custom", 20)
     else:
         out["travel_time"] = TRAVEL_TIMES.get(rarity, 45)
+    return out
+
+
+async def get_view_car(
+    id: str = Query(..., alias="id", description="Personal car instance id (user_car_id)"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Return a specific car instance by its personal id (user_car_id). Own car: full details. Others: only if listed for sale."""
+    user_car = await db.user_cars.find_one({"id": id})
+    if not user_car:
+        try:
+            user_car = await db.user_cars.find_one({"_id": ObjectId(id)})
+        except Exception:
+            user_car = None
+    if not user_car:
+        raise HTTPException(status_code=404, detail="Car not found")
+    car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
+    if not car_info:
+        raise HTTPException(status_code=404, detail="Car not found")
+    owner_id = user_car.get("user_id")
+    rarity = car_info.get("rarity") or "common"
+    travel_time = TRAVEL_TIMES.get("custom", 20) if car_info.get("id") == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
+    damage_percent = min(100, max(0, float(user_car.get("damage_percent", 0))))
+    name = user_car.get("car_name") or car_info.get("name")
+    image = car_info.get("image")
+    if user_car.get("car_id") == "car_custom" and user_car.get("custom_image_url"):
+        image = user_car.get("custom_image_url")
+    out = {
+        **{k: v for k, v in car_info.items()},
+        "user_car_id": user_car.get("id"),
+        "name": name,
+        "image": image,
+        "damage_percent": damage_percent,
+        "travel_time": travel_time,
+        "value": car_info.get("value", 0),
+    }
+    if owner_id == current_user["id"]:
+        out["owner"] = "you"
+        out["listed_for_sale"] = bool(user_car.get("listed_for_sale"))
+        out["sale_price"] = user_car.get("sale_price")
+    else:
+        if not user_car.get("listed_for_sale"):
+            raise HTTPException(status_code=404, detail="Car not found")
+        seller = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
+        out["owner"] = "listing"
+        out["seller_username"] = (seller or {}).get("username", "?")
+        out["sale_price"] = user_car.get("sale_price")
+        out["listed_for_sale"] = True
     return out
 
 
@@ -771,3 +875,5 @@ def register(router):
     router.add_api_route("/gta/list-car", list_car, methods=["POST"])
     router.add_api_route("/gta/delist-car", delist_car, methods=["POST"])
     router.add_api_route("/gta/buy-listed-car", buy_listed_car, methods=["POST"])
+    router.add_api_route("/gta/repair-car", repair_car, methods=["POST"])
+    router.add_api_route("/gta/view-car", get_view_car, methods=["GET"])

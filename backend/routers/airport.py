@@ -1,6 +1,7 @@
 # Travel (info, travel, buy-airmiles) and Airports (list, claim, set-price, transfer, sell-on-trade)
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import random
 import time
 from pydantic import BaseModel
 
@@ -130,6 +131,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             user_car_id = uc.get("id") or str(uc["_id"])
             name = car_info["name"]
             image = car_info.get("image", "")
+            damage_percent = min(100, max(0, float(uc.get("damage_percent", 0))))
             if uc.get("car_id") == "car_custom":
                 if uc.get("custom_name"):
                     name = uc["custom_name"]
@@ -141,16 +143,21 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
                 "name": name,
                 "rarity": car_info["rarity"],
                 "travel_time": travel_time,
-                "image": image
+                "image": image,
+                "damage_percent": damage_percent,
+                "can_travel": damage_percent < 100,
             })
 
     custom_car = None
     first_custom = next((uc for uc in user_cars if uc.get("car_id") == "car_custom"), None)
     if first_custom:
+        custom_damage = min(100, max(0, float(first_custom.get("damage_percent", 0))))
         custom_car = {
             "name": first_custom.get("custom_name") or "Custom Car",
             "travel_time": TRAVEL_TIMES["custom"],
-            "image": first_custom.get("custom_image_url") or ""
+            "image": first_custom.get("custom_image_url") or "",
+            "damage_percent": custom_damage,
+            "can_travel": custom_damage < 100,
         }
 
     max_travels = MAX_TRAVELS_PER_HOUR + current_user.get("extra_airmiles", 0)
@@ -208,13 +215,18 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     return payload
 
 
+# Booze run: 0.3% damage per run. Custom and exclusive take no damage.
+BOOZE_RUN_DAMAGE_PERCENT = 0.3
+
+
 async def _start_travel_impl(
     user: dict,
     destination: str,
     travel_method: str,
     airport_slot: Optional[int] = None,
+    booze_run: bool = False,
 ) -> dict:
-    """Start travel for user (by user dict). Returns {message, travel_time, destination} or raises HTTPException. Used by travel() and auto_rank booze."""
+    """Start travel for user (by user dict). Returns {message, travel_time, destination} or raises HTTPException. Used by travel() and auto_rank booze. If booze_run=True, damage is 0.3%% per run and custom/exclusive cars take no damage."""
     if destination not in STATES:
         raise HTTPException(status_code=400, detail="Invalid destination")
     now_utc = datetime.now(timezone.utc)
@@ -244,6 +256,7 @@ async def _start_travel_impl(
 
     travel_time = 45
     method_name = "Walking"
+    car_to_damage = None  # user_car doc to apply travel damage (2–4%) when travel_time > 0
 
     if travel_method == "airport":
         if _booze_user_carrying_total(user.get("booze_carrying") or {}) > 0:
@@ -278,8 +291,12 @@ async def _start_travel_impl(
         )
         if not first_custom:
             raise HTTPException(status_code=400, detail="You don't own a custom car")
+        if min(100, max(0, float(first_custom.get("damage_percent", 0)))) >= 100:
+            raise HTTPException(status_code=400, detail="That car is too damaged to travel. Repair or scrap it in the garage.")
         travel_time = TRAVEL_TIMES["custom"]
         method_name = first_custom.get("custom_name") or "Custom Car"
+        # Custom car never takes damage (manual or booze)
+        car_to_damage = None
     else:
         user_car = await db.user_cars.find_one(
             {"id": travel_method, "user_id": user["id"]},
@@ -295,10 +312,17 @@ async def _start_travel_impl(
                 user_car = None
         if not user_car:
             raise HTTPException(status_code=400, detail="Car not found")
+        if min(100, max(0, float(user_car.get("damage_percent", 0)))) >= 100:
+            raise HTTPException(status_code=400, detail="That car is too damaged to travel. Repair or scrap it in the garage.")
         car_info = next((c for c in CARS if c["id"] == user_car["car_id"]), None)
         if car_info:
             travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
             method_name = car_info["name"]
+        # Custom and exclusive cars never take damage (manual or booze)
+        if car_info and car_info.get("rarity") == "exclusive":
+            car_to_damage = None
+        else:
+            car_to_damage = user_car
 
     if travel_time <= 0:
         await db.users.update_one(
@@ -311,6 +335,18 @@ async def _start_travel_impl(
             {"id": user["id"]},
             {"$set": {"traveling_to": destination, "travel_arrives_at": arrives_at}, "$inc": {"travels_this_hour": 1}}
         )
+        if car_to_damage:
+            current_damage = min(100, max(0, float(car_to_damage.get("damage_percent", 0))))
+            if booze_run:
+                add_damage = BOOZE_RUN_DAMAGE_PERCENT  # 0.3% per run
+            else:
+                add_damage = random.randint(2, 4)
+            new_damage = round(min(100, current_damage + add_damage), 1)
+            if car_to_damage.get("_id") is not None:
+                q = {"_id": car_to_damage["_id"]}
+            else:
+                q = {"user_id": user["id"], "id": car_to_damage.get("id")}
+            await db.user_cars.update_one(q, {"$set": {"damage_percent": new_damage}})
 
     _invalidate_travel_info_cache(user["id"])
     return {

@@ -13,6 +13,7 @@ import Garage from "./pages/Garage";
 import SellCars from "./pages/SellCars";
 import BuyCars from "./pages/BuyCars";
 import CarProfile from "./pages/CarProfile";
+import ViewCar from "./pages/ViewCar";
 import Jail from "./pages/Jail";
 import OrganisedCrime from "./pages/OrganisedCrime";
 import Attack from "./pages/Attack";
@@ -221,6 +222,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <CarProfile />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/view-car"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ViewCar />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

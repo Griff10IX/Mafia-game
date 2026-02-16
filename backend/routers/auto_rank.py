@@ -91,6 +91,15 @@ async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime
     )
 
 
+async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime):
+    """Record one completed booze run (sell for profit)."""
+    await _ensure_stats_since(db, user_id, now)
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"auto_rank_total_booze_runs": 1}},
+    )
+
+
 async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
     """Send an immediate Telegram when Auto Rank puts the user in jail (bust/crime/GTA failed)."""
     from security import send_telegram_to_chat
@@ -175,6 +184,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                     profit = out.get("profit") or 0
                     if out.get("is_run") and profit:
                         lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
+                        await _update_auto_rank_stats_booze(db, user_id, now)
                         has_success = True
                     user = await db.users.find_one({"id": user_id}, {"_id": 0})
                     if not user:
@@ -214,7 +224,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                             if first_car:
                                 travel_method = first_car.get("id") or str(first_car.get("_id", ""))
                         if travel_method:
-                            await _start_travel_impl(user, city_b, travel_method)
+                            await _start_travel_impl(user, city_b, travel_method, airport_slot=None, booze_run=True)
                             lines.append(f"**Booze** — Bought {amount} at {city_a}, traveling to {city_b}.")
                             has_success = True
                     except HTTPException:
@@ -236,6 +246,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                     profit = out.get("profit") or 0
                     if out.get("is_run") and profit:
                         lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
+                        await _update_auto_rank_stats_booze(db, user_id, now)
                         has_success = True
                     user = await db.users.find_one({"id": user_id}, {"_id": 0})
                     if not user:
@@ -275,7 +286,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                             if first_car:
                                 travel_method = first_car.get("id") or str(first_car.get("_id", ""))
                         if travel_method:
-                            await _start_travel_impl(user, city_a, travel_method)
+                            await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
                             lines.append(f"**Booze** — Bought {amount} at {city_b}, traveling to {city_a}.")
                             has_success = True
                     except HTTPException:
@@ -697,15 +708,31 @@ def register(router):
 
     @router.get("/auto-rank/stats")
     async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
-        """Get current user's Auto Rank lifetime stats: busts, crimes, GTAs, cash, running time, best cars."""
+        """Get current user's Auto Rank lifetime stats: busts, crimes, GTAs, cash, running time, best cars, booze runs, next OC at."""
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1},
+            {
+                "_id": 0,
+                "auto_rank_stats_since": 1,
+                "auto_rank_total_busts": 1,
+                "auto_rank_total_crimes": 1,
+                "auto_rank_total_gtas": 1,
+                "auto_rank_total_cash": 1,
+                "auto_rank_best_cars": 1,
+                "auto_rank_total_booze_runs": 1,
+                "oc_cooldown_until": 1,
+            },
         )
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
         now = datetime.now(timezone.utc)
         running_seconds = int((now - since).total_seconds()) if since and since <= now else 0
         best_cars = (u or {}).get("auto_rank_best_cars") or []
+        oc_until = (u or {}).get("oc_cooldown_until")
+        next_oc_at = None
+        if oc_until:
+            until_dt = _parse_iso(oc_until)
+            if until_dt and until_dt > now:
+                next_oc_at = oc_until
         return {
             "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
             "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
@@ -714,6 +741,8 @@ def register(router):
             "stats_since": (u or {}).get("auto_rank_stats_since"),
             "running_seconds": max(0, running_seconds),
             "best_cars": [{"name": c.get("name", "?"), "value": int(c.get("value", 0) or 0)} for c in best_cars],
+            "total_booze_runs": int((u or {}).get("auto_rank_total_booze_runs") or 0),
+            "next_oc_at": next_oc_at,
         }
 
     @router.patch("/auto-rank/me")
