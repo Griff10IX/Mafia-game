@@ -212,6 +212,33 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
+/* Original theme – pre-custom-theme button look (horizontal gradient, 2px radius, no glossy) */
+[data-button-style="original"] .btnPrimary {
+  background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4));
+  border: 1px solid rgba(var(--noir-button-primary-rgb), 0.5);
+  border-top-color: inherit;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+[data-button-style="original"] .btnPrimary:hover {
+  opacity: 0.9;
+  box-shadow: none;
+}
+
+[data-button-style="original"] .btnGoldDarkText {
+  background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4));
+  border: 1px solid rgba(var(--noir-button-primary-rgb), 0.5);
+  border-top-color: inherit;
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+[data-button-style="original"] .btnGoldDarkText:hover {
+  opacity: 0.92;
+  box-shadow: none;
+}
+
 /* Active tab (login): darker gold background, bright gold text */
 .tabActive {
   background: var(--noir-tab-bg);

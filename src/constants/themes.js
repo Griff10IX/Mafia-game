@@ -248,11 +248,12 @@ export const DEFAULT_TEXTURE_ID = 'none';
  * buttonColourId / accentLineColourId: null = use main colour.
  */
 export const THEME_PRESETS = [
+  { id: 'original', name: 'Original theme', description: 'Default look before custom themes', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'default', name: 'Classic Mafia', description: 'Gold, no texture', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'dark-mode', name: 'Dark Mode', description: 'Slate accents, clean', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'telegram', name: 'Telegram', description: 'Teal / sky blue', colourId: 'sky', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'facebook', name: 'Facebook', description: 'Blue accent', colourId: 'blue', textureId: 'none', buttonColourId: null, accentLineColourId: null },
-  { id: 'glossy-gold', name: 'Glossy Gold', description: 'Rich gold, subtle grain', colourId: 'glossy-gold', textureId: 'grain', buttonColourId: null, accentLineColourId: null },
+  { id: 'glossy-gold', name: 'Glossy Gold', description: 'Rich gold', colourId: 'glossy-gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'glossy-teal', name: 'Glossy Teal', description: 'Shiny teal', colourId: 'glossy-teal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'matte', name: 'Matte', description: 'Muted, flat look', colourId: 'matte-sage', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'midnight', name: 'Midnight', description: 'Deep blue / indigo', colourId: 'midnight', textureId: 'none', buttonColourId: null, accentLineColourId: null },
@@ -262,21 +263,21 @@ export const THEME_PRESETS = [
   { id: 'ember', name: 'Ember', description: 'Dark red / orange', colourId: 'tone-4-ember', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'lavender-dream', name: 'Lavender Dream', description: 'Soft purple gradient', colourId: 'tone-3-lavender', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'noir-matte', name: 'Noir Matte', description: 'Charcoal, minimal', colourId: 'charcoal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
-  { id: 'vintage-paper', name: 'Vintage Paper', description: 'Sepia + paper texture', colourId: 'sepia', textureId: 'paper', buttonColourId: null, accentLineColourId: null },
-  { id: 'carbon-pro', name: 'Carbon Pro', description: 'Dark with carbon texture', colourId: 'carbon', textureId: 'carbon', buttonColourId: null, accentLineColourId: null },
+  { id: 'vintage-paper', name: 'Vintage Paper', description: 'Sepia', colourId: 'sepia', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'carbon-pro', name: 'Carbon Pro', description: 'Dark carbon', colourId: 'carbon', textureId: 'none', buttonColourId: null, accentLineColourId: null },
 
   /* Mafia vibes */
-  { id: 'old-school-mafia', name: 'Old School Mafia', description: '1920s gold, paper grain', colourId: 'gold', textureId: 'paper', buttonColourId: null, accentLineColourId: null },
-  { id: 'old-school-mafia-noir', name: 'Old School Mafia Noir', description: 'Film noir, charcoal + gold', colourId: 'charcoal', textureId: 'grain', buttonColourId: null, accentLineColourId: null },
+  { id: 'old-school-mafia', name: 'Old School Mafia', description: '1920s gold', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'old-school-mafia-noir', name: 'Old School Mafia Noir', description: 'Film noir, charcoal + gold', colourId: 'charcoal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'modern-mafia', name: 'Modern Mafia', description: 'Clean slate blue', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },
-  { id: 'speakeasy', name: 'Speakeasy', description: 'Warm bronze, grain', colourId: 'bronze', textureId: 'grain', buttonColourId: null, accentLineColourId: null },
-  { id: 'godfather', name: 'The Godfather', description: 'Deep amber, linen', colourId: 'antique-brass', textureId: 'linen', buttonColourId: null, accentLineColourId: null },
+  { id: 'speakeasy', name: 'Speakeasy', description: 'Warm bronze', colourId: 'bronze', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'godfather', name: 'The Godfather', description: 'Deep amber', colourId: 'antique-brass', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'street-boss', name: 'Street Boss', description: 'Gunmetal + gold accent', colourId: 'gunmetal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
-  { id: 'sicilian', name: 'Sicilian', description: 'Terracotta warmth', colourId: 'terracotta', textureId: 'sand', buttonColourId: null, accentLineColourId: null },
+  { id: 'sicilian', name: 'Sicilian', description: 'Terracotta warmth', colourId: 'terracotta', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'boardroom', name: 'Boardroom', description: 'Navy, minimal', colourId: 'navy', textureId: 'none', buttonColourId: null, accentLineColourId: null },
-  { id: 'noir-gold', name: 'Noir Gold', description: 'Black & gold classic', colourId: 'gold', textureId: 'noise', buttonColourId: null, accentLineColourId: null },
-  { id: 'vintage-noir', name: 'Vintage Noir', description: 'Sepia noir, paper', colourId: 'sepia', textureId: 'paper', buttonColourId: null, accentLineColourId: null },
-  { id: 'concrete-boss', name: 'Concrete Boss', description: 'Steel, concrete texture', colourId: 'steel', textureId: 'concrete', buttonColourId: null, accentLineColourId: null },
+  { id: 'noir-gold', name: 'Noir Gold', description: 'Black & gold classic', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'vintage-noir', name: 'Vintage Noir', description: 'Sepia noir', colourId: 'sepia', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'concrete-boss', name: 'Concrete Boss', description: 'Steel', colourId: 'steel', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'blood-money', name: 'Blood & Money', description: 'Wine red, dark', colourId: 'wine', textureId: 'none', buttonColourId: null, accentLineColourId: null },
 ];
 

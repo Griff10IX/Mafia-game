@@ -6,6 +6,7 @@ const STORAGE_KEY_TEXTURE = 'app_theme_texture';
 const STORAGE_KEY_BUTTON = 'app_theme_button';
 const STORAGE_KEY_ACCENT_LINE = 'app_theme_accent_line';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
+const STORAGE_KEY_BUTTON_STYLE = 'app_theme_button_style'; // 'glossy' | 'original' (pre-theme button look)
 
 /** Convert saved custom theme to colour shape used by applyColourToDocument */
 function customToColour(custom) {
@@ -220,6 +221,18 @@ export function ThemeProvider({ children }) {
       return [];
     }
   });
+  const [buttonStyle, setButtonStyleState] = useState(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEY_BUTTON_STYLE);
+      return v === 'original' ? 'original' : 'glossy';
+    } catch {
+      return 'glossy';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-button-style', buttonStyle);
+  }, [buttonStyle]);
 
   useEffect(() => {
     const colour = getResolvedColour(colourId, customThemes);
@@ -313,6 +326,14 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setButtonStyle = useCallback((style) => {
+    const next = style === 'original' ? 'original' : 'glossy';
+    setButtonStyleState(next);
+    try {
+      localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, next);
+    } catch (_) {}
+  }, []);
+
   const value = {
     colourId,
     textureId,
@@ -324,6 +345,8 @@ export function ThemeProvider({ children }) {
     setAccentLineColour,
     resetButtonToDefault,
     resetAccentLineToDefault,
+    buttonStyle,
+    setButtonStyle,
     customThemes,
     addCustomTheme,
     removeCustomTheme,

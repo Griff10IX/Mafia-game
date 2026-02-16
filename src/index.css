@@ -142,6 +142,25 @@ a.from-primary:hover {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3) !important;
 }
 
+/* Original theme – pre-custom-theme button look (horizontal gradient, 2px radius, no glossy) */
+[data-button-style="original"] button.bg-primary,
+[data-button-style="original"] button.from-primary,
+[data-button-style="original"] a.bg-primary,
+[data-button-style="original"] a.from-primary {
+  background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
+  border: 1px solid rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5) !important;
+  border-top-color: inherit !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+}
+
+[data-button-style="original"] button.bg-primary:hover,
+[data-button-style="original"] button.from-primary:hover,
+[data-button-style="original"] a.bg-primary:hover,
+[data-button-style="original"] a.from-primary:hover {
+  box-shadow: none !important;
+}
+
 /* Glitch / chromatic aberration text effect for buttons (add class .btn-glitch-text) */
 .btn-glitch-text {
   text-shadow:
