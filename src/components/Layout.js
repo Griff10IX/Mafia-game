@@ -368,9 +368,9 @@ export default function Layout({ children }) {
           {/* Logo – thin gold line under header (match reference) */}
           <div className={`p-4 border-b ${styles.borderGoldLight}`}>
             <div className="flex items-center gap-2">
-              <div className="w-6 h-px" style={{ backgroundColor: 'var(--gm-gold)', opacity: 0.5 }} />
+              <div className="w-6 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
               <h1 className={`text-xl font-heading font-bold tracking-widest ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
-              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--gm-gold)', opacity: 0.5 }} />
+              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
             </div>
             <p className={`text-xs mt-1 font-heading tracking-wider text-center ${styles.sidebarHeaderSub}`}>Chicago, 1927</p>
           </div>
@@ -783,7 +783,7 @@ export default function Layout({ children }) {
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
                     <div className="w-10 sm:w-16" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
-                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-primary), var(--noir-primary-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
+                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
                   <span className="text-[10px] text-primary font-heading shrink-0">{progress.toFixed(0)}%</span>

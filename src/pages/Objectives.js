@@ -33,7 +33,7 @@ const ObjectiveRow = ({ obj }) => {
               style={{
                 width: `${progressPct}%`,
                 minWidth: progressPct > 0 ? 6 : 0,
-                background: 'linear-gradient(to right, var(--noir-primary), var(--noir-primary-dark))',
+                background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
               }}
               role="progressbar"
               aria-valuenow={obj.current}

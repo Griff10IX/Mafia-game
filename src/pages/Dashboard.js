@@ -87,10 +87,10 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
             </span>
           </div>
           
-          <div className="relative w-full h-3 bg-secondary rounded-full overflow-hidden border border-primary/20">
-            <div
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%`, minWidth: progressPct > 0 ? '8px' : 0 }}
+<div className="relative w-full h-3 bg-secondary rounded-full overflow-hidden border border-primary/20">
+              <div
+              className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
+              style={{ width: `${progressPct}%`, minWidth: progressPct > 0 ? '8px' : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }}
               role="progressbar"
               aria-valuenow={progressPct}
               aria-valuemin={0}
@@ -322,7 +322,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
             At a Glance
           </h2>
-          <div className="flex-1 h-px bg-primary/30" />
+          <div className="flex-1 h-px opacity-30" style={{ backgroundColor: 'var(--noir-accent-line)' }} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {stats.map((stat) => (
@@ -337,7 +337,7 @@ export default function Dashboard() {
           <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
             Quick Actions
           </h2>
-          <div className="flex-1 h-px bg-primary/30" />
+          <div className="flex-1 h-px opacity-30" style={{ backgroundColor: 'var(--noir-accent-line)' }} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
           {quickActions.map((action) => (

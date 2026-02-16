@@ -112,11 +112,25 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
       {/* Name */}
       <h3 className={`font-heading font-bold text-sm mb-2 ${locked ? 'text-zinc-400' : 'text-foreground'}`}>{racket.name}</h3>
 
-      {/* Level Bar */}
-      <div className="flex gap-0.5 mb-2">
-        {[...Array(maxLevel)].map((_, i) => (
-          <div key={i} className={`flex-1 h-1.5 rounded-full ${i < racket.level ? accent.bar : 'bg-zinc-700'}`} />
-        ))}
+      {/* Level Bar – same style as rank bar (gradient lighter → darker) */}
+      <div className="w-full mb-2" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden' }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: `${maxLevel ? (racket.level / maxLevel) * 100 : 0}%`,
+            minWidth: racket.level > 0 ? 4 : 0,
+            background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
+            borderRadius: 9999,
+            transition: 'width 0.3s ease',
+          }}
+          role="progressbar"
+          aria-valuenow={racket.level}
+          aria-valuemin={0}
+          aria-valuemax={maxLevel}
+        />
       </div>
 
       {/* Requirement */}
