@@ -208,31 +208,31 @@ export default function AutoRank() {
                 </button>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-heading text-foreground flex items-center gap-1.5">
+                <span className={`text-sm font-heading flex items-center gap-1.5 ${prefs.auto_rank_bust_every_5_sec ? 'text-mutedForeground' : 'text-foreground'}`}>
                   <Crosshair className="w-4 h-4 text-primary" /> Run crimes
                 </span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={prefs.auto_rank_crimes}
-                  disabled={savingPrefs || !prefs.auto_rank_enabled}
+                  disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
                   onClick={() => updatePref('auto_rank_crimes', !prefs.auto_rank_crimes)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs.auto_rank_crimes ? 'bg-primary border-primary/50' : 'bg-secondary border-border'} ${savingPrefs ? 'opacity-60' : ''}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs.auto_rank_crimes ? 'bg-primary border-primary/50' : 'bg-secondary border-border'} ${savingPrefs || prefs.auto_rank_bust_every_5_sec ? 'opacity-60' : ''}`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs.auto_rank_crimes ? 'translate-x-5' : 'translate-x-0.5'}`} />
                 </button>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-heading text-foreground flex items-center gap-1.5">
+                <span className={`text-sm font-heading flex items-center gap-1.5 ${prefs.auto_rank_bust_every_5_sec ? 'text-mutedForeground' : 'text-foreground'}`}>
                   <Car className="w-4 h-4 text-primary" /> Run GTA
                 </span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={prefs.auto_rank_gta}
-                  disabled={savingPrefs || !prefs.auto_rank_enabled}
+                  disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
                   onClick={() => updatePref('auto_rank_gta', !prefs.auto_rank_gta)}
-                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs.auto_rank_gta ? 'bg-primary border-primary/50' : 'bg-secondary border-border'} ${savingPrefs ? 'opacity-60' : ''}`}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs.auto_rank_gta ? 'bg-primary border-primary/50' : 'bg-secondary border-border'} ${savingPrefs || prefs.auto_rank_bust_every_5_sec ? 'opacity-60' : ''}`}
                 >
                   <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs.auto_rank_gta ? 'translate-x-5' : 'translate-x-0.5'}`} />
                 </button>
@@ -255,7 +255,7 @@ export default function AutoRank() {
             </div>
             {prefs.auto_rank_bust_every_5_sec && (
               <p className="text-xs text-amber-600 dark:text-amber-400 font-heading">
-                With this on, busts are tried every 5 seconds (even when you&apos;re in jail). Crimes and GTA still run at least every 5 minutes.
+                With this on, busts are tried every 5 seconds (even when you&apos;re in jail). When jail is empty, crimes and GTA run instead, then busting resumes. Run crimes / Run GTA are disabled here since this mode handles them.
               </p>
             )}
             <p className="text-xs text-mutedForeground font-heading">

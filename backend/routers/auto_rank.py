@@ -349,7 +349,21 @@ async def run_bust_5sec_loop():
                 if not chat_id:
                     continue
                 try:
-                    await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id)
+                    bust_target_username = None
+                    npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
+                    if npc:
+                        bust_target_username = npc.get("username")
+                    if not bust_target_username:
+                        jailed = await db.users.find_one(
+                            {"in_jail": True, "id": {"$ne": u["id"]}},
+                            {"_id": 0, "username": 1},
+                        )
+                        if jailed:
+                            bust_target_username = jailed.get("username")
+                    if bust_target_username:
+                        await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id)
+                    else:
+                        await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id)
                 except Exception as e:
                     logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
                 await asyncio.sleep(0.3)
