@@ -125,25 +125,16 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         if not user:
             return
         bust_result = await _attempt_bust_impl(user, bust_target_username)
-        if bust_result.get("error"):
-            msg = f"**Auto Rank** — {username}\n\n**Bust** — {bust_result.get('error', 'Failed')}."
-            await send_telegram_to_chat(telegram_chat_id, msg, token)
+        if bust_result.get("error") or not bust_result.get("success"):
             return
-        if bust_result.get("success"):
-            rp = bust_result.get("rank_points_earned") or 0
-            cash = bust_result.get("cash_reward") or 0
-            await _update_auto_rank_stats_bust(db, user_id, cash, datetime.now(timezone.utc))
-            parts = [f"Busted {bust_target_username}! +{rp} RP"]
-            if cash:
-                parts.append(f"${cash:,}")
-            msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
-        else:
-            msg = f"**Auto Rank** — {username}\n\n**Bust** — " + (bust_result.get("message") or "Failed.")
+        rp = bust_result.get("rank_points_earned") or 0
+        cash = bust_result.get("cash_reward") or 0
+        await _update_auto_rank_stats_bust(db, user_id, cash, datetime.now(timezone.utc))
+        parts = [f"Busted {bust_target_username}! +{rp} RP"]
+        if cash:
+            parts.append(f"${cash:,}")
+        msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
         await send_telegram_to_chat(telegram_chat_id, msg, token)
-        if not bust_result.get("success"):
-            user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "in_jail": 1})
-            if user_after and user_after.get("in_jail"):
-                await _send_jail_notification(telegram_chat_id, username, "bust failed", 30, token)
     except Exception as e:
         logger.exception("Auto rank bust-only for %s: %s", user_id, e)
 
@@ -169,28 +160,13 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if last_at and (now - last_at).total_seconds() < CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC:
             return
         if user.get("in_jail"):
-            await send_telegram_to_chat(
-                telegram_chat_id,
-                f"**Auto Rank** — {username}\n\nYou're in jail. No auto actions this run.",
-                token,
-            )
             return
 
     if not bust_every_5 and user.get("in_jail"):
-        await send_telegram_to_chat(
-            telegram_chat_id,
-            f"**Auto Rank** — {username}\n\nYou're in jail. No auto actions this run.",
-            token,
-        )
         return
 
-    await send_telegram_to_chat(
-        telegram_chat_id,
-        f"**Auto Rank** — {username}\n\nSending results…",
-        token,
-    )
-
     lines = [f"**Auto Rank** — {username}", ""]
+    has_success = False
 
     # --- Jail bust: one attempt per cycle (skip when bust_every_5_sec; they get busts in the 5-sec loop) ---
     if not bust_every_5:
@@ -209,32 +185,27 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             from routers.jail import _attempt_bust_impl
             try:
                 bust_result = await _attempt_bust_impl(user, bust_target_username)
-                if not bust_result.get("error"):
-                    if bust_result.get("success"):
-                        rp = bust_result.get("rank_points_earned") or 0
-                        cash = bust_result.get("cash_reward") or 0
-                        await _update_auto_rank_stats_bust(db, user_id, cash, now)
-                        parts = [f"Busted {bust_target_username}! +{rp} RP"]
-                        if cash:
-                            parts.append(f"${cash:,}")
-                        lines.append("**Bust** — " + ". ".join(parts) + ".")
-                    else:
-                        lines.append("**Bust** — " + (bust_result.get("message") or "Failed. Got caught."))
+                if not bust_result.get("error") and bust_result.get("success"):
+                    has_success = True
+                    rp = bust_result.get("rank_points_earned") or 0
+                    cash = bust_result.get("cash_reward") or 0
+                    await _update_auto_rank_stats_bust(db, user_id, cash, now)
+                    parts = [f"Busted {bust_target_username}! +{rp} RP"]
+                    if cash:
+                        parts.append(f"${cash:,}")
+                    lines.append("**Bust** — " + ". ".join(parts) + ".")
             except Exception as e:
                 logger.exception("Auto rank bust for %s: %s", user_id, e)
-                lines.append("**Bust** — Error.")
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
-        lines.append("")
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
         return
     if user.get("in_jail"):
-        await _send_jail_notification(telegram_chat_id, username, "bust failed", 30, token)
-        if "**Bust**" not in "\n".join(lines):
-            lines.append("(You're in jail — no crimes/GTA this run.)")
-        lines.append("")
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
+        if bust_every_5:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
+            )
         return
 
     run_crimes = user.get("auto_rank_crimes", True)
@@ -244,9 +215,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         run_gta = True
 
     # --- Crimes: commit ALL that are off cooldown and rank-eligible (loop until none left) ---
-    if not run_crimes:
-        lines.append("**Crimes** — Disabled.")
-    else:
+    if run_crimes:
         crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
         crime_success_count = 0
         crime_fail_count = 0
@@ -279,79 +248,51 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 logger.exception("Auto rank crime for %s: %s", user_id, e)
                 crime_fail_count += 1
                 break
-        if crime_success_count == 0 and crime_fail_count == 0:
-            lines.append("**Crimes** — None off cooldown.")
-        else:
-            if crime_success_count or crime_total_cash:
-                await _update_auto_rank_stats_crimes(db, user_id, crime_success_count, crime_total_cash, now)
-            parts = [f"Committed {crime_success_count + crime_fail_count} crime(s)"]
-            if crime_success_count:
-                parts.append(f"earned ${crime_total_cash:,} and {crime_total_rp} RP")
-            if crime_fail_count:
-                parts.append(f"{crime_fail_count} failed")
+        if crime_success_count > 0:
+            has_success = True
+            await _update_auto_rank_stats_crimes(db, user_id, crime_success_count, crime_total_cash, now)
+            parts = [f"Committed {crime_success_count} crime(s)", f"earned ${crime_total_cash:,} and {crime_total_rp} RP"]
             lines.append("**Crimes** — " + ". ".join(parts) + ".")
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
-        lines.append("")
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
         return
     if user.get("in_jail"):
-        await _send_jail_notification(telegram_chat_id, username, "crime failed", 30, token)
-        lines.append("")
-        lines.append("(You're in jail — no GTA this run.)")
         if bust_every_5:
             await db.users.update_one(
                 {"id": user_id},
                 {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
             )
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
         return
 
-    if not run_gta:
-        lines.append("**GTA** — Disabled.")
-    else:
-        gta_done = False
+    if run_gta:
         cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
-        if cooldown_doc:
-            until = _parse_iso(cooldown_doc.get("cooldown_until"))
-            if until and until > now:
-                lines.append("**GTA** — On cooldown.")
-                await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
-                return
+        until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
+        if not (until and until > now):
+            rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
+            for opt in GTA_OPTIONS:
+                if rank_id < opt["min_rank"]:
+                    continue
+                try:
+                    out = await _attempt_gta_impl(opt["id"], user)
+                    if out.success:
+                        has_success = True
+                        car_name = out.car.get("name", "Car") if out.car else "Car"
+                        await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now)
+                        lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
+                    break
+                except Exception as e:
+                    logger.exception("Auto rank GTA for %s: %s", user_id, e)
+                    break
 
-        rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
-        for opt in GTA_OPTIONS:
-            if rank_id < opt["min_rank"]:
-                continue
-            try:
-                out = await _attempt_gta_impl(opt["id"], user)
-                gta_done = True
-                if out.success:
-                    car_name = out.car.get("name", "Car") if out.car else "Car"
-                    await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now)
-                    lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
-                else:
-                    lines.append(f"**GTA** — {out.message}")
-                    user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "in_jail": 1})
-                    if user_after and user_after.get("in_jail"):
-                        jail_sec = 10 if "10" in (out.message or "") else 30
-                        await _send_jail_notification(telegram_chat_id, username, "GTA caught", jail_sec, token)
-                break
-            except Exception as e:
-                logger.exception("Auto rank GTA for %s: %s", user_id, e)
-                lines.append(f"**GTA** — Error: {e!s}")
-                break
-        if not gta_done:
-            lines.append("**GTA** — None available (rank or cooldown).")
-
-    lines.append("")
     if bust_every_5:
         await db.users.update_one(
             {"id": user_id},
             {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
         )
-    await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
+    if has_success:
+        lines.append("")
+        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
 
 
 async def run_auto_rank_due_users():
@@ -484,11 +425,8 @@ async def run_auto_rank_oc_loop():
                             {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}},
                         )
                         continue
-                    if result.get("ran"):
-                        if result.get("success"):
-                            msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
-                        else:
-                            msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist failed')}."
+                    if result.get("ran") and result.get("success"):
+                        msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
                         await send_telegram_to_chat(chat_id, msg, bot_token)
                     if result.get("ran"):
                         await db.users.update_one(
