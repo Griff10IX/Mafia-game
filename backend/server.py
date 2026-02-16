@@ -2379,83 +2379,6 @@ async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_us
 
 
 
-# Rank Progress endpoint
-@api_router.get("/user/rank-progress")
-async def get_rank_progress(current_user: dict = Depends(get_current_user)):
-    current_rank_id, current_rank_name = get_rank_info(current_user.get("rank_points", 0))
-    
-    if current_rank_id >= 11:
-        return {
-            "current_rank": current_rank_id,
-            "current_rank_name": current_rank_name,
-            "next_rank": None,
-            "next_rank_name": "Max Rank",
-            "money_progress": 100,
-            "rank_points_progress": 100,
-            "money_needed": 0,
-            "rank_points_needed": 0,
-            "money_current": current_user["money"],
-            "rank_points_current": current_user.get("rank_points", 0)
-        }
-    
-    next_rank = RANKS[current_rank_id]
-    current_rank_req = RANKS[current_rank_id - 1]
-    
-    rank_points_progress = 0
-    
-    if next_rank["required_points"] > current_rank_req["required_points"]:
-        points_range = next_rank["required_points"] - current_rank_req["required_points"]
-        points_current = current_user.get("rank_points", 0) - current_rank_req["required_points"]
-        rank_points_progress = min(100, max(0, (points_current / points_range * 100)))
-    
-    return {
-        "current_rank": current_rank_id,
-        "current_rank_name": current_rank_name,
-        "next_rank": next_rank["id"],
-        "next_rank_name": next_rank["name"],
-        "rank_points_progress": rank_points_progress,
-        "rank_points_needed": max(0, next_rank["required_points"] - current_user.get("rank_points", 0)),
-        "rank_points_current": current_user.get("rank_points", 0)
-    }
-
-
-@api_router.get("/wealth-ranks")
-async def get_wealth_ranks_list():
-    """Return the full wealth rank ladder (1920s–1930s style). No auth required."""
-    return {"wealth_ranks": [{"id": r["id"], "name": r["name"], "min_money": r["min_money"]} for r in WEALTH_RANKS]}
-
-
-@api_router.get("/user/wealth-progress")
-async def get_wealth_progress(current_user: dict = Depends(get_current_user)):
-    """Current wealth rank and progress to next tier."""
-    money = int(current_user.get("money", 0) or 0)
-    wealth_id, wealth_name = get_wealth_rank(money)
-    is_max = wealth_id >= WEALTH_RANKS[-1]["id"]
-    if is_max:
-        return {
-            "wealth_rank": wealth_id,
-            "wealth_rank_name": wealth_name,
-            "money": money,
-            "next_rank": None,
-            "next_rank_name": None,
-            "min_money_next": None,
-            "money_needed": 0,
-        }
-    next_tier = next((r for r in WEALTH_RANKS if r["id"] == wealth_id + 1), None)
-    if not next_tier:
-        return {"wealth_rank": wealth_id, "wealth_rank_name": wealth_name, "money": money, "next_rank": None, "next_rank_name": None, "min_money_next": None, "money_needed": 0}
-    min_next = next_tier["min_money"]
-    return {
-        "wealth_rank": wealth_id,
-        "wealth_rank_name": wealth_name,
-        "money": money,
-        "next_rank": next_tier["id"],
-        "next_rank_name": next_tier["name"],
-        "min_money_next": min_next,
-        "money_needed": max(0, min_next - money),
-    }
-
-
 # Admin endpoints
 ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
 
@@ -3833,7 +3756,7 @@ async def get_my_properties(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -3873,6 +3796,7 @@ racket.register(api_router)
 leaderboard.register(api_router)
 armour.register(api_router)
 meta.register(api_router)
+user_progress.register(api_router)
 
 app.include_router(api_router)
 
