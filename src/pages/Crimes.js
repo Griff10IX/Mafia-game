@@ -221,7 +221,10 @@ export default function Crimes() {
   const [user, setUser] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
-  const [crimeStats, setCrimeStats] = useState({ profit_last_hour: 0, profit_today: 0, profit_last_7_days: 0 });
+  const [crimeStats, setCrimeStats] = useState({
+    count_today: 0, count_week: 0, success_today: 0, success_week: 0,
+    profit_today: 0, profit_24h: 0, profit_week: 0,
+  });
 
   const fetchCrimes = async () => {
     try {
@@ -229,14 +232,14 @@ export default function Crimes() {
         api.get('/crimes'),
         api.get('/auth/me'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/crimes/stats').catch(() => ({ data: { profit_last_hour: 0, profit_today: 0, profit_last_7_days: 0 } })),
+        api.get('/crimes/stats').catch(() => ({ data: {} })),
       ]);
       
       setCrimes(crimesRes.data);
       setUser(meRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
-      setCrimeStats(statsRes.data || { profit_last_hour: 0, profit_today: 0, profit_last_7_days: 0 });
+      setCrimeStats(statsRes.data || {});
     } catch (error) {
       toast.error('Failed to load crimes');
       console.error('Error fetching crimes:', error);
@@ -385,6 +388,43 @@ export default function Crimes() {
       {user?.in_jail && <JailNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
+
+      {/* Stats */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Crimes stats</span>
+        </div>
+        <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm font-heading">
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-foreground">{crimeStats.count_today ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-foreground">{crimeStats.count_week ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Past week</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{crimeStats.success_today ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Success today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{crimeStats.success_week ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Success week</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
+            <div className="text-lg font-bold text-primary">${(crimeStats.profit_today ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
+            <div className="text-lg font-bold text-primary">${(crimeStats.profit_24h ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit past 24h</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2 md:col-span-4">
+            <div className="text-lg font-bold text-primary">${(crimeStats.profit_week ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit past week</div>
+          </div>
+        </div>
+      </div>
 
       {/* Crimes list */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>

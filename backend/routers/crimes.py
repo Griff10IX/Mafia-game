@@ -349,6 +349,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         },
         upsert=True,
     )
+    await db.crime_events.insert_one(
+        {"user_id": current_user["id"], "at": now, "success": success, "profit": reward if success and reward is not None else 0}
+    )
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
@@ -365,40 +368,53 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
 
 
 async def get_crime_stats(current_user: dict = Depends(get_current_user)):
-    """Return profit in last hour, today (UTC), and last 7 days."""
+    """Return crimes today/week, successful crimes, profit today / 24h / week."""
     now = datetime.now(timezone.utc)
-    last_hour_start = now - timedelta(hours=1)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_24h_start = now - timedelta(hours=24)
     seven_days_start = now - timedelta(days=7)
     pipeline = [
         {"$match": {"user_id": current_user["id"]}},
         {
             "$facet": {
-                "last_hour": [
-                    {"$match": {"at": {"$gte": last_hour_start}}},
-                    {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
-                ],
                 "today": [
                     {"$match": {"at": {"$gte": today_start}}},
-                    {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
+                ],
+                "last_24h": [
+                    {"$match": {"at": {"$gte": last_24h_start}}},
+                    {"$group": {"_id": None, "profit": {"$sum": "$profit"}}},
                 ],
                 "last_7_days": [
                     {"$match": {"at": {"$gte": seven_days_start}}},
-                    {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
                 ],
             }
         },
     ]
-    cursor = db.crime_earnings.aggregate(pipeline)
+    cursor = db.crime_events.aggregate(pipeline)
     result = await cursor.to_list(1)
     doc = result[0] if result else {}
-    def _sum(bucket):
-        arr = doc.get(bucket) or []
-        return int(arr[0]["total"]) if arr else 0
+    def _today():
+        arr = doc.get("today") or []
+        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
+    def _24h():
+        arr = doc.get("last_24h") or []
+        return int(arr[0]["profit"]) if arr else 0
+    def _week():
+        arr = doc.get("last_7_days") or []
+        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
+    t, w = _today(), _week()
     return {
-        "profit_last_hour": _sum("last_hour"),
-        "profit_today": _sum("today"),
-        "profit_last_7_days": _sum("last_7_days"),
+        "count_today": int(t.get("count", 0)),
+        "count_week": int(w.get("count", 0)),
+        "success_today": int(t.get("successes", 0)),
+        "success_week": int(w.get("successes", 0)),
+        "profit_today": int(t.get("profit", 0)),
+        "profit_24h": _24h(),
+        "profit_week": int(w.get("profit", 0)),
+        "profit_last_hour": _24h(),  # backward compat
+        "profit_last_7_days": int(w.get("profit", 0)),
     }
 
 

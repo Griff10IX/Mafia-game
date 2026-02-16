@@ -274,7 +274,62 @@ async def bust_out_of_jail(
     result = await _attempt_bust_impl(current_user, request.target_username or "")
     if result.get("error"):
         raise HTTPException(status_code=result.get("error_code", 400), detail=result["error"])
+    now = datetime.now(timezone.utc)
+    success = result.get("success", False)
+    profit = int(result.get("cash_reward", 0) or 0)
+    await db.bust_events.insert_one(
+        {"user_id": current_user["id"], "at": now, "success": success, "profit": profit}
+    )
     return result
+
+
+async def get_jail_stats(current_user: dict = Depends(get_current_user)):
+    """Return busts today/week, successful busts, profit today / 24h / week."""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_24h_start = now - timedelta(hours=24)
+    seven_days_start = now - timedelta(days=7)
+    pipeline = [
+        {"$match": {"user_id": current_user["id"]}},
+        {
+            "$facet": {
+                "today": [
+                    {"$match": {"at": {"$gte": today_start}}},
+                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
+                ],
+                "last_24h": [
+                    {"$match": {"at": {"$gte": last_24h_start}}},
+                    {"$group": {"_id": None, "profit": {"$sum": "$profit"}}},
+                ],
+                "last_7_days": [
+                    {"$match": {"at": {"$gte": seven_days_start}}},
+                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
+                ],
+            }
+        },
+    ]
+    cursor = db.bust_events.aggregate(pipeline)
+    result = await cursor.to_list(1)
+    doc = result[0] if result else {}
+    def _today():
+        arr = doc.get("today") or []
+        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
+    def _24h():
+        arr = doc.get("last_24h") or []
+        return int(arr[0]["profit"]) if arr else 0
+    def _week():
+        arr = doc.get("last_7_days") or []
+        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
+    t, w = _today(), _week()
+    return {
+        "count_today": int(t.get("count", 0)),
+        "count_week": int(w.get("count", 0)),
+        "success_today": int(t.get("successes", 0)),
+        "success_week": int(w.get("successes", 0)),
+        "profit_today": int(t.get("profit", 0)),
+        "profit_24h": _24h(),
+        "profit_week": int(w.get("profit", 0)),
+    }
 
 
 async def get_jail_status(current_user: dict = Depends(get_current_user)):
@@ -445,6 +500,7 @@ async def spawn_jail_npcs():
 def register(router):
     router.add_api_route("/jail/players", get_jailed_players, methods=["GET"])
     router.add_api_route("/jail/bust", bust_out_of_jail, methods=["POST"])
+    router.add_api_route("/jail/stats", get_jail_stats, methods=["GET"])
     router.add_api_route("/jail/status", get_jail_status, methods=["GET"])
     router.add_api_route("/jail/set-bust-reward", set_bust_reward, methods=["POST"])
     router.add_api_route("/jail/leave", leave_jail, methods=["POST"])

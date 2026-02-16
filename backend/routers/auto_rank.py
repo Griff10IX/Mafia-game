@@ -43,6 +43,52 @@ def _parse_iso(s):
         return None
 
 
+async def _ensure_stats_since(db, user_id: str, now: datetime):
+    """Set auto_rank_stats_since to now if not already set."""
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_stats_since": 1})
+    if u and not u.get("auto_rank_stats_since"):
+        await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_stats_since": now.isoformat()}})
+
+
+async def _update_auto_rank_stats_bust(db, user_id: str, cash: int, now: datetime):
+    """Record one successful bust: increment total_busts, add cash, ensure stats_since."""
+    await _ensure_stats_since(db, user_id, now)
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"auto_rank_total_busts": 1, "auto_rank_total_cash": cash}},
+    )
+
+
+async def _update_auto_rank_stats_crimes(db, user_id: str, count: int, cash: int, now: datetime):
+    """Record crime run: increment total_crimes, add cash, ensure stats_since."""
+    if count <= 0 and cash <= 0:
+        return
+    await _ensure_stats_since(db, user_id, now)
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"auto_rank_total_crimes": count, "auto_rank_total_cash": cash}},
+    )
+
+
+async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime):
+    """Record one successful GTA: increment total_gtas, add car to best_cars (top 3 by value)."""
+    await _ensure_stats_since(db, user_id, now)
+    car_name = (car or {}).get("name") or "Car"
+    car_value = int((car or {}).get("value", 0) or 0)
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_best_cars": 1})
+    best = list((u or {}).get("auto_rank_best_cars") or [])
+    best.append({"name": car_name, "value": car_value})
+    best.sort(key=lambda x: x.get("value", 0), reverse=True)
+    best = best[:3]
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$inc": {"auto_rank_total_gtas": 1},
+            "$set": {"auto_rank_best_cars": best},
+        },
+    )
+
+
 async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
     """Send an immediate Telegram when Auto Rank puts the user in jail (bust/crime/GTA failed)."""
     from security import send_telegram_to_chat
@@ -84,6 +130,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         if bust_result.get("success"):
             rp = bust_result.get("rank_points_earned") or 0
             cash = bust_result.get("cash_reward") or 0
+            await _update_auto_rank_stats_bust(db, user_id, cash, datetime.now(timezone.utc))
             parts = [f"Busted {bust_target_username}! +{rp} RP"]
             if cash:
                 parts.append(f"${cash:,}")
@@ -159,6 +206,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     if bust_result.get("success"):
                         rp = bust_result.get("rank_points_earned") or 0
                         cash = bust_result.get("cash_reward") or 0
+                        await _update_auto_rank_stats_bust(db, user_id, cash, now)
                         parts = [f"Busted {bust_target_username}! +{rp} RP"]
                         if cash:
                             parts.append(f"${cash:,}")
@@ -227,6 +275,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if crime_success_count == 0 and crime_fail_count == 0:
             lines.append("**Crimes** — None off cooldown.")
         else:
+            if crime_success_count or crime_total_cash:
+                await _update_auto_rank_stats_crimes(db, user_id, crime_success_count, crime_total_cash, now)
             parts = [f"Committed {crime_success_count + crime_fail_count} crime(s)"]
             if crime_success_count:
                 parts.append(f"earned ${crime_total_cash:,} and {crime_total_rp} RP")
@@ -272,6 +322,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 gta_done = True
                 if out.success:
                     car_name = out.car.get("name", "Car") if out.car else "Car"
+                    await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now)
                     lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
                 else:
                     lines.append(f"**GTA** — {out.message}")
@@ -429,6 +480,27 @@ def register(router):
             "auto_rank_bust_every_5_sec": current_user.get("auto_rank_bust_every_5_sec", False),
             "auto_rank_purchased": current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False),
             "telegram_chat_id_set": bool(chat_id),
+        }
+
+    @router.get("/auto-rank/stats")
+    async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
+        """Get current user's Auto Rank lifetime stats: busts, crimes, GTAs, cash, running time, best cars."""
+        u = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1},
+        )
+        since = _parse_iso((u or {}).get("auto_rank_stats_since"))
+        now = datetime.now(timezone.utc)
+        running_seconds = int((now - since).total_seconds()) if since and since <= now else 0
+        best_cars = (u or {}).get("auto_rank_best_cars") or []
+        return {
+            "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
+            "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
+            "total_gtas": int((u or {}).get("auto_rank_total_gtas") or 0),
+            "total_cash": int((u or {}).get("auto_rank_total_cash") or 0),
+            "stats_since": (u or {}).get("auto_rank_stats_since"),
+            "running_seconds": max(0, running_seconds),
+            "best_cars": [{"name": c.get("name", "?"), "value": int(c.get("value", 0) or 0)} for c in best_cars],
         }
 
     @router.patch("/auto-rank/me")

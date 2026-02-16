@@ -370,7 +370,63 @@ async def attempt_gta(
             raise HTTPException(
                 status_code=400, detail=f"GTA cooldown: try again in {secs}s"
             )
-    return await _attempt_gta_impl(request.option_id, current_user)
+    result = await _attempt_gta_impl(request.option_id, current_user)
+    now = datetime.now(timezone.utc)
+    success = getattr(result, "success", False)
+    profit = int((result.car.get("value", 0) or 0)) if (getattr(result, "car", None) and success) else 0
+    await db.gta_events.insert_one(
+        {"user_id": current_user["id"], "at": now, "success": success, "profit": profit}
+    )
+    return result
+
+
+async def get_gta_stats(current_user: dict = Depends(get_current_user)):
+    """Return GTAs today/week, successful GTAs, profit today / 24h / week."""
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_24h_start = now - timedelta(hours=24)
+    seven_days_start = now - timedelta(days=7)
+    pipeline = [
+        {"$match": {"user_id": current_user["id"]}},
+        {
+            "$facet": {
+                "today": [
+                    {"$match": {"at": {"$gte": today_start}}},
+                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
+                ],
+                "last_24h": [
+                    {"$match": {"at": {"$gte": last_24h_start}}},
+                    {"$group": {"_id": None, "profit": {"$sum": "$profit"}}},
+                ],
+                "last_7_days": [
+                    {"$match": {"at": {"$gte": seven_days_start}}},
+                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
+                ],
+            }
+        },
+    ]
+    cursor = db.gta_events.aggregate(pipeline)
+    result = await cursor.to_list(1)
+    doc = result[0] if result else {}
+    def _today():
+        arr = doc.get("today") or []
+        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
+    def _24h():
+        arr = doc.get("last_24h") or []
+        return int(arr[0]["profit"]) if arr else 0
+    def _week():
+        arr = doc.get("last_7_days") or []
+        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
+    t, w = _today(), _week()
+    return {
+        "count_today": int(t.get("count", 0)),
+        "count_week": int(w.get("count", 0)),
+        "success_today": int(t.get("successes", 0)),
+        "success_week": int(w.get("successes", 0)),
+        "profit_today": int(t.get("profit", 0)),
+        "profit_24h": _24h(),
+        "profit_week": int(w.get("profit", 0)),
+    }
 
 
 async def get_garage(current_user: dict = Depends(get_current_user)):
@@ -495,5 +551,6 @@ def register(router):
         methods=["POST"],
         response_model=GTAAttemptResponse,
     )
+    router.add_api_route("/gta/stats", get_gta_stats, methods=["GET"])
     router.add_api_route("/gta/garage", get_garage, methods=["GET"])
     router.add_api_route("/gta/melt", melt_cars, methods=["POST"])

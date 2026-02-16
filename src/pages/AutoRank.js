@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -29,14 +29,35 @@ export default function AutoRank() {
   const [editingChatId, setEditingChatId] = useState({});
   const [editingToken, setEditingToken] = useState({});
   const [savingUser, setSavingUser] = useState(null);
+  const [stats, setStats] = useState({
+    total_busts: 0,
+    total_crimes: 0,
+    total_gtas: 0,
+    total_cash: 0,
+    running_seconds: 0,
+    best_cars: [],
+  });
+
+  const formatRunningTime = (seconds) => {
+    if (seconds <= 0) return '—';
+    const d = Math.floor(seconds / 86400);
+    const h = Math.floor((seconds % 86400) / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const parts = [];
+    if (d > 0) parts.push(`${d}d`);
+    if (h > 0) parts.push(`${h}h`);
+    if (m > 0 || parts.length === 0) parts.push(`${m}m`);
+    return parts.join(' ');
+  };
 
   useEffect(() => {
     const run = async () => {
       try {
-        const [meRes, checkRes, intervalRes] = await Promise.all([
+        const [meRes, checkRes, intervalRes, statsRes] = await Promise.all([
           api.get('/auto-rank/me').catch(() => ({ data: null })),
           api.get('/admin/check').catch(() => ({ data: {} })),
           api.get('/auto-rank/interval').catch(() => ({ data: null })),
+          api.get('/auto-rank/stats').catch(() => ({ data: null })),
         ]);
         setIsAdmin(!!checkRes.data?.is_admin);
         if (meRes?.data) {
@@ -47,6 +68,16 @@ export default function AutoRank() {
             auto_rank_bust_every_5_sec: !!meRes.data.auto_rank_bust_every_5_sec,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
             telegram_chat_id_set: !!meRes.data.telegram_chat_id_set,
+          });
+        }
+        if (statsRes?.data) {
+          setStats({
+            total_busts: statsRes.data.total_busts ?? 0,
+            total_crimes: statsRes.data.total_crimes ?? 0,
+            total_gtas: statsRes.data.total_gtas ?? 0,
+            total_cash: statsRes.data.total_cash ?? 0,
+            running_seconds: statsRes.data.running_seconds ?? 0,
+            best_cars: statsRes.data.best_cars ?? [],
           });
         }
         if (checkRes.data?.is_admin) {
@@ -278,6 +309,59 @@ export default function AutoRank() {
             </p>
           </div>
         </div>
+
+        {/* Stats card */}
+        {canEnable && (
+          <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/20`}>
+            <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-primary" />
+              <span className="text-sm md:text-base font-heading font-bold text-primary uppercase tracking-wider">Auto Rank stats</span>
+            </div>
+            <div className="p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+                <div className="rounded-md bg-secondary/50 border border-border/50 p-3 text-center">
+                  <div className="text-lg font-heading font-bold text-foreground">{stats.total_busts.toLocaleString()}</div>
+                  <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider">Busts</div>
+                </div>
+                <div className="rounded-md bg-secondary/50 border border-border/50 p-3 text-center">
+                  <div className="text-lg font-heading font-bold text-foreground">{stats.total_crimes.toLocaleString()}</div>
+                  <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider">Crimes</div>
+                </div>
+                <div className="rounded-md bg-secondary/50 border border-border/50 p-3 text-center">
+                  <div className="text-lg font-heading font-bold text-foreground">{stats.total_gtas.toLocaleString()}</div>
+                  <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider">GTAs</div>
+                </div>
+                <div className="rounded-md bg-secondary/50 border border-border/50 p-3 text-center">
+                  <div className="text-lg font-heading font-bold text-emerald-500 dark:text-emerald-400">${stats.total_cash.toLocaleString()}</div>
+                  <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider">Cash made</div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-4 text-sm font-heading">
+                <div className="flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-primary" />
+                  <span className="text-mutedForeground">Running:</span>
+                  <span className="text-foreground font-medium">{formatRunningTime(stats.running_seconds)}</span>
+                </div>
+              </div>
+              {stats.best_cars && stats.best_cars.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border/50">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <TrendingUp className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">Top 3 cars stolen</span>
+                  </div>
+                  <ul className="space-y-1">
+                    {stats.best_cars.map((car, i) => (
+                      <li key={i} className="flex items-center justify-between text-sm">
+                        <span className="text-foreground font-medium">{car.name}</span>
+                        <span className="text-emerald-500 dark:text-emerald-400 font-mono">${(car.value || 0).toLocaleString()}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Admin only: global loop */}
         {isAdmin && (

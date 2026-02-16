@@ -244,6 +244,10 @@ const InfoSection = () => (
 export default function Jail() {
   const [jailStatus, setJailStatus] = useState({ in_jail: false });
   const [jailedPlayers, setJailedPlayers] = useState([]);
+  const [jailStats, setJailStats] = useState({
+    count_today: 0, count_week: 0, success_today: 0, success_week: 0,
+    profit_today: 0, profit_24h: 0, profit_week: 0,
+  });
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [bustRewardInput, setBustRewardInput] = useState('');
@@ -252,12 +256,14 @@ export default function Jail() {
 
   const fetchJailData = async () => {
     try {
-      const [jailRes, playersRes] = await Promise.all([
+      const [jailRes, playersRes, statsRes] = await Promise.all([
         api.get('/jail/status'),
-        api.get('/jail/players')
+        api.get('/jail/players'),
+        api.get('/jail/stats').catch(() => ({ data: {} })),
       ]);
       setJailStatus(jailRes.data);
       setJailedPlayers(playersRes.data.players);
+      setJailStats(statsRes.data || {});
     } catch (error) {
       console.error('Failed to load jail data:', error);
       toast.error('Failed to load jail data');
@@ -364,6 +370,43 @@ export default function Jail() {
         leavingJail={leavingJail}
         currentReward={jailStatus.bust_reward_cash ?? 0}
       />
+
+      {/* Bust stats */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Bust stats</span>
+        </div>
+        <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm font-heading">
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-foreground">{jailStats.count_today ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-foreground">{jailStats.count_week ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Past week</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{jailStats.success_today ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Success today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{jailStats.success_week ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Success week</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
+            <div className="text-lg font-bold text-primary">${(jailStats.profit_today ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
+            <div className="text-lg font-bold text-primary">${(jailStats.profit_24h ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit past 24h</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2 md:col-span-4">
+            <div className="text-lg font-bold text-primary">${(jailStats.profit_week ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit past week</div>
+          </div>
+        </div>
+      </div>
 
       {/* Jailed Players */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>

@@ -312,6 +312,10 @@ const InfoSection = () => (
 export default function GTA() {
   const [options, setOptions] = useState([]);
   const [garage, setGarage] = useState([]);
+  const [gtaStats, setGtaStats] = useState({
+    count_today: 0, count_week: 0, success_today: 0, success_week: 0,
+    profit_today: 0, profit_24h: 0, profit_week: 0,
+  });
   const [attemptingOptionId, setAttemptingOptionId] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
@@ -334,16 +338,20 @@ export default function GTA() {
 
   const fetchData = async () => {
     try {
-      const [optionsRes, garageRes, eventsRes] = await Promise.allSettled([
+      const [optionsRes, garageRes, eventsRes, statsRes] = await Promise.allSettled([
         api.get('/gta/options'),
         api.get('/gta/garage'),
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } }))
+        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        api.get('/gta/stats').catch(() => ({ data: {} })),
       ]);
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
         setOptions(optionsRes.value.data);
       } else if (optionsRes.status === 'rejected') {
         toast.error('Failed to load GTA options');
+      }
+      if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
+        setGtaStats(statsRes.value.data);
       }
       
       if (garageRes.status === 'fulfilled' && garageRes.value?.data) {
@@ -438,6 +446,43 @@ export default function GTA() {
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="gta-page">
       <EventBanner event={event} eventsEnabled={eventsEnabled} />
+
+      {/* GTA stats */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">GTA stats</span>
+        </div>
+        <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm font-heading">
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-foreground">{gtaStats.count_today ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-foreground">{gtaStats.count_week ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Past week</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{gtaStats.success_today ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Success today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{gtaStats.success_week ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Success week</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
+            <div className="text-lg font-bold text-primary">${(gtaStats.profit_today ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit today</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
+            <div className="text-lg font-bold text-primary">${(gtaStats.profit_24h ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit past 24h</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2 md:col-span-4">
+            <div className="text-lg font-bold text-primary">${(gtaStats.profit_week ?? 0).toLocaleString()}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Profit past week</div>
+          </div>
+        </div>
+      </div>
 
       {/* GTA options list */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
