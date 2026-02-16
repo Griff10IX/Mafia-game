@@ -43,6 +43,13 @@ def _parse_iso(s):
         return None
 
 
+async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30):
+    """Send an immediate Telegram when Auto Rank puts the user in jail (bust/crime/GTA failed)."""
+    from security import send_telegram_to_chat
+    msg = f"**Auto Rank** — {username}\n\n🔒 You're in jail ({reason}). {jail_seconds}s."
+    await send_telegram_to_chat(telegram_chat_id, msg)
+
+
 async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id: str):
     """Try one jail bust (regardless of whether user is in jail), send result to Telegram. Used by the 5-sec bust loop."""
     import server as srv
@@ -83,6 +90,10 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         else:
             msg = f"**Auto Rank** — {username}\n\n**Bust** — " + (bust_result.get("message") or "Failed.")
         await send_telegram_to_chat(telegram_chat_id, msg)
+        if not bust_result.get("success"):
+            user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "in_jail": 1})
+            if user_after and user_after.get("in_jail"):
+                await _send_jail_notification(telegram_chat_id, username, "bust failed", 30)
     except Exception as e:
         logger.exception("Auto rank bust-only for %s: %s", user_id, e)
 
@@ -160,6 +171,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
         return
     if user.get("in_jail"):
+        await _send_jail_notification(telegram_chat_id, username, "bust failed", 30)
         if "**Bust**" not in "\n".join(lines):
             lines.append("(You're in jail — no crimes/GTA this run.)")
         lines.append("")
@@ -221,6 +233,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
         return
     if user.get("in_jail"):
+        await _send_jail_notification(telegram_chat_id, username, "crime failed", 30)
         lines.append("")
         lines.append("(You're in jail — no GTA this run.)")
         if bust_every_5:
@@ -255,6 +268,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
                 else:
                     lines.append(f"**GTA** — {out.message}")
+                    user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "in_jail": 1})
+                    if user_after and user_after.get("in_jail"):
+                        jail_sec = 10 if "10" in (out.message or "") else 30
+                        await _send_jail_notification(telegram_chat_id, username, "GTA caught", jail_sec)
                 break
             except Exception as e:
                 logger.exception("Auto rank GTA for %s: %s", user_id, e)
