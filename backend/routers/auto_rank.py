@@ -189,12 +189,16 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
 
     has_success = False
 
+    buy_location_by_booze = dict((user.get("booze_buy_location") or {}).items())
+
     if current == city_a:
         if carrying_total > 0:
             for bid, amt in list(carrying.items()):
                 amt = int(amt or 0)
                 if amt <= 0:
                     continue
+                if buy_location_by_booze.get(bid) == city_a:
+                    continue  # don't sell in same city we bought (must travel first)
                 try:
                     out = await _booze_sell_impl(user, bid, amt)
                     if out.get("caught"):
@@ -209,6 +213,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                     if not user:
                         return has_success
                     carrying = dict(user.get("booze_carrying") or {})
+                    buy_location_by_booze = dict((user.get("booze_buy_location") or {}).items())
                 except Exception as e:
                     logger.exception("Auto rank booze sell %s: %s", user_id, e)
                     break
@@ -257,6 +262,8 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                 amt = int(amt or 0)
                 if amt <= 0:
                     continue
+                if buy_location_by_booze.get(bid) == city_b:
+                    continue  # don't sell in same city we bought (must travel first)
                 try:
                     out = await _booze_sell_impl(user, bid, amt)
                     if out.get("caught"):
@@ -271,6 +278,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                     if not user:
                         return has_success
                     carrying = dict(user.get("booze_carrying") or {})
+                    buy_location_by_booze = dict((user.get("booze_buy_location") or {}).items())
                 except Exception as e:
                     logger.exception("Auto rank booze sell %s: %s", user_id, e)
                     break
