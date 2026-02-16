@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plane, Car, Clock, MapPin, Zap, ShoppingCart } from 'lucide-react';
+import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -71,14 +71,16 @@ const CurrentLocationCard = ({ location, travelsUsed, maxTravels, userPoints }) 
 const DestinationCard = ({ 
   destination, 
   onTravel, 
-  travelInfo 
+  travelInfo,
+  travelDisabled = false,
 }) => {
   const airports = travelInfo.airports || [];
   const airport = airports.length > 0 ? airports[0] : null;
   const hasAirports = !!airport;
+  const canUse = !travelDisabled && !travelInfo.carrying_booze && travelInfo.user_points >= (airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10));
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`} data-testid={`dest-${destination}`}>
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 ${travelDisabled ? 'opacity-70' : ''}`} data-testid={`dest-${destination}`}>
       <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
         <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
           {destination}
@@ -90,14 +92,14 @@ const DestinationCard = ({
           const fullPrice = airport.price_per_travel ?? 10;
           const getsDiscount = !!travelInfo.user_gets_airport_discount;
           const displayPrice = getsDiscount ? Math.max(1, Math.round(fullPrice * 0.95)) : fullPrice;
-          const canUse = !travelInfo.carrying_booze && travelInfo.user_points >= displayPrice;
+          const canUseAirport = !travelDisabled && !travelInfo.carrying_booze && travelInfo.user_points >= displayPrice;
           return (
             <button
               key={airport.slot}
-              onClick={() => onTravel(destination, 'airport', airport.slot)}
-              disabled={!canUse}
+              onClick={() => canUseAirport && onTravel(destination, 'airport', airport.slot)}
+              disabled={!canUseAirport}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md border-2 transition-all touch-manipulation ${
-                canUse
+                canUseAirport
                   ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50 hover:from-primary/30 hover:via-yellow-600/30 hover:to-primary/30 active:scale-95'
                   : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
               }`}
@@ -117,10 +119,10 @@ const DestinationCard = ({
           );
         })() : (
           <button
-            onClick={() => onTravel(destination, 'airport', 1)}
-            disabled={!(!travelInfo.carrying_booze && travelInfo.user_points >= (travelInfo.airport_cost ?? 10))}
+            onClick={() => canUse && onTravel(destination, 'airport', 1)}
+            disabled={!canUse}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md border-2 transition-all ${
-              !travelInfo.carrying_booze && travelInfo.user_points >= (travelInfo.airport_cost ?? 10)
+              canUse
                 ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50'
                 : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
             }`}
@@ -145,10 +147,10 @@ const DestinationCard = ({
         {/* Custom Car */}
         {travelInfo?.custom_car && (
           <button
-            onClick={() => travelInfo.custom_car?.can_travel !== false && onTravel(destination, 'custom')}
-            disabled={travelInfo.custom_car?.can_travel === false}
+            onClick={() => !travelDisabled && travelInfo.custom_car?.can_travel !== false && onTravel(destination, 'custom')}
+            disabled={travelDisabled || travelInfo.custom_car?.can_travel === false}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-all touch-manipulation ${
-              travelInfo.custom_car?.can_travel !== false
+              !travelDisabled && travelInfo.custom_car?.can_travel !== false
                 ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
                 : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
             }`}
@@ -173,10 +175,10 @@ const DestinationCard = ({
         {travelInfo?.cars?.slice(0, 3).map(car => (
           <button
             key={car.user_car_id}
-            onClick={() => car.can_travel !== false && onTravel(destination, car.user_car_id)}
-            disabled={car.can_travel === false}
+            onClick={() => !travelDisabled && car.can_travel !== false && onTravel(destination, car.user_car_id)}
+            disabled={travelDisabled || car.can_travel === false}
             className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-all touch-manipulation ${
-              car.can_travel !== false
+              !travelDisabled && car.can_travel !== false
                 ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
                 : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
             }`}
@@ -277,11 +279,16 @@ export default function Travel() {
   const [traveling, setTraveling] = useState(false);
   const [travelTime, setTravelTime] = useState(0);
   const [selectedDest, setSelectedDest] = useState('');
+  const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(false);
 
   const fetchTravelInfo = useCallback(async () => {
     try {
-      const response = await api.get('/travel/info');
-      setTravelInfo(response.data);
+      const [infoRes, meRes] = await Promise.all([
+        api.get('/travel/info'),
+        api.get('/auto-rank/me').catch(() => ({ data: {} })),
+      ]);
+      setTravelInfo(infoRes.data);
+      setAutoRankBoozeOn(!!meRes.data?.auto_rank_booze);
     } catch (error) {
       toast.error('Failed to load travel info');
       console.error('Error fetching travel info:', error);
@@ -357,6 +364,15 @@ export default function Travel() {
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="travel-page">
+      {autoRankBoozeOn && (
+        <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs flex items-center gap-2`}>
+          <Bot size={14} className="text-amber-400 shrink-0" />
+          <span className="text-amber-200/90">
+            <strong className="text-amber-300">Auto Rank booze running is on.</strong> Manual travel is disabled. Turn off booze running in <Link to="/auto-rank" className="underline font-bold">Auto Rank</Link> to travel.
+          </span>
+        </div>
+      )}
+
       <CurrentLocationCard
         location={travelInfo?.current_location}
         travelsUsed={travelInfo?.travels_this_hour}
@@ -378,6 +394,7 @@ export default function Travel() {
               destination={dest}
               onTravel={handleTravel}
               travelInfo={travelInfo}
+              travelDisabled={autoRankBoozeOn}
             />
           ))}
         </div>

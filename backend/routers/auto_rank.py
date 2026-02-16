@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
-MIN_INTERVAL_SECONDS = 30
+MIN_INTERVAL_SECONDS = 5
 DEFAULT_INTERVAL_SECONDS = 2 * 60  # 2 minutes
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 5
@@ -157,7 +157,24 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
         return False
     city_a, city_b = round_trip[0], round_trip[1]
     current = (user.get("current_state") or "").strip()
+
+    # If not at a round-trip city, travel to the buy city (city_a) first so we can start the run
     if current not in (city_a, city_b):
+        travel_method = None
+        first_custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom"}, {"_id": 0, "id": 1})
+        if first_custom:
+            travel_method = "custom"
+        else:
+            first_car = await db.user_cars.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
+            if first_car:
+                travel_method = first_car.get("id") or str(first_car.get("_id", ""))
+        if travel_method:
+            try:
+                await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
+                lines.append(f"**Booze** — Traveling to {city_a} to start run.")
+                return True
+            except Exception as e:
+                logger.exception("Auto rank booze travel to buy city %s: %s", user_id, e)
         return False
 
     prices_map = _booze_prices_for_rotation()

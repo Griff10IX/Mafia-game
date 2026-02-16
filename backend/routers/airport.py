@@ -357,6 +357,11 @@ async def _start_travel_impl(
 
 
 async def travel(request: TravelRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("auto_rank_booze"):
+        raise HTTPException(
+            status_code=400,
+            detail="Manual travel is disabled while Auto Rank booze running is on. Turn off booze running in Auto Rank to travel.",
+        )
     return await _start_travel_impl(
         current_user,
         request.destination,

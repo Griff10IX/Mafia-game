@@ -5,7 +5,7 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
-const MIN_INTERVAL = 30;
+const MIN_INTERVAL = 5;
 
 export default function AutoRank() {
   const [loading, setLoading] = useState(true);
@@ -251,14 +251,14 @@ export default function AutoRank() {
   const canEnable = prefs.auto_rank_purchased;
 
   const ToggleRow = ({ icon: Icon, label, description, checked, disabled, onToggle }) => (
-    <div className="flex items-start justify-between gap-4 py-3 border-b border-border/50 last:border-b-0">
+    <div className="flex items-start justify-between gap-3 py-2 border-b border-border/50 last:border-b-0">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <Icon className="w-4 h-4 text-primary shrink-0" />
-          <span className={`text-sm font-heading font-medium ${disabled ? 'text-mutedForeground' : 'text-foreground'}`}>{label}</span>
+          <span className={`text-xs font-heading font-medium ${disabled ? 'text-mutedForeground' : 'text-foreground'}`}>{label}</span>
         </div>
         {description && (
-          <p className="text-xs text-mutedForeground font-heading mt-1 pl-6">{description}</p>
+          <p className="text-[11px] text-mutedForeground font-heading mt-0.5 pl-5">{description}</p>
         )}
       </div>
       <button
@@ -276,36 +276,28 @@ export default function AutoRank() {
 
   return (
     <div className={styles.pageContent}>
-      <div className="max-w-xl mx-auto space-y-6">
+      <div className="max-w-xl mx-auto space-y-4">
         {/* Hero / intro */}
         <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-          <div className="px-4 py-3 md:px-5 md:py-4 bg-primary/10 border-b border-primary/30 flex items-center gap-3">
-            <Bot className="w-6 h-6 text-primary shrink-0" />
+          <div className="px-4 py-2 md:px-5 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-3">
+            <Bot className="w-5 h-5 text-primary shrink-0" />
             <div>
-              <h1 className="text-base md:text-lg font-heading font-bold text-primary uppercase tracking-wider">Auto Rank</h1>
-              <p className="text-xs text-mutedForeground font-heading mt-0.5">Automate ranking — crimes, GTA, jail busts, and Organised Crime. Results are sent to your Telegram.</p>
+              <h1 className="text-sm md:text-base font-heading font-bold text-primary uppercase tracking-wider">Auto Rank</h1>
+              <p className="text-[11px] text-mutedForeground font-heading mt-0.5">Automate crimes, GTA, busts, OC. Results to Telegram (successes only).</p>
             </div>
           </div>
-          <div className="p-4 md:p-5 space-y-4">
-            <p className="text-sm font-heading text-foreground/90">
-              When Auto Rank is on, the game runs actions for you on a timer: bust players out of jail, commit crimes, steal cars, and (optionally) run Organised Crime heists with NPCs. You only get Telegram messages when something <strong className="text-primary">succeeds</strong>, so your inbox stays clean. A small robot icon appears in the sidebar when Auto Rank is active.
-            </p>
+          <div className="p-3 md:p-4 space-y-3">
             {!prefs.telegram_chat_id_set && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
-                <p className="text-sm font-heading font-medium text-amber-200 dark:text-amber-100 mb-1">Telegram required</p>
-                <p className="text-xs text-amber-200/90 dark:text-amber-100/90 font-heading mb-2">
-                  Auto Rank sends results to your Telegram. Without a chat ID, you won&apos;t see when it runs.
-                </p>
-                <p className="text-xs text-amber-200/90 dark:text-amber-100/90 font-heading">
-                  Go to <Link to="/profile" className="underline font-bold">Profile → Settings</Link> and set your <strong>Telegram chat ID</strong>. Get it by messaging <span className="font-mono">@userinfobot</span> on Telegram — it will reply with your ID.
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
+                <p className="text-xs font-heading text-amber-200/90 dark:text-amber-100/90">
+                  Set <strong>Telegram chat ID</strong> in <Link to="/profile" className="underline font-bold">Profile → Settings</Link> (get ID from <span className="font-mono">@userinfobot</span> on Telegram).
                 </p>
               </div>
             )}
             {!canEnable && (
-              <div className="rounded-md border border-primary/40 bg-primary/10 p-3">
-                <p className="text-sm font-heading font-medium text-primary mb-1">Unlock Auto Rank</p>
-                <p className="text-xs text-mutedForeground font-heading">
-                  Purchase Auto Rank from the <Link to="/store" className="text-primary underline font-bold">Store</Link> to turn on the main switch below. After that, choose which activities to run and you&apos;re done.
+              <div className="rounded-md border border-primary/40 bg-primary/10 p-2">
+                <p className="text-xs font-heading text-mutedForeground">
+                  Buy Auto Rank in the <Link to="/store" className="text-primary underline font-bold">Store</Link> to enable the main switch.
                 </p>
               </div>
             )}
@@ -314,26 +306,23 @@ export default function AutoRank() {
 
         {/* Your settings */}
         <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Your settings</span>
+          <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your settings</span>
           </div>
-          <div className="p-4 md:p-5">
+          <div className="p-3 md:p-4 space-y-1">
             <ToggleRow
               icon={Bot}
               label="Enable Auto Rank"
-              description="Master switch. When on, the bot runs your chosen activities on a schedule and notifies you on Telegram (successes only)."
+              description="Master switch; notifies on Telegram (successes only)."
               checked={prefs.auto_rank_enabled}
               disabled={savingPrefs || (prefs.auto_rank_enabled ? false : !canEnable)}
               onToggle={() => updatePref('auto_rank_enabled', !prefs.auto_rank_enabled)}
             />
-            <div className="pt-1 pb-2">
-              <p className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider px-0 mb-2">What should Auto Rank run?</p>
-              <p className="text-xs text-mutedForeground font-heading mb-3 pl-0">Pick which activities to automate. Each cycle runs in order: busts → crimes → GTA. OC runs on its own timer when ready.</p>
-            </div>
+            <p className="text-[10px] text-mutedForeground font-heading pt-1 pb-0.5 px-0">Cycle: busts → crimes → GTA. OC on its own timer.</p>
             <ToggleRow
               icon={Crosshair}
               label="Run crimes"
-              description="Commit available crimes automatically when your cycle runs. Uses your current success rate; failures are not reported (successes only)."
+              description="Auto-commit crimes per cycle."
               checked={prefs.auto_rank_crimes}
               disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
               onToggle={() => updatePref('auto_rank_crimes', !prefs.auto_rank_crimes)}
@@ -341,23 +330,23 @@ export default function AutoRank() {
             <ToggleRow
               icon={Car}
               label="Run GTA"
-              description="Attempt one car theft per cycle when your GTA cooldown is ready. Best car you can attempt for your rank; failures are not reported."
+              description="One theft per cycle when cooldown ready."
               checked={prefs.auto_rank_gta}
               disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
               onToggle={() => updatePref('auto_rank_gta', !prefs.auto_rank_gta)}
             />
             <ToggleRow
               icon={Lock}
-              label="Jail bust every 5 seconds"
-              description="Try to bust someone out of jail every 5 seconds (even if you're in jail). When nobody is in jail, the bot runs crimes and GTA instead, then goes back to busting. When this is on, the two toggles above are ignored — this mode does both."
+              label="Jail bust every 5 sec"
+              description="Bust every 5s; when nobody in jail, runs crimes + GTA instead."
               checked={prefs.auto_rank_bust_every_5_sec}
               disabled={savingPrefs || !prefs.auto_rank_enabled}
               onToggle={() => updatePref('auto_rank_bust_every_5_sec', !prefs.auto_rank_bust_every_5_sec)}
             />
             <ToggleRow
               icon={Briefcase}
-              label="Run Organised Crime (NPC only)"
-              description="When your OC cooldown is ready, run one heist with you + 3 NPCs. Picks the best job you can afford. If you can't afford any job, it retries in 10 minutes. Only successes are sent to Telegram."
+              label="Run Organised Crime (NPC)"
+              description="Heist with you + 3 NPCs when OC cooldown ready."
               checked={prefs.auto_rank_oc}
               disabled={savingPrefs || !prefs.auto_rank_enabled}
               onToggle={() => updatePref('auto_rank_oc', !prefs.auto_rank_oc)}
@@ -365,7 +354,7 @@ export default function AutoRank() {
             <ToggleRow
               icon={Wine}
               label="Run booze running"
-              description="Buys, travels, and sells on the round-trip route when enabled. Uses your car to travel between cities."
+              description="Buy, travel, sell on round-trip route."
               checked={prefs.auto_rank_booze}
               disabled={savingPrefs || !prefs.auto_rank_enabled}
               onToggle={() => updatePref('auto_rank_booze', !prefs.auto_rank_booze)}
@@ -376,15 +365,13 @@ export default function AutoRank() {
         {/* Stats card */}
         {canEnable && (
           <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-primary" />
-              <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Your Auto Rank stats</span>
+            <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-primary" />
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your Auto Rank stats</span>
             </div>
-            <div className="p-4 md:p-5">
-              <p className="text-xs text-mutedForeground font-heading mb-4">
-                Lifetime totals from successful Auto Rank runs (busts, crimes, GTAs). Cash is from crimes and bust rewards. &quot;Running&quot; is time since you first had stats recorded.
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+            <div className="p-3 md:p-4">
+              <p className="text-[11px] text-mutedForeground font-heading mb-3">Lifetime busts, crimes, GTAs, cash. Running = time since first stats.</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
                 <div className="rounded-md bg-secondary/50 border border-border/50 p-3 text-center">
                   <div className="text-lg font-heading font-bold text-foreground">{stats.total_busts.toLocaleString()}</div>
                   <div className="text-xs font-heading text-mutedForeground uppercase tracking-wider">Busts</div>
