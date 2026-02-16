@@ -376,43 +376,10 @@ export default function Jail() {
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Bust stats</span>
         </div>
-        <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm font-heading">
-          <div className="rounded bg-primary/10 border border-primary/30 p-2 text-center">
-            <div className="text-lg font-bold text-primary">{jailStatus.current_consecutive_busts ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Streak</div>
-            <div className="text-[9px] text-mutedForeground/80 mt-0.5">Successful busts without going to jail</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-foreground">{jailStatus.consecutive_busts_record ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Record</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-foreground">{jailStats.count_today ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-foreground">{jailStats.count_week ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Past week</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{jailStats.success_today ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Success today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{jailStats.success_week ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Success week</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
-            <div className="text-lg font-bold text-primary">${(jailStats.profit_today ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
-            <div className="text-lg font-bold text-primary">${(jailStats.profit_24h ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit past 24h</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2 md:col-span-4">
-            <div className="text-lg font-bold text-primary">${(jailStats.profit_week ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit past week</div>
+        <div className="p-3 text-sm font-heading text-foreground">
+          Busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}  total successful busts {jailStats.success_today ?? 0}
+          <div className="mt-1.5 text-mutedForeground text-xs">
+            Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts, {jailStats.success_week ?? 0} successful  ·  Profit today ${(jailStats.profit_today ?? 0).toLocaleString()}  ·  Past week ${(jailStats.profit_week ?? 0).toLocaleString()}
           </div>
         </div>
       </div>

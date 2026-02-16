@@ -1056,6 +1056,7 @@ async def startup_db():
     from routers import auto_rank
     asyncio.create_task(auto_rank.run_auto_rank_loop())
     asyncio.create_task(auto_rank.run_bust_5sec_loop())
+    asyncio.create_task(auto_rank.run_auto_rank_oc_loop())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

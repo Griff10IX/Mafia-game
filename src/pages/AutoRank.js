@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -15,6 +15,7 @@ export default function AutoRank() {
     auto_rank_crimes: true,
     auto_rank_gta: true,
     auto_rank_bust_every_5_sec: false,
+    auto_rank_oc: false,
     auto_rank_purchased: false,
     telegram_chat_id_set: false,
   });
@@ -66,6 +67,7 @@ export default function AutoRank() {
             auto_rank_crimes: meRes.data.auto_rank_crimes !== false,
             auto_rank_gta: meRes.data.auto_rank_gta !== false,
             auto_rank_bust_every_5_sec: !!meRes.data.auto_rank_bust_every_5_sec,
+            auto_rank_oc: !!meRes.data.auto_rank_oc,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
             telegram_chat_id_set: !!meRes.data.telegram_chat_id_set,
           });
@@ -108,6 +110,7 @@ export default function AutoRank() {
         auto_rank_crimes: res.data?.auto_rank_crimes ?? p.auto_rank_crimes,
         auto_rank_gta: res.data?.auto_rank_gta ?? p.auto_rank_gta,
         auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec ?? p.auto_rank_bust_every_5_sec,
+        auto_rank_oc: res.data?.auto_rank_oc ?? p.auto_rank_oc,
       }));
       toast.success('Saved');
     } catch (e) {
@@ -298,7 +301,27 @@ export default function AutoRank() {
                   <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs.auto_rank_bust_every_5_sec ? 'translate-x-5' : 'translate-x-0.5'}`} />
                 </button>
               </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm font-heading text-foreground flex items-center gap-1.5">
+                  <Briefcase className="w-4 h-4 text-primary" /> Run Organised Crime (NPC only)
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={prefs.auto_rank_oc}
+                  disabled={savingPrefs || !prefs.auto_rank_enabled}
+                  onClick={() => updatePref('auto_rank_oc', !prefs.auto_rank_oc)}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs.auto_rank_oc ? 'bg-primary border-primary/50' : 'bg-secondary border-border'} ${savingPrefs ? 'opacity-60' : ''}`}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs.auto_rank_oc ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
             </div>
+            {prefs.auto_rank_oc && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 font-heading">
+                Runs when your OC timer is ready. Only the best job you can afford is run, with NPC crew only. If you can&apos;t afford any job, it retries in 10 minutes.
+              </p>
+            )}
             {prefs.auto_rank_bust_every_5_sec && (
               <p className="text-xs text-amber-600 dark:text-amber-400 font-heading">
                 With this on, busts are tried every 5 seconds (even when you&apos;re in jail). When jail is empty, crimes and GTA run instead, then busting resumes. Run crimes / Run GTA are disabled here since this mode handles them.
@@ -456,6 +479,7 @@ export default function AutoRank() {
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Crimes</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">GTA</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Bust 5s</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">OC</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Chat ID</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Token</th>
                       <th className="py-2 font-bold text-mutedForeground uppercase text-xs">Actions</th>
@@ -471,6 +495,7 @@ export default function AutoRank() {
                         <td className="py-2 pr-2">{u.auto_rank_crimes ? 'On' : 'Off'}</td>
                         <td className="py-2 pr-2">{u.auto_rank_gta ? 'On' : 'Off'}</td>
                         <td className="py-2 pr-2">{u.auto_rank_bust_every_5_sec ? 'On' : 'Off'}</td>
+                        <td className="py-2 pr-2">{u.auto_rank_oc ? 'On' : 'Off'}</td>
                         <td className="py-2 pr-2">
                           {editingChatId[u.username] ? (
                             <div className="flex gap-1 items-center">

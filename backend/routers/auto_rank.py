@@ -433,6 +433,68 @@ async def run_bust_5sec_loop():
 
 
 LOOP_WAKE_SECONDS = 15  # How often we check who's due for a run
+OC_LOOP_INTERVAL_SECONDS = 60  # How often we check OC timer for auto-rank OC users
+OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60  # 10 minutes if user can't afford an OC
+
+
+async def run_auto_rank_oc_loop():
+    """Background loop: every OC_LOOP_INTERVAL_SECONDS, for users with auto_rank_oc, run OC with NPC only when timer is ready. Skip if can't afford and retry in 10 min."""
+    import server as srv
+    from routers.oc import run_oc_heist_npc_only
+    from security import send_telegram_to_chat
+
+    db = srv.db
+    await asyncio.sleep(90)  # Start after main loops
+    while True:
+        if not await get_auto_rank_enabled(db):
+            await asyncio.sleep(10)
+            continue
+        now = datetime.now(timezone.utc)
+        try:
+            cursor = db.users.find(
+                {
+                    "auto_rank_enabled": True,
+                    "auto_rank_oc": True,
+                    "telegram_chat_id": {"$exists": True, "$nin": [None, ""]},
+                },
+                {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
+            )
+            users = await cursor.to_list(500)
+            for u in users:
+                retry_at = _parse_iso(u.get("auto_rank_oc_retry_at"))
+                if retry_at and now < retry_at:
+                    continue
+                chat_id = (u.get("telegram_chat_id") or "").strip()
+                if not chat_id:
+                    continue
+                bot_token = (u.get("telegram_bot_token") or "").strip() or None
+                try:
+                    result = await run_oc_heist_npc_only(u["id"])
+                    if result.get("skipped_afford"):
+                        retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
+                        await db.users.update_one(
+                            {"id": u["id"]},
+                            {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}},
+                        )
+                        continue
+                    if result.get("ran"):
+                        if result.get("success"):
+                            msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
+                        else:
+                            msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist failed')}."
+                        await send_telegram_to_chat(chat_id, msg, bot_token)
+                    if result.get("ran"):
+                        await db.users.update_one(
+                            {"id": u["id"]},
+                            {"$unset": {"auto_rank_oc_retry_at": ""}},
+                        )
+                except Exception as e:
+                    logger.exception("Auto rank OC for user %s: %s", u.get("id"), e)
+                await asyncio.sleep(0.5)
+        except Exception as e:
+            logger.exception("Auto rank OC cycle failed: %s", e)
+        await asyncio.sleep(OC_LOOP_INTERVAL_SECONDS)
+
 
 async def run_auto_rank_loop():
     """Background loop: wake every LOOP_WAKE_SECONDS, process any user whose next_run_at is due. Each user has their own cycle (next run = now + interval)."""
@@ -468,6 +530,7 @@ def register(router):
         auto_rank_crimes: Optional[bool] = None
         auto_rank_gta: Optional[bool] = None
         auto_rank_bust_every_5_sec: Optional[bool] = None
+        auto_rank_oc: Optional[bool] = None
 
     @router.get("/auto-rank/me")
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
@@ -478,6 +541,7 @@ def register(router):
             "auto_rank_crimes": current_user.get("auto_rank_crimes", True),
             "auto_rank_gta": current_user.get("auto_rank_gta", True),
             "auto_rank_bust_every_5_sec": current_user.get("auto_rank_bust_every_5_sec", False),
+            "auto_rank_oc": current_user.get("auto_rank_oc", False),
             "auto_rank_purchased": current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False),
             "telegram_chat_id_set": bool(chat_id),
         }
@@ -522,16 +586,19 @@ def register(router):
             updates["auto_rank_gta"] = body.auto_rank_gta
         if body.auto_rank_bust_every_5_sec is not None:
             updates["auto_rank_bust_every_5_sec"] = body.auto_rank_bust_every_5_sec
+        if body.auto_rank_oc is not None:
+            updates["auto_rank_oc"] = body.auto_rank_oc
         if not updates:
-            return {"message": "No changes", "auto_rank_enabled": current_user.get("auto_rank_enabled"), "auto_rank_crimes": current_user.get("auto_rank_crimes"), "auto_rank_gta": current_user.get("auto_rank_gta"), "auto_rank_bust_every_5_sec": current_user.get("auto_rank_bust_every_5_sec", False)}
+            return {"message": "No changes", "auto_rank_enabled": current_user.get("auto_rank_enabled"), "auto_rank_crimes": current_user.get("auto_rank_crimes"), "auto_rank_gta": current_user.get("auto_rank_gta"), "auto_rank_bust_every_5_sec": current_user.get("auto_rank_bust_every_5_sec", False), "auto_rank_oc": current_user.get("auto_rank_oc", False)}
         await db.users.update_one({"id": user_id}, {"$set": updates})
-        updated = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1})
+        updated = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "auto_rank_oc": 1})
         return {
             "message": "Preferences saved",
             "auto_rank_enabled": updated.get("auto_rank_enabled", False),
             "auto_rank_crimes": updated.get("auto_rank_crimes", True),
             "auto_rank_gta": updated.get("auto_rank_gta", True),
             "auto_rank_bust_every_5_sec": updated.get("auto_rank_bust_every_5_sec", False),
+            "auto_rank_oc": updated.get("auto_rank_oc", False),
         }
 
     @router.get("/auto-rank/interval")
@@ -602,7 +669,7 @@ def register(router):
                     {"auto_rank_enabled": True},
                 ],
             },
-            {"_id": 0, "id": 1, "username": 1, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
+            {"_id": 0, "id": 1, "username": 1, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "auto_rank_oc": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
         )
         users = await cursor.to_list(500)
         return {
@@ -614,6 +681,7 @@ def register(router):
                     "auto_rank_crimes": u.get("auto_rank_crimes", True),
                     "auto_rank_gta": u.get("auto_rank_gta", True),
                     "auto_rank_bust_every_5_sec": u.get("auto_rank_bust_every_5_sec", False),
+                    "auto_rank_oc": u.get("auto_rank_oc", False),
                     "telegram_chat_id": u.get("telegram_chat_id") or "",
                     "telegram_bot_token": u.get("telegram_bot_token") or "",
                 }

@@ -435,6 +435,139 @@ async def oc_pending_set_slot(
     return {"message": f"Invite sent to {target.get('username') or val}.", "invite_id": invite_id}
 
 
+async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list) -> dict:
+    """Run one OC heist: cooldown check, charge, roll, set cooldown, apply rewards. Caller must have validated job and resolved. Returns result dict."""
+    now = datetime.now(timezone.utc)
+    current_user = await db.users.find_one({"id": uid}, {"_id": 0})
+    if not current_user:
+        return {"success": False, "message": "User not found", "cooldown_until": None}
+    has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
+    cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if has_timer_upgrade else OC_COOLDOWN_HOURS
+    cooldown_until = current_user.get("oc_cooldown_until")
+    if cooldown_until:
+        until = _parse_iso_datetime(cooldown_until)
+        if until and until > now:
+            secs = int((until - now).total_seconds())
+            return {"success": False, "message": f"OC cooldown: try again in {secs}s", "cooldown_until": cooldown_until}
+    user_oc = await db.user_organised_crime.find_one({"user_id": uid}, {"_id": 0, "selected_equipment": 1})
+    selected_id = (user_oc or {}).get("selected_equipment", "basic")
+    equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
+    total_cost = OC_SETUP_COST + equip["cost"]
+    creator_money = int(current_user.get("money") or 0)
+    if creator_money < total_cost:
+        return {
+            "success": False,
+            "message": f"Not enough money. Need ${total_cost:,}",
+            "cooldown_until": None,
+            "skipped_afford": True,
+        }
+    await db.users.update_one({"id": uid}, {"$inc": {"money": -total_cost}})
+    ev = await get_effective_event()
+    rank_mult = float(ev.get("rank_points", 1.0))
+    cash_mult = float(ev.get("kill_cash", 1.0))
+    success_rate = min(0.92, job["success_rate"] + equip["success_bonus"])
+    success = random.random() < success_rate
+    new_cooldown_until = now + timedelta(hours=cooldown_hours)
+    await db.users.update_one(
+        {"id": uid},
+        {"$set": {"oc_cooldown_until": new_cooldown_until.isoformat()}},
+    )
+    if not success:
+        return {
+            "success": False,
+            "message": random.choice(OC_TEAM_HEIST_FAIL_MESSAGES),
+            "cooldown_until": new_cooldown_until.isoformat(),
+        }
+    user_ids = [r for r in resolved if r is not None]
+    num_humans = len(user_ids)
+    num_npcs = 4 - num_humans
+    total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
+    cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
+    rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
+    user_map = {}
+    if user_ids:
+        users_raw = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "rank_points": 1, "username": 1},
+        ).to_list(10)
+        user_map = {u["id"]: u for u in users_raw}
+    cash_each = rp_each = 0
+    for i, user_id in enumerate(resolved):
+        pct = pcts[i]
+        cash_add = int(cash_pool * pct / 100)
+        rp_add = int(rp_pool * pct / 100)
+        if user_id is None:
+            cash_each += cash_add
+            rp_each += rp_add
+            continue
+        if user_id == uid:
+            cash_each += cash_add
+            rp_each += rp_add
+        rp_before = int((user_map.get(user_id) or {}).get("rank_points") or 0)
+        await db.users.update_one(
+            {"id": user_id},
+            {"$inc": {"money": cash_add, "rank_points": rp_add, "total_oc_heists": 1}},
+        )
+        if rp_add > 0:
+            try:
+                await maybe_process_rank_up(
+                    user_id,
+                    rp_before,
+                    rp_add,
+                    (user_map.get(user_id) or {}).get("username", ""),
+                )
+            except Exception as e:
+                logger.exception("Rank-up notification (team OC): %s", e)
+    msg = random.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
+    return {
+        "success": True,
+        "message": msg,
+        "cash_earned": cash_each,
+        "rp_earned": rp_each,
+        "cooldown_until": new_cooldown_until.isoformat(),
+    }
+
+
+async def run_oc_heist_npc_only(user_id: str) -> dict:
+    """Run one OC heist with self + 3 NPCs if timer is ready and user can afford a job. For Auto Rank. Returns {ran, success, message, cooldown_until, skipped_afford}."""
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "id": 1, "oc_cooldown_until": 1, "money": 1, "oc_timer_reduced": 1},
+    )
+    if not user:
+        return {"ran": False, "success": False, "message": "User not found", "skipped_afford": False}
+    now = datetime.now(timezone.utc)
+    cooldown_until = user.get("oc_cooldown_until")
+    if cooldown_until:
+        until = _parse_iso_datetime(cooldown_until)
+        if until and until > now:
+            return {"ran": False, "success": False, "message": "Cooldown active", "cooldown_until": cooldown_until, "skipped_afford": False}
+    user_oc = await db.user_organised_crime.find_one({"user_id": user_id}, {"_id": 0, "selected_equipment": 1})
+    selected_id = (user_oc or {}).get("selected_equipment", "basic")
+    equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
+    money = int(user.get("money") or 0)
+    best_job = None
+    for job in reversed(OC_JOBS):
+        total_cost = OC_SETUP_COST + equip["cost"]
+        if money >= total_cost:
+            best_job = job
+            break
+    if not best_job:
+        return {"ran": False, "success": False, "message": "Cannot afford any job", "skipped_afford": True}
+    resolved = [user_id, None, None, None]
+    pcts = [25, 25, 25, 25]
+    result = await _execute_oc_heist_core(user_id, best_job, resolved, pcts)
+    if result.get("skipped_afford"):
+        return {"ran": False, "success": False, "message": result.get("message", "Cannot afford"), "skipped_afford": True}
+    return {
+        "ran": True,
+        "success": result.get("success", False),
+        "message": result.get("message", ""),
+        "cooldown_until": result.get("cooldown_until"),
+        "skipped_afford": False,
+    }
+
+
 async def execute_oc(
     request: OCExecuteRequest,
     current_user: dict = Depends(get_current_user),
@@ -504,109 +637,16 @@ async def execute_oc(
                 if other.get("is_dead"):
                     raise HTTPException(status_code=400, detail="Cannot include dead players")
 
-    now = datetime.now(timezone.utc)
-    has_timer_upgrade = bool(current_user.get("oc_timer_reduced", False))
-    cooldown_hours = OC_COOLDOWN_HOURS_REDUCED if has_timer_upgrade else OC_COOLDOWN_HOURS
-    cooldown_until = current_user.get("oc_cooldown_until")
-    if cooldown_until:
-        until = _parse_iso_datetime(cooldown_until)
-        if until and until > now:
-            secs = int((until - now).total_seconds())
-            raise HTTPException(status_code=400, detail=f"OC cooldown: try again in {secs}s")
-
-    ev = await get_effective_event()
-    rank_mult = float(ev.get("rank_points", 1.0))
-    cash_mult = float(ev.get("kill_cash", 1.0))
-    # Equipment (from Organised Crime page) boosts success chance; cap 92%
-    user_oc = await db.user_organised_crime.find_one({"user_id": uid}, {"_id": 0, "selected_equipment": 1})
-    selected_id = (user_oc or {}).get("selected_equipment", "basic")
-    equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
-    total_cost = OC_SETUP_COST + equip["cost"]
-    creator_money = int(current_user.get("money") or 0)
-    if creator_money < total_cost:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Not enough money. Need ${total_cost:,} (${OC_SETUP_COST:,} setup + ${equip['cost']:,} equipment)",
-        )
-    # Charge creator upfront (setup + equipment); reward pool is always > cost so split is still profitable
-    await db.users.update_one(
-        {"id": uid},
-        {"$inc": {"money": -total_cost}},
-    )
-
-    success_rate = min(0.92, job["success_rate"] + equip["success_bonus"])
-    success = random.random() < success_rate
-
-    new_cooldown_until = now + timedelta(hours=cooldown_hours)
-    await db.users.update_one(
-        {"id": uid},
-        {"$set": {"oc_cooldown_until": new_cooldown_until.isoformat()}},
-    )
-
-    if not success:
-        return {
-            "success": False,
-            "message": random.choice(OC_TEAM_HEIST_FAIL_MESSAGES),
-            "cooldown_until": new_cooldown_until.isoformat(),
-        }
-
-    # Pool size: NPC slots reduce total (35% share per NPC)
-    user_ids = [r for r in resolved if r is not None]
-    num_humans = len(user_ids)
-    num_npcs = 4 - num_humans
-    total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
-    cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
-    rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
-    user_map = {}
-    if user_ids:
-        users_raw = await db.users.find(
-            {"id": {"$in": user_ids}},
-            {"_id": 0, "id": 1, "rank_points": 1, "username": 1},
-        ).to_list(10)
-        user_map = {u["id"]: u for u in users_raw}
-    # Each human gets that slot's % of the pool; NPC slots' share goes to the creator
-    cash_each = rp_each = 0
-    for i, user_id in enumerate(resolved):
-        pct = pcts[i]
-        cash_add = int(cash_pool * pct / 100)
-        rp_add = int(rp_pool * pct / 100)
-        if user_id is None:
-            cash_each += cash_add
-            rp_each += rp_add
-            continue
-        if user_id == uid:
-            cash_each += cash_add
-            rp_each += rp_add
-        rp_before = int((user_map.get(user_id) or {}).get("rank_points") or 0)
-        await db.users.update_one(
-            {"id": user_id},
-            {
-                "$inc": {
-                    "money": cash_add,
-                    "rank_points": rp_add,
-                    "total_oc_heists": 1,
-                }
-            },
-        )
-        if rp_add > 0:
-            try:
-                await maybe_process_rank_up(
-                    user_id,
-                    rp_before,
-                    rp_add,
-                    (user_map.get(user_id) or {}).get("username", ""),
-                )
-            except Exception as e:
-                logger.exception("Rank-up notification (team OC): %s", e)
-
-    msg = random.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
-    return {
-        "success": True,
-        "message": msg,
-        "cash_earned": cash_each,
-        "rp_earned": rp_each,
-        "cooldown_until": new_cooldown_until.isoformat(),
-    }
+    result = await _execute_oc_heist_core(uid, job, resolved, pcts)
+    if result.get("skipped_afford"):
+        raise HTTPException(status_code=400, detail=result.get("message", "Not enough money"))
+    if not result.get("success") and result.get("cooldown_until") and "cooldown" in (result.get("message") or ""):
+        raise HTTPException(status_code=400, detail=result.get("message", "OC cooldown"))
+    out = {"success": result.get("success", False), "message": result.get("message", ""), "cooldown_until": result.get("cooldown_until")}
+    if result.get("success"):
+        out["cash_earned"] = result.get("cash_earned", 0)
+        out["rp_earned"] = result.get("rp_earned", 0)
+    return out
 
 
 def register(router):
