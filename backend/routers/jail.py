@@ -5,21 +5,40 @@ import re
 import random
 import uuid
 from datetime import datetime, timezone, timedelta
+from typing import Optional, List
 from fastapi import Depends, HTTPException
+from pydantic import BaseModel
 
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# ---------------------------------------------------------------------------
+# Request models
+# ---------------------------------------------------------------------------
+
+class BustOutRequest(BaseModel):
+    target_username: str
+
+
+class JailSetBustRewardRequest(BaseModel):
+    amount: int  # $ reward for whoever busts you out (0 to clear)
+
+
+class NPCToggleRequest(BaseModel):
+    enabled: bool
+    count: int
+
+
+# ---------------------------------------------------------------------------
+
 from server import (
     db,
     get_current_user,
     get_rank_info,
     maybe_process_rank_up,
     update_objectives_progress,
-    BustOutRequest,
-    JailSetBustRewardRequest,
     ADMIN_EMAILS,
-    NPCToggleRequest,
     RANKS,
     STATES,
 )
@@ -78,6 +97,24 @@ def _player_bust_success_rate(total_attempts: int) -> float:
         return 0.90  # 90% - Master buster (was 85% at 25k)
 
 
+# Cache for jail NPCs list (invalidated when spawn adds or bust removes an NPC)
+_jail_npcs_cache: Optional[List[dict]] = None
+
+
+def _invalidate_jail_npcs_cache():
+    global _jail_npcs_cache
+    _jail_npcs_cache = None
+
+
+async def _get_jail_npcs():
+    """Return jail NPCs list, using cache when valid."""
+    global _jail_npcs_cache
+    if _jail_npcs_cache is not None:
+        return _jail_npcs_cache
+    _jail_npcs_cache = await db.jail_npcs.find({}, {"_id": 0}).to_list(20)
+    return _jail_npcs_cache
+
+
 async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     real_players_raw = await db.users.find(
@@ -106,7 +143,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             )
             continue
         real_players.append(p)
-    npcs = await db.jail_npcs.find({}, {"_id": 0}).to_list(20)
+    npcs = await _get_jail_npcs()
     players_data = []
     for player in real_players:
         rank_id, rank_name = get_rank_info(player.get("rank_points", 0))
@@ -168,6 +205,7 @@ async def bust_out_of_jail(
             except Exception as e:
                 logger.exception("Rank-up notification (jail NPC bust): %s", e)
             await db.jail_npcs.delete_one({"username": npc["username"]})
+            _invalidate_jail_npcs_cache()
             try:
                 await update_objectives_progress(current_user["id"], "busts", 1)
             except Exception:
@@ -424,6 +462,7 @@ async def spawn_jail_npcs():
                         "bust_reward_cash": bust_reward_cash,
                         "spawned_at": datetime.now(timezone.utc).isoformat(),
                     })
+                    _invalidate_jail_npcs_cache()
         except Exception as e:
             logger.error(f"Error spawning jail NPC: {e}")
             await asyncio.sleep(60)

@@ -423,10 +423,6 @@ class BoozeSellRequest(BaseModel):
     booze_id: str
     amount: int
 
-class NPCToggleRequest(BaseModel):
-    enabled: bool
-    count: int
-
 class DeadAliveRetrieveRequest(BaseModel):
     dead_username: str
     dead_password: str
@@ -811,14 +807,6 @@ class CustomCarImageUpdate(BaseModel):
 
 class ArmourBuyRequest(BaseModel):
     level: int  # 1-5
-
-class BustOutRequest(BaseModel):
-    target_username: str
-
-
-class JailSetBustRewardRequest(BaseModel):
-    amount: int  # $ reward for whoever busts you out (0 to clear)
-
 
 class ProtectionRacketRequest(BaseModel):
     target_username: str
