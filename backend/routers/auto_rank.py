@@ -39,12 +39,20 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         )
         return
 
+    await send_telegram_to_chat(
+        telegram_chat_id,
+        f"**Auto Rank** — {username}\n\nSending results…",
+    )
+
     now = datetime.now(timezone.utc)
     lines = [f"**Auto Rank** — {username}", ""]
 
     # --- Crimes: commit ALL that are off cooldown and rank-eligible (loop until none left) ---
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
-    crime_count = 0
+    crime_success_count = 0
+    crime_fail_count = 0
+    crime_total_cash = 0
+    crime_total_rp = 0  # 3 RP per successful crime
     while True:
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if not user or user.get("in_jail"):
@@ -62,18 +70,25 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         c = available[0]
         try:
             out = await _commit_crime_impl(c["id"], user)
-            crime_count += 1
             if out.success:
-                r = out.reward if out.reward is not None else 0
-                lines.append(f"**Crime** — Success: ${r:,} + RP. {out.message}")
+                crime_success_count += 1
+                crime_total_cash += out.reward if out.reward is not None else 0
+                crime_total_rp += 3
             else:
-                lines.append(f"**Crime** — Failed. {out.message}")
+                crime_fail_count += 1
         except Exception as e:
             logger.exception("Auto rank crime for %s: %s", user_id, e)
-            lines.append(f"**Crime** — Error: {e!s}")
+            crime_fail_count += 1
             break
-    if crime_count == 0:
+    if crime_success_count == 0 and crime_fail_count == 0:
         lines.append("**Crimes** — None off cooldown.")
+    else:
+        parts = [f"Committed {crime_success_count + crime_fail_count} crime(s)"]
+        if crime_success_count:
+            parts.append(f"earned ${crime_total_cash:,} and {crime_total_rp} RP")
+        if crime_fail_count:
+            parts.append(f"{crime_fail_count} failed")
+        lines.append("**Crimes** — " + ". ".join(parts) + ".")
 
     # Refresh user after crimes (money/rank may have changed; might be in_jail)
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
