@@ -348,6 +348,16 @@ def register(router):
         )
         return {"message": f"Reset hitlist NPC timers for all users ({result.modified_count} accounts)", "modified_count": result.modified_count}
 
+    @router.post("/admin/oc/reset-all-timers")
+    async def admin_reset_all_oc_timers(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        result = await db.users.update_many(
+            {},
+            {"$unset": {"oc_cooldown_until": ""}}
+        )
+        return {"message": f"Reset OC timers for all users ({result.modified_count} accounts)", "modified_count": result.modified_count}
+
     @router.post("/admin/force-online")
     async def admin_force_online(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

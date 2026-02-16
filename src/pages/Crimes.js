@@ -394,34 +394,10 @@ export default function Crimes() {
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Crimes stats</span>
         </div>
-        <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm font-heading">
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-foreground">{crimeStats.count_today ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-foreground">{crimeStats.count_week ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Past week</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{crimeStats.success_today ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Success today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{crimeStats.success_week ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Success week</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
-            <div className="text-lg font-bold text-primary">${(crimeStats.profit_today ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
-            <div className="text-lg font-bold text-primary">${(crimeStats.profit_24h ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit past 24h</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2 md:col-span-4">
-            <div className="text-lg font-bold text-primary">${(crimeStats.profit_week ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit past week</div>
+        <div className="p-3 text-sm font-heading text-foreground">
+          Crimes today: {crimeStats.count_today ?? 0}  successful today {crimeStats.success_today ?? 0}  past week {crimeStats.count_week ?? 0} ({crimeStats.success_week ?? 0} successful)
+          <div className="mt-1.5 text-mutedForeground text-xs">
+            Profit today ${(crimeStats.profit_today ?? 0).toLocaleString()}  ·  Past 24h ${(crimeStats.profit_24h ?? 0).toLocaleString()}  ·  Past week ${(crimeStats.profit_week ?? 0).toLocaleString()}
           </div>
         </div>
       </div>

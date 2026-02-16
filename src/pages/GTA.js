@@ -452,35 +452,8 @@ export default function GTA() {
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">GTA stats</span>
         </div>
-        <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm font-heading">
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-foreground">{gtaStats.count_today ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-foreground">{gtaStats.count_week ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Past week</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{gtaStats.success_today ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Success today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
-            <div className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{gtaStats.success_week ?? 0}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Success week</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
-            <div className="text-lg font-bold text-primary">${(gtaStats.profit_today ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit today</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2">
-            <div className="text-lg font-bold text-primary">${(gtaStats.profit_24h ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit past 24h</div>
-          </div>
-          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center sm:col-span-2 md:col-span-4">
-            <div className="text-lg font-bold text-primary">${(gtaStats.profit_week ?? 0).toLocaleString()}</div>
-            <div className="text-[10px] text-mutedForeground uppercase">Profit past week</div>
-          </div>
+        <div className="p-3 text-sm font-heading text-foreground">
+          GTAs today: {gtaStats.count_today ?? 0}  successful today {gtaStats.success_today ?? 0}  past week {gtaStats.count_week ?? 0} ({gtaStats.success_week ?? 0} successful)
         </div>
       </div>
 

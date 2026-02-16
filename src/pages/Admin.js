@@ -52,6 +52,7 @@ export default function Admin() {
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
+  const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
@@ -270,6 +271,16 @@ export default function Admin() {
       toast.success(res.data?.message || 'Reset');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setResetNpcTimersLoading(false); }
+  };
+
+  const handleResetAllOcTimers = async () => {
+    if (!window.confirm('Reset all OC timers for everyone? Everyone will be able to run Organised Crime immediately.')) return;
+    setResetOcTimersLoading(true);
+    try {
+      const res = await api.post('/admin/oc/reset-all-timers');
+      toast.success(res.data?.message || 'Reset');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setResetOcTimersLoading(false); }
   };
 
   const handleForceOnline = async () => {
@@ -837,6 +848,12 @@ export default function Admin() {
             <ActionRow icon={Clock} label="Reset Hitlist NPC Timers" description="All users can add NPCs again">
               <BtnPrimary onClick={handleResetHitlistNpcTimers} disabled={resetNpcTimersLoading}>
                 {resetNpcTimersLoading ? '...' : 'Reset'}
+              </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Clock} label="Reset All OC Timers" description="Clear OC cooldown for everyone; all can run Organised Crime immediately">
+              <BtnPrimary onClick={handleResetAllOcTimers} disabled={resetOcTimersLoading}>
+                {resetOcTimersLoading ? '...' : 'Reset'}
               </BtnPrimary>
             </ActionRow>
           </div>

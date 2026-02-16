@@ -126,6 +126,8 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
             return
         bust_result = await _attempt_bust_impl(user, bust_target_username)
         if bust_result.get("error"):
+            msg = f"**Auto Rank** — {username}\n\n**Bust** — {bust_result.get('error', 'Failed')}."
+            await send_telegram_to_chat(telegram_chat_id, msg, token)
             return
         if bust_result.get("success"):
             rp = bust_result.get("rank_points_earned") or 0
@@ -167,6 +169,11 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if last_at and (now - last_at).total_seconds() < CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC:
             return
         if user.get("in_jail"):
+            await send_telegram_to_chat(
+                telegram_chat_id,
+                f"**Auto Rank** — {username}\n\nYou're in jail. No auto actions this run.",
+                token,
+            )
             return
 
     if not bust_every_5 and user.get("in_jail"):
