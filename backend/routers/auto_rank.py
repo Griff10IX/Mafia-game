@@ -10,7 +10,7 @@ MIN_INTERVAL_SECONDS = 30
 DEFAULT_INTERVAL_SECONDS = 2 * 60  # 2 minutes
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 5
-CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 5 * 60  # 5 minutes
+CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 30  # 30 seconds when jail empty (bust-every-5s fallback)
 
 
 async def get_auto_rank_interval_seconds(db) -> int:
@@ -180,6 +180,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
 
     run_crimes = user.get("auto_rank_crimes", True)
     run_gta = user.get("auto_rank_gta", True)
+    if bust_every_5:
+        run_crimes = True
+        run_gta = True
 
     # --- Crimes: commit ALL that are off cooldown and rank-eligible (loop until none left) ---
     if not run_crimes:
