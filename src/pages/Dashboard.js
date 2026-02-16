@@ -114,7 +114,7 @@ const StatCard = ({ stat }) => {
   
   return (
     <div
-      className="bg-card border border-border rounded-md p-4 flex items-start gap-3 hover:border-primary/30 transition-all"
+      className={`${styles.panel} border border-border rounded-md p-4 flex items-start gap-3 hover:border-primary/30 transition-all`}
       data-testid={stat.testId}
     >
       <div className="p-2 rounded-md bg-primary/20 border border-primary/30 shrink-0">
@@ -134,7 +134,7 @@ const StatCard = ({ stat }) => {
               </TooltipTrigger>
               <TooltipContent 
                 side="top" 
-                className="bg-card text-foreground border-primary/30 rounded-md px-3 py-2 text-sm font-heading"
+                className={`${styles.panel} text-foreground border-primary/30 rounded-md px-3 py-2 text-sm font-heading`}
               >
                 {stat.tooltip}
               </TooltipContent>
@@ -160,7 +160,7 @@ const QuickActionCard = ({ action }) => {
     <Link
       to={action.to}
       data-testid={`quick-action-${action.id}`}
-      className="group bg-card border border-border rounded-md p-4 flex items-center gap-3 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all touch-manipulation"
+      className={`group ${styles.panel} border border-border rounded-md p-4 flex items-center gap-3 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all touch-manipulation`}
     >
       <div className="p-2 rounded-md bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0 transition-colors">
         <Icon className="text-primary" size={20} />

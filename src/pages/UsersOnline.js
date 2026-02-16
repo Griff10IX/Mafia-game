@@ -38,7 +38,7 @@ const PageHeader = () => (
 );
 
 const OnlineCountCard = ({ totalOnline }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         👥 Activity Status
@@ -68,7 +68,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 
   return (
     <div
-      className="bg-card rounded-md border border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all px-3 py-2"
+      className={`${styles.panel} rounded-md border border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all px-3 py-2`}
       data-testid="user-card"
     >
       <div className="flex items-center gap-2">
@@ -85,7 +85,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
           <HoverCardContent 
             align="start" 
             sideOffset={8} 
-            className="w-80 max-w-[90vw] bg-card border-2 border-primary/30 rounded-lg shadow-2xl p-0 overflow-hidden"
+            className={`w-80 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl p-0 overflow-hidden`}
           >
             {preview?.error ? (
               <div className="p-4 text-sm text-mutedForeground font-heading">
@@ -208,7 +208,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 };
 
 const InfoCard = () => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         ℹ️ How It Works
@@ -304,7 +304,7 @@ export default function UsersOnline() {
       <OnlineCountCard totalOnline={totalOnline} />
 
       {users.length === 0 ? (
-        <div className="bg-card rounded-md border border-border py-16 text-center" data-testid="no-users">
+        <div className={`${styles.panel} rounded-md border border-border py-16 text-center`} data-testid="no-users">
           <Users size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">
             No other users online
@@ -314,7 +314,7 @@ export default function UsersOnline() {
           </p>
         </div>
       ) : (
-        <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
           <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
             <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
               👤 Active Users ({users.length})

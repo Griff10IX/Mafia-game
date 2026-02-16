@@ -60,7 +60,7 @@ const StatsCard = ({ config, timer }) => {
   const carryingTotal = config.carrying_total ?? 0;
   
   return (
-    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
       <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
         <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
           📊 Overview
@@ -153,7 +153,7 @@ const RouteItem = ({ r }) => (
 );
 
 const BestRoutesCard = ({ routes, title }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
         {title}
@@ -177,7 +177,7 @@ const BestRoutesCard = ({ routes, title }) => (
 
 /** One combined card: "Sell in [cityA]" (3) + "Run back" buy cityA → sell cityB (3) */
 const BestRoutesCombinedCard = ({ cityA, cityB, sellInCityARoutes, runBackRoutes }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
         🗺️ Best routes: sell in {cityA} & run to {cityB}
@@ -217,7 +217,7 @@ const BestRoutesCombinedCard = ({ cityA, cityB, sellInCityARoutes, runBackRoutes
 );
 
 const CityPricesCard = ({ citySummary }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
         🌎 Prices by City
@@ -289,7 +289,7 @@ const SuppliesCard = ({
 }) => {
   const maxBuy = Math.max(0, capacity - carryingTotal);
   return (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
         🍾 Supplies in {location}
@@ -428,7 +428,7 @@ const SuppliesCard = ({
 };
 
 const HistoryCard = ({ history }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
         📜 Recent Transactions
@@ -533,7 +533,7 @@ const HistoryCard = ({ history }) => (
 );
 
 const InfoCard = ({ rotationHours, dailyEstimateRough }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
         ℹ️ How It Works

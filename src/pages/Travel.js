@@ -41,7 +41,7 @@ const TravelingScreen = ({ destination, timeLeft }) => (
 );
 
 const CurrentLocationCard = ({ location, travelsUsed, maxTravels, userPoints }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         Current Location
@@ -89,7 +89,7 @@ const DestinationCard = ({
   const hasAirports = !!airport;
 
   return (
-    <div className="bg-card rounded-md overflow-hidden border border-primary/20" data-testid={`dest-${destination}`}>
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`} data-testid={`dest-${destination}`}>
       <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
         <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
           {destination}
@@ -196,7 +196,7 @@ const DestinationCard = ({
 };
 
 const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         ℹ️ Travel Info

@@ -99,7 +99,7 @@ const PageHeader = ({ totalCrimes = 0, crimeProfit = 0, profitLastHour = 0, prof
 );
 
 const JailNotice = () => (
-  <div className="p-2.5 bg-card border border-amber-500/40 rounded-md text-xs">
+  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
     <div className="flex items-center gap-2">
       <AlertCircle size={14} className="text-amber-400 shrink-0" />
       <span className="text-amber-200/80">

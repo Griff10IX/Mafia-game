@@ -137,7 +137,7 @@ const AttemptRow = ({ attempt }) => {
 };
 
 const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
         <Icon size={16} />

@@ -40,7 +40,7 @@ const PageHeader = () => (
 );
 
 const EventBanner = ({ event }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         🎯 Today's Event
@@ -69,7 +69,7 @@ const KillUserCard = ({
   onKill,
   onOpenCalc
 }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
         <Skull size={16} />
@@ -175,7 +175,7 @@ const FindUserCard = ({
   loading,
   onSearch
 }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
         <Search size={16} />
@@ -245,7 +245,7 @@ const SearchesCard = ({
   onFillKillTarget
 }) => {
   return (
-    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
       <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
           <Users size={16} />
@@ -496,7 +496,7 @@ const TravelModal = ({
   onTravel 
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-    <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden">
+    <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden`}>
       <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
         <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
           <MapPin size={18} />
@@ -610,7 +610,7 @@ const CalcModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] overflow-auto">
+      <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] overflow-auto`}>
         <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between sticky top-0">
           <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
             <Calculator size={18} />

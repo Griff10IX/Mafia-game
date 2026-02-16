@@ -143,7 +143,7 @@ export default function InboxChat() {
                 className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 ${
                   msg.from_me
                     ? 'bg-primary text-primaryForeground rounded-br-md'
-                    : 'bg-card border border-primary/20 text-foreground rounded-bl-md'
+                    : `${styles.panel} border border-primary/20 text-foreground rounded-bl-md`
                 }`}
               >
                 <p className="text-sm font-heading whitespace-pre-wrap break-words">
@@ -173,7 +173,7 @@ export default function InboxChat() {
       {/* Reply box (Telegram-style input at bottom) + GIPHY + gangster emojis below */}
       <form
         onSubmit={handleSend}
-        className="p-3 border-t border-primary/20 bg-card shrink-0"
+        className={`p-3 border-t border-primary/20 ${styles.panel} shrink-0`}
       >
         {showGifPicker && (
           <div className="mb-2">

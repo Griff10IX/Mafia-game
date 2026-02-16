@@ -55,7 +55,7 @@ const PageHeader = ({ totalCount }) => (
 );
 
 const EmptyGarageCard = () => (
-  <div className="bg-card rounded-md border border-border py-12 text-center">
+  <div className={`${styles.panel} rounded-md border border-border py-12 text-center`}>
     <Car size={48} className="mx-auto text-primary/30 mb-3" />
     <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wide mb-1">
       Empty Garage
@@ -67,7 +67,7 @@ const EmptyGarageCard = () => (
 );
 
 const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
         <Filter size={14} />
@@ -130,7 +130,7 @@ const ActionsBar = ({
   onMelt,
   onScrap
 }) => (
-  <div className="bg-card rounded-md border border-primary/20 p-3">
+  <div className={`${styles.panel} rounded-md border border-primary/20 p-3`}>
     <div className="flex flex-wrap items-center justify-between gap-3">
       <div className="flex flex-wrap items-center gap-2">
         {!showAll && hiddenCount > 0 && (
@@ -210,7 +210,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
   return (
     <div
       onClick={() => (isCustom ? onOpenCustomModal(car) : onToggle(car.user_car_id))}
-      className={`bg-card rounded-md border p-1.5 cursor-pointer transition-all ${
+      className={`${styles.panel} rounded-md border p-1.5 cursor-pointer transition-all ${
         isSelected
           ? 'border-primary shadow-md shadow-primary/20'
           : 'border-border hover:border-primary/30 hover:shadow-sm'
@@ -230,7 +230,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
           </div>
         )}
         {!isCustom && (
-          <div className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center bg-card/95 border border-primary/50 shadow">
+          <div className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center bg-zinc-800/95 border border-primary/50 shadow">
             {isSelected ? (
               <CheckSquare size={12} className="text-primary" strokeWidth={2.5} />
             ) : (
@@ -272,7 +272,7 @@ const SettingsModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-sm w-full" onClick={e => e.stopPropagation()}>
+      <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl max-w-sm w-full`} onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
           <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
             <Settings size={16} />
@@ -341,7 +341,7 @@ const CustomCarModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className="bg-card border-2 border-primary/30 rounded-lg shadow-2xl max-w-md w-full" onClick={e => e.stopPropagation()}>
+      <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl max-w-md w-full`} onClick={e => e.stopPropagation()}>
         <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
           <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
             <ImageIcon size={16} />

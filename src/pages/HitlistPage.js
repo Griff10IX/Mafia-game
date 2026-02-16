@@ -28,7 +28,7 @@ const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
   if (!npcStatus) return null;
   
   return (
-    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
       <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
         <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
           <UserPlus size={16} />
@@ -82,7 +82,7 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
     // Optional: show past "who placed" if they had revealed and are no longer on list
     if (revealed && who?.length > 0) {
       return (
-        <div className="bg-card rounded-md overflow-hidden border border-border">
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-border`}>
           <div className="px-4 py-2 bg-secondary/50 border-b border-border">
             <h2 className="text-sm font-heading font-bold text-mutedForeground uppercase tracking-widest">
               Previously on hitlist (revealed)
@@ -115,7 +115,7 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
   const costLabel = [needCash > 0 && `$${Number(needCash).toLocaleString()}`, needPoints > 0 && `${Number(needPoints).toLocaleString()} pts`].filter(Boolean).join(' + ');
   
   return (
-    <div className="bg-card rounded-md overflow-hidden border-2 border-red-500/30 shadow-lg shadow-red-500/10">
+    <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-red-500/30 shadow-lg shadow-red-500/10`}>
       <div className="px-4 py-2.5 bg-red-500/10 border-b border-red-500/30">
         <h2 className="text-sm font-heading font-bold text-red-400 uppercase tracking-widest flex items-center gap-2">
           <Target size={16} />
@@ -203,7 +203,7 @@ const PlaceBountyCard = ({
   onSubmit,
   hasReward,
 }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         💰 Place a Bounty
@@ -323,7 +323,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
     (cash === 0 || haveCash >= cash) && (points === 0 || havePoints >= points);
 
   return (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-between">
         <span>🎯 Active Bounties</span>
@@ -517,7 +517,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
 };
 
 const InfoCard = () => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
       <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
         ℹ️ How It Works

@@ -75,7 +75,7 @@ const ComposeModal = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="bg-card rounded-lg border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className={`${styles.panel} rounded-lg border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}>
         {/* Header */}
         <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
           <h2 className="text-lg font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
@@ -206,7 +206,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
           ? 'bg-secondary/20 hover:bg-secondary/40 border-l-4 border-l-transparent'
           : notification.read 
           ? 'bg-secondary/30 hover:bg-secondary/50' 
-          : 'bg-card hover:bg-secondary/30 border-l-4 border-l-primary/50'
+          : `${styles.panel} hover:bg-secondary/30 border-l-4 border-l-primary/50`
       }`}
     >
       {/* Icon */}
@@ -333,7 +333,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
   const recipient = isSent ? (notification.recipient_username || notification.to_username || notification.target_username) : null;
 
   return (
-    <div className="flex-1 flex flex-col bg-card">
+    <div className={`flex-1 flex flex-col ${styles.panel}`}>
       {/* Message Header */}
       <div className="px-4 md:px-6 py-4 border-b border-border bg-secondary/30">
         <div className="flex items-start justify-between gap-4 mb-3">
@@ -628,7 +628,7 @@ export default function Inbox() {
       />
 
       {/* Inbox Layout */}
-      <div className="bg-card border border-primary/20 rounded-lg overflow-hidden">
+      <div className={`${styles.panel} border border-primary/20 rounded-lg overflow-hidden`}>
         {/* Toolbar */}
         <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
           {/* Top row: Filters + Compose */}

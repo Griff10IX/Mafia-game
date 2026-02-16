@@ -75,7 +75,7 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
         </TooltipTrigger>
         <TooltipContent 
           side="bottom" 
-          className="bg-card border-2 border-primary/30 rounded-md px-3 py-2 text-sm font-heading text-foreground shadow-xl"
+          className={`${styles.panel} border-2 border-primary/30 rounded-md px-3 py-2 text-sm font-heading text-foreground shadow-xl`}
         >
           {rangeStr}
         </TooltipContent>
@@ -141,7 +141,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
   const avatarSrc = isRobotBodyguard ? null : profile.avatar_url;
 
   return (
-    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
       <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
         <h2 className="text-sm md:text-base lg:text-lg font-heading font-bold text-primary uppercase tracking-wider truncate">
           {profile.username}
@@ -243,7 +243,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
 };
 
 const HonoursCard = ({ honours }) => (
-  <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-1.5">
         <Trophy size={14} className="md:w-4 md:h-4" />
@@ -287,7 +287,7 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
   const isEmpty = !hasCasinos && !hasProperty;
 
   return (
-    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
       <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
         <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-1.5">
           <Building2 size={14} className="md:w-4 md:h-4" />
@@ -380,7 +380,7 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
 };
 
 const AdminStatsCard = ({ adminStats }) => (
-  <div className="bg-card rounded-md overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10">
+  <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
         🔐 Admin Info
@@ -440,7 +440,7 @@ const AvatarCard = ({
   };
 
   return (
-    <div className="bg-card rounded-md overflow-hidden border border-primary/20">
+    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
       <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
         <h3 class="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
           📸 Profile Picture
@@ -690,7 +690,7 @@ export default function Profile() {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
         <PageHeader username={null} />
-        <div className="bg-card rounded-md border border-border py-16 text-center">
+        <div className={`${styles.panel} rounded-md border border-border py-16 text-center`}>
           <UserIcon size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">
             Profile not found
@@ -735,7 +735,7 @@ export default function Profile() {
         {isMe && hasAdminEmail && (
           <>
             {isAdmin && (
-              <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
+              <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/30`}>
                 <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 md:gap-2">
                     <Ghost className="w-4 h-4 md:w-5 md:h-5 text-primary" />
@@ -757,7 +757,7 @@ export default function Profile() {
                 </p>
               </div>
             )}
-            <div className="bg-card rounded-md overflow-hidden border-2 border-primary/30">
+            <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/30`}>
               <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 md:gap-2">
                   <Shield className="w-4 h-4 md:w-5 md:h-5 text-primary" />
@@ -794,7 +794,7 @@ export default function Profile() {
           <AdminStatsCard adminStats={profile.admin_stats} />
         )}
 
-        <div className="bg-card rounded-md overflow-hidden border border-border">
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-border`}>
           <div className="px-3 py-2 md:px-4 md:py-2.5 bg-secondary/30 border-b border-border text-center">
             <span className="text-[10px] md:text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
               Account Created
@@ -808,7 +808,7 @@ export default function Profile() {
 
       {isMe && (
         <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-          <DialogContent className="max-w-md bg-card border-primary/20">
+          <DialogContent className={`max-w-md ${styles.panel} border-primary/20`}>
             <DialogHeader>
               <DialogTitle className="font-heading text-primary">Profile settings</DialogTitle>
               <DialogDescription>Notifications and account options.</DialogDescription>

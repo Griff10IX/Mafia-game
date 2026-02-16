@@ -218,7 +218,7 @@ const DepositCard = ({ deposit, onClaim }) => {
   const canClaim = matured && !claimed;
 
   return (
-    <div className="bg-card border border-border rounded-md p-4 hover:border-primary/30 transition-all">
+    <div className={`${styles.panel} border border-border rounded-md p-4 hover:border-primary/30 transition-all`}>
       <div className="space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
         <div className="flex-1 space-y-2">
           <div className="flex items-center justify-between">
@@ -317,7 +317,7 @@ const SendMoneyCard = ({
 );
 
 const TransferCard = ({ transfer }) => (
-  <div className="bg-card border border-border rounded-md p-4 hover:border-primary/30 transition-all">
+  <div className={`${styles.panel} border border-border rounded-md p-4 hover:border-primary/30 transition-all`}>
     <div className="flex items-center justify-between gap-3">
       <div className="flex-1 min-w-0">
         <div className={`text-sm font-heading font-bold mb-1 ${
@@ -588,7 +588,7 @@ export default function Bank() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <div className="bg-card border border-primary/20 rounded-md overflow-hidden">
+        <div className={`${styles.panel} border border-primary/20 rounded-md overflow-hidden`}>
           <button
             type="button"
             onClick={() => toggleSection('sendMoney')}

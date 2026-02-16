@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Sword, DollarSign, Zap, Lock, CheckCircle2, Gem } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 export default function Weapons() {
   const [weapons, setWeapons] = useState([]);
@@ -123,7 +124,7 @@ export default function Weapons() {
 
       <div className="flex justify-center">
         <div className="w-full max-w-3xl space-y-4">
-          <div className="bg-card border border-border rounded-sm p-6">
+          <div className={`${styles.panel} border border-border rounded-sm p-6`}>
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <div className="text-xs uppercase tracking-[0.3em] text-mutedForeground">Combat Loadout</div>
@@ -145,7 +146,7 @@ export default function Weapons() {
             </div>
           </div>
 
-          <div className="bg-card border border-border rounded-sm overflow-hidden">
+          <div className={`${styles.panel} border border-border rounded-sm overflow-hidden`}>
           <div className="grid grid-cols-12 bg-secondary/40 text-xs uppercase tracking-wider text-mutedForeground px-4 py-3">
             <div className="col-span-8">Weapon</div>
             <div className="col-span-4 text-right">Action</div>
@@ -243,7 +244,7 @@ export default function Weapons() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-card border border-border rounded-sm p-6">
+        <div className={`w-full max-w-3xl ${styles.panel} border border-border rounded-sm p-6`}>
           <h3 className="text-xl font-heading font-semibold text-primary mb-3">Weapon System</h3>
           <ul className="space-y-2 text-sm text-mutedForeground">
             <li>• Buy weapons to build your arsenal</li>

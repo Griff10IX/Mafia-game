@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Shield, DollarSign, Gem, CheckCircle2, Lock } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 function formatCost(opt) {
   if (opt.cost_points != null) return `${opt.cost_points} points`;
@@ -107,7 +108,7 @@ export default function Armour() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-card border border-border rounded-sm overflow-hidden">
+        <div className={`w-full max-w-3xl ${styles.panel} border border-border rounded-sm overflow-hidden`}>
           <div className="grid grid-cols-12 bg-secondary/40 text-xs uppercase tracking-wider text-mutedForeground px-4 py-3">
             <div className="col-span-6">Set</div>
             <div className="col-span-2 text-right">Level</div>
@@ -189,7 +190,7 @@ export default function Armour() {
       </div>
 
       <div className="flex justify-center">
-        <div className="w-full max-w-3xl bg-card border border-border rounded-sm p-6">
+        <div className={`w-full max-w-3xl ${styles.panel} border border-border rounded-sm p-6`}>
           <h3 className="text-xl font-heading font-semibold text-primary mb-3">Armour System</h3>
           <ul className="space-y-2 text-sm text-mutedForeground">
             <li>• Armour has 5 tiers (Lv.1 → Lv.5)</li>
