@@ -219,8 +219,8 @@ const CityPricesCard = ({ citySummary }) => (
         <thead>
           <tr className="bg-secondary/30 text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border">
             <th className="text-left py-1.5 px-3">City</th>
-            <th className="text-right py-1.5 px-3">Lowest Buy</th>
-            <th className="text-right py-1.5 px-3">Highest Sell</th>
+            <th className="text-right py-1.5 px-3">Lowest</th>
+            <th className="text-right py-1.5 px-3">Highest</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
@@ -228,10 +228,10 @@ const CityPricesCard = ({ citySummary }) => (
             <tr key={c.city} className="hover:bg-secondary/30 transition-colors">
               <td className="py-1.5 px-3 font-heading font-bold text-foreground">{c.city}</td>
               <td className="py-1.5 px-3 text-right text-mutedForeground font-heading">
-                {formatMoney(c.minBuy)} <span className="text-[10px]">({c.bestBuyBooze})</span>
+                {formatMoney(c.minPrice)} <span className="text-[10px]">({c.lowestBooze})</span>
               </td>
               <td className="py-1.5 px-3 text-right text-mutedForeground font-heading">
-                {formatMoney(c.maxSell)} <span className="text-[10px]">({c.bestSellBooze})</span>
+                {formatMoney(c.maxPrice)} <span className="text-[10px]">({c.highestBooze})</span>
               </td>
             </tr>
           ))}
@@ -244,17 +244,17 @@ const CityPricesCard = ({ citySummary }) => (
       {citySummary.map((c) => (
         <div key={c.city} className="p-2 hover:bg-secondary/30 transition-colors">
           <div className="font-heading font-bold text-foreground text-sm mb-1">{c.city}</div>
-          <div className="space-y-0.5 text-xs">
+            <div className="space-y-0.5 text-xs">
             <div className="flex justify-between">
-              <span className="text-mutedForeground">Lowest Buy:</span>
+              <span className="text-mutedForeground">Lowest:</span>
               <span className="font-heading text-foreground">
-                {formatMoney(c.minBuy)} <span className="text-[10px] text-mutedForeground">({c.bestBuyBooze})</span>
+                {formatMoney(c.minPrice)} <span className="text-[10px] text-mutedForeground">({c.lowestBooze})</span>
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-mutedForeground">Highest Sell:</span>
+              <span className="text-mutedForeground">Highest:</span>
               <span className="font-heading text-foreground">
-                {formatMoney(c.maxSell)} <span className="text-[10px] text-mutedForeground">({c.bestSellBooze})</span>
+                {formatMoney(c.maxPrice)} <span className="text-[10px] text-mutedForeground">({c.highestBooze})</span>
               </span>
             </div>
           </div>
@@ -291,8 +291,7 @@ const SuppliesCard = ({
         <thead>
           <tr className="bg-secondary/30 text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border">
             <th className="text-left py-1.5 px-3">Booze</th>
-            <th className="text-right py-1.5 px-3">Buy</th>
-            <th className="text-right py-1.5 px-3">Sell</th>
+            <th className="text-right py-1.5 px-3">Price</th>
             <th className="text-right py-1.5 px-3">Have</th>
             <th className="text-right py-1.5 px-3">Qty</th>
             <th className="text-right py-1.5 px-3">Actions</th>
@@ -304,9 +303,6 @@ const SuppliesCard = ({
               <td className="py-1.5 px-3 font-heading font-bold text-foreground">{row.name}</td>
               <td className="py-1.5 px-3 text-right text-mutedForeground font-heading tabular-nums">
                 {formatMoney(row.buy_price)}
-              </td>
-              <td className="py-1.5 px-3 text-right text-mutedForeground font-heading tabular-nums">
-                {formatMoney(row.sell_price)}
               </td>
               <td className="py-1.5 px-3 text-right font-heading font-bold text-foreground tabular-nums">
                 {row.carrying ?? 0}
@@ -367,9 +363,8 @@ const SuppliesCard = ({
                 Have: <span className="text-foreground font-bold">{row.carrying ?? 0}</span>
               </div>
             </div>
-            <div className="text-right text-xs space-y-0.5">
-              <div className="text-mutedForeground">Buy: {formatMoney(row.buy_price)}</div>
-              <div className="text-mutedForeground">Sell: {formatMoney(row.sell_price)}</div>
+            <div className="text-right text-xs">
+              <div className="text-mutedForeground">Price: {formatMoney(row.buy_price)}</div>
             </div>
           </div>
           
@@ -720,13 +715,13 @@ export default function BoozeRun() {
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 3);
 
-  // Per-city summary: lowest buy and highest sell (any booze) for quick scan
+  // Per-city summary: lowest and highest price (one price per booze — profit = sell in pricier city than you bought)
   const citySummary = Object.entries(allByLocation).map(([city, list]) => {
-    const minBuy = Math.min(...list.map((p) => p.buy_price));
-    const maxSell = Math.max(...list.map((p) => p.sell_price));
-    const bestBuyBooze = list.find((p) => p.buy_price === minBuy);
-    const bestSellBooze = list.find((p) => p.sell_price === maxSell);
-    return { city, minBuy, maxSell, bestBuyBooze: bestBuyBooze?.name, bestSellBooze: bestSellBooze?.name };
+    const minPrice = Math.min(...list.map((p) => p.buy_price));
+    const maxPrice = Math.max(...list.map((p) => p.sell_price));
+    const lowestBooze = list.find((p) => p.buy_price === minPrice);
+    const highestBooze = list.find((p) => p.sell_price === maxPrice);
+    return { city, minPrice, maxPrice, lowestBooze: lowestBooze?.name, highestBooze: highestBooze?.name };
   });
 
   return (

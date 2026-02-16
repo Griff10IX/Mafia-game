@@ -7101,10 +7101,7 @@ def _booze_round_trip_cities():
 
 
 def _booze_prices_for_rotation():
-    """Per (location_index, booze_index): (buy_price, sell_price). Deterministic from rotation.
-    Guarantees one round-trip pair per rotation: buy in city A → sell in city B, then buy in city B → sell in city A
-    (both legs profitable) so you can profit there and back without visiting 3–4 cities. Which pair rotates.
-    """
+    """One market price per (location_index, booze_index). Same price to buy or sell in that city — profit only by buying in a cheap city and selling in a pricier one. Guarantees one round-trip pair per rotation (both legs profitable)."""
     idx = _booze_rotation_index()
     n_locs = 4  # len(STATES)
     n_booze = len(BOOZE_TYPES)
@@ -7113,28 +7110,24 @@ def _booze_prices_for_rotation():
         for booze_i in range(n_booze):
             base = 200 + (loc_i * 85) + (booze_i * 72) + (idx % 19) * 23
             base += ((idx * 7 + loc_i * 11 + booze_i * 13) % 67) - 33
-            spread = 20 + (idx + loc_i * 5 + booze_i * 9) % 161
-            buy = min(2000, max(100, base))
-            sell = buy + spread
-            out[(loc_i, booze_i)] = (buy, sell)
-    # One round-trip per rotation: (locA, locB) rotates through all 6 unordered pairs
+            price = min(2000, max(100, base))
+            out[(loc_i, booze_i)] = price
+    # One round-trip per rotation: make one booze cheap in A / dear in B, another cheap in B / dear in A
     unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
     locA, locB = unordered_pairs[idx % len(unordered_pairs)]
-    profit_min = 25
-    # Leg 1: buy in A, sell in B — use one booze
+    profit_min = 40
     booze_ab = idx % n_booze
-    buy_a_ab, sell_a_ab = out[(locA, booze_ab)]
-    buy_b_ab, sell_b_ab = out[(locB, booze_ab)]
-    if sell_b_ab <= buy_a_ab + profit_min:
-        sell_b_ab = min(2000, buy_a_ab + profit_min + (idx % 50))
-        out[(locB, booze_ab)] = (buy_b_ab, sell_b_ab)
-    # Leg 2: buy in B, sell in A — use a different booze so both legs are profitable
+    price_a_ab = out[(locA, booze_ab)]
+    price_b_ab = out[(locB, booze_ab)]
+    if price_b_ab <= price_a_ab + profit_min:
+        price_b_ab = min(2000, price_a_ab + profit_min + (idx % 60))
+        out[(locB, booze_ab)] = price_b_ab
     booze_ba = (idx + 1) % n_booze
-    buy_b_ba, sell_b_ba = out[(locB, booze_ba)]
-    buy_a_ba, sell_a_ba = out[(locA, booze_ba)]
-    if sell_a_ba <= buy_b_ba + profit_min:
-        sell_a_ba = min(2000, buy_b_ba + profit_min + (idx % 50))
-        out[(locA, booze_ba)] = (buy_a_ba, sell_a_ba)
+    price_b_ba = out[(locB, booze_ba)]
+    price_a_ba = out[(locA, booze_ba)]
+    if price_a_ba <= price_b_ba + profit_min:
+        price_a_ba = min(2000, price_b_ba + profit_min + (idx % 60))
+        out[(locA, booze_ba)] = price_a_ba
     return out
 
 
@@ -9297,22 +9290,22 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     capacity = _booze_user_capacity(current_user)
-    # Prices at current location only (front can show "buy here / sell here")
+    # Prices at current location only (one price per booze — same to buy or sell in this city)
     prices_at_location = []
     for i, bt in enumerate(BOOZE_TYPES):
-        buy_p, sell_p = prices_map.get((loc_index, i), (300, 450))
+        price = prices_map.get((loc_index, i), 400)
         prices_at_location.append({
             "booze_id": bt["id"],
             "name": bt["name"],
-            "buy_price": buy_p,
-            "sell_price": sell_p,
+            "buy_price": price,
+            "sell_price": price,
             "carrying": int(carrying.get(bt["id"], 0)),
         })
-    # All locations' buy/sell for "route" awareness (optional - so user can see where to buy/sell)
+    # All locations' prices for route awareness (buy in cheap city, sell in pricier city)
     all_prices = {}
     for loc_i, state in enumerate(STATES):
         all_prices[state] = [
-            {"booze_id": BOOZE_TYPES[b]["id"], "name": BOOZE_TYPES[b]["name"], "buy_price": prices_map.get((loc_i, b), (300, 450))[0], "sell_price": prices_map.get((loc_i, b), (300, 450))[1]}
+            {"booze_id": BOOZE_TYPES[b]["id"], "name": BOOZE_TYPES[b]["name"], "buy_price": prices_map.get((loc_i, b), 400), "sell_price": prices_map.get((loc_i, b), 400)}
             for b in range(len(BOOZE_TYPES))
         ]
     # Profit today (reset at UTC midnight; we show 0 if date changed, reset stored on next sell)
@@ -9383,8 +9376,8 @@ async def booze_run_buy(request: BoozeBuyRequest, current_user: dict = Depends(g
     loc_index = STATES.index(current_state) if current_state in STATES else 0
     booze_index = booze_ids.index(request.booze_id)
     prices_map = _booze_prices_for_rotation()
-    buy_price, _ = prices_map.get((loc_index, booze_index), (300, 450))
-    cost = buy_price * request.amount
+    price = prices_map.get((loc_index, booze_index), 400)
+    cost = price * request.amount
     if current_user.get("money", 0) < cost:
         raise HTTPException(status_code=400, detail="Insufficient money")
     carrying = dict(current_user.get("booze_carrying") or {})
@@ -9416,7 +9409,7 @@ async def booze_run_buy(request: BoozeBuyRequest, current_user: dict = Depends(g
         "action": "buy",
         "booze_name": booze_name,
         "amount": request.amount,
-        "unit_price": buy_price,
+        "unit_price": price,
         "total": cost,
         "location": current_state,
     }
@@ -9445,7 +9438,7 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
     loc_index = STATES.index(current_state) if current_state in STATES else 0
     booze_index = booze_ids.index(request.booze_id)
     prices_map = _booze_prices_for_rotation()
-    _, sell_price = prices_map.get((loc_index, booze_index), (300, 450))
+    price = prices_map.get((loc_index, booze_index), 400)
     carrying = dict(current_user.get("booze_carrying") or {})
     carrying_cost = dict(current_user.get("booze_carrying_cost") or {})
     have = int(carrying.get(request.booze_id, 0))
@@ -9468,7 +9461,7 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
             "jail_until": jail_until.isoformat(),
             "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
         }
-    revenue = sell_price * request.amount
+    revenue = price * request.amount
     total_cost_stored = int(carrying_cost.get(request.booze_id, 0))
     cost_of_sold = (total_cost_stored * request.amount // have) if have else 0
     profit = revenue - cost_of_sold
@@ -9491,7 +9484,7 @@ async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends
         "action": "sell",
         "booze_name": booze_name,
         "amount": request.amount,
-        "unit_price": sell_price,
+        "unit_price": price,
         "total": revenue,
         "profit": profit if is_run else None,
         "location": current_state,
