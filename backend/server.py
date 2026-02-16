@@ -391,6 +391,7 @@ class UserResponse(BaseModel):
     admin_acting_as_normal: bool = False
     casino_profit: int = 0  # $ from owned casino table
     property_profit: int = 0  # points from owned property (e.g. airport)
+    theme_preferences: Optional[Dict] = None  # saved theme (colour, font, etc.) for cross-device sync
 
 # Notification/Inbox models
 class NotificationCreate(BaseModel):
@@ -447,6 +448,19 @@ class NotificationPreferencesRequest(BaseModel):
     attacks: Optional[bool] = None
     system: Optional[bool] = None
     messages: Optional[bool] = None
+
+class ThemePreferencesRequest(BaseModel):
+    """Theme preferences (all optional). Omitted keys are left unchanged; send full object to replace."""
+    colour_id: Optional[str] = None
+    texture_id: Optional[str] = None
+    button_colour_id: Optional[str] = None
+    accent_line_colour_id: Optional[str] = None
+    font_id: Optional[str] = None
+    button_style_id: Optional[str] = None
+    writing_colour_id: Optional[str] = None
+    text_style_id: Optional[str] = None
+    custom_themes: Optional[List[Dict]] = None
+
 
 class ChangePasswordRequest(BaseModel):
     current_password: str
@@ -1571,6 +1585,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         admin_acting_as_normal=bool(current_user.get("admin_acting_as_normal", False)),
         casino_profit=casino_cash,
         property_profit=property_pts,
+        theme_preferences=current_user.get("theme_preferences"),
     )
 
 @api_router.get("/users/{username}/profile")
@@ -1724,6 +1739,40 @@ async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depen
     return {"message": "Avatar updated"}
 
 DEFAULT_NOTIFICATION_PREFS = {"ent_games": True, "oc_invites": True, "attacks": True, "system": True, "messages": True}
+
+@api_router.get("/profile/theme")
+async def get_profile_theme(current_user: dict = Depends(get_current_user)):
+    """Get current user's theme preferences (for cross-device sync). Returns defaults if never set."""
+    prefs = current_user.get("theme_preferences") or {}
+    return {"theme_preferences": prefs}
+
+
+@api_router.patch("/profile/theme")
+async def update_profile_theme(request: ThemePreferencesRequest, current_user: dict = Depends(get_current_user)):
+    """Save theme preferences to DB so they sync across devices. Only provided keys are updated."""
+    updates = {k: v for k, v in request.model_dump().items() if v is not None}
+    if not updates:
+        return {"message": "No theme updates", "theme_preferences": current_user.get("theme_preferences") or {}}
+    # Map request keys to stored keys (snake_case in DB)
+    key_map = {
+        "colour_id": "colourId",
+        "texture_id": "textureId",
+        "button_colour_id": "buttonColourId",
+        "accent_line_colour_id": "accentLineColourId",
+        "font_id": "fontId",
+        "button_style_id": "buttonStyleId",
+        "writing_colour_id": "writingColourId",
+        "text_style_id": "textStyleId",
+        "custom_themes": "customThemes",
+    }
+    stored = {key_map.get(k, k): v for k, v in updates.items()}
+    new_prefs = {**(current_user.get("theme_preferences") or {}), **stored}
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"theme_preferences": new_prefs}},
+    )
+    return {"message": "Theme saved", "theme_preferences": new_prefs}
+
 
 @api_router.get("/profile/preferences")
 async def get_profile_preferences(current_user: dict = Depends(get_current_user)):

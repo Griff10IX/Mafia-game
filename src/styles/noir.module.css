@@ -86,24 +86,24 @@
 .sidebar {
   background-color: var(--noir-bg) !important;
   border-right: 1px solid var(--noir-border-mid);
-  color: var(--noir-primary);
+  color: var(--noir-foreground);
 }
 
 
 /* Sidebar nav: default link state – gold text on black */
 .sidebarNavLink {
-  color: var(--noir-primary) !important;
+  color: var(--noir-foreground) !important;
   background-color: transparent !important;
 }
 
 .sidebarNavLink:hover {
   background-color: var(--noir-raised) !important;
-  color: var(--noir-primary) !important;
+  color: var(--noir-foreground) !important;
 }
 
 /* Sidebar header text uses theme gold/muted */
 .sidebarHeaderTitle {
-  color: var(--noir-primary);
+  color: var(--noir-foreground);
 }
 
 .sidebarHeaderSub {
@@ -355,11 +355,11 @@
   letter-spacing: 0.02em;
 }
 
-/* Sidebar: same gray as content (inline style in Layout also sets this) */
+/* Sidebar: same gray as content; text = writing colour */
 .themeGangsterModern .sidebar {
   background-color: var(--gm-bg-top) !important;
   border-right: 1px solid var(--gm-border);
-  color: var(--gm-gold);
+  color: var(--gm-text);
 }
 
 /* Sidebar scrollbar – dark grey thumb #303030 to match main scrollbar */
@@ -386,16 +386,16 @@
 }
 
 .themeGangsterModern .sidebarNavLink {
-  color: var(--gm-gold) !important;
+  color: var(--gm-text) !important;
 }
 
 .themeGangsterModern .sidebarNavLink:hover {
   background-color: var(--gm-card-hover) !important;
-  color: var(--gm-gold) !important;
+  color: var(--gm-text) !important;
 }
 
 .themeGangsterModern .sidebarHeaderTitle {
-  color: var(--gm-gold);
+  color: var(--gm-text);
 }
 
 .themeGangsterModern .sidebarHeaderSub {

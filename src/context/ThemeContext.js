@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { getThemeColour, getThemeTexture, getThemeFont, getThemeButtonStyle, getThemeWritingColour, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID } from '../constants/themes';
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { getThemeColour, getThemeTexture, getThemeFont, getThemeButtonStyle, getThemeWritingColour, getThemeTextStyle, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID } from '../constants/themes';
+import api from '../utils/api';
 
 const STORAGE_KEY_COLOUR = 'app_theme_colour';
 const STORAGE_KEY_TEXTURE = 'app_theme_texture';
@@ -8,6 +9,7 @@ const STORAGE_KEY_ACCENT_LINE = 'app_theme_accent_line';
 const STORAGE_KEY_FONT = 'app_theme_font';
 const STORAGE_KEY_BUTTON_STYLE = 'app_theme_button_style';
 const STORAGE_KEY_WRITING = 'app_theme_writing_colour';
+const STORAGE_KEY_TEXT_STYLE = 'app_theme_text_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
 
 /** Convert saved custom theme to colour shape used by applyColourToDocument */
@@ -192,6 +194,13 @@ function applyWritingColourToDocument(w) {
   root.style.setProperty('--muted-foreground', hexToHslString(w.muted));
 }
 
+function applyTextStyleToDocument(style) {
+  if (!style) return;
+  const root = document.documentElement;
+  root.style.setProperty('--app-font-weight', style.fontWeight);
+  root.style.setProperty('--app-font-style', style.fontStyle);
+}
+
 function applyTextureToDocument(textureId) {
   const body = document.body;
   const prev = body.getAttribute('data-texture');
@@ -204,6 +213,7 @@ function applyTextureToDocument(textureId) {
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
+  const themeSourceRef = useRef('local'); // 'server' = just loaded from API, skip next persist
   const [colourId, setColourIdState] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_COLOUR) || DEFAULT_COLOUR_ID;
@@ -255,6 +265,13 @@ export function ThemeProvider({ children }) {
       return DEFAULT_WRITING_COLOUR_ID;
     }
   });
+  const [textStyleId, setTextStyleIdState] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_TEXT_STYLE) || DEFAULT_TEXT_STYLE_ID;
+    } catch {
+      return DEFAULT_TEXT_STYLE_ID;
+    }
+  });
   const [customThemes, setCustomThemesState] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_THEMES);
@@ -287,6 +304,11 @@ export function ThemeProvider({ children }) {
     const w = getThemeWritingColour(writingColourId);
     applyWritingColourToDocument(w);
   }, [writingColourId]);
+
+  useEffect(() => {
+    const style = getThemeTextStyle(textStyleId);
+    applyTextStyleToDocument(style);
+  }, [textStyleId]);
 
   const persistCustomThemes = useCallback((next) => {
     setCustomThemesState(next);
@@ -328,6 +350,49 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     applyTextureToDocument(textureId);
   }, [textureId]);
+
+  const themeLoadedRef = useRef(false);
+  useEffect(() => {
+    api.get('/profile/theme').then((res) => {
+      const prefs = res.data?.theme_preferences;
+      if (!prefs || typeof prefs !== 'object' || Object.keys(prefs).length === 0) {
+        themeLoadedRef.current = true;
+        return;
+      }
+      themeSourceRef.current = 'server';
+      try {
+        if (prefs.colourId != null) { localStorage.setItem(STORAGE_KEY_COLOUR, prefs.colourId); setColourIdState(prefs.colourId); }
+        if (prefs.textureId != null) { localStorage.setItem(STORAGE_KEY_TEXTURE, prefs.textureId); setTextureIdState(prefs.textureId); }
+        if (prefs.buttonColourId !== undefined) { localStorage.setItem(STORAGE_KEY_BUTTON, prefs.buttonColourId || ''); setButtonColourIdState(prefs.buttonColourId || null); }
+        if (prefs.accentLineColourId !== undefined) { localStorage.setItem(STORAGE_KEY_ACCENT_LINE, prefs.accentLineColourId || ''); setAccentLineColourIdState(prefs.accentLineColourId || null); }
+        if (prefs.fontId != null) { localStorage.setItem(STORAGE_KEY_FONT, prefs.fontId); setFontIdState(prefs.fontId); }
+        if (prefs.buttonStyleId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, prefs.buttonStyleId); setButtonStyleIdState(prefs.buttonStyleId); }
+        if (prefs.writingColourId != null) { localStorage.setItem(STORAGE_KEY_WRITING, prefs.writingColourId); setWritingColourIdState(prefs.writingColourId); }
+        if (prefs.textStyleId != null) { localStorage.setItem(STORAGE_KEY_TEXT_STYLE, prefs.textStyleId); setTextStyleIdState(prefs.textStyleId); }
+        if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
+      } catch (_) {}
+    }).catch(() => {}).finally(() => { themeLoadedRef.current = true; });
+  }, []);
+
+  useEffect(() => {
+    if (!themeLoadedRef.current) return;
+    if (themeSourceRef.current === 'server') {
+      themeSourceRef.current = 'local';
+      return;
+    }
+    const payload = {
+      colour_id: colourId,
+      texture_id: textureId,
+      button_colour_id: buttonColourId || null,
+      accent_line_colour_id: accentLineColourId || null,
+      font_id: fontId,
+      button_style_id: buttonStyleId,
+      writing_colour_id: writingColourId,
+      text_style_id: textStyleId,
+      custom_themes: customThemes,
+    };
+    api.patch('/profile/theme', payload).catch(() => {});
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, textStyleId, customThemes]);
 
   const setColour = useCallback((id) => {
     setColourIdState(id);
@@ -392,6 +457,13 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setTextStyle = useCallback((id) => {
+    setTextStyleIdState(id);
+    try {
+      localStorage.setItem(STORAGE_KEY_TEXT_STYLE, id);
+    } catch (_) {}
+  }, []);
+
   const value = {
     colourId,
     textureId,
@@ -409,6 +481,8 @@ export function ThemeProvider({ children }) {
     setButtonStyle,
     writingColourId,
     setWritingColour,
+    textStyleId,
+    setTextStyle,
     customThemes,
     addCustomTheme,
     removeCustomTheme,
@@ -418,6 +492,7 @@ export function ThemeProvider({ children }) {
     font: getThemeFont(fontId),
     buttonStyle: getThemeButtonStyle(buttonStyleId),
     writingColour: getThemeWritingColour(writingColourId),
+    textStyle: getThemeTextStyle(textStyleId),
     buttonColour: buttonColourId ? getResolvedColour(buttonColourId, customThemes) : null,
     accentLineColour: accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : null,
   };

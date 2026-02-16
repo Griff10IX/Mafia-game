@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_WRITING_COLOURS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, getThemeColour } from '../constants/themes';
+import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_WRITING_COLOURS, THEME_TEXT_STYLES, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
 function customToColourEntry(c) {
@@ -18,7 +18,7 @@ function customToColourEntry(c) {
 }
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, textStyleId, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setTextStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
@@ -84,7 +84,7 @@ export default function ThemePicker({ open, onClose }) {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID); setButtonStyle(DEFAULT_BUTTON_STYLE_ID); setWritingColour(DEFAULT_WRITING_COLOUR_ID); resetButtonToDefault(); resetAccentLineToDefault(); }}
+              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID); setButtonStyle(DEFAULT_BUTTON_STYLE_ID); setWritingColour(DEFAULT_WRITING_COLOUR_ID); setTextStyle(DEFAULT_TEXT_STYLE_ID); resetButtonToDefault(); resetAccentLineToDefault(); }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               data-testid="theme-reset-default"
               title="Reset to Original theme (gold, no texture)"
@@ -269,6 +269,30 @@ export default function ThemePicker({ open, onClose }) {
                   title={`Heading: ${f.heading}, Body: ${f.body}`}
                 >
                   {f.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Text style (bold, italic, etc.) */}
+          <div>
+            <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Type className="w-3.5 h-3.5" />
+              Text style
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {THEME_TEXT_STYLES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTextStyle(t.id)}
+                  className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-all ${
+                    textStyleId === t.id ? 'border-primary bg-primary/20 text-primary' : 'border-zinc-600 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                  }`}
+                  style={textStyleId !== t.id ? { fontWeight: t.fontWeight, fontStyle: t.fontStyle } : undefined}
+                  title={`${t.fontWeight} / ${t.fontStyle}`}
+                >
+                  {t.name}
                 </button>
               ))}
             </div>

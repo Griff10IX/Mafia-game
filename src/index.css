@@ -12,6 +12,8 @@
     --border: 0 0% 18%;
     --font-heading: "Playfair Display", Georgia, serif;
     --font-body: Inter, system-ui, sans-serif;
+    --app-font-weight: 400;
+    --app-font-style: normal;
   }
 }
 
@@ -28,7 +30,9 @@ html {
 
 body {
   margin: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-body), 'Inter', sans-serif;
+  font-weight: var(--app-font-weight, 400);
+  font-style: var(--app-font-style, normal);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #1a1a1a;
@@ -70,6 +74,8 @@ code {
   }
   body {
     @apply bg-background text-foreground;
+    font-weight: var(--app-font-weight, 400);
+    font-style: var(--app-font-style, normal);
   }
   /* Links use inherited/theme color unless a class sets it (avoids browser purple) */
   a {

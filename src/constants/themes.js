@@ -228,6 +228,17 @@ export const THEME_FONTS = [
   { id: 'compact', name: 'Compact', heading: 'Inter, system-ui, sans-serif', body: 'Inter, system-ui, sans-serif' },
 ];
 
+/** Text style: weight and slant (applies to body/heading base). */
+export const THEME_TEXT_STYLES = [
+  { id: 'normal', name: 'Normal', fontWeight: '400', fontStyle: 'normal' },
+  { id: 'bold', name: 'Bold', fontWeight: '700', fontStyle: 'normal' },
+  { id: 'italic', name: 'Italic', fontWeight: '400', fontStyle: 'italic' },
+  { id: 'bold-italic', name: 'Bold italic', fontWeight: '700', fontStyle: 'italic' },
+  { id: 'light', name: 'Light', fontWeight: '300', fontStyle: 'normal' },
+  { id: 'medium', name: 'Medium', fontWeight: '500', fontStyle: 'normal' },
+  { id: 'semibold', name: 'Semibold', fontWeight: '600', fontStyle: 'normal' },
+];
+
 /** Button style: look and feel of primary buttons. */
 export const THEME_BUTTON_STYLES = [
   { id: 'original', name: 'Original' },
@@ -295,6 +306,7 @@ export const THEME_WRITING_COLOURS = [
 
 export const DEFAULT_COLOUR_ID = 'gold';
 export const DEFAULT_WRITING_COLOUR_ID = 'default';
+export const DEFAULT_TEXT_STYLE_ID = 'normal';
 export const DEFAULT_FONT_ID = 'classic';
 export const DEFAULT_BUTTON_STYLE_ID = 'original';
 export const DEFAULT_TEXTURE_ID = 'none';
@@ -359,4 +371,8 @@ export function getThemeButtonStyle(id) {
 
 export function getThemeWritingColour(id) {
   return THEME_WRITING_COLOURS.find((w) => w.id === id) || THEME_WRITING_COLOURS[0];
+}
+
+export function getThemeTextStyle(id) {
+  return THEME_TEXT_STYLES.find((t) => t.id === id) || THEME_TEXT_STYLES[0];
 }
