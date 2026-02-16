@@ -1055,6 +1055,7 @@ async def startup_db():
     # Auto Rank: auto-commit crimes + GTA for users who bought it; send results to Telegram
     from routers import auto_rank
     asyncio.create_task(auto_rank.run_auto_rank_loop())
+    asyncio.create_task(auto_rank.run_bust_5sec_loop())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

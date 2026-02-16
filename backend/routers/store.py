@@ -9,7 +9,6 @@ from server import (
     db,
     get_current_user,
     send_notification,
-    _is_admin,
     DEFAULT_GARAGE_BATCH_LIMIT,
     GARAGE_BATCH_UPGRADE_COST,
     GARAGE_BATCH_UPGRADE_INCREMENT,
@@ -131,9 +130,7 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
 
 
 async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
-    """Purchase Auto Rank: crimes and GTAs committed automatically; results to Telegram. Admin only for now."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Auto Rank is currently admin only.")
+    """Purchase Auto Rank: crimes and GTAs committed automatically; results to Telegram."""
     if current_user.get("auto_rank_enabled", False):
         raise HTTPException(status_code=400, detail="You already have Auto Rank")
     if (current_user.get("points") or 0) < AUTO_RANK_COST_POINTS:
