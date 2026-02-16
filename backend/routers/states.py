@@ -6,12 +6,14 @@ from routers.dice import DICE_MAX_BET
 from routers.roulette import ROULETTE_MAX_BET
 from routers.blackjack import BLACKJACK_MAX_BET
 from routers.horseracing import HORSERACING_MAX_BET
+from routers.slots import SLOTS_MAX_BET
 
 CASINO_GAMES = [
     {"id": "blackjack", "name": "Blackjack", "max_bet": BLACKJACK_MAX_BET},
     {"id": "horseracing", "name": "Horse Racing", "max_bet": HORSERACING_MAX_BET},
     {"id": "roulette", "name": "Roulette", "max_bet": ROULETTE_MAX_BET},
     {"id": "dice", "name": "Dice", "max_bet": DICE_MAX_BET},
+    {"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET},
 ]
 
 

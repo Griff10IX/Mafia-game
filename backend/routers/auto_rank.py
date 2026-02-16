@@ -1,8 +1,13 @@
 # Auto Rank: background task that auto-commits crimes and GTA for users who bought it, sends results to Telegram
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+
+# Short-lived cache for game_config (enabled + interval) so multiple loops share one read per 3s
+_auto_rank_config_cache: Optional[dict] = None
+_auto_rank_config_cache_until: Optional[datetime] = None
+AUTO_RANK_CONFIG_CACHE_SECONDS = 3
 
 from fastapi import HTTPException
 
@@ -15,41 +20,47 @@ BUST_EVERY_5SEC_INTERVAL = 5
 CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 30  # 30 seconds when jail empty (bust-every-5s fallback)
 
 
-async def get_auto_rank_interval_seconds(db) -> int:
-    """Return configured interval (seconds) between full cycles. Min MIN_INTERVAL_SECONDS."""
-    doc = await db.game_config.find_one({"id": GAME_CONFIG_ID}, {"_id": 0, "interval_seconds": 1})
-    raw = doc.get("interval_seconds") if doc else None
-    try:
-        val = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
-    except (TypeError, ValueError):
-        val = DEFAULT_INTERVAL_SECONDS
-    return max(MIN_INTERVAL_SECONDS, val)
-
-
-async def get_auto_rank_enabled(db) -> bool:
-    """Return whether the Auto Rank loop is allowed to run (start/stop). Default True."""
-    doc = await db.game_config.find_one({"id": GAME_CONFIG_ID}, {"_id": 0, "enabled": 1})
-    if doc is None:
-        return True
-    return doc.get("enabled", True)
+def _invalidate_auto_rank_config_cache():
+    """Invalidate cached game_config so next get_auto_rank_config fetches fresh (e.g. after admin start/stop/interval)."""
+    global _auto_rank_config_cache, _auto_rank_config_cache_until
+    _auto_rank_config_cache = None
+    _auto_rank_config_cache_until = None
 
 
 async def get_auto_rank_config(db) -> dict:
-    """One game_config read for auto_rank: returns enabled and interval_seconds. Use when both are needed (e.g. main loop, interval API)."""
+    """One game_config read for auto_rank: returns enabled and interval_seconds. Cached for AUTO_RANK_CONFIG_CACHE_SECONDS so multiple loops share one read."""
+    global _auto_rank_config_cache, _auto_rank_config_cache_until
+    now = datetime.now(timezone.utc)
+    if _auto_rank_config_cache is not None and _auto_rank_config_cache_until is not None and now < _auto_rank_config_cache_until:
+        return _auto_rank_config_cache
     doc = await db.game_config.find_one(
         {"id": GAME_CONFIG_ID}, {"_id": 0, "enabled": 1, "interval_seconds": 1}
     )
     if doc is None:
-        return {"enabled": True, "interval_seconds": DEFAULT_INTERVAL_SECONDS}
-    raw = doc.get("interval_seconds")
-    try:
-        interval = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
-    except (TypeError, ValueError):
-        interval = DEFAULT_INTERVAL_SECONDS
-    return {
-        "enabled": doc.get("enabled", True),
-        "interval_seconds": max(MIN_INTERVAL_SECONDS, interval),
-    }
+        config = {"enabled": True, "interval_seconds": DEFAULT_INTERVAL_SECONDS}
+    else:
+        raw = doc.get("interval_seconds")
+        try:
+            interval = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
+        except (TypeError, ValueError):
+            interval = DEFAULT_INTERVAL_SECONDS
+        config = {
+            "enabled": doc.get("enabled", True),
+            "interval_seconds": max(MIN_INTERVAL_SECONDS, interval),
+        }
+    _auto_rank_config_cache = config
+    _auto_rank_config_cache_until = now + timedelta(seconds=AUTO_RANK_CONFIG_CACHE_SECONDS)
+    return config
+
+
+async def get_auto_rank_interval_seconds(db) -> int:
+    """Return configured interval (seconds) between full cycles. Min MIN_INTERVAL_SECONDS."""
+    return (await get_auto_rank_config(db))["interval_seconds"]
+
+
+async def get_auto_rank_enabled(db) -> bool:
+    """Return whether the Auto Rank loop is allowed to run (start/stop). Default True."""
+    return (await get_auto_rank_config(db))["enabled"]
 
 
 def _parse_iso(s):
@@ -674,14 +685,22 @@ async def run_auto_rank_oc_loop():
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
             )
             users = await cursor.to_list(500)
+            # One user_organised_crime fetch per OC cycle (reused for all users)
+            user_oc_cursor = db.user_organised_crime.find(
+                {"user_id": {"$in": [u["id"] for u in users]}},
+                {"_id": 0, "user_id": 1, "selected_equipment": 1},
+            )
+            user_oc_list = await user_oc_cursor.to_list(500)
+            user_oc_by_id = {doc["user_id"]: doc.get("selected_equipment", "basic") for doc in user_oc_list}
             for u in users:
                 retry_at = _parse_iso(u.get("auto_rank_oc_retry_at"))
                 if retry_at and now < retry_at:
                     continue
                 chat_id = (u.get("telegram_chat_id") or "").strip()
                 bot_token = (u.get("telegram_bot_token") or "").strip() or None
+                selected_equipment = user_oc_by_id.get(u["id"], "basic")
                 try:
-                    result = await run_oc_heist_npc_only(u["id"])
+                    result = await run_oc_heist_npc_only(u["id"], selected_equipment_override=selected_equipment)
                     if result.get("skipped_afford"):
                         retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
                         await db.users.update_one(
@@ -868,6 +887,7 @@ def register(router):
             {"$set": {"enabled": True}},
             upsert=True,
         )
+        _invalidate_auto_rank_config_cache()
         return {"enabled": True, "message": "Auto Rank started."}
 
     @router.post("/auto-rank/stop")
@@ -879,6 +899,7 @@ def register(router):
             {"$set": {"enabled": False}},
             upsert=True,
         )
+        _invalidate_auto_rank_config_cache()
         return {"enabled": False, "message": "Auto Rank stopped. Current cycle will finish, then no new cycles until started."}
 
     @router.patch("/auto-rank/interval")
@@ -899,6 +920,7 @@ def register(router):
             {"$set": {"interval_seconds": interval}},
             upsert=True,
         )
+        _invalidate_auto_rank_config_cache()
         return {"interval_seconds": interval, "message": f"Auto Rank will run every {interval} seconds after each cycle."}
 
     class AdminUserUpdateBody(BaseModel):

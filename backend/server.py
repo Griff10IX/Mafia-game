@@ -888,6 +888,7 @@ from routers.dice import DICE_MAX_BET, DiceSellOnTradeRequest  # used by CASINO_
 from routers.roulette import ROULETTE_MAX_BET, RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest  # CASINO_GAMES, blackjack/horseracing reuse these models
 from routers.blackjack import BLACKJACK_MAX_BET  # CASINO_GAMES
 from routers.horseracing import HORSERACING_MAX_BET  # CASINO_GAMES
+from routers.slots import SLOTS_MAX_BET  # CASINO_GAMES
 
 
 async def _user_owns_any_property(user_id: str):
@@ -904,7 +905,7 @@ async def _user_owns_any_property(user_id: str):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, slots, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -914,6 +915,7 @@ CASINO_GAMES = [
     {"id": "horseracing", "name": "Horse Racing", "max_bet": HORSERACING_MAX_BET},
     {"id": "roulette", "name": "Roulette", "max_bet": ROULETTE_MAX_BET},
     {"id": "dice", "name": "Dice", "max_bet": DICE_MAX_BET},
+    {"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET},
 ]
 crimes.register(api_router)
 gta.register(api_router)
@@ -936,6 +938,7 @@ dice.register(api_router)
 roulette.register(api_router)
 blackjack.register(api_router)
 horseracing.register(api_router)
+slots.register(api_router)
 notifications.register(api_router)
 hitlist.register(api_router)
 properties.register(api_router)

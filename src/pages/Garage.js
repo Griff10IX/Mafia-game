@@ -119,81 +119,97 @@ const ActionsBar = ({
   onToggleSelectAll,
   onOpenSettings,
   onMelt,
-  onScrap
-}) => (
-  <div className={`${styles.panel} rounded-md border border-primary/20 p-3`}>
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        {!showAll && hiddenCount > 0 && (
-          <span className="text-[10px] text-mutedForeground font-heading">
-            Showing {displayedCount}
-          </span>
-        )}
+  onScrap,
+  meltBulletsSecondsRemaining,
+}) => {
+  const meltOnCooldown = meltBulletsSecondsRemaining != null && meltBulletsSecondsRemaining > 0;
+  return (
+    <div className={`${styles.panel} rounded-md border border-primary/20 p-3`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {!showAll && hiddenCount > 0 && (
+            <span className="text-[10px] text-mutedForeground font-heading">
+              Showing {displayedCount}
+            </span>
+          )}
+          
+          {selectedCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/30">
+              {selectedCount} selected
+            </span>
+          )}
+          
+          {displayedCount > 0 && (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onToggleSelectAll}
+                disabled={noEligibleInView}
+                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-heading font-bold uppercase tracking-wide transition-all ${
+                  noEligibleInView
+                    ? 'border-border text-mutedForeground/60 cursor-not-allowed'
+                    : 'border-primary/30 text-foreground hover:border-primary/50 hover:bg-primary/10 active:scale-95'
+                }`}
+                data-testid="garage-select-all"
+              >
+                {allDisplayedSelected ? (
+                  <CheckSquare size={12} className="text-primary" />
+                ) : (
+                  <Square size={12} className="text-mutedForeground" />
+                )}
+                {noEligibleInView
+                  ? 'No match'
+                  : allDisplayedSelected
+                  ? `Clear${filterActive ? ` (${displayedEligibleCount})` : ''}`
+                  : `Select all${filterActive ? ` (${displayedEligibleCount})` : ''}`}
+              </button>
+              
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="inline-flex items-center justify-center w-7 h-7 rounded border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all active:scale-95"
+                title="Filter rarities"
+              >
+                <Settings size={14} />
+              </button>
+            </div>
+          )}
+        </div>
         
         {selectedCount > 0 && (
-          <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/30">
-            {selectedCount} selected
-          </span>
-        )}
-        
-        {displayedCount > 0 && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-2">
+            {meltOnCooldown && (
+              <span className="text-[10px] text-mutedForeground font-heading">
+                Melt for bullets: next in {meltBulletsSecondsRemaining}s
+              </span>
+            )}
             <button
-              type="button"
-              onClick={onToggleSelectAll}
-              disabled={noEligibleInView}
-              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-heading font-bold uppercase tracking-wide transition-all ${
-                noEligibleInView
-                  ? 'border-border text-mutedForeground/60 cursor-not-allowed'
-                  : 'border-primary/30 text-foreground hover:border-primary/50 hover:bg-primary/10 active:scale-95'
+              onClick={onMelt}
+              disabled={meltOnCooldown}
+              title={meltOnCooldown ? `1 car per 45s. Next in ${meltBulletsSecondsRemaining}s` : 'Melt for bullets (1 car every 45s)'}
+              className={`rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide border inline-flex items-center gap-1.5 touch-manipulation transition-all ${
+                meltOnCooldown
+                  ? 'bg-secondary/50 text-mutedForeground border-border cursor-not-allowed'
+                  : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground border border-yellow-600/50 shadow shadow-primary/20 active:scale-95'
               }`}
-              data-testid="garage-select-all"
             >
-              {allDisplayedSelected ? (
-                <CheckSquare size={12} className="text-primary" />
-              ) : (
-                <Square size={12} className="text-mutedForeground" />
-              )}
-              {noEligibleInView
-                ? 'No match'
-                : allDisplayedSelected
-                ? `Clear${filterActive ? ` (${displayedEligibleCount})` : ''}`
-                : `Select all${filterActive ? ` (${displayedEligibleCount})` : ''}`}
+              <Flame size={12} />
+              Melt (1/45s)
             </button>
-            
             <button
-              type="button"
-              onClick={onOpenSettings}
-              className="inline-flex items-center justify-center w-7 h-7 rounded border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all active:scale-95"
-              title="Filter rarities"
+              onClick={onScrap}
+              className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
+              title="Scrap for cash (no cooldown)"
             >
-              <Settings size={14} />
+              <DollarSign size={12} />
+              Scrap
             </button>
           </div>
         )}
       </div>
-      
-      {selectedCount > 0 && (
-        <div className="flex gap-2">
-          <button
-            onClick={onMelt}
-            className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide border border-yellow-600/50 shadow shadow-primary/20 transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
-          >
-            <Flame size={12} />
-            Melt
-          </button>
-          <button
-            onClick={onScrap}
-            className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
-          >
-            <DollarSign size={12} />
-            Scrap
-          </button>
-        </div>
-      )}
     </div>
-  </div>
-);
+  );
+};
 
 const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repairingCarId, getRarityColor }) => {
   const isCustom = car.car_id === 'car_custom';
@@ -436,6 +452,8 @@ export default function Garage() {
   const [meltScrapRarities, setMeltScrapRarities] = useState(() => loadMeltScrapRarities());
   const [meltScrapSettingsOpen, setMeltScrapSettingsOpen] = useState(false);
   const [meltScrapSettingsDraft, setMeltScrapSettingsDraft] = useState([]);
+  const [meltBulletsCooldownUntil, setMeltBulletsCooldownUntil] = useState(null);
+  const [meltBulletsSecondsRemaining, setMeltBulletsSecondsRemaining] = useState(0);
   const [repairingCarId, setRepairingCarId] = useState(null);
 
   useEffect(() => {
@@ -445,13 +463,30 @@ export default function Garage() {
   const fetchGarage = async () => {
     try {
       const response = await api.get('/gta/garage');
-      setCars(response.data.cars);
+      setCars(response.data.cars ?? []);
+      setMeltBulletsCooldownUntil(response.data.melt_bullets_cooldown_until ?? null);
     } catch (error) {
       toast.error('Failed to load garage');
     } finally {
       setLoading(false);
     }
   };
+
+  // Tick every second while melt-for-bullets cooldown is active
+  useEffect(() => {
+    if (!meltBulletsCooldownUntil) {
+      setMeltBulletsSecondsRemaining(0);
+      return;
+    }
+    const until = new Date(meltBulletsCooldownUntil).getTime();
+    const update = () => {
+      const secs = Math.max(0, Math.floor((until - Date.now()) / 1000));
+      setMeltBulletsSecondsRemaining(secs);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [meltBulletsCooldownUntil]);
 
   const toggleSelect = (carId) => {
     setSelectedCars(prev =>
@@ -498,9 +533,13 @@ export default function Garage() {
 
   const meltCars = async () => {
     if (selectedCars.length === 0) { toast.error('No cars selected'); return; }
+    if (meltBulletsSecondsRemaining > 0) return;
     try {
       const response = await api.post('/gta/melt', { car_ids: selectedCars, action: 'bullets' });
       toast.success(response.data.message);
+      if (response.data.melt_bullets_cooldown_until) {
+        setMeltBulletsCooldownUntil(response.data.melt_bullets_cooldown_until);
+      }
       setSelectedCars([]);
       refreshUser();
       fetchGarage();
@@ -621,6 +660,7 @@ export default function Garage() {
             onOpenSettings={openMeltScrapSettings}
             onMelt={meltCars}
             onScrap={scrapCars}
+            meltBulletsSecondsRemaining={meltBulletsSecondsRemaining > 0 ? meltBulletsSecondsRemaining : null}
           />
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">

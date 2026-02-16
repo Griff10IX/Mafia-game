@@ -27,6 +27,7 @@ import Dice from "./pages/Casinos/Dice.js";
 import Rlt from "./pages/Casinos/Rlt.js";
 import Blackjack from "./pages/Casinos/BlackjackPage";
 import HorseRacing from "./pages/Casinos/HorseRacingPage";
+import Slots from "./pages/Casinos/SlotsPage";
 import SportsBetting from "./pages/SportsBetting";
 import Bank from "./pages/Bank";
 import ArmourWeapons from "./pages/ArmourWeapons";
@@ -452,6 +453,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <HorseRacing />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/casino/slots"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Slots />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -6,7 +7,7 @@ import styles from '../styles/noir.module.css';
 
 // Constants
 const TICK_INTERVAL = 1000;
-const COLLAPSED_KEY = 'gta_garage_collapsed';
+const RECENT_STOLEN_COLLAPSED_KEY = 'gta_recent_stolen_collapsed';
 
 // Utility functions
 function formatCooldown(isoUntil) {
@@ -198,8 +199,8 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
   );
 };
 
-const GarageSection = ({ garage, isCollapsed, onToggle }) => {
-  if (garage.length === 0) return null;
+const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
+  if (recentStolen.length === 0) return null;
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
@@ -209,10 +210,10 @@ const GarageSection = ({ garage, isCollapsed, onToggle }) => {
         className="w-full px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between hover:bg-primary/15 transition-colors"
       >
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-          🚗 Your Garage
+          🚗 Last 10 cars stolen
         </span>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-primary font-heading font-bold">{garage.length} cars</span>
+          <span className="text-xs text-primary font-heading font-bold">{recentStolen.length} cars</span>
           <span className="text-primary/80">
             {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
           </span>
@@ -221,11 +222,11 @@ const GarageSection = ({ garage, isCollapsed, onToggle }) => {
       
       {!isCollapsed && (
         <div className="p-3">
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
-            {garage.slice(0, 24).map((car, index) => (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+            {recentStolen.map((car, index) => (
               <div
-                key={index}
-                data-testid={`garage-car-${index}`}
+                key={car.user_car_id ?? index}
+                data-testid={`recent-stolen-car-${index}`}
                 className="bg-zinc-800/30 border border-primary/10 rounded-sm p-1 flex flex-col items-center text-center hover:border-primary/30 transition-all"
               >
                 <div className="w-full aspect-square rounded-sm overflow-hidden bg-zinc-900/50 shrink-0 mb-0.5">
@@ -248,11 +249,9 @@ const GarageSection = ({ garage, isCollapsed, onToggle }) => {
               </div>
             ))}
           </div>
-          {garage.length > 24 && (
-            <p className="text-[10px] text-mutedForeground font-heading mt-2 text-center">
-              + {garage.length - 24} more
-            </p>
-          )}
+          <p className="text-[10px] text-mutedForeground font-heading mt-2 text-center">
+            <Link to="/garage" className="text-primary hover:underline">View full garage →</Link>
+          </p>
         </div>
       )}
     </div>
@@ -330,7 +329,7 @@ const InfoSection = () => (
 // Main component
 export default function GTA() {
   const [options, setOptions] = useState([]);
-  const [garage, setGarage] = useState([]);
+  const [recentStolen, setRecentStolen] = useState([]);
   const [gtaStats, setGtaStats] = useState({
     count_today: 0, count_week: 0, success_today: 0, success_week: 0,
     profit_today: 0, profit_24h: 0, profit_week: 0,
@@ -339,18 +338,18 @@ export default function GTA() {
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [garageCollapsed, setGarageCollapsed] = useState(() => {
+  const [recentStolenCollapsed, setRecentStolenCollapsed] = useState(() => {
     try {
-      return localStorage.getItem(COLLAPSED_KEY) === 'true';
+      return localStorage.getItem(RECENT_STOLEN_COLLAPSED_KEY) === 'true';
     } catch {
       return false;
     }
   });
 
-  const toggleGarage = () => {
-    setGarageCollapsed((prev) => {
+  const toggleRecentStolen = () => {
+    setRecentStolenCollapsed((prev) => {
       const next = !prev;
-      try { localStorage.setItem(COLLAPSED_KEY, String(next)); } catch {}
+      try { localStorage.setItem(RECENT_STOLEN_COLLAPSED_KEY, String(next)); } catch {}
       return next;
     });
   };
@@ -359,9 +358,9 @@ export default function GTA() {
 
   const fetchData = async () => {
     try {
-      const [optionsRes, garageRes, eventsRes, statsRes, autoRankRes] = await Promise.allSettled([
+      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes] = await Promise.allSettled([
         api.get('/gta/options'),
-        api.get('/gta/garage'),
+        api.get('/gta/recent-stolen'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/gta/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
@@ -376,8 +375,8 @@ export default function GTA() {
         setGtaStats(statsRes.value.data);
       }
       
-      if (garageRes.status === 'fulfilled' && garageRes.value?.data) {
-        setGarage(Array.isArray(garageRes.value.data.cars) ? garageRes.value.data.cars : []);
+      if (recentStolenRes.status === 'fulfilled' && recentStolenRes.value?.data) {
+        setRecentStolen(Array.isArray(recentStolenRes.value.data.cars) ? recentStolenRes.value.data.cars : []);
       }
       
       if (eventsRes.status === 'fulfilled' && eventsRes.value?.data) {
@@ -507,10 +506,10 @@ export default function GTA() {
         </div>
       </div>
 
-      <GarageSection 
-        garage={garage} 
-        isCollapsed={garageCollapsed} 
-        onToggle={toggleGarage} 
+      <RecentStolenSection 
+        recentStolen={recentStolen} 
+        isCollapsed={recentStolenCollapsed} 
+        onToggle={toggleRecentStolen} 
       />
 
       <InfoSection />

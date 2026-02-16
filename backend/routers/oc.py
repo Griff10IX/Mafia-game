@@ -1,5 +1,6 @@
 # Organised Crime: team heists (Driver, Weapons, Explosives, Hacker), 4 job types, 6h/4h cooldown
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 import random
 import re
 import os
@@ -528,8 +529,8 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     }
 
 
-async def run_oc_heist_npc_only(user_id: str) -> dict:
-    """Run one OC heist with self + 3 NPCs if timer is ready and user can afford a job. For Auto Rank. Returns {ran, success, message, cooldown_until, skipped_afford}."""
+async def run_oc_heist_npc_only(user_id: str, selected_equipment_override: Optional[str] = None) -> dict:
+    """Run one OC heist with self + 3 NPCs if timer is ready and user can afford a job. For Auto Rank. Returns {ran, success, message, cooldown_until, skipped_afford}. When selected_equipment_override is set (e.g. from OC loop), skip user_organised_crime lookup."""
     user = await db.users.find_one(
         {"id": user_id},
         {"_id": 0, "id": 1, "oc_cooldown_until": 1, "money": 1, "oc_timer_reduced": 1},
@@ -542,8 +543,11 @@ async def run_oc_heist_npc_only(user_id: str) -> dict:
         until = _parse_iso_datetime(cooldown_until)
         if until and until > now:
             return {"ran": False, "success": False, "message": "Cooldown active", "cooldown_until": cooldown_until, "skipped_afford": False}
-    user_oc = await db.user_organised_crime.find_one({"user_id": user_id}, {"_id": 0, "selected_equipment": 1})
-    selected_id = (user_oc or {}).get("selected_equipment", "basic")
+    if selected_equipment_override is not None:
+        selected_id = selected_equipment_override
+    else:
+        user_oc = await db.user_organised_crime.find_one({"user_id": user_id}, {"_id": 0, "selected_equipment": 1})
+        selected_id = (user_oc or {}).get("selected_equipment", "basic")
     equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
     money = int(user.get("money") or 0)
     best_job = None

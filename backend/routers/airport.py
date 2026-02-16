@@ -148,6 +148,9 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
                 "can_travel": damage_percent < 100,
             })
 
+    # Sort by travel time ascending (fastest first) so exclusive/ultra_rare/legendary show first
+    cars_with_travel_times.sort(key=lambda c: (c["travel_time"], c.get("name", "")))
+
     custom_car = None
     first_custom = next((uc for uc in user_cars if uc.get("car_id") == "car_custom"), None)
     if first_custom:

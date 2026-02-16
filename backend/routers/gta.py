@@ -456,8 +456,16 @@ async def get_gta_stats(current_user: dict = Depends(get_current_user)):
     }
 
 
+MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every 45s. Scrap has no cooldown.
+
+
 async def get_garage(current_user: dict = Depends(get_current_user)):
     cars = await db.user_cars.find({"user_id": current_user["id"]}).to_list(1000)
+    user_doc = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "melt_bullets_cooldown_until": 1},
+    )
+    melt_bullets_cooldown_until = user_doc.get("melt_bullets_cooldown_until") if user_doc else None
     car_details = []
     for user_car in cars:
         car_id = user_car.get("car_id")
@@ -479,7 +487,47 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
                 entry["sale_price"] = user_car.get("sale_price")
                 entry["listed_at"] = user_car.get("listed_at")
             car_details.append(entry)
+    return {"cars": car_details, "melt_bullets_cooldown_until": melt_bullets_cooldown_until}
+
+
+async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
+    """Last 10 cars stolen (by acquired_at desc) for the GTA page. Same shape as garage entries."""
+    cursor = (
+        db.user_cars.find({"user_id": current_user["id"]})
+        .sort("acquired_at", -1)
+        .limit(10)
+    )
+    cars = await cursor.to_list(10)
+    car_details = []
+    for user_car in cars:
+        car_id = user_car.get("car_id")
+        if not car_id:
+            continue
+        car_info = next((c for c in CARS if c["id"] == car_id), None)
+        if car_info:
+            user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
+            entry = {
+                "user_car_id": user_car_id,
+                "car_id": car_id,
+                "car_name": user_car.get("car_name"),
+                "acquired_at": user_car.get("acquired_at"),
+                "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
+                **car_info,
+            }
+            car_details.append(entry)
     return {"cars": car_details}
+
+
+def _parse_melt_cooldown(iso_str):
+    if not iso_str:
+        return None
+    if hasattr(iso_str, "year"):
+        return iso_str
+    try:
+        s = str(iso_str).strip().replace("Z", "+00:00")
+        return datetime.fromisoformat(s)
+    except Exception:
+        return None
 
 
 async def melt_cars(
@@ -487,16 +535,40 @@ async def melt_cars(
 ):
     if not request.car_ids:
         raise HTTPException(status_code=400, detail="No cars selected")
-    limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
-    if len(request.car_ids) > limit:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You can only melt/scrap {limit} cars at a time. Upgrade your limit in the Store.",
+    now = datetime.now(timezone.utc)
+
+    if request.action == "bullets":
+        # Only 1 car per 45s for bullets; check cooldown first
+        user_doc = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "melt_bullets_cooldown_until": 1},
         )
+        cooldown_until = _parse_melt_cooldown((user_doc or {}).get("melt_bullets_cooldown_until"))
+        if cooldown_until and now < cooldown_until:
+            secs = int((cooldown_until - now).total_seconds())
+            raise HTTPException(
+                status_code=400,
+                detail=f"You can only melt 1 car for bullets every {MELT_BULLETS_COOLDOWN_SECONDS}s. Next melt in {secs}s.",
+            )
+        # Process only the first eligible car for bullets
+        limit = 1
+    else:
+        # Scrap (cash): no cooldown, batch limit applies
+        limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
+        if len(request.car_ids) > limit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You can only scrap up to {limit} cars at a time. Upgrade your limit in the Store.",
+            )
+        limit = len(request.car_ids)
+
     total_value = 0
     total_bullets = 0
     deleted_count = 0
+    processed = 0
     for car_id in request.car_ids:
+        if processed >= limit:
+            break
         user_car = await db.user_cars.find_one(
             {"user_id": current_user["id"], "id": car_id}
         )
@@ -536,17 +608,20 @@ async def melt_cars(
                         }
                     )
                 deleted_count += 1
+                processed += 1
     if deleted_count > 0:
         if request.action == "bullets":
+            cooldown_until = now + timedelta(seconds=MELT_BULLETS_COOLDOWN_SECONDS)
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": {"bullets": total_bullets}},
+                {"$inc": {"bullets": total_bullets}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
             )
             return {
                 "success": True,
                 "melted_count": deleted_count,
                 "total_bullets": total_bullets,
-                "message": f"Melted {deleted_count} car(s) for {total_bullets} bullets",
+                "message": f"Melted {deleted_count} car(s) for {total_bullets} bullets. Next melt in {MELT_BULLETS_COOLDOWN_SECONDS}s.",
+                "melt_bullets_cooldown_until": cooldown_until.isoformat(),
             }
         await db.users.update_one(
             {"id": current_user["id"]}, {"$inc": {"money": total_value}}
@@ -919,6 +994,7 @@ def register(router):
     )
     router.add_api_route("/gta/stats", get_gta_stats, methods=["GET"])
     router.add_api_route("/gta/garage", get_garage, methods=["GET"])
+    router.add_api_route("/gta/recent-stolen", get_recent_stolen, methods=["GET"])
     router.add_api_route("/gta/melt", melt_cars, methods=["POST"])
     router.add_api_route("/gta/cars-for-sale", get_cars_for_sale, methods=["GET"])
     router.add_api_route("/gta/buy-car", buy_car, methods=["POST"])

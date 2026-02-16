@@ -171,8 +171,8 @@ const DestinationCard = ({
           </button>
         )}
 
-        {/* User Cars */}
-        {travelInfo?.cars?.slice(0, 3).map(car => (
+        {/* User Cars (best 2 only, sorted fastest first) */}
+        {travelInfo?.cars?.slice(0, 2).map(car => (
           <button
             key={car.user_car_id}
             onClick={() => !travelDisabled && car.can_travel !== false && onTravel(destination, car.user_car_id)}
