@@ -1749,11 +1749,10 @@ async def get_profile_theme(current_user: dict = Depends(get_current_user)):
 
 @api_router.patch("/profile/theme")
 async def update_profile_theme(request: ThemePreferencesRequest, current_user: dict = Depends(get_current_user)):
-    """Save theme preferences to DB so they sync across devices. Only provided keys are updated."""
-    updates = {k: v for k, v in request.model_dump().items() if v is not None}
+    """Save theme preferences to DB so they sync across devices. Only provided keys are updated. Null = clear (e.g. reset to default)."""
+    updates = request.model_dump(exclude_unset=True)  # include None so reset can clear button/accent
     if not updates:
         return {"message": "No theme updates", "theme_preferences": current_user.get("theme_preferences") or {}}
-    # Map request keys to stored keys (snake_case in DB)
     key_map = {
         "colour_id": "colourId",
         "texture_id": "textureId",
