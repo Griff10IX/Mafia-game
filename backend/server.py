@@ -7092,35 +7092,49 @@ def _booze_rotation_ends_at():
     return datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat()
 
 
+def _booze_round_trip_cities():
+    """The two cities that have a guaranteed profitable round-trip this rotation (buy A sell B, buy B sell A)."""
+    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    idx = _booze_rotation_index()
+    i, j = unordered_pairs[idx % len(unordered_pairs)]
+    return [STATES[i], STATES[j]]
+
+
 def _booze_prices_for_rotation():
     """Per (location_index, booze_index): (buy_price, sell_price). Deterministic from rotation.
-    Ensures at least one booze is profitable on the return leg (buy in highest-sell city, sell in lowest-buy city).
+    Guarantees one round-trip pair per rotation: buy in city A → sell in city B, then buy in city B → sell in city A
+    (both legs profitable) so you can profit there and back without visiting 3–4 cities. Which pair rotates.
     """
     idx = _booze_rotation_index()
-    n_locs = 4  # len(STATES) - avoid forward ref
+    n_locs = 4  # len(STATES)
     n_booze = len(BOOZE_TYPES)
     out = {}
     for loc_i in range(n_locs):
         for booze_i in range(n_booze):
-            # Deterministic: no random module
-            base = 200 + (loc_i * 100) + (booze_i * 80) + (idx % 17) * 20
-            # ECONOMY: Low profit spread so booze runs don't dominate (spread ~8-22 per unit)
-            spread = 8 + (idx + loc_i + booze_i) % 15
+            base = 200 + (loc_i * 85) + (booze_i * 72) + (idx % 19) * 23
+            base += ((idx * 7 + loc_i * 11 + booze_i * 13) % 67) - 33
+            spread = 20 + (idx + loc_i * 5 + booze_i * 9) % 161
             buy = min(2000, max(100, base))
             sell = buy + spread
             out[(loc_i, booze_i)] = (buy, sell)
-    # Guarantee at least one profitable return route: buy in loc 3 (e.g. Atlantic City), sell in loc 0 (e.g. Chicago).
-    # Pick one booze per rotation so return is profitable for that booze.
-    return_booze_i = idx % n_booze
-    sell_at_0 = out[(0, return_booze_i)][1]
-    buy_at_3, sell_at_3 = out[(3, return_booze_i)]
-    return_profit_desired = 10
-    if sell_at_0 <= buy_at_3:
-        buy_at_3_new = min(buy_at_3, sell_at_0 - return_profit_desired)
-        buy_at_3_new = max(100, min(2000, buy_at_3_new))
-        spread_3 = sell_at_3 - buy_at_3
-        sell_at_3_new = min(2000, max(buy_at_3_new + spread_3, buy_at_3_new + 8))
-        out[(3, return_booze_i)] = (buy_at_3_new, sell_at_3_new)
+    # One round-trip per rotation: (locA, locB) rotates through all 6 unordered pairs
+    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    locA, locB = unordered_pairs[idx % len(unordered_pairs)]
+    profit_min = 25
+    # Leg 1: buy in A, sell in B — use one booze
+    booze_ab = idx % n_booze
+    buy_a_ab, sell_a_ab = out[(locA, booze_ab)]
+    buy_b_ab, sell_b_ab = out[(locB, booze_ab)]
+    if sell_b_ab <= buy_a_ab + profit_min:
+        sell_b_ab = min(2000, buy_a_ab + profit_min + (idx % 50))
+        out[(locB, booze_ab)] = (buy_b_ab, sell_b_ab)
+    # Leg 2: buy in B, sell in A — use a different booze so both legs are profitable
+    booze_ba = (idx + 1) % n_booze
+    buy_b_ba, sell_b_ba = out[(locB, booze_ba)]
+    buy_a_ba, sell_a_ba = out[(locA, booze_ba)]
+    if sell_a_ba <= buy_b_ba + profit_min:
+        sell_a_ba = min(2000, buy_b_ba + profit_min + (idx % 50))
+        out[(locA, booze_ba)] = (buy_a_ba, sell_a_ba)
     return out
 
 
@@ -9334,6 +9348,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "rotation_ends_at": _booze_rotation_ends_at(),
         "rotation_hours": BOOZE_ROTATION_HOURS,
         "rotation_seconds": _booze_rotation_override_seconds,
+        "round_trip_cities": _booze_round_trip_cities(),
         "profit_today": profit_today,
         "profit_total": profit_total,
         "runs_count": runs_count,

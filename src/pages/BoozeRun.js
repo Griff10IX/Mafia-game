@@ -163,23 +163,24 @@ const BestRoutesCard = ({ routes, title }) => (
   </div>
 );
 
-/** One combined card: "Sell in [cityA]" (3) + "Run back" buy cityA → sell cityB (3) */
-const BestRoutesCombinedCard = ({ cityA, cityB, sellInCityARoutes, runBackRoutes }) => (
+/** One round-trip card: Buy in A → Sell in B, then Buy in B → Sell in A (same two cities, profit both ways) */
+const RoundTripCard = ({ cityA, cityB, buyASellBRoutes, buyBSellARoutes }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-        🗺️ Best routes: sell in {cityA} & run to {cityB}
+        🗺️ Round trip: {cityA} ↔ {cityB}
       </h2>
+      <p className="text-[10px] text-mutedForeground mt-0.5">Buy in one city, sell in the other — then do the reverse. One route there and back.</p>
     </div>
     <div className="p-2 space-y-4">
       <div>
         <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-2">
-          Sell in {cityA} (buy elsewhere → sell {cityA})
+          Buy in {cityA} → sell in {cityB}
         </h3>
-        {sellInCityARoutes.length > 0 ? (
+        {buyASellBRoutes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            {sellInCityARoutes.map((r) => (
-              <RouteItem key={`sell-${r.booze.id}`} r={r} />
+            {buyASellBRoutes.map((r) => (
+              <RouteItem key={`ab-${r.booze.id}`} r={r} />
             ))}
           </div>
         ) : (
@@ -188,12 +189,12 @@ const BestRoutesCombinedCard = ({ cityA, cityB, sellInCityARoutes, runBackRoutes
       </div>
       <div>
         <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-2">
-          Buy {cityA} → sell {cityB}
+          Buy in {cityB} → sell in {cityA}
         </h3>
-        {runBackRoutes.length > 0 ? (
+        {buyBSellARoutes.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-            {runBackRoutes.map((r) => (
-              <RouteItem key={`back-${r.booze.id}`} r={r} />
+            {buyBSellARoutes.map((r) => (
+              <RouteItem key={`ba-${r.booze.id}`} r={r} />
             ))}
           </div>
         ) : (
@@ -688,40 +689,34 @@ export default function BoozeRun() {
   const currentLocation = config.current_location || '';
   const cities = Object.keys(allByLocation);
 
-  const pairBestProfit = {}; // (cityA,cityB) -> { maxProfit, routes: [...] }
-  cities.forEach((cityA) => {
-    cities.forEach((cityB) => {
-      if (cityA === cityB) return;
-      const routes = (config.booze_types || []).map((bt) => {
-        const buyItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
-        const sellItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
-        const buyPrice = buyItem?.buy_price ?? Infinity;
-        const sellPrice = sellItem?.sell_price ?? -1;
-        const profit = (typeof sellPrice === 'number' && typeof buyPrice === 'number' && sellPrice > buyPrice)
-          ? sellPrice - buyPrice
-          : -Infinity;
-        return { booze: bt, bestBuyCity: cityA, bestBuyPrice: buyPrice, bestSellCity: cityB, bestSellPrice: sellPrice, profit };
-      }).filter((r) => r.profit > 0);
-      const maxProfit = routes.length ? Math.max(...routes.map((r) => r.profit)) : -1;
-      if (maxProfit > 0) pairBestProfit[`${cityA}\t${cityB}`] = { maxProfit, routes: routes.sort((a, b) => b.profit - a.profit) };
-    });
-  });
-  const bestPairKey = Object.keys(pairBestProfit).sort((a, b) => pairBestProfit[b].maxProfit - pairBestProfit[a].maxProfit)[0];
-  const cityA = bestPairKey ? bestPairKey.split('\t')[0] : '';
-  const cityB = bestPairKey ? bestPairKey.split('\t')[1] : '';
-  const best3Forward = (pairBestProfit[bestPairKey]?.routes ?? []).slice(0, 3);
+  // One round-trip per rotation: use server's round_trip_cities so there's always one route there and back
+  const roundTripCities = config.round_trip_cities && config.round_trip_cities.length === 2 ? config.round_trip_cities : null;
+  const cityA = roundTripCities ? roundTripCities[0] : '';
+  const cityB = roundTripCities ? roundTripCities[1] : '';
 
-  // Return leg: buy in cityB, sell in cityA. Show top 3 by profit (best first), even if loss
-  const best3Reverse = (config.booze_types || [])
+  const buyASellBRoutes = (config.booze_types || [])
+    .map((bt) => {
+      const buyItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
+      const sellItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
+      const buyPrice = buyItem?.buy_price ?? Infinity;
+      const sellPrice = sellItem?.sell_price ?? -1;
+      const profit = (typeof sellPrice === 'number' && typeof buyPrice === 'number' && sellPrice > buyPrice) ? sellPrice - buyPrice : -Infinity;
+      return { booze: bt, bestBuyCity: cityA, bestBuyPrice: buyPrice, bestSellCity: cityB, bestSellPrice: sellPrice, profit };
+    })
+    .filter((r) => r.profit > 0)
+    .sort((a, b) => b.profit - a.profit)
+    .slice(0, 3);
+
+  const buyBSellARoutes = (config.booze_types || [])
     .map((bt) => {
       const buyItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
       const sellItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
       const buyPrice = buyItem?.buy_price ?? Infinity;
       const sellPrice = sellItem?.sell_price ?? -1;
-      const profit = (typeof sellPrice === 'number' && typeof buyPrice === 'number') ? sellPrice - buyPrice : -Infinity;
+      const profit = (typeof sellPrice === 'number' && typeof buyPrice === 'number' && sellPrice > buyPrice) ? sellPrice - buyPrice : -Infinity;
       return { booze: bt, bestBuyCity: cityB, bestBuyPrice: buyPrice, bestSellCity: cityA, bestSellPrice: sellPrice, profit };
     })
-    .filter((r) => r.bestBuyCity && r.bestSellCity && r.bestSellPrice >= 0 && r.bestBuyPrice < Infinity)
+    .filter((r) => r.profit > 0)
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 3);
 
@@ -738,12 +733,12 @@ export default function BoozeRun() {
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="booze-run-page">
       <StatsCard config={config} timer={timer} />
 
-      {cityA && cityB && (
-        <BestRoutesCombinedCard
+      {roundTripCities && (
+        <RoundTripCard
           cityA={cityA}
           cityB={cityB}
-          sellInCityARoutes={best3Reverse}
-          runBackRoutes={best3Forward}
+          buyASellBRoutes={buyASellBRoutes}
+          buyBSellARoutes={buyBSellARoutes}
         />
       )}
 
