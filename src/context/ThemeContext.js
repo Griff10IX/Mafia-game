@@ -53,23 +53,45 @@ function hexToHsl(hex) {
 function applyColourToDocument(colour) {
   if (!colour) return;
   const root = document.documentElement;
-  const hsl = hexToHsl(colour.primary);
+  const stops = colour.stops && colour.stops.length >= 2 ? colour.stops : null;
+  const primary = stops ? stops[0] : colour.primary;
+  const primaryBright = stops ? stops[0] : colour.primaryBright;
+  const primaryDark = stops ? stops[stops.length - 1] : colour.primaryDark;
+
+  const hsl = hexToHsl(primary);
   root.style.setProperty('--primary', `${hsl.h} ${hsl.s}% ${hsl.l}%`);
   const fgIsWhite = colour.foregroundOnPrimary.toLowerCase() === '#ffffff' || colour.foregroundOnPrimary.toLowerCase() === '#fff';
   root.style.setProperty('--primary-foreground', fgIsWhite ? '0 0% 100%' : '0 0% 0%');
-  root.style.setProperty('--noir-primary', colour.primary);
-  root.style.setProperty('--noir-primary-bright', colour.primaryBright);
-  root.style.setProperty('--noir-primary-dark', colour.primaryDark);
+  root.style.setProperty('--noir-primary', primary);
+  root.style.setProperty('--noir-primary-bright', primaryBright);
+  root.style.setProperty('--noir-primary-dark', primaryDark);
   root.style.setProperty('--noir-primary-foreground', colour.foregroundOnPrimary);
-  const rgb = hexToRgb(colour.primary);
+
+  if (stops) {
+    const g1 = stops[0];
+    const g2 = stops[1] ?? stops[0];
+    const g3 = stops[2] ?? g2;
+    const g4 = stops[3] ?? g3;
+    root.style.setProperty('--noir-gradient-1', g1);
+    root.style.setProperty('--noir-gradient-2', g2);
+    root.style.setProperty('--noir-gradient-3', g3);
+    root.style.setProperty('--noir-gradient-4', g4);
+  } else {
+    root.style.setProperty('--noir-gradient-1', colour.primaryBright);
+    root.style.setProperty('--noir-gradient-2', colour.primaryDark);
+    root.style.setProperty('--noir-gradient-3', colour.primaryDark);
+    root.style.setProperty('--noir-gradient-4', colour.primaryDark);
+  }
+
+  const rgb = hexToRgb(primary);
   if (rgb) {
     root.style.setProperty('--noir-primary-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
   }
-  const brightRgb = hexToRgb(colour.primaryBright);
+  const brightRgb = hexToRgb(primaryBright);
   if (brightRgb) {
     root.style.setProperty('--noir-primary-bright-rgb', `${brightRgb.r}, ${brightRgb.g}, ${brightRgb.b}`);
   }
-  const darkRgb = hexToRgb(colour.primaryDark);
+  const darkRgb = hexToRgb(primaryDark);
   if (darkRgb) {
     root.style.setProperty('--noir-primary-dark-rgb', `${darkRgb.r}, ${darkRgb.g}, ${darkRgb.b}`);
   }

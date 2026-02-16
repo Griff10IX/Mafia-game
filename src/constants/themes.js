@@ -142,6 +142,42 @@ export const THEME_COLOURS = [
   { id: 'steel-blue', name: 'Steel Blue', primary: '#4a6b8a', primaryBright: '#5e86aa', primaryDark: '#38526b', foregroundOnPrimary: '#ffffff' },
   { id: 'rose-quartz', name: 'Rose Quartz', primary: '#b8a0a8', primaryBright: '#d4bcc6', primaryDark: '#8a767e', foregroundOnPrimary: '#000000' },
   { id: 'bronze-green', name: 'Bronze Green', primary: '#5c6b4a', primaryBright: '#738662', primaryDark: '#445236', foregroundOnPrimary: '#ffffff' },
+
+  /* Vivid gradients (editable vivid set – two-tone) */
+  { id: 'gradient-green-teal', name: 'Green → Teal', primary: '#4de8bf', primaryBright: '#73ff8d', primaryDark: '#29cdb2', foregroundOnPrimary: '#000000' },
+  { id: 'gradient-teal-pink', name: 'Teal → Pink', primary: '#6a84b7', primaryBright: '#26d6a6', primaryDark: '#cf3388', foregroundOnPrimary: '#ffffff' },
+  { id: 'gradient-orange-yellow', name: 'Orange → Yellow', primary: '#ffc72f', primaryBright: '#ffe900', primaryDark: '#ffab5e', foregroundOnPrimary: '#000000' },
+  { id: 'gradient-lime', name: 'Lime', primary: '#18ff29', primaryBright: '#2aff2c', primaryDark: '#01ff25', foregroundOnPrimary: '#000000' },
+  { id: 'gradient-blue-deep', name: 'Blue → Deep Blue', primary: '#004faa', primaryBright: '#008faa', primaryDark: '#000faa', foregroundOnPrimary: '#ffffff' },
+  { id: 'gradient-yellow-gold', name: 'Yellow → Gold', primary: '#e6d625', primaryBright: '#eeff2a', primaryDark: '#deac21', foregroundOnPrimary: '#000000' },
+  { id: 'gradient-blue-orange', name: 'Blue → Orange', primary: '#6b70ff', primaryBright: '#0089ff', primaryDark: '#d75700', foregroundOnPrimary: '#ffffff' },
+  { id: 'gradient-blue-sky', name: 'Blue → Sky', primary: '#3075d0', primaryBright: '#5fffec', primaryDark: '#008bff', foregroundOnPrimary: '#000000' },
+  { id: 'gradient-green-forest', name: 'Green → Forest', primary: '#53dd22', primaryBright: '#5aff00', primaryDark: '#4c7a45', foregroundOnPrimary: '#000000' },
+  { id: 'gradient-magenta-lavender', name: 'Magenta → Lavender', primary: '#b458c8', primaryBright: '#8f71ff', primaryDark: '#da4097', foregroundOnPrimary: '#ffffff' },
+  { id: 'gradient-pink-purple', name: 'Pink → Purple', primary: '#e963f0', primaryBright: '#cd87ff', primaryDark: '#ff40e1', foregroundOnPrimary: '#ffffff' },
+  { id: 'gradient-peach-pink', name: 'Peach → Pink', primary: '#fe8c9a', primaryBright: '#fec183', primaryDark: '#ff1572', foregroundOnPrimary: '#000000' },
+
+  /* Multi-tone: 2–4 colour stops (stops array drives gradient) */
+  { id: 'tone-2-sunset', name: '2-tone Sunset', stops: ['#ff6b4a', '#ffb347'], primary: '#ff6b4a', primaryBright: '#ff6b4a', primaryDark: '#ffb347', foregroundOnPrimary: '#000000' },
+  { id: 'tone-2-ocean', name: '2-tone Ocean', stops: ['#0077b6', '#00b4d8'], primary: '#0077b6', primaryBright: '#0077b6', primaryDark: '#00b4d8', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-2-forest', name: '2-tone Forest', stops: ['#2d6a4f', '#95d5b2'], primary: '#2d6a4f', primaryBright: '#2d6a4f', primaryDark: '#95d5b2', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-2-berry', name: '2-tone Berry', stops: ['#7b2cbf', '#e0aaff'], primary: '#7b2cbf', primaryBright: '#7b2cbf', primaryDark: '#e0aaff', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-3-fire', name: '3-tone Fire', stops: ['#ff0000', '#ff9500', '#ffea00'], primary: '#ff0000', primaryBright: '#ff0000', primaryDark: '#ffea00', foregroundOnPrimary: '#000000' },
+  { id: 'tone-3-ocean-deep', name: '3-tone Ocean', stops: ['#03045e', '#0077b6', '#00b4d8'], primary: '#03045e', primaryBright: '#03045e', primaryDark: '#00b4d8', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-3-sunset', name: '3-tone Sunset', stops: ['#ff6b6b', '#ffa94d', '#ffd93d'], primary: '#ff6b6b', primaryBright: '#ff6b6b', primaryDark: '#ffd93d', foregroundOnPrimary: '#000000' },
+  { id: 'tone-3-aurora', name: '3-tone Aurora', stops: ['#06ffa5', '#00d4ff', '#7b2cbf'], primary: '#06ffa5', primaryBright: '#06ffa5', primaryDark: '#7b2cbf', foregroundOnPrimary: '#000000' },
+  { id: 'tone-3-raspberry', name: '3-tone Raspberry', stops: ['#9d0208', '#dc2f02', '#e85d04'], primary: '#9d0208', primaryBright: '#9d0208', primaryDark: '#e85d04', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-3-mint', name: '3-tone Mint', stops: ['#2d6a4f', '#40916c', '#95d5b2'], primary: '#2d6a4f', primaryBright: '#2d6a4f', primaryDark: '#95d5b2', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-3-lavender', name: '3-tone Lavender', stops: ['#5a189a', '#9d4edd', '#e0aaff'], primary: '#5a189a', primaryBright: '#5a189a', primaryDark: '#e0aaff', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-rainbow', name: '4-tone Rainbow', stops: ['#ff0000', '#ffaa00', '#00ff00', '#0088ff'], primary: '#ff0000', primaryBright: '#ff0000', primaryDark: '#0088ff', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-sunset', name: '4-tone Sunset', stops: ['#1a1a2e', '#e94560', '#ff6b6b', '#ffd93d'], primary: '#1a1a2e', primaryBright: '#1a1a2e', primaryDark: '#ffd93d', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-ocean', name: '4-tone Ocean', stops: ['#03045e', '#0077b6', '#00b4d8', '#90e0ef'], primary: '#03045e', primaryBright: '#03045e', primaryDark: '#90e0ef', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-forest', name: '4-tone Forest', stops: ['#1b4332', '#2d6a4f', '#40916c', '#95d5b2'], primary: '#1b4332', primaryBright: '#1b4332', primaryDark: '#95d5b2', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-candy', name: '4-tone Candy', stops: ['#ff006e', '#ff4081', '#ff79b0', '#ffb3d9'], primary: '#ff006e', primaryBright: '#ff006e', primaryDark: '#ffb3d9', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-neon', name: '4-tone Neon', stops: ['#00f5d4', '#00bbf9', '#9b5de5', '#f15bb5'], primary: '#00f5d4', primaryBright: '#00f5d4', primaryDark: '#f15bb5', foregroundOnPrimary: '#000000' },
+  { id: 'tone-4-ember', name: '4-tone Ember', stops: ['#370617', '#9d0208', '#dc2f02', '#e85d04'], primary: '#370617', primaryBright: '#370617', primaryDark: '#e85d04', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-ice', name: '4-tone Ice', stops: ['#012a4a', '#013a63', '#014f86', '#89c2d9'], primary: '#012a4a', primaryBright: '#012a4a', primaryDark: '#89c2d9', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-wine', name: '4-tone Wine', stops: ['#3c096c', '#5a189a', '#7b2cbf', '#c77dff'], primary: '#3c096c', primaryBright: '#3c096c', primaryDark: '#c77dff', foregroundOnPrimary: '#ffffff' },
 ];
 
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */

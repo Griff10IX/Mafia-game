@@ -55,21 +55,30 @@ export default function ThemePicker({ open, onClose }) {
           <div>
             <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Colour</p>
             <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
-              {coloursSlice.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => setColour(c.id)}
-                  className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${
-                    colourId === c.id
-                      ? 'border-primary ring-2 ring-primary/30'
-                      : 'border-transparent hover:border-primary/50'
-                  }`}
-                  style={{ backgroundColor: c.primary }}
-                  title={c.name}
-                  aria-label={c.name}
-                />
-              ))}
+              {coloursSlice.map((c) => {
+                const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
+                const isGradient = c.id.startsWith('gradient-') || stops;
+                const swatchStyle = stops
+                  ? { background: `linear-gradient(135deg, ${stops.join(', ')})` }
+                  : isGradient
+                    ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` }
+                    : { backgroundColor: c.primary };
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setColour(c.id)}
+                    className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${
+                      colourId === c.id
+                        ? 'border-primary ring-2 ring-primary/30'
+                        : 'border-transparent hover:border-primary/50'
+                    }`}
+                    style={swatchStyle}
+                    title={c.name}
+                    aria-label={c.name}
+                  />
+                );
+              })}
             </div>
             {totalColourPages > 1 && (
               <div className="flex items-center justify-center gap-1 mt-2">

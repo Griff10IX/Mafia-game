@@ -10,6 +10,11 @@
   --noir-primary: #d4af37;
   --noir-primary-bright: #e6c229;
   --noir-primary-dark: #b8860b;
+  /* Multi-tone gradient (2–4 stops); when set by theme, overrides bright/dark for gradients */
+  --noir-gradient-1: #e6c229;
+  --noir-gradient-2: #b8860b;
+  --noir-gradient-3: #b8860b;
+  --noir-gradient-4: #b8860b;
   --noir-primary-rgb: 212, 175, 55;
   --noir-tab-bg: rgba(var(--noir-primary-rgb), 0.5);
   --noir-primary-foreground: #ffffff;
@@ -114,7 +119,7 @@
 
 /* Sidebar: expanded group header (e.g. RANKING when open) – solid gold, dark text */
 .navItemActive {
-  background: linear-gradient(to bottom, var(--noir-primary-bright), var(--noir-primary-dark)) !important;
+  background: linear-gradient(to bottom, var(--noir-gradient-1), var(--noir-gradient-2), var(--noir-gradient-3), var(--noir-gradient-4)) !important;
   color: #1a1a1a !important;
   border: none !important;
 }
@@ -126,7 +131,7 @@
 
 /* Sidebar: current page link – solid gold bar, light text (match reference image) */
 .navItemActivePage {
-  background: linear-gradient(to bottom, var(--noir-primary-bright), var(--noir-primary-dark)) !important;
+  background: linear-gradient(to bottom, var(--noir-gradient-1), var(--noir-gradient-2), var(--noir-gradient-3), var(--noir-gradient-4)) !important;
   color: var(--noir-primary-foreground) !important;
   border: none !important;
 }
@@ -169,7 +174,7 @@
 
 /* Button primary – gradient gold, white text (e.g. ENTER THE FAMILY) */
 .btnPrimary {
-  background: linear-gradient(to right, var(--noir-primary-bright), var(--noir-primary-dark));
+  background: linear-gradient(to right, var(--noir-gradient-1), var(--noir-gradient-2), var(--noir-gradient-3), var(--noir-gradient-4));
   color: var(--noir-primary-foreground);
   border: 1px solid rgba(var(--noir-primary-rgb), 0.5);
   border-radius: 2px;
@@ -181,7 +186,7 @@
 
 /* Gold background, dark text (e.g. BUY / SELL in reference) */
 .btnGoldDarkText {
-  background: linear-gradient(to bottom, var(--noir-primary-bright), var(--noir-primary-dark));
+  background: linear-gradient(to bottom, var(--noir-gradient-1), var(--noir-gradient-2), var(--noir-gradient-3), var(--noir-gradient-4));
   color: #1a1a1a;
   border: 1px solid rgba(var(--noir-primary-rgb), 0.5);
   border-radius: 2px;
