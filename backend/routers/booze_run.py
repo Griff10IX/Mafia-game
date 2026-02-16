@@ -176,6 +176,151 @@ class AdminBoozeRotationRequest(BaseModel):
     seconds: Optional[int] = None
 
 
+# ----- Internal impls (for auto-rank) -----
+async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
+    """Perform buy for given user (by id). Returns response dict or raises HTTPException. Updates DB."""
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if _booze_user_in_jail(user):
+        raise HTTPException(status_code=400, detail="You are in jail!")
+    booze_ids = [b["id"] for b in BOOZE_TYPES]
+    if booze_id not in booze_ids:
+        raise HTTPException(status_code=400, detail="Invalid booze type")
+    current_state = user.get("current_state", STATES[0] if STATES else "")
+    loc_index = STATES.index(current_state) if current_state in STATES else 0
+    booze_index = booze_ids.index(booze_id)
+    prices_map = _booze_prices_for_rotation()
+    price = prices_map.get((loc_index, booze_index), 400)
+    cost = price * amount
+    if user.get("money", 0) < cost:
+        raise HTTPException(status_code=400, detail="Insufficient money")
+    carrying = dict(user.get("booze_carrying") or {})
+    capacity = _booze_user_capacity(user)
+    current_carry = _booze_user_carrying_total(carrying)
+    if current_carry + amount > capacity:
+        raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
+    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
+    if random.random() < jail_chance:
+        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
+        )
+        _invalidate_config_cache(user["id"])
+        return {
+            "message": "Busted! Prohibition agents got you. You're going to jail.",
+            "caught": True,
+            "jail_until": jail_until.isoformat(),
+            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
+        }
+    booze_name = BOOZE_TYPES[booze_index]["name"]
+    history_entry = {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "action": "buy",
+        "booze_name": booze_name,
+        "amount": amount,
+        "unit_price": price,
+        "total": cost,
+        "location": current_state,
+    }
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$inc": {"money": -cost, f"booze_carrying.{booze_id}": amount, f"booze_carrying_cost.{booze_id}": cost},
+            "$set": {f"booze_buy_location.{booze_id}": current_state},
+            "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
+        }
+    )
+    new_carrying = carrying.get(booze_id, 0) + amount
+    _invalidate_config_cache(user["id"])
+    return {"message": f"Purchased {amount} {booze_name}", "new_carrying": new_carrying, "spent": cost}
+
+
+async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
+    """Perform sell for given user. Returns response dict or raises HTTPException. Updates DB."""
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Amount must be positive")
+    if _booze_user_in_jail(user):
+        raise HTTPException(status_code=400, detail="You are in jail!")
+    booze_ids = [b["id"] for b in BOOZE_TYPES]
+    if booze_id not in booze_ids:
+        raise HTTPException(status_code=400, detail="Invalid booze type")
+    current_state = user.get("current_state", STATES[0] if STATES else "")
+    loc_index = STATES.index(current_state) if current_state in STATES else 0
+    booze_index = booze_ids.index(booze_id)
+    prices_map = _booze_prices_for_rotation()
+    price = prices_map.get((loc_index, booze_index), 400)
+    carrying = dict(user.get("booze_carrying") or {})
+    carrying_cost = dict(user.get("booze_carrying_cost") or {})
+    have = int(carrying.get(booze_id, 0))
+    if have < amount:
+        raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
+    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
+    if random.random() < jail_chance:
+        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
+        )
+        _invalidate_config_cache(user["id"])
+        return {
+            "message": "Busted! Prohibition agents got you. You're going to jail.",
+            "caught": True,
+            "jail_until": jail_until.isoformat(),
+            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
+        }
+    revenue = price * amount
+    total_cost_stored = int(carrying_cost.get(booze_id, 0))
+    cost_of_sold = (total_cost_stored * amount // have) if have else 0
+    profit = revenue - cost_of_sold
+    new_val = have - amount
+    booze_name = BOOZE_TYPES[booze_index]["name"]
+    buy_location = (user.get("booze_buy_location") or {}).get(booze_id)
+    is_run = buy_location is not None and buy_location != current_state
+    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    profit_today = user.get("booze_profit_today", 0)
+    profit_today_date = user.get("booze_profit_today_date")
+    if profit_today_date != today_utc:
+        profit_today = 0
+    history_entry = {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "action": "sell",
+        "booze_name": booze_name,
+        "amount": amount,
+        "unit_price": price,
+        "total": revenue,
+        "profit": profit if is_run else None,
+        "location": current_state,
+        "is_run": is_run,
+    }
+    updates = {
+        "$inc": {"money": revenue},
+        "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
+    }
+    if is_run:
+        updates["$inc"] = updates.get("$inc", {})
+        updates["$inc"]["booze_profit_today"] = profit
+        updates["$inc"]["booze_profit_total"] = profit
+        updates["$inc"]["booze_runs_count"] = 1
+        updates["$set"] = {"booze_profit_today_date": today_utc}
+    if new_val == 0:
+        updates.setdefault("$unset", {})[f"booze_carrying.{booze_id}"] = ""
+        updates["$unset"][f"booze_carrying_cost.{booze_id}"] = ""
+        updates["$unset"][f"booze_buy_location.{booze_id}"] = ""
+    else:
+        updates["$inc"][f"booze_carrying.{booze_id}"] = -amount
+        updates["$inc"][f"booze_carrying_cost.{booze_id}"] = -cost_of_sold
+    await db.users.update_one({"id": user["id"]}, updates)
+    if is_run:
+        try:
+            from routers.objectives import update_objectives_progress
+            await update_objectives_progress(user["id"], "booze_runs", 1)
+        except Exception:
+            pass
+    _invalidate_config_cache(user["id"])
+    return {"message": f"Sold {amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
+
+
 # ----- Routes -----
 async def booze_run_config(current_user: dict = Depends(get_current_user)):
     global _config_cache
@@ -251,146 +396,11 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
 
 
 async def booze_run_buy(request: BoozeBuyRequest, current_user: dict = Depends(get_current_user)):
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    if _booze_user_in_jail(current_user):
-        raise HTTPException(status_code=400, detail="You are in jail!")
-    booze_ids = [b["id"] for b in BOOZE_TYPES]
-    if request.booze_id not in booze_ids:
-        raise HTTPException(status_code=400, detail="Invalid booze type")
-    current_state = current_user.get("current_state", STATES[0] if STATES else "")
-    loc_index = STATES.index(current_state) if current_state in STATES else 0
-    booze_index = booze_ids.index(request.booze_id)
-    prices_map = _booze_prices_for_rotation()
-    price = prices_map.get((loc_index, booze_index), 400)
-    cost = price * request.amount
-    if current_user.get("money", 0) < cost:
-        raise HTTPException(status_code=400, detail="Insufficient money")
-    carrying = dict(current_user.get("booze_carrying") or {})
-    capacity = _booze_user_capacity(current_user)
-    current_carry = _booze_user_carrying_total(carrying)
-    if current_carry + request.amount > capacity:
-        raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
-    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
-    if random.random() < jail_chance:
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
-        )
-        _invalidate_config_cache(current_user["id"])
-        return {
-            "message": "Busted! Prohibition agents got you. You're going to jail.",
-            "caught": True,
-            "jail_until": jail_until.isoformat(),
-            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
-        }
-    booze_name = BOOZE_TYPES[booze_index]["name"]
-    history_entry = {
-        "at": datetime.now(timezone.utc).isoformat(),
-        "action": "buy",
-        "booze_name": booze_name,
-        "amount": request.amount,
-        "unit_price": price,
-        "total": cost,
-        "location": current_state,
-    }
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {
-            "$inc": {"money": -cost, f"booze_carrying.{request.booze_id}": request.amount, f"booze_carrying_cost.{request.booze_id}": cost},
-            "$set": {f"booze_buy_location.{request.booze_id}": current_state},
-            "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
-        }
-    )
-    new_carrying = carrying.get(request.booze_id, 0) + request.amount
-    _invalidate_config_cache(current_user["id"])
-    return {"message": f"Purchased {request.amount} {booze_name}", "new_carrying": new_carrying, "spent": cost}
+    return await _booze_buy_impl(current_user, request.booze_id, request.amount)
 
 
 async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends(get_current_user)):
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    if _booze_user_in_jail(current_user):
-        raise HTTPException(status_code=400, detail="You are in jail!")
-    booze_ids = [b["id"] for b in BOOZE_TYPES]
-    if request.booze_id not in booze_ids:
-        raise HTTPException(status_code=400, detail="Invalid booze type")
-    current_state = current_user.get("current_state", STATES[0] if STATES else "")
-    loc_index = STATES.index(current_state) if current_state in STATES else 0
-    booze_index = booze_ids.index(request.booze_id)
-    prices_map = _booze_prices_for_rotation()
-    price = prices_map.get((loc_index, booze_index), 400)
-    carrying = dict(current_user.get("booze_carrying") or {})
-    carrying_cost = dict(current_user.get("booze_carrying_cost") or {})
-    have = int(carrying.get(request.booze_id, 0))
-    if have < request.amount:
-        raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
-    jail_chance = random.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
-    if random.random() < jail_chance:
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
-        )
-        _invalidate_config_cache(current_user["id"])
-        return {
-            "message": "Busted! Prohibition agents got you. You're going to jail.",
-            "caught": True,
-            "jail_until": jail_until.isoformat(),
-            "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
-        }
-    revenue = price * request.amount
-    total_cost_stored = int(carrying_cost.get(request.booze_id, 0))
-    cost_of_sold = (total_cost_stored * request.amount // have) if have else 0
-    profit = revenue - cost_of_sold
-    new_val = have - request.amount
-    new_cost = total_cost_stored - cost_of_sold
-    booze_name = BOOZE_TYPES[booze_index]["name"]
-    buy_location = (current_user.get("booze_buy_location") or {}).get(request.booze_id)
-    is_run = buy_location is not None and buy_location != current_state
-    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    profit_today = current_user.get("booze_profit_today", 0)
-    profit_today_date = current_user.get("booze_profit_today_date")
-    if profit_today_date != today_utc:
-        profit_today = 0
-    history_entry = {
-        "at": datetime.now(timezone.utc).isoformat(),
-        "action": "sell",
-        "booze_name": booze_name,
-        "amount": request.amount,
-        "unit_price": price,
-        "total": revenue,
-        "profit": profit if is_run else None,
-        "location": current_state,
-        "is_run": is_run,
-    }
-    updates = {
-        "$inc": {"money": revenue},
-        "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
-    }
-    if is_run:
-        updates["$inc"] = updates.get("$inc", {})
-        updates["$inc"]["booze_profit_today"] = profit
-        updates["$inc"]["booze_profit_total"] = profit
-        updates["$inc"]["booze_runs_count"] = 1
-        updates["$set"] = {"booze_profit_today_date": today_utc}
-    if new_val == 0:
-        updates.setdefault("$unset", {})[f"booze_carrying.{request.booze_id}"] = ""
-        updates["$unset"][f"booze_carrying_cost.{request.booze_id}"] = ""
-        updates["$unset"][f"booze_buy_location.{request.booze_id}"] = ""
-    else:
-        updates["$inc"][f"booze_carrying.{request.booze_id}"] = -request.amount
-        updates["$inc"][f"booze_carrying_cost.{request.booze_id}"] = -cost_of_sold
-    await db.users.update_one({"id": current_user["id"]}, updates)
-    if is_run:
-        try:
-            from routers.objectives import update_objectives_progress
-            await update_objectives_progress(current_user["id"], "booze_runs", 1)
-        except Exception:
-            pass
-    _invalidate_config_cache(current_user["id"])
-    return {"message": f"Sold {request.amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
+    return await _booze_sell_impl(current_user, request.booze_id, request.amount)
 
 
 async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):

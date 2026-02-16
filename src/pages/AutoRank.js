@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -16,6 +16,7 @@ export default function AutoRank() {
     auto_rank_gta: true,
     auto_rank_bust_every_5_sec: false,
     auto_rank_oc: false,
+    auto_rank_booze: false,
     auto_rank_purchased: false,
     telegram_chat_id_set: false,
   });
@@ -68,6 +69,7 @@ export default function AutoRank() {
             auto_rank_gta: meRes.data.auto_rank_gta !== false,
             auto_rank_bust_every_5_sec: !!meRes.data.auto_rank_bust_every_5_sec,
             auto_rank_oc: !!meRes.data.auto_rank_oc,
+            auto_rank_booze: !!meRes.data.auto_rank_booze,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
             telegram_chat_id_set: !!meRes.data.telegram_chat_id_set,
           });
@@ -111,6 +113,7 @@ export default function AutoRank() {
         auto_rank_gta: res.data?.auto_rank_gta ?? p.auto_rank_gta,
         auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec ?? p.auto_rank_bust_every_5_sec,
         auto_rank_oc: res.data?.auto_rank_oc ?? p.auto_rank_oc,
+        auto_rank_booze: res.data?.auto_rank_booze ?? p.auto_rank_booze,
       }));
       toast.success('Saved');
     } catch (e) {
@@ -334,6 +337,14 @@ export default function AutoRank() {
               disabled={savingPrefs || !prefs.auto_rank_enabled}
               onToggle={() => updatePref('auto_rank_oc', !prefs.auto_rank_oc)}
             />
+            <ToggleRow
+              icon={Wine}
+              label="Run booze running"
+              description="Buys, travels, and sells on the round-trip route when enabled. Uses your car to travel between cities."
+              checked={prefs.auto_rank_booze}
+              disabled={savingPrefs || !prefs.auto_rank_enabled}
+              onToggle={() => updatePref('auto_rank_booze', !prefs.auto_rank_booze)}
+            />
           </div>
         </div>
 
@@ -490,6 +501,7 @@ export default function AutoRank() {
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">GTA</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Bust 5s</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">OC</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Booze</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Chat ID</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Token</th>
                       <th className="py-2 font-bold text-mutedForeground uppercase text-xs">Actions</th>
@@ -506,6 +518,7 @@ export default function AutoRank() {
                         <td className="py-2 pr-2">{u.auto_rank_gta ? 'On' : 'Off'}</td>
                         <td className="py-2 pr-2">{u.auto_rank_bust_every_5_sec ? 'On' : 'Off'}</td>
                         <td className="py-2 pr-2">{u.auto_rank_oc ? 'On' : 'Off'}</td>
+                        <td className="py-2 pr-2">{u.auto_rank_booze ? 'On' : 'Off'}</td>
                         <td className="py-2 pr-2">
                           {editingChatId[u.username] ? (
                             <div className="flex gap-1 items-center">

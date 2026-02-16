@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Image as ImageIcon } from 'lucide-react';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Image as ImageIcon, ShoppingCart, Banknote, Users } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -32,6 +32,217 @@ function saveMeltScrapRarities(rarities) {
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
     <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const RARITY_COLORS = {
+  common: 'text-gray-400',
+  uncommon: 'text-green-400',
+  rare: 'text-blue-400',
+  ultra_rare: 'text-purple-400',
+  legendary: 'text-yellow-400',
+  custom: 'text-orange-400',
+  exclusive: 'text-red-400',
+};
+
+const BuySellSection = ({
+  dealerCars,
+  dealerLoading,
+  userMoney,
+  onBuyCar,
+  buyingCarId,
+  marketplaceListings,
+  marketplaceLoading,
+  onBuyListedCar,
+  buyingListedId,
+  myCars,
+  myListedCars,
+  onListCar,
+  onDelistCar,
+  listPrice,
+  setListPrice,
+  carToList,
+  setCarToList,
+  listingCarId,
+  delistingCarId,
+}) => (
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+      <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
+        <ShoppingCart size={14} />
+        Buy & Sell Cars
+      </h2>
+    </div>
+    <div className="p-3 space-y-4">
+      <div>
+        <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-1 flex items-center gap-1">
+          <Banknote size={12} />
+          Sell your cars
+        </h3>
+        <p className="text-xs text-mutedForeground font-heading">
+          Select cars in your garage below, then use <strong className="text-foreground">Scrap</strong> for cash (50% value) or <strong className="text-foreground">Melt</strong> for bullets (10 per $1 value).
+        </p>
+      </div>
+
+      <div>
+        <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-2 flex items-center gap-1">
+          <Users size={12} />
+          Marketplace — buy other players&apos; cars
+        </h3>
+        <p className="text-xs text-mutedForeground font-heading mb-2">
+          List your cars for sale below; buy cars listed by other players (pay cash to the seller).
+        </p>
+        {marketplaceLoading ? (
+          <p className="text-xs text-mutedForeground font-heading">Loading...</p>
+        ) : marketplaceListings.length === 0 ? (
+          <p className="text-xs text-mutedForeground font-heading">No cars listed by other players right now.</p>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 max-h-48 overflow-y-auto">
+            {marketplaceListings.map((l) => {
+              const canAfford = (userMoney ?? 0) >= (l.sale_price ?? 0);
+              const loading = buyingListedId === l.user_car_id;
+              return (
+                <div key={l.user_car_id} className={`${styles.panel} rounded border border-border overflow-hidden ${!canAfford ? 'opacity-75' : ''}`}>
+                  <div className="aspect-[4/3] bg-secondary relative">
+                    {l.image ? (
+                      <img src={l.image} alt={l.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Car size={24} className="text-primary/30" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-1.5">
+                    <div className="text-[10px] font-heading font-bold text-foreground truncate" title={l.name}>{l.name}</div>
+                    <div className="text-[9px] text-mutedForeground font-heading truncate" title={l.seller_username}>by {l.seller_username}</div>
+                    <div className="text-[10px] text-primary font-heading font-bold">${(l.sale_price ?? 0).toLocaleString()}</div>
+                    <button
+                      type="button"
+                      disabled={!canAfford || loading}
+                      onClick={() => onBuyListedCar(l.user_car_id)}
+                      className="mt-1 w-full bg-secondary border border-primary/50 text-primary rounded px-1.5 py-1 text-[9px] font-heading font-bold uppercase hover:bg-primary/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      {loading ? '...' : 'Buy'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-2">
+          List your car for sale
+        </h3>
+        {myListedCars.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {myListedCars.map((c) => (
+              <div key={c.user_car_id} className="flex items-center gap-2 px-2 py-1 rounded bg-secondary/50 border border-border text-xs font-heading">
+                <span className="text-foreground font-bold truncate max-w-[100px]">{c.name}</span>
+                <span className="text-primary font-bold">${(c.sale_price ?? 0).toLocaleString()}</span>
+                <button
+                  type="button"
+                  disabled={delistingCarId === c.user_car_id}
+                  onClick={() => onDelistCar(c.user_car_id)}
+                  className="text-mutedForeground hover:text-foreground text-[10px] font-heading uppercase"
+                >
+                  {delistingCarId === c.user_car_id ? '...' : 'Delist'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {myCars.filter((c) => !c.listed_for_sale).length === 0 ? (
+          <p className="text-xs text-mutedForeground font-heading">No cars to list (list cars from your garage below).</p>
+        ) : (
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading mb-0.5">Car</label>
+              <select
+                value={carToList || ''}
+                onChange={(e) => setCarToList(e.target.value || null)}
+                className="bg-input border border-border rounded px-2 py-1 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none min-w-[140px]"
+              >
+                <option value="">Select...</option>
+                {myCars.filter((c) => !c.listed_for_sale).map((c) => (
+                  <option key={c.user_car_id} value={c.user_car_id}>{c.name} (${c.value?.toLocaleString()})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading mb-0.5">Price ($)</label>
+              <input
+                type="number"
+                min={1}
+                value={listPrice}
+                onChange={(e) => setListPrice(e.target.value.replace(/\D/g, ''))}
+                placeholder="Price"
+                className="bg-input border border-border rounded px-2 py-1 text-xs font-heading text-foreground w-24 focus:border-primary/50 focus:outline-none"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={!carToList || !listPrice || Number(listPrice) < 1 || listingCarId === carToList}
+              onClick={() => { const p = Number(listPrice); if (carToList && p >= 1) onListCar(carToList, p); }}
+              className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1 text-[10px] font-heading font-bold uppercase border border-yellow-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {listingCarId === carToList ? '...' : 'List for sale'}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div>
+        <h3 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-2 flex items-center gap-1">
+          <ShoppingCart size={12} />
+          Buy from dealer (new cars)
+        </h3>
+        {dealerLoading ? (
+          <p className="text-xs text-mutedForeground font-heading">Loading...</p>
+        ) : dealerCars.length === 0 ? (
+          <p className="text-xs text-mutedForeground font-heading">No cars for sale.</p>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 max-h-64 overflow-y-auto">
+            {dealerCars.map((c) => {
+              const price = c.dealer_price ?? 0;
+              const canAfford = (userMoney ?? 0) >= price;
+              const canBuy = c.can_buy && canAfford;
+              const loading = buyingCarId === c.id;
+              return (
+                <div
+                  key={c.id}
+                  className={`${styles.panel} rounded border border-border overflow-hidden ${!canBuy ? 'opacity-75' : ''}`}
+                >
+                  <div className="aspect-[4/3] bg-secondary relative">
+                    {c.image ? (
+                      <img src={c.image} alt={c.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Car size={24} className="text-primary/30" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-1.5">
+                    <div className="text-[10px] font-heading font-bold text-foreground truncate" title={c.name}>{c.name}</div>
+                    <div className="text-[10px] text-primary font-heading font-bold">${price.toLocaleString()}</div>
+                    <button
+                      type="button"
+                      disabled={!canBuy || loading}
+                      onClick={() => onBuyCar(c.id)}
+                      className="mt-1 w-full bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-1.5 py-1 text-[9px] font-heading font-bold uppercase disabled:opacity-50 disabled:cursor-not-allowed transition-all border border-yellow-600/50"
+                    >
+                      {loading ? '...' : 'Buy'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   </div>
 );
 
@@ -187,14 +398,18 @@ const ActionsBar = ({
 
 const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor }) => {
   const isCustom = car.car_id === 'car_custom';
-  
+  const isListed = car.listed_for_sale;
+  const handleClick = () => {
+    if (isCustom) onOpenCustomModal(car);
+    else if (!isListed) onToggle(car.user_car_id);
+  };
   return (
     <div
-      onClick={() => (isCustom ? onOpenCustomModal(car) : onToggle(car.user_car_id))}
-      className={`${styles.panel} rounded-md border p-1.5 cursor-pointer transition-all ${
-        isSelected
-          ? 'border-primary shadow-md shadow-primary/20'
-          : 'border-border hover:border-primary/30 hover:shadow-sm'
+      onClick={handleClick}
+      className={`${styles.panel} rounded-md border p-1.5 transition-all ${
+        isListed ? 'border-amber-500/40 opacity-90' : 'cursor-pointer'
+      } ${
+        !isListed && (isSelected ? 'border-primary shadow-md shadow-primary/20' : 'border-border hover:border-primary/30 hover:shadow-sm')
       }`}
     >
       <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
@@ -210,7 +425,12 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, getRarityColor 
             <Car size={32} className="text-primary/30" />
           </div>
         )}
-        {!isCustom && (
+        {isListed && (
+          <div className="absolute top-1 left-1 px-1 rounded bg-amber-500/90 text-[8px] font-heading font-bold text-black uppercase">
+            Listed ${(car.sale_price ?? 0).toLocaleString()}
+          </div>
+        )}
+        {!isCustom && !isListed && (
           <div className="absolute top-1 right-1 w-5 h-5 rounded flex items-center justify-center bg-zinc-800/95 border border-primary/50 shadow">
             {isSelected ? (
               <CheckSquare size={12} className="text-primary" strokeWidth={2.5} />
@@ -397,10 +617,55 @@ export default function Garage() {
   const [meltScrapRarities, setMeltScrapRarities] = useState(() => loadMeltScrapRarities());
   const [meltScrapSettingsOpen, setMeltScrapSettingsOpen] = useState(false);
   const [meltScrapSettingsDraft, setMeltScrapSettingsDraft] = useState([]);
+  const [dealerCars, setDealerCars] = useState([]);
+  const [dealerLoading, setDealerLoading] = useState(true);
+  const [userMoney, setUserMoney] = useState(null);
+  const [buyingCarId, setBuyingCarId] = useState(null);
+  const [marketplaceListings, setMarketplaceListings] = useState([]);
+  const [marketplaceLoading, setMarketplaceLoading] = useState(true);
+  const [buyingListedId, setBuyingListedId] = useState(null);
+  const [listPrice, setListPrice] = useState('');
+  const [carToList, setCarToList] = useState('');
+  const [listingCarId, setListingCarId] = useState(null);
+  const [delistingCarId, setDelistingCarId] = useState(null);
 
   useEffect(() => {
     fetchGarage();
   }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      setDealerLoading(true);
+      setMarketplaceLoading(true);
+      try {
+        const [saleRes, meRes, marketRes] = await Promise.all([
+          api.get('/gta/cars-for-sale').catch(() => ({ data: { cars: [] } })),
+          api.get('/auth/me').catch(() => ({ data: {} })),
+          api.get('/gta/marketplace').catch(() => ({ data: { listings: [] } })),
+        ]);
+        setDealerCars(Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : []);
+        setUserMoney(meRes.data?.money ?? null);
+        setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
+      } finally {
+        setDealerLoading(false);
+        setMarketplaceLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  const fetchDealerAndMoney = async () => {
+    try {
+      const [saleRes, meRes, marketRes] = await Promise.all([
+        api.get('/gta/cars-for-sale').catch(() => ({ data: { cars: [] } })),
+        api.get('/auth/me').catch(() => ({ data: {} })),
+        api.get('/gta/marketplace').catch(() => ({ data: { listings: [] } })),
+      ]);
+      setDealerCars(Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : []);
+      setUserMoney(meRes.data?.money ?? null);
+      setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
+    } catch (_) {}
+  };
 
   const fetchGarage = async () => {
     try {
@@ -462,10 +727,73 @@ export default function Garage() {
       setSelectedCars([]);
       refreshUser();
       fetchGarage();
+      fetchDealerAndMoney();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to scrap cars');
     }
   };
+
+  const handleBuyCar = async (carId) => {
+    setBuyingCarId(carId);
+    try {
+      const res = await api.post('/gta/buy-car', { car_id: carId });
+      toast.success(res.data?.message || 'Car purchased');
+      refreshUser();
+      fetchGarage();
+      fetchDealerAndMoney();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to buy car');
+    } finally {
+      setBuyingCarId(null);
+    }
+  };
+
+  const handleBuyListedCar = async (userCarId) => {
+    setBuyingListedId(userCarId);
+    try {
+      const res = await api.post('/gta/buy-listed-car', { user_car_id: userCarId });
+      toast.success(res.data?.message || 'Car purchased');
+      refreshUser();
+      fetchGarage();
+      fetchDealerAndMoney();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to buy car');
+    } finally {
+      setBuyingListedId(null);
+    }
+  };
+
+  const handleListCar = async (userCarId, price) => {
+    setListingCarId(userCarId);
+    try {
+      await api.post('/gta/list-car', { user_car_id: userCarId, price });
+      toast.success('Car listed for sale');
+      setCarToList('');
+      setListPrice('');
+      fetchGarage();
+      fetchDealerAndMoney();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to list car');
+    } finally {
+      setListingCarId(null);
+    }
+  };
+
+  const handleDelistCar = async (userCarId) => {
+    setDelistingCarId(userCarId);
+    try {
+      await api.post('/gta/delist-car', { user_car_id: userCarId });
+      toast.success('Car delisted');
+      fetchGarage();
+      fetchDealerAndMoney();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delist');
+    } finally {
+      setDelistingCarId(null);
+    }
+  };
+
+  const myListedCars = (cars || []).filter((c) => c.listed_for_sale);
 
   const getRarityColor = (rarity) => {
     const colors = {
@@ -504,7 +832,7 @@ export default function Garage() {
   const hiddenCount = totalCount - displayedCars.length;
   
   const displayedEligibleForMelt = displayedCars.filter(
-    (c) => c.car_id !== 'car_custom' && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
+    (c) => c.car_id !== 'car_custom' && !c.listed_for_sale && (meltScrapRarities.length === 0 || meltScrapRarities.includes(c.rarity))
   );
   const displayedEligibleIds = displayedEligibleForMelt.map((c) => c.user_car_id);
   const allDisplayedSelected = displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));
@@ -542,6 +870,27 @@ export default function Garage() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`}>
+      <BuySellSection
+        dealerCars={dealerCars}
+        dealerLoading={dealerLoading}
+        userMoney={userMoney}
+        onBuyCar={handleBuyCar}
+        buyingCarId={buyingCarId}
+        marketplaceListings={marketplaceListings}
+        marketplaceLoading={marketplaceLoading}
+        onBuyListedCar={handleBuyListedCar}
+        buyingListedId={buyingListedId}
+        myCars={cars}
+        myListedCars={myListedCars}
+        onListCar={handleListCar}
+        onDelistCar={handleDelistCar}
+        listPrice={listPrice}
+        setListPrice={setListPrice}
+        carToList={carToList}
+        setCarToList={setCarToList}
+        listingCarId={listingCarId}
+        delistingCarId={delistingCarId}
+      />
       {cars.length === 0 ? (
         <EmptyGarageCard />
       ) : (

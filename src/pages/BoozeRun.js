@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { MapPin, Package, Clock, Wine, TrendingUp, DollarSign, ShoppingCart } from 'lucide-react';
+import { MapPin, Package, Clock, Wine, TrendingUp, DollarSign, ShoppingCart, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -40,6 +40,17 @@ function timeUntil(isoEnd) {
 const LoadingSpinner = () => (
   <div className="flex items-center justify-center min-h-[60vh]">
     <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  </div>
+);
+
+const AutoRankBoozeNotice = () => (
+  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+    <div className="flex items-center gap-2">
+      <Bot size={14} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80">
+        <strong className="text-amber-300">Auto Rank</strong> — Booze running is automated (buy, travel, sell). Manual buy/sell disabled.
+      </span>
+    </div>
   </div>
 );
 
@@ -275,6 +286,7 @@ const SuppliesCard = ({
   handleSell,
   capacity = 0,
   carryingTotal = 0,
+  disabled = false,
 }) => {
   const maxBuy = Math.max(0, capacity - carryingTotal);
   return (
@@ -333,13 +345,14 @@ const SuppliesCard = ({
                 <div className="flex items-center justify-end gap-1">
                   <button
                     onClick={() => handleBuy(row.booze_id)}
-                    className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground px-2 py-0.5 rounded text-[10px] font-heading font-bold uppercase transition-all border border-yellow-600/50"
+                    disabled={disabled}
+                    className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground px-2 py-0.5 rounded text-[10px] font-heading font-bold uppercase transition-all border border-yellow-600/50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Buy
                   </button>
                   <button
                     onClick={() => handleSell(row.booze_id)}
-                    disabled={!(row.carrying > 0)}
+                    disabled={disabled || !(row.carrying > 0)}
                     className="bg-secondary text-foreground border border-border hover:border-primary/30 px-2 py-0.5 rounded text-[10px] font-heading font-bold uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Sell
@@ -392,13 +405,14 @@ const SuppliesCard = ({
           <div className="flex gap-2">
             <button
               onClick={() => handleBuy(row.booze_id)}
-              className="flex-1 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 font-heading font-bold uppercase text-xs border border-yellow-600/50 transition-all touch-manipulation"
+              disabled={disabled}
+              className="flex-1 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 font-heading font-bold uppercase text-xs border border-yellow-600/50 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Buy
             </button>
             <button
               onClick={() => handleSell(row.booze_id)}
-              disabled={!(row.carrying > 0)}
+              disabled={disabled || !(row.carrying > 0)}
               className="flex-1 bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded px-3 py-1.5 font-heading font-bold uppercase text-xs transition-all disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
             >
               Sell
@@ -559,6 +573,7 @@ export default function BoozeRun() {
   const [buyAmounts, setBuyAmounts] = useState({});
   const [sellAmounts, setSellAmounts] = useState({});
   const [timer, setTimer] = useState('');
+  const [autoRankBoozeDisabled, setAutoRankBoozeDisabled] = useState(false);
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -574,6 +589,10 @@ export default function BoozeRun() {
   useEffect(() => {
     fetchConfig();
   }, [fetchConfig]);
+
+  useEffect(() => {
+    api.get('/auto-rank/me').then((r) => setAutoRankBoozeDisabled(!!r.data?.auto_rank_booze)).catch(() => setAutoRankBoozeDisabled(false));
+  }, []);
 
   const rotationEndRef = useRef(null);
   useEffect(() => {
@@ -726,6 +745,7 @@ export default function BoozeRun() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="booze-run-page">
+      {autoRankBoozeDisabled && <AutoRankBoozeNotice />}
       <StatsCard config={config} timer={timer} />
 
       {roundTripCities && (
@@ -750,6 +770,7 @@ export default function BoozeRun() {
         handleSell={handleSell}
         capacity={config.capacity ?? 0}
         carryingTotal={config.carrying_total ?? 0}
+        disabled={autoRankBoozeDisabled}
       />
 
       <HistoryCard history={historyList} />

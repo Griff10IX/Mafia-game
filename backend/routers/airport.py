@@ -208,59 +208,72 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     return payload
 
 
-async def travel(request: TravelRequest, current_user: dict = Depends(get_current_user)):
-    if request.destination not in STATES:
+async def _start_travel_impl(
+    user: dict,
+    destination: str,
+    travel_method: str,
+    airport_slot: Optional[int] = None,
+) -> dict:
+    """Start travel for user (by user dict). Returns {message, travel_time, destination} or raises HTTPException. Used by travel() and auto_rank booze."""
+    if destination not in STATES:
         raise HTTPException(status_code=400, detail="Invalid destination")
-
-    current_location = current_user.get("current_state")
-    if current_user.get("travel_arrives_at"):
+    now_utc = datetime.now(timezone.utc)
+    current_location = user.get("current_state")
+    if user.get("travel_arrives_at"):
         try:
-            arrives_dt = datetime.fromisoformat(current_user["travel_arrives_at"].replace("Z", "+00:00"))
-            if datetime.now(timezone.utc) >= arrives_dt:
-                current_location = current_user.get("traveling_to") or current_location
+            arrives_dt = datetime.fromisoformat(user["travel_arrives_at"].replace("Z", "+00:00"))
+            if now_utc >= arrives_dt:
+                current_location = user.get("traveling_to") or current_location
         except Exception:
             pass
-    if request.destination == current_location:
+    if destination == current_location:
         raise HTTPException(status_code=400, detail="Already at this location")
-    if current_user.get("travel_arrives_at"):
-        raise HTTPException(status_code=400, detail="You are already traveling. Wait for arrival.")
+    if user.get("travel_arrives_at"):
+        try:
+            arrives_dt = datetime.fromisoformat(user["travel_arrives_at"].replace("Z", "+00:00"))
+            if now_utc < arrives_dt:
+                raise HTTPException(status_code=400, detail="You are already traveling. Wait for arrival.")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
 
-    max_travels = MAX_TRAVELS_PER_HOUR + current_user.get("extra_airmiles", 0)
-    if current_user.get("travels_this_hour", 0) >= max_travels:
+    max_travels = MAX_TRAVELS_PER_HOUR + user.get("extra_airmiles", 0)
+    if user.get("travels_this_hour", 0) >= max_travels:
         raise HTTPException(status_code=400, detail="Travel limit reached. Buy extra airmiles or wait.")
 
     travel_time = 45
     method_name = "Walking"
 
-    if request.travel_method == "airport":
-        if _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0:
+    if travel_method == "airport":
+        if _booze_user_carrying_total(user.get("booze_carrying") or {}) > 0:
             raise HTTPException(status_code=400, detail="Cannot use airport while carrying booze. Use a car.")
-        airport_slot = request.airport_slot if request.airport_slot is not None else 1
-        if airport_slot < 1 or airport_slot > AIRPORT_SLOTS_PER_STATE:
+        slot = airport_slot if airport_slot is not None else 1
+        if slot < 1 or slot > AIRPORT_SLOTS_PER_STATE:
             raise HTTPException(status_code=400, detail=f"Invalid airport slot (1–{AIRPORT_SLOTS_PER_STATE})")
-        airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": airport_slot}, {"_id": 0})
+        airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": slot}, {"_id": 0})
         if not airport_doc:
-            await db.airport_ownership.insert_one({"state": current_location, "slot": airport_slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
-            airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": airport_slot}, {"_id": 0})
+            await db.airport_ownership.insert_one({"state": current_location, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
+            airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": slot}, {"_id": 0})
         airport_price = max(AIRPORT_PRICE_MIN, min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
-        user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": current_user["id"]}, {"_id": 1})
+        user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": user["id"]}, {"_id": 1})
         if user_owns_any_airport:
             airport_price = max(1, round(airport_price * 0.95))
         owner_id = airport_doc.get("owner_id")
-        if current_user["points"] < airport_price:
+        if user.get("points", 0) < airport_price:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
         travel_time = TRAVEL_TIMES["airport"]
-        method_name = f"Airport #{airport_slot}"
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -airport_price}})
+        method_name = f"Airport #{slot}"
+        await db.users.update_one({"id": user["id"]}, {"$inc": {"points": -airport_price}})
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"points": airport_price}})
             await db.airport_ownership.update_one(
-                {"state": current_location, "slot": airport_slot},
+                {"state": current_location, "slot": slot},
                 {"$inc": {"total_earnings": airport_price}}
             )
-    elif request.travel_method == "custom":
+    elif travel_method == "custom":
         first_custom = await db.user_cars.find_one(
-            {"user_id": current_user["id"], "car_id": "car_custom"},
+            {"user_id": user["id"], "car_id": "car_custom"},
             sort=[("acquired_at", 1)]
         )
         if not first_custom:
@@ -269,13 +282,13 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
         method_name = first_custom.get("custom_name") or "Custom Car"
     else:
         user_car = await db.user_cars.find_one(
-            {"id": request.travel_method, "user_id": current_user["id"]},
+            {"id": travel_method, "user_id": user["id"]},
             {"_id": 0}
         )
         if not user_car:
             try:
                 user_car = await db.user_cars.find_one(
-                    {"_id": ObjectId(request.travel_method), "user_id": current_user["id"]},
+                    {"_id": ObjectId(travel_method), "user_id": user["id"]},
                     {"_id": 0}
                 )
             except Exception:
@@ -287,25 +300,33 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
             travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
             method_name = car_info["name"]
 
-    now = datetime.now(timezone.utc)
     if travel_time <= 0:
         await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"current_state": request.destination}, "$inc": {"travels_this_hour": 1}}
+            {"id": user["id"]},
+            {"$set": {"current_state": destination}, "$inc": {"travels_this_hour": 1}}
         )
     else:
-        arrives_at = (now + timedelta(seconds=travel_time)).isoformat()
+        arrives_at = (now_utc + timedelta(seconds=travel_time)).isoformat()
         await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"traveling_to": request.destination, "travel_arrives_at": arrives_at}, "$inc": {"travels_this_hour": 1}}
+            {"id": user["id"]},
+            {"$set": {"traveling_to": destination, "travel_arrives_at": arrives_at}, "$inc": {"travels_this_hour": 1}}
         )
 
-    _invalidate_travel_info_cache(current_user["id"])
+    _invalidate_travel_info_cache(user["id"])
     return {
-        "message": f"Traveling to {request.destination} via {method_name}",
+        "message": f"Traveling to {destination} via {method_name}",
         "travel_time": travel_time,
-        "destination": request.destination
+        "destination": destination
     }
+
+
+async def travel(request: TravelRequest, current_user: dict = Depends(get_current_user)):
+    return await _start_travel_impl(
+        current_user,
+        request.destination,
+        request.travel_method,
+        request.airport_slot,
+    )
 
 
 async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):

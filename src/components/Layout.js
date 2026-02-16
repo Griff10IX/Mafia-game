@@ -144,7 +144,7 @@ export default function Layout({ children }) {
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [atWar, setAtWar] = useState(false);
-  const [autoRankPrefs, setAutoRankPrefs] = useState({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false });
+  const [autoRankPrefs, setAutoRankPrefs] = useState({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false });
   const [flashNews, setFlashNews] = useState([]);
   const [flashIndex, setFlashIndex] = useState(0);
   const [travelStatus, setTravelStatus] = useState(null); // { traveling: bool, destination, seconds_remaining }
@@ -243,9 +243,10 @@ export default function Layout({ children }) {
         auto_rank_gta: !!res.data?.auto_rank_gta,
         auto_rank_oc: !!res.data?.auto_rank_oc,
         auto_rank_bust_every_5_sec: !!res.data?.auto_rank_bust_every_5_sec,
+        auto_rank_booze: !!res.data?.auto_rank_booze,
       });
     } catch {
-      setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false });
+      setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false });
     }
   };
 

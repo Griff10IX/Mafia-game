@@ -34,6 +34,23 @@ class GTAMeltRequest(BaseModel):
     action: str  # "bullets" or "cash"
 
 
+class GTABuyCarRequest(BaseModel):
+    car_id: str
+
+
+class GTAListCarRequest(BaseModel):
+    user_car_id: str
+    price: int
+
+
+class GTADelistCarRequest(BaseModel):
+    user_car_id: str
+
+
+class GTABuyListedCarRequest(BaseModel):
+    user_car_id: str
+
+
 class GTAAttemptResponse(BaseModel):
     success: bool
     message: str
@@ -439,15 +456,18 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
         car_info = next((c for c in CARS if c["id"] == car_id), None)
         if car_info:
             user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
-            car_details.append(
-                {
-                    "user_car_id": user_car_id,
-                    "car_id": car_id,
-                    "car_name": user_car.get("car_name"),
-                    "acquired_at": user_car.get("acquired_at"),
-                    **car_info,
-                }
-            )
+            entry = {
+                "user_car_id": user_car_id,
+                "car_id": car_id,
+                "car_name": user_car.get("car_name"),
+                "acquired_at": user_car.get("acquired_at"),
+                **car_info,
+            }
+            if user_car.get("listed_for_sale"):
+                entry["listed_for_sale"] = True
+                entry["sale_price"] = user_car.get("sale_price")
+                entry["listed_at"] = user_car.get("listed_at")
+            car_details.append(entry)
     return {"cars": car_details}
 
 
@@ -481,6 +501,8 @@ async def melt_cars(
                 {"user_id": current_user["id"], "car_id": car_id}
             )
         if user_car:
+            if user_car.get("listed_for_sale"):
+                continue  # cannot melt/scrap a listed car; must delist first
             model_id = user_car["car_id"]
             car_info = next((c for c in CARS if c["id"] == model_id), None)
             if car_info:
@@ -527,6 +549,195 @@ async def melt_cars(
     return {"success": False, "message": "No cars were processed"}
 
 
+# Dealer: buy cars for cash (price = value * multiplier). Custom and exclusive are not for sale.
+DEALER_PRICE_MULTIPLIER = 1.2
+DEALER_EXCLUDED_IDS = {"car_custom", "car20"}
+
+
+async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
+    """List cars available to buy from the dealer (cash). Excludes custom and exclusive."""
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    out = []
+    for c in CARS:
+        if c.get("id") in DEALER_EXCLUDED_IDS:
+            continue
+        price = int(c.get("value", 0) * DEALER_PRICE_MULTIPLIER)
+        min_rank = c.get("min_difficulty", 1)  # use difficulty as min rank to buy
+        out.append({
+            **{k: v for k, v in c.items()},
+            "dealer_price": price,
+            "min_rank": min_rank,
+            "can_buy": rank_id >= min_rank,
+        })
+    return {"cars": out}
+
+
+async def buy_car(
+    request: GTABuyCarRequest, current_user: dict = Depends(get_current_user)
+):
+    """Purchase one car from the dealer for cash."""
+    car_info = next((c for c in CARS if c.get("id") == request.car_id), None)
+    if not car_info:
+        raise HTTPException(status_code=400, detail="Car not found")
+    if car_info.get("id") in DEALER_EXCLUDED_IDS:
+        raise HTTPException(status_code=400, detail="That car is not for sale")
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    if rank_id < car_info.get("min_difficulty", 1):
+        raise HTTPException(status_code=400, detail="Rank too low to buy this car")
+    price = int(car_info.get("value", 0) * DEALER_PRICE_MULTIPLIER)
+    if current_user.get("money", 0) < price:
+        raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
+    now = datetime.now(timezone.utc)
+    doc = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user["id"],
+        "car_id": request.car_id,
+        "car_name": car_info.get("name"),
+        "acquired_at": now.isoformat(),
+    }
+    await db.user_cars.insert_one(doc)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"money": -price}},
+    )
+    return {
+        "success": True,
+        "message": f"Purchased {car_info.get('name')} for ${price:,}",
+        "car_id": request.car_id,
+        "user_car_id": doc["id"],
+    }
+
+
+# ----- Player-to-player car marketplace (list your car, buy other players' cars) -----
+async def get_marketplace_listings(current_user: dict = Depends(get_current_user)):
+    """List cars that other players have listed for sale (cash). Excludes current user's own listings."""
+    cursor = db.user_cars.find(
+        {"listed_for_sale": True, "user_id": {"$ne": current_user["id"]}},
+        {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "sale_price": 1, "listed_at": 1},
+    ).sort("listed_at", -1)
+    listings = await cursor.to_list(200)
+    out = []
+    for uc in listings:
+        car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+        if not car_info:
+            continue
+        seller = await db.users.find_one({"id": uc["user_id"]}, {"_id": 0, "username": 1})
+        listing_id = uc.get("id") or str(uc.get("_id", ""))
+        out.append({
+            "user_car_id": listing_id,
+            "seller_id": uc["user_id"],
+            "seller_username": seller.get("username", "?"),
+            "car_id": uc.get("car_id"),
+            "name": uc.get("car_name") or car_info.get("name"),
+            "value": car_info.get("value", 0),
+            "rarity": car_info.get("rarity", "common"),
+            "image": car_info.get("image"),
+            "sale_price": uc.get("sale_price", 0),
+            "listed_at": uc.get("listed_at"),
+        })
+    return {"listings": out}
+
+
+async def list_car(
+    request: GTAListCarRequest, current_user: dict = Depends(get_current_user)
+):
+    """List one of your cars for sale on the marketplace (other players can buy for cash)."""
+    if request.price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be positive")
+    user_car = await db.user_cars.find_one(
+        {"user_id": current_user["id"], "id": request.user_car_id}
+    )
+    if not user_car:
+        try:
+            user_car = await db.user_cars.find_one(
+                {"user_id": current_user["id"], "_id": ObjectId(request.user_car_id)}
+            )
+        except Exception:
+            user_car = None
+    if not user_car:
+        raise HTTPException(status_code=404, detail="Car not found in your garage")
+    if user_car.get("listed_for_sale"):
+        raise HTTPException(status_code=400, detail="Car is already listed")
+    now = datetime.now(timezone.utc).isoformat()
+    if user_car.get("_id") is not None:
+        q = {"_id": user_car["_id"]}
+    else:
+        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+    await db.user_cars.update_one(q, {"$set": {"listed_for_sale": True, "sale_price": request.price, "listed_at": now}})
+    return {"message": f"Listed for ${request.price:,}", "sale_price": request.price}
+
+
+async def delist_car(
+    request: GTADelistCarRequest, current_user: dict = Depends(get_current_user)
+):
+    """Remove your car from the marketplace."""
+    user_car = await db.user_cars.find_one(
+        {"user_id": current_user["id"], "id": request.user_car_id}
+    )
+    if not user_car:
+        try:
+            user_car = await db.user_cars.find_one(
+                {"user_id": current_user["id"], "_id": ObjectId(request.user_car_id)}
+            )
+        except Exception:
+            user_car = None
+    if not user_car:
+        raise HTTPException(status_code=404, detail="Car not found in your garage")
+    if not user_car.get("listed_for_sale"):
+        raise HTTPException(status_code=400, detail="Car is not listed")
+    if user_car.get("_id") is not None:
+        q = {"_id": user_car["_id"]}
+    else:
+        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+    await db.user_cars.update_one(q, {"$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}})
+    return {"message": "Car delisted"}
+
+
+async def buy_listed_car(
+    request: GTABuyListedCarRequest, current_user: dict = Depends(get_current_user)
+):
+    """Buy a car listed by another player (pay cash to seller)."""
+    buyer_id = current_user["id"]
+    user_car = await db.user_cars.find_one(
+        {"id": request.user_car_id, "listed_for_sale": True}
+    )
+    if not user_car:
+        try:
+            user_car = await db.user_cars.find_one(
+                {"_id": ObjectId(request.user_car_id), "listed_for_sale": True}
+            )
+        except Exception:
+            user_car = None
+    if not user_car:
+        raise HTTPException(status_code=404, detail="Listing not found or no longer available")
+    seller_id = user_car.get("user_id")
+    if seller_id == buyer_id:
+        raise HTTPException(status_code=400, detail="Cannot buy your own listing")
+    price = int(user_car.get("sale_price") or 0)
+    if price <= 0:
+        raise HTTPException(status_code=400, detail="Invalid listing")
+    buyer = await db.users.find_one({"id": buyer_id})
+    if not buyer or buyer.get("money", 0) < price:
+        raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
+    car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
+    car_name = (car_info or {}).get("name") or user_car.get("car_name") or "Car"
+    if user_car.get("_id") is not None:
+        q = {"_id": user_car["_id"]}
+    else:
+        q = {"id": user_car.get("id")}
+    await db.user_cars.update_one(
+        q,
+        {"$set": {"user_id": buyer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
+    )
+    await db.users.update_one({"id": buyer_id}, {"$inc": {"money": -price}})
+    await db.users.update_one({"id": seller_id}, {"$inc": {"money": price}})
+    return {
+        "message": f"Purchased {car_name} from seller for ${price:,}",
+        "car_id": user_car.get("car_id"),
+        "user_car_id": user_car.get("id"),
+    }
+
+
 async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
     """Return full car details by id (for profile page)."""
     car = next((c for c in CARS if c.get("id") == car_id), None)
@@ -554,3 +765,9 @@ def register(router):
     router.add_api_route("/gta/stats", get_gta_stats, methods=["GET"])
     router.add_api_route("/gta/garage", get_garage, methods=["GET"])
     router.add_api_route("/gta/melt", melt_cars, methods=["POST"])
+    router.add_api_route("/gta/cars-for-sale", get_cars_for_sale, methods=["GET"])
+    router.add_api_route("/gta/buy-car", buy_car, methods=["POST"])
+    router.add_api_route("/gta/marketplace", get_marketplace_listings, methods=["GET"])
+    router.add_api_route("/gta/list-car", list_car, methods=["POST"])
+    router.add_api_route("/gta/delist-car", delist_car, methods=["POST"])
+    router.add_api_route("/gta/buy-listed-car", buy_listed_car, methods=["POST"])
