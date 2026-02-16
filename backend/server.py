@@ -3586,11 +3586,17 @@ async def admin_change_rank(target_username: str, new_rank: int, current_user: d
     # Rank is derived from rank_points everywhere; set rank_points to this rank's required_points
     rank_def = RANKS[new_rank - 1]
     required_pts = int(rank_def["required_points"])
+    old_rp = int(target.get("rank_points") or 0)
     await db.users.update_one(
         {"id": target["id"]},
         {"$set": {"rank": new_rank, "rank_points": required_pts}}
     )
-    
+    rp_added = required_pts - old_rp
+    if rp_added > 0:
+        try:
+            await maybe_process_rank_up(target["id"], old_rp, rp_added, target.get("username", ""))
+        except Exception as e:
+            logging.exception("Rank-up notification (admin set rank): %s", e)
     return {"message": f"Changed {target['username']}'s rank to {rank_def['name']} (rank_points set to {required_pts:,})"}
 
 @api_router.post("/admin/add-points")
@@ -10760,12 +10766,17 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
     ).to_list(50)
     accepted_ids = [a["user_id"] for a in accepted]
     roster_ids = list(dict.fromkeys(member_ids + accepted_ids))
-    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1}).to_list(100)
+    living = await db.users.find(
+        {"id": {"$in": roster_ids}, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1, "rank_points": 1, "username": 1},
+    ).to_list(100)
     living_ids = [u["id"] for u in living]
     if not living_ids:
         raise HTTPException(status_code=400, detail="No living crew members")
 
-    for uid in living_ids:
+    for u in living:
+        uid = u["id"]
+        rp_before = int(u.get("rank_points") or 0)
         await db.users.update_one(
             {"id": uid},
             {
@@ -10778,6 +10789,10 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
                 }
             },
         )
+        try:
+            await maybe_process_rank_up(uid, rp_before, CREW_OC_REWARD_RP, u.get("username", ""))
+        except Exception as e:
+            logging.exception("Rank-up notification (Crew OC): %s", e)
     await db.families.update_one(
         {"id": family_id},
         {"$inc": {"treasury": CREW_OC_TREASURY_LUMP}, "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()}},

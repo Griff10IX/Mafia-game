@@ -24,7 +24,7 @@ def _parse_iso_datetime(val):
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
-from server import db, get_current_user, get_effective_event, send_notification
+from server import db, get_current_user, get_effective_event, maybe_process_rank_up, send_notification
 
 # Roles (team of 4)
 OC_ROLES = [
@@ -541,6 +541,13 @@ async def execute_oc(
     total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
     cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
     rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
+    user_map = {}
+    if user_ids:
+        users_raw = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "rank_points": 1, "username": 1},
+        ).to_list(10)
+        user_map = {u["id"]: u for u in users_raw}
     # Each human gets that slot's % of the pool; NPC slots' share goes to the creator
     cash_each = rp_each = 0
     for i, user_id in enumerate(resolved):
@@ -554,6 +561,7 @@ async def execute_oc(
         if user_id == uid:
             cash_each += cash_add
             rp_each += rp_add
+        rp_before = int((user_map.get(user_id) or {}).get("rank_points") or 0)
         await db.users.update_one(
             {"id": user_id},
             {
@@ -564,6 +572,16 @@ async def execute_oc(
                 }
             },
         )
+        if rp_add > 0:
+            try:
+                await maybe_process_rank_up(
+                    user_id,
+                    rp_before,
+                    rp_add,
+                    (user_map.get(user_id) or {}).get("username", ""),
+                )
+            except Exception as e:
+                logger.exception("Rank-up notification (team OC): %s", e)
 
     msg = random.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
     return {
