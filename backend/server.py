@@ -715,6 +715,14 @@ class FamilyAttackRacketRequest(BaseModel):
     racket_id: str
 
 
+class FamilyCrewOCSetFeeRequest(BaseModel):
+    fee: int  # 0 = free, else cash required to apply (auto-accept when paid)
+
+
+class FamilyCrewOCApplyRequest(BaseModel):
+    family_id: str
+
+
 class SportsBetPlaceRequest(BaseModel):
     event_id: str
     option_id: str
@@ -10223,6 +10231,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             })
         except Exception:
             continue
+    crew_oc_applications = []
+    if family_id:
+        app_cursor = db.family_crew_oc_applications.find({"family_id": family_id}, {"_id": 0}).sort("created_at", -1)
+        crew_oc_applications = await app_cursor.to_list(50)
     return {
         "family": {
             "id": fam["id"],
@@ -10230,11 +10242,14 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "tag": fam["tag"],
             "treasury": fam.get("treasury", 0),
             "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
+            "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
+            "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
         },
         "members": members,
         "rackets": rackets,
         "my_role": my_role,
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
+        "crew_oc_applications": crew_oc_applications,
     }
 
 
@@ -10265,9 +10280,23 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
     my_role = None
     if current_user.get("family_id") == fam["id"]:
         my_role = current_user.get("family_role")
+    crew_oc_join_fee = int(fam.get("crew_oc_join_fee") or 0)
+    crew_oc_cooldown_until = fam.get("crew_oc_cooldown_until")
+    crew_oc_forum_topic_id = fam.get("crew_oc_forum_topic_id")
+    crew_oc_application = None
+    app = await db.family_crew_oc_applications.find_one(
+        {"family_id": fam["id"], "user_id": current_user["id"]},
+        {"_id": 0, "status": 1, "amount_paid": 1},
+    )
+    if app:
+        crew_oc_application = {"status": app.get("status"), "amount_paid": int(app.get("amount_paid") or 0)}
     return {
         "id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0),
         "member_count": len(members), "members": members, "rackets": rackets, "my_role": my_role,
+        "crew_oc_join_fee": crew_oc_join_fee,
+        "crew_oc_cooldown_until": crew_oc_cooldown_until,
+        "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
+        "crew_oc_application": crew_oc_application,
     }
 
 
@@ -10441,9 +10470,172 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     return {"message": "Withdrew from treasury"}
 
 
+@api_router.post("/families/crew-oc/set-fee")
+async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_user: dict = Depends(get_current_user)):
+    """Boss, Underboss, or Capo sets the join fee for Crew OC (0 = free; else cash, auto-accept when paid)."""
+    role = (current_user.get("family_role") or "").strip().lower()
+    if role not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set Crew OC fee")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    fee = int(request.fee or 0)
+    if fee < 0:
+        raise HTTPException(status_code=400, detail="Fee cannot be negative")
+    await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_join_fee": fee}})
+    return {"message": "Crew OC join fee updated.", "fee": fee}
+
+
+@api_router.post("/families/crew-oc/advertise")
+async def families_crew_oc_advertise(current_user: dict = Depends(get_current_user)):
+    """Boss, Underboss, or Capo creates a Crew OC forum topic for this family (one per family)."""
+    role = (current_user.get("family_role") or "").strip().lower()
+    if role not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can advertise Crew OC")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_forum_topic_id": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    if fam.get("crew_oc_forum_topic_id"):
+        raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Go to Forum → Crew OC to find it.")
+    topic_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    title = f"Crew OC: {fam.get('name')} [{fam.get('tag')}]"
+    content = f"Apply here to join {fam.get('name')} [{fam.get('tag')}] for their next Crew OC run. Set your join fee in Families → Crew OC."
+    doc = {
+        "id": topic_id,
+        "title": title,
+        "content": content,
+        "category": "crew_oc",
+        "crew_oc_family_id": family_id,
+        "author_id": current_user["id"],
+        "author_username": current_user.get("username") or "?",
+        "created_at": now,
+        "updated_at": now,
+        "views": 0,
+        "is_sticky": False,
+        "is_important": False,
+        "is_locked": False,
+    }
+    await db.forum_topics.insert_one(doc)
+    await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_forum_topic_id": topic_id}})
+    return {"message": "Crew OC topic created.", "topic_id": topic_id, "title": title}
+
+
+@api_router.post("/families/crew-oc/apply")
+async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user: dict = Depends(get_current_user)):
+    """Apply to join a family's Crew OC for the next run. If fee > 0 and you have enough cash, you're auto-accepted and cash goes to family treasury."""
+    family_id = (request.family_id or "").strip()
+    if not family_id:
+        raise HTTPException(status_code=400, detail="family_id required")
+    uid = current_user["id"]
+    if current_user.get("family_id") == family_id:
+        raise HTTPException(status_code=400, detail="You are already in this family")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    fee = int(fam.get("crew_oc_join_fee") or 0)
+    existing = await db.family_crew_oc_applications.find_one({"family_id": family_id, "user_id": uid}, {"_id": 0, "status": 1})
+    if existing:
+        raise HTTPException(status_code=400, detail=f"You already applied (status: {existing.get('status')})")
+    now = datetime.now(timezone.utc).isoformat()
+    application_id = str(uuid.uuid4())
+    if fee > 0:
+        money = int(current_user.get("money") or 0)
+        if money < fee:
+            raise HTTPException(status_code=400, detail=f"Join fee is ${fee:,}. You need ${fee - money:,} more cash.")
+        await db.users.update_one({"id": uid}, {"$inc": {"money": -fee}})
+        await db.families.update_one({"id": family_id}, {"$inc": {"treasury": fee}})
+        await db.family_crew_oc_applications.insert_one({
+            "id": application_id,
+            "family_id": family_id,
+            "user_id": uid,
+            "username": current_user.get("username") or "?",
+            "status": "accepted",
+            "amount_paid": fee,
+            "created_at": now,
+        })
+        await send_notification(
+            uid,
+            "Crew OC – You're in",
+            f"You paid ${fee:,} and joined {fam.get('name')} [{fam.get('tag')}] Crew OC for their next run.",
+            "reward",
+            category="crew_oc",
+        )
+        return {"message": "You paid and joined the crew. You'll get rewards when they commit.", "status": "accepted", "amount_paid": fee}
+    await db.family_crew_oc_applications.insert_one({
+        "id": application_id,
+        "family_id": family_id,
+        "user_id": uid,
+        "username": current_user.get("username") or "?",
+        "status": "pending",
+        "amount_paid": 0,
+        "created_at": now,
+    })
+    return {"message": "Application sent. The family will accept or reject.", "status": "pending"}
+
+
+@api_router.get("/families/crew-oc/applications")
+async def families_crew_oc_applications(current_user: dict = Depends(get_current_user)):
+    """List applications for my family's Crew OC (Boss/Underboss/Capo can accept/reject pending)."""
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    role = (current_user.get("family_role") or "").strip().lower()
+    apps = await db.family_crew_oc_applications.find({"family_id": family_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
+    return {"applications": apps, "can_manage": role in ("boss", "underboss", "capo")}
+
+
+@api_router.post("/families/crew-oc/applications/{application_id}/accept")
+async def families_crew_oc_accept(application_id: str, current_user: dict = Depends(get_current_user)):
+    """Boss/Underboss/Capo accept a pending (free) application."""
+    role = (current_user.get("family_role") or "").strip().lower()
+    if role not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    app = await db.family_crew_oc_applications.find_one({"id": application_id, "family_id": family_id}, {"_id": 0})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if app.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Application already processed")
+    await db.family_crew_oc_applications.update_one({"id": application_id}, {"$set": {"status": "accepted"}})
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1})
+    fam_name = (fam or {}).get("name") or (fam or {}).get("tag") or "the family"
+    await send_notification(
+        app["user_id"],
+        "Crew OC – Accepted",
+        f"Your application to join {fam_name} Crew OC was accepted. You'll get rewards when they commit.",
+        "reward",
+        category="crew_oc",
+    )
+    return {"message": "Application accepted."}
+
+
+@api_router.post("/families/crew-oc/applications/{application_id}/reject")
+async def families_crew_oc_reject(application_id: str, current_user: dict = Depends(get_current_user)):
+    """Boss/Underboss/Capo reject a pending application."""
+    role = (current_user.get("family_role") or "").strip().lower()
+    if role not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    app = await db.family_crew_oc_applications.find_one({"id": application_id, "family_id": family_id}, {"_id": 0})
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    if app.get("status") != "pending":
+        raise HTTPException(status_code=400, detail="Application already processed")
+    await db.family_crew_oc_applications.update_one({"id": application_id}, {"$set": {"status": "rejected"}})
+    return {"message": "Application rejected."}
+
+
 @api_router.post("/families/crew-oc/commit")
 async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)):
-    """Boss, Underboss, or Capo commits Crew OC: all living family members get XP, cash, bullets, points, booze; treasury gets a lump sum. Cooldown 8h (6h if committer has Crew OC Timer from store)."""
+    """Boss, Underboss, or Capo commits Crew OC: all living family members + accepted applicants get rewards; treasury gets a lump sum. Cooldown 8h (6h if committer has Crew OC Timer). After commit, applications are cleared."""
     role = (current_user.get("family_role") or "").strip().lower()
     if role not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can commit Crew OC")
@@ -10470,11 +10662,17 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
     new_cooldown_until = now + timedelta(hours=cooldown_hours)
 
     members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
-    user_ids = [m["user_id"] for m in members]
-    living = await db.users.find({"id": {"$in": user_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1}).to_list(100)
+    member_ids = [m["user_id"] for m in members]
+    accepted = await db.family_crew_oc_applications.find(
+        {"family_id": family_id, "status": "accepted"},
+        {"_id": 0, "user_id": 1},
+    ).to_list(50)
+    accepted_ids = [a["user_id"] for a in accepted]
+    roster_ids = list(dict.fromkeys(member_ids + accepted_ids))
+    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1}).to_list(100)
     living_ids = [u["id"] for u in living]
     if not living_ids:
-        raise HTTPException(status_code=400, detail="No living family members")
+        raise HTTPException(status_code=400, detail="No living crew members")
 
     for uid in living_ids:
         await db.users.update_one(
@@ -10493,15 +10691,17 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
         {"id": family_id},
         {"$inc": {"treasury": CREW_OC_TREASURY_LUMP}, "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()}},
     )
-    await send_notification_to_family(
-        family_id,
-        "Crew OC committed",
-        f"Your family committed Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{CREW_OC_REWARD_POINTS} points, +{CREW_OC_REWARD_BOOZE} booze. Treasury +${CREW_OC_TREASURY_LUMP:,}.",
-        "reward",
-        category="crew_oc",
-    )
+    await db.family_crew_oc_applications.delete_many({"family_id": family_id})
+    for uid in living_ids:
+        await send_notification(
+            uid,
+            "Crew OC committed",
+            f"Your crew committed Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{CREW_OC_REWARD_POINTS} points, +{CREW_OC_REWARD_BOOZE} booze. Treasury +${CREW_OC_TREASURY_LUMP:,}.",
+            "reward",
+            category="crew_oc",
+        )
     return {
-        "message": "Crew OC committed. All members rewarded.",
+        "message": "Crew OC committed. All crew rewarded.",
         "crew_oc_cooldown_until": new_cooldown_until.isoformat(),
         "cooldown_hours": cooldown_hours,
     }

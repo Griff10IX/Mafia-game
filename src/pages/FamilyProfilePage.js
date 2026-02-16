@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Building2, Users, DollarSign, TrendingUp, ArrowLeft } from 'lucide-react';
 import api from '../utils/api';
+import { Building2, Users, DollarSign, TrendingUp, ArrowLeft, Crosshair, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -13,11 +13,23 @@ function formatMoney(n) {
 
 const ROLE_LABELS = { boss: 'Boss', underboss: 'Underboss', consigliere: 'Consigliere', capo: 'Capo', soldier: 'Soldier', associate: 'Associate' };
 
+function formatTimeLeft(isoUntil) {
+  if (!isoUntil) return null;
+  try {
+    const sec = Math.max(0, Math.floor((new Date(isoUntil) - new Date()) / 1000));
+    if (sec <= 0) return 'Ready';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  } catch { return null; }
+}
+
 export default function FamilyProfilePage() {
   const { familyId } = useParams();
   const navigate = useNavigate();
   const [family, setFamily] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
 
   useEffect(() => {
     const id = (familyId && String(familyId).trim()) || '';
@@ -67,6 +79,25 @@ export default function FamilyProfilePage() {
 
   const members = family.members || [];
   const rackets = family.rackets || [];
+  const isMyFamily = !!family.my_role;
+  const crewOCFee = family.crew_oc_join_fee ?? 0;
+  const crewOCCooldown = family.crew_oc_cooldown_until;
+  const crewOCAvailable = !crewOCCooldown || formatTimeLeft(crewOCCooldown) === 'Ready';
+  const crewOCApp = family.crew_oc_application;
+
+  const handleApplyCrewOC = async () => {
+    setCrewOCApplyLoading(true);
+    try {
+      const res = await api.post('/families/crew-oc/apply', { family_id: family.id });
+      toast.success(res.data?.message || 'Applied.');
+      const r = await api.get('/families/lookup', { params: { tag: family.tag } });
+      setFamily(r.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to apply');
+    } finally {
+      setCrewOCApplyLoading(false);
+    }
+  };
 
   return (
     <div className={`space-y-5 ${styles.pageContent}`}>
@@ -107,6 +138,51 @@ export default function FamilyProfilePage() {
               </div>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Crew OC */}
+      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-px bg-primary/50" />
+            <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+              <Crosshair size={16} /> Crew OC
+            </h3>
+            <div className="flex-1 h-px bg-primary/50" />
+          </div>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-mutedForeground font-heading">Status</span>
+            <span className={`font-heading font-bold ${crewOCAvailable ? 'text-emerald-400' : 'text-amber-400'}`}>
+              {crewOCAvailable ? 'Available' : `Next in ${formatTimeLeft(crewOCCooldown)}`}
+            </span>
+          </div>
+          {!isMyFamily && (
+            <div>
+              {crewOCApp ? (
+                <p className="text-xs font-heading text-primary">You applied: {crewOCApp.status}</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleApplyCrewOC}
+                  disabled={crewOCApplyLoading}
+                  className="w-full py-2 font-heading font-bold uppercase tracking-wider text-xs rounded border bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50 disabled:opacity-50"
+                >
+                  {crewOCApplyLoading ? '...' : crewOCFee > 0 ? `Apply to Crew OC — $${crewOCFee.toLocaleString()}` : 'Apply to Crew OC (free)'}
+                </button>
+              )}
+            </div>
+          )}
+          {family.crew_oc_forum_topic_id && (
+            <Link
+              to={`/forum/topic/${family.crew_oc_forum_topic_id}`}
+              className="inline-flex items-center gap-1 text-xs font-heading text-primary hover:underline"
+            >
+              <Clock size={12} /> View Crew OC topic on Forum
+            </Link>
+          )}
         </div>
       </div>
 

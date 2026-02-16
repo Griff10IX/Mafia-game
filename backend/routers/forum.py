@@ -11,13 +11,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, log_activity
 
 
-FORUM_CATEGORIES = ["general", "entertainer"]  # entertainer = sub-forum for dice/gbox games
+FORUM_CATEGORIES = ["general", "entertainer", "crew_oc"]  # crew_oc = family Crew OC ads
 
 class TopicCreate(BaseModel):
     title: str
     content: str
     category: Optional[str] = "general"
-    category: Optional[str] = "general"  # "general" | "entertainer"
+    crew_oc_family_id: Optional[str] = None  # set when creating a Crew OC ad (category becomes crew_oc)
 
 
 class CommentCreate(BaseModel):
@@ -43,7 +43,7 @@ async def get_topics(category: Optional[str] = None, current_user: dict = Depend
     out = []
     for t in topics:
         comment_count = await db.forum_comments.count_documents({"topic_id": t["id"]})
-        out.append({
+        item = {
             "id": t["id"],
             "title": t["title"],
             "author_username": t.get("author_username", "?"),
@@ -55,7 +55,15 @@ async def get_topics(category: Optional[str] = None, current_user: dict = Depend
             "is_locked": t.get("is_locked", False),
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
-        })
+        }
+        if t.get("crew_oc_family_id"):
+            item["crew_oc_family_id"] = t["crew_oc_family_id"]
+            fam = await db.families.find_one({"id": t["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1})
+            if fam:
+                item["crew_oc_family_name"] = fam.get("name")
+                item["crew_oc_family_tag"] = fam.get("tag")
+                item["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
+        out.append(item)
     return {"topics": out, "categories": FORUM_CATEGORIES}
 
 
@@ -75,6 +83,18 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
     for c in comments:
         liked = await db.forum_comment_likes.find_one({"comment_id": c["id"], "user_id": uid})
         c["liked"] = liked is not None
+    if topic.get("crew_oc_family_id"):
+        fam = await db.families.find_one({"id": topic["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_cooldown_until": 1})
+        if fam:
+            topic["crew_oc_family_name"] = fam.get("name")
+            topic["crew_oc_family_tag"] = fam.get("tag")
+            topic["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
+            topic["crew_oc_cooldown_until"] = fam.get("crew_oc_cooldown_until")
+        app = await db.family_crew_oc_applications.find_one(
+            {"family_id": topic["crew_oc_family_id"], "user_id": current_user["id"]},
+            {"_id": 0, "status": 1},
+        )
+        topic["crew_oc_my_application"] = {"status": app["status"]} if app else None
     return {
         "topic": topic,
         "comments": comments,
@@ -85,10 +105,26 @@ async def create_topic(
     request: TopicCreate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a new forum topic."""
+    """Create a new forum topic. If crew_oc_family_id is set, category is forced to crew_oc and user must be boss/underboss/capo of that family."""
     title = (request.title or "").strip()
     content = (request.content or "").strip()
+    crew_oc_family_id = (request.crew_oc_family_id or "").strip() or None
     category = (request.category or "general").strip().lower()
+    if crew_oc_family_id:
+        category = "crew_oc"
+        if category not in FORUM_CATEGORIES:
+            FORUM_CATEGORIES.append("crew_oc")  # ensure present
+        fam = await db.families.find_one({"id": crew_oc_family_id}, {"_id": 0, "id": 1, "name": 1, "tag": 1})
+        if not fam:
+            raise HTTPException(status_code=404, detail="Family not found")
+        if current_user.get("family_id") != crew_oc_family_id:
+            raise HTTPException(status_code=403, detail="Not in this family")
+        role = (current_user.get("family_role") or "").strip().lower()
+        if role not in ("boss", "underboss", "capo"):
+            raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can create Crew OC ads")
+        existing = await db.families.find_one({"id": crew_oc_family_id, "crew_oc_forum_topic_id": {"$exists": True, "$ne": None}}, {"_id": 0, "crew_oc_forum_topic_id": 1})
+        if existing and existing.get("crew_oc_forum_topic_id"):
+            raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Use that topic or remove the link from family first.")
     if category not in FORUM_CATEGORIES:
         category = "general"
     if not title:
@@ -109,7 +145,14 @@ async def create_topic(
         "is_important": False,
         "is_locked": False,
     }
+    if crew_oc_family_id:
+        doc["crew_oc_family_id"] = crew_oc_family_id
     await db.forum_topics.insert_one(doc)
+    if crew_oc_family_id:
+        await db.families.update_one(
+            {"id": crew_oc_family_id},
+            {"$set": {"crew_oc_forum_topic_id": topic_id}},
+        )
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",

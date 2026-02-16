@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -464,22 +464,93 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
 };
 
 // ============================================================================
-// CREW OC TAB (separate from heist OC: one button, boss/underboss/capo commit)
+// CREW OC TAB (set fee, advertise on forum, applications, commit)
 // ============================================================================
 
-const CrewOCTab = ({ family, myRole, crewOCCooldownUntil, committerHasTimer, onCommit, committing }) => {
+const CrewOCTab = ({
+  family,
+  myRole,
+  crewOCCooldownUntil,
+  committerHasTimer,
+  crewOCJoinFee,
+  crewOCForumTopicId,
+  crewOCApplications,
+  canManageCrewOC,
+  onCommit,
+  committing,
+  feeInput,
+  setFeeInput,
+  onSetFee,
+  setFeeLoading,
+  onAdvertise,
+  advertiseLoading,
+  onAcceptApp,
+  onRejectApp,
+}) => {
   const canCommit = ['boss', 'underboss', 'capo'].includes(myRole?.toLowerCase());
   const cooldownHours = committerHasTimer ? 6 : 8;
   const now = Date.now();
   const until = family?.crew_oc_cooldown_until ? new Date(family.crew_oc_cooldown_until).getTime() : 0;
   const onCooldown = until > now;
   const timeLeft = onCooldown ? formatTimeLeft(family.crew_oc_cooldown_until) : 'Ready';
+  const pending = (crewOCApplications || []).filter((a) => a.status === 'pending');
+  const accepted = (crewOCApplications || []).filter((a) => a.status === 'accepted');
 
   return (
     <div className="space-y-3">
       <p className="text-[10px] text-mutedForeground font-heading">
-        When Boss, Underboss, or Capo commits, every living family member gets: XP, cash, bullets, points, booze. Family treasury gets a lump sum. Once every {cooldownHours}h{committerHasTimer ? ' (you have the timer)' : ''}.
+        When Boss, Underboss, or Capo commits, every living family member and accepted applicants get: XP, cash, bullets, points, booze. Treasury gets a lump sum. Once every {cooldownHours}h{committerHasTimer ? ' (you have the timer)' : ''}.
       </p>
+
+      {/* Set join fee & Advertise */}
+      {canManageCrewOC && (
+        <div className="space-y-2 p-2 rounded-md bg-zinc-800/20 border border-zinc-700/30">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] text-mutedForeground font-heading">Join fee:</span>
+            {(crewOCJoinFee ?? 0) > 0 && (
+              <span className="text-[10px] text-primary font-heading">Current: {formatMoney(crewOCJoinFee)}</span>
+            )}
+            {(crewOCJoinFee ?? 0) === 0 && <span className="text-[10px] text-mutedForeground font-heading">Current: Free</span>}
+            <input
+              type="number"
+              min={0}
+              value={feeInput}
+              onChange={(e) => setFeeInput(e.target.value.replace(/\D/g, ''))}
+              placeholder="0 = free"
+              className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={onSetFee}
+              disabled={setFeeLoading}
+              className="px-2 py-1 text-[10px] font-bold uppercase rounded border bg-primary/20 text-primary border-primary/50 hover:bg-primary/30 disabled:opacity-50"
+            >
+              {setFeeLoading ? '...' : 'Set fee'}
+            </button>
+            <span className="text-[10px] text-mutedForeground">(0 = free; else cash, auto-accept when paid)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {crewOCForumTopicId ? (
+              <Link
+                to={`/forum/topic/${crewOCForumTopicId}`}
+                className="inline-flex items-center gap-1 text-xs font-heading text-primary hover:underline"
+              >
+                <MessageSquare size={12} /> View Crew OC topic
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={onAdvertise}
+                disabled={advertiseLoading}
+                className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase rounded border bg-primary/20 text-primary border-primary/50 hover:bg-primary/30 disabled:opacity-50"
+              >
+                <MessageSquare size={12} /> {advertiseLoading ? '...' : 'Advertise Crew OC'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between px-3 py-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
         <span className="text-[10px] text-mutedForeground">Next commit</span>
         <span className={`text-xs font-heading font-bold ${onCooldown ? 'text-amber-400' : 'text-emerald-400'}`}>
@@ -501,6 +572,31 @@ const CrewOCTab = ({ family, myRole, crewOCCooldownUntil, committerHasTimer, onC
         </button>
       ) : (
         <p className="text-[10px] text-mutedForeground">Only Boss, Underboss, or Capo can commit.</p>
+      )}
+
+      {/* Applications */}
+      {(pending.length > 0 || accepted.length > 0) && (
+        <div className="space-y-1.5">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+            <UserPlus size={12} /> Applications
+          </span>
+          {accepted.length > 0 && (
+            <div className="text-[10px] text-mutedForeground">
+              In crew: {accepted.map((a) => a.username).join(', ')}
+            </div>
+          )}
+          {pending.map((a) => (
+            <div key={a.id} className="flex items-center justify-between px-2 py-1.5 bg-zinc-800/30 rounded border border-zinc-700/30">
+              <span className="text-xs font-heading text-foreground">{a.username}</span>
+              {canManageCrewOC && (
+                <div className="flex gap-1">
+                  <button type="button" onClick={() => onAcceptApp(a.id)} className="text-[10px] font-bold text-emerald-400 hover:underline">Accept</button>
+                  <button type="button" onClick={() => onRejectApp(a.id)} className="text-[10px] font-bold text-red-400 hover:underline">Reject</button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -579,6 +675,9 @@ export default function FamilyPage() {
   const [raidCooldownUntil, setRaidCooldownUntil] = useState(0);
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
   const [crewOCCommitting, setCrewOCCommitting] = useState(false);
+  const [crewOCFeeInput, setCrewOCFeeInput] = useState('');
+  const [crewOCSetFeeLoading, setCrewOCSetFeeLoading] = useState(false);
+  const [crewOCAdvertiseLoading, setCrewOCAdvertiseLoading] = useState(false);
 
   const family = myFamily?.family;
   const members = myFamily?.members || [];
@@ -587,6 +686,7 @@ export default function FamilyPage() {
   const canManage = ['boss', 'underboss'].includes(myRole);
   const canWithdraw = ['boss', 'underboss', 'consigliere'].includes(myRole);
   const canUpgradeRacket = ['boss', 'underboss', 'consigliere'].includes(myRole);
+  const canManageCrewOC = ['boss', 'underboss', 'capo'].includes(myRole);
   const activeWars = warStats?.wars ?? [];
 
   const readyRackets = rackets.filter(r => r.level > 0 && (!formatTimeLeft(r.next_collect_at) || formatTimeLeft(r.next_collect_at) === 'Ready')).length;
@@ -658,6 +758,54 @@ export default function FamilyPage() {
       toast.error(apiDetail(e));
     } finally {
       setCrewOCCommitting(false);
+    }
+  };
+  const handleCrewOCSetFee = async () => {
+    const fee = parseInt(crewOCFeeInput.replace(/\D/g, ''), 10);
+    if (Number.isNaN(fee) || fee < 0) {
+      toast.error('Enter a valid fee (0 or more)');
+      return;
+    }
+    setCrewOCSetFeeLoading(true);
+    try {
+      await api.post('/families/crew-oc/set-fee', { fee });
+      toast.success('Join fee updated.');
+      setCrewOCFeeInput('');
+      fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setCrewOCSetFeeLoading(false);
+    }
+  };
+  const handleCrewOCAdvertise = async () => {
+    setCrewOCAdvertiseLoading(true);
+    try {
+      const res = await api.post('/families/crew-oc/advertise');
+      toast.success(res.data?.message || 'Crew OC topic created.');
+      fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setCrewOCAdvertiseLoading(false);
+    }
+  };
+  const handleCrewOCAccept = async (applicationId) => {
+    try {
+      await api.post(`/families/crew-oc/applications/${applicationId}/accept`);
+      toast.success('Application accepted.');
+      fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
+  const handleCrewOCReject = async (applicationId) => {
+    try {
+      await api.post(`/families/crew-oc/applications/${applicationId}/reject`);
+      toast.success('Application rejected.');
+      fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
     }
   };
 
@@ -741,8 +889,20 @@ export default function FamilyPage() {
                   myRole={myRole}
                   crewOCCooldownUntil={family?.crew_oc_cooldown_until}
                   committerHasTimer={myFamily?.crew_oc_committer_has_timer}
+                  crewOCJoinFee={family?.crew_oc_join_fee}
+                  crewOCForumTopicId={family?.crew_oc_forum_topic_id}
+                  crewOCApplications={myFamily?.crew_oc_applications}
+                  canManageCrewOC={canManageCrewOC}
                   onCommit={handleCrewOCCommit}
                   committing={crewOCCommitting}
+                  feeInput={crewOCFeeInput}
+                  setFeeInput={setCrewOCFeeInput}
+                  onSetFee={handleCrewOCSetFee}
+                  setFeeLoading={crewOCSetFeeLoading}
+                  onAdvertise={handleCrewOCAdvertise}
+                  advertiseLoading={crewOCAdvertiseLoading}
+                  onAcceptApp={handleCrewOCAccept}
+                  onRejectApp={handleCrewOCReject}
                 />
               )}
               {activeTab === 'raid' && (

@@ -278,6 +278,7 @@ const TopicRowMobile = ({ topic, isAdmin, onUpdate, updating }) => (
 const FORUM_TABS = [
   { id: 'general', label: 'General' },
   { id: 'entertainer', label: 'Entertainer Forum' },
+  { id: 'crew_oc', label: 'Crew OC' },
 ];
 
 export default function Forum() {
@@ -440,7 +441,7 @@ export default function Forum() {
   const pinnedTopics = topics.filter(t => t.is_sticky || t.is_important);
   const regularTopics = topics.filter(t => !t.is_sticky && !t.is_important);
 
-  const currentCategory = activeTab === 'entertainer' ? 'entertainer' : 'general';
+  const currentCategory = activeTab === 'entertainer' ? 'entertainer' : activeTab === 'crew_oc' ? 'crew_oc' : 'general';
   const openGames = (entertainerGames || []).filter((g) => g.status === 'open');
   const handleJoinGame = async (gameId) => {
     setJoiningId(gameId);
@@ -466,7 +467,9 @@ export default function Forum() {
             💬 Forum
           </h1>
           <p className="text-xs text-mutedForeground">
-            {activeTab === 'general' ? 'Discuss OC, crews, trades & more' : 'Dice games, gbox — auto payout when full'}
+            {activeTab === 'general' && 'Discuss OC, crews, trades & more'}
+            {activeTab === 'entertainer' && 'Dice games, gbox — auto payout when full'}
+            {activeTab === 'crew_oc' && 'Family Crew OC ads — apply from topic or family profile'}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -478,12 +481,14 @@ export default function Forum() {
               <Dice5 size={14} /> New Game
             </button>
           )}
-          <button
-            onClick={() => setModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 hover:from-yellow-500 hover:to-yellow-600 transition-all touch-manipulation"
-          >
-            <Plus size={14} /> New Topic
-          </button>
+          {activeTab !== 'crew_oc' && (
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 hover:from-yellow-500 hover:to-yellow-600 transition-all touch-manipulation"
+            >
+              <Plus size={14} /> New Topic
+            </button>
+          )}
         </div>
       </div>
 

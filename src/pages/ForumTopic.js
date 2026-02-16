@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package } from 'lucide-react';
+import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus } from 'lucide-react';
 import api from '../utils/api';
 import GifPicker from '../components/GifPicker';
 import { toast } from 'sonner';
@@ -38,6 +38,7 @@ export default function ForumTopic() {
   const [createGamePot, setCreateGamePot] = useState(0);
   const [createGameJoinFee, setCreateGameJoinFee] = useState(0);
   const [createGameSubmitting, setCreateGameSubmitting] = useState(false);
+  const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -140,6 +141,20 @@ export default function ForumTopic() {
       toast.error(err.response?.data?.detail || 'Failed to create game');
     } finally {
       setCreateGameSubmitting(false);
+    }
+  };
+
+  const applyCrewOC = async () => {
+    if (!topic?.crew_oc_family_id) return;
+    setCrewOCApplyLoading(true);
+    try {
+      const res = await api.post('/families/crew-oc/apply', { family_id: topic.crew_oc_family_id });
+      toast.success(res.data?.message || 'Applied.');
+      fetchTopic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to apply');
+    } finally {
+      setCrewOCApplyLoading(false);
     }
   };
 
@@ -251,6 +266,38 @@ export default function ForumTopic() {
           </p>
         </div>
       </div>
+
+      {/* Crew OC: Apply to join */}
+      {topic.crew_oc_family_id && (
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+            <UserPlus size={14} className="text-primary" />
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Apply to Crew OC</span>
+          </div>
+          <div className="p-3">
+            <p className="text-xs text-mutedForeground mb-2">
+              Join {topic.crew_oc_family_name} [{topic.crew_oc_family_tag}] for their next Crew OC run.
+              {topic.crew_oc_join_fee > 0
+                ? ` Pay ${(topic.crew_oc_join_fee || 0).toLocaleString()} cash to join instantly.`
+                : ' Free — your application will need approval.'}
+            </p>
+            {topic.crew_oc_my_application ? (
+              <p className="text-xs font-heading font-bold text-primary">
+                You applied: {topic.crew_oc_my_application.status}
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={applyCrewOC}
+                disabled={crewOCApplyLoading}
+                className="w-full py-2 font-heading font-bold uppercase tracking-wider text-xs rounded border bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50 disabled:opacity-50"
+              >
+                {crewOCApplyLoading ? '...' : topic.crew_oc_join_fee > 0 ? `Apply — pay $${(topic.crew_oc_join_fee || 0).toLocaleString()}` : 'Apply (free)'}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Entertainer: Create dice / gbox game (manual roll when ready) */}
       {topic.category === 'entertainer' && !topic.is_locked && (
