@@ -359,24 +359,24 @@ export default function Layout({ children }) {
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
       {/* Sidebar */}
       <div
-        className={`fixed left-0 top-0 h-full w-56 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
+        className={`fixed left-0 top-0 h-full w-48 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } md:translate-x-0`}
         style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
-          {/* Logo – thin gold line under header (match reference) */}
-          <div className={`p-4 border-b ${styles.borderGoldLight}`}>
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
-              <h1 className={`text-xl font-heading font-bold tracking-widest ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
-              <div className="flex-1 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
+          {/* Logo – compact header */}
+          <div className={`px-2.5 py-2 border-b ${styles.borderGoldLight} shrink-0`}>
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-px shrink-0" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
+              <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
+              <div className="flex-1 min-w-0 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
             </div>
-            <p className={`text-xs mt-1 font-heading tracking-wider text-center ${styles.sidebarHeaderSub}`}>Chicago, 1927</p>
+            <p className={`text-[10px] mt-0.5 font-heading tracking-wider text-center ${styles.sidebarHeaderSub}`}>Chicago, 1927</p>
           </div>
 
-          {/* Navigation */}
-          <nav className={`flex-1 overflow-y-auto p-3 ${styles.sidebarNav}`}>
+          {/* Navigation – compact list */}
+          <nav className={`flex-1 overflow-y-auto px-2 py-1.5 ${styles.sidebarNav} min-h-0`}>
             <div className="space-y-0.5">
               {navItems.map((item) => {
                 const Icon = item.icon;
@@ -397,22 +397,22 @@ export default function Layout({ children }) {
                         type="button"
                         data-testid="nav-ranking-group"
                         onClick={() => setRankingOpen((v) => !v)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm transition-smooth ${
+                        className={`w-full flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth ${
                           isAnyRankingActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                         style={isAnyRankingActive ? sidebarActiveGroupStyle : undefined}
                       >
-                        <Icon size={16} style={{ color: 'var(--gm-gold)' }} />
-                        <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {rankingOpen ? <ChevronDown size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} />}
+                        <Icon size={14} style={{ color: 'var(--gm-gold)' }} className="shrink-0" />
+                        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
+                        {rankingOpen ? <ChevronDown size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" />}
                       </button>
 
                       {rankingOpen && (
-                        <div className={`ml-4 pl-2 space-y-0.5 ${styles.sidebarSubmenuBorder}`}>
+                        <div className={`ml-3 pl-1.5 space-y-0.5 ${styles.sidebarSubmenuBorder}`}>
                           <Link
                             to="/crimes"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/crimes' ? sidebarActiveStyle : undefined}
@@ -432,7 +432,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/gta"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/gta' ? sidebarActiveStyle : undefined}
@@ -452,7 +452,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/jail"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/jail' ? sidebarActiveStyle : undefined}
@@ -472,7 +472,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/organised-crime"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined}
@@ -502,14 +502,14 @@ export default function Layout({ children }) {
                         type="button"
                         data-testid="nav-casino-group"
                         onClick={() => setCasinoOpen((v) => !v)}
-                        className={`w-full flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm transition-smooth ${
+                        className={`w-full flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth ${
                           isAnyCasinoActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                         style={isAnyCasinoActive ? sidebarActiveGroupStyle : undefined}
                       >
-                        <Icon size={16} style={{ color: 'var(--gm-gold)' }} />
-                        <span className="uppercase tracking-widest text-xs font-heading flex-1 text-left">{item.label}</span>
-                        {casinoOpen ? <ChevronDown size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} /> : <ChevronRight size={14} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} />}
+                        <Icon size={14} style={{ color: 'var(--gm-gold)' }} className="shrink-0" />
+                        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
+                        {casinoOpen ? <ChevronDown size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" />}
                       </button>
 
                       {casinoOpen && (
@@ -517,7 +517,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino' ? sidebarActiveStyle : undefined}
@@ -528,7 +528,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/dice"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/dice' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/dice' ? sidebarActiveStyle : undefined}
@@ -539,7 +539,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/rlt"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/rlt' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/rlt' ? sidebarActiveStyle : undefined}
@@ -550,7 +550,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/blackjack"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/blackjack' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/blackjack' ? sidebarActiveStyle : undefined}
@@ -561,7 +561,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/casino/horseracing"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/horseracing' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/horseracing' ? sidebarActiveStyle : undefined}
@@ -572,7 +572,7 @@ export default function Layout({ children }) {
                           <Link
                             to="/sports-betting"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-2 px-3 py-1.5 min-h-[44px] rounded-sm transition-smooth text-xs ${
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/sports-betting' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/sports-betting' ? sidebarActiveStyle : undefined}
@@ -593,7 +593,7 @@ export default function Layout({ children }) {
                     to={item.path}
                     data-testid={`nav-${item.label.toLowerCase()}`}
                     data-at-war={atWar && item.path === '/families' ? 'true' : undefined}
-                    className={`flex items-center gap-2 px-3 py-2 min-h-[44px] rounded-sm transition-smooth ${
+                    className={`flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth ${
                       isFamiliesAtWar
                         ? isActive
                           ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500'
@@ -605,8 +605,8 @@ export default function Layout({ children }) {
                     style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={16} className={isFamiliesAtWar ? '' : undefined} style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--gm-gold)' }} />
-                    <span className="uppercase tracking-widest text-xs font-heading flex-1">{item.label}</span>
+                    <Icon size={14} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--gm-gold)' }} />
+                    <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
                       <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">
@@ -626,7 +626,7 @@ export default function Layout({ children }) {
                     key={item.path}
                     to={item.path}
                     data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth border-t border-primary/20 mt-2 pt-2 ${
+                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-sm transition-smooth border-t border-primary/20 mt-1.5 pt-1.5 ${
                       isActive
                         ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
                         : 'text-red-400 hover:bg-red-500/10'
@@ -642,7 +642,7 @@ export default function Layout({ children }) {
                 <button
                   type="button"
                   onClick={() => { promoteToAdmin(); setSidebarOpen(false); }}
-                  className="flex items-center gap-2 px-3 py-2 rounded-sm transition-smooth border-t border-primary/20 mt-2 pt-2 w-full text-left text-amber-400 hover:bg-amber-500/10"
+                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-sm transition-smooth border-t border-primary/20 mt-1.5 pt-1.5 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]"
                 >
                   <Shield size={16} />
                   <span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
@@ -651,30 +651,24 @@ export default function Layout({ children }) {
             </div>
           </nav>
 
-          {/* Theme */}
+          {/* Theme & Logout – compact */}
           {user && (
-            <div className={`p-3 border-t ${styles.borderGoldLight}`}>
+            <div className={`px-2 py-1.5 border-t ${styles.borderGoldLight} shrink-0 space-y-1`}>
               <button
                 type="button"
                 onClick={() => setThemePickerOpen(true)}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-sm transition-smooth uppercase tracking-widest text-xs font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-sm transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
                 data-testid="theme-picker-button"
               >
-                <Palette size={14} />
+                <Palette size={12} />
                 Theme
               </button>
-            </div>
-          )}
-
-          {/* Logout */}
-          {user && (
-            <div className={`p-3 border-t ${styles.borderGoldLight} mt-auto`}>
               <button
                 onClick={handleLogout}
                 data-testid="logout-button"
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-xs font-heading font-bold"
+                className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold"
               >
-                <LogOut size={14} />
+                <LogOut size={12} />
                 Logout
               </button>
             </div>
@@ -691,7 +685,7 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className={`fixed top-0 right-0 left-0 md:left-56 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-4 gap-2 md:gap-3 py-2 md:py-0`}>
+      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-4 gap-2 md:gap-3 py-2 md:py-0`}>
         <div className="flex items-center gap-3 flex-1 min-w-0 shrink-0">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -919,7 +913,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className="md:ml-56 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden">
+      <main className="md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden">
         {children}
       </main>
 

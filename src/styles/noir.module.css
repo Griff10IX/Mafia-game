@@ -262,15 +262,15 @@
 
 /* ========== OLD SCHOOL GANGSTER + MODERN TWIST (app-wide: sidebar + main) ========== */
 .themeGangsterModern {
-  /* Neutral charcoal + reflective gold (no brown) */
+  /* Neutral charcoal; accent colours from theme (so Theme picker changes sidebar/topbar) */
   --gm-bg: #0a0a0a;
   --gm-bg-top: #1a1a1a;
   --gm-card: #242424;
   --gm-card-hover: #2d2d2d;
   --gm-border: #333333;
-  --gm-gold: #d4af37;
-  --gm-gold-light: #e6c229;
-  --gm-gold-dim: rgba(212, 175, 55, 0.35);
+  --gm-gold: var(--noir-primary);
+  --gm-gold-light: var(--noir-primary-bright);
+  --gm-gold-dim: rgba(var(--noir-primary-rgb), 0.35);
   --gm-profit: #5cb85c;
   --gm-text: #f5f5f5;
   --gm-muted: #a1a1aa;
@@ -403,7 +403,7 @@
 }
 
 .themeGangsterModern .btnGoldDarkText {
-  background: linear-gradient(180deg, var(--gm-gold-light), #b8860b);
+  background: linear-gradient(180deg, var(--noir-gradient-1), var(--noir-gradient-2));
   color: #1a1a1a;
   border-color: rgba(var(--noir-primary-rgb), 0.5);
 }

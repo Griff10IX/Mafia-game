@@ -212,32 +212,11 @@ export const THEME_COLOURS = [
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */
 export const THEME_TEXTURES = [
   { id: 'none', name: 'None' },
-  { id: 'noise', name: 'Noise' },
   { id: 'grid', name: 'Grid' },
-  { id: 'dots', name: 'Dots' },
   { id: 'lines', name: 'Lines' },
   { id: 'crosshatch', name: 'Crosshatch' },
-  { id: 'paper', name: 'Paper' },
-  { id: 'carbon', name: 'Carbon' },
-  { id: 'fabric', name: 'Fabric' },
-  { id: 'grain', name: 'Grain' },
-  { id: 'mesh', name: 'Mesh' },
-  { id: 'stipple', name: 'Stipple' },
-  { id: 'weave', name: 'Weave' },
-  { id: 'brushed', name: 'Brushed' },
-  { id: 'sand', name: 'Sand' },
-  { id: 'diagonal', name: 'Diagonal' },
-  { id: 'herringbone', name: 'Herringbone' },
-  { id: 'speckle', name: 'Speckle' },
-  { id: 'linen', name: 'Linen' },
   { id: 'hexagons', name: 'Hexagons' },
-  { id: 'circuit', name: 'Circuit' },
-  { id: 'waves', name: 'Waves' },
-  { id: 'brick', name: 'Brick' },
-  { id: 'concrete', name: 'Concrete' },
-  { id: 'subtle-dots', name: 'Subtle Dots' },
   { id: 'fine-lines', name: 'Fine Lines' },
-  { id: 'scatter', name: 'Scatter' },
 ];
 
 export const DEFAULT_COLOUR_ID = 'gold';
