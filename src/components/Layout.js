@@ -7,15 +7,39 @@ import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
 import styles from '../styles/noir.module.css';
 
-/** Bottom bar nav items when mobile nav style is "bottom" (icon + path; "more" opens sidebar) */
+/** Bottom bar: direct links or expandable groups (tap icon → sub-menu above bar) */
 const MOBILE_BOTTOM_NAV_ITEMS = [
-  { path: '/dashboard', icon: Home, label: 'Dashboard' },
-  { path: '/crimes', icon: Target, label: 'Crimes' },
-  { path: '/forum', icon: MessageSquare, label: 'Forum' },
-  { path: '/inbox', icon: Mail, label: 'Inbox' },
-  { path: '/garage', icon: Car, label: 'Garage' },
-  { path: '/casino', icon: Dice5, label: 'Casino' },
-  { path: '/store', icon: ShoppingBag, label: 'Store' },
+  { type: 'link', path: '/dashboard', icon: Home, label: 'Dashboard' },
+  {
+    type: 'group',
+    id: 'ranking',
+    icon: Target,
+    label: 'Ranking',
+    items: [
+      { path: '/crimes', label: 'Crimes' },
+      { path: '/gta', label: 'GTA' },
+      { path: '/jail', label: 'Jail' },
+      { path: '/organised-crime', label: 'Organised Crime' },
+    ],
+  },
+  { type: 'link', path: '/forum', icon: MessageSquare, label: 'Forum' },
+  { type: 'link', path: '/inbox', icon: Mail, label: 'Inbox' },
+  { type: 'link', path: '/garage', icon: Car, label: 'Garage' },
+  {
+    type: 'group',
+    id: 'casino',
+    icon: Dice5,
+    label: 'Casino',
+    items: [
+      { path: '/casino', label: 'Casino' },
+      { path: '/casino/dice', label: 'Dice' },
+      { path: '/casino/rlt', label: 'Roulette' },
+      { path: '/casino/blackjack', label: 'Blackjack' },
+      { path: '/casino/horseracing', label: 'Horse Racing' },
+      { path: '/sports-betting', label: 'Sports Betting' },
+    ],
+  },
+  { type: 'link', path: '/store', icon: ShoppingBag, label: 'Store' },
 ];
 
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
@@ -40,6 +64,7 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
+  const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null); // 'ranking' | 'casino' when bottom bar group is expanded
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
@@ -53,9 +78,25 @@ export default function Layout({ children }) {
   const notificationPanelRef = useRef(null);
   const notificationPanelOpenRef = useRef(false);
   notificationPanelOpenRef.current = notificationPanelOpen;
+  const mobileBottomNavRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const { mobileNavStyle } = useTheme();
+
+  useEffect(() => {
+    setMobileBottomMenuOpen(null);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileBottomMenuOpen) return;
+    const handleClickOutside = (e) => {
+      if (mobileBottomNavRef.current && !mobileBottomNavRef.current.contains(e.target)) {
+        setMobileBottomMenuOpen(null);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [mobileBottomMenuOpen]);
 
   useEffect(() => {
     if (!notificationPanelOpen) return;
@@ -930,51 +971,111 @@ export default function Layout({ children }) {
 
       {/* Mobile bottom nav (only when theme set to "Bottom bar" and on small screens) */}
       {mobileNavStyle === 'bottom' && (
-        <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around py-2 safe-area-pb"
-          style={{ backgroundColor: 'var(--gm-bg-top)', borderTop: '1px solid var(--noir-border-mid)' }}
-          aria-label="Mobile navigation"
-        >
-          {MOBILE_BOTTOM_NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
-            const isInbox = item.path === '/inbox';
+        <div ref={mobileBottomNavRef} className="md:hidden fixed bottom-0 left-0 right-0 z-40">
+          {/* Sub-menu panel above bar when Ranking or Casino is opened */}
+          {mobileBottomMenuOpen && (() => {
+            const group = MOBILE_BOTTOM_NAV_ITEMS.find((i) => i.type === 'group' && i.id === mobileBottomMenuOpen);
+            if (!group || group.type !== 'group') return null;
             return (
-              <Link
-                key={item.path}
-                to={item.path}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
-                  isActive ? 'bg-primary/25 border border-primary/50' : ''
-                }`}
-                style={isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
-                aria-current={isActive ? 'page' : undefined}
-                title={item.label}
+              <div
+                className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-lg max-h-[60vh] overflow-y-auto"
+                style={{ backgroundColor: 'var(--gm-card)', borderBottom: '1px solid var(--noir-border-mid)' }}
+                role="menu"
               >
-                <span className="relative inline-flex">
-                  <Icon size={22} strokeWidth={2} />
-                  {isInbox && unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </span>
-                  )}
-                </span>
-                <span className="text-[9px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
-              </Link>
+                <div className="py-2">
+                  {group.items.map((sub) => {
+                    const isActive = location.pathname === sub.path || (sub.path !== '/casino' && location.pathname.startsWith(sub.path + '/'));
+                    return (
+                      <Link
+                        key={sub.path}
+                        to={sub.path}
+                        onClick={() => setMobileBottomMenuOpen(null)}
+                        role="menuitem"
+                        className={`block w-full px-4 py-2.5 text-left text-sm font-heading uppercase tracking-wider transition-colors ${
+                          isActive ? 'bg-primary/20' : ''
+                        }`}
+                        style={isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                      >
+                        {sub.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
             );
-          })}
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border border-transparent"
-            style={{ color: 'var(--noir-foreground)' }}
-            aria-label="Open full menu"
-            title="More"
+          })()}
+          <nav
+            className="flex items-center justify-around py-2 safe-area-pb"
+            style={{ backgroundColor: 'var(--gm-bg-top)', borderTop: '1px solid var(--noir-border-mid)' }}
+            aria-label="Mobile navigation"
           >
-            <Menu size={22} strokeWidth={2} />
-            <span className="text-[9px] font-heading uppercase tracking-wider">More</span>
-          </button>
-        </nav>
+            {MOBILE_BOTTOM_NAV_ITEMS.map((item) => {
+              const Icon = item.icon;
+              if (item.type === 'link') {
+                const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
+                const isInbox = item.path === '/inbox';
+                return (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
+                    className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+                      isActive ? 'bg-primary/25 border border-primary/50' : ''
+                    }`}
+                    style={isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                    aria-current={isActive ? 'page' : undefined}
+                    title={item.label}
+                  >
+                    <span className="relative inline-flex">
+                      <Icon size={22} strokeWidth={2} />
+                      {isInbox && unreadCount > 0 && (
+                        <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[9px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
+                  </Link>
+                );
+              }
+              if (item.type === 'group') {
+                const isOpen = mobileBottomMenuOpen === item.id;
+                const isActive = item.items.some(
+                  (sub) => location.pathname === sub.path || (sub.path !== '/casino' && location.pathname.startsWith(sub.path + '/'))
+                );
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
+                    className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+                      isOpen || isActive ? 'bg-primary/25 border border-primary/50' : ''
+                    }`}
+                    style={isOpen || isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                    aria-expanded={isOpen}
+                    aria-haspopup="true"
+                    title={item.label}
+                  >
+                    <Icon size={22} strokeWidth={2} />
+                    <span className="text-[9px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
+                  </button>
+                );
+              }
+              return null;
+            })}
+            <button
+              type="button"
+              onClick={() => setSidebarOpen(true)}
+              className="flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border border-transparent"
+              style={{ color: 'var(--noir-foreground)' }}
+              aria-label="Open full menu"
+              title="More"
+            >
+              <Menu size={22} strokeWidth={2} />
+              <span className="text-[9px] font-heading uppercase tracking-wider">More</span>
+            </button>
+          </nav>
+        </div>
       )}
 
       <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />

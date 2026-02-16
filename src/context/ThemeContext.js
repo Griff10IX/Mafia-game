@@ -9,6 +9,7 @@ const STORAGE_KEY_ACCENT_LINE = 'app_theme_accent_line';
 const STORAGE_KEY_FONT = 'app_theme_font';
 const STORAGE_KEY_BUTTON_STYLE = 'app_theme_button_style';
 const STORAGE_KEY_WRITING = 'app_theme_writing_colour';
+const STORAGE_KEY_MUTED_WRITING = 'app_theme_muted_writing_colour';
 const STORAGE_KEY_TEXT_STYLE = 'app_theme_text_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
 const STORAGE_KEY_MOBILE_NAV = 'app_theme_mobile_nav';
@@ -186,13 +187,13 @@ function hexToHslString(hex) {
   return `${hsl.h} ${hsl.s}% ${hsl.l}%`;
 }
 
-function applyWritingColourToDocument(w) {
-  if (!w) return;
+function applyWritingColourToDocument(foregroundHex, mutedHex) {
+  if (!foregroundHex) return;
   const root = document.documentElement;
-  root.style.setProperty('--noir-foreground', w.foreground);
-  root.style.setProperty('--noir-muted', w.muted);
-  root.style.setProperty('--foreground', hexToHslString(w.foreground));
-  root.style.setProperty('--muted-foreground', hexToHslString(w.muted));
+  root.style.setProperty('--noir-foreground', foregroundHex);
+  root.style.setProperty('--noir-muted', mutedHex || foregroundHex);
+  root.style.setProperty('--foreground', hexToHslString(foregroundHex));
+  root.style.setProperty('--muted-foreground', hexToHslString(mutedHex || foregroundHex));
 }
 
 function applyTextStyleToDocument(style) {
@@ -266,6 +267,14 @@ export function ThemeProvider({ children }) {
       return DEFAULT_WRITING_COLOUR_ID;
     }
   });
+  const [mutedWritingColourId, setMutedWritingColourIdState] = useState(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEY_MUTED_WRITING);
+      return (v === '' || v == null) ? null : v;
+    } catch {
+      return null;
+    }
+  });
   const [textStyleId, setTextStyleIdState] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_TEXT_STYLE) || DEFAULT_TEXT_STYLE_ID;
@@ -311,8 +320,11 @@ export function ThemeProvider({ children }) {
 
   useEffect(() => {
     const w = getThemeWritingColour(writingColourId);
-    applyWritingColourToDocument(w);
-  }, [writingColourId]);
+    const mutedHex = mutedWritingColourId
+      ? getThemeWritingColour(mutedWritingColourId).foreground
+      : w.muted;
+    applyWritingColourToDocument(w.foreground, mutedHex);
+  }, [writingColourId, mutedWritingColourId]);
 
   useEffect(() => {
     const style = getThemeTextStyle(textStyleId);
@@ -377,6 +389,7 @@ export function ThemeProvider({ children }) {
         if (prefs.fontId != null) { localStorage.setItem(STORAGE_KEY_FONT, prefs.fontId); setFontIdState(prefs.fontId); }
         if (prefs.buttonStyleId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, prefs.buttonStyleId); setButtonStyleIdState(prefs.buttonStyleId); }
         if (prefs.writingColourId != null) { localStorage.setItem(STORAGE_KEY_WRITING, prefs.writingColourId); setWritingColourIdState(prefs.writingColourId); }
+        if (prefs.mutedWritingColourId !== undefined) { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, prefs.mutedWritingColourId || ''); setMutedWritingColourIdState(prefs.mutedWritingColourId || null); }
         if (prefs.textStyleId != null) { localStorage.setItem(STORAGE_KEY_TEXT_STYLE, prefs.textStyleId); setTextStyleIdState(prefs.textStyleId); }
         if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
       } catch (_) {}
@@ -397,11 +410,12 @@ export function ThemeProvider({ children }) {
       font_id: fontId,
       button_style_id: buttonStyleId,
       writing_colour_id: writingColourId,
+      muted_writing_colour_id: mutedWritingColourId || null,
       text_style_id: textStyleId,
       custom_themes: customThemes,
     };
     api.patch('/profile/theme', payload).catch(() => {});
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, textStyleId, customThemes]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, textStyleId, customThemes]);
 
   const setColour = useCallback((id) => {
     setColourIdState(id);
@@ -466,6 +480,14 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setMutedWritingColour = useCallback((id) => {
+    const v = id || null;
+    setMutedWritingColourIdState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_MUTED_WRITING, v === null ? '' : v);
+    } catch (_) {}
+  }, []);
+
   const setTextStyle = useCallback((id) => {
     setTextStyleIdState(id);
     try {
@@ -498,6 +520,8 @@ export function ThemeProvider({ children }) {
     setButtonStyle,
     writingColourId,
     setWritingColour,
+    mutedWritingColourId,
+    setMutedWritingColour,
     textStyleId,
     setTextStyle,
     customThemes,
@@ -509,6 +533,7 @@ export function ThemeProvider({ children }) {
     font: getThemeFont(fontId),
     buttonStyle: getThemeButtonStyle(buttonStyleId),
     writingColour: getThemeWritingColour(writingColourId),
+    mutedWritingColour: mutedWritingColourId ? getThemeWritingColour(mutedWritingColourId) : null,
     textStyle: getThemeTextStyle(textStyleId),
     buttonColour: buttonColourId ? getResolvedColour(buttonColourId, customThemes) : null,
     accentLineColour: accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : null,

@@ -18,7 +18,7 @@ function customToColourEntry(c) {
 }
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, textStyleId, mobileNavStyle, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setTextStyle, setMobileNavStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, textStyleId, mobileNavStyle, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setMutedWritingColour, setTextStyle, setMobileNavStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
@@ -92,7 +92,7 @@ export default function ThemePicker({ open, onClose }) {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID); setButtonStyle(DEFAULT_BUTTON_STYLE_ID); setWritingColour(DEFAULT_WRITING_COLOUR_ID); setTextStyle(DEFAULT_TEXT_STYLE_ID); resetButtonToDefault(); resetAccentLineToDefault(); }}
+              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID); setButtonStyle(DEFAULT_BUTTON_STYLE_ID); setWritingColour(DEFAULT_WRITING_COLOUR_ID); setMutedWritingColour(null); setTextStyle(DEFAULT_TEXT_STYLE_ID); resetButtonToDefault(); resetAccentLineToDefault(); }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               data-testid="theme-reset-default"
               title="Reset to Original theme (gold, no texture)"
@@ -472,7 +472,7 @@ export default function ThemePicker({ open, onClose }) {
                   </div>
                 </div>
                 <div>
-                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Writing colour</p>
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Writing colour (main text)</p>
                   <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-48 overflow-y-auto">
                     {THEME_WRITING_COLOURS.map((w) => (
                       <button
@@ -488,6 +488,36 @@ export default function ThemePicker({ open, onClose }) {
                       >
                         <span className="w-1/2 h-0.5 rounded shrink-0 opacity-70" style={{ backgroundColor: w.muted }} aria-hidden />
                       </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Muted text colour (secondary)</p>
+                  <p className="text-[9px] text-mutedForeground mb-1.5">Pick a colour for muted text, or &quot;Same as main&quot; to use the preset’s muted.</p>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    <button
+                      type="button"
+                      onClick={() => setMutedWritingColour(null)}
+                      className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                        mutedWritingColourId === null ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                      }`}
+                    >
+                      Same as main
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-48 overflow-y-auto">
+                    {THEME_WRITING_COLOURS.map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => setMutedWritingColour(w.id)}
+                        className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 flex items-center justify-center ${
+                          mutedWritingColourId === w.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'
+                        }`}
+                        style={{ backgroundColor: w.foreground }}
+                        title={w.name}
+                        aria-label={`Muted: ${w.name}`}
+                      />
                     ))}
                   </div>
                 </div>

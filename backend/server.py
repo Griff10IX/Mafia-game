@@ -458,6 +458,7 @@ class ThemePreferencesRequest(BaseModel):
     font_id: Optional[str] = None
     button_style_id: Optional[str] = None
     writing_colour_id: Optional[str] = None
+    muted_writing_colour_id: Optional[str] = None
     text_style_id: Optional[str] = None
     custom_themes: Optional[List[Dict]] = None
 
@@ -1761,6 +1762,7 @@ async def update_profile_theme(request: ThemePreferencesRequest, current_user: d
         "font_id": "fontId",
         "button_style_id": "buttonStyleId",
         "writing_colour_id": "writingColourId",
+        "muted_writing_colour_id": "mutedWritingColourId",
         "text_style_id": "textStyleId",
         "custom_themes": "customThemes",
     }
