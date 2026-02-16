@@ -11,7 +11,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, CARS
 
-AUTO_ROLL_AFTER_SECONDS = 60
+# Auto-create runs every 3 hours; open games roll 20 mins before the next batch (so plenty of time to join)
+AUTO_CREATE_INTERVAL_SECONDS = 3 * 3600   # 3 hours between batches
+ROLL_BEFORE_NEXT_CREATE_SECONDS = 20 * 60  # roll current games 20 mins before next batch
 ENTERTAINER_CONFIG_KEY = "entertainer_config"
 
 # Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
@@ -247,14 +249,41 @@ async def _run_gbox_payout(game: dict):
     return {"rewards_by_user": rewards_by_user}
 
 
+def _parse_iso(iso_str):
+    if not iso_str:
+        return None
+    try:
+        return datetime.fromisoformat(iso_str.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
 async def _maybe_auto_settle_open_games():
-    """Settle any open game older than AUTO_ROLL_AFTER_SECONDS. Skip manual_roll games (creator rolls)."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(seconds=AUTO_ROLL_AFTER_SECONDS)).isoformat()
-    open_old = await db.entertainer_games.find(
-        {"status": "open", "created_at": {"$lt": cutoff}, "manual_roll": {"$ne": True}},
+    """Settle all open (non-manual) games when we're in the '20 mins before next batch' window."""
+    doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"last_auto_create_at": 1})
+    last_at = _parse_iso(doc.get("last_auto_create_at") if doc else None)
+    if not last_at:
+        return
+    next_create = last_at + timedelta(seconds=AUTO_CREATE_INTERVAL_SECONDS)
+    roll_at = next_create - timedelta(seconds=ROLL_BEFORE_NEXT_CREATE_SECONDS)
+    now = datetime.now(timezone.utc)
+    if now < roll_at:
+        return
+    open_games = await db.entertainer_games.find(
+        {"status": "open", "manual_roll": {"$ne": True}},
         {"_id": 0},
     ).to_list(50)
-    for g in open_old:
+    for g in open_games:
+        await _settle_game(g)
+
+
+async def settle_open_games_now():
+    """Settle all open non-manual games (called by server task 20 mins before next batch)."""
+    open_games = await db.entertainer_games.find(
+        {"status": "open", "manual_roll": {"$ne": True}},
+        {"_id": 0},
+    ).to_list(50)
+    for g in open_games:
         await _settle_game(g)
 
 
@@ -278,7 +307,7 @@ async def list_games(
     status: Optional[str] = Query(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """List entertainer games (open + recent completed). Auto-settles open games older than 60s."""
+    """List entertainer games (open + recent completed). Auto-settles open games when 20 mins before next batch."""
     await _maybe_auto_settle_open_games()
     query = {}
     if game_type and game_type in ("dice", "gbox"):
@@ -286,7 +315,7 @@ async def list_games(
     if status and status in ("open", "full", "completed"):
         query["status"] = status
     games = await db.entertainer_games.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return {"games": games, "auto_roll_after_seconds": AUTO_ROLL_AFTER_SECONDS}
+    return {"games": games}
 
 
 async def games_history(current_user: dict = Depends(get_current_user)):
@@ -436,11 +465,22 @@ async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current
 
 # ---------- Admin: entertainer config (auto-create on/off) ----------
 async def get_entertainer_config(current_user: dict = Depends(get_current_user)):
-    """Get entertainer config (auto_create_enabled). Admin only for write; anyone can read."""
+    """Get entertainer config (auto_create_enabled, last/next run). Anyone can read."""
     doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"_id": 0, "key": 0})
     if not doc:
-        return {"auto_create_enabled": False, "last_auto_create_at": None}
-    return {"auto_create_enabled": doc.get("auto_create_enabled", False), "last_auto_create_at": doc.get("last_auto_create_at")}
+        return {"auto_create_enabled": False, "last_auto_create_at": None, "next_auto_create_at": None}
+    last_at = doc.get("last_auto_create_at")
+    next_at = None
+    if last_at:
+        last_dt = _parse_iso(last_at)
+        if last_dt:
+            next_dt = last_dt + timedelta(seconds=AUTO_CREATE_INTERVAL_SECONDS)
+            next_at = next_dt.isoformat()
+    return {
+        "auto_create_enabled": doc.get("auto_create_enabled", False),
+        "last_auto_create_at": last_at,
+        "next_auto_create_at": next_at,
+    }
 
 
 class EntertainerConfigUpdate(BaseModel):
@@ -451,7 +491,7 @@ async def update_entertainer_config(
     body: EntertainerConfigUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin only: enable/disable auto-create games every hour."""
+    """Admin only: enable/disable auto-create games every 3 hours."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     await db.game_config.update_one(
@@ -515,7 +555,7 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
 
 
 async def run_auto_create_if_enabled():
-    """Called by hourly task: if auto_create_enabled, create 3–5 games and notify."""
+    """Called by scheduled task every 3h: if auto_create_enabled, create 3–5 games and notify."""
     doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"_id": 0})
     if not doc or not doc.get("auto_create_enabled"):
         return

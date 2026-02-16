@@ -228,13 +228,73 @@ export const THEME_FONTS = [
   { id: 'compact', name: 'Compact', heading: 'Inter, system-ui, sans-serif', body: 'Inter, system-ui, sans-serif' },
 ];
 
-/** Button style: original (flat) vs glossy. */
+/** Button style: look and feel of primary buttons. */
 export const THEME_BUTTON_STYLES = [
   { id: 'original', name: 'Original' },
   { id: 'glossy', name: 'Glossy' },
+  { id: 'shaded', name: 'Shaded' },
+  { id: 'opaque', name: 'Opaque' },
+  { id: 'shadow', name: 'Shadow' },
+  { id: 'raised', name: 'Raised' },
+  { id: 'flat', name: 'Flat' },
+  { id: 'outline', name: 'Outline' },
+];
+
+/** Writing (text) colour: main body and muted text. { id, name, foreground, muted } hex. */
+export const THEME_WRITING_COLOURS = [
+  /* Default & light */
+  { id: 'default', name: 'Default', foreground: '#f5f5f5', muted: '#a1a1aa' },
+  { id: 'snow', name: 'Snow', foreground: '#fafafa', muted: '#d4d4d4' },
+  { id: 'pearl', name: 'Pearl', foreground: '#f5f5f4', muted: '#a8a29e' },
+  { id: 'ivory-text', name: 'Ivory', foreground: '#fefce8', muted: '#e7e5e4' },
+  { id: 'cream-text', name: 'Cream', foreground: '#fffbeb', muted: '#d6d3d1' },
+  { id: 'warm-white', name: 'Warm White', foreground: '#fef3c7', muted: '#fde68a' },
+  { id: 'cool-white', name: 'Cool White', foreground: '#f0f9ff', muted: '#bae6fd' },
+  /* Grays – light to dark */
+  { id: 'gray-50', name: 'Gray 50', foreground: '#f9fafb', muted: '#e5e7eb' },
+  { id: 'gray-100', name: 'Gray 100', foreground: '#f3f4f6', muted: '#d1d5db' },
+  { id: 'gray-200', name: 'Gray 200', foreground: '#e5e7eb', muted: '#9ca3af' },
+  { id: 'gray-300', name: 'Gray 300', foreground: '#d1d5db', muted: '#6b7280' },
+  { id: 'gray-400', name: 'Gray 400', foreground: '#9ca3af', muted: '#4b5563' },
+  { id: 'gray-500', name: 'Gray 500', foreground: '#6b7280', muted: '#374151' },
+  { id: 'zinc-100', name: 'Zinc 100', foreground: '#f4f4f5', muted: '#a1a1aa' },
+  { id: 'zinc-200', name: 'Zinc 200', foreground: '#e4e4e7', muted: '#71717a' },
+  { id: 'zinc-300', name: 'Zinc 300', foreground: '#d4d4d8', muted: '#52525b' },
+  { id: 'zinc-400', name: 'Zinc 400', foreground: '#a1a1aa', muted: '#3f3f46' },
+  { id: 'zinc-500', name: 'Zinc 500', foreground: '#71717a', muted: '#27272a' },
+  { id: 'slate-200', name: 'Slate 200', foreground: '#e2e8f0', muted: '#94a3b8' },
+  { id: 'slate-300', name: 'Slate 300', foreground: '#cbd5e1', muted: '#64748b' },
+  { id: 'slate-400', name: 'Slate 400', foreground: '#94a3b8', muted: '#475569' },
+  { id: 'slate-500', name: 'Slate 500', foreground: '#64748b', muted: '#334155' },
+  { id: 'stone-200', name: 'Stone 200', foreground: '#e7e5e4', muted: '#a8a29e' },
+  { id: 'stone-300', name: 'Stone 300', foreground: '#d6d3d1', muted: '#78716c' },
+  { id: 'stone-400', name: 'Stone 400', foreground: '#a8a29e', muted: '#57534e' },
+  { id: 'neutral-300', name: 'Neutral 300', foreground: '#d4d4d4', muted: '#737373' },
+  { id: 'neutral-400', name: 'Neutral 400', foreground: '#a3a3a3', muted: '#525252' },
+  /* Dark */
+  { id: 'charcoal-text', name: 'Charcoal', foreground: '#3f3f46', muted: '#71717a' },
+  { id: 'graphite-text', name: 'Graphite', foreground: '#44403c', muted: '#57534e' },
+  { id: 'smoke-text', name: 'Smoke', foreground: '#52525b', muted: '#3f3f46' },
+  { id: 'carbon-text', name: 'Carbon', foreground: '#3f3f46', muted: '#27272a' },
+  { id: 'obsidian-text', name: 'Obsidian', foreground: '#27272a', muted: '#18181b' },
+  { id: 'ink', name: 'Ink', foreground: '#1f2937', muted: '#374151' },
+  { id: 'midnight-text', name: 'Midnight', foreground: '#1e1b4b', muted: '#312e81' },
+  /* Tinted (subtle colour in text) */
+  { id: 'warm-gray', name: 'Warm Gray', foreground: '#f5f5f4', muted: '#a8a29e' },
+  { id: 'cool-gray', name: 'Cool Gray', foreground: '#f1f5f9', muted: '#94a3b8' },
+  { id: 'blue-gray', name: 'Blue Gray', foreground: '#e2e8f0', muted: '#64748b' },
+  { id: 'sepia-text', name: 'Sepia', foreground: '#f5f0e6', muted: '#d4c4a8' },
+  { id: 'parchment', name: 'Parchment', foreground: '#faf8f5', muted: '#c9b896' },
+  { id: 'blush-text', name: 'Blush', foreground: '#fdf2f8', muted: '#f9a8d4' },
+  { id: 'mint-text', name: 'Mint', foreground: '#f0fdf4', muted: '#86efac' },
+  { id: 'frost', name: 'Frost', foreground: '#ecfeff', muted: '#a5f3fc' },
+  { id: 'lavender-text', name: 'Lavender', foreground: '#f5f3ff', muted: '#c4b5fd' },
+  { id: 'rose-text', name: 'Rose', foreground: '#fff1f2', muted: '#fecdd3' },
+  { id: 'amber-text', name: 'Amber', foreground: '#fffbeb', muted: '#fde68a' },
 ];
 
 export const DEFAULT_COLOUR_ID = 'gold';
+export const DEFAULT_WRITING_COLOUR_ID = 'default';
 export const DEFAULT_FONT_ID = 'classic';
 export const DEFAULT_BUTTON_STYLE_ID = 'original';
 export const DEFAULT_TEXTURE_ID = 'none';
@@ -295,4 +355,8 @@ export function getThemeFont(id) {
 
 export function getThemeButtonStyle(id) {
   return THEME_BUTTON_STYLES.find((b) => b.id === id) || THEME_BUTTON_STYLES[0];
+}
+
+export function getThemeWritingColour(id) {
+  return THEME_WRITING_COLOURS.find((w) => w.id === id) || THEME_WRITING_COLOURS[0];
 }

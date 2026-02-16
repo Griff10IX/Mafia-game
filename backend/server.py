@@ -11180,21 +11180,28 @@ async def startup_db():
     # Start security monitoring background task
     asyncio.create_task(security_module.security_monitor_task(db))
 
-    async def hourly_entertainer_auto_create():
+    async def entertainer_auto_create_cycle():
         # Run once shortly after startup so "Last run" isn't stuck on a pre-restart value
         await asyncio.sleep(30)
         try:
             await entertainer.run_auto_create_if_enabled()
         except Exception as e:
             logging.exception("Entertainer auto-create (startup): %s", e)
-        # Then run every hour
+        # Then every 3 hours: wait 2h40m, roll open games, wait 20m, create next batch
+        three_h = 3 * 3600
+        twenty_min = 20 * 60
         while True:
-            await asyncio.sleep(3600)
+            await asyncio.sleep(three_h - twenty_min)  # 2h 40m until roll time
+            try:
+                await entertainer.settle_open_games_now()
+            except Exception as e:
+                logging.exception("Entertainer settle open games: %s", e)
+            await asyncio.sleep(twenty_min)  # 20 mins, then new batch
             try:
                 await entertainer.run_auto_create_if_enabled()
             except Exception as e:
                 logging.exception("Entertainer auto-create: %s", e)
-    asyncio.create_task(hourly_entertainer_auto_create())
+    asyncio.create_task(entertainer_auto_create_cycle())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

@@ -153,6 +153,104 @@ a.from-primary {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3) !important;
 }
 
+/* Shaded */
+[data-button-style="shaded"] button.bg-primary,
+[data-button-style="shaded"] button.from-primary,
+[data-button-style="shaded"] a.bg-primary,
+[data-button-style="shaded"] a.from-primary {
+  background: linear-gradient(180deg, var(--noir-button-gradient-1) 0%, var(--noir-button-gradient-2) 40%, var(--noir-button-gradient-4) 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), inset 0 -1px 0 rgba(0, 0, 0, 0.2) !important;
+  border-radius: 4px !important;
+}
+[data-button-style="shaded"] button.bg-primary:hover,
+[data-button-style="shaded"] button.from-primary:hover,
+[data-button-style="shaded"] a.bg-primary:hover,
+[data-button-style="shaded"] a.from-primary:hover {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), inset 0 -1px 0 rgba(0, 0, 0, 0.25) !important;
+}
+
+/* Opaque */
+[data-button-style="opaque"] button.bg-primary,
+[data-button-style="opaque"] button.from-primary,
+[data-button-style="opaque"] a.bg-primary,
+[data-button-style="opaque"] a.from-primary {
+  background: var(--noir-button-gradient-2) !important;
+  border-radius: 4px !important;
+}
+[data-button-style="opaque"] button.bg-primary:hover,
+[data-button-style="opaque"] button.from-primary:hover,
+[data-button-style="opaque"] a.bg-primary:hover,
+[data-button-style="opaque"] a.from-primary:hover {
+  background: var(--noir-button-gradient-1) !important;
+}
+
+/* Shadow */
+[data-button-style="shadow"] button.bg-primary,
+[data-button-style="shadow"] button.from-primary,
+[data-button-style="shadow"] a.bg-primary,
+[data-button-style="shadow"] a.from-primary {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35), 0 1px 0 rgba(255, 255, 255, 0.05) inset !important;
+  border-radius: 4px !important;
+}
+[data-button-style="shadow"] button.bg-primary:hover,
+[data-button-style="shadow"] button.from-primary:hover,
+[data-button-style="shadow"] a.bg-primary:hover,
+[data-button-style="shadow"] a.from-primary:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 1px 0 rgba(255, 255, 255, 0.08) inset !important;
+}
+
+/* Raised */
+[data-button-style="raised"] button.bg-primary,
+[data-button-style="raised"] button.from-primary,
+[data-button-style="raised"] a.bg-primary,
+[data-button-style="raised"] a.from-primary {
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.25), 0 6px 16px rgba(0, 0, 0, 0.3) !important;
+  border-radius: 4px !important;
+  border-bottom-width: 2px !important;
+}
+[data-button-style="raised"] button.bg-primary:hover,
+[data-button-style="raised"] button.from-primary:hover,
+[data-button-style="raised"] a.bg-primary:hover,
+[data-button-style="raised"] a.from-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.25), 0 8px 20px rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Flat */
+[data-button-style="flat"] button.bg-primary,
+[data-button-style="flat"] button.from-primary,
+[data-button-style="flat"] a.bg-primary,
+[data-button-style="flat"] a.from-primary {
+  background: var(--noir-button-gradient-2) !important;
+  box-shadow: none !important;
+  border-radius: 2px !important;
+}
+[data-button-style="flat"] button.bg-primary:hover,
+[data-button-style="flat"] button.from-primary:hover,
+[data-button-style="flat"] a.bg-primary:hover,
+[data-button-style="flat"] a.from-primary:hover {
+  background: var(--noir-button-gradient-1) !important;
+}
+
+/* Outline */
+[data-button-style="outline"] button.bg-primary,
+[data-button-style="outline"] button.from-primary,
+[data-button-style="outline"] a.bg-primary,
+[data-button-style="outline"] a.from-primary {
+  background: rgba(var(--noir-button-primary-rgb, 212, 175, 55), 0.12) !important;
+  color: var(--noir-button-foreground) !important;
+  border: 2px solid var(--noir-button-gradient-2) !important;
+  box-shadow: none !important;
+  border-radius: 4px !important;
+}
+[data-button-style="outline"] button.bg-primary:hover,
+[data-button-style="outline"] button.from-primary:hover,
+[data-button-style="outline"] a.bg-primary:hover,
+[data-button-style="outline"] a.from-primary:hover {
+  background: rgba(var(--noir-button-primary-rgb, 212, 175, 55), 0.22) !important;
+  border-color: var(--noir-button-gradient-1) !important;
+}
+
 /* Glitch / chromatic aberration text effect for buttons (add class .btn-glitch-text) */
 .btn-glitch-text {
   text-shadow:

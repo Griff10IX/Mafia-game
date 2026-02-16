@@ -7,8 +7,6 @@ import styles from '../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💵', '💎', '🎩', '🔫', '⚔️', '🎲', '👑', '🏆', '✨'];
 
-const AUTO_ROLL_SECONDS = 60;
-
 function getTimeAgo(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -20,10 +18,29 @@ function getTimeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
-function getSecondsUntilRoll(createdAt) {
-  if (!createdAt) return 0;
-  const elapsed = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
-  return Math.max(0, AUTO_ROLL_SECONDS - elapsed);
+/** Seconds until next batch (next_auto_create_at). */
+function getSecondsUntilNextBatch(nextAutoCreateAt) {
+  if (!nextAutoCreateAt) return 0;
+  const secs = Math.floor((new Date(nextAutoCreateAt).getTime() - Date.now()) / 1000);
+  return Math.max(0, secs);
+}
+
+/** Seconds until the roll window (20 mins before next batch). */
+function getSecondsUntilRollWindow(nextAutoCreateAt) {
+  if (!nextAutoCreateAt) return 0;
+  const nextBatch = new Date(nextAutoCreateAt).getTime();
+  const rollAt = nextBatch - 20 * 60 * 1000;
+  const secs = Math.floor((rollAt - Date.now()) / 1000);
+  return Math.max(0, secs);
+}
+
+function formatTimeUntil(seconds) {
+  if (seconds <= 0) return 'soon';
+  if (seconds < 60) return '<1m';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return m ? `${h}h ${m}m` : `${h}h`;
 }
 
 const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) => {
@@ -295,7 +312,7 @@ export default function Forum() {
   const [entertainerHistory, setEntertainerHistory] = useState([]);
   const [entertainerPrizes, setEntertainerPrizes] = useState(null);
   const [gamesLoading, setGamesLoading] = useState(false);
-  const [entertainerConfig, setEntertainerConfig] = useState({ auto_create_enabled: false, last_auto_create_at: null });
+  const [entertainerConfig, setEntertainerConfig] = useState({ auto_create_enabled: false, last_auto_create_at: null, next_auto_create_at: null });
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
@@ -351,9 +368,9 @@ export default function Forum() {
   const fetchEntertainerConfig = useCallback(async () => {
     try {
       const res = await api.get('/forum/entertainer/admin/config');
-      setEntertainerConfig(res.data ?? { auto_create_enabled: false, last_auto_create_at: null });
+      setEntertainerConfig(res.data ?? { auto_create_enabled: false, last_auto_create_at: null, next_auto_create_at: null });
     } catch {
-      setEntertainerConfig({ auto_create_enabled: false, last_auto_create_at: null });
+      setEntertainerConfig({ auto_create_enabled: false, last_auto_create_at: null, next_auto_create_at: null });
     }
   }, []);
 
@@ -369,10 +386,13 @@ export default function Forum() {
   }, [activeTab, fetchEntertainerGames, fetchEntertainerHistory, fetchEntertainerPrizes, fetchEntertainerConfig]);
   useEffect(() => {
     if (activeTab === 'entertainer') {
-      const id = setInterval(fetchEntertainerGames, 10000);
+      const id = setInterval(() => {
+        fetchEntertainerGames();
+        fetchEntertainerConfig();
+      }, 10000);
       return () => clearInterval(id);
     }
-  }, [activeTab, fetchEntertainerGames]);
+  }, [activeTab, fetchEntertainerGames, fetchEntertainerConfig]);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
@@ -523,7 +543,7 @@ export default function Forum() {
                     disabled={configSaving}
                     className="rounded border-primary/50"
                   />
-                  <span className="text-xs font-heading">Auto-create 3–5 games every hour</span>
+                  <span className="text-xs font-heading">Auto-create 3–5 games every 3 hours</span>
                 </label>
                 <button
                   type="button"
@@ -536,6 +556,11 @@ export default function Forum() {
                 {entertainerConfig.last_auto_create_at && (
                   <span className="text-[10px] text-mutedForeground">
                     Last run: {getTimeAgo(entertainerConfig.last_auto_create_at)}
+                  </span>
+                )}
+                {entertainerConfig.next_auto_create_at && (
+                  <span className="text-[10px] text-mutedForeground">
+                    Next games due in: {formatTimeUntil(getSecondsUntilNextBatch(entertainerConfig.next_auto_create_at))}
                   </span>
                 )}
               </div>
@@ -593,18 +618,18 @@ export default function Forum() {
           <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
             <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between flex-wrap gap-1">
               <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Auto games</span>
-              <span className="text-[10px] text-mutedForeground">Free to join · Win random: points, cash, bullets, cars · Rolls when full or after 60s</span>
+              <span className="text-[10px] text-mutedForeground">Free to join · Win random: points, cash, bullets, cars · Rolls when full or 20 mins before next batch</span>
             </div>
             {gamesLoading ? (
               <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
             ) : openGames.length === 0 ? (
-              <div className="p-4 text-center text-xs text-mutedForeground">No open games. Create one above{entertainerConfig.auto_create_enabled ? ' or wait for the next hourly batch' : ''}.</div>
+              <div className="p-4 text-center text-xs text-mutedForeground">No open games. Create one above{entertainerConfig.auto_create_enabled ? ' or wait for the next batch (every 3h)' : ''}.</div>
             ) : (
               <div className="divide-y divide-zinc-700/30">
                 {openGames.map((g) => {
                   const participants = g.participants || [];
                   const isIn = user && participants.some((p) => p.user_id === user.id);
-                  const secsLeft = getSecondsUntilRoll(g.created_at);
+                  const secsLeft = getSecondsUntilRollWindow(entertainerConfig.next_auto_create_at);
                   return (
                     <div key={g.id} className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
@@ -621,7 +646,7 @@ export default function Forum() {
                             <span className="text-[10px] text-mutedForeground ml-2">Manual roll</span>
                           )}
                           {secsLeft > 0 && !g.manual_roll && (
-                            <span className="text-[10px] text-amber-400/90 ml-2">Rolls in {secsLeft}s</span>
+                            <span className="text-[10px] text-amber-400/90 ml-2">Rolls in {formatTimeUntil(secsLeft)}</span>
                           )}
                         </div>
                       </div>

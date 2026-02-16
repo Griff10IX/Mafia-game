@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, getThemeColour } from '../constants/themes';
+import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_WRITING_COLOURS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
 function customToColourEntry(c) {
@@ -18,7 +18,7 @@ function customToColourEntry(c) {
 }
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
@@ -84,7 +84,7 @@ export default function ThemePicker({ open, onClose }) {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID); setButtonStyle(DEFAULT_BUTTON_STYLE_ID); resetButtonToDefault(); resetAccentLineToDefault(); }}
+              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID); setButtonStyle(DEFAULT_BUTTON_STYLE_ID); setWritingColour(DEFAULT_WRITING_COLOUR_ID); resetButtonToDefault(); resetAccentLineToDefault(); }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               data-testid="theme-reset-default"
               title="Reset to Original theme (gold, no texture)"
@@ -280,20 +280,46 @@ export default function ThemePicker({ open, onClose }) {
               <Square className="w-3.5 h-3.5" />
               Button style
             </p>
-            <div className="flex rounded-md border border-zinc-600 overflow-hidden w-fit">
+            <div className="flex flex-wrap gap-1.5">
               {THEME_BUTTON_STYLES.map((b) => (
                 <button
                   key={b.id}
                   type="button"
                   onClick={() => setButtonStyle(b.id)}
-                  className={`px-4 py-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
-                    buttonStyleId === b.id ? 'bg-primary/30 text-primary border border-primary/50' : 'bg-zinc-800 text-mutedForeground hover:text-foreground'
+                  className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                    buttonStyleId === b.id ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
                   }`}
                 >
                   {b.name}
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Writing colour (text) */}
+          <div>
+            <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Palette className="w-3.5 h-3.5" />
+              Writing colour
+            </p>
+            <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-32 overflow-y-auto">
+              {THEME_WRITING_COLOURS.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => setWritingColour(w.id)}
+                  className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 flex flex-col items-center justify-center ${
+                    writingColourId === w.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'
+                  }`}
+                  style={{ backgroundColor: w.foreground }}
+                  title={`${w.name}: ${w.foreground} / ${w.muted}`}
+                  aria-label={w.name}
+                >
+                  <span className="w-1/2 h-0.5 rounded shrink-0 opacity-70" style={{ backgroundColor: w.muted }} aria-hidden />
+                </button>
+              ))}
+            </div>
+            <p className="text-[9px] text-mutedForeground mt-1">Light grays, dark, and tinted text colours</p>
           </div>
 
           {/* Colour */}
