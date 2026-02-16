@@ -207,6 +207,54 @@ export const THEME_COLOURS = [
   { id: 'matte-mauve', name: 'Matte Mauve', primary: '#8b7a8e', primaryBright: '#a594a8', primaryDark: '#6a5c6e', foregroundOnPrimary: '#ffffff' },
   { id: 'matte-navy', name: 'Matte Navy', primary: '#334155', primaryBright: '#475569', primaryDark: '#1e293b', foregroundOnPrimary: '#ffffff' },
   { id: 'matte-terracotta', name: 'Matte Terracotta', primary: '#a67c6b', primaryBright: '#c49a8a', primaryDark: '#7a5a4a', foregroundOnPrimary: '#ffffff' },
+
+  /* Extra deep darks */
+  { id: 'deep-ink', name: 'Deep Ink', primary: '#0f172a', primaryBright: '#1e293b', primaryDark: '#020617', foregroundOnPrimary: '#ffffff' },
+  { id: 'pitch', name: 'Pitch', primary: '#18181b', primaryBright: '#27272a', primaryDark: '#09090b', foregroundOnPrimary: '#ffffff' },
+  { id: 'deep-navy', name: 'Deep Navy', primary: '#0c1929', primaryBright: '#1e3a5f', primaryDark: '#051018', foregroundOnPrimary: '#ffffff' },
+  { id: 'deep-forest', name: 'Deep Forest', primary: '#052e16', primaryBright: '#14532d', primaryDark: '#021c0e', foregroundOnPrimary: '#ffffff' },
+  { id: 'deep-wine', name: 'Deep Wine', primary: '#450a0a', primaryBright: '#7f1d1d', primaryDark: '#2a0606', foregroundOnPrimary: '#ffffff' },
+  { id: 'deep-plum', name: 'Deep Plum', primary: '#3b0764', primaryBright: '#581c87', primaryDark: '#1e0332', foregroundOnPrimary: '#ffffff' },
+  { id: 'shadow-dark', name: 'Shadow Dark', primary: '#1f2937', primaryBright: '#374151', primaryDark: '#111827', foregroundOnPrimary: '#ffffff' },
+  { id: 'iron-dark', name: 'Iron Dark', primary: '#27272a', primaryBright: '#3f3f46', primaryDark: '#18181b', foregroundOnPrimary: '#ffffff' },
+  { id: 'slate-deep', name: 'Slate Deep', primary: '#0f172a', primaryBright: '#1e293b', primaryDark: '#020617', foregroundOnPrimary: '#ffffff' },
+  { id: 'teal-deep', name: 'Teal Deep', primary: '#042f2e', primaryBright: '#134e4a', primaryDark: '#021c1b', foregroundOnPrimary: '#ffffff' },
+  /* Extra deep lights */
+  { id: 'silk', name: 'Silk', primary: '#fefefe', primaryBright: '#ffffff', primaryDark: '#f5f5f5', foregroundOnPrimary: '#000000' },
+  { id: 'snow-white', name: 'Snow White', primary: '#fffefe', primaryBright: '#ffffff', primaryDark: '#fafafa', foregroundOnPrimary: '#000000' },
+  { id: 'linen-light', name: 'Linen Light', primary: '#fdf8f3', primaryBright: '#fefaf5', primaryDark: '#f5ebe0', foregroundOnPrimary: '#000000' },
+  { id: 'pearl-white', name: 'Pearl White', primary: '#fcfcfb', primaryBright: '#ffffff', primaryDark: '#f0f0ee', foregroundOnPrimary: '#000000' },
+  { id: 'ivory-light', name: 'Ivory Light', primary: '#fffff0', primaryBright: '#fffffa', primaryDark: '#f5f5e6', foregroundOnPrimary: '#000000' },
+  { id: 'cream-light', name: 'Cream Light', primary: '#fffef5', primaryBright: '#fffffb', primaryDark: '#faf8eb', foregroundOnPrimary: '#000000' },
+  { id: 'frost-white', name: 'Frost White', primary: '#f0faff', primaryBright: '#f8fcff', primaryDark: '#e0f2fe', foregroundOnPrimary: '#000000' },
+  { id: 'blush-white', name: 'Blush White', primary: '#fff5f8', primaryBright: '#fffafc', primaryDark: '#fce7ef', foregroundOnPrimary: '#000000' },
+  { id: 'mint-white', name: 'Mint White', primary: '#f0fff8', primaryBright: '#f7fffc', primaryDark: '#d1fae5', foregroundOnPrimary: '#000000' },
+  /* Extra mid tones */
+  { id: 'storm', name: 'Storm', primary: '#4b5563', primaryBright: '#6b7280', primaryDark: '#374151', foregroundOnPrimary: '#ffffff' },
+  { id: 'fog', name: 'Fog', primary: '#9ca3af', primaryBright: '#d1d5db', primaryDark: '#6b7280', foregroundOnPrimary: '#000000' },
+  { id: 'dove', name: 'Dove', primary: '#e5e7eb', primaryBright: '#f3f4f6', primaryDark: '#d1d5db', foregroundOnPrimary: '#000000' },
+  { id: 'flint', name: 'Flint', primary: '#57534e', primaryBright: '#78716c', primaryDark: '#44403c', foregroundOnPrimary: '#ffffff' },
+  { id: 'battleship', name: 'Battleship', primary: '#64748b', primaryBright: '#94a3b8', primaryDark: '#475569', foregroundOnPrimary: '#ffffff' },
+  { id: 'mink', name: 'Mink', primary: '#78716c', primaryBright: '#a8a29e', primaryDark: '#57534e', foregroundOnPrimary: '#ffffff' },
+  { id: 'taupe', name: 'Taupe', primary: '#8b7355', primaryBright: '#a88b6a', primaryDark: '#6b5842', foregroundOnPrimary: '#ffffff' },
+  { id: 'sage-mid', name: 'Sage Mid', primary: '#6b7c6b', primaryBright: '#8a9e8a', primaryDark: '#4d5c4d', foregroundOnPrimary: '#ffffff' },
+  { id: 'dust', name: 'Dust', primary: '#a8a29e', primaryBright: '#d6d3d1', primaryDark: '#78716c', foregroundOnPrimary: '#000000' },
+];
+
+/** Display order: sections for main/button/line colours. Colours not listed go in "More". */
+export const THEME_COLOUR_SECTIONS = [
+  { label: 'Default', ids: ['gold'] },
+  { label: 'Deep dark', ids: ['obsidian', 'carbon', 'gunmetal', 'deep-red', 'deep-blue', 'deep-green', 'deep-purple', 'deep-ink', 'pitch', 'deep-navy', 'deep-forest', 'deep-wine', 'deep-plum', 'shadow-dark', 'iron-dark', 'slate-deep', 'teal-deep', 'midnight', 'twilight'] },
+  { label: 'Dark', ids: ['charcoal', 'graphite', 'blood', 'navy', 'ocean', 'forest', 'wine', 'plum', 'ash', 'smoke', 'pewter', 'titanium', 'steel', 'aubergine', 'spruce', 'merlot', 'cedar'] },
+  { label: 'Mid', ids: ['slate', 'zinc', 'neutral', 'stone', 'storm', 'fog', 'flint', 'battleship', 'mink', 'taupe', 'sage-mid', 'dust', 'denim', 'moonlight', 'pewter-blue', 'mauve', 'sepia', 'clay', 'rose-quartz', 'bronze-green'] },
+  { label: 'Light', ids: ['cream', 'ivory', 'silver', 'chrome', 'dove', 'silk', 'snow-white', 'linen-light', 'pearl-white', 'ivory-light', 'cream-light', 'frost-white', 'blush-white', 'mint-white'] },
+  { label: 'Bright & vivid', ids: ['amber', 'yellow', 'orange', 'red', 'rose', 'crimson', 'fuchsia', 'violet', 'purple', 'indigo', 'blue', 'sky', 'cyan', 'teal', 'emerald', 'green', 'lime', 'olive', 'electric', 'royal', 'coral', 'peach', 'honey', 'mustard', 'saffron', 'tangerine', 'salmon'] },
+  { label: 'Pastel', ids: ['pastel-pink', 'pastel-blue', 'pastel-green', 'pastel-purple', 'pastel-yellow'] },
+  { label: 'Neon', ids: ['neon-green', 'neon-pink', 'neon-blue', 'neon-orange'] },
+  { label: 'Mixed & blends', ids: ['rose-gold', 'copper-rose', 'gold-amber', 'teal-blue', 'violet-blue', 'blue-teal', 'sunset-blend', 'forest-teal', 'lavender-rose', 'peach-gold', 'coral-pink', 'mint-blue', 'plum-violet', 'amber-copper', 'olive-gold', 'sage-blue', 'dusty-rose', 'muted-teal', 'blush', 'sea-green', 'berry', 'slate-blue', 'dusty-lavender', 'terracotta', 'honey-rose', 'emerald-teal', 'indigo-violet', 'rust-gold', 'wine-plum', 'frost-blue', 'moss', 'thistle', 'apricot', 'camel', 'bronze', 'copper', 'rust', 'magenta', 'lavender', 'periwinkle', 'aqua', 'jade', 'sage', 'chartreuse', 'mint'] },
+  { label: 'Gradients', ids: ['gradient-green-teal', 'gradient-teal-pink', 'gradient-orange-yellow', 'gradient-lime', 'gradient-blue-deep', 'gradient-yellow-gold', 'gradient-blue-orange', 'gradient-blue-sky', 'gradient-green-forest', 'gradient-magenta-lavender', 'gradient-pink-purple', 'gradient-peach-pink', 'tone-2-sunset', 'tone-2-ocean', 'tone-2-forest', 'tone-2-berry', 'tone-3-fire', 'tone-3-ocean-deep', 'tone-3-sunset', 'tone-3-aurora', 'tone-3-raspberry', 'tone-3-mint', 'tone-3-lavender', 'tone-4-rainbow', 'tone-4-sunset', 'tone-4-ocean', 'tone-4-forest', 'tone-4-candy', 'tone-4-neon', 'tone-4-ember', 'tone-4-ice', 'tone-4-wine', 'tone-2-teal-orange', 'tone-2-dark-teal-amber', 'tone-2-deep-teal-orange', 'tone-3-teal-orange', 'tone-3-dark-teal-amber', 'tone-3-navy-teal-orange', 'tone-4-teal-orange', 'tone-4-dark-teal-warm', 'tone-2-cyan-amber', 'tone-2-slate-orange', 'tone-3-midnight-teal-amber', 'tone-4-ocean-fire'] },
+  { label: 'Glossy & matte', ids: ['glossy-gold', 'glossy-teal', 'glossy-blue', 'glossy-rose', 'glossy-emerald', 'glossy-violet', 'matte-slate', 'matte-sage', 'matte-dust', 'matte-mauve', 'matte-navy', 'matte-terracotta'] },
+  { label: 'More', ids: ['sunset', 'sunrise', 'pale-gold', 'antique-brass', 'lagoon', 'mulberry', 'steel-blue'] },
 ];
 
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */
@@ -423,6 +471,51 @@ export const THEME_WRITING_COLOURS = [
   { id: 'grey-650', name: 'Grey 650', foreground: '#616161', muted: '#303030' },
   { id: 'grey-750', name: 'Grey 750', foreground: '#424242', muted: '#212121' },
   { id: 'grey-850', name: 'Grey 850', foreground: '#303030', muted: '#121212' },
+  /* Extra deep darks */
+  { id: 'ink-deep', name: 'Ink Deep', foreground: '#0f172a', muted: '#1e293b' },
+  { id: 'pitch-text', name: 'Pitch', foreground: '#18181b', muted: '#27272a' },
+  { id: 'obsidian-deep', name: 'Obsidian Deep', foreground: '#09090b', muted: '#18181b' },
+  { id: 'midnight-ink', name: 'Midnight Ink', foreground: '#0c1929', muted: '#1e3a5f' },
+  { id: 'forest-ink', name: 'Forest Ink', foreground: '#052e16', muted: '#14532d' },
+  { id: 'wine-ink', name: 'Wine Ink', foreground: '#450a0a', muted: '#7f1d1d' },
+  { id: 'plum-ink', name: 'Plum Ink', foreground: '#3b0764', muted: '#581c87' },
+  { id: 'slate-ink', name: 'Slate Ink', foreground: '#0f172a', muted: '#334155' },
+  { id: 'teal-ink', name: 'Teal Ink', foreground: '#042f2e', muted: '#134e4a' },
+  { id: 'carbon-deep', name: 'Carbon Deep', foreground: '#27272a', muted: '#3f3f46' },
+  /* Extra deep lights */
+  { id: 'silk-text', name: 'Silk', foreground: '#fefefe', muted: '#e8e8e8' },
+  { id: 'snow-deep', name: 'Snow Deep', foreground: '#fffefe', muted: '#f0f0f0' },
+  { id: 'linen-text', name: 'Linen', foreground: '#fdf8f3', muted: '#f0e6dc' },
+  { id: 'pearl-deep', name: 'Pearl Deep', foreground: '#fcfcfb', muted: '#e8e8e6' },
+  { id: 'ivory-deep', name: 'Ivory Deep', foreground: '#fffff0', muted: '#f5f5e6' },
+  { id: 'cream-deep', name: 'Cream Deep', foreground: '#fffef5', muted: '#f5f0e8' },
+  { id: 'frost-text', name: 'Frost', foreground: '#f0faff', muted: '#bae6fd' },
+  { id: 'blush-light', name: 'Blush Light', foreground: '#fff5f8', muted: '#fce7ef' },
+  { id: 'mint-light', name: 'Mint Light', foreground: '#f0fff8', muted: '#a7f3d0' },
+  /* Extra mid */
+  { id: 'storm-text', name: 'Storm', foreground: '#4b5563', muted: '#6b7280' },
+  { id: 'fog-text', name: 'Fog', foreground: '#9ca3af', muted: '#d1d5db' },
+  { id: 'dove-text', name: 'Dove', foreground: '#e5e7eb', muted: '#9ca3af' },
+  { id: 'flint-text', name: 'Flint', foreground: '#57534e', muted: '#78716c' },
+  { id: 'battleship-text', name: 'Battleship', foreground: '#64748b', muted: '#94a3b8' },
+  { id: 'mink-text', name: 'Mink', foreground: '#78716c', muted: '#a8a29e' },
+  { id: 'taupe-text', name: 'Taupe', foreground: '#8b7355', muted: '#a88b6a' },
+  { id: 'dust-text', name: 'Dust', foreground: '#a8a29e', muted: '#d6d3d1' },
+];
+
+/** Display order: sections for writing (text) colours. */
+export const THEME_WRITING_SECTIONS = [
+  { label: 'Default & light', ids: ['default', 'snow', 'pearl', 'ivory-text', 'cream-text', 'warm-white', 'cool-white', 'bone', 'eggshell', 'linen', 'vanilla', 'honeydew', 'azure', 'alabaster', 'chalk', 'milk', 'silk-text', 'snow-deep', 'linen-text', 'pearl-deep', 'ivory-deep', 'cream-deep', 'frost-text', 'blush-light', 'mint-light'] },
+  { label: 'Grays', ids: ['gray-50', 'gray-100', 'gray-200', 'gray-300', 'gray-400', 'gray-500', 'zinc-100', 'zinc-200', 'zinc-300', 'zinc-400', 'zinc-500', 'slate-200', 'slate-300', 'slate-400', 'slate-500', 'stone-200', 'stone-300', 'stone-400', 'neutral-300', 'neutral-400', 'storm-text', 'fog-text', 'dove-text', 'flint-text', 'battleship-text', 'mink-text', 'taupe-text', 'dust-text'] },
+  { label: 'Dark', ids: ['charcoal-text', 'graphite-text', 'smoke-text', 'carbon-text', 'obsidian-text', 'ink', 'midnight-text', 'iron', 'lead', 'ash-dark', 'graphite-dark', 'slate-dark', 'navy-text', 'forest-text', 'burgundy-text', 'plum-dark', 'dark-1', 'dark-2', 'dark-3', 'dark-charcoal', 'dark-brown-grey', 'dark-indigo', 'dark-blue', 'dark-purple', 'dark-maroon', 'dark-forest', 'dark-teal', 'dark-slate', 'shadow', 'onyx', 'ink-deep', 'pitch-text', 'obsidian-deep', 'midnight-ink', 'forest-ink', 'wine-ink', 'plum-ink', 'slate-ink', 'teal-ink', 'carbon-deep'] },
+  { label: 'Tinted – warm', ids: ['warm-gray', 'sepia-text', 'parchment', 'amber-text', 'saffron-text', 'butter', 'wheat', 'sand', 'caramel', 'toast', 'terracotta-text', 'clay'] },
+  { label: 'Tinted – cool', ids: ['cool-gray', 'blue-gray', 'frost', 'ice', 'mist', 'steel-text', 'silver-text'] },
+  { label: 'Tinted – pastels', ids: ['blush-text', 'rose-text', 'pink-text', 'lavender-text', 'lilac', 'violet-text', 'mauve', 'mint-text', 'sage-text', 'seafoam', 'aqua-text', 'sky-text', 'powder-blue', 'periwinkle-text'] },
+  { label: 'Stronger tints', ids: ['gold-text', 'cream-gold', 'peach-text', 'coral-text', 'salmon', 'melon', 'lavender-rose-text', 'thistle', 'eucalyptus', 'spearmint', 'turquoise-text', 'arctic', 'cornflower', 'bluebell'] },
+  { label: 'More lights', ids: ['pure-white', 'bright-white', 'paper', 'off-white', 'light-1', 'light-2', 'light-3', 'pearl-light', 'snow-light', 'cloud'] },
+  { label: 'Vibrant', ids: ['neon-orange', 'neon-orange-light', 'hot-pink', 'hot-pink-light', 'royal-blue', 'royal-blue-light', 'bright-green', 'bright-green-light', 'bright-yellow', 'bright-yellow-light', 'burnt-orange', 'deep-red', 'vibrant-cyan', 'vibrant-purple', 'vibrant-rose', 'electric-blue'] },
+  { label: 'Pastel lights', ids: ['pastel-orange', 'pastel-yellow', 'pastel-pink-light', 'pastel-blue-light', 'pastel-green-light', 'pastel-lavender', 'pastel-mint', 'pastel-sky', 'pastel-peach', 'pastel-rose'] },
+  { label: 'Mid greys', ids: ['grey-150', 'grey-250', 'grey-350', 'grey-450', 'grey-550', 'grey-650', 'grey-750', 'grey-850'] },
 ];
 
 export const DEFAULT_COLOUR_ID = 'gold';
