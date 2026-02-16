@@ -15,6 +15,8 @@ from server import db, get_current_user, send_notification, send_notification_to
 AUTO_CREATE_INTERVAL_SECONDS = 3 * 3600   # 3 hours between batches
 ROLL_BEFORE_NEXT_CREATE_SECONDS = 20 * 60  # roll current games 20 mins before next batch
 ENTERTAINER_CONFIG_KEY = "entertainer_config"
+# DB-backed cap: never create more open games than this (stops spam from restarts or double-runs)
+MAX_OPEN_ENTERTAINER_GAMES = 10
 
 # Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
 E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
@@ -526,10 +528,17 @@ async def _create_system_game(game_type: str, max_players: int) -> dict:
 
 
 async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
-    """Admin only: create 3–5 system games now and send notification to all users."""
+    """Admin only: create 3–5 system games now and send notification to all users. Blocked if open games at cap (DB)."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
+    open_count = await _count_open_entertainer_games()
+    if open_count >= MAX_OPEN_ENTERTAINER_GAMES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many open games ({open_count}). Roll or wait for some to settle before creating more (max {MAX_OPEN_ENTERTAINER_GAMES}).",
+        )
     n = random.randint(3, 5)
+    n = min(n, MAX_OPEN_ENTERTAINER_GAMES - open_count)
     created = []
     for _ in range(n):
         game_type = random.choice(["dice", "gbox"])
@@ -554,17 +563,35 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
     return {"message": f"Created {len(created)} games", "count": len(created), "games": created}
 
 
+async def _count_open_entertainer_games() -> int:
+    """Number of games that are open or full (not yet completed). Used to enforce MAX_OPEN_ENTERTAINER_GAMES."""
+    return await db.entertainer_games.count_documents({"status": {"$in": ["open", "full"]}})
+
+
 async def run_auto_create_if_enabled():
-    """Called by scheduled task every 3h: if auto_create_enabled, create 3–5 games and notify."""
+    """Called by scheduled task every 3h: if auto_create_enabled, create 3–5 games and notify. DB guards prevent spam."""
     doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"_id": 0})
     if not doc or not doc.get("auto_create_enabled"):
         return
+    # Time guard: don't create if we already ran recently (e.g. server restarts within same interval)
+    last_at = _parse_iso(doc.get("last_auto_create_at"))
+    now = datetime.now(timezone.utc)
+    if last_at and (now - last_at).total_seconds() < AUTO_CREATE_INTERVAL_SECONDS - 60:
+        return
+    # Cap: don't add more open games if we're at or over the limit
+    open_count = await _count_open_entertainer_games()
+    if open_count >= MAX_OPEN_ENTERTAINER_GAMES:
+        return
     n = random.randint(3, 5)
+    # Don't create more than would exceed the cap
+    n = min(n, MAX_OPEN_ENTERTAINER_GAMES - open_count)
+    if n <= 0:
+        return
     for _ in range(n):
         game_type = random.choice(["dice", "gbox"])
         max_players = random.randint(2, 10)
         await _create_system_game(game_type, max_players)
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = now.isoformat()
     await db.game_config.update_one(
         {"key": ENTERTAINER_CONFIG_KEY},
         {"$set": {"key": ENTERTAINER_CONFIG_KEY, "last_auto_create_at": now_iso}},
