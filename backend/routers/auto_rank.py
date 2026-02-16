@@ -488,3 +488,70 @@ def register(router):
             upsert=True,
         )
         return {"interval_seconds": interval, "message": f"Auto Rank will run every {interval} seconds after each cycle."}
+
+    class AdminUserUpdateBody(BaseModel):
+        telegram_chat_id: Optional[str] = None
+        auto_rank_enabled: Optional[bool] = None
+
+    @router.get("/admin/auto-rank/users")
+    async def admin_list_auto_rank_users(current_user: dict = Depends(get_current_user)):
+        """List alive users who have Auto Rank purchased. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        cursor = db.users.find(
+            {
+                "is_dead": {"$ne": True},
+                "$or": [
+                    {"auto_rank_purchased": True},
+                    {"auto_rank_enabled": True},
+                ],
+            },
+            {"_id": 0, "id": 1, "username": 1, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "telegram_chat_id": 1},
+        )
+        users = await cursor.to_list(500)
+        return {
+            "users": [
+                {
+                    "id": u.get("id"),
+                    "username": u.get("username"),
+                    "auto_rank_enabled": u.get("auto_rank_enabled", False),
+                    "auto_rank_crimes": u.get("auto_rank_crimes", True),
+                    "auto_rank_gta": u.get("auto_rank_gta", True),
+                    "auto_rank_bust_every_5_sec": u.get("auto_rank_bust_every_5_sec", False),
+                    "telegram_chat_id": u.get("telegram_chat_id") or "",
+                }
+                for u in users
+            ],
+        }
+
+    @router.patch("/admin/auto-rank/users/{username}")
+    async def admin_update_auto_rank_user(
+        username: str,
+        body: AdminUserUpdateBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Update a user's Auto Rank: set telegram_chat_id or enable/disable. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        import re
+        username_ci = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE) if username else None
+        if not username_ci:
+            raise HTTPException(status_code=400, detail="Username required")
+        target = await db.users.find_one({"username": username_ci}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        updates = {}
+        if body.telegram_chat_id is not None:
+            updates["telegram_chat_id"] = (body.telegram_chat_id or "").strip() or None
+        if body.auto_rank_enabled is not None:
+            updates["auto_rank_enabled"] = body.auto_rank_enabled
+        if not updates:
+            return {"message": "No changes", "username": target.get("username")}
+        await db.users.update_one({"id": target["id"]}, {"$set": updates})
+        updated = await db.users.find_one({"id": target["id"]}, {"_id": 0, "auto_rank_enabled": 1, "telegram_chat_id": 1})
+        return {
+            "message": "Updated",
+            "username": target.get("username"),
+            "auto_rank_enabled": updated.get("auto_rank_enabled", False),
+            "telegram_chat_id": updated.get("telegram_chat_id") or "",
+        }

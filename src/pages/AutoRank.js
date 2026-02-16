@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -24,6 +24,10 @@ export default function AutoRank() {
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [inputValue, setInputValue] = useState('120');
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [adminUsersLoading, setAdminUsersLoading] = useState(false);
+  const [editingChatId, setEditingChatId] = useState({});
+  const [savingUser, setSavingUser] = useState(null);
 
   useEffect(() => {
     const run = async () => {
@@ -44,10 +48,13 @@ export default function AutoRank() {
             telegram_chat_id_set: !!meRes.data.telegram_chat_id_set,
           });
         }
-        if (checkRes.data?.is_admin && intervalRes?.data) {
-          setIntervalSeconds(intervalRes.data.interval_seconds ?? 120);
-          setInputValue(String(intervalRes.data.interval_seconds ?? 120));
-          setGlobalEnabled(intervalRes.data.enabled !== false);
+        if (checkRes.data?.is_admin) {
+          if (intervalRes?.data) {
+            setIntervalSeconds(intervalRes.data.interval_seconds ?? 120);
+            setInputValue(String(intervalRes.data.interval_seconds ?? 120));
+            setGlobalEnabled(intervalRes.data.enabled !== false);
+          }
+          api.get('/admin/auto-rank/users').then((r) => setAdminUsers(r.data?.users ?? [])).catch(() => setAdminUsers([]));
         }
       } catch {
         setPrefs((p) => ({ ...p, auto_rank_purchased: false }));
@@ -120,6 +127,39 @@ export default function AutoRank() {
       toast.error(e.response?.data?.detail ?? 'Failed to stop');
     } finally {
       setToggling(false);
+    }
+  };
+
+  const fetchAdminUsers = () => {
+    if (!isAdmin) return;
+    setAdminUsersLoading(true);
+    api.get('/admin/auto-rank/users').then((r) => setAdminUsers(r.data?.users ?? [])).catch(() => setAdminUsers([])).finally(() => setAdminUsersLoading(false));
+  };
+
+  const handleSaveUserChatId = async (username, newChatId) => {
+    setSavingUser(username);
+    try {
+      await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { telegram_chat_id: newChatId || null });
+      toast.success('Chat ID updated');
+      setEditingChatId((p) => ({ ...p, [username]: false }));
+      fetchAdminUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
+  const handleDisableUser = async (username) => {
+    setSavingUser(username);
+    try {
+      await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { auto_rank_enabled: false });
+      toast.success(`${username}'s Auto Rank disabled`);
+      fetchAdminUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to disable');
+    } finally {
+      setSavingUser(null);
     }
   };
 
@@ -281,6 +321,116 @@ export default function AutoRank() {
               <p className="text-xs text-mutedForeground font-heading">
                 Each cycle runs for all users who have Auto Rank enabled; then the next cycle starts after this interval.
               </p>
+            </div>
+          </div>
+        )}
+
+        {/* Admin: list all alive users with Auto Rank purchased */}
+        {isAdmin && (
+          <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/20`}>
+            <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-primary" />
+                <span className="text-sm md:text-base font-heading font-bold text-primary uppercase tracking-wider">Auto Rank users (alive)</span>
+              </div>
+              <button
+                type="button"
+                onClick={fetchAdminUsers}
+                disabled={adminUsersLoading}
+                className="p-1.5 rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50"
+                title="Refresh list"
+              >
+                <RefreshCw className={`w-4 h-4 ${adminUsersLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <div className="p-4 overflow-x-auto">
+              {adminUsersLoading ? (
+                <p className="text-sm text-mutedForeground font-heading">Loading...</p>
+              ) : adminUsers.length === 0 ? (
+                <p className="text-sm text-mutedForeground font-heading">No alive users with Auto Rank purchased.</p>
+              ) : (
+                <table className="w-full text-left border-collapse text-sm font-heading">
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Username</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Enabled</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Crimes</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">GTA</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Bust 5s</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Chat ID</th>
+                      <th className="py-2 font-bold text-mutedForeground uppercase text-xs">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminUsers.map((u) => (
+                      <tr key={u.id || u.username} className="border-b border-border/50">
+                        <td className="py-2 pr-2 text-foreground font-medium">{u.username}</td>
+                        <td className="py-2 pr-2">
+                          <span className={u.auto_rank_enabled ? 'text-emerald-400' : 'text-mutedForeground'}>{u.auto_rank_enabled ? 'Yes' : 'No'}</span>
+                        </td>
+                        <td className="py-2 pr-2">{u.auto_rank_crimes ? 'On' : 'Off'}</td>
+                        <td className="py-2 pr-2">{u.auto_rank_gta ? 'On' : 'Off'}</td>
+                        <td className="py-2 pr-2">{u.auto_rank_bust_every_5_sec ? 'On' : 'Off'}</td>
+                        <td className="py-2 pr-2">
+                          {editingChatId[u.username] ? (
+                            <div className="flex gap-1 items-center">
+                              <input
+                                type="text"
+                                defaultValue={u.telegram_chat_id}
+                                id={`chat-${u.username}`}
+                                placeholder="Chat ID"
+                                className="w-28 px-2 py-1 rounded bg-secondary border border-border text-foreground text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = document.getElementById(`chat-${u.username}`)?.value ?? '';
+                                  handleSaveUserChatId(u.username, val.trim() || null);
+                                }}
+                                disabled={savingUser === u.username}
+                                className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-bold disabled:opacity-50"
+                              >
+                                {savingUser === u.username ? '...' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingChatId((p) => ({ ...p, [u.username]: false }))}
+                                className="px-2 py-1 rounded bg-secondary border border-border text-mutedForeground text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-mutedForeground font-mono text-xs">{u.telegram_chat_id || '—'}</span>
+                          )}
+                          {!editingChatId[u.username] && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingChatId((p) => ({ ...p, [u.username]: true }))}
+                              className="ml-1 p-0.5 rounded text-primary hover:bg-primary/20"
+                              title="Edit chat ID"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
+                        <td className="py-2">
+                          {u.auto_rank_enabled && (
+                            <button
+                              type="button"
+                              onClick={() => handleDisableUser(u.username)}
+                              disabled={savingUser === u.username}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-bold hover:bg-red-500/30 disabled:opacity-50"
+                            >
+                              <Ban className="w-3.5 h-3.5" /> Disable
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         )}
