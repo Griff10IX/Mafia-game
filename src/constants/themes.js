@@ -178,6 +178,20 @@ export const THEME_COLOURS = [
   { id: 'tone-4-ember', name: '4-tone Ember', stops: ['#370617', '#9d0208', '#dc2f02', '#e85d04'], primary: '#370617', primaryBright: '#370617', primaryDark: '#e85d04', foregroundOnPrimary: '#ffffff' },
   { id: 'tone-4-ice', name: '4-tone Ice', stops: ['#012a4a', '#013a63', '#014f86', '#89c2d9'], primary: '#012a4a', primaryBright: '#012a4a', primaryDark: '#89c2d9', foregroundOnPrimary: '#ffffff' },
   { id: 'tone-4-wine', name: '4-tone Wine', stops: ['#3c096c', '#5a189a', '#7b2cbf', '#c77dff'], primary: '#3c096c', primaryBright: '#3c096c', primaryDark: '#c77dff', foregroundOnPrimary: '#ffffff' },
+
+  /* Dark teals + oranges / warm combos */
+  { id: 'tone-2-teal-orange', name: 'Teal → Orange', stops: ['#0d9488', '#ea580c'], primary: '#0d9488', primaryBright: '#0d9488', primaryDark: '#ea580c', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-2-dark-teal-amber', name: 'Dark Teal → Amber', stops: ['#134e4a', '#f59e0b'], primary: '#134e4a', primaryBright: '#134e4a', primaryDark: '#f59e0b', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-2-deep-teal-orange', name: 'Deep Teal → Orange', stops: ['#0f766e', '#f97316'], primary: '#0f766e', primaryBright: '#0f766e', primaryDark: '#f97316', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-3-teal-orange', name: '3-tone Teal Orange', stops: ['#0f766e', '#14b8a6', '#f97316'], primary: '#0f766e', primaryBright: '#0f766e', primaryDark: '#f97316', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-3-dark-teal-amber', name: '3-tone Dark Teal Amber', stops: ['#134e4a', '#0d9488', '#fbbf24'], primary: '#134e4a', primaryBright: '#134e4a', primaryDark: '#fbbf24', foregroundOnPrimary: '#000000' },
+  { id: 'tone-3-navy-teal-orange', name: '3-tone Navy Teal Orange', stops: ['#0c4a6e', '#0d9488', '#ea580c'], primary: '#0c4a6e', primaryBright: '#0c4a6e', primaryDark: '#ea580c', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-teal-orange', name: '4-tone Teal Orange', stops: ['#134e4a', '#0d9488', '#14b8a6', '#f97316'], primary: '#134e4a', primaryBright: '#134e4a', primaryDark: '#f97316', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-dark-teal-warm', name: '4-tone Dark Teal Warm', stops: ['#042f2e', '#0d9488', '#f59e0b', '#fbbf24'], primary: '#042f2e', primaryBright: '#042f2e', primaryDark: '#fbbf24', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-2-cyan-amber', name: 'Cyan → Amber', stops: ['#0891b2', '#f59e0b'], primary: '#0891b2', primaryBright: '#0891b2', primaryDark: '#f59e0b', foregroundOnPrimary: '#000000' },
+  { id: 'tone-2-slate-orange', name: 'Slate → Orange', stops: ['#475569', '#ea580c'], primary: '#475569', primaryBright: '#475569', primaryDark: '#ea580c', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-3-midnight-teal-amber', name: '3-tone Midnight Teal Amber', stops: ['#0f172a', '#0d9488', '#f59e0b'], primary: '#0f172a', primaryBright: '#0f172a', primaryDark: '#f59e0b', foregroundOnPrimary: '#ffffff' },
+  { id: 'tone-4-ocean-fire', name: '4-tone Ocean Fire', stops: ['#0c4a6e', '#0284c7', '#0d9488', '#ea580c'], primary: '#0c4a6e', primaryBright: '#0c4a6e', primaryDark: '#ea580c', foregroundOnPrimary: '#ffffff' },
 ];
 
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */

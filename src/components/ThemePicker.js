@@ -1,17 +1,23 @@
 import { useState } from 'react';
-import { Palette, X, RotateCcw } from 'lucide-react';
+import { Palette, X, RotateCcw, MousePointer2 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { THEME_COLOURS, THEME_TEXTURES, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, setColour, setTexture } = useTheme();
+  const { colourId, textureId, buttonColourId, setColour, setTexture, setButtonColour, resetButtonToDefault } = useTheme();
   const [colourPage, setColourPage] = useState(0);
+  const [buttonPage, setButtonPage] = useState(0);
   const COLOURS_PER_PAGE = 24;
   const totalColourPages = Math.ceil(THEME_COLOURS.length / COLOURS_PER_PAGE);
+  const totalButtonPages = Math.ceil(THEME_COLOURS.length / COLOURS_PER_PAGE);
   const coloursSlice = THEME_COLOURS.slice(
     colourPage * COLOURS_PER_PAGE,
     (colourPage + 1) * COLOURS_PER_PAGE
+  );
+  const buttonColoursSlice = THEME_COLOURS.slice(
+    buttonPage * COLOURS_PER_PAGE,
+    (buttonPage + 1) * COLOURS_PER_PAGE
   );
 
   if (!open) return null;
@@ -91,6 +97,71 @@ export default function ThemePicker({ open, onClose }) {
                       i === colourPage ? 'bg-primary' : 'bg-zinc-600 hover:bg-zinc-500'
                     }`}
                     aria-label={`Page ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Button colour – same palette; null = use main theme */}
+          <div>
+            <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <MousePointer2 className="w-3.5 h-3.5" />
+              Button colour
+            </p>
+            <div className="flex items-center gap-2 mb-2">
+              <button
+                type="button"
+                onClick={resetButtonToDefault}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                data-testid="theme-reset-buttons"
+                title="Use same as main theme"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Reset buttons to default
+              </button>
+              {buttonColourId === null && (
+                <span className="text-[10px] text-mutedForeground">(using main theme)</span>
+              )}
+            </div>
+            <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+              {buttonColoursSlice.map((c) => {
+                const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
+                const isGradient = c.id.startsWith('gradient-') || stops;
+                const swatchStyle = stops
+                  ? { background: `linear-gradient(135deg, ${stops.join(', ')})` }
+                  : isGradient
+                    ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` }
+                    : { backgroundColor: c.primary };
+                const isSelected = buttonColourId === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setButtonColour(c.id)}
+                    className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${
+                      isSelected
+                        ? 'border-primary ring-2 ring-primary/30'
+                        : 'border-transparent hover:border-primary/50'
+                    }`}
+                    style={swatchStyle}
+                    title={c.name}
+                    aria-label={c.name}
+                  />
+                );
+              })}
+            </div>
+            {totalButtonPages > 1 && (
+              <div className="flex items-center justify-center gap-1 mt-2">
+                {Array.from({ length: totalButtonPages }, (_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setButtonPage(i)}
+                    className={`w-2 h-2 rounded-full transition-colors ${
+                      i === buttonPage ? 'bg-primary' : 'bg-zinc-600 hover:bg-zinc-500'
+                    }`}
+                    aria-label={`Button page ${i + 1}`}
                   />
                 ))}
               </div>

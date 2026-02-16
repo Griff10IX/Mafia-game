@@ -3,6 +3,7 @@ import { getThemeColour, getThemeTexture, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID 
 
 const STORAGE_KEY_COLOUR = 'app_theme_colour';
 const STORAGE_KEY_TEXTURE = 'app_theme_texture';
+const STORAGE_KEY_BUTTON = 'app_theme_button';
 
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -97,6 +98,42 @@ function applyColourToDocument(colour) {
   }
 }
 
+function applyButtonColourToDocument(buttonColour) {
+  if (!buttonColour) return;
+  const root = document.documentElement;
+  const stops = buttonColour.stops && buttonColour.stops.length >= 2 ? buttonColour.stops : null;
+  const primary = stops ? stops[0] : buttonColour.primary;
+  const primaryBright = stops ? stops[0] : buttonColour.primaryBright;
+  const primaryDark = stops ? stops[stops.length - 1] : buttonColour.primaryDark;
+
+  const hsl = hexToHsl(primary);
+  root.style.setProperty('--button-primary', `${hsl.h} ${hsl.s}% ${hsl.l}%`);
+  const fgIsWhite = buttonColour.foregroundOnPrimary.toLowerCase() === '#ffffff' || buttonColour.foregroundOnPrimary.toLowerCase() === '#fff';
+  root.style.setProperty('--button-foreground', fgIsWhite ? '0 0% 100%' : '0 0% 0%');
+  root.style.setProperty('--noir-button-foreground', buttonColour.foregroundOnPrimary);
+
+  if (stops) {
+    const g1 = stops[0];
+    const g2 = stops[1] ?? stops[0];
+    const g3 = stops[2] ?? g2;
+    const g4 = stops[3] ?? g3;
+    root.style.setProperty('--noir-button-gradient-1', g1);
+    root.style.setProperty('--noir-button-gradient-2', g2);
+    root.style.setProperty('--noir-button-gradient-3', g3);
+    root.style.setProperty('--noir-button-gradient-4', g4);
+  } else {
+    root.style.setProperty('--noir-button-gradient-1', primaryBright);
+    root.style.setProperty('--noir-button-gradient-2', primaryDark);
+    root.style.setProperty('--noir-button-gradient-3', primaryDark);
+    root.style.setProperty('--noir-button-gradient-4', primaryDark);
+  }
+
+  const rgb = hexToRgb(primary);
+  if (rgb) {
+    root.style.setProperty('--noir-button-primary-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
+  }
+}
+
 function applyTextureToDocument(textureId) {
   const body = document.body;
   const prev = body.getAttribute('data-texture');
@@ -123,11 +160,21 @@ export function ThemeProvider({ children }) {
       return DEFAULT_TEXTURE_ID;
     }
   });
+  const [buttonColourId, setButtonColourIdState] = useState(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEY_BUTTON);
+      return v === '' ? null : (v || null);
+    } catch {
+      return null;
+    }
+  });
 
   useEffect(() => {
     const colour = getThemeColour(colourId);
     applyColourToDocument(colour);
-  }, [colourId]);
+    const buttonColour = buttonColourId ? getThemeColour(buttonColourId) : colour;
+    applyButtonColourToDocument(buttonColour);
+  }, [colourId, buttonColourId]);
 
   useEffect(() => {
     applyTextureToDocument(textureId);
@@ -147,13 +194,31 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setButtonColour = useCallback((id) => {
+    setButtonColourIdState(id || null);
+    try {
+      localStorage.setItem(STORAGE_KEY_BUTTON, id || '');
+    } catch (_) {}
+  }, []);
+
+  const resetButtonToDefault = useCallback(() => {
+    setButtonColourIdState(null);
+    try {
+      localStorage.setItem(STORAGE_KEY_BUTTON, '');
+    } catch (_) {}
+  }, []);
+
   const value = {
     colourId,
     textureId,
+    buttonColourId,
     setColour,
     setTexture,
+    setButtonColour,
+    resetButtonToDefault,
     colour: getThemeColour(colourId),
     texture: getThemeTexture(textureId),
+    buttonColour: buttonColourId ? getThemeColour(buttonColourId) : null,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

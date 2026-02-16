@@ -6,6 +6,8 @@
     --foreground: 0 0% 96%;
     --primary: 43 74% 52%;
     --primary-foreground: 0 0% 100%;
+    --button-primary: var(--primary);
+    --button-foreground: var(--primary-foreground);
     --muted-foreground: 240 5% 65%;
     --border: 0 0% 18%;
   }
@@ -117,7 +119,17 @@ code {
 }
 
 .gold-glow {
-  box-shadow: 0 0 15px rgba(var(--noir-primary-rgb), 0.3);
+  box-shadow: 0 0 15px rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.3);
+}
+
+/* Buttons and primary-styled links use themeable button colour (noir button vars) */
+button.bg-primary,
+button.from-primary,
+a.bg-primary,
+a.from-primary {
+  background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
+  color: var(--noir-button-foreground) !important;
+  border-color: rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5);
 }
 
 .transition-smooth {
@@ -299,255 +311,132 @@ code {
   transition: width 3.2s cubic-bezier(0.2, 0, 0.2, 1);
 }
 
-/* Theme textures – applied via body[data-texture]. Opacity tuned so patterns are visible. */
-body[data-texture="noise"]::before {
+/* Theme textures – overlay on top of page (pointer-events: none so clicks pass through) */
+body[data-texture]::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
-  z-index: 0;
-  opacity: 0.08;
+  z-index: 9998;
+}
+body[data-texture="noise"]::before {
+  opacity: 0.14;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 body[data-texture="grid"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.08;
-  background-image: linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px);
+  opacity: 0.14;
+  background-image: linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px);
   background-size: 20px 20px;
 }
 body[data-texture="dots"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.1;
-  background-image: radial-gradient(circle, currentColor 1px, transparent 1px);
+  opacity: 0.16;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.35) 1px, transparent 1px);
   background-size: 16px 16px;
 }
 body[data-texture="lines"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.07;
-  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.05) 2px, rgba(255,255,255,0.05) 4px);
+  opacity: 0.14;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.08) 2px, rgba(255,255,255,0.08) 4px);
 }
 body[data-texture="crosshatch"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.08;
-  background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  opacity: 0.14;
+  background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
   background-size: 12px 12px;
 }
 body[data-texture="paper"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
+  opacity: 0.12;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.04' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
 }
 body[data-texture="carbon"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.1;
-  background-image: linear-gradient(45deg, rgba(255,255,255,0.04) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.04) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.04) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.04) 75%);
+  opacity: 0.16;
+  background-image: linear-gradient(45deg, rgba(255,255,255,0.07) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.07) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.07) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.07) 75%);
   background-size: 8px 8px;
   background-position: 0 0, 0 4px, 4px -4px, -4px 0;
 }
 body[data-texture="fabric"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.07;
+  opacity: 0.14;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.8' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
 }
 body[data-texture="grain"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.08;
+  opacity: 0.14;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
 }
 body[data-texture="mesh"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.07;
-  background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+  opacity: 0.14;
+  background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
   background-size: 40px 40px;
 }
 body[data-texture="stipple"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.1;
-  background-image: radial-gradient(circle at 50% 50%, currentColor 0.5px, transparent 0.5px);
+  opacity: 0.16;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.3) 0.5px, transparent 0.5px);
   background-size: 8px 8px;
 }
 body[data-texture="weave"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.07;
-  background: linear-gradient(90deg, rgba(255,255,255,0.05) 50%, transparent 50%), linear-gradient(rgba(255,255,255,0.05) 50%, transparent 50%);
+  opacity: 0.14;
+  background: linear-gradient(90deg, rgba(255,255,255,0.08) 50%, transparent 50%), linear-gradient(rgba(255,255,255,0.08) 50%, transparent 50%);
   background-size: 6px 6px;
 }
 body[data-texture="brushed"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  background: repeating-linear-gradient(90deg, transparent 0, transparent 1px, rgba(255,255,255,0.03) 1px, rgba(255,255,255,0.03) 2px);
+  opacity: 0.12;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent 1px, rgba(255,255,255,0.06) 1px, rgba(255,255,255,0.06) 2px);
   background-size: 4px 100%;
 }
 body[data-texture="sand"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.08;
+  opacity: 0.14;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='s'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.6' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23s)'/%3E%3C/svg%3E");
 }
 body[data-texture="diagonal"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.07;
-  background: repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.04) 8px, rgba(255,255,255,0.04) 16px);
+  opacity: 0.14;
+  background: repeating-linear-gradient(45deg, transparent, transparent 8px, rgba(255,255,255,0.07) 8px, rgba(255,255,255,0.07) 16px);
 }
 body[data-texture="herringbone"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  background-image: linear-gradient(45deg, rgba(255,255,255,0.03) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.03) 25%, transparent 25%);
+  opacity: 0.12;
+  background-image: linear-gradient(45deg, rgba(255,255,255,0.06) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.06) 25%, transparent 25%);
   background-size: 12px 12px;
 }
 body[data-texture="speckle"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.1;
-  background-image: radial-gradient(circle at 20% 30%, currentColor 0.5px, transparent 0.5px), radial-gradient(circle at 80% 70%, currentColor 0.5px, transparent 0.5px), radial-gradient(circle at 40% 80%, currentColor 0.5px, transparent 0.5px);
+  opacity: 0.16;
+  background-image: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.3) 0.5px, transparent 0.5px), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.3) 0.5px, transparent 0.5px), radial-gradient(circle at 40% 80%, rgba(255,255,255,0.3) 0.5px, transparent 0.5px);
   background-size: 24px 24px;
 }
 body[data-texture="linen"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
+  opacity: 0.12;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='l'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.5' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23l)'/%3E%3C/svg%3E");
 }
 body[data-texture="hexagons"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='24'%3E%3Cpath d='M0 6L7 0h14l7 6v12l-7 6H7L0 18z' fill='none' stroke='rgba(255,255,255,0.06)' stroke-width='0.5'/%3E%3C/svg%3E");
+  opacity: 0.14;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='24'%3E%3Cpath d='M0 6L7 0h14l7 6v12l-7 6H7L0 18z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.5'/%3E%3C/svg%3E");
   background-size: 28px 24px;
 }
 body[data-texture="circuit"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  background-image: linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px);
+  opacity: 0.12;
+  background-image: linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
   background-size: 16px 16px;
 }
 body[data-texture="waves"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  background: repeating-linear-gradient(0deg, transparent 0, transparent 12px, rgba(255,255,255,0.02) 12px, rgba(255,255,255,0.02) 24px);
+  opacity: 0.12;
+  background: repeating-linear-gradient(0deg, transparent 0, transparent 12px, rgba(255,255,255,0.06) 12px, rgba(255,255,255,0.06) 24px);
 }
 body[data-texture="brick"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  background-image: linear-gradient(90deg, rgba(255,255,255,0.02) 0, transparent 0), linear-gradient(rgba(255,255,255,0.03) 0, transparent 0);
+  opacity: 0.12;
+  background-image: linear-gradient(90deg, rgba(255,255,255,0.05) 0, transparent 0), linear-gradient(rgba(255,255,255,0.08) 0, transparent 0);
   background-size: 24px 12px;
   background-position: 0 0, 0 0;
 }
 body[data-texture="concrete"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.07;
+  opacity: 0.14;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='c'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.08' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23c)'/%3E%3C/svg%3E");
 }
 body[data-texture="subtle-dots"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.08;
-  background-image: radial-gradient(circle, currentColor 0.5px, transparent 0.5px);
+  opacity: 0.14;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.25) 0.5px, transparent 0.5px);
   background-size: 12px 12px;
 }
 body[data-texture="fine-lines"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.06;
-  background: repeating-linear-gradient(90deg, transparent 0, transparent 3px, rgba(255,255,255,0.04) 3px, rgba(255,255,255,0.04) 4px);
+  opacity: 0.12;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent 3px, rgba(255,255,255,0.08) 3px, rgba(255,255,255,0.08) 4px);
 }
 body[data-texture="scatter"]::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0.09;
+  opacity: 0.14;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='sc'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23sc)'/%3E%3C/svg%3E");
 }
 
@@ -572,8 +461,8 @@ body[data-texture="scatter"]::before {
 }
 .theme-texture-swatch[data-texture="dots"]::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  opacity: 0.5;
-  background-image: radial-gradient(circle, currentColor 1.5px, transparent 1.5px);
+  opacity: 0.65;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.7) 1.5px, transparent 1.5px);
   background-size: 10px 10px;
 }
 .theme-texture-swatch[data-texture="lines"]::after {
@@ -616,8 +505,8 @@ body[data-texture="scatter"]::before {
 }
 .theme-texture-swatch[data-texture="stipple"]::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  opacity: 0.5;
-  background-image: radial-gradient(circle at 50% 50%, currentColor 1px, transparent 1px);
+  opacity: 0.65;
+  background-image: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.7) 1px, transparent 1px);
   background-size: 6px 6px;
 }
 .theme-texture-swatch[data-texture="weave"]::after {
@@ -649,8 +538,8 @@ body[data-texture="scatter"]::before {
 }
 .theme-texture-swatch[data-texture="speckle"]::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  opacity: 0.5;
-  background-image: radial-gradient(circle at 20% 30%, currentColor 1px, transparent 1px), radial-gradient(circle at 80% 70%, currentColor 1px, transparent 1px), radial-gradient(circle at 40% 80%, currentColor 1px, transparent 1px);
+  opacity: 0.65;
+  background-image: radial-gradient(circle at 20% 30%, rgba(255,255,255,0.7) 1px, transparent 1px), radial-gradient(circle at 80% 70%, rgba(255,255,255,0.7) 1px, transparent 1px), radial-gradient(circle at 40% 80%, rgba(255,255,255,0.7) 1px, transparent 1px);
   background-size: 14px 14px;
 }
 .theme-texture-swatch[data-texture="linen"]::after {
@@ -688,8 +577,8 @@ body[data-texture="scatter"]::before {
 }
 .theme-texture-swatch[data-texture="subtle-dots"]::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  opacity: 0.45;
-  background-image: radial-gradient(circle, currentColor 0.8px, transparent 0.8px);
+  opacity: 0.6;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.65) 0.8px, transparent 0.8px);
   background-size: 8px 8px;
 }
 .theme-texture-swatch[data-texture="fine-lines"]::after {
