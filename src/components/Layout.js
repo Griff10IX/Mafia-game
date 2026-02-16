@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot } from 'lucide-react';
 import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -110,7 +110,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
       items: [
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
-        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }] : []),
+        ...(isAdmin ? [{ path: '/auto-rank', label: 'Auto Rank' }, { path: '/admin', label: 'Admin Tools' }] : []),
       ],
     },
   ];
@@ -486,6 +486,7 @@ export default function Layout({ children }) {
   ];
 
   const adminNavItems = isAdmin ? [
+    { path: '/auto-rank', icon: Bot, label: 'Auto Rank' },
     { path: '/admin', icon: Settings, label: 'Admin Tools' }
   ] : [];
 

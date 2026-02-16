@@ -31,6 +31,7 @@ import Attemps from "./pages/Attemps";
 import Leaderboard from "./pages/Leaderboard";
 import Store from "./pages/Store";
 import Admin from "./pages/Admin";
+import AutoRank from "./pages/AutoRank";
 import Travel from "./pages/Travel";
 import States from "./pages/States";
 import MyProperties from "./pages/MyProperties";
@@ -242,6 +243,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Admin />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/auto-rank"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <AutoRank />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

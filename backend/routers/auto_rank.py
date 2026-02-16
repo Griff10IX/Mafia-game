@@ -2,10 +2,32 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-AUTO_RANK_INTERVAL_SECONDS = 2 * 60  # Run every 2 minutes
+MIN_INTERVAL_SECONDS = 30
+DEFAULT_INTERVAL_SECONDS = 2 * 60  # 2 minutes
+GAME_CONFIG_ID = "auto_rank"
+
+
+async def get_auto_rank_interval_seconds(db) -> int:
+    """Return configured interval (seconds) between full cycles. Min MIN_INTERVAL_SECONDS."""
+    doc = await db.game_config.find_one({"id": GAME_CONFIG_ID}, {"_id": 0, "interval_seconds": 1})
+    raw = doc.get("interval_seconds") if doc else None
+    try:
+        val = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
+    except (TypeError, ValueError):
+        val = DEFAULT_INTERVAL_SECONDS
+    return max(MIN_INTERVAL_SECONDS, val)
+
+
+async def get_auto_rank_enabled(db) -> bool:
+    """Return whether the Auto Rank loop is allowed to run (start/stop). Default True."""
+    doc = await db.game_config.find_one({"id": GAME_CONFIG_ID}, {"_id": 0, "enabled": 1})
+    if doc is None:
+        return True
+    return doc.get("enabled", True)
 
 
 def _parse_iso(s):
@@ -157,11 +179,83 @@ async def run_auto_rank_cycle():
 
 
 async def run_auto_rank_loop():
-    """Background loop: run auto rank cycle every AUTO_RANK_INTERVAL_SECONDS."""
+    """Background loop: when enabled, run full cycle then wait interval; when stopped, wait and re-check."""
+    import server as srv
+    db = srv.db
     await asyncio.sleep(60)  # Delay first run 1 min after startup
     while True:
+        if not await get_auto_rank_enabled(db):
+            await asyncio.sleep(10)
+            continue
         try:
             await run_auto_rank_cycle()
         except Exception as e:
             logger.exception("Auto rank cycle failed: %s", e)
-        await asyncio.sleep(AUTO_RANK_INTERVAL_SECONDS)
+        if not await get_auto_rank_enabled(db):
+            continue
+        interval = await get_auto_rank_interval_seconds(db)
+        await asyncio.sleep(interval)
+
+
+def register(router):
+    """Register auto-rank settings routes (admin only)."""
+    import server as srv
+    from fastapi import Depends, HTTPException
+    from pydantic import BaseModel
+
+    db = srv.db
+    get_current_user = srv.get_current_user
+    _is_admin = srv._is_admin
+
+    class IntervalBody(BaseModel):
+        interval_seconds: Optional[int] = None
+
+    @router.get("/auto-rank/interval")
+    async def get_interval(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        interval = await get_auto_rank_interval_seconds(db)
+        enabled = await get_auto_rank_enabled(db)
+        return {"interval_seconds": interval, "min_interval_seconds": MIN_INTERVAL_SECONDS, "enabled": enabled}
+
+    @router.post("/auto-rank/start")
+    async def start_auto_rank(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        await db.game_config.update_one(
+            {"id": GAME_CONFIG_ID},
+            {"$set": {"enabled": True}},
+            upsert=True,
+        )
+        return {"enabled": True, "message": "Auto Rank started."}
+
+    @router.post("/auto-rank/stop")
+    async def stop_auto_rank(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        await db.game_config.update_one(
+            {"id": GAME_CONFIG_ID},
+            {"$set": {"enabled": False}},
+            upsert=True,
+        )
+        return {"enabled": False, "message": "Auto Rank stopped. Current cycle will finish, then no new cycles until started."}
+
+    @router.patch("/auto-rank/interval")
+    async def set_interval(
+        body: IntervalBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        raw = body.interval_seconds
+        try:
+            val = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
+        except (TypeError, ValueError):
+            val = DEFAULT_INTERVAL_SECONDS
+        interval = max(MIN_INTERVAL_SECONDS, val)
+        await db.game_config.update_one(
+            {"id": GAME_CONFIG_ID},
+            {"$set": {"interval_seconds": interval}},
+            upsert=True,
+        )
+        return {"interval_seconds": interval, "message": f"Auto Rank will run every {interval} seconds after each cycle."}

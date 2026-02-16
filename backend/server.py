@@ -953,6 +953,8 @@ stats.register(api_router)
 dead_alive.register(api_router)
 users.register(api_router)
 giphy.register(api_router)
+from routers import auto_rank as auto_rank_router
+auto_rank_router.register(api_router)
 
 app.include_router(api_router)
 
