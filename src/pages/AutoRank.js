@@ -27,6 +27,7 @@ export default function AutoRank() {
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
   const [editingChatId, setEditingChatId] = useState({});
+  const [editingToken, setEditingToken] = useState({});
   const [savingUser, setSavingUser] = useState(null);
 
   useEffect(() => {
@@ -142,6 +143,20 @@ export default function AutoRank() {
       await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { telegram_chat_id: newChatId || null });
       toast.success('Chat ID updated');
       setEditingChatId((p) => ({ ...p, [username]: false }));
+      fetchAdminUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSavingUser(null);
+    }
+  };
+
+  const handleSaveUserToken = async (username, newToken) => {
+    setSavingUser(username);
+    try {
+      await api.patch(`/admin/auto-rank/users/${encodeURIComponent(username)}`, { telegram_bot_token: newToken || null });
+      toast.success('Bot token updated');
+      setEditingToken((p) => ({ ...p, [username]: false }));
       fetchAdminUsers();
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
@@ -358,6 +373,7 @@ export default function AutoRank() {
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">GTA</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Bust 5s</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Chat ID</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Token</th>
                       <th className="py-2 font-bold text-mutedForeground uppercase text-xs">Actions</th>
                     </tr>
                   </thead>
@@ -409,6 +425,49 @@ export default function AutoRank() {
                               onClick={() => setEditingChatId((p) => ({ ...p, [u.username]: true }))}
                               className="ml-1 p-0.5 rounded text-primary hover:bg-primary/20"
                               title="Edit chat ID"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
+                        <td className="py-2 pr-2">
+                          {editingToken[u.username] ? (
+                            <div className="flex gap-1 items-center">
+                              <input
+                                type="password"
+                                defaultValue={u.telegram_bot_token}
+                                id={`token-${u.username}`}
+                                placeholder="Bot token"
+                                className="w-32 px-2 py-1 rounded bg-secondary border border-border text-foreground text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const val = document.getElementById(`token-${u.username}`)?.value ?? '';
+                                  handleSaveUserToken(u.username, val.trim() || null);
+                                }}
+                                disabled={savingUser === u.username}
+                                className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-bold disabled:opacity-50"
+                              >
+                                {savingUser === u.username ? '...' : 'Save'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingToken((p) => ({ ...p, [u.username]: false }))}
+                                className="px-2 py-1 rounded bg-secondary border border-border text-mutedForeground text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-mutedForeground font-mono text-xs">{u.telegram_bot_token ? '•••' : '—'}</span>
+                          )}
+                          {!editingToken[u.username] && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingToken((p) => ({ ...p, [u.username]: true }))}
+                              className="ml-1 p-0.5 rounded text-primary hover:bg-primary/20"
+                              title="Edit bot token"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>

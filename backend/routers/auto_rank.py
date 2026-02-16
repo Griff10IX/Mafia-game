@@ -43,14 +43,14 @@ def _parse_iso(s):
         return None
 
 
-async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30):
+async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
     """Send an immediate Telegram when Auto Rank puts the user in jail (bust/crime/GTA failed)."""
     from security import send_telegram_to_chat
     msg = f"**Auto Rank** — {username}\n\n🔒 You're in jail ({reason}). {jail_seconds}s."
-    await send_telegram_to_chat(telegram_chat_id, msg)
+    await send_telegram_to_chat(telegram_chat_id, msg, bot_token)
 
 
-async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id: str):
+async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None):
     """Try one jail bust (regardless of whether user is in jail), send result to Telegram. Used by the 5-sec bust loop."""
     import server as srv
     from routers.jail import _attempt_bust_impl
@@ -60,6 +60,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return
+    token = bot_token or (user.get("telegram_bot_token") or "").strip()
     bust_target_username = None
     npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
     if npc:
@@ -89,16 +90,16 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
             msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
         else:
             msg = f"**Auto Rank** — {username}\n\n**Bust** — " + (bust_result.get("message") or "Failed.")
-        await send_telegram_to_chat(telegram_chat_id, msg)
+        await send_telegram_to_chat(telegram_chat_id, msg, token)
         if not bust_result.get("success"):
             user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "in_jail": 1})
             if user_after and user_after.get("in_jail"):
-                await _send_jail_notification(telegram_chat_id, username, "bust failed", 30)
+                await _send_jail_notification(telegram_chat_id, username, "bust failed", 30, token)
     except Exception as e:
         logger.exception("Auto rank bust-only for %s: %s", user_id, e)
 
 
-async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: str):
+async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None):
     """Commit all crimes that are off cooldown, then one GTA (if off cooldown); send summary to Telegram. When bust_every_5_sec, skip bust here and only run crimes+GTA every 5+ mins."""
     import server as srv
     from routers.crimes import _commit_crime_impl
@@ -111,6 +112,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return
+    token = (bot_token or "").strip() or (user.get("telegram_bot_token") or "").strip()
 
     bust_every_5 = user.get("auto_rank_bust_every_5_sec", False)
     if bust_every_5:
@@ -124,12 +126,14 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         await send_telegram_to_chat(
             telegram_chat_id,
             f"**Auto Rank** — {username}\n\nYou're in jail. No auto actions this run.",
+            token,
         )
         return
 
     await send_telegram_to_chat(
         telegram_chat_id,
         f"**Auto Rank** — {username}\n\nSending results…",
+        token,
     )
 
     lines = [f"**Auto Rank** — {username}", ""]
@@ -168,14 +172,14 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         lines.append("")
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
         return
     if user.get("in_jail"):
-        await _send_jail_notification(telegram_chat_id, username, "bust failed", 30)
+        await _send_jail_notification(telegram_chat_id, username, "bust failed", 30, token)
         if "**Bust**" not in "\n".join(lines):
             lines.append("(You're in jail — no crimes/GTA this run.)")
         lines.append("")
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
         return
 
     run_crimes = user.get("auto_rank_crimes", True)
@@ -233,10 +237,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         lines.append("")
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
         return
     if user.get("in_jail"):
-        await _send_jail_notification(telegram_chat_id, username, "crime failed", 30)
+        await _send_jail_notification(telegram_chat_id, username, "crime failed", 30, token)
         lines.append("")
         lines.append("(You're in jail — no GTA this run.)")
         if bust_every_5:
@@ -244,7 +248,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 {"id": user_id},
                 {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
             )
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
         return
 
     if not run_gta:
@@ -256,7 +260,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             until = _parse_iso(cooldown_doc.get("cooldown_until"))
             if until and until > now:
                 lines.append("**GTA** — On cooldown.")
-                await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+                await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
                 return
 
         rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
@@ -274,7 +278,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "in_jail": 1})
                     if user_after and user_after.get("in_jail"):
                         jail_sec = 10 if "10" in (out.message or "") else 30
-                        await _send_jail_notification(telegram_chat_id, username, "GTA caught", jail_sec)
+                        await _send_jail_notification(telegram_chat_id, username, "GTA caught", jail_sec, token)
                 break
             except Exception as e:
                 logger.exception("Auto rank GTA for %s: %s", user_id, e)
@@ -289,7 +293,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             {"id": user_id},
             {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
         )
-    await send_telegram_to_chat(telegram_chat_id, "\n".join(lines))
+    await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
 
 
 async def run_auto_rank_due_users():
@@ -308,7 +312,7 @@ async def run_auto_rank_due_users():
                 {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
             ],
         },
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1},
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(500)
     next_run = (now.timestamp() + interval)
@@ -317,8 +321,9 @@ async def run_auto_rank_due_users():
         chat_id = (u.get("telegram_chat_id") or "").strip()
         if not chat_id:
             continue
+        bot_token = (u.get("telegram_bot_token") or "").strip() or None
         try:
-            await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id)
+            await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token)
         except Exception as e:
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
         await db.users.update_one(
@@ -344,13 +349,14 @@ async def run_bust_5sec_loop():
                     "auto_rank_bust_every_5_sec": True,
                     "telegram_chat_id": {"$exists": True, "$nin": [None, ""]},
                 },
-                {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1},
+                {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
             )
             users = await cursor.to_list(500)
             for u in users:
                 chat_id = (u.get("telegram_chat_id") or "").strip()
                 if not chat_id:
                     continue
+                bot_token = (u.get("telegram_bot_token") or "").strip()
                 try:
                     bust_target_username = None
                     npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
@@ -364,9 +370,9 @@ async def run_bust_5sec_loop():
                         if jailed:
                             bust_target_username = jailed.get("username")
                     if bust_target_username:
-                        await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id)
+                        await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
                     else:
-                        await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id)
+                        await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
                 except Exception as e:
                     logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
                 await asyncio.sleep(0.3)
@@ -508,6 +514,7 @@ def register(router):
 
     class AdminUserUpdateBody(BaseModel):
         telegram_chat_id: Optional[str] = None
+        telegram_bot_token: Optional[str] = None
         auto_rank_enabled: Optional[bool] = None
 
     @router.get("/admin/auto-rank/users")
@@ -523,7 +530,7 @@ def register(router):
                     {"auto_rank_enabled": True},
                 ],
             },
-            {"_id": 0, "id": 1, "username": 1, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "telegram_chat_id": 1},
+            {"_id": 0, "id": 1, "username": 1, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
         )
         users = await cursor.to_list(500)
         return {
@@ -536,6 +543,7 @@ def register(router):
                     "auto_rank_gta": u.get("auto_rank_gta", True),
                     "auto_rank_bust_every_5_sec": u.get("auto_rank_bust_every_5_sec", False),
                     "telegram_chat_id": u.get("telegram_chat_id") or "",
+                    "telegram_bot_token": u.get("telegram_bot_token") or "",
                 }
                 for u in users
             ],
@@ -547,7 +555,7 @@ def register(router):
         body: AdminUserUpdateBody,
         current_user: dict = Depends(get_current_user),
     ):
-        """Update a user's Auto Rank: set telegram_chat_id or enable/disable. Admin only."""
+        """Update a user's Auto Rank: set telegram_chat_id, telegram_bot_token, or enable/disable. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         import re
@@ -560,15 +568,18 @@ def register(router):
         updates = {}
         if body.telegram_chat_id is not None:
             updates["telegram_chat_id"] = (body.telegram_chat_id or "").strip() or None
+        if body.telegram_bot_token is not None:
+            updates["telegram_bot_token"] = (body.telegram_bot_token or "").strip() or None
         if body.auto_rank_enabled is not None:
             updates["auto_rank_enabled"] = body.auto_rank_enabled
         if not updates:
             return {"message": "No changes", "username": target.get("username")}
         await db.users.update_one({"id": target["id"]}, {"$set": updates})
-        updated = await db.users.find_one({"id": target["id"]}, {"_id": 0, "auto_rank_enabled": 1, "telegram_chat_id": 1})
+        updated = await db.users.find_one({"id": target["id"]}, {"_id": 0, "auto_rank_enabled": 1, "telegram_chat_id": 1, "telegram_bot_token": 1})
         return {
             "message": "Updated",
             "username": target.get("username"),
             "auto_rank_enabled": updated.get("auto_rank_enabled", False),
             "telegram_chat_id": updated.get("telegram_chat_id") or "",
+            "telegram_bot_token": updated.get("telegram_bot_token") or "",
         }

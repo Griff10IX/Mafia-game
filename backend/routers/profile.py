@@ -217,18 +217,27 @@ def register(router):
 
     @router.get("/profile/telegram")
     async def get_profile_telegram(current_user: dict = Depends(get_current_user)):
-        """Get Telegram chat ID (for Auto Rank results). Set via PATCH; get your chat_id from @userinfobot on Telegram."""
-        return {"telegram_chat_id": current_user.get("telegram_chat_id")}
+        """Get Telegram chat ID and optional bot token (for Auto Rank). Chat ID from @userinfobot; bot token from @BotFather if you use your own bot."""
+        return {
+            "telegram_chat_id": current_user.get("telegram_chat_id"),
+            "telegram_bot_token": current_user.get("telegram_bot_token"),
+        }
 
     @router.patch("/profile/telegram")
     async def update_profile_telegram(
         current_user: dict = Depends(get_current_user),
         telegram_chat_id: Optional[str] = Body(None, embed=True),
+        telegram_bot_token: Optional[str] = Body(None, embed=True),
     ):
-        """Set or clear Telegram chat ID. Use your chat_id from @userinfobot so Auto Rank can send results. Send null/empty to clear."""
-        value = (telegram_chat_id or "").strip() or None
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"telegram_chat_id": value}}
-        )
-        return {"message": "Telegram chat ID updated" if value else "Telegram chat ID cleared", "telegram_chat_id": value}
+        """Set or clear Telegram chat ID and/or bot token. Chat ID from @userinfobot. Bot token from @BotFather (optional; if set, your bot is used for Auto Rank notifications)."""
+        updates = {}
+        if telegram_chat_id is not None:
+            updates["telegram_chat_id"] = (telegram_chat_id or "").strip() or None
+        if telegram_bot_token is not None:
+            updates["telegram_bot_token"] = (telegram_bot_token or "").strip() or None
+        if not updates:
+            doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "telegram_chat_id": 1, "telegram_bot_token": 1})
+            return {"message": "Telegram settings unchanged", "telegram_chat_id": doc.get("telegram_chat_id"), "telegram_bot_token": doc.get("telegram_bot_token")}
+        await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
+        doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "telegram_chat_id": 1, "telegram_bot_token": 1})
+        return {"message": "Telegram settings updated", "telegram_chat_id": doc.get("telegram_chat_id"), "telegram_bot_token": doc.get("telegram_bot_token")}

@@ -490,6 +490,7 @@ export default function Profile() {
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [changingPassword, setChangingPassword] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState('');
+  const [telegramBotToken, setTelegramBotToken] = useState('');
   const [savingTelegram, setSavingTelegram] = useState(false);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
@@ -551,8 +552,10 @@ export default function Profile() {
     try {
       const res = await api.get('/profile/telegram');
       setTelegramChatId(res.data?.telegram_chat_id ?? '');
+      setTelegramBotToken(res.data?.telegram_bot_token ?? '');
     } catch (_) {
       setTelegramChatId('');
+      setTelegramBotToken('');
     }
   };
   useEffect(() => {
@@ -576,10 +579,13 @@ export default function Profile() {
   const saveTelegram = async () => {
     setSavingTelegram(true);
     try {
-      const res = await api.patch('/profile/telegram', { telegram_chat_id: telegramChatId.trim() || null });
-      toast.success(res.data?.message ?? 'Telegram chat ID saved');
+      const res = await api.patch('/profile/telegram', {
+        telegram_chat_id: telegramChatId.trim() || null,
+        telegram_bot_token: telegramBotToken.trim() || null,
+      });
+      toast.success(res.data?.message ?? 'Telegram settings saved');
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to save Telegram chat ID');
+      toast.error(e.response?.data?.detail || 'Failed to save Telegram settings');
     } finally {
       setSavingTelegram(false);
     }
@@ -844,23 +850,32 @@ export default function Profile() {
               </div>
               <div className="border-t border-border pt-4">
                 <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Telegram (Auto Rank)</h3>
-                <p className="text-xs text-mutedForeground mb-2">Get your chat ID from @userinfobot on Telegram. Auto Rank sends results to this chat.</p>
-                <div className="flex gap-2">
+                <p className="text-xs text-mutedForeground mb-2">Chat ID from @userinfobot. Optional: use your own bot token from @BotFather so you get notifications (if the shared bot doesn’t work for you).</p>
+                <div className="space-y-2">
                   <input
                     type="text"
                     placeholder="Telegram chat ID"
                     value={telegramChatId}
                     onChange={(e) => setTelegramChatId(e.target.value)}
-                    className="flex-1 px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
                   />
-                  <button
-                    type="button"
-                    onClick={saveTelegram}
-                    disabled={savingTelegram}
-                    className="shrink-0 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {savingTelegram ? 'Saving...' : 'Save'}
-                  </button>
+                  <input
+                    type="password"
+                    placeholder="Bot token (optional — from @BotFather)"
+                    value={telegramBotToken}
+                    onChange={(e) => setTelegramBotToken(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={saveTelegram}
+                      disabled={savingTelegram}
+                      className="shrink-0 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingTelegram ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="border-t border-border pt-4">
