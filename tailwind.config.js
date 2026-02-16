@@ -20,10 +20,10 @@ module.exports = {
         input: 'hsl(240 4.8% 12%)', // zinc-900/lighter
         secondary: 'hsl(240 4.8% 20%)', // zinc-800
         
-        // Primary - Yellow/Gold theme (original)
+        // Primary – driven by theme (ThemeContext sets --primary and --primary-foreground on :root)
         primary: {
-          DEFAULT: '#eab308', // yellow-500
-          foreground: '#000000', // black text on yellow
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
         },
         
         // Muted text

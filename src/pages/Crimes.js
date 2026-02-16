@@ -147,7 +147,7 @@ const CrimeProgressBar = ({ progress }) => {
             height: '100%',
             width: `${barPct}%`,
             minWidth: barPct > 0 ? 4 : 0,
-            background: 'linear-gradient(to right, #d4af37, #ca8a04)',
+            background: 'linear-gradient(to right, var(--noir-primary), var(--noir-primary-dark))',
             borderRadius: 9999,
             transition: 'width 0.3s ease',
           }}

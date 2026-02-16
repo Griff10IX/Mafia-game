@@ -46,6 +46,7 @@ import Objectives from "./pages/Objectives";
 import QuickTrade from "./pages/QuickTrade";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { ThemeProvider } from "./context/ThemeContext";
 import "@/App.css";
 
 function App() {
@@ -71,6 +72,7 @@ function App() {
   return (
     <div className="App">
       <BrowserRouter>
+        <ThemeProvider>
         <Routes>
           <Route
             path="/"
@@ -587,6 +589,7 @@ function App() {
             }
           />
         </Routes>
+        </ThemeProvider>
       </BrowserRouter>
       <Toaster position="bottom-center" offset="max(16px, env(safe-area-inset-bottom, 16px))" />
     </div>

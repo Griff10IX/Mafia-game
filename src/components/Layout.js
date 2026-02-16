@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette } from 'lucide-react';
 import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
+import { useTheme } from '../context/ThemeContext';
+import ThemePicker from './ThemePicker';
 import styles from '../styles/noir.module.css';
 
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
@@ -36,11 +38,13 @@ export default function Layout({ children }) {
   const [travelStatus, setTravelStatus] = useState(null); // { traveling: bool, destination, seconds_remaining }
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [notificationList, setNotificationList] = useState([]);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
   const notificationPanelRef = useRef(null);
   const notificationPanelOpenRef = useRef(false);
   notificationPanelOpenRef.current = notificationPanelOpen;
   const navigate = useNavigate();
   const location = useLocation();
+  useTheme();
 
   useEffect(() => {
     if (!notificationPanelOpen) return;
@@ -647,6 +651,21 @@ export default function Layout({ children }) {
             </div>
           </nav>
 
+          {/* Theme */}
+          {user && (
+            <div className={`p-3 border-t ${styles.borderGoldLight}`}>
+              <button
+                type="button"
+                onClick={() => setThemePickerOpen(true)}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-sm transition-smooth uppercase tracking-widest text-xs font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                data-testid="theme-picker-button"
+              >
+                <Palette size={14} />
+                Theme
+              </button>
+            </div>
+          )}
+
           {/* Logout */}
           {user && (
             <div className={`p-3 border-t ${styles.borderGoldLight} mt-auto`}>
@@ -764,7 +783,7 @@ export default function Layout({ children }) {
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
                     <div className="w-10 sm:w-16" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
-                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, #d4af37, #ca8a04)', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
+                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-primary), var(--noir-primary-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
                   <span className="text-[10px] text-primary font-heading shrink-0">{progress.toFixed(0)}%</span>
@@ -868,7 +887,7 @@ export default function Layout({ children }) {
                                   type="button"
                                   onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
                                   className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
-                                  style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(212, 175, 55, 0.06)' }}
+                                  style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.06)' }}
                                 >
                                   <span className="font-semibold block truncate">{n.title}</span>
                                   <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
@@ -903,6 +922,8 @@ export default function Layout({ children }) {
       <main className="md:ml-56 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden">
         {children}
       </main>
+
+      <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
     </div>
   );
 }

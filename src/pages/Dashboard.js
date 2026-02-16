@@ -89,7 +89,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
           
           <div className="relative w-full h-3 bg-secondary rounded-full overflow-hidden border border-primary/20">
             <div
-              className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary to-yellow-600 rounded-full transition-all duration-500"
+              className="absolute top-0 left-0 h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
               style={{ width: `${progressPct}%`, minWidth: progressPct > 0 ? '8px' : 0 }}
               role="progressbar"
               aria-valuenow={progressPct}

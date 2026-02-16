@@ -1,0 +1,120 @@
+/**
+ * Theme presets: colours and textures for the app.
+ * Changing theme updates Rank Progress bar, panel headers, buttons, sidebar, and all accent UI.
+ */
+
+/** Hex colour presets: { id, name, primary, primaryBright, primaryDark, foregroundOnPrimary } */
+export const THEME_COLOURS = [
+  { id: 'gold', name: 'Gold', primary: '#d4af37', primaryBright: '#e6c229', primaryDark: '#b8860b', foregroundOnPrimary: '#ffffff' },
+  { id: 'amber', name: 'Amber', primary: '#f59e0b', primaryBright: '#fbbf24', primaryDark: '#d97706', foregroundOnPrimary: '#000000' },
+  { id: 'yellow', name: 'Yellow', primary: '#eab308', primaryBright: '#facc15', primaryDark: '#ca8a04', foregroundOnPrimary: '#000000' },
+  { id: 'orange', name: 'Orange', primary: '#ea580c', primaryBright: '#f97316', primaryDark: '#c2410c', foregroundOnPrimary: '#ffffff' },
+  { id: 'red', name: 'Red', primary: '#dc2626', primaryBright: '#ef4444', primaryDark: '#b91c1c', foregroundOnPrimary: '#ffffff' },
+  { id: 'rose', name: 'Rose', primary: '#e11d48', primaryBright: '#f43f5e', primaryDark: '#be123c', foregroundOnPrimary: '#ffffff' },
+  { id: 'crimson', name: 'Crimson', primary: '#be185d', primaryBright: '#ec4899', primaryDark: '#9d174d', foregroundOnPrimary: '#ffffff' },
+  { id: 'fuchsia', name: 'Fuchsia', primary: '#c026d3', primaryBright: '#d946ef', primaryDark: '#a21caf', foregroundOnPrimary: '#ffffff' },
+  { id: 'violet', name: 'Violet', primary: '#7c3aed', primaryBright: '#8b5cf6', primaryDark: '#6d28d9', foregroundOnPrimary: '#ffffff' },
+  { id: 'purple', name: 'Purple', primary: '#9333ea', primaryBright: '#a855f7', primaryDark: '#7e22ce', foregroundOnPrimary: '#ffffff' },
+  { id: 'indigo', name: 'Indigo', primary: '#4f46e5', primaryBright: '#6366f1', primaryDark: '#4338ca', foregroundOnPrimary: '#ffffff' },
+  { id: 'blue', name: 'Blue', primary: '#2563eb', primaryBright: '#3b82f6', primaryDark: '#1d4ed8', foregroundOnPrimary: '#ffffff' },
+  { id: 'sky', name: 'Sky', primary: '#0ea5e9', primaryBright: '#38bdf8', primaryDark: '#0284c7', foregroundOnPrimary: '#000000' },
+  { id: 'cyan', name: 'Cyan', primary: '#0891b2', primaryBright: '#22d3ee', primaryDark: '#0e7490', foregroundOnPrimary: '#000000' },
+  { id: 'teal', name: 'Teal', primary: '#0d9488', primaryBright: '#2dd4bf', primaryDark: '#0f766e', foregroundOnPrimary: '#ffffff' },
+  { id: 'emerald', name: 'Emerald', primary: '#059669', primaryBright: '#10b981', primaryDark: '#047857', foregroundOnPrimary: '#ffffff' },
+  { id: 'green', name: 'Green', primary: '#16a34a', primaryBright: '#22c55e', primaryDark: '#15803d', foregroundOnPrimary: '#ffffff' },
+  { id: 'lime', name: 'Lime', primary: '#65a30d', primaryBright: '#84cc16', primaryDark: '#4d7c0f', foregroundOnPrimary: '#000000' },
+  { id: 'olive', name: 'Olive', primary: '#84cc16', primaryBright: '#a3e635', primaryDark: '#65a30d', foregroundOnPrimary: '#000000' },
+  { id: 'bronze', name: 'Bronze', primary: '#b45309', primaryBright: '#d97706', primaryDark: '#92400e', foregroundOnPrimary: '#ffffff' },
+  { id: 'copper', name: 'Copper', primary: '#b45309', primaryBright: '#ea580c', primaryDark: '#9a3412', foregroundOnPrimary: '#ffffff' },
+  { id: 'rust', name: 'Rust', primary: '#c2410c', primaryBright: '#ea580c', primaryDark: '#9a3412', foregroundOnPrimary: '#ffffff' },
+  { id: 'wine', name: 'Wine', primary: '#9f1239', primaryBright: '#be123c', primaryDark: '#881337', foregroundOnPrimary: '#ffffff' },
+  { id: 'plum', name: 'Plum', primary: '#701a75', primaryBright: '#86198f', primaryDark: '#581c87', foregroundOnPrimary: '#ffffff' },
+  { id: 'slate', name: 'Slate', primary: '#475569', primaryBright: '#64748b', primaryDark: '#334155', foregroundOnPrimary: '#ffffff' },
+  { id: 'zinc', name: 'Zinc', primary: '#71717a', primaryBright: '#a1a1aa', primaryDark: '#52525b', foregroundOnPrimary: '#ffffff' },
+  { id: 'neutral', name: 'Neutral', primary: '#737373', primaryBright: '#a3a3a3', primaryDark: '#525252', foregroundOnPrimary: '#ffffff' },
+  { id: 'stone', name: 'Stone', primary: '#78716c', primaryBright: '#a8a29e', primaryDark: '#57534e', foregroundOnPrimary: '#ffffff' },
+  { id: 'mint', name: 'Mint', primary: '#10b981', primaryBright: '#34d399', primaryDark: '#059669', foregroundOnPrimary: '#000000' },
+  { id: 'coral', name: 'Coral', primary: '#f43f5e', primaryBright: '#fb7185', primaryDark: '#e11d48', foregroundOnPrimary: '#ffffff' },
+  { id: 'peach', name: 'Peach', primary: '#fb923c', primaryBright: '#fdba74', primaryDark: '#ea580c', foregroundOnPrimary: '#000000' },
+  { id: 'honey', name: 'Honey', primary: '#eab308', primaryBright: '#fde047', primaryDark: '#ca8a04', foregroundOnPrimary: '#000000' },
+  { id: 'mustard', name: 'Mustard', primary: '#ca8a04', primaryBright: '#eab308', primaryDark: '#a16207', foregroundOnPrimary: '#000000' },
+  { id: 'saffron', name: 'Saffron', primary: '#f59e0b', primaryBright: '#fbbf24', primaryDark: '#d97706', foregroundOnPrimary: '#000000' },
+  { id: 'burgundy', name: 'Burgundy', primary: '#881337', primaryBright: '#9f1239', primaryDark: '#701a75', foregroundOnPrimary: '#ffffff' },
+  { id: 'maroon', name: 'Maroon', primary: '#9f1239', primaryBright: '#be123c', primaryDark: '#881337', foregroundOnPrimary: '#ffffff' },
+  { id: 'magenta', name: 'Magenta', primary: '#c026d3', primaryBright: '#e879f9', primaryDark: '#a21caf', foregroundOnPrimary: '#ffffff' },
+  { id: 'lavender', name: 'Lavender', primary: '#8b5cf6', primaryBright: '#a78bfa', primaryDark: '#7c3aed', foregroundOnPrimary: '#ffffff' },
+  { id: 'periwinkle', name: 'Periwinkle', primary: '#6366f1', primaryBright: '#818cf8', primaryDark: '#4f46e5', foregroundOnPrimary: '#ffffff' },
+  { id: 'navy', name: 'Navy', primary: '#1e40af', primaryBright: '#2563eb', primaryDark: '#1e3a8a', foregroundOnPrimary: '#ffffff' },
+  { id: 'ocean', name: 'Ocean', primary: '#0369a1', primaryBright: '#0ea5e9', primaryDark: '#075985', foregroundOnPrimary: '#ffffff' },
+  { id: 'aqua', name: 'Aqua', primary: '#06b6d4', primaryBright: '#22d3ee', primaryDark: '#0891b2', foregroundOnPrimary: '#000000' },
+  { id: 'jade', name: 'Jade', primary: '#0d9488', primaryBright: '#14b8a6', primaryDark: '#0f766e', foregroundOnPrimary: '#ffffff' },
+  { id: 'forest', name: 'Forest', primary: '#166534', primaryBright: '#22c55e', primaryDark: '#14532d', foregroundOnPrimary: '#ffffff' },
+  { id: 'sage', name: 'Sage', primary: '#4d7c0f', primaryBright: '#65a30d', primaryDark: '#3f6212', foregroundOnPrimary: '#ffffff' },
+  { id: 'chartreuse', name: 'Chartreuse', primary: '#65a30d', primaryBright: '#84cc16', primaryDark: '#4d7c0f', foregroundOnPrimary: '#000000' },
+  { id: 'cream', name: 'Cream', primary: '#e7e5e4', primaryBright: '#f5f5f4', primaryDark: '#d6d3d1', foregroundOnPrimary: '#000000' },
+  { id: 'ivory', name: 'Ivory', primary: '#fafaf9', primaryBright: '#ffffff', primaryDark: '#e7e5e4', foregroundOnPrimary: '#000000' },
+  { id: 'silver', name: 'Silver', primary: '#a8a29e', primaryBright: '#d6d3d1', primaryDark: '#78716c', foregroundOnPrimary: '#000000' },
+  { id: 'chrome', name: 'Chrome', primary: '#94a3b8', primaryBright: '#cbd5e1', primaryDark: '#64748b', foregroundOnPrimary: '#000000' },
+  { id: 'steel', name: 'Steel', primary: '#64748b', primaryBright: '#94a3b8', primaryDark: '#475569', foregroundOnPrimary: '#ffffff' },
+  { id: 'graphite', name: 'Graphite', primary: '#44403c', primaryBright: '#57534e', primaryDark: '#292524', foregroundOnPrimary: '#ffffff' },
+  { id: 'charcoal', name: 'Charcoal', primary: '#3f3f46', primaryBright: '#52525b', primaryDark: '#27272a', foregroundOnPrimary: '#ffffff' },
+  { id: 'midnight', name: 'Midnight', primary: '#312e81', primaryBright: '#4338ca', primaryDark: '#1e1b4b', foregroundOnPrimary: '#ffffff' },
+  { id: 'twilight', name: 'Twilight', primary: '#4c1d95', primaryBright: '#6d28d9', primaryDark: '#3b0764', foregroundOnPrimary: '#ffffff' },
+  { id: 'sunset', name: 'Sunset', primary: '#c2410c', primaryBright: '#ea580c', primaryDark: '#9a3412', foregroundOnPrimary: '#ffffff' },
+  { id: 'sunrise', name: 'Sunrise', primary: '#ea580c', primaryBright: '#fb923c', primaryDark: '#c2410c', foregroundOnPrimary: '#000000' },
+  { id: 'blood', name: 'Blood', primary: '#991b1b', primaryBright: '#b91c1c', primaryDark: '#7f1d1d', foregroundOnPrimary: '#ffffff' },
+  { id: 'royal', name: 'Royal', primary: '#3730a3', primaryBright: '#4f46e5', primaryDark: '#312e81', foregroundOnPrimary: '#ffffff' },
+  { id: 'electric', name: 'Electric', primary: '#2563eb', primaryBright: '#60a5fa', primaryDark: '#1d4ed8', foregroundOnPrimary: '#ffffff' },
+  { id: 'neon-green', name: 'Neon Green', primary: '#22c55e', primaryBright: '#4ade80', primaryDark: '#16a34a', foregroundOnPrimary: '#000000' },
+  { id: 'neon-pink', name: 'Neon Pink', primary: '#ec4899', primaryBright: '#f472b6', primaryDark: '#db2777', foregroundOnPrimary: '#000000' },
+  { id: 'neon-blue', name: 'Neon Blue', primary: '#3b82f6', primaryBright: '#60a5fa', primaryDark: '#2563eb', foregroundOnPrimary: '#ffffff' },
+  { id: 'neon-orange', name: 'Neon Orange', primary: '#f97316', primaryBright: '#fb923c', primaryDark: '#ea580c', foregroundOnPrimary: '#000000' },
+  { id: 'pastel-pink', name: 'Pastel Pink', primary: '#f9a8d4', primaryBright: '#fbcfe8', primaryDark: '#ec4899', foregroundOnPrimary: '#000000' },
+  { id: 'pastel-blue', name: 'Pastel Blue', primary: '#93c5fd', primaryBright: '#bfdbfe', primaryDark: '#3b82f6', foregroundOnPrimary: '#000000' },
+  { id: 'pastel-green', name: 'Pastel Green', primary: '#86efac', primaryBright: '#bbf7d0', primaryDark: '#22c55e', foregroundOnPrimary: '#000000' },
+  { id: 'pastel-purple', name: 'Pastel Purple', primary: '#c4b5fd', primaryBright: '#ddd6fe', primaryDark: '#8b5cf6', foregroundOnPrimary: '#000000' },
+  { id: 'pastel-yellow', name: 'Pastel Yellow', primary: '#fde047', primaryBright: '#fef08a', primaryDark: '#eab308', foregroundOnPrimary: '#000000' },
+  { id: 'deep-red', name: 'Deep Red', primary: '#7f1d1d', primaryBright: '#991b1b', primaryDark: '#450a0a', foregroundOnPrimary: '#ffffff' },
+  { id: 'deep-blue', name: 'Deep Blue', primary: '#1e3a8a', primaryBright: '#1d4ed8', primaryDark: '#172554', foregroundOnPrimary: '#ffffff' },
+  { id: 'deep-green', name: 'Deep Green', primary: '#14532d', primaryBright: '#166534', primaryDark: '#052e16', foregroundOnPrimary: '#ffffff' },
+  { id: 'deep-purple', name: 'Deep Purple', primary: '#581c87', primaryBright: '#6d28d9', primaryDark: '#3b0764', foregroundOnPrimary: '#ffffff' },
+  { id: 'pale-gold', name: 'Pale Gold', primary: '#fcd34d', primaryBright: '#fde68a', primaryDark: '#f59e0b', foregroundOnPrimary: '#000000' },
+  { id: 'antique-brass', name: 'Antique Brass', primary: '#b8860b', primaryBright: '#d4af37', primaryDark: '#8b6914', foregroundOnPrimary: '#000000' },
+  { id: 'gunmetal', name: 'Gunmetal', primary: '#2d3748', primaryBright: '#4a5568', primaryDark: '#1a202c', foregroundOnPrimary: '#ffffff' },
+  { id: 'ash', name: 'Ash', primary: '#6b7280', primaryBright: '#9ca3af', primaryDark: '#4b5563', foregroundOnPrimary: '#ffffff' },
+  { id: 'smoke', name: 'Smoke', primary: '#6b7280', primaryBright: '#9ca3af', primaryDark: '#4b5563', foregroundOnPrimary: '#ffffff' },
+  { id: 'pewter', name: 'Pewter', primary: '#78716c', primaryBright: '#a8a29e', primaryDark: '#57534e', foregroundOnPrimary: '#ffffff' },
+  { id: 'titanium', name: 'Titanium', primary: '#71717a', primaryBright: '#a1a1aa', primaryDark: '#52525b', foregroundOnPrimary: '#ffffff' },
+  { id: 'carbon', name: 'Carbon', primary: '#3f3f46', primaryBright: '#52525b', primaryDark: '#27272a', foregroundOnPrimary: '#ffffff' },
+  { id: 'obsidian', name: 'Obsidian', primary: '#27272a', primaryBright: '#3f3f46', primaryDark: '#18181b', foregroundOnPrimary: '#ffffff' },
+];
+
+/** Texture presets: applied as body/main background or overlay. id = class name or 'none'. */
+export const THEME_TEXTURES = [
+  { id: 'none', name: 'None' },
+  { id: 'noise', name: 'Noise' },
+  { id: 'grid', name: 'Grid' },
+  { id: 'dots', name: 'Dots' },
+  { id: 'lines', name: 'Lines' },
+  { id: 'crosshatch', name: 'Crosshatch' },
+  { id: 'paper', name: 'Paper' },
+  { id: 'carbon', name: 'Carbon' },
+  { id: 'fabric', name: 'Fabric' },
+  { id: 'grain', name: 'Grain' },
+  { id: 'mesh', name: 'Mesh' },
+  { id: 'stipple', name: 'Stipple' },
+  { id: 'weave', name: 'Weave' },
+  { id: 'brushed', name: 'Brushed' },
+  { id: 'sand', name: 'Sand' },
+];
+
+export const DEFAULT_COLOUR_ID = 'gold';
+export const DEFAULT_TEXTURE_ID = 'none';
+
+export function getThemeColour(id) {
+  return THEME_COLOURS.find((c) => c.id === id) || THEME_COLOURS[0];
+}
+
+export function getThemeTexture(id) {
+  return THEME_TEXTURES.find((t) => t.id === id) || THEME_TEXTURES[0];
+}
