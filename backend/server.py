@@ -7100,6 +7100,37 @@ def _booze_round_trip_cities():
     return [STATES[i], STATES[j]]
 
 
+def _booze_daily_estimate_rough(capacity: int, prices_map: dict) -> int:
+    """Rough 24h profit estimate: custom car, best route this rotation, jail chance and travel time from constants."""
+    if capacity <= 0:
+        return 0
+    # Best profit per unit this rotation (round-trip pair)
+    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    idx = _booze_rotation_index()
+    locA, locB = unordered_pairs[idx % len(unordered_pairs)]
+    n_booze = len(BOOZE_TYPES)
+    best_ab = max(
+        prices_map.get((locB, i), 400) - prices_map.get((locA, i), 400)
+        for i in range(n_booze)
+    )
+    best_ba = max(
+        prices_map.get((locA, i), 400) - prices_map.get((locB, i), 400)
+        for i in range(n_booze)
+    )
+    profit_per_unit = max(best_ab, best_ba, 1)
+    # Time per run: 2 legs (buy city -> sell city), custom car
+    secs_per_run = 2 * TRAVEL_TIMES.get("custom", 20)
+    # Jail: each buy/sell has P(jail) in [BOOZE_RUN_JAIL_CHANCE_MIN, MAX]; use average
+    jail_per_action = (BOOZE_RUN_JAIL_CHANCE_MIN + BOOZE_RUN_JAIL_CHANCE_MAX) / 2
+    jail_per_run = 1 - (1 - jail_per_action) ** 2  # at least one of buy/sell
+    jail_seconds = BOOZE_RUN_JAIL_SECONDS
+    expected_secs_per_run = secs_per_run + jail_per_run * jail_seconds
+    runs_per_24h = 86400 / expected_secs_per_run
+    successful_run_rate = (1 - jail_per_action) ** 2  # no jail on either action
+    profitable_runs = runs_per_24h * successful_run_rate
+    return int(profitable_runs * capacity * profit_per_unit)
+
+
 def _booze_prices_for_rotation():
     """One market price per (location_index, booze_index). Same price to buy or sell in that city — profit only by buying in a cheap city and selling in a pricier one. Guarantees one round-trip pair per rotation (both legs profitable)."""
     idx = _booze_rotation_index()
@@ -9319,12 +9350,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     history = (current_user.get("booze_run_history") or [])[:BOOZE_RUN_HISTORY_MAX]
 
     capacity_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    # Rough 24h estimate: custom car (20s per leg = 40s per run), best route, non-stop
-    _secs_per_run_custom = 40  # 20s travel to buy city + 20s to sell city
-    _runs_per_day = 86400 // _secs_per_run_custom  # 2160
-    _jail_reduction = 0.95  # ~5% of runs lose time to jail
-    _avg_profit_per_unit = 15  # spread ~8–22 per unit (reduced so profits stay modest)
-    daily_estimate_rough = int(_runs_per_day * _jail_reduction * capacity * _avg_profit_per_unit)
+    daily_estimate_rough = _booze_daily_estimate_rough(capacity, prices_map)
     return {
         "locations": list(STATES),
         "booze_types": list(BOOZE_TYPES),
