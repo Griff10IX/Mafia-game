@@ -324,8 +324,10 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
     return has_success
 
 
-async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None):
-    """Try one jail bust (regardless of whether user is in jail), send result to Telegram. Used by the 5-sec bust loop."""
+async def _run_bust_only_for_user(
+    user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, bust_target_username: Optional[str] = None
+):
+    """Try one jail bust (regardless of whether user is in jail), send result to Telegram. Used by the 5-sec bust loop. If bust_target_username is provided, skip jail lookup."""
     import server as srv
     from routers.jail import _attempt_bust_impl
     from security import send_telegram_to_chat
@@ -335,17 +337,17 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
     if not user:
         return
     token = bot_token or (user.get("telegram_bot_token") or "").strip()
-    bust_target_username = None
-    npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
-    if npc:
-        bust_target_username = npc.get("username")
-    if not bust_target_username:
-        jailed = await db.users.find_one(
-            {"in_jail": True, "id": {"$ne": user_id}},
-            {"_id": 0, "username": 1},
-        )
-        if jailed:
-            bust_target_username = jailed.get("username")
+    if bust_target_username is None:
+        npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
+        if npc:
+            bust_target_username = npc.get("username")
+        if not bust_target_username:
+            jailed = await db.users.find_one(
+                {"in_jail": True, "id": {"$ne": user_id}},
+                {"_id": 0, "username": 1},
+            )
+            if jailed:
+                bust_target_username = jailed.get("username")
     if not bust_target_username:
         return
     try:
@@ -594,23 +596,24 @@ async def run_bust_5sec_loop():
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
             )
             users = await cursor.to_list(500)
+            # One jail lookup per cycle: NPC or any jailed player (reused for all users)
+            bust_target_username = None
+            npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
+            if npc:
+                bust_target_username = npc.get("username")
+            if not bust_target_username:
+                jailed = await db.users.find_one(
+                    {"in_jail": True},
+                    {"_id": 0, "username": 1},
+                )
+                if jailed:
+                    bust_target_username = jailed.get("username")
             for u in users:
                 chat_id = (u.get("telegram_chat_id") or "").strip()
                 bot_token = (u.get("telegram_bot_token") or "").strip()
                 try:
-                    bust_target_username = None
-                    npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
-                    if npc:
-                        bust_target_username = npc.get("username")
-                    if not bust_target_username:
-                        jailed = await db.users.find_one(
-                            {"in_jail": True, "id": {"$ne": u["id"]}},
-                            {"_id": 0, "username": 1},
-                        )
-                        if jailed:
-                            bust_target_username = jailed.get("username")
-                    if bust_target_username:
-                        await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
+                    if bust_target_username and bust_target_username != u.get("username"):
+                        await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None, bust_target_username=bust_target_username)
                     else:
                         await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
                 except Exception as e:
