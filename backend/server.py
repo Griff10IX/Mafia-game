@@ -550,13 +550,17 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             prize_rackets.append({"racket_id": racket_id, "name": racket_def["name"] if racket_def else racket_id, "level": l_level})
     await db.families.update_one({"id": winner_id}, {"$set": {"rackets": winner_rackets}})
     loser_member_ids = [m["user_id"] for m in members]
-    exclusive_cars = await db.user_cars.find({"user_id": {"$in": loser_member_ids}}, {"_id": 0}).to_list(500)
+    exclusive_cars = await db.user_cars.find({"user_id": {"$in": loser_member_ids}}).to_list(500)
     for uc in exclusive_cars:
         car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
         if car_info and car_info.get("rarity") == "exclusive":
+            # New id so old view-car link is dead; new owner keeps it private until listed or shown on profile
             await db.user_cars.update_one(
-                {"id": uc.get("id")},
-                {"$set": {"user_id": winner_boss_id}},
+                {"_id": uc["_id"]},
+                {
+                    "$set": {"user_id": winner_boss_id, "id": str(uuid.uuid4())},
+                    "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
+                },
             )
     prize_count = sum(1 for uc in exclusive_cars if next((c for c in CARS if c.get("id") == uc.get("car_id")), {}).get("rarity") == "exclusive")
     await db.family_wars.update_one(

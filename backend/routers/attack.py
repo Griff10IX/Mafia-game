@@ -558,13 +558,13 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         ev = await get_effective_event()
         cash_loot = int(cash_loot * ev.get("kill_cash", 1.0))
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
-        victim_cars = await db.user_cars.find({"user_id": victim_id}, {"_id": 0, "car_id": 1}).to_list(500)
+        victim_cars = await db.user_cars.find({"user_id": victim_id}).to_list(500)
         victim_props = await db.user_properties.find({"user_id": victim_id}, {"_id": 0, "property_id": 1}).to_list(100)
         victim_cars_count = len(victim_cars)
         victim_props_count = len(victim_props)
         exclusive_car_count = 0
         for uc in victim_cars:
-            car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
+            car_info = next((c for c in CARS if c["id"] == uc.get("car_id")), None)
             if car_info and car_info.get("rarity") == "exclusive":
                 exclusive_car_count += 1
         prop_names = []
@@ -582,7 +582,23 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""))
         except Exception as e:
             logging.exception("Rank-up notification (kill): %s", e)
-        await db.user_cars.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
+        # Transfer cars to killer; only exclusives get a new id so old view-car links are dead
+        for uc in victim_cars:
+            car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+            is_exclusive = car_info and car_info.get("rarity") == "exclusive"
+            if is_exclusive:
+                await db.user_cars.update_one(
+                    {"_id": uc["_id"]},
+                    {
+                        "$set": {"user_id": killer_id, "id": str(uuid.uuid4())},
+                        "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
+                    },
+                )
+            else:
+                await db.user_cars.update_one(
+                    {"_id": uc["_id"]},
+                    {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
+                )
         await db.user_properties.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
