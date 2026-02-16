@@ -11181,6 +11181,13 @@ async def startup_db():
     asyncio.create_task(security_module.security_monitor_task(db))
 
     async def hourly_entertainer_auto_create():
+        # Run once shortly after startup so "Last run" isn't stuck on a pre-restart value
+        await asyncio.sleep(30)
+        try:
+            await entertainer.run_auto_create_if_enabled()
+        except Exception as e:
+            logging.exception("Entertainer auto-create (startup): %s", e)
+        # Then run every hour
         while True:
             await asyncio.sleep(3600)
             try:

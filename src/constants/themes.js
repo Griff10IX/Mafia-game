@@ -219,7 +219,24 @@ export const THEME_TEXTURES = [
   { id: 'fine-lines', name: 'Fine Lines' },
 ];
 
+/** Writing style: heading + body font family (CSS font-family value). */
+export const THEME_FONTS = [
+  { id: 'classic', name: 'Classic', heading: '"Playfair Display", Georgia, serif', body: 'Inter, system-ui, sans-serif' },
+  { id: 'modern', name: 'Modern', heading: 'system-ui, -apple-system, sans-serif', body: 'system-ui, -apple-system, sans-serif' },
+  { id: 'newspaper', name: 'Newspaper', heading: 'Georgia, "Times New Roman", serif', body: 'Georgia, "Times New Roman", serif' },
+  { id: 'clean', name: 'Clean', heading: '"Segoe UI", system-ui, sans-serif', body: '"Segoe UI", system-ui, sans-serif' },
+  { id: 'compact', name: 'Compact', heading: 'Inter, system-ui, sans-serif', body: 'Inter, system-ui, sans-serif' },
+];
+
+/** Button style: original (flat) vs glossy. */
+export const THEME_BUTTON_STYLES = [
+  { id: 'original', name: 'Original' },
+  { id: 'glossy', name: 'Glossy' },
+];
+
 export const DEFAULT_COLOUR_ID = 'gold';
+export const DEFAULT_FONT_ID = 'classic';
+export const DEFAULT_BUTTON_STYLE_ID = 'original';
 export const DEFAULT_TEXTURE_ID = 'none';
 
 /**
@@ -270,4 +287,12 @@ export function getThemeTexture(id) {
 
 export function getThemePreset(id) {
   return THEME_PRESETS.find((p) => p.id === id) || THEME_PRESETS[0];
+}
+
+export function getThemeFont(id) {
+  return THEME_FONTS.find((f) => f.id === id) || THEME_FONTS[0];
+}
+
+export function getThemeButtonStyle(id) {
+  return THEME_BUTTON_STYLES.find((b) => b.id === id) || THEME_BUTTON_STYLES[0];
 }

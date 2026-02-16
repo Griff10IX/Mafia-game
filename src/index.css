@@ -10,6 +10,8 @@
     --button-foreground: var(--primary-foreground);
     --muted-foreground: 240 5% 65%;
     --border: 0 0% 18%;
+    --font-heading: "Playfair Display", Georgia, serif;
+    --font-body: Inter, system-ui, sans-serif;
   }
 }
 
@@ -122,43 +124,33 @@ code {
   box-shadow: 0 0 15px rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.3);
 }
 
-/* Buttons and primary-styled links – glossy metallic (vertical gradient, theme colours) */
+/* Buttons and primary-styled links – original by default */
 button.bg-primary,
 button.from-primary,
 a.bg-primary,
 a.from-primary {
-  background: linear-gradient(to bottom, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
+  background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
   color: var(--noir-button-foreground) !important;
-  border: 1px solid rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.55) !important;
+  border: 1px solid rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5) !important;
+  border-radius: 2px !important;
+}
+
+/* Glossy button style (when user selects Glossy in theme) */
+[data-button-style="glossy"] button.bg-primary,
+[data-button-style="glossy"] button.from-primary,
+[data-button-style="glossy"] a.bg-primary,
+[data-button-style="glossy"] a.from-primary {
+  background: linear-gradient(to bottom, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
   border-top-color: rgba(255, 255, 255, 0.2) !important;
   border-radius: 6px !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 4px rgba(0, 0, 0, 0.25) !important;
 }
 
-button.bg-primary:hover,
-button.from-primary:hover,
-a.bg-primary:hover,
-a.from-primary:hover {
+[data-button-style="glossy"] button.bg-primary:hover,
+[data-button-style="glossy"] button.from-primary:hover,
+[data-button-style="glossy"] a.bg-primary:hover,
+[data-button-style="glossy"] a.from-primary:hover {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 2px 6px rgba(0, 0, 0, 0.3) !important;
-}
-
-/* Original theme – pre-custom-theme button look (horizontal gradient, 2px radius, no glossy) */
-[data-button-style="original"] button.bg-primary,
-[data-button-style="original"] button.from-primary,
-[data-button-style="original"] a.bg-primary,
-[data-button-style="original"] a.from-primary {
-  background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
-  border: 1px solid rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5) !important;
-  border-top-color: inherit !important;
-  border-radius: 2px !important;
-  box-shadow: none !important;
-}
-
-[data-button-style="original"] button.bg-primary:hover,
-[data-button-style="original"] button.from-primary:hover,
-[data-button-style="original"] a.bg-primary:hover,
-[data-button-style="original"] a.from-primary:hover {
-  box-shadow: none !important;
 }
 
 /* Glitch / chromatic aberration text effect for buttons (add class .btn-glitch-text) */

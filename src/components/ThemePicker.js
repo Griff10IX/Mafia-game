@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2 } from 'lucide-react';
+import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, getThemeColour } from '../constants/themes';
+import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
 function customToColourEntry(c) {
@@ -18,14 +18,13 @@ function customToColourEntry(c) {
 }
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, setColour, setTexture, setButtonColour, setAccentLineColour, resetButtonToDefault, resetAccentLineToDefault, buttonStyle, setButtonStyle, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
     setTexture(preset.textureId);
     setButtonColour(preset.buttonColourId ?? null);
     setAccentLineColour(preset.accentLineColourId ?? null);
-    setButtonStyle(preset.id === 'original' ? 'original' : 'glossy');
   };
 
   const allColours = [...customThemes.map(customToColourEntry), ...THEME_COLOURS];
@@ -85,10 +84,10 @@ export default function ThemePicker({ open, onClose }) {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setButtonStyle('original'); resetButtonToDefault(); resetAccentLineToDefault(); }}
+              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID); setButtonStyle(DEFAULT_BUTTON_STYLE_ID); resetButtonToDefault(); resetAccentLineToDefault(); }}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
               data-testid="theme-reset-default"
-              title="Reset to Original theme (gold, no texture, original button look)"
+              title="Reset to Original theme (gold, no texture)"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               Reset to original
@@ -251,6 +250,52 @@ export default function ThemePicker({ open, onClose }) {
             </div>
           )}
 
+          {/* Writing style (fonts) */}
+          <div>
+            <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Type className="w-3.5 h-3.5" />
+              Writing style
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {THEME_FONTS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setFont(f.id)}
+                  className={`px-3 py-1.5 rounded-md border-2 text-xs font-heading uppercase tracking-wider transition-all ${
+                    fontId === f.id ? 'border-primary bg-primary/20 text-primary' : 'border-zinc-600 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                  }`}
+                  style={fontId === f.id ? undefined : { fontFamily: f.body }}
+                  title={`Heading: ${f.heading}, Body: ${f.body}`}
+                >
+                  {f.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Button style */}
+          <div>
+            <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Square className="w-3.5 h-3.5" />
+              Button style
+            </p>
+            <div className="flex rounded-md border border-zinc-600 overflow-hidden w-fit">
+              {THEME_BUTTON_STYLES.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => setButtonStyle(b.id)}
+                  className={`px-4 py-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                    buttonStyleId === b.id ? 'bg-primary/30 text-primary border border-primary/50' : 'bg-zinc-800 text-mutedForeground hover:text-foreground'
+                  }`}
+                >
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Colour */}
           <div>
             <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Colour</p>
@@ -303,27 +348,6 @@ export default function ThemePicker({ open, onClose }) {
               <MousePointer2 className="w-3.5 h-3.5" />
               Button colour
             </p>
-            <div className="flex items-center gap-3 mb-2 flex-wrap">
-              <span className="text-[10px] text-mutedForeground">Button look:</span>
-              <div className="flex rounded-md border border-zinc-600 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setButtonStyle('original')}
-                  className={`px-2.5 py-1 text-[10px] font-heading uppercase tracking-wider transition-colors ${buttonStyle === 'original' ? 'bg-primary/30 text-primary border border-primary/50' : 'bg-zinc-800 text-mutedForeground hover:text-foreground'}`}
-                  title="Original flat style (before theme changes)"
-                >
-                  Original
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setButtonStyle('glossy')}
-                  className={`px-2.5 py-1 text-[10px] font-heading uppercase tracking-wider transition-colors ${buttonStyle === 'glossy' ? 'bg-primary/30 text-primary border border-primary/50' : 'bg-zinc-800 text-mutedForeground hover:text-foreground'}`}
-                  title="Glossy metallic style"
-                >
-                  Glossy
-                </button>
-              </div>
-            </div>
             <div className="flex items-center gap-2 mb-2">
               <button
                 type="button"

@@ -1,12 +1,13 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { getThemeColour, getThemeTexture, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID } from '../constants/themes';
+import { getThemeColour, getThemeTexture, getThemeFont, getThemeButtonStyle, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID } from '../constants/themes';
 
 const STORAGE_KEY_COLOUR = 'app_theme_colour';
 const STORAGE_KEY_TEXTURE = 'app_theme_texture';
 const STORAGE_KEY_BUTTON = 'app_theme_button';
 const STORAGE_KEY_ACCENT_LINE = 'app_theme_accent_line';
+const STORAGE_KEY_FONT = 'app_theme_font';
+const STORAGE_KEY_BUTTON_STYLE = 'app_theme_button_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
-const STORAGE_KEY_BUTTON_STYLE = 'app_theme_button_style'; // 'glossy' | 'original' (pre-theme button look)
 
 /** Convert saved custom theme to colour shape used by applyColourToDocument */
 function customToColour(custom) {
@@ -169,6 +170,13 @@ function applyAccentLineToDocument(accentLineColour) {
   root.style.setProperty('--noir-accent-line-dark', primaryDark);
 }
 
+function applyFontToDocument(font) {
+  if (!font) return;
+  const root = document.documentElement;
+  root.style.setProperty('--font-heading', font.heading);
+  root.style.setProperty('--font-body', font.body);
+}
+
 function applyTextureToDocument(textureId) {
   const body = document.body;
   const prev = body.getAttribute('data-texture');
@@ -211,6 +219,20 @@ export function ThemeProvider({ children }) {
       return null;
     }
   });
+  const [fontId, setFontIdState] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_FONT) || DEFAULT_FONT_ID;
+    } catch {
+      return DEFAULT_FONT_ID;
+    }
+  });
+  const [buttonStyleId, setButtonStyleIdState] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_KEY_BUTTON_STYLE) || DEFAULT_BUTTON_STYLE_ID;
+    } catch {
+      return DEFAULT_BUTTON_STYLE_ID;
+    }
+  });
   const [customThemes, setCustomThemesState] = useState(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_THEMES);
@@ -221,19 +243,6 @@ export function ThemeProvider({ children }) {
       return [];
     }
   });
-  const [buttonStyle, setButtonStyleState] = useState(() => {
-    try {
-      const v = localStorage.getItem(STORAGE_KEY_BUTTON_STYLE);
-      return v === 'original' ? 'original' : 'glossy';
-    } catch {
-      return 'glossy';
-    }
-  });
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-button-style', buttonStyle);
-  }, [buttonStyle]);
-
   useEffect(() => {
     const colour = getResolvedColour(colourId, customThemes);
     applyColourToDocument(colour);
@@ -242,6 +251,15 @@ export function ThemeProvider({ children }) {
     const accentLineColour = accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : colour;
     applyAccentLineToDocument(accentLineColour);
   }, [colourId, buttonColourId, accentLineColourId, customThemes]);
+
+  useEffect(() => {
+    const font = getThemeFont(fontId);
+    applyFontToDocument(font);
+  }, [fontId]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-button-style', buttonStyleId === 'glossy' ? 'glossy' : 'original');
+  }, [buttonStyleId]);
 
   const persistCustomThemes = useCallback((next) => {
     setCustomThemesState(next);
@@ -326,11 +344,17 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
-  const setButtonStyle = useCallback((style) => {
-    const next = style === 'original' ? 'original' : 'glossy';
-    setButtonStyleState(next);
+  const setFont = useCallback((id) => {
+    setFontIdState(id);
     try {
-      localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, next);
+      localStorage.setItem(STORAGE_KEY_FONT, id);
+    } catch (_) {}
+  }, []);
+
+  const setButtonStyle = useCallback((id) => {
+    setButtonStyleIdState(id);
+    try {
+      localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, id);
     } catch (_) {}
   }, []);
 
@@ -345,7 +369,9 @@ export function ThemeProvider({ children }) {
     setAccentLineColour,
     resetButtonToDefault,
     resetAccentLineToDefault,
-    buttonStyle,
+    fontId,
+    buttonStyleId,
+    setFont,
     setButtonStyle,
     customThemes,
     addCustomTheme,
@@ -353,6 +379,8 @@ export function ThemeProvider({ children }) {
     getResolvedColour: (id) => getResolvedColour(id, customThemes),
     colour: getResolvedColour(colourId, customThemes),
     texture: getThemeTexture(textureId),
+    font: getThemeFont(fontId),
+    buttonStyle: getThemeButtonStyle(buttonStyleId),
     buttonColour: buttonColourId ? getResolvedColour(buttonColourId, customThemes) : null,
     accentLineColour: accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : null,
   };

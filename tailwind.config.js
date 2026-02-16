@@ -46,8 +46,8 @@ module.exports = {
       },
       
       fontFamily: {
-        heading: ['"Playfair Display"', 'Georgia', 'serif'],
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        heading: 'var(--font-heading)',
+        sans: 'var(--font-body)',
       },
       
       // Animations for dice and interactive elements
