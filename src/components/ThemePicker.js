@@ -1,11 +1,24 @@
 import { useState } from 'react';
-import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid } from 'lucide-react';
+import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
+function customToColourEntry(c) {
+  const stops = c.stops && c.stops.length >= 1 ? c.stops : [c.stops?.[0] || '#888'];
+  return {
+    id: c.id,
+    name: c.name || 'Custom',
+    stops: stops.length >= 2 ? stops : null,
+    primary: stops[0],
+    primaryBright: stops[0],
+    primaryDark: stops[stops.length - 1],
+    foregroundOnPrimary: c.foregroundOnPrimary || '#ffffff',
+  };
+}
+
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, setColour, setTexture, setButtonColour, setAccentLineColour, resetButtonToDefault, resetAccentLineToDefault } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, setColour, setTexture, setButtonColour, setAccentLineColour, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
@@ -13,25 +26,46 @@ export default function ThemePicker({ open, onClose }) {
     setButtonColour(preset.buttonColourId ?? null);
     setAccentLineColour(preset.accentLineColourId ?? null);
   };
+
+  const allColours = [...customThemes.map(customToColourEntry), ...THEME_COLOURS];
   const [colourPage, setColourPage] = useState(0);
   const [buttonPage, setButtonPage] = useState(0);
   const [accentLinePage, setAccentLinePage] = useState(0);
   const COLOURS_PER_PAGE = 24;
-  const totalColourPages = Math.ceil(THEME_COLOURS.length / COLOURS_PER_PAGE);
-  const totalButtonPages = Math.ceil(THEME_COLOURS.length / COLOURS_PER_PAGE);
-  const totalAccentLinePages = Math.ceil(THEME_COLOURS.length / COLOURS_PER_PAGE);
-  const coloursSlice = THEME_COLOURS.slice(
+  const totalColourPages = Math.ceil(allColours.length / COLOURS_PER_PAGE);
+  const totalButtonPages = Math.ceil(allColours.length / COLOURS_PER_PAGE);
+  const totalAccentLinePages = Math.ceil(allColours.length / COLOURS_PER_PAGE);
+  const coloursSlice = allColours.slice(
     colourPage * COLOURS_PER_PAGE,
     (colourPage + 1) * COLOURS_PER_PAGE
   );
-  const buttonColoursSlice = THEME_COLOURS.slice(
+  const buttonColoursSlice = allColours.slice(
     buttonPage * COLOURS_PER_PAGE,
     (buttonPage + 1) * COLOURS_PER_PAGE
   );
-  const accentLineColoursSlice = THEME_COLOURS.slice(
+  const accentLineColoursSlice = allColours.slice(
     accentLinePage * COLOURS_PER_PAGE,
     (accentLinePage + 1) * COLOURS_PER_PAGE
   );
+
+  const [customName, setCustomName] = useState('');
+  const [customNumColours, setCustomNumColours] = useState(2);
+  const [customHexes, setCustomHexes] = useState(['#d4af37', '#b8860b']);
+  const [customTextLight, setCustomTextLight] = useState(true);
+
+  const handleSaveCustom = () => {
+    const name = customName.trim() || 'My theme';
+    const stops = customHexes.slice(0, customNumColours).filter(Boolean).map((h) => (h.startsWith('#') ? h : `#${h}`));
+    if (stops.length < 1) return;
+    const newId = addCustomTheme({
+      name,
+      stops,
+      foregroundOnPrimary: customTextLight ? '#ffffff' : '#000000',
+    });
+    setColour(newId);
+    setCustomName('');
+    setCustomHexes(['#d4af37', '#b8860b', '#0d9488', '#ea580c']);
+  };
 
   if (!open) return null;
 
@@ -111,6 +145,110 @@ export default function ThemePicker({ open, onClose }) {
               })}
             </div>
           </div>
+
+          {/* Create custom theme (1–4 colours) */}
+          <div className="rounded-lg border border-primary/20 bg-zinc-800/40 p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider flex items-center gap-1.5">
+              <Plus className="w-3.5 h-3.5" />
+              Create custom theme (up to 4 colours)
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] text-mutedForeground">Name</span>
+                <input
+                  type="text"
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="My theme"
+                  className="w-32 bg-zinc-900 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] text-mutedForeground">Colours</span>
+                <select
+                  value={customNumColours}
+                  onChange={(e) => setCustomNumColours(Number(e.target.value))}
+                  className="bg-zinc-900 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  {[1, 2, 3, 4].map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </label>
+              {[1, 2, 3, 4].map((i) => (
+                <label key={i} className="flex flex-col gap-1" style={{ visibility: i <= customNumColours ? 'visible' : 'hidden' }}>
+                  <span className="text-[10px] text-mutedForeground">{i}</span>
+                  <input
+                    type="color"
+                    value={customHexes[i - 1] || '#888888'}
+                    onChange={(e) => {
+                      const next = [...customHexes];
+                      next[i - 1] = e.target.value;
+                      setCustomHexes(next);
+                    }}
+                    className="w-10 h-10 rounded border border-zinc-600 cursor-pointer bg-transparent"
+                  />
+                </label>
+              ))}
+              <label className="flex items-center gap-2">
+                <span className="text-[10px] text-mutedForeground">Text on accent</span>
+                <select
+                  value={customTextLight ? 'light' : 'dark'}
+                  onChange={(e) => setCustomTextLight(e.target.value === 'light')}
+                  className="bg-zinc-900 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={handleSaveCustom}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
+                data-testid="theme-save-custom"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Save theme
+              </button>
+            </div>
+          </div>
+
+          {/* Your themes (custom only) */}
+          {customThemes.length > 0 && (
+            <div>
+              <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Your themes</p>
+              <div className="flex flex-wrap gap-2">
+                {customThemes.map((c) => {
+                  const entry = customToColourEntry(c);
+                  const stops = entry.stops;
+                  const swatchStyle = stops
+                    ? { background: `linear-gradient(135deg, ${stops.join(', ')})` }
+                    : { backgroundColor: entry.primary };
+                  return (
+                    <div key={c.id} className="relative group">
+                      <button
+                        type="button"
+                        onClick={() => setColour(c.id)}
+                        className={`w-12 h-12 rounded-lg border-2 transition-all shrink-0 ${colourId === c.id ? 'border-primary ring-2 ring-primary/30' : 'border-zinc-600 hover:border-primary/50'}`}
+                        style={swatchStyle}
+                        title={entry.name}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); removeCustomTheme(c.id); }}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                        aria-label={`Delete ${entry.name}`}
+                        title={`Delete ${entry.name}`}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                      <span className="block text-[9px] text-mutedForeground truncate w-12 mt-0.5 text-center">{entry.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Colour */}
           <div>

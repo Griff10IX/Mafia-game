@@ -5,6 +5,29 @@ const STORAGE_KEY_COLOUR = 'app_theme_colour';
 const STORAGE_KEY_TEXTURE = 'app_theme_texture';
 const STORAGE_KEY_BUTTON = 'app_theme_button';
 const STORAGE_KEY_ACCENT_LINE = 'app_theme_accent_line';
+const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
+
+/** Convert saved custom theme to colour shape used by applyColourToDocument */
+function customToColour(custom) {
+  if (!custom || !custom.stops || custom.stops.length < 1) return null;
+  const stops = custom.stops.slice(0, 4);
+  const primary = stops[0];
+  const primaryDark = stops[stops.length - 1];
+  return {
+    primary,
+    primaryBright: primary,
+    primaryDark,
+    foregroundOnPrimary: custom.foregroundOnPrimary || '#ffffff',
+    stops: stops.length >= 2 ? stops : null,
+  };
+}
+
+function getResolvedColour(colourId, customThemes) {
+  if (!colourId) return null;
+  const custom = customThemes?.find((c) => c.id === colourId);
+  if (custom) return customToColour(custom);
+  return getThemeColour(colourId);
+}
 
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -187,15 +210,62 @@ export function ThemeProvider({ children }) {
       return null;
     }
   });
+  const [customThemes, setCustomThemesState] = useState(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY_CUSTOM_THEMES);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
-    const colour = getThemeColour(colourId);
+    const colour = getResolvedColour(colourId, customThemes);
     applyColourToDocument(colour);
-    const buttonColour = buttonColourId ? getThemeColour(buttonColourId) : colour;
+    const buttonColour = buttonColourId ? getResolvedColour(buttonColourId, customThemes) : colour;
     applyButtonColourToDocument(buttonColour);
-    const accentLineColour = accentLineColourId ? getThemeColour(accentLineColourId) : colour;
+    const accentLineColour = accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : colour;
     applyAccentLineToDocument(accentLineColour);
-  }, [colourId, buttonColourId, accentLineColourId]);
+  }, [colourId, buttonColourId, accentLineColourId, customThemes]);
+
+  const persistCustomThemes = useCallback((next) => {
+    setCustomThemesState(next);
+    try {
+      localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(next));
+    } catch (_) {}
+  }, []);
+
+  const addCustomTheme = useCallback((theme) => {
+    const id = theme.id || `custom-${Date.now()}`;
+    const next = [...customThemes, { ...theme, id }];
+    persistCustomThemes(next);
+    return id;
+  }, [customThemes, persistCustomThemes]);
+
+  const removeCustomTheme = useCallback((id) => {
+    const next = customThemes.filter((c) => c.id !== id);
+    persistCustomThemes(next);
+    if (colourId === id) {
+      setColourIdState(DEFAULT_COLOUR_ID);
+      try {
+        localStorage.setItem(STORAGE_KEY_COLOUR, DEFAULT_COLOUR_ID);
+      } catch (_) {}
+    }
+    if (buttonColourId === id) {
+      setButtonColourIdState(null);
+      try {
+        localStorage.setItem(STORAGE_KEY_BUTTON, '');
+      } catch (_) {}
+    }
+    if (accentLineColourId === id) {
+      setAccentLineColourIdState(null);
+      try {
+        localStorage.setItem(STORAGE_KEY_ACCENT_LINE, '');
+      } catch (_) {}
+    }
+  }, [customThemes, persistCustomThemes, colourId, buttonColourId, accentLineColourId]);
 
   useEffect(() => {
     applyTextureToDocument(textureId);
@@ -254,10 +324,14 @@ export function ThemeProvider({ children }) {
     setAccentLineColour,
     resetButtonToDefault,
     resetAccentLineToDefault,
-    colour: getThemeColour(colourId),
+    customThemes,
+    addCustomTheme,
+    removeCustomTheme,
+    getResolvedColour: (id) => getResolvedColour(id, customThemes),
+    colour: getResolvedColour(colourId, customThemes),
     texture: getThemeTexture(textureId),
-    buttonColour: buttonColourId ? getThemeColour(buttonColourId) : null,
-    accentLineColour: accentLineColourId ? getThemeColour(accentLineColourId) : null,
+    buttonColour: buttonColourId ? getResolvedColour(buttonColourId, customThemes) : null,
+    accentLineColour: accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : null,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
