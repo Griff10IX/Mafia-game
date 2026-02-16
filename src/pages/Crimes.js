@@ -142,9 +142,20 @@ const CrimeRow = ({ crime, onCommit }) => {
       {/* Crime info */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <span className="text-primary/50 text-xs">▸</span>
-        <div className="min-w-0">
-          <div className="text-sm font-heading font-bold text-foreground truncate">
-            {crime.name}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-heading font-bold text-foreground truncate">
+              {crime.name}
+            </span>
+            {crime.unlocked === false && crime.min_rank_name && (
+              <span
+                className="shrink-0 inline-flex items-center gap-1 bg-zinc-800/50 text-mutedForeground rounded px-2 py-0.5 text-[10px] font-bold uppercase border border-zinc-700/50"
+                title={`Unlocked at rank ${crime.min_rank_name}`}
+              >
+                <HelpCircle size={10} />
+                Unlocked at rank {crime.min_rank_name}
+              </span>
+            )}
           </div>
           <div className="text-[10px] text-mutedForeground truncate hidden sm:block">
             {crime.description}
@@ -194,15 +205,7 @@ const CrimeRow = ({ crime, onCommit }) => {
             Wait
           </button>
         ) : crime.unlocked === false && crime.min_rank_name ? (
-          <button
-            type="button"
-            disabled
-            title={`Unlocked at rank ${crime.min_rank_name}`}
-            className="bg-zinc-800/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-700/50 cursor-not-allowed flex items-center gap-1"
-          >
-            <HelpCircle size={10} />
-            Unlocked at rank {crime.min_rank_name}
-          </button>
+          <span className="text-[10px] text-mutedForeground">—</span>
         ) : (
           <button
             type="button"

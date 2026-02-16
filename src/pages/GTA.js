@@ -100,13 +100,24 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
         ) : (
           <Lock className="text-mutedForeground/50 w-4 h-4 shrink-0" />
         )}
-        <div className="min-w-0">
-          <span className="text-sm font-heading font-bold text-foreground truncate block">
-            {option.name}
-          </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-heading font-bold text-foreground truncate block">
+              {option.name}
+            </span>
+            {!unlocked && option.min_rank_name && (
+              <span
+                className="shrink-0 inline-flex items-center gap-1 bg-zinc-800/50 text-mutedForeground rounded px-2 py-0.5 text-[10px] font-bold uppercase border border-zinc-700/50"
+                title={`Unlocked at rank ${option.min_rank_name}`}
+              >
+                <Lock size={10} />
+                Unlocked at rank {option.min_rank_name}
+              </span>
+            )}
+          </div>
           <div className="text-[10px] text-mutedForeground truncate">
             {!unlocked && option.min_rank_name
-              ? `Unavailable — Unlocked at rank ${option.min_rank_name}`
+              ? 'Unavailable'
               : `Difficulty ${option.difficulty}/5`}
           </div>
         </div>
@@ -159,15 +170,9 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
             Wait
           </button>
         ) : (
-          <button
-            type="button"
-            disabled
-            title={option.min_rank_name ? `Unlocked at rank ${option.min_rank_name}` : 'Locked'}
-            className="bg-zinc-800/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-700/50 cursor-not-allowed flex items-center gap-1"
-          >
-            <Lock size={10} />
-            {option.min_rank_name ? `Unlocked at rank ${option.min_rank_name}` : 'Locked'}
-          </button>
+          <span className="text-[10px] text-mutedForeground">
+            {option.min_rank_name ? '—' : 'Locked'}
+          </span>
         )}
       </div>
     </div>
