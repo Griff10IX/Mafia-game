@@ -1,11 +1,3 @@
-/* App-wide theme: default is Gold; overridden by applyAppTheme() when user has chosen a theme */
-:root {
-  --app-accent: #d4af37;
-  --app-accent-foreground: #ffffff;
-  --app-accent-bright: #e6c229;
-  --app-accent-dark: #b8860b;
-}
-
 .App {
   min-height: 100vh;
   background-color: #050505;

@@ -830,11 +830,6 @@ export default function FamilyPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
-  useEffect(() => {
-    const onThemeChange = () => setTick((t) => t + 1);
-    window.addEventListener('app:game-theme-changed', onThemeChange);
-    return () => window.removeEventListener('app:game-theme-changed', onThemeChange);
-  }, []);
   useEffect(() => { if (showWarModal && myFamily?.family) api.get('/families/war/stats').then((res) => setWarStats(res.data)).catch(() => {}); }, [showWarModal, myFamily?.family]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><div className="text-primary text-sm font-heading">Loading...</div></div>;

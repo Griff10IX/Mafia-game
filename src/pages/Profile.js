@@ -4,7 +4,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
-import { GAME_THEME_STORAGE_KEY, GAME_THEME_OPTIONS, DEFAULT_GAME_THEME } from '../constants';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import styles from '../styles/noir.module.css';
@@ -512,14 +511,6 @@ export default function Profile() {
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [changingPassword, setChangingPassword] = useState(false);
-  const [gameTheme, setGameTheme] = useState(() => {
-    try {
-      return localStorage.getItem(GAME_THEME_STORAGE_KEY) || DEFAULT_GAME_THEME;
-    } catch {
-      return DEFAULT_GAME_THEME;
-    }
-  });
-
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
 
@@ -577,24 +568,8 @@ export default function Profile() {
     }
   };
   useEffect(() => {
-    if (settingsOpen && isMe) {
-      fetchPrefs();
-      try {
-        setGameTheme(localStorage.getItem(GAME_THEME_STORAGE_KEY) || DEFAULT_GAME_THEME);
-      } catch (_) {}
-    }
+    if (settingsOpen && isMe) fetchPrefs();
   }, [settingsOpen, isMe]);
-
-  const setGameThemeAndSave = (value) => {
-    setGameTheme(value);
-    try {
-      localStorage.setItem(GAME_THEME_STORAGE_KEY, value);
-      window.dispatchEvent(new CustomEvent('app:game-theme-changed', { detail: value }));
-      toast.success('Game theme updated');
-    } catch (_) {
-      toast.error('Could not save theme');
-    }
-  };
 
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
@@ -863,35 +838,6 @@ export default function Profile() {
                         <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
                       </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="border-t border-border pt-4">
-                <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Game theme settings</h3>
-                <p className="text-xs text-mutedForeground mb-3">Accent colour applied to all pages. Click a swatch to apply.</p>
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-64 overflow-y-auto pr-1">
-                  {GAME_THEME_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setGameThemeAndSave(opt.value)}
-                      data-testid={`game-theme-${opt.value}`}
-                      className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 transition-all text-left ${
-                        gameTheme === opt.value
-                          ? 'border-foreground bg-secondary ring-2 ring-primary/50'
-                          : 'border-transparent bg-secondary/50 hover:bg-secondary hover:border-zinc-600'
-                      }`}
-                      title={opt.label}
-                    >
-                      <span
-                        className="w-10 h-10 rounded-full shrink-0 border-2 border-white/20 shadow-inner"
-                        style={{ backgroundColor: opt.color }}
-                        aria-hidden
-                      />
-                      <span className="text-[10px] font-heading font-bold text-foreground truncate w-full text-center">
-                        {opt.label}
-                      </span>
-                    </button>
                   ))}
                 </div>
               </div>

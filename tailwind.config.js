@@ -20,10 +20,10 @@ module.exports = {
         input: 'hsl(240 4.8% 12%)', // zinc-900/lighter
         secondary: 'hsl(240 4.8% 20%)', // zinc-800
         
-        // Primary - uses app theme (Profile → Game theme settings); default gold
+        // Primary - Yellow/Gold theme (original)
         primary: {
-          DEFAULT: 'var(--app-accent)',
-          foreground: 'var(--app-accent-foreground)',
+          DEFAULT: '#eab308', // yellow-500
+          foreground: '#000000', // black text on yellow
         },
         
         // Muted text
