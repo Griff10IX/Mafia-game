@@ -85,7 +85,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
       <div
         className="absolute inset-0 z-30"
         style={{
-          animation: spinning ? `ball-orbit ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.55, 0.15, 1.0) forwards` : 'none',
+          animation: spinning ? `ball-orbit ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.0, 0.15, 1.0) forwards` : 'none',
           transform: spinning ? undefined : 'rotate(0deg)',
         }}
       >
@@ -94,7 +94,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
           style={{
             width: 10,
             height: 10,
-            top: 12,
+            top: 6,
             left: '50%',
             transform: 'translateX(-50%)',
             background: 'radial-gradient(circle at 35% 30%, #ffffff, #e0e0e0, #999)',
@@ -439,7 +439,10 @@ export default function Rlt() {
           50% { box-shadow: 0 0 40px rgba(212,175,55,0.5); }
         }
         @keyframes ball-orbit {
-          0% { transform: rotate(0deg); }
+          0%   { transform: rotate(0deg); }
+          20%  { transform: rotate(-720deg); }
+          50%  { transform: rotate(-1800deg); }
+          75%  { transform: rotate(-2340deg); }
           100% { transform: rotate(-2520deg); }
         }
         .animate-result-glow { animation: result-glow 1s ease-in-out 3; }
