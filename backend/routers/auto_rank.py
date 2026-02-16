@@ -156,21 +156,32 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return False
-    # Apply travel arrival if due (we don't go through get_current_user in this loop)
+    # Always clear overdue travel first so we never get stuck (arrival applied even if a previous update failed)
     arrives_at = user.get("travel_arrives_at")
-    if arrives_at:
-        try:
-            arrives_dt = _parse_iso(arrives_at)
-            if arrives_dt and now >= arrives_dt:
-                dest = user.get("traveling_to")
-                if dest:
-                    await db.users.update_one(
-                        {"id": user_id},
-                        {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
-                    )
+    traveling_to = user.get("traveling_to")
+    if arrives_at and traveling_to:
+        arrives_dt = _parse_iso(arrives_at)
+        if arrives_dt and now >= arrives_dt:
+            try:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$set": {"current_state": traveling_to}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+                )
+                user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            except Exception as e:
+                logger.warning("Auto rank booze: arrival update failed for %s, will retry: %s", user_id, e)
+            if user and user.get("travel_arrives_at"):
+                # Fallback: first update may have failed, retry once and reload
+                try:
+                    dest = user.get("traveling_to")
+                    if dest:
+                        await db.users.update_one(
+                            {"id": user_id},
+                            {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+                        )
                     user = await db.users.find_one({"id": user_id}, {"_id": 0})
-        except Exception:
-            pass
+                except Exception as e2:
+                    logger.exception("Auto rank booze: arrival retry failed for %s: %s", user_id, e2)
     if not user:
         return False
     if user.get("in_jail"):
@@ -540,13 +551,29 @@ async def _run_auto_rank_for_user(
 
 
 async def run_booze_arrivals():
-    """Run booze for users who have just arrived (travel_arrives_at <= now) so they sell immediately after travel instead of waiting for the next full tick."""
+    """Run booze for users who have just arrived (travel_arrives_at <= now) so they sell immediately after travel instead of waiting for the next full tick. Also clears overdue travel for booze users who are in jail so when they get out they're not stuck."""
     import server as srv
     from security import send_telegram_to_chat
 
     db = srv.db
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
+    # Clear overdue travel for booze users who are in jail (so when they get out they're in the right city, not stuck)
+    stuck_jailed = db.users.find(
+        {"auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}},
+        {"_id": 0, "id": 1, "traveling_to": 1},
+    )
+    async for u in stuck_jailed:
+        dest = (u.get("traveling_to") or "").strip()
+        if dest:
+            try:
+                await db.users.update_one(
+                    {"id": u["id"]},
+                    {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+                )
+            except Exception as e:
+                logger.warning("Auto rank booze cleanup: arrival update for jailed %s failed: %s", u.get("id"), e)
+    # Process arrivals for sell step
     cursor = db.users.find(
         {
             "auto_rank_enabled": True,
