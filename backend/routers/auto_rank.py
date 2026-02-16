@@ -386,34 +386,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     lines = [f"**Auto Rank** — {username}", ""]
     has_success = False
 
-    # --- Jail bust: one attempt per cycle (skip when bust_every_5_sec; they get busts in the 5-sec loop) ---
-    if not bust_every_5:
-        bust_target_username = None
-        npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
-        if npc:
-            bust_target_username = npc.get("username")
-        if not bust_target_username:
-            jailed = await db.users.find_one(
-                {"in_jail": True, "id": {"$ne": user_id}},
-                {"_id": 0, "username": 1},
-            )
-            if jailed:
-                bust_target_username = jailed.get("username")
-        if bust_target_username:
-            from routers.jail import _attempt_bust_impl
-            try:
-                bust_result = await _attempt_bust_impl(user, bust_target_username)
-                if not bust_result.get("error") and bust_result.get("success"):
-                    has_success = True
-                    rp = bust_result.get("rank_points_earned") or 0
-                    cash = bust_result.get("cash_reward") or 0
-                    await _update_auto_rank_stats_bust(db, user_id, cash, now)
-                    parts = [f"Busted {bust_target_username}! +{rp} RP"]
-                    if cash:
-                        parts.append(f"${cash:,}")
-                    lines.append("**Bust** — " + ". ".join(parts) + ".")
-            except Exception as e:
-                logger.exception("Auto rank bust for %s: %s", user_id, e)
+    # Busts only run for users with "Jail bust every 5 seconds" on (via run_bust_5sec_loop). Main cycle does not do busts.
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
