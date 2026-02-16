@@ -79,6 +79,27 @@ class AirportSellRequest(BaseModel):
 
 
 # ----- Travel routes -----
+async def get_travel_status(current_user: dict = Depends(get_current_user)):
+    """Lightweight status for layout poll: traveling, seconds_remaining, destination. Returns 200 so layout can show travel countdown."""
+    traveling_to = current_user.get("traveling_to")
+    travel_arrives_at = current_user.get("travel_arrives_at")
+    seconds_remaining = None
+    if travel_arrives_at and traveling_to:
+        try:
+            arrives_dt = datetime.fromisoformat(travel_arrives_at.replace("Z", "+00:00"))
+            secs = max(0, int((arrives_dt - datetime.now(timezone.utc)).total_seconds()))
+            seconds_remaining = secs if secs > 0 else None
+        except Exception:
+            pass
+    traveling = seconds_remaining is not None and seconds_remaining > 0
+    return {
+        "traveling": traveling,
+        "seconds_remaining": seconds_remaining if traveling else 0,
+        "destination": traveling_to if traveling else (current_user.get("current_state") or ""),
+        "current_state": current_user.get("current_state") or "",
+    }
+
+
 async def get_travel_info(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id")
     now = time.monotonic()
@@ -428,6 +449,7 @@ async def airport_sell_on_trade(req: AirportSellRequest, current_user: dict = De
 
 
 def register(router):
+    router.add_api_route("/travel/status", get_travel_status, methods=["GET"])
     router.add_api_route("/travel/info", get_travel_info, methods=["GET"])
     router.add_api_route("/travel", travel, methods=["POST"])
     router.add_api_route("/travel/buy-airmiles", buy_extra_airmiles, methods=["POST"])

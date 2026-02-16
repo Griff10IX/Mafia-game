@@ -377,6 +377,15 @@ export default function Jail() {
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Bust stats</span>
         </div>
         <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm font-heading">
+          <div className="rounded bg-primary/10 border border-primary/30 p-2 text-center">
+            <div className="text-lg font-bold text-primary">{jailStatus.current_consecutive_busts ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Streak</div>
+            <div className="text-[9px] text-mutedForeground/80 mt-0.5">Successful busts without going to jail</div>
+          </div>
+          <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
+            <div className="text-lg font-bold text-foreground">{jailStatus.consecutive_busts_record ?? 0}</div>
+            <div className="text-[10px] text-mutedForeground uppercase">Record</div>
+          </div>
           <div className="rounded bg-secondary/50 border border-border/50 p-2 text-center">
             <div className="text-lg font-bold text-foreground">{jailStats.count_today ?? 0}</div>
             <div className="text-[10px] text-mutedForeground uppercase">Today</div>
