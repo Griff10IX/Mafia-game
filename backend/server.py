@@ -347,7 +347,6 @@ class UserResponse(BaseModel):
     has_casino_or_property: bool = False  # true if user owns a casino or property (airport, bullet factory, armory) — for menu visibility
     theme_preferences: Optional[Dict] = None  # saved theme (colour, font, etc.) for cross-device sync
 
-# Notification/Inbox models
 class NotificationCreate(BaseModel):
     title: str
     message: str
@@ -362,14 +361,6 @@ class DeadAliveRetrieveRequest(BaseModel):
 
 class AvatarUpdateRequest(BaseModel):
     avatar_data: str  # data URL: data:image/...;base64,...
-
-class NotificationPreferencesRequest(BaseModel):
-    """Optional; only include keys you want to update. True = receive, False = mute."""
-    ent_games: Optional[bool] = None
-    oc_invites: Optional[bool] = None
-    attacks: Optional[bool] = None
-    system: Optional[bool] = None
-    messages: Optional[bool] = None
 
 class ThemePreferencesRequest(BaseModel):
     """Theme preferences (all optional). Omitted keys are left unchanged; send full object to replace."""
@@ -389,13 +380,6 @@ class ThemePreferencesRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
-
-class SendMessageRequest(BaseModel):
-    """Send a direct message to another user (inbox). Supports text, emojis, and optional GIF URL."""
-    target_username: str
-    message: str
-    gif_url: Optional[str] = None
-
 
 class PropertyResponse(BaseModel):
     id: str
@@ -1232,8 +1216,6 @@ async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depen
     )
     return {"message": "Avatar updated"}
 
-DEFAULT_NOTIFICATION_PREFS = {"ent_games": True, "oc_invites": True, "attacks": True, "system": True, "messages": True}
-
 @api_router.get("/profile/theme")
 async def get_profile_theme(current_user: dict = Depends(get_current_user)):
     """Get current user's theme preferences (for cross-device sync). Returns defaults if never set."""
@@ -1268,26 +1250,6 @@ async def update_profile_theme(request: ThemePreferencesRequest, current_user: d
     )
     return {"message": "Theme saved", "theme_preferences": new_prefs}
 
-
-@api_router.get("/profile/preferences")
-async def get_profile_preferences(current_user: dict = Depends(get_current_user)):
-    """Get current user's notification preferences (for profile settings)."""
-    prefs = current_user.get("notification_preferences") or {}
-    out = {k: prefs.get(k, v) for k, v in DEFAULT_NOTIFICATION_PREFS.items()}
-    return {"notification_preferences": out}
-
-@api_router.patch("/profile/preferences")
-async def update_profile_preferences(request: NotificationPreferencesRequest, current_user: dict = Depends(get_current_user)):
-    """Update notification preferences. Only provided keys are updated."""
-    updates = {k: v for k, v in request.model_dump().items() if v is not None}
-    if not updates:
-        return {"message": "No preferences to update", "notification_preferences": current_user.get("notification_preferences") or DEFAULT_NOTIFICATION_PREFS}
-    new_prefs = {**(current_user.get("notification_preferences") or DEFAULT_NOTIFICATION_PREFS), **updates}
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"notification_preferences": new_prefs}}
-    )
-    return {"message": "Preferences updated", "notification_preferences": new_prefs}
 
 @api_router.post("/profile/change-password")
 async def change_password(request: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
@@ -4745,144 +4707,6 @@ async def get_payment_status(session_id: str, current_user: dict = Depends(get_c
 async def stripe_webhook(request: Request):
     raise HTTPException(status_code=503, detail="Payments not available")
 
-# ============ NOTIFICATION/INBOX ENDPOINTS ============
-
-@api_router.get("/notifications")
-async def get_notifications(current_user: dict = Depends(get_current_user)):
-    notifications = await db.notifications.find(
-        {"user_id": current_user["id"]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
-    
-    unread_count = await db.notifications.count_documents({"user_id": current_user["id"], "read": False})
-    
-    return {"notifications": notifications, "unread_count": unread_count}
-
-@api_router.post("/notifications/{notification_id}/read")
-async def mark_notification_read(notification_id: str, current_user: dict = Depends(get_current_user)):
-    await db.notifications.update_one(
-        {"id": notification_id, "user_id": current_user["id"]},
-        {"$set": {"read": True}}
-    )
-    return {"message": "Notification marked as read"}
-
-@api_router.post("/notifications/read-all")
-async def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
-    await db.notifications.update_many(
-        {"user_id": current_user["id"], "read": False},
-        {"$set": {"read": True}}
-    )
-    return {"message": "All notifications marked as read"}
-
-
-@api_router.delete("/notifications/{notification_id}")
-async def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
-    """Delete a single message from the current user's inbox."""
-    result = await db.notifications.delete_one(
-        {"id": notification_id, "user_id": current_user["id"]}
-    )
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    return {"message": "Message deleted"}
-
-
-@api_router.delete("/notifications")
-async def delete_all_notifications(current_user: dict = Depends(get_current_user)):
-    """Delete all messages in the current user's inbox."""
-    result = await db.notifications.delete_many({"user_id": current_user["id"]})
-    return {"message": "All messages deleted", "deleted_count": result.deleted_count}
-
-
-@api_router.post("/notifications/send")
-async def send_message_to_user(request: SendMessageRequest, current_user: dict = Depends(get_current_user)):
-    """Send a direct message to another user. Message can include emojis; optional gif_url is shown as an image."""
-    target_username = (request.target_username or "").strip()
-    if not target_username:
-        raise HTTPException(status_code=400, detail="Enter a username")
-    if (target_username or "").lower() == (current_user.get("username") or "").lower():
-        raise HTTPException(status_code=400, detail="You cannot message yourself")
-    target_username_pattern = _username_pattern(target_username)
-    if not target_username_pattern:
-        raise HTTPException(status_code=404, detail="User not found")
-    target = await db.users.find_one(
-        {"username": target_username_pattern},
-        {"_id": 0, "id": 1, "username": 1}
-    )
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    message = (request.message or "").strip()
-    if not message and not (request.gif_url or "").strip():
-        raise HTTPException(status_code=400, detail="Message or GIF is required")
-    message = message or "(GIF)"
-    gif_url = (request.gif_url or "").strip()
-    if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
-        raise HTTPException(status_code=400, detail="GIF URL must start with http:// or https://")
-    sender_username = current_user.get("username") or "?"
-    title = f"Message from {sender_username}"
-    extra = {"sender_id": current_user["id"], "sender_username": sender_username}
-    if gif_url:
-        extra["gif_url"] = gif_url
-    await send_notification(target["id"], title, message, "user_message", category="messages", **extra)
-    # Store a copy for the sender so thread view can show "You: ..."
-    sent_copy = {
-        "id": str(uuid.uuid4()),
-        "user_id": current_user["id"],
-        "sender_id": current_user["id"],
-        "sender_username": sender_username,
-        "recipient_id": target["id"],
-        "recipient_username": target["username"],
-        "title": f"To {target['username']}",
-        "message": message,
-        "notification_type": "user_message_sent",
-        "read": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    if gif_url:
-        sent_copy["gif_url"] = gif_url
-    await db.notifications.insert_one(sent_copy)
-    return {"message": f"Message sent to {target['username']}"}
-
-
-@api_router.get("/notifications/thread/{other_user_id}")
-async def get_thread(other_user_id: str, current_user: dict = Depends(get_current_user)):
-    """Get conversation thread with another user (for Telegram-style chat). Returns messages from both sides, sorted by time."""
-    me = current_user["id"]
-    # Messages they sent to me (user_message, I am user_id)
-    from_them = await db.notifications.find(
-        {
-            "user_id": me,
-            "sender_id": other_user_id,
-            "notification_type": "user_message",
-        },
-        {"_id": 0, "id": 1, "message": 1, "created_at": 1, "sender_username": 1, "gif_url": 1},
-    ).sort("created_at", 1).to_list(100)
-    # Messages I sent to them (user_message_sent, I am user_id, they are recipient_id)
-    from_me = await db.notifications.find(
-        {
-            "user_id": me,
-            "recipient_id": other_user_id,
-            "notification_type": "user_message_sent",
-        },
-        {"_id": 0, "id": 1, "message": 1, "created_at": 1, "sender_username": 1, "gif_url": 1},
-    ).sort("created_at", 1).to_list(100)
-    # Merge and sort
-    for m in from_them:
-        m["from_me"] = False
-    for m in from_me:
-        m["from_me"] = True
-    thread = sorted(from_them + from_me, key=lambda x: x["created_at"])
-    # Resolve other user's username for header (from first message from them, or we need to look up)
-    other_username = None
-    for m in from_them:
-        if m.get("sender_username"):
-            other_username = m["sender_username"]
-            break
-    if not other_username:
-        other_doc = await db.users.find_one({"id": other_user_id}, {"_id": 0, "username": 1})
-        other_username = (other_doc or {}).get("username") or "User"
-    return {"thread": thread, "other_user_id": other_user_id, "other_username": other_username}
-
-
 @api_router.get("/giphy/search")
 async def giphy_search(
     q: str = Query(..., min_length=1, max_length=50),
@@ -5095,7 +4919,7 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -5127,6 +4951,7 @@ dice.register(api_router)
 roulette.register(api_router)
 blackjack.register(api_router)
 horseracing.register(api_router)
+notifications.register(api_router)
 
 app.include_router(api_router)
 
