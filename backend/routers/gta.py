@@ -826,6 +826,9 @@ async def get_view_car(
     if not car_info:
         raise HTTPException(status_code=404, detail="Car not found")
     owner_id = user_car.get("user_id")
+    # Exclusive cars: only the owner can view by id (keeps them hidden from bots/enumeration)
+    if car_info.get("rarity") == "exclusive" and owner_id != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Car not found")
     rarity = car_info.get("rarity") or "common"
     travel_time = TRAVEL_TIMES.get("custom", 20) if car_info.get("id") == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
     damage_percent = min(100, max(0, float(user_car.get("damage_percent", 0))))
