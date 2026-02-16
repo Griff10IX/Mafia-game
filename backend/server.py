@@ -3382,107 +3382,6 @@ async def admin_seed_families(current_user: dict = Depends(get_current_user)):
         "users": created_users,
     }
 
-@api_router.get("/events/active")
-async def get_active_event(current_user: dict = Depends(get_current_user)):
-    """Current game-wide daily event when enabled; otherwise null. Frontend uses for prices and banners. When all-events-for-testing is on, returns combined event."""
-    enabled = await get_events_enabled()
-    event = await get_effective_event() if enabled else None
-    return {"event": event, "events_enabled": enabled}
-
-
-# Flash news: wars, booze prices, daily game event.
-@api_router.get("/news/flash")
-async def get_flash_news(current_user: dict = Depends(get_current_user)):
-    """Recent flash news: wars, booze price changes, etc. For the top-bar ticker."""
-    now = datetime.now(timezone.utc)
-    now_ts = now.timestamp()
-    items = []
-
-    # Daily game event (only when enabled)
-    try:
-        ev = await get_effective_event()
-        if ev.get("id") != "none":
-            event_start_iso = datetime.now(timezone.utc).date().isoformat()
-            items.append({
-                "id": f"event_{ev.get('id', '')}_{event_start_iso}",
-                "type": "game_event",
-                "message": ev.get("message") or f"Today: {ev.get('name', 'Event')}",
-                "at": event_start_iso + "T00:00:00+00:00",
-            })
-    except Exception:
-        pass
-
-    # Booze run: prices rotate every rotation interval. Show "Booze prices just changed!" for the first part of each rotation.
-    try:
-        interval = get_booze_rotation_interval_seconds()
-        rotation_index = get_booze_rotation_index()
-        rotation_start_ts = rotation_index * interval
-        rotation_start_iso = datetime.fromtimestamp(rotation_start_ts, tz=timezone.utc).isoformat()
-        if now_ts - rotation_start_ts < interval:  # within current rotation window
-            items.append({
-                "id": f"booze_rotation_{rotation_index}",
-                "type": "booze_prices",
-                "message": "Booze prices just changed! Check Booze Run for new rates.",
-                "at": rotation_start_iso,
-            })
-    except Exception:
-        pass
-
-    # Family wars: started and ended
-    wars = await db.family_wars.find({}, {"_id": 0}).sort("created_at", -1).limit(20).to_list(20)
-    family_ids = set()
-    for w in wars:
-        family_ids.add(w.get("family_a_id"))
-        family_ids.add(w.get("family_b_id"))
-    families = await db.families.find({"id": {"$in": list(family_ids)}}, {"_id": 0, "id": 1, "name": 1, "tag": 1}).to_list(50)
-    family_map = {f["id"]: f for f in families}
-    for w in wars:
-        fa = family_map.get(w.get("family_a_id"), {})
-        fb = family_map.get(w.get("family_b_id"), {})
-        a_name = fa.get("name") or "?"
-        b_name = fb.get("name") or "?"
-        status = w.get("status")
-        ended_at = w.get("ended_at")
-        created_at = w.get("created_at") or ""
-        if status in ("active", "truce_offered"):
-            items.append({
-                "id": w.get("id"),
-                "type": "war_started",
-                "message": f"War: {a_name} vs {b_name}",
-                "at": created_at,
-            })
-        elif ended_at:
-            winner_id = w.get("winner_family_id")
-            loser_id = w.get("loser_family_id")
-            if status == "truce":
-                items.append({
-                    "id": w.get("id") + "_truce",
-                    "type": "war_ended",
-                    "message": f"War ended: {a_name} vs {b_name} — truce",
-                    "at": ended_at,
-                })
-            elif winner_id and loser_id:
-                winner = family_map.get(winner_id, {})
-                loser = family_map.get(loser_id, {})
-                wn = winner.get("name") or "?"
-                ln = loser.get("name") or "?"
-                items.append({
-                    "id": w.get("id") + "_end",
-                    "type": "war_ended",
-                    "message": f"War ended: {wn} defeated {ln}",
-                    "at": ended_at,
-                })
-            else:
-                items.append({
-                    "id": w.get("id") + "_end",
-                    "type": "war_ended",
-                    "message": f"War ended: {a_name} vs {b_name}",
-                    "at": ended_at,
-                })
-    # Sort by at desc (most recent first), take 10
-    items.sort(key=lambda x: x["at"], reverse=True)
-    return {"items": items[:10]}
-
 
 
 
@@ -3614,78 +3513,6 @@ async def giphy_search(
     return {"data": data.get("data") or []}
 
 
-# ============ TRAVEL ENDPOINTS ============
-# STATES defined at top of file; do not redefine here
-
-# Casino games and max bets (same in every city; exposed for States page). CASINO_GAMES defined after router imports (needs DICE_MAX_BET from routers.dice).
-
-@api_router.get("/states")
-async def get_states(current_user: dict = Depends(get_current_user)):
-    """List all cities (travel destinations), casino games with max bet, and casino owners per city."""
-    # Fetch all casino ownerships
-    dice_docs = await db.dice_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
-    rlt_docs = await db.roulette_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
-    blackjack_docs = await db.blackjack_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
-    horseracing_docs = await db.horseracing_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
-    
-    # Collect all unique owner IDs
-    all_docs = dice_docs + rlt_docs + blackjack_docs + horseracing_docs
-    owner_ids = list({d["owner_id"] for d in all_docs if d.get("owner_id")})
-    users = await db.users.find({"id": {"$in": owner_ids}}, {"_id": 0, "id": 1, "username": 1, "money": 1}).to_list(len(owner_ids) or 1)
-    user_map = {u["id"]: u for u in users}
-    
-    # Build ownership maps
-    dice_owners = {}
-    roulette_owners = {}
-    blackjack_owners = {}
-    horseracing_owners = {}
-    
-    for d in dice_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        dice_max = d.get("max_bet") if d.get("max_bet") is not None else DICE_MAX_BET
-        dice_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": dice_max, "buy_back_reward": d.get("buy_back_reward")}
-    
-    for d in rlt_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        rlt_max = d.get("max_bet") if d.get("max_bet") is not None else ROULETTE_MAX_BET
-        roulette_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": rlt_max}
-    
-    for d in blackjack_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        bj_max = d.get("max_bet") if d.get("max_bet") is not None else BLACKJACK_MAX_BET
-        blackjack_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": bj_max, "buy_back_reward": d.get("buy_back_reward")}
-    
-    for d in horseracing_docs:
-        if not d.get("owner_id"):
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        hr_max = d.get("max_bet") if d.get("max_bet") is not None else HORSERACING_MAX_BET
-        horseracing_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": hr_max}
-    
-    return {
-        "cities": list(STATES), 
-        "games": CASINO_GAMES, 
-        "dice_owners": dice_owners,
-        "roulette_owners": roulette_owners,
-        "blackjack_owners": blackjack_owners,
-        "horseracing_owners": horseracing_owners
-    }
-
-
 # ============ My Properties (1 casino + 1 property max) ============
 async def _get_casino_property_profit(user_id: str):
     """Return (casino_profit_cash, property_profit_points, has_casino, has_property) for header display and menu visibility."""
@@ -3756,7 +3583,7 @@ async def get_my_properties(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -3797,6 +3624,9 @@ leaderboard.register(api_router)
 armour.register(api_router)
 meta.register(api_router)
 user_progress.register(api_router)
+states.register(api_router)
+events.register(api_router)
+security_admin.register(api_router)
 
 app.include_router(api_router)
 

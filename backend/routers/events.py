@@ -3,14 +3,8 @@ from datetime import datetime, timezone
 
 from fastapi import Depends
 
-from server import (
-    db,
-    get_current_user,
-    get_effective_event,
-    get_events_enabled,
-    _booze_rotation_index,
-    BOOZE_ROTATION_HOURS,
-)
+from server import db, get_current_user, get_effective_event, get_events_enabled
+from routers.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index
 
 
 async def get_active_event(current_user: dict = Depends(get_current_user)):
@@ -38,10 +32,11 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     except Exception:
         pass
     try:
-        rotation_index = _booze_rotation_index()
-        rotation_start_ts = rotation_index * BOOZE_ROTATION_HOURS * 3600
+        interval = get_booze_rotation_interval_seconds()
+        rotation_index = get_booze_rotation_index()
+        rotation_start_ts = rotation_index * interval
         rotation_start_iso = datetime.fromtimestamp(rotation_start_ts, tz=timezone.utc).isoformat()
-        if now_ts - rotation_start_ts < BOOZE_ROTATION_HOURS * 3600:
+        if now_ts - rotation_start_ts < interval:
             items.append({
                 "id": f"booze_rotation_{rotation_index}",
                 "type": "booze_prices",
