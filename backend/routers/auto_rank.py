@@ -34,6 +34,24 @@ async def get_auto_rank_enabled(db) -> bool:
     return doc.get("enabled", True)
 
 
+async def get_auto_rank_config(db) -> dict:
+    """One game_config read for auto_rank: returns enabled and interval_seconds. Use when both are needed (e.g. main loop, interval API)."""
+    doc = await db.game_config.find_one(
+        {"id": GAME_CONFIG_ID}, {"_id": 0, "enabled": 1, "interval_seconds": 1}
+    )
+    if doc is None:
+        return {"enabled": True, "interval_seconds": DEFAULT_INTERVAL_SECONDS}
+    raw = doc.get("interval_seconds")
+    try:
+        interval = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
+    except (TypeError, ValueError):
+        interval = DEFAULT_INTERVAL_SECONDS
+    return {
+        "enabled": doc.get("enabled", True),
+        "interval_seconds": max(MIN_INTERVAL_SECONDS, interval),
+    }
+
+
 def _parse_iso(s):
     if not s:
         return None
@@ -370,8 +388,10 @@ async def _run_bust_only_for_user(
         logger.exception("Auto rank bust-only for %s: %s", user_id, e)
 
 
-async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None):
-    """Commit all crimes that are off cooldown, then one GTA (if off cooldown); send summary to Telegram. When bust_every_5_sec, skip bust here and only run crimes+GTA every 5+ mins."""
+async def _run_auto_rank_for_user(
+    user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, crimes: Optional[list] = None
+):
+    """Commit all crimes that are off cooldown, then one GTA (if off cooldown); send summary to Telegram. When bust_every_5_sec, skip bust here and only run crimes+GTA every 5+ mins. If crimes list is provided, use it instead of fetching (one per cycle)."""
     import server as srv
     from routers.crimes import _commit_crime_impl
     from routers.gta import _attempt_gta_impl, GTA_OPTIONS
@@ -400,10 +420,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     has_success = False
 
     # Busts only run for users with "Jail bust every 5 seconds" on (via run_bust_5sec_loop). Main cycle does not do busts.
-
-    user = await db.users.find_one({"id": user_id}, {"_id": 0})
-    if not user:
-        return
+    # Reuse user from above (no second fetch here)
     if user.get("in_jail"):
         if bust_every_5:
             await db.users.update_one(
@@ -420,7 +437,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
 
     # --- Crimes: commit ALL that are off cooldown and rank-eligible (loop until none left) ---
     if run_crimes:
-        crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
+        if crimes is None:
+            crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
         crime_success_count = 0
         crime_fail_count = 0
         crime_total_cash = 0
@@ -544,12 +562,12 @@ async def run_booze_arrivals():
         await asyncio.sleep(0.2)
 
 
-async def run_auto_rank_due_users():
-    """Find users whose auto_rank_next_run_at is due (or unset), run each once, set their next_run_at = now + interval. Per-user cycles so everyone gets the interval they expect."""
+async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
+    """Find users whose auto_rank_next_run_at is due (or unset), run each once, set their next_run_at = now + interval. Per-user cycles so everyone gets the interval they expect. If interval_seconds provided (e.g. from main loop), skip game_config read."""
     import server as srv
     db = srv.db
     now = datetime.now(timezone.utc)
-    interval = await get_auto_rank_interval_seconds(db)
+    interval = interval_seconds if interval_seconds is not None else await get_auto_rank_interval_seconds(db)
     cursor = db.users.find(
         {
             "auto_rank_enabled": True,
@@ -562,20 +580,25 @@ async def run_auto_rank_due_users():
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(500)
+    # One crimes list per cycle (reused for all users)
+    crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
     next_run = (now.timestamp() + interval)
     next_run_iso = datetime.fromtimestamp(next_run, tz=timezone.utc).isoformat()
     for u in users:
         chat_id = (u.get("telegram_chat_id") or "").strip()
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
         try:
-            await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token)
+            await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token, crimes=crimes)
         except Exception as e:
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
-        await db.users.update_one(
-            {"id": u["id"]},
-            {"$set": {"auto_rank_next_run_at": next_run_iso}},
-        )
         await asyncio.sleep(0.5)
+    # One bulk write to set next_run_at for all processed users (one round-trip instead of N)
+    if users:
+        from pymongo import UpdateOne
+        await db.users.bulk_write(
+            [UpdateOne({"id": u["id"]}, {"$set": {"auto_rank_next_run_at": next_run_iso}}) for u in users],
+            ordered=False,
+        )
 
 
 async def run_bust_5sec_loop():
@@ -689,7 +712,8 @@ async def run_auto_rank_loop():
     db = srv.db
     await asyncio.sleep(60)  # Delay first run 1 min after startup
     while True:
-        if not await get_auto_rank_enabled(db):
+        config = await get_auto_rank_config(db)  # one game_config read per iteration
+        if not config["enabled"]:
             await asyncio.sleep(10)
             continue
         try:
@@ -697,7 +721,7 @@ async def run_auto_rank_loop():
         except Exception as e:
             logger.exception("Auto rank booze arrivals failed: %s", e)
         try:
-            await run_auto_rank_due_users()
+            await run_auto_rank_due_users(interval_seconds=config["interval_seconds"])
         except Exception as e:
             logger.exception("Auto rank due-users run failed: %s", e)
         await asyncio.sleep(LOOP_WAKE_SECONDS)
@@ -832,9 +856,8 @@ def register(router):
     async def get_interval(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
-        interval = await get_auto_rank_interval_seconds(db)
-        enabled = await get_auto_rank_enabled(db)
-        return {"interval_seconds": interval, "min_interval_seconds": MIN_INTERVAL_SECONDS, "enabled": enabled}
+        config = await get_auto_rank_config(db)
+        return {"interval_seconds": config["interval_seconds"], "min_interval_seconds": MIN_INTERVAL_SECONDS, "enabled": config["enabled"]}
 
     @router.post("/auto-rank/start")
     async def start_auto_rank(current_user: dict = Depends(get_current_user)):
