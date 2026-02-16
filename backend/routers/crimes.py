@@ -84,6 +84,7 @@ from server import (
     log_activity,
     maybe_process_rank_up,
     update_objectives_progress,
+    RANKS,
     CrimeResponse,
     CommitCrimeResponse,
 )
@@ -117,12 +118,14 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
         )
         
         unlocked = crime["min_rank"] <= user_rank
+        min_rank_name = next((r["name"] for r in RANKS if r["id"] == crime["min_rank"]), None)
         result.append(
             CrimeResponse(
                 id=crime["id"],
                 name=crime["name"],
                 description=crime["description"],
                 min_rank=crime["min_rank"],
+                min_rank_name=min_rank_name,
                 reward_min=crime["reward_min"],
                 reward_max=crime["reward_max"],
                 cooldown_minutes=crime["cooldown_minutes"],

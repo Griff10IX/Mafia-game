@@ -170,7 +170,7 @@ const CrimeRow = ({ crime, onCommit }) => {
             <span>{crime.remaining}s</span>
           </div>
         ) : (
-          <span className="text-[10px] text-mutedForeground">{crime.wait}</span>
+          <span className="text-[10px] text-mutedForeground" title={crime.wait}>{crime.wait}</span>
         )}
       </div>
 
@@ -192,6 +192,16 @@ const CrimeRow = ({ crime, onCommit }) => {
             className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Wait
+          </button>
+        ) : crime.unlocked === false && crime.min_rank_name ? (
+          <button
+            type="button"
+            disabled
+            title={`Unlocked at rank ${crime.min_rank_name}`}
+            className="bg-zinc-800/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-700/50 cursor-not-allowed flex items-center gap-1"
+          >
+            <HelpCircle size={10} />
+            Unlocked at rank {crime.min_rank_name}
           </button>
         ) : (
           <button
@@ -289,11 +299,14 @@ export default function Crimes() {
         (crime.next_available && (remaining === null || remaining <= 0))
       );
       
+      const lockedByRank = crime.unlocked === false && crime.min_rank_name;
       const wait = canCommit
         ? formatWaitFromMinutes(crime.cooldown_minutes)
         : remaining && remaining > 0
           ? `${remaining}s`
-          : 'Unavailable';
+          : lockedByRank
+            ? `Unavailable — Unlocked at rank ${crime.min_rank_name}`
+            : 'Unavailable';
 
       return {
         ...crime,

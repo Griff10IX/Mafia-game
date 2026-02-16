@@ -26,7 +26,7 @@ FAQ_CONTENT = """What does each feature do? (Normal player features only.)
 
 ——— RANKS (by rank points) ———
 Your rank unlocks crimes, GTA locations, and other content. Earn rank points from crimes, GTA, jail busts, OC heists, and kills.
-• Street Thug (0) → Hustler (1k) → Goon (3k) → Made Man (6k) → Capo (12k) → Underboss (24k) → Consigliere (50k) → Boss (100k) → Don (200k) → Godfather (400k) → The Commission (1M).
+• Rat (0) → Street Thug (250) → Hustler (1k) → Goon (3k) → Made Man (6k) → Capo (12k) → Underboss (24k) → Consigliere (50k) → Boss (100k) → Don (200k) → Godfather (400k, top).
 
 ——— WEALTH RANKS (by cash on hand) ———
 Displayed on your profile; based only on how much cash you’re carrying.

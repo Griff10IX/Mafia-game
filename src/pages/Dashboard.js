@@ -181,7 +181,7 @@ const GameSystemsCard = () => (
           <span className="text-primary">▸</span> Ranks
         </p>
         <p className="text-mutedForeground text-[10px] leading-snug">
-          Rise from Street Thug to The Commission. Each rank unlocks crimes, weapons, and opportunities.
+          Rise from Rat to Godfather. Each rank unlocks crimes, weapons, and opportunities.
         </p>
       </div>
       <div>

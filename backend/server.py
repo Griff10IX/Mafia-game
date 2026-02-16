@@ -79,19 +79,19 @@ api_router = APIRouter(prefix="/api")
 
 # Constants
 STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
-# Rank is based on rank_points only; 20x harder than original scale
+# Rank is based on rank_points only; 20x harder than original scale. Godfather is the top rank.
 RANKS = [
-    {"id": 1, "name": "Street Thug", "required_points": 0},
-    {"id": 2, "name": "Hustler", "required_points": 1000},
-    {"id": 3, "name": "Goon", "required_points": 3000},
-    {"id": 4, "name": "Made Man", "required_points": 6000},
-    {"id": 5, "name": "Capo", "required_points": 12000},
-    {"id": 6, "name": "Underboss", "required_points": 24000},
-    {"id": 7, "name": "Consigliere", "required_points": 50000},
-    {"id": 8, "name": "Boss", "required_points": 100000},
-    {"id": 9, "name": "Don", "required_points": 200000},
-    {"id": 10, "name": "Godfather", "required_points": 400000},
-    {"id": 11, "name": "The Commission", "required_points": 1000000}
+    {"id": 1, "name": "Rat", "required_points": 0},
+    {"id": 2, "name": "Street Thug", "required_points": 250},
+    {"id": 3, "name": "Hustler", "required_points": 1000},
+    {"id": 4, "name": "Goon", "required_points": 3000},
+    {"id": 5, "name": "Made Man", "required_points": 6000},
+    {"id": 6, "name": "Capo", "required_points": 12000},
+    {"id": 7, "name": "Underboss", "required_points": 24000},
+    {"id": 8, "name": "Consigliere", "required_points": 50000},
+    {"id": 9, "name": "Boss", "required_points": 100000},
+    {"id": 10, "name": "Don", "required_points": 200000},
+    {"id": 11, "name": "Godfather", "required_points": 400000},
 ]
 
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)
@@ -280,11 +280,11 @@ POINT_PACKAGES = {
 
 # GTA Options and Cars - Cooldowns: min 30s (easiest), best option 3-4 min (legendary). Unlock by rank.
 GTA_OPTIONS = [
-    {"id": "easy", "name": "Street Parking", "success_rate": 0.85, "jail_time": 10, "difficulty": 1, "cooldown": 30, "min_rank": 3},
-    {"id": "medium", "name": "Residential Area", "success_rate": 0.65, "jail_time": 20, "difficulty": 2, "cooldown": 90, "min_rank": 4},
-    {"id": "hard", "name": "Downtown District", "success_rate": 0.45, "jail_time": 35, "difficulty": 3, "cooldown": 150, "min_rank": 5},
-    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.30, "jail_time": 50, "difficulty": 4, "cooldown": 210, "min_rank": 6},
-    {"id": "legendary", "name": "Private Estate", "success_rate": 0.18, "jail_time": 60, "difficulty": 5, "cooldown": 240, "min_rank": 7}
+    {"id": "easy", "name": "Street Parking", "success_rate": 0.85, "jail_time": 10, "difficulty": 1, "cooldown": 30, "min_rank": 4},
+    {"id": "medium", "name": "Residential Area", "success_rate": 0.65, "jail_time": 20, "difficulty": 2, "cooldown": 90, "min_rank": 5},
+    {"id": "hard", "name": "Downtown District", "success_rate": 0.45, "jail_time": 35, "difficulty": 3, "cooldown": 150, "min_rank": 6},
+    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.30, "jail_time": 50, "difficulty": 4, "cooldown": 210, "min_rank": 7},
+    {"id": "legendary", "name": "Private Estate", "success_rate": 0.18, "jail_time": 60, "difficulty": 5, "cooldown": 240, "min_rank": 8}
 ]
 
 # Travel times based on car rarity (in seconds)
@@ -578,6 +578,7 @@ class CrimeResponse(BaseModel):
     name: str
     description: str
     min_rank: int
+    min_rank_name: Optional[str] = None  # rank name required to unlock (e.g. "Hustler")
     reward_min: int
     reward_max: int
     cooldown_minutes: float
@@ -11319,12 +11320,12 @@ async def init_game_data():
     crimes = [
         {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 20, "reward_max": 60, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
         {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 40, "reward_max": 120, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
-        {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 2, "reward_min": 200, "reward_max": 500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
-        {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 3, "reward_min": 800, "reward_max": 1800, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
-        {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 4, "reward_min": 2000, "reward_max": 4500, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
-        {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 5, "reward_min": 4000, "reward_max": 9000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
-        {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 7, "reward_min": 18000, "reward_max": 50000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
-        {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 9, "reward_min": 70000, "reward_max": 180000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
+        {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 3, "reward_min": 200, "reward_max": 500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
+        {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 4, "reward_min": 800, "reward_max": 1800, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
+        {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 5, "reward_min": 2000, "reward_max": 4500, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
+        {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 6, "reward_min": 4000, "reward_max": 9000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
+        {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 8, "reward_min": 18000, "reward_max": 50000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
+        {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 10, "reward_min": 70000, "reward_max": 180000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
     ]
     await db.crimes.insert_many(crimes)
     

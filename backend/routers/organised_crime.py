@@ -105,7 +105,7 @@ HEIST_JOBS = [
         "rank_points": 120,
         "jail_time": 45,  # 45 seconds
         "jail_chance": 0.05,  # 5% chance of jail on failure
-        "min_rank": 1,
+        "min_rank": 2,
         "setup_cost": 1_000_000
     },
     {
@@ -116,7 +116,7 @@ HEIST_JOBS = [
         "rank_points": 360,
         "jail_time": 60,  # 1 minute
         "jail_chance": 0.08,  # 8% chance of jail on failure
-        "min_rank": 3,
+        "min_rank": 4,
         "setup_cost": 1_000_000
     },
     {
@@ -127,7 +127,7 @@ HEIST_JOBS = [
         "rank_points": 960,
         "jail_time": 75,  # 1 min 15 sec
         "jail_chance": 0.12,  # 12% chance of jail on failure
-        "min_rank": 5,
+        "min_rank": 6,
         "setup_cost": 1_000_000
     },
     {
@@ -138,7 +138,7 @@ HEIST_JOBS = [
         "rank_points": 1920,
         "jail_time": 90,  # 1 min 30 sec (max)
         "jail_chance": 0.15,  # 15% chance of jail on failure
-        "min_rank": 7,
+        "min_rank": 8,
         "setup_cost": 1_000_000
     }
 ]

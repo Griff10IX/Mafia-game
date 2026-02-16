@@ -6,19 +6,19 @@ Imported by server.py and optionally by routers.
 # Locations (travel / attack states)
 STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
 
-# Rank is based on rank_points only
+# Rank is based on rank_points only. Godfather is the top rank.
 RANKS = [
-    {"id": 1, "name": "Street Thug", "required_points": 0},
-    {"id": 2, "name": "Hustler", "required_points": 1000},
-    {"id": 3, "name": "Goon", "required_points": 3000},
-    {"id": 4, "name": "Made Man", "required_points": 6000},
-    {"id": 5, "name": "Capo", "required_points": 12000},
-    {"id": 6, "name": "Underboss", "required_points": 24000},
-    {"id": 7, "name": "Consigliere", "required_points": 50000},
-    {"id": 8, "name": "Boss", "required_points": 100000},
-    {"id": 9, "name": "Don", "required_points": 200000},
-    {"id": 10, "name": "Godfather", "required_points": 400000},
-    {"id": 11, "name": "The Commission", "required_points": 1000000},
+    {"id": 1, "name": "Rat", "required_points": 0},
+    {"id": 2, "name": "Street Thug", "required_points": 250},
+    {"id": 3, "name": "Hustler", "required_points": 1000},
+    {"id": 4, "name": "Goon", "required_points": 3000},
+    {"id": 5, "name": "Made Man", "required_points": 6000},
+    {"id": 6, "name": "Capo", "required_points": 12000},
+    {"id": 7, "name": "Underboss", "required_points": 24000},
+    {"id": 8, "name": "Consigliere", "required_points": 50000},
+    {"id": 9, "name": "Boss", "required_points": 100000},
+    {"id": 10, "name": "Don", "required_points": 200000},
+    {"id": 11, "name": "Godfather", "required_points": 400000},
 ]
 
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)

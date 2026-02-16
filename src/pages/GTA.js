@@ -105,8 +105,9 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
             {option.name}
           </span>
           <div className="text-[10px] text-mutedForeground truncate">
-            Difficulty {option.difficulty}/5
-            {!unlocked && ` • ${option.min_rank_name}`}
+            {!unlocked && option.min_rank_name
+              ? `Unavailable — Unlocked at rank ${option.min_rank_name}`
+              : `Difficulty ${option.difficulty}/5`}
           </div>
         </div>
       </div>
@@ -161,10 +162,11 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled })
           <button
             type="button"
             disabled
+            title={option.min_rank_name ? `Unlocked at rank ${option.min_rank_name}` : 'Locked'}
             className="bg-zinc-800/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-700/50 cursor-not-allowed flex items-center gap-1"
           >
             <Lock size={10} />
-            Locked
+            {option.min_rank_name ? `Unlocked at rank ${option.min_rank_name}` : 'Locked'}
           </button>
         )}
       </div>
