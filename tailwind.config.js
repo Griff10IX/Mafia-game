@@ -15,7 +15,8 @@ module.exports = {
         // Base theme colors - dark zinc palette
         border: 'hsl(240 3.7% 15.9%)', // zinc-800
         background: 'hsl(240 10% 3.9%)', // zinc-950
-        foreground: 'hsl(0 0% 98%)', // zinc-50
+        // Main and muted text – from theme (ThemeContext sets --foreground and --muted-foreground for Writing colour)
+        foreground: 'hsl(var(--foreground, 0 0% 98%))',
         card: 'hsl(240 5.9% 10%)', // zinc-900
         input: 'hsl(240 4.8% 12%)', // zinc-900/lighter
         secondary: 'hsl(240 4.8% 20%)', // zinc-800
@@ -26,8 +27,8 @@ module.exports = {
           foreground: 'hsl(var(--primary-foreground))',
         },
         
-        // Muted text
-        mutedForeground: '#a1a1aa', // zinc-400
+        // Muted text – follows Theme → Writing colour (muted)
+        mutedForeground: 'hsl(var(--muted-foreground, 240 5% 65%))',
         
         // Status colors
         profit: '#22c55e', // green-500
