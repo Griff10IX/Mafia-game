@@ -1,4 +1,5 @@
 # GTA endpoints: options, attempt, garage, melt
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 import random
@@ -134,21 +135,26 @@ def _gta_progress_from_attempts(gta_attempts: int) -> int:
 async def get_gta_options(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
-    cooldown_doc = await db.gta_cooldowns.find_one(
-        {"user_id": current_user["id"]},
-        {"_id": 0, "cooldown_until": 1},
+    option_ids = [o["id"] for o in GTA_OPTIONS]
+    cooldown_doc, user_gta_list = await asyncio.gather(
+        db.gta_cooldowns.find_one(
+            {"user_id": current_user["id"]},
+            {"_id": 0, "cooldown_until": 1},
+        ),
+        db.user_gta.find(
+            {"user_id": current_user["id"], "option_id": {"$in": option_ids}},
+            {"_id": 0, "option_id": 1, "attempts": 1, "successes": 1, "progress": 1, "progress_max": 1},
+        ).to_list(len(option_ids)),
     )
     global_cooldown_until = None
     if cooldown_doc:
         until = datetime.fromisoformat(cooldown_doc["cooldown_until"])
         if until > now:
             global_cooldown_until = cooldown_doc["cooldown_until"]
+    user_gta_by_id = {ug["option_id"]: ug for ug in user_gta_list}
     result = []
     for opt in GTA_OPTIONS:
-        user_gta = await db.user_gta.find_one(
-            {"user_id": current_user["id"], "option_id": opt["id"]},
-            {"_id": 0},
-        )
+        user_gta = user_gta_by_id.get(opt["id"])
         attempts = int((user_gta or {}).get("attempts", 0) or 0)
         successes = int((user_gta or {}).get("successes", 0) or 0)
         stored = (user_gta or {}).get("progress")
