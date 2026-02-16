@@ -526,8 +526,9 @@ export const DEFAULT_BUTTON_STYLE_ID = 'original';
 export const DEFAULT_TEXTURE_ID = 'none';
 
 /**
- * Full presets: one-click theme bundles (colour + texture + optional button/accent).
+ * Full presets: one-click theme bundles (colour + texture + optional button/accent/writing/buttonStyle).
  * buttonColourId / accentLineColourId: null = use main colour.
+ * Optional: writingColourId, mutedWritingColourId, buttonStyleId, fontId, textStyleId, toastTextColourId for full presets.
  */
 export const THEME_PRESETS = [
   { id: 'original', name: 'Original theme', description: 'Default look before custom themes', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
@@ -561,6 +562,20 @@ export const THEME_PRESETS = [
   { id: 'vintage-noir', name: 'Vintage Noir', description: 'Sepia noir', colourId: 'sepia', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'concrete-boss', name: 'Concrete Boss', description: 'Steel', colourId: 'steel', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'blood-money', name: 'Blood & Money', description: 'Wine red, dark', colourId: 'wine', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+
+  /* Full multicolored presets (accent + writing + buttons coordinated) */
+  { id: 'neon-pink-full', name: 'Neon Pink', description: 'Pink accent, blush text, glossy', colourId: 'neon-pink', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'blush-text', mutedWritingColourId: 'hot-pink-light', buttonStyleId: 'glossy', toastTextColourId: 'blush-text', isFullPreset: true },
+  { id: 'ocean-full', name: 'Ocean Blue', description: 'Teal accent, sky text, glossy', colourId: 'teal', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'sky-text', mutedWritingColourId: 'aqua-text', buttonStyleId: 'glossy', toastTextColourId: 'sky-text', isFullPreset: true },
+  { id: 'forest-full', name: 'Forest Green', description: 'Green accent, mint text, flat', colourId: 'emerald', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'mint-text', mutedWritingColourId: 'sage-text', buttonStyleId: 'flat', toastTextColourId: 'mint-text', isFullPreset: true },
+  { id: 'sunset-full', name: 'Sunset', description: 'Orange accent, peach text, shaded', colourId: 'sunset', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'peach-text', mutedWritingColourId: 'melon', buttonStyleId: 'shaded', toastTextColourId: 'peach-text', isFullPreset: true },
+  { id: 'lavender-full', name: 'Lavender Dream', description: 'Purple accent, lavender text, glossy', colourId: 'lavender', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'lavender-text', mutedWritingColourId: 'lilac', buttonStyleId: 'glossy', toastTextColourId: 'lavender-text', isFullPreset: true },
+  { id: 'gold-classic-full', name: 'Gold Classic', description: 'Gold accent, cream-gold text, raised', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'cream-gold', mutedWritingColourId: 'warm-white', buttonStyleId: 'raised', toastTextColourId: 'cream-gold', isFullPreset: true },
+  { id: 'coral-full', name: 'Coral', description: 'Coral accent, peach text, glossy', colourId: 'coral', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'coral-text', mutedWritingColourId: 'salmon', buttonStyleId: 'glossy', toastTextColourId: 'coral-text', isFullPreset: true },
+  { id: 'electric-blue-full', name: 'Electric Blue', description: 'Blue accent, cool white text, glossy', colourId: 'electric', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'cool-white', mutedWritingColourId: 'powder-blue', buttonStyleId: 'glossy', toastTextColourId: 'cool-white', isFullPreset: true },
+  { id: 'neon-green-full', name: 'Neon Green', description: 'Green accent, mint text, flat', colourId: 'neon-green', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'eucalyptus', mutedWritingColourId: 'spearmint', buttonStyleId: 'flat', toastTextColourId: 'eucalyptus', isFullPreset: true },
+  { id: 'royal-purple-full', name: 'Royal Purple', description: 'Violet accent, periwinkle text, shadow', colourId: 'violet', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'periwinkle-text', mutedWritingColourId: 'lavender-text', buttonStyleId: 'shadow', toastTextColourId: 'periwinkle-text', isFullPreset: true },
+  { id: 'blood-red-full', name: 'Blood Red', description: 'Deep red accent, warm text, shaded', colourId: 'blood', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'burgundy-text', mutedWritingColourId: null, buttonStyleId: 'shaded', toastTextColourId: 'burgundy-text', isFullPreset: true },
+  { id: 'cyan-full', name: 'Cyan', description: 'Cyan accent, seafoam text, glossy', colourId: 'cyan', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'seafoam', mutedWritingColourId: 'aqua-text', buttonStyleId: 'glossy', toastTextColourId: 'seafoam', isFullPreset: true },
 ];
 
 export function getThemeColour(id) {

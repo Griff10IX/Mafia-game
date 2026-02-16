@@ -25,6 +25,12 @@ export default function ThemePicker({ open, onClose }) {
     setTexture(preset.textureId);
     setButtonColour(preset.buttonColourId ?? null);
     setAccentLineColour(preset.accentLineColourId ?? null);
+    if (preset.writingColourId != null) setWritingColour(preset.writingColourId);
+    if (preset.mutedWritingColourId !== undefined) setMutedWritingColour(preset.mutedWritingColourId ?? null);
+    if (preset.buttonStyleId != null) setButtonStyle(preset.buttonStyleId);
+    if (preset.fontId != null) setFont(preset.fontId);
+    if (preset.textStyleId != null) setTextStyle(preset.textStyleId);
+    if (preset.toastTextColourId !== undefined) setToastTextColour(preset.toastTextColourId ?? null);
   };
 
   const allColours = [...customThemes.map(customToColourEntry), ...THEME_COLOURS];
@@ -38,6 +44,47 @@ export default function ThemePicker({ open, onClose }) {
     label,
     colours: ids.map((id) => writingColourById[id]).filter(Boolean),
   })).filter((s) => s.colours.length > 0);
+
+  const getPresetIsActive = (preset) =>
+    colourId === preset.colourId &&
+    textureId === preset.textureId &&
+    (preset.buttonColourId == null ? buttonColourId == null : buttonColourId === preset.buttonColourId) &&
+    (preset.accentLineColourId == null ? accentLineColourId == null : accentLineColourId === preset.accentLineColourId) &&
+    (preset.writingColourId == null ? true : writingColourId === preset.writingColourId) &&
+    (preset.mutedWritingColourId === undefined ? true : (preset.mutedWritingColourId == null ? mutedWritingColourId == null : mutedWritingColourId === preset.mutedWritingColourId)) &&
+    (preset.buttonStyleId == null ? true : buttonStyleId === preset.buttonStyleId) &&
+    (preset.fontId == null ? true : fontId === preset.fontId) &&
+    (preset.textStyleId == null ? true : textStyleId === preset.textStyleId) &&
+    (preset.toastTextColourId === undefined ? true : (preset.toastTextColourId == null ? toastTextColourId == null : toastTextColourId === preset.toastTextColourId));
+
+  const renderPresetCard = (preset) => {
+    const colour = getThemeColour(preset.colourId);
+    const stops = colour.stops && colour.stops.length >= 2 ? colour.stops : null;
+    const swatchStyle = stops
+      ? { background: `linear-gradient(135deg, ${stops.slice(0, 3).join(', ')})` }
+      : { backgroundColor: colour.primary };
+    const isActive = getPresetIsActive(preset);
+    return (
+      <button
+        key={preset.id}
+        type="button"
+        onClick={() => applyPreset(preset)}
+        className={`flex flex-col rounded-lg border-2 transition-all text-left overflow-hidden ${
+          isActive ? 'border-primary ring-2 ring-primary/30' : 'border-zinc-700 hover:border-primary/50'
+        }`}
+        title={preset.description}
+        data-testid={`theme-preset-${preset.id}`}
+      >
+        <div className="h-10 w-full shrink-0" style={swatchStyle} />
+        <div className="p-2 bg-zinc-800/80">
+          <span className="block text-xs font-heading font-bold text-foreground truncate">{preset.name}</span>
+          {preset.description && (
+            <span className="block text-[10px] text-mutedForeground truncate mt-0.5">{preset.description}</span>
+          )}
+        </div>
+      </button>
+    );
+  };
 
   const [customName, setCustomName] = useState('');
   const [customNumColours, setCustomNumColours] = useState(2);
@@ -133,38 +180,14 @@ export default function ThemePicker({ open, onClose }) {
                     One-click presets
                   </p>
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                    {THEME_PRESETS.map((preset) => {
-                      const colour = getThemeColour(preset.colourId);
-                      const stops = colour.stops && colour.stops.length >= 2 ? colour.stops : null;
-                      const swatchStyle = stops
-                        ? { background: `linear-gradient(135deg, ${stops.slice(0, 3).join(', ')})` }
-                        : { backgroundColor: colour.primary };
-                      const isActive =
-                        colourId === preset.colourId &&
-                        textureId === preset.textureId &&
-                        (preset.buttonColourId == null ? buttonColourId == null : buttonColourId === preset.buttonColourId) &&
-                        (preset.accentLineColourId == null ? accentLineColourId == null : accentLineColourId === preset.accentLineColourId);
-                      return (
-                        <button
-                          key={preset.id}
-                          type="button"
-                          onClick={() => applyPreset(preset)}
-                          className={`flex flex-col rounded-lg border-2 transition-all text-left overflow-hidden ${
-                            isActive ? 'border-primary ring-2 ring-primary/30' : 'border-zinc-700 hover:border-primary/50'
-                          }`}
-                          title={preset.description}
-                          data-testid={`theme-preset-${preset.id}`}
-                        >
-                          <div className="h-10 w-full shrink-0" style={swatchStyle} />
-                          <div className="p-2 bg-zinc-800/80">
-                            <span className="block text-xs font-heading font-bold text-foreground truncate">{preset.name}</span>
-                            {preset.description && (
-                              <span className="block text-[10px] text-mutedForeground truncate mt-0.5">{preset.description}</span>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {THEME_PRESETS.filter((p) => !p.isFullPreset).map((preset) => renderPresetCard(preset))}
+                  </div>
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-4 mb-2 flex items-center gap-1.5">
+                    <LayoutGrid className="w-3.5 h-3.5" />
+                    Full presets (accent, text & buttons)
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                    {THEME_PRESETS.filter((p) => p.isFullPreset).map((preset) => renderPresetCard(preset))}
                   </div>
                 </div>
                 <div className="rounded-lg border border-primary/20 bg-zinc-800/40 p-3 space-y-3">
