@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckSquare, Square, ChevronDown } from 'lucide-react';
+import { CheckSquare, Square } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -165,62 +165,55 @@ export default function SellCars() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
-      {/* Title */}
-      <div className={`${styles.panel} rounded-md border border-primary/20`}>
-        <div className="px-4 py-3 text-center border-b border-primary/20">
-          <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wide">Sell Cars</h1>
-        </div>
-      </div>
-
-      {/* Filter + Prev/Next */}
-      <div className={`${styles.panel} rounded-md border border-primary/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2`}>
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider">Filter:</label>
-          <select
-            value={filterRarity}
-            onChange={(e) => setFilterRarity(e.target.value)}
-            className="bg-input border border-border rounded px-2 py-1.5 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none min-w-[120px] flex items-center gap-1"
-          >
-            <option value="all">All</option>
-            {GTA_RARITIES.map((r) => (
-              <option key={r} value={r}>{RARITY_LABELS[r] || r}</option>
-            ))}
-          </select>
-          <ChevronDown size={12} className="text-mutedForeground shrink-0" />
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
-          >
-            Prev
-          </button>
-          <button
-            type="button"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
-          >
-            Next
-          </button>
-        </div>
-      </div>
-
-      {/* Table: Car | Price | Bullets | Damage | Speed */}
+    <div className={`space-y-2 ${styles.pageContent}`}>
+      {/* Single panel: title + filter + table + actions */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        {/* Title + Filter + Pagination in one bar */}
+        <div className={`px-3 py-1.5 ${styles.panelHeader} border-b border-primary/20 flex flex-wrap items-center justify-between gap-2`}>
+          <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wide">Sell Cars</h1>
+          <div className="flex items-center gap-2">
+            <label className="text-[10px] font-heading text-mutedForeground uppercase">Filter:</label>
+            <select
+              value={filterRarity}
+              onChange={(e) => setFilterRarity(e.target.value)}
+              className="bg-input border border-border rounded px-1.5 py-1 text-[11px] font-heading text-foreground focus:border-primary/50 focus:outline-none min-w-[100px]"
+            >
+              <option value="all">All</option>
+              {GTA_RARITIES.map((r) => (
+                <option key={r} value={r}>{RARITY_LABELS[r] || r}</option>
+              ))}
+            </select>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                disabled={page === 0}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-[11px]">
             <thead>
               <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
-                <th className="w-8 py-2 pl-2 pr-0" />
-                <th className="text-left py-2 px-3">Car</th>
-                <th className="text-right py-2 px-3">Price</th>
-                <th className="text-right py-2 px-3">Bullets</th>
-                <th className="text-right py-2 px-3">Damage</th>
-                <th className="text-right py-2 px-3">Speed</th>
+                <th className="w-7 py-1 pl-1.5 pr-0" />
+                <th className="text-left py-1 px-2">Car</th>
+                <th className="text-right py-1 px-2">Price</th>
+                <th className="text-right py-1 px-2">Bullets</th>
+                <th className="text-right py-1 px-2">Damage</th>
+                <th className="text-right py-1 px-2">Speed</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -230,28 +223,28 @@ export default function SellCars() {
                 const isListed = !!car.listed_for_sale;
                 return (
                   <tr key={car.user_car_id} className="hover:bg-secondary/30 transition-colors">
-                    <td className="py-2 pl-2 pr-0">
+                    <td className="py-1 pl-1.5 pr-0">
                       {car.car_id !== 'car_custom' && (
                         <button
                           type="button"
                           onClick={() => toggleSelect(car.user_car_id)}
-                          className="p-1 rounded hover:bg-primary/10"
+                          className="p-0.5 rounded hover:bg-primary/10"
                         >
                           {selectedIds.has(car.user_car_id) ? (
-                            <CheckSquare size={14} className="text-primary" />
+                            <CheckSquare size={12} className="text-primary" />
                           ) : (
-                            <Square size={14} className="text-mutedForeground" />
+                            <Square size={12} className="text-mutedForeground" />
                           )}
                         </button>
                       )}
                     </td>
-                    <td className="py-2 px-3 font-heading text-foreground">{car.name}</td>
-                    <td className="py-2 px-3 text-right font-heading text-emerald-400">
+                    <td className="py-1 px-2 font-heading text-foreground">{car.name}</td>
+                    <td className="py-1 px-2 text-right font-heading text-emerald-400">
                       {isListed ? `$${(car.sale_price ?? 0).toLocaleString()}` : '—'}
                     </td>
-                    <td className="py-2 px-3 text-right text-mutedForeground font-heading">{bullets}</td>
-                    <td className="py-2 px-3 text-right text-mutedForeground font-heading">—</td>
-                    <td className="py-2 px-3 text-right text-mutedForeground font-heading">{speed} secs</td>
+                    <td className="py-1 px-2 text-right text-mutedForeground font-heading">{bullets}</td>
+                    <td className="py-1 px-2 text-right text-mutedForeground font-heading">—</td>
+                    <td className="py-1 px-2 text-right text-mutedForeground font-heading">{speed} secs</td>
                   </tr>
                 );
               })}
@@ -259,21 +252,16 @@ export default function SellCars() {
           </table>
         </div>
         {paginatedCars.length === 0 && (
-          <p className="p-4 text-center text-sm text-mutedForeground font-heading">No cars to sell</p>
+          <p className="py-2 text-center text-[11px] text-mutedForeground font-heading">No cars to sell</p>
         )}
 
-        {/* Bottom: Check all, Price, Sell, Stop Selling */}
-        <div className={`px-3 py-2 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center gap-3`}>
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <button
-              type="button"
-              onClick={toggleSelectAll}
-              className="p-1 rounded hover:bg-primary/10"
-            >
+        <div className={`px-3 py-1.5 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center gap-2`}>
+          <label className="flex items-center gap-1 cursor-pointer">
+            <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10">
               {paginatedCars.length > 0 && paginatedCars.every((c) => selectedIds.has(c.user_car_id)) ? (
-                <CheckSquare size={14} className="text-primary" />
+                <CheckSquare size={12} className="text-primary" />
               ) : (
-                <Square size={14} className="text-mutedForeground" />
+                <Square size={12} className="text-mutedForeground" />
               )}
             </button>
             <span className="text-[10px] font-heading text-mutedForeground uppercase">Check all</span>
@@ -284,13 +272,13 @@ export default function SellCars() {
             placeholder="Price..."
             value={listPrice}
             onChange={(e) => setListPrice(e.target.value.replace(/\D/g, ''))}
-            className="w-24 bg-input border border-border rounded px-2 py-1 text-xs font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+            className="w-20 bg-input border border-border rounded px-1.5 py-1 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
           />
           <button
             type="button"
             disabled={selectedIds.size === 0 || selling}
             onClick={handleSell}
-            className="px-3 py-1.5 rounded bg-primary/20 text-primary border border-primary/50 font-heading font-bold uppercase text-xs hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-2 py-1 rounded bg-primary/20 text-primary border border-primary/50 font-heading font-bold uppercase text-[11px] hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Sell
           </button>
@@ -298,15 +286,15 @@ export default function SellCars() {
             type="button"
             disabled={selectedIds.size === 0 || stopping}
             onClick={handleStopSelling}
-            className="px-3 py-1.5 rounded bg-secondary border border-border text-foreground font-heading font-bold uppercase text-xs hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="px-2 py-1 rounded bg-secondary border border-border text-foreground font-heading font-bold uppercase text-[11px] hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Stop Selling
           </button>
         </div>
       </div>
 
-      <p className="text-xs text-mutedForeground font-heading">
-        <Link to="/buy-cars" className="text-primary font-bold hover:underline">Buy cars</Link> from the dealer or other players.
+      <p className="text-[10px] text-mutedForeground font-heading">
+        <Link to="/buy-cars" className="text-primary font-bold hover:underline">Buy cars</Link> from dealer or other players.
       </p>
     </div>
   );

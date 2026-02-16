@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, ChevronLeft, ChevronRight, CheckSquare, Square } from 'lucide-react';
+import { Car, CheckSquare, Square } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -213,63 +213,44 @@ export default function BuyCars() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wide">Buy Cars</h1>
+    <div className={`space-y-2 ${styles.pageContent}`}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wide">Buy Cars</h1>
         <Link
           to="/garage"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/30 text-primary font-heading text-xs font-bold hover:bg-primary/10 transition-colors"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/30 text-primary font-heading text-[11px] font-bold hover:bg-primary/10"
         >
-          <Car size={14} />
-          View garage
+          <Car size={12} />
+          Garage
         </Link>
       </div>
 
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className={`px-3 py-2 ${styles.panelHeader} border-b border-primary/20`}>
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">By Rarity</h2>
-          <p className="text-[10px] text-mutedForeground font-heading mt-0.5">Click a row to show vehicles in that category</p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
-                <th className="text-left py-2 px-3">Rarity</th>
-                <th className="text-right py-2 px-3">Speed</th>
-                <th className="text-right py-2 px-3">For Sale</th>
-                <th className="text-right py-2 px-3">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {raritySummary.map((row) => (
-                <tr
-                  key={row.rarity}
-                  onClick={() => setSelectedRarity(selectedRarity === row.rarity ? null : row.rarity)}
-                  className={`cursor-pointer transition-colors ${
-                    selectedRarity === row.rarity ? 'bg-primary/15 border-l-2 border-primary' : 'hover:bg-secondary/50'
-                  }`}
-                >
-                  <td className={`py-2 px-3 font-heading font-bold ${RARITY_COLOR[row.rarity] || 'text-foreground'}`}>
-                    {row.label}
-                  </td>
-                  <td className="py-2 px-3 text-right text-mutedForeground font-heading">{row.speed}</td>
-                  <td className="py-2 px-3 text-right font-heading">{row.forSale || '—'}</td>
-                  <td className="py-2 px-3 text-right font-heading">{row.total || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {raritySummary.length === 0 && (
-          <p className="p-3 text-xs text-mutedForeground font-heading">No dealer or marketplace cars right now.</p>
-        )}
-      </div>
+      <p className="text-[10px] text-mutedForeground font-heading">
+        Dealer stock replenishes in 1–2 hours. Dealer prices are inflated; check marketplace for player listings.
+      </p>
 
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className={`px-3 py-2 ${styles.panelHeader} border-b border-primary/20 flex items-center justify-between`}>
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-            Vehicles{selectedRarity ? ` — ${RARITY_LABELS[selectedRarity] || selectedRarity}` : ''}
-          </h2>
+        {/* Compact rarity row: click to filter */}
+        <div className={`px-3 py-1 ${styles.panelHeader} border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1`}>
+          <span className="text-[10px] font-heading text-mutedForeground uppercase">By rarity:</span>
+          {raritySummary.length === 0 ? (
+            <span className="text-[10px] text-mutedForeground">None</span>
+          ) : (
+            raritySummary.map((row) => (
+              <button
+                key={row.rarity}
+                type="button"
+                onClick={() => setSelectedRarity(selectedRarity === row.rarity ? null : row.rarity)}
+                className={`text-[11px] font-heading font-bold py-0.5 px-1 rounded transition-colors ${
+                  selectedRarity === row.rarity
+                    ? 'bg-primary/20 text-primary border border-primary/50'
+                    : `border border-transparent hover:bg-secondary/50 ${RARITY_COLOR[row.rarity] || 'text-foreground'}`
+                }`}
+              >
+                {row.label} ({row.total})
+              </button>
+            ))
+          )}
           {selectedRarity && (
             <button
               type="button"
@@ -280,84 +261,73 @@ export default function BuyCars() {
             </button>
           )}
         </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-[11px]">
             <thead>
               <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
-                <th className="w-8 py-2 pl-2 pr-0">
-                  <button
-                    type="button"
-                    onClick={toggleSelectAll}
-                    className="p-1 rounded hover:bg-primary/10 transition-colors"
-                    title="Check all"
-                  >
+                <th className="w-7 py-1 pl-1.5 pr-0">
+                  <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10" title="Check all">
                     {paginatedVehicles.filter((v) => v.canBuy).length > 0 &&
                     paginatedVehicles.filter((v) => v.canBuy).every((v) => selectedIds.has(v.id)) ? (
-                      <CheckSquare size={14} className="text-primary" />
+                      <CheckSquare size={12} className="text-primary" />
                     ) : (
-                      <Square size={14} className="text-mutedForeground" />
+                      <Square size={12} className="text-mutedForeground" />
                     )}
                   </button>
                 </th>
-                <th className="text-left py-2 px-3">Car</th>
-                <th className="text-right py-2 px-3">Price</th>
-                <th className="text-right py-2 px-3">Speed</th>
-                <th className="text-right py-2 px-3">Owner</th>
+                <th className="text-left py-1 px-2">Car</th>
+                <th className="text-right py-1 px-2">Price</th>
+                <th className="text-right py-1 px-2">Speed</th>
+                <th className="text-right py-1 px-2">Owner</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {paginatedVehicles.map((row) => (
-                <tr
-                  key={row.id}
-                  className={`hover:bg-secondary/30 transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}
-                >
-                  <td className="py-2 pl-2 pr-0">
+                <tr key={row.id} className={`hover:bg-secondary/30 transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}>
+                  <td className="py-1 pl-1.5 pr-0">
                     {row.canBuy ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleSelect(row.id)}
-                        className="p-1 rounded hover:bg-primary/10"
-                      >
+                      <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10">
                         {selectedIds.has(row.id) ? (
-                          <CheckSquare size={14} className="text-primary" />
+                          <CheckSquare size={12} className="text-primary" />
                         ) : (
-                          <Square size={14} className="text-mutedForeground" />
+                          <Square size={12} className="text-mutedForeground" />
                         )}
                       </button>
                     ) : (
-                      <span className="inline-block w-5" />
+                      <span className="inline-block w-4" />
                     )}
                   </td>
-                  <td className="py-2 px-3">
+                  <td className="py-1 px-2">
                     <span className={`font-heading font-bold ${RARITY_COLOR[row.rarity] || 'text-foreground'}`}>
                       {RARITY_LABELS[row.rarity] || row.rarity}:
                     </span>{' '}
                     <span className="font-heading text-foreground">{row.name}</span>
                   </td>
-                  <td className="py-2 px-3 text-right font-heading font-bold text-emerald-400">
+                  <td className="py-1 px-2 text-right font-heading font-bold text-emerald-400">
                     ${(row.price || 0).toLocaleString()}
                   </td>
-                  <td className="py-2 px-3 text-right text-mutedForeground font-heading">{row.speed} secs</td>
-                  <td className="py-2 px-3 text-right font-heading text-foreground">{row.owner}</td>
+                  <td className="py-1 px-2 text-right text-mutedForeground font-heading">{row.speed} secs</td>
+                  <td className="py-1 px-2 text-right font-heading text-foreground">{row.owner}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
         {paginatedVehicles.length === 0 && (
-          <p className="p-3 text-xs text-mutedForeground font-heading">
+          <p className="py-2 text-center text-[11px] text-mutedForeground font-heading">
             {selectedRarity ? `No vehicles in ${RARITY_LABELS[selectedRarity]}.` : 'No vehicles for sale.'}
           </p>
         )}
 
-        <div className={`px-3 py-2 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center justify-between gap-2`}>
-          <div className="flex items-center gap-3">
+        <div className={`px-3 py-1.5 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center justify-between gap-2`}>
+          <div className="flex items-center gap-2">
             <span className="text-[10px] text-mutedForeground font-heading uppercase">Check all</span>
             <button
               type="button"
               disabled={selectedIds.size === 0 || buying}
               onClick={handleBuySelected}
-              className={`px-4 py-1.5 rounded font-heading font-bold uppercase text-xs border transition-all ${
+              className={`px-3 py-1 rounded font-heading font-bold uppercase text-[11px] border ${
                 selectedIds.size > 0 && !buying
                   ? 'bg-primary/20 text-primary border-primary/50 hover:bg-primary/30'
                   : 'bg-secondary/50 text-mutedForeground border-border cursor-not-allowed'
@@ -371,22 +341,18 @@ export default function BuyCars() {
               type="button"
               disabled={page === 0}
               onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
+              className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
             >
-              <ChevronLeft size={14} />
               Prev
             </button>
-            <span className="text-[10px] font-heading text-mutedForeground px-2">
-              {page + 1} / {totalPages}
-            </span>
+            <span className="text-[10px] font-heading text-mutedForeground px-1.5">{page + 1}/{totalPages}</span>
             <button
               type="button"
               disabled={page >= totalPages - 1}
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
+              className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
             >
               Next
-              <ChevronRight size={14} />
             </button>
           </div>
         </div>
