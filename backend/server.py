@@ -715,73 +715,7 @@ async def maybe_process_rank_up(user_id: str, rank_points_before: int, rank_poin
 
 
 # Auth and profile endpoints -> routers/auth.py, routers/profile.py
-
-@api_router.post("/dead-alive/retrieve")
-async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user)):
-    """Retrieve a % of points from a dead account into your current account. One-time per dead account."""
-    # Case-insensitive username lookup
-    username_pattern = _username_pattern(request.dead_username)
-    dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
-    if not dead_user:
-        raise HTTPException(status_code=404, detail="No account found with that username")
-    if not dead_user.get("is_dead"):
-        raise HTTPException(status_code=400, detail="That account is not dead. Only dead accounts can be retrieved.")
-    if dead_user.get("retrieval_used"):
-        raise HTTPException(status_code=400, detail="Points from that dead account have already been retrieved.")
-    if not verify_password(request.dead_password, dead_user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid password for that account")
-    points_at_death = dead_user.get("points_at_death", 0)
-    if points_at_death <= 0:
-        raise HTTPException(status_code=400, detail="That account had no points to retrieve")
-    retrieved = int(points_at_death * DEAD_ALIVE_POINTS_PERCENT)
-    retrieved = max(1, retrieved)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": retrieved}}
-    )
-    await db.users.update_one(
-        {"id": dead_user["id"]},
-        {"$set": {"retrieval_used": True}}
-    )
-    return {
-        "message": f"Retrieved {retrieved} points from your dead account ({dead_user['username']}). One-time retrieval complete.",
-        "points_retrieved": retrieved
-    }
-
-# Online Users endpoint
-@api_router.get("/users/online", response_model=OnlineUsersResponse)
-async def get_online_users(current_user: dict = Depends(get_current_user)):
-    # Users online in last 5 minutes OR forced-online window (exclude dead accounts)
-    now = datetime.now(timezone.utc)
-    five_min_ago = now - timedelta(minutes=5)
-    users = await db.users.find(
-        {
-            "is_dead": {"$ne": True},
-            "is_bodyguard": {"$ne": True},
-            "$or": [
-                {"last_seen": {"$gte": five_min_ago.isoformat()}},
-                {"forced_online_until": {"$gt": now.isoformat()}},
-            ],
-        },
-        {"_id": 0, "password_hash": 0}
-    ).to_list(100)
-    
-    users_data = []
-    for user in users:
-        if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
-            continue
-        rank_id, rank_name = get_rank_info(user.get("rank_points", 0))
-        if user.get("email") in ADMIN_EMAILS:
-            rank_name = "Admin"
-        users_data.append({
-            "username": user["username"],
-            "rank": rank_id,
-            "rank_name": rank_name,
-            "location": user["current_state"],
-            "in_jail": user.get("in_jail", False)
-        })
-    
-    return OnlineUsersResponse(total_online=len(users_data), users=users_data)
+# Dead-alive, users/online -> routers/dead_alive.py, routers/users.py
 
 # Stats endpoints -> routers/stats.py
 
@@ -902,37 +836,8 @@ async def _increase_kill_inflation_on_kill(user_id: str) -> float:
 
 
 # Payment endpoints -> routers/payments.py
-
-@api_router.get("/giphy/search")
-async def giphy_search(
-    q: str = Query(..., min_length=1, max_length=50),
-    current_user: dict = Depends(get_current_user),
-):
-    """Proxy Giphy GIF search. API key is read from backend .env (GIPHY_API_KEY)."""
-    api_key = (os.environ.get("GIPHY_API_KEY") or "").strip()
-    if not api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="Giphy not configured. Add GIPHY_API_KEY to backend/.env and restart the backend.",
-        )
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.get(
-            "https://api.giphy.com/v1/gifs/search",
-            params={
-                "api_key": api_key,
-                "q": q,
-                "limit": 20,
-                "rating": "pg-13",
-            },
-        )
-    data = resp.json()
-    if data.get("meta", {}).get("status") != 200:
-        raise HTTPException(
-            status_code=502,
-            detail=data.get("meta", {}).get("msg") or "Giphy error",
-        )
-    return {"data": data.get("data") or []}
-
+# Giphy -> routers/giphy.py
+# My-properties -> routers/properties.py
 
 # ============ My Properties (1 casino + 1 property max) ============
 async def _get_casino_property_profit(user_id: str):
@@ -993,18 +898,9 @@ async def _user_owns_any_property(user_id: str):
     return None
 
 
-@api_router.get("/my-properties")
-async def get_my_properties(current_user: dict = Depends(get_current_user)):
-    """Return current user's one casino (if any) and one property (if any). Rule: max 1 casino, max 1 property."""
-    user_id = current_user["id"]
-    casino = await _user_owns_any_casino(user_id)
-    property_ = await _user_owns_any_property(user_id)
-    return {"casino": casino, "property": property_}
-
-
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -1054,6 +950,9 @@ profile.register(api_router)
 admin.register(api_router)
 payments.register(api_router)
 stats.register(api_router)
+dead_alive.register(api_router)
+users.register(api_router)
+giphy.register(api_router)
 
 app.include_router(api_router)
 

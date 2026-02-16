@@ -166,6 +166,19 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
 
 
 def register(router):
+    import server as srv
+    get_current_user = srv.get_current_user
+    _user_owns_any_casino = srv._user_owns_any_casino
+    _user_owns_any_property = srv._user_owns_any_property
+
+    async def get_my_properties(current_user: dict = Depends(get_current_user)):
+        """Return current user's one casino (if any) and one property (if any). Rule: max 1 casino, max 1 property."""
+        user_id = current_user["id"]
+        casino = await _user_owns_any_casino(user_id)
+        property_ = await _user_owns_any_property(user_id)
+        return {"casino": casino, "property": property_}
+
     router.add_api_route("/properties", get_properties, methods=["GET"], response_model=List[PropertyResponse])
     router.add_api_route("/properties/{property_id}/buy", buy_property, methods=["POST"])
     router.add_api_route("/properties/{property_id}/collect", collect_property_income, methods=["POST"])
+    router.add_api_route("/my-properties", get_my_properties, methods=["GET"])
