@@ -65,8 +65,8 @@ function Reel({ spinning, revealed, symbolId, reelIndex, isWin }) {
       cancelAnimationFrame(animRef.current);
       const el = stripRef.current;
       if (!el) return;
-      const idx = FULL_STRIP.indexOf(symbolId);
-      const targetIdx = idx >= 0 ? idx : 0;
+      const safeIdx = FULL_STRIP.findIndex((id, i) => id === symbolId && i >= 1 && i <= FULL_STRIP.length - 2);
+      const targetIdx = safeIdx >= 1 ? safeIdx : 1;
       const targetY = targetIdx * CELL_H;
       el.style.transition = 'transform 0.45s cubic-bezier(0.2, 0.8, 0.3, 1.05)';
       el.style.transform = `translateY(-${targetY}px)`;
