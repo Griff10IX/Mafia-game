@@ -61,6 +61,36 @@ function piePath(cx, cy, r, startDeg, endDeg) {
 function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
   const cx = 100, cy = 100, outerR = 95, textR = 78;
   const segAngle = 360 / WHEEL_ORDER.length;
+  const ballOrbitRef = useRef(null);
+  const ballAnimRef = useRef(null);
+
+  useEffect(() => {
+    if (spinning && ballOrbitRef.current) {
+      const el = ballOrbitRef.current;
+      const startTime = performance.now();
+      const duration = SPIN_DURATION_MS;
+      const totalRotation = -2520;
+
+      const animate = (now) => {
+        const elapsed = now - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - t, 2.8);
+        el.style.transform = `rotate(${totalRotation * eased}deg)`;
+        if (t < 1) {
+          ballAnimRef.current = requestAnimationFrame(animate);
+        }
+      };
+
+      el.style.transform = 'rotate(0deg)';
+      ballAnimRef.current = requestAnimationFrame(animate);
+
+      return () => {
+        if (ballAnimRef.current) cancelAnimationFrame(ballAnimRef.current);
+      };
+    } else if (!spinning && ballOrbitRef.current) {
+      ballOrbitRef.current.style.transform = 'rotate(0deg)';
+    }
+  }, [spinning]);
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -81,20 +111,18 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
           boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 3px rgba(255,255,255,0.05)',
         }}
       />
-      {/* Ball orbit container — spins opposite direction then settles */}
+      {/* Ball orbit container — JS-driven smooth animation */}
       <div
+        ref={ballOrbitRef}
         className="absolute inset-0 z-30"
-        style={{
-          animation: spinning ? `ball-orbit ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.0, 0.15, 1.0) forwards` : 'none',
-          transform: spinning ? undefined : 'rotate(0deg)',
-        }}
+        style={{ transform: 'rotate(0deg)', willChange: 'transform' }}
       >
         <div
           className="absolute rounded-full"
           style={{
-            width: 10,
-            height: 10,
-            top: 6,
+            width: 11,
+            height: 11,
+            top: 5,
             left: '50%',
             transform: 'translateX(-50%)',
             background: 'radial-gradient(circle at 35% 30%, #ffffff, #e0e0e0, #999)',
@@ -438,13 +466,7 @@ export default function Rlt() {
           0%, 100% { box-shadow: 0 0 20px rgba(212,175,55,0.2); }
           50% { box-shadow: 0 0 40px rgba(212,175,55,0.5); }
         }
-        @keyframes ball-orbit {
-          0%   { transform: rotate(0deg); }
-          20%  { transform: rotate(-720deg); }
-          50%  { transform: rotate(-1800deg); }
-          75%  { transform: rotate(-2340deg); }
-          100% { transform: rotate(-2520deg); }
-        }
+        /* ball-orbit: now driven by requestAnimationFrame in JS */
         .animate-result-glow { animation: result-glow 1s ease-in-out 3; }
         .animate-result-pop { animation: result-number-pop 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.1) forwards; }
         .animate-win-shower { animation: win-shower ease-in forwards; }
