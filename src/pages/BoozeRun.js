@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Package, Clock, Wine, TrendingUp, DollarSign, ShoppingCart } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -579,13 +579,27 @@ export default function BoozeRun() {
     fetchConfig();
   }, [fetchConfig]);
 
+  const rotationEndRef = useRef(null);
   useEffect(() => {
     if (!config?.rotation_ends_at) return;
-    const tick = () => setTimer(timeUntil(config.rotation_ends_at));
+    const tick = () => {
+      const end = new Date(config.rotation_ends_at).getTime();
+      const now = Date.now();
+      if (end <= now) {
+        if (rotationEndRef.current !== config.rotation_ends_at) {
+          rotationEndRef.current = config.rotation_ends_at;
+          fetchConfig();
+          toast.success('Prices rotated — new rates and best routes');
+        }
+        setTimer('00:00:00');
+        return;
+      }
+      setTimer(timeUntil(config.rotation_ends_at));
+    };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [config?.rotation_ends_at]);
+  }, [config?.rotation_ends_at, fetchConfig]);
 
   const setBuyAmount = (boozeId, value) => {
     const n = parseInt(String(value).replace(/\D/g, ''), 10);
