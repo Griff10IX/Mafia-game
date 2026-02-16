@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { Dices } from 'lucide-react';
 import { toast } from 'sonner';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
@@ -14,48 +13,120 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
-// Animated dice display component
-function DiceDisplay({ isRolling, result, rollingNumber }) {
+/* ═══════════════════════════════════════════════════════
+   3D Dice Visual
+   ═══════════════════════════════════════════════════════ */
+function DiceVisual({ isRolling, result, rollingNumber }) {
+  const showResult = !isRolling && result;
+  const isWin = showResult && result.win;
+  const isLoss = showResult && !result.win;
+
   return (
-    <div className="flex flex-col items-center justify-center py-6 md:py-8 px-3 rounded-lg bg-gradient-to-b from-zinc-800/50 to-zinc-900/80 border border-primary/20 min-h-[180px] md:min-h-[200px]">
+    <div className="flex flex-col items-center justify-center py-6 sm:py-8 min-h-[240px] relative">
+      {/* Ambient table light */}
+      <div
+        className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 rounded-full blur-3xl pointer-events-none"
+        style={{
+          background: isWin
+            ? 'rgba(52,211,153,0.15)'
+            : isLoss
+              ? 'rgba(248,113,113,0.1)'
+              : 'rgba(212,175,55,0.08)',
+        }}
+      />
+
       {isRolling ? (
         <>
-          <Dices className="text-primary animate-dice-roll w-16 h-16 md:w-20 md:h-20 mb-3" aria-hidden />
-          <p className="text-xs md:text-sm text-primary/80 uppercase tracking-widest font-heading mb-2 animate-pulse">
+          {/* Rolling state */}
+          <div className="relative">
+            <div
+              className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl flex items-center justify-center animate-dice-tumble"
+              style={{
+                background: 'linear-gradient(135deg, #2a2520, #1a1612)',
+                border: '3px solid #c9a84c',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 20px rgba(212,175,55,0.15)',
+              }}
+            >
+              <span className="text-4xl sm:text-5xl font-heading font-black text-primary tabular-nums animate-dice-number-blur">
+                {rollingNumber ?? '?'}
+              </span>
+            </div>
+            {/* Dice shadow */}
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-20 h-3 rounded-full bg-black/30 blur-md animate-dice-shadow" />
+          </div>
+          <p className="text-xs text-primary/70 font-heading uppercase tracking-[0.3em] mt-5 animate-pulse">
             Rolling...
           </p>
-          <div className="text-5xl md:text-6xl font-heading font-bold text-primary tabular-nums animate-dice-number">
-            {rollingNumber ?? '?'}
-          </div>
         </>
-      ) : result ? (
+      ) : showResult ? (
         <>
-          <p className="text-xs md:text-sm text-mutedForeground uppercase tracking-widest font-heading mb-3">
-            You rolled
-          </p>
-          <div
-            className={`flex items-center justify-center w-24 h-24 md:w-28 md:h-28 rounded-xl font-heading font-bold text-5xl md:text-6xl tabular-nums border-4 ${
-              result.win
-                ? 'bg-gradient-to-br from-emerald-600/40 to-emerald-900/40 text-emerald-300 border-emerald-500/70 animate-dice-win'
-                : 'bg-gradient-to-br from-red-600/40 to-red-900/40 text-red-300 border-red-500/70 animate-dice-lose'
-            }`}
-          >
-            {result.roll}
+          {/* Result state */}
+          <div className="relative animate-dice-land">
+            <div
+              className={`w-28 h-28 sm:w-32 sm:h-32 rounded-2xl flex items-center justify-center transition-all duration-500 ${isWin ? 'animate-dice-win-glow' : ''}`}
+              style={{
+                background: isWin
+                  ? 'linear-gradient(135deg, #064e3b, #065f46)'
+                  : 'linear-gradient(135deg, #450a0a, #7f1d1d)',
+                border: `3px solid ${isWin ? '#34d399' : '#f87171'}`,
+                boxShadow: isWin
+                  ? '0 0 30px rgba(52,211,153,0.3), 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.1)'
+                  : '0 0 20px rgba(248,113,113,0.2), 0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05)',
+              }}
+            >
+              <span className={`text-4xl sm:text-5xl font-heading font-black tabular-nums ${isWin ? 'text-emerald-300' : 'text-red-300'}`}>
+                {result.roll}
+              </span>
+              {/* Corner pips */}
+              {[
+                { top: 8, left: 8 }, { top: 8, right: 8 },
+                { bottom: 8, left: 8 }, { bottom: 8, right: 8 },
+              ].map((pos, i) => (
+                <div
+                  key={i}
+                  className="absolute w-2 h-2 rounded-full"
+                  style={{
+                    ...pos,
+                    background: isWin ? 'rgba(52,211,153,0.4)' : 'rgba(248,113,113,0.3)',
+                  }}
+                />
+              ))}
+            </div>
+            {/* Landing shadow */}
+            <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 w-24 h-3 rounded-full blur-md ${isWin ? 'bg-emerald-500/20' : 'bg-red-500/10'}`} />
           </div>
-          <p className={`text-base md:text-lg mt-4 font-heading font-bold uppercase tracking-widest ${
-            result.win ? 'text-emerald-400' : 'text-red-400'
-          }`}>
-            {result.win ? '🎉 Winner!' : '💀 Busted'}
+          <p className={`text-lg sm:text-xl font-heading font-black uppercase tracking-wider mt-5 ${isWin ? 'text-emerald-400 animate-dice-win-text' : 'text-red-400'}`}>
+            {isWin ? 'Winner!' : 'Busted'}
           </p>
         </>
       ) : (
         <>
-          <Dices className="text-primary/30 w-16 h-16 md:w-20 md:h-20 mb-3" aria-hidden />
-          <p className="text-sm md:text-base text-mutedForeground uppercase tracking-widest font-heading text-center">
+          {/* Idle state */}
+          <div className="relative">
+            <div
+              className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl flex items-center justify-center"
+              style={{
+                background: 'linear-gradient(135deg, #2a2520, #1a1612)',
+                border: '3px solid rgba(201,168,76,0.3)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.05)',
+              }}
+            >
+              <span className="text-4xl text-primary/20 font-heading font-black">?</span>
+              {[
+                { top: 8, left: 8 }, { top: 8, right: 8 },
+                { bottom: 8, left: 8 }, { bottom: 8, right: 8 },
+              ].map((pos, i) => (
+                <div
+                  key={i}
+                  className="absolute w-2 h-2 rounded-full bg-primary/15"
+                  style={pos}
+                />
+              ))}
+            </div>
+            <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 w-20 h-3 rounded-full bg-black/20 blur-md" />
+          </div>
+          <p className="text-sm text-emerald-200/40 font-heading mt-5 text-center">
             Place a bet to roll
-          </p>
-          <p className="text-xs text-mutedForeground/60 mt-2 text-center max-w-xs">
-            Pick your number. Match the roll to win.
           </p>
         </>
       )}
@@ -63,24 +134,70 @@ function DiceDisplay({ isRolling, result, rollingNumber }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════
+   Win celebration particles
+   ═══════════════════════════════════════════════════════ */
+function WinParticles({ active }) {
+  const [particles] = useState(() =>
+    Array.from({ length: 24 }, (_, i) => ({
+      id: i,
+      left: 5 + Math.random() * 90,
+      delay: Math.random() * 0.8,
+      duration: 1.0 + Math.random() * 0.6,
+      rotate: Math.random() * 540 - 270,
+      emoji: ['🪙', '✨', '💰', '🎲'][i % 4],
+      size: 14 + Math.random() * 10,
+    }))
+  );
+  if (!active) return null;
+  return (
+    <div className="fixed inset-0 pointer-events-none z-50" aria-hidden>
+      {particles.map((p) => (
+        <span
+          key={p.id}
+          className="absolute animate-dice-particle"
+          style={{
+            left: `${p.left}%`,
+            top: '-5%',
+            fontSize: p.size,
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            '--p-rotate': `${p.rotate}deg`,
+          }}
+        >
+          {p.emoji}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Quick bet chips
+   ═══════════════════════════════════════════════════════ */
+const QUICK_BETS = [
+  { label: '100K', value: 100_000, color: '#e4e4e7', text: '#000' },
+  { label: '1M', value: 1_000_000, color: '#dc2626', text: '#fff' },
+  { label: '5M', value: 5_000_000, color: '#16a34a', text: '#fff' },
+  { label: '10M', value: 10_000_000, color: '#18181b', text: '#fff' },
+  { label: '50M', value: 50_000_000, color: '#7c3aed', text: '#fff' },
+];
+
 export default function Dice() {
-  const navigate = useNavigate();
   const [diceConfig, setDiceConfig] = useState({ sides_min: 2, sides_max: 5000, max_bet: 5_000_000 });
   const [ownership, setOwnership] = useState({ current_city: null, owner: null });
 
-  // Betting state
   const [stake, setStake] = useState('');
   const [sides, setSides] = useState('100');
   const [chosenNumber, setChosenNumber] = useState('101');
   const [skipAnimation, setSkipAnimation] = useState(false);
 
-  // Game state
   const [playing, setPlaying] = useState(false);
   const [diceLoading, setDiceLoading] = useState(false);
   const [lastResult, setLastResult] = useState(null);
   const [rollingNumber, setRollingNumber] = useState(null);
+  const [showWin, setShowWin] = useState(false);
 
-  // Owner state (aligned with Blackjack/RLT)
   const [ownerLoading, setOwnerLoading] = useState(false);
   const [newMaxBet, setNewMaxBet] = useState('');
   const [transferUsername, setTransferUsername] = useState('');
@@ -89,7 +206,6 @@ export default function Dice() {
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
 
-  // Refs
   const rollIntervalRef = useRef(null);
   const rollTimeoutRef = useRef(null);
   const pendingResultRef = useRef(null);
@@ -112,28 +228,20 @@ export default function Dice() {
       .catch(() => {});
   };
 
-  useEffect(() => {
-    fetchConfigAndOwnership();
+  useEffect(() => { fetchConfigAndOwnership(); }, []);
+  useEffect(() => () => {
+    if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
+    if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
   }, []);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
-      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
-    };
-  }, []);
-
-  // Calculated values
   const config = diceConfig && typeof diceConfig === 'object' ? diceConfig : { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 };
   const stakeNum = parseInt(String(stake || '').replace(/[^\d]/g, ''), 10) || 0;
   const sidesNum = Math.max(config.sides_min || 2, Math.min(config.sides_max || 5000, parseInt(String(sides || ''), 10) || 100));
-  const actualSidesNum = Math.max(2, Math.ceil(sidesNum * 1.05)); // 5% extra sides
+  const actualSidesNum = Math.max(2, Math.ceil(sidesNum * 1.05));
   const chosenNum = Math.max(1, Math.min(actualSidesNum, parseInt(String(chosenNumber || ''), 10) || 101));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
   const canBet = stakeNum > 0 && stakeNum <= (config.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= actualSidesNum;
 
-  // Auto-clamp chosen number when sides change
   useEffect(() => {
     const n = parseInt(String(chosenNumber || ''), 10);
     if (chosenNumber === '' || Number.isNaN(n)) return;
@@ -141,12 +249,8 @@ export default function Dice() {
     else if (n > actualSidesNum) setChosenNumber(String(actualSidesNum));
   }, [sides, actualSidesNum, chosenNumber]);
 
-  // Buy-back timer
   useEffect(() => {
-    if (!buyBackOffer?.expires_at) {
-      setBuyBackSecondsLeft(null);
-      return;
-    }
+    if (!buyBackOffer?.expires_at) { setBuyBackSecondsLeft(null); return; }
     const update = () => {
       const exp = new Date(buyBackOffer.expires_at).getTime();
       const left = Math.max(0, Math.ceil((exp - Date.now()) / 1000));
@@ -158,7 +262,6 @@ export default function Dice() {
     return () => clearInterval(t);
   }, [buyBackOffer]);
 
-  // Rolling animation
   useEffect(() => {
     if (!diceLoading || actualSidesNum < 2) return;
     setLastResult(null);
@@ -166,34 +269,28 @@ export default function Dice() {
       setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
     }, 60);
     return () => {
-      if (rollIntervalRef.current) {
-        clearInterval(rollIntervalRef.current);
-        rollIntervalRef.current = null;
-      }
+      if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
     };
   }, [diceLoading, actualSidesNum]);
 
   const applyRollResult = (data) => {
-    if (rollIntervalRef.current) {
-      clearInterval(rollIntervalRef.current);
-      rollIntervalRef.current = null;
-    }
+    if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
     setRollingNumber(null);
     setLastResult({ roll: data.roll, win: data.win });
-
     if (data.win) {
       if (data.shortfall > 0) {
         const received = data.actual_payout ?? data.owner_paid ?? 0;
         toast.success(`Rolled ${data.roll}! House paid ${formatMoney(received)} (full win: ${formatMoney(data.payout)})`);
-        if (data.ownership_transferred) toast.success('🎰 You won the casino! This table is now yours.');
+        if (data.ownership_transferred) toast.success('You won the casino! This table is now yours.');
         if (data.buy_back_offer) setBuyBackOffer(data.buy_back_offer);
       } else {
-        toast.success(`🎲 Rolled ${data.roll}! You won ${formatMoney(data.payout)}!`);
+        toast.success(`Rolled ${data.roll}! You won ${formatMoney(data.payout)}!`);
       }
+      setShowWin(true);
+      setTimeout(() => setShowWin(false), 3000);
     } else {
       toast.error(`Rolled ${data.roll}. Lost ${formatMoney(stakeNum)}.`);
     }
-
     setDiceLoading(false);
     setPlaying(false);
     refreshUser();
@@ -207,46 +304,25 @@ export default function Dice() {
       else if (chosenNum < 1 || chosenNum > actualSidesNum) toast.error(`Pick 1-${actualSidesNum}`);
       return;
     }
-
     setChosenNumber(String(chosenNum));
     setPlaying(true);
-
-    // Only set loading and show animation if NOT skipping
+    setShowWin(false);
     if (!skipAnimation) {
       setDiceLoading(true);
       setLastResult(null);
       setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
     }
-
-    if (rollTimeoutRef.current) {
-      clearTimeout(rollTimeoutRef.current);
-      rollTimeoutRef.current = null;
-    }
-
+    if (rollTimeoutRef.current) { clearTimeout(rollTimeoutRef.current); rollTimeoutRef.current = null; }
     try {
-      const res = await api.post('/casino/dice/play', {
-        stake: stakeNum,
-        sides: sidesNum,
-        chosen_number: chosenNum,
-      });
-
+      const res = await api.post('/casino/dice/play', { stake: stakeNum, sides: sidesNum, chosen_number: chosenNum });
       const data = res.data || {};
-
-      if (skipAnimation) {
-        // Instant result - no animation
-        applyRollResult(data);
-        return;
-      }
-
-      // With animation
+      if (skipAnimation) { applyRollResult(data); return; }
       pendingResultRef.current = data;
-
       rollTimeoutRef.current = setTimeout(() => {
         rollTimeoutRef.current = null;
         const pending = pendingResultRef.current;
         if (pending) applyRollResult(pending);
       }, ROLL_DURATION_MS);
-
     } catch (e) {
       if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
       if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
@@ -257,7 +333,6 @@ export default function Dice() {
     }
   };
 
-  // Owner actions (identical pattern to Blackjack/RLT)
   const handleClaim = async () => {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
@@ -267,11 +342,8 @@ export default function Dice() {
       toast.success(res.data?.message || 'You own this table!');
       fetchConfigAndOwnership();
       refreshUser();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setOwnerLoading(false);
-    }
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setOwnerLoading(false); }
   };
 
   const handleRelinquish = async () => {
@@ -283,32 +355,23 @@ export default function Dice() {
       await api.post('/casino/dice/relinquish', { city });
       toast.success('Relinquished');
       fetchConfigAndOwnership();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setOwnerLoading(false);
-    }
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setOwnerLoading(false); }
   };
 
   const handleSetMaxBet = async () => {
     const city = ownership?.current_city;
     if (!city) return;
     const val = parseInt(String(newMaxBet).replace(/\D/g, ''), 10);
-    if (!val || val < 1000000) {
-      toast.error('Min $1,000,000');
-      return;
-    }
+    if (!val || val < 1000000) { toast.error('Min $1,000,000'); return; }
     setOwnerLoading(true);
     try {
       await api.post('/casino/dice/set-max-bet', { city, max_bet: val });
       toast.success('Updated');
       fetchConfigAndOwnership();
       setNewMaxBet('');
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setOwnerLoading(false);
-    }
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setOwnerLoading(false); }
   };
 
   const handleTransfer = async () => {
@@ -321,32 +384,22 @@ export default function Dice() {
       toast.success('Transferred');
       fetchConfigAndOwnership();
       setTransferUsername('');
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setOwnerLoading(false);
-    }
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setOwnerLoading(false); }
   };
 
   const handleSellOnTrade = async () => {
     const city = ownership?.current_city;
     if (!city || ownerLoading) return;
     const points = parseInt(sellPoints, 10);
-    if (!points || points <= 0) {
-      toast.error('Enter valid points');
-      return;
-    }
+    if (!points || points <= 0) { toast.error('Enter valid points'); return; }
     setOwnerLoading(true);
     try {
       await api.post('/casino/dice/sell-on-trade', { city, points });
       toast.success(`Listed for ${points.toLocaleString()} pts!`);
       setSellPoints('');
-      setTimeout(() => navigate('/quick-trade'), 1500);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setOwnerLoading(false);
-    }
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setOwnerLoading(false); }
   };
 
   const acceptBuyBack = async () => {
@@ -357,12 +410,9 @@ export default function Dice() {
       toast.success(res.data?.message || 'Accepted! You received the points.');
       setBuyBackOffer(null);
       refreshUser();
-      fetchConfigAndOwnership(); // Refresh ownership state after accepting
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setBuyBackActionLoading(false);
-    }
+      fetchConfigAndOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setBuyBackActionLoading(false); }
   };
 
   const rejectBuyBack = async () => {
@@ -372,12 +422,9 @@ export default function Dice() {
       await api.post('/casino/dice/buy-back/reject', { offer_id: buyBackOffer.offer_id });
       toast.success('You kept the casino!');
       setBuyBackOffer(null);
-      fetchConfigAndOwnership(); // Refresh ownership state after rejecting
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setBuyBackActionLoading(false);
-    }
+      fetchConfigAndOwnership();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    finally { setBuyBackActionLoading(false); }
   };
 
   const isOwner = !!ownership?.is_owner;
@@ -386,12 +433,61 @@ export default function Dice() {
   const maxBet = ownership?.max_bet ?? config.max_bet ?? 5_000_000;
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="dice-page">
-      {/* Header (identical to Blackjack/RLT) */}
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="dice-page">
+      <style>{`
+        @keyframes dice-tumble {
+          0% { transform: rotate(0deg) scale(1); }
+          15% { transform: rotate(-12deg) scale(1.05) translateY(-6px); }
+          30% { transform: rotate(8deg) scale(0.98) translateY(2px); }
+          45% { transform: rotate(-6deg) scale(1.03) translateY(-4px); }
+          60% { transform: rotate(10deg) scale(0.97) translateY(3px); }
+          75% { transform: rotate(-4deg) scale(1.02) translateY(-2px); }
+          90% { transform: rotate(3deg) scale(1); }
+          100% { transform: rotate(0deg) scale(1); }
+        }
+        @keyframes dice-number-blur {
+          0%, 100% { filter: blur(0px); opacity: 1; }
+          50% { filter: blur(1px); opacity: 0.8; }
+        }
+        @keyframes dice-shadow {
+          0%, 100% { transform: translateX(-50%) scaleX(1); opacity: 0.3; }
+          50% { transform: translateX(-50%) scaleX(0.7); opacity: 0.15; }
+        }
+        @keyframes dice-land {
+          0% { transform: scale(0.3) rotate(-20deg); opacity: 0; }
+          50% { transform: scale(1.1) rotate(3deg); }
+          70% { transform: scale(0.95) rotate(-1deg); }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        @keyframes dice-win-glow {
+          0%, 100% { box-shadow: 0 0 30px rgba(52,211,153,0.3), 0 8px 32px rgba(0,0,0,0.4); }
+          50% { box-shadow: 0 0 50px rgba(52,211,153,0.5), 0 0 80px rgba(52,211,153,0.2), 0 8px 32px rgba(0,0,0,0.4); }
+        }
+        @keyframes dice-win-text {
+          0%, 100% { text-shadow: 0 0 8px rgba(52,211,153,0.4); }
+          50% { text-shadow: 0 0 20px rgba(52,211,153,0.8), 0 0 40px rgba(52,211,153,0.3); }
+        }
+        @keyframes dice-particle {
+          0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+          70% { opacity: 1; }
+          100% { transform: translateY(500px) rotate(var(--p-rotate, 180deg)) scale(0.3); opacity: 0; }
+        }
+        .animate-dice-tumble { animation: dice-tumble 0.4s ease-in-out infinite; }
+        .animate-dice-number-blur { animation: dice-number-blur 0.15s ease-in-out infinite; }
+        .animate-dice-shadow { animation: dice-shadow 0.4s ease-in-out infinite; }
+        .animate-dice-land { animation: dice-land 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.05) forwards; }
+        .animate-dice-win-glow { animation: dice-win-glow 1.2s ease-in-out infinite; }
+        .animate-dice-win-text { animation: dice-win-text 1s ease-in-out infinite; }
+        .animate-dice-particle { animation: dice-particle ease-in forwards; }
+      `}</style>
+
+      <WinParticles active={showWin} />
+
+      {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-            🎲 Dice
+            Dice
           </h1>
           <p className="text-xs text-mutedForeground">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
@@ -410,9 +506,15 @@ export default function Dice() {
 
       {/* Buy-back offer */}
       {buyBackOffer && (
-        <div className="p-4 rounded-lg border-2 border-primary/50 bg-gradient-to-r from-primary/10 to-primary/5 space-y-3">
-          <h3 className="font-heading font-bold text-primary uppercase tracking-wider">Buy-Back Offer</h3>
-          <p className="text-sm text-mutedForeground">
+        <div
+          className="p-4 rounded-lg border-2 space-y-3"
+          style={{
+            borderColor: '#c9a84c',
+            background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))',
+          }}
+        >
+          <h3 className="font-heading font-bold text-primary uppercase tracking-wider text-sm">Buy-Back Offer</h3>
+          <p className="text-xs text-mutedForeground">
             House could only pay {formatMoney(buyBackOffer.owner_paid)}. Accept to return the table for {(buyBackOffer.points_offered || 0).toLocaleString()} points, or reject to keep ownership.
           </p>
           <div className="flex flex-wrap items-center gap-3">
@@ -421,19 +523,14 @@ export default function Dice() {
                 {Math.floor(buyBackSecondsLeft / 60)}:{String(buyBackSecondsLeft % 60).padStart(2, '0')}
               </span>
             )}
-            <button
-              type="button"
-              onClick={acceptBuyBack}
-              disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
-              className="bg-primary text-primaryForeground px-5 py-2 rounded-md text-sm font-bold uppercase tracking-wide hover:opacity-90 disabled:opacity-50 touch-manipulation"
+            <button onClick={acceptBuyBack} disabled={buyBackActionLoading || (buyBackSecondsLeft !== null && buyBackSecondsLeft <= 0)}
+              className="rounded-lg px-5 py-2 text-xs font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40"
+              style={{ background: 'linear-gradient(180deg, #d4af37, #8a6e18)', borderColor: '#c9a84c', color: '#1a1200' }}
             >
               {buyBackActionLoading ? '...' : `Accept (${(buyBackOffer.points_offered || 0).toLocaleString()} pts)`}
             </button>
-            <button
-              type="button"
-              onClick={rejectBuyBack}
-              disabled={buyBackActionLoading}
-              className="bg-secondary border border-border text-foreground px-5 py-2 rounded-md text-sm font-bold uppercase tracking-wide hover:opacity-90 disabled:opacity-50 touch-manipulation"
+            <button onClick={rejectBuyBack} disabled={buyBackActionLoading}
+              className="bg-zinc-800 border border-zinc-600 text-foreground px-5 py-2 rounded-lg text-xs font-heading font-bold uppercase disabled:opacity-40"
             >
               {buyBackActionLoading ? '...' : 'Reject'}
             </button>
@@ -441,11 +538,11 @@ export default function Dice() {
         </div>
       )}
 
-      {/* Owner Controls (identical to Blackjack/RLT) */}
+      {/* Owner Controls */}
       {isOwner && (
         <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/30`}>
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">👑 Owner Controls</span>
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Owner Controls</span>
             <span className={`text-xs font-heading font-bold ${(ownership?.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               P/L: {formatMoney(ownership?.profit ?? ownership?.total_earnings ?? 0)}
             </span>
@@ -473,138 +570,150 @@ export default function Dice() {
         </div>
       )}
 
-      {/* Game Area */}
+      {/* ═══ Game Table ═══ */}
       {!isOwner && (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <div className={`${styles.panel} rounded-md overflow-hidden`}>
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-              <h3 className="text-lg font-heading font-semibold text-primary">Place Your Bet</h3>
-            </div>
-            <div className="p-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-mutedForeground mb-2">
-                  Stake
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary font-bold">$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="5000000"
-                    value={stake}
-                    onChange={(e) => setStake(e.target.value)}
-                    className="w-full bg-input border border-border rounded-sm h-12 pl-8 pr-3 text-foreground text-base font-semibold"
-                  />
+        <div
+          className="rounded-xl overflow-hidden border-2"
+          style={{
+            borderColor: '#5a3e1b',
+            background: 'linear-gradient(180deg, #0c3d1a 0%, #0a5e2a 20%, #0d7a35 50%, #0a5e2a 80%, #0c3d1a 100%)',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.5), inset 0 0 60px rgba(0,0,0,0.2)',
+          }}
+        >
+          {/* Gold rail */}
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
+
+          <div className="p-4 sm:p-5">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-5">
+              {/* Left: Dice display */}
+              <div className="flex flex-col items-center">
+                <DiceVisual isRolling={diceLoading} result={lastResult} rollingNumber={rollingNumber} />
+
+                {/* Odds info strip */}
+                <div className="flex items-center gap-4 mt-2 text-[10px] font-heading">
+                  <span className="text-emerald-200/50">
+                    Sides: <span className="text-white font-bold">{actualSidesNum}</span>
+                  </span>
+                  <span className="text-emerald-200/50">
+                    Odds: <span className="text-primary font-bold">1 in {actualSidesNum}</span>
+                  </span>
+                  <span className="text-emerald-200/50">
+                    Pays: <span className="text-emerald-300 font-bold">{formatMoney(returnsAmount)}</span>
+                  </span>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-mutedForeground mb-2">
-                  Number of Sides (5% edge)
-                </label>
-                <input
-                  type="number"
-                  min={config.sides_min ?? 2}
-                  max={config.sides_max ?? 5000}
-                  placeholder="100"
-                  value={sides}
-                  onChange={(e) => setSides(e.target.value)}
-                  className="w-full bg-input border border-border rounded-sm h-12 px-3 text-foreground text-base font-semibold"
-                />
-                {actualSidesNum > sidesNum && (
-                  <p className="text-xs text-mutedForeground mt-1.5">
-                    Actual sides: {actualSidesNum} ({sidesNum} + 5%)
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-mutedForeground mb-2">
-                  Your Number
-                </label>
-                <input
-                  type="number"
-                  min={1}
-                  max={actualSidesNum}
-                  placeholder={`1-${actualSidesNum}`}
-                  value={chosenNumber === '' ? '' : String(chosenNum)}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === '') {
-                      setChosenNumber('');
-                      return;
-                    }
-                    const n = parseInt(v, 10);
-                    if (!Number.isNaN(n)) {
-                      const clamped = Math.max(1, Math.min(actualSidesNum, n));
-                      setChosenNumber(String(clamped));
-                    }
-                  }}
-                  onBlur={() => {
-                    if (chosenNumber === '') setChosenNumber('1');
-                  }}
-                  className="w-full bg-input border border-border rounded-sm h-12 px-3 text-foreground text-base font-semibold"
-                />
-              </div>
-
-              <label className="flex items-center gap-2 cursor-pointer select-none py-1">
-                <input
-                  type="checkbox"
-                  checked={skipAnimation}
-                  onChange={(e) => setSkipAnimation(e.target.checked)}
-                  className="rounded border-border bg-input text-primary focus:ring-primary w-4 h-4"
-                />
-                <span className="text-sm text-mutedForeground">Skip animation</span>
-              </label>
-
-              <button
-                type="button"
-                onClick={placeDiceBet}
-                disabled={!canBet || diceLoading}
-                className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary text-primaryForeground hover:opacity-90 active:scale-98 rounded-lg py-4 text-base font-bold uppercase tracking-wider disabled:opacity-50 shadow-xl shadow-primary/20 transition-all touch-manipulation"
+              {/* Right: Bet controls */}
+              <div
+                className="flex flex-col gap-3 rounded-lg p-4 min-w-[260px]"
+                style={{
+                  background: 'rgba(0,0,0,0.25)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                }}
               >
-                {diceLoading ? 'Rolling...' : `Roll — Returns ${formatMoney(returnsAmount)}`}
-              </button>
+                {/* Stake */}
+                <div>
+                  <label className="block text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1.5">Stake</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary font-bold text-sm">$</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="5000000"
+                      value={stake}
+                      onChange={(e) => setStake(e.target.value)}
+                      className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 pl-7 pr-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
+                    />
+                  </div>
+                  {/* Quick bet chips */}
+                  <div className="flex gap-1.5 mt-2 flex-wrap">
+                    {QUICK_BETS.map((qb) => (
+                      <button
+                        key={qb.value}
+                        onClick={() => setStake(String(qb.value))}
+                        className="w-9 h-9 rounded-full text-[8px] font-bold transition-all hover:scale-105 active:scale-95"
+                        style={{
+                          background: `radial-gradient(circle at 40% 35%, ${qb.color}, ${qb.color}dd)`,
+                          border: `2px dashed ${qb.color}88`,
+                          color: qb.text,
+                          boxShadow: stake === String(qb.value) ? `0 0 0 2px #d4af37, 0 2px 8px rgba(0,0,0,0.3)` : '0 2px 6px rgba(0,0,0,0.3)',
+                        }}
+                      >
+                        {qb.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sides */}
+                <div>
+                  <label className="block text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1.5">
+                    Sides <span className="text-emerald-200/40">(5% edge)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={config.sides_min ?? 2}
+                    max={config.sides_max ?? 5000}
+                    placeholder="100"
+                    value={sides}
+                    onChange={(e) => setSides(e.target.value)}
+                    className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 px-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
+                  />
+                  {actualSidesNum > sidesNum && (
+                    <p className="text-[9px] text-emerald-200/40 font-heading mt-1">
+                      Actual: {actualSidesNum} ({sidesNum} + 5%)
+                    </p>
+                  )}
+                </div>
+
+                {/* Chosen number */}
+                <div>
+                  <label className="block text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1.5">Your Number</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={actualSidesNum}
+                    placeholder={`1-${actualSidesNum}`}
+                    value={chosenNumber === '' ? '' : String(chosenNum)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') { setChosenNumber(''); return; }
+                      const n = parseInt(v, 10);
+                      if (!Number.isNaN(n)) setChosenNumber(String(Math.max(1, Math.min(actualSidesNum, n))));
+                    }}
+                    onBlur={() => { if (chosenNumber === '') setChosenNumber('1'); }}
+                    className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 px-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
+                  />
+                </div>
+
+                {/* Skip animation */}
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={skipAnimation} onChange={(e) => setSkipAnimation(e.target.checked)} className="w-3.5 h-3.5 rounded accent-primary" />
+                  <span className="text-[10px] text-emerald-200/50 font-heading">Skip animation</span>
+                </label>
+
+                {/* Roll button */}
+                <button
+                  type="button"
+                  onClick={placeDiceBet}
+                  disabled={!canBet || diceLoading}
+                  className="w-full rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
+                  style={{
+                    background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
+                    borderColor: '#c9a84c',
+                    color: '#1a1200',
+                    boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
+                  }}
+                >
+                  {diceLoading ? 'Rolling...' : 'Roll the Dice'}
+                </button>
+              </div>
             </div>
           </div>
 
-        {/* Right panel - Result Display */}
-        <div className={`${styles.panel} rounded-md overflow-hidden`}>
-          <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-            <h3 className="text-lg font-heading font-semibold text-primary">The Roll</h3>
-          </div>
-          <div className="p-4 space-y-4">
-            <DiceDisplay
-              isRolling={diceLoading}
-              result={lastResult}
-              rollingNumber={rollingNumber}
-            />
-
-            {/* Game info */}
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between items-center py-2 border-b border-border">
-                <span className="text-mutedForeground">Max Bet</span>
-                <span className="text-primary font-bold">{formatMoney(config.max_bet ?? 0)}</span>
-              </div>
-              <div className="flex justify-between items-center py-2 border-b border-border">
-                <span className="text-mutedForeground">House Edge</span>
-                <span className="text-foreground font-semibold">5%</span>
-              </div>
-              <div className="flex justify-between items-center py-2">
-                <span className="text-mutedForeground">Payout</span>
-                <span className="text-foreground font-semibold">sides × stake × 0.95</span>
-              </div>
-            </div>
-
-            <div className="bg-secondary/30 rounded-sm p-3 text-center">
-              <p className="text-xs text-mutedForeground">
-                Pick 1–{actualSidesNum}. Match the roll to win.<br />
-                Payout = sides × stake (5% house edge)
-              </p>
-            </div>
-          </div>
+          {/* Bottom rail */}
+          <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
         </div>
-      </div>
       )}
 
       {isOwner && (
@@ -612,6 +721,21 @@ export default function Dice() {
           <p className="text-xs text-mutedForeground">You cannot play at your own table. Travel to another city.</p>
         </div>
       )}
+
+      {/* Rules */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Rules</span>
+        </div>
+        <div className="p-3">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{actualSidesNum}, match the roll to win</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payout = sides × stake × 0.95</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>5% house edge (extra sides)</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Max bet: {formatMoney(maxBet)}</li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 }
