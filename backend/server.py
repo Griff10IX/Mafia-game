@@ -123,20 +123,6 @@ BANK_INTEREST_OPTIONS = [
     {"hours": 72, "rate": 0.20},    # 20%
 ]
 
-# Horse Racing: id, name, odds (e.g. 2 = 2:1 payout). Lower odds = favourite, higher win probability.
-HORSERACING_MAX_BET = 10_000_000
-HORSERACING_CLAIM_COST = 500_000_000  # $500M to claim track (per city)
-HORSERACING_ABSOLUTE_MAX_BET = 50_000_000  # owner can set max_bet up to this
-HORSERACING_HOUSE_EDGE = 0.05
-HORSERACING_HORSES = [
-    {"id": 1, "name": "Thunder Bolt", "odds": 2},
-    {"id": 2, "name": "Midnight Runner", "odds": 3},
-    {"id": 3, "name": "Golden Star", "odds": 4},
-    {"id": 4, "name": "Shadow Fox", "odds": 5},
-    {"id": 5, "name": "Storm Chaser", "odds": 6},
-    {"id": 6, "name": "Dark Horse", "odds": 8},
-]
-
 # Health & armour: health 0-100, armour 0-5. Bullets to kill clamped to [MIN_BULLETS_TO_KILL, MAX_BULLETS_TO_KILL]
 DEFAULT_HEALTH = 100
 MIN_BULLETS_TO_KILL = 5000
@@ -409,11 +395,6 @@ class SendMessageRequest(BaseModel):
     target_username: str
     message: str
     gif_url: Optional[str] = None
-
-
-class HorseRacingBetRequest(BaseModel):
-    horse_id: int
-    bet: int
 
 
 class PropertyResponse(BaseModel):
@@ -5049,6 +5030,7 @@ async def _user_owns_any_casino(user_id: str):
 from routers.dice import DICE_MAX_BET, DiceSellOnTradeRequest  # used by CASINO_GAMES and roulette/blackjack/horseracing sell-on-trade
 from routers.roulette import ROULETTE_MAX_BET, RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest  # CASINO_GAMES, blackjack/horseracing reuse these models
 from routers.blackjack import BLACKJACK_MAX_BET  # CASINO_GAMES
+from routers.horseracing import HORSERACING_MAX_BET  # CASINO_GAMES
 
 
 async def _user_owns_any_property(user_id: str):
@@ -5070,287 +5052,6 @@ async def get_my_properties(current_user: dict = Depends(get_current_user)):
     casino = await _user_owns_any_casino(user_id)
     property_ = await _user_owns_any_property(user_id)
     return {"casino": casino, "property": property_}
-
-
-# ============ Casino Horse Racing API ============
-# Races use animation on frontend: backend returns winner_id and horses list; frontend animates progress bars.
-# Ownership per city (like blackjack/dice): owner sets max_bet, receives losses and pays wins.
-HORSERACING_HISTORY_MAX = 20
-
-def _normalize_city_for_horseracing(city_raw: str) -> str:
-    if not city_raw:
-        return ""
-    city_lower = city_raw.strip().lower()
-    for state in STATES:
-        if state.lower() == city_lower:
-            return state
-    return ""
-
-async def _get_horseracing_ownership_doc(city: str):
-    if not city:
-        return city, None
-    pattern = re.compile(f"^{re.escape(city)}$", re.IGNORECASE)
-    doc = await db.horseracing_ownership.find_one({"city": pattern})
-    if doc:
-        return doc.get("city", city), doc
-    return city, None
-
-def _horseracing_pick_winner() -> dict:
-    """Pick a winner weighted by inverse odds (lower odds = favourite = higher win probability)."""
-    horses = list(HORSERACING_HORSES)
-    if not horses:
-        return horses[0] if horses else None
-    weights = [1.0 / max(1, h.get("odds") or 1) for h in horses]
-    total = sum(weights)
-    if total <= 0:
-        return random.choice(horses)
-    r = random.uniform(0, total)
-    acc = 0
-    for h, w in zip(horses, weights):
-        acc += w
-        if r <= acc:
-            return h
-    return horses[-1]
-
-
-@api_router.get("/casino/horseracing/config")
-async def casino_horseracing_config(current_user: dict = Depends(get_current_user)):
-    """Horse racing config: horses, max_bet (from ownership or default), claim_cost, house_edge."""
-    raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
-    city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "")
-    _, doc = await _get_horseracing_ownership_doc(city) if city else (None, None)
-    max_bet = doc.get("max_bet", HORSERACING_MAX_BET) if doc else HORSERACING_MAX_BET
-    return {
-        "horses": list(HORSERACING_HORSES),
-        "max_bet": max_bet,
-        "house_edge": HORSERACING_HOUSE_EDGE,
-        "claim_cost": HORSERACING_CLAIM_COST,
-    }
-
-
-@api_router.get("/casino/horseracing/ownership")
-async def casino_horseracing_ownership(current_user: dict = Depends(get_current_user)):
-    """Current city's track ownership: owner, is_owner, claim_cost, max_bet."""
-    raw = (current_user.get("current_state") or "").strip()
-    city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "Chicago")
-    display_city = city or raw or "Chicago"
-    stored_city, doc = await _get_horseracing_ownership_doc(city)
-    if not doc:
-        return {
-            "current_city": display_city,
-            "owner_id": None,
-            "owner_name": None,
-            "is_owner": False,
-            "is_unclaimed": True,
-            "claim_cost": HORSERACING_CLAIM_COST,
-            "max_bet": HORSERACING_MAX_BET,
-        }
-    owner_id = doc.get("owner_id")
-    owner_name = None
-    if owner_id:
-        u = await db.users.find_one({"id": owner_id}, {"username": 1})
-        owner_name = u.get("username") if u else None
-    is_owner = owner_id == current_user["id"]
-    max_bet = doc.get("max_bet", HORSERACING_MAX_BET)
-    total_earnings = doc.get("total_earnings", 0)
-    profit = int((doc.get("profit") or 0) or 0)
-    return {
-        "current_city": display_city,
-        "owner_id": owner_id,
-        "owner_name": owner_name,
-        "is_owner": is_owner,
-        "is_unclaimed": owner_id is None,
-        "claim_cost": HORSERACING_CLAIM_COST,
-        "max_bet": max_bet,
-        "total_earnings": total_earnings if is_owner else None,
-        "profit": profit if is_owner else None,
-    }
-
-
-@api_router.post("/casino/horseracing/claim")
-async def casino_horseracing_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
-    """Claim race track. Max 1 casino per player."""
-    city = _normalize_city_for_horseracing((request.city or "").strip())
-    if not city or city not in STATES:
-        raise HTTPException(status_code=400, detail="Invalid city")
-    owned = await _user_owns_any_casino(current_user["id"])
-    if owned and (owned.get("type") != "horseracing" or owned.get("city") != city):
-        raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
-    stored_city, doc = await _get_horseracing_ownership_doc(city)
-    if doc and doc.get("owner_id"):
-        raise HTTPException(status_code=400, detail="This track already has an owner")
-    user = await db.users.find_one({"id": current_user["id"]})
-    if not user or user.get("money", 0) < HORSERACING_CLAIM_COST:
-        raise HTTPException(status_code=400, detail=f"You need ${HORSERACING_CLAIM_COST:,} to claim")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
-    await db.horseracing_ownership.update_one(
-        {"city": stored_city or city},
-        {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"], "max_bet": HORSERACING_MAX_BET, "total_earnings": 0, "profit": 0}},
-        upsert=True,
-    )
-    return {"message": f"You now own the race track in {city}!"}
-
-
-@api_router.post("/casino/horseracing/relinquish")
-async def casino_horseracing_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
-    city = _normalize_city_for_horseracing((request.city or "").strip())
-    if not city or city not in STATES:
-        raise HTTPException(status_code=400, detail="Invalid city")
-    stored_city, doc = await _get_horseracing_ownership_doc(city)
-    if not doc or doc.get("owner_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You do not own this track")
-    await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
-    return {"message": "Ownership relinquished."}
-
-
-@api_router.post("/casino/horseracing/set-max-bet")
-async def casino_horseracing_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
-    city = _normalize_city_for_horseracing((request.city or "").strip())
-    if not city or city not in STATES:
-        raise HTTPException(status_code=400, detail="Invalid city")
-    stored_city, doc = await _get_horseracing_ownership_doc(city)
-    if not doc or doc.get("owner_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You do not own this track")
-    new_max = max(1_000_000, min(request.max_bet, HORSERACING_ABSOLUTE_MAX_BET))
-    await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
-    return {"message": f"Max bet set to ${new_max:,}"}
-
-
-@api_router.post("/casino/horseracing/send-to-user")
-async def casino_horseracing_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user)):
-    city = _normalize_city_for_horseracing((request.city or "").strip())
-    if not city or city not in STATES:
-        raise HTTPException(status_code=400, detail="Invalid city")
-    stored_city, doc = await _get_horseracing_ownership_doc(city)
-    if not doc or doc.get("owner_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You do not own this track")
-    # Case-insensitive username lookup
-    target_username_pattern = _username_pattern(request.target_username.strip())
-    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
-    if not target or target["id"] == current_user["id"]:
-        raise HTTPException(status_code=400, detail="Invalid target user")
-    await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target.get("username")}})
-    return {"message": f"Track ownership transferred to {target.get('username', '?')}."}
-
-
-@api_router.post("/casino/horseracing/sell-on-trade")
-async def casino_horseracing_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
-    """List your horseracing track for sale on Quick Trade (points only)."""
-    city = _normalize_city_for_horseracing((request.city or "").strip())
-    if not city or city not in STATES:
-        raise HTTPException(status_code=400, detail="Invalid city")
-    
-    if request.points <= 0:
-        raise HTTPException(status_code=400, detail="Points must be positive")
-    
-    stored_city, doc = await _get_horseracing_ownership_doc(city)
-    if not doc or doc.get("owner_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You do not own this track")
-    
-    casino_property = {
-        "_id": ObjectId(),
-        "type": "casino_horseracing",
-        "location": city,
-        "name": f"Horse Racing Track ({city})",
-        "owner_id": current_user["id"],
-        "owner_username": current_user.get("username", "Unknown"),
-        "for_sale": True,
-        "sale_price": request.points,
-        "created_at": datetime.now(timezone.utc)
-    }
-    
-    await db.properties.insert_one(casino_property)
-    return {"message": f"Horse racing track listed for {request.points:,} points on Quick Trade"}
-
-
-@api_router.post("/casino/horseracing/race")
-async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: dict = Depends(get_current_user)):
-    """Place a bet on a horse. Owner pays wins and receives losses (by city). Owner cannot play at own track."""
-    raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
-    city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "")
-    stored_city, doc = await _get_horseracing_ownership_doc(city) if city else (None, None)
-    max_bet = doc.get("max_bet", HORSERACING_MAX_BET) if doc else HORSERACING_MAX_BET
-    owner_id = doc.get("owner_id") if doc else None
-    if owner_id and owner_id == current_user["id"]:
-        raise HTTPException(status_code=400, detail="You cannot bet at your own track")
-    horse_id = int(request.horse_id)
-    bet = int(request.bet or 0)
-    if bet < 1:
-        raise HTTPException(status_code=400, detail="Bet must be at least 1")
-    if bet > max_bet:
-        raise HTTPException(status_code=400, detail=f"Max bet is ${max_bet:,}")
-    horse = next((h for h in HORSERACING_HORSES if h["id"] == horse_id), None)
-    if not horse:
-        raise HTTPException(status_code=400, detail="Invalid horse")
-    user_money = int(current_user.get("money") or 0)
-    if user_money < bet:
-        raise HTTPException(status_code=400, detail="Insufficient cash")
-    winner = _horseracing_pick_winner()
-    won = winner["id"] == horse_id
-    if won:
-        payout = int(bet * (1 + horse["odds"]) * (1.0 - HORSERACING_HOUSE_EDGE))
-        payout = max(payout, bet)
-    else:
-        payout = 0
-    new_money = user_money - bet
-    if not owner_id:
-        if won:
-            new_money += payout
-        await db.users.update_one({"id": current_user["id"]}, {"$set": {"money": new_money}})
-    else:
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -bet}})
-        if won:
-            owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
-            owner_money = int((owner.get("money") or 0) or 0)
-            actual_payout = min(payout, owner_money)
-            shortfall = payout - actual_payout
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout}})
-            await db.horseracing_ownership.update_one(
-                {"city": stored_city or city},
-                {"$inc": {"profit": -actual_payout}}
-            )
-            new_money = user_money - bet + actual_payout
-            if shortfall > 0:
-                await db.horseracing_ownership.update_one(
-                    {"city": stored_city or city},
-                    {"$set": {"owner_id": None, "owner_username": None}}
-                )
-        else:
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-            await db.horseracing_ownership.update_one(
-                {"city": stored_city or city},
-                {"$inc": {"total_earnings": bet, "profit": bet}}
-            )
-    history_entry = {
-        "bet": bet,
-        "horse_id": horse_id,
-        "horse_name": horse["name"],
-        "won": won,
-        "payout": payout if won else 0,
-        "winner_name": winner["name"],
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$push": {"horseracing_history": {"$each": [history_entry], "$slice": -HORSERACING_HISTORY_MAX}}}
-    )
-    return {
-        "winner_id": winner["id"],
-        "horses": list(HORSERACING_HORSES),
-        "won": won,
-        "payout": payout,
-        "winner_name": winner["name"],
-        "new_balance": new_money,
-    }
-
-
-@api_router.get("/casino/horseracing/history")
-async def casino_horseracing_history(current_user: dict = Depends(get_current_user)):
-    """Last N horse racing bets for the current user (for display with race animation results)."""
-    user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "horseracing_history": 1})
-    history = (user.get("horseracing_history") or [])[:HORSERACING_HISTORY_MAX]
-    return {"history": list(reversed(history))}
 
 
 @api_router.post("/store/buy-custom-car")
@@ -5394,7 +5095,7 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -5425,6 +5126,7 @@ booze_run.register(api_router)
 dice.register(api_router)
 roulette.register(api_router)
 blackjack.register(api_router)
+horseracing.register(api_router)
 
 app.include_router(api_router)
 
