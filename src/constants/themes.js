@@ -192,6 +192,21 @@ export const THEME_COLOURS = [
   { id: 'tone-2-slate-orange', name: 'Slate → Orange', stops: ['#475569', '#ea580c'], primary: '#475569', primaryBright: '#475569', primaryDark: '#ea580c', foregroundOnPrimary: '#ffffff' },
   { id: 'tone-3-midnight-teal-amber', name: '3-tone Midnight Teal Amber', stops: ['#0f172a', '#0d9488', '#f59e0b'], primary: '#0f172a', primaryBright: '#0f172a', primaryDark: '#f59e0b', foregroundOnPrimary: '#ffffff' },
   { id: 'tone-4-ocean-fire', name: '4-tone Ocean Fire', stops: ['#0c4a6e', '#0284c7', '#0d9488', '#ea580c'], primary: '#0c4a6e', primaryBright: '#0c4a6e', primaryDark: '#ea580c', foregroundOnPrimary: '#ffffff' },
+
+  /* Glossy – richer, saturated, reflective feel */
+  { id: 'glossy-gold', name: 'Glossy Gold', primary: '#e6c229', primaryBright: '#f5d654', primaryDark: '#c9a227', foregroundOnPrimary: '#000000' },
+  { id: 'glossy-teal', name: 'Glossy Teal', primary: '#14b8a6', primaryBright: '#2dd4bf', primaryDark: '#0d9488', foregroundOnPrimary: '#000000' },
+  { id: 'glossy-blue', name: 'Glossy Blue', primary: '#3b82f6', primaryBright: '#60a5fa', primaryDark: '#2563eb', foregroundOnPrimary: '#ffffff' },
+  { id: 'glossy-rose', name: 'Glossy Rose', primary: '#f43f5e', primaryBright: '#fb7185', primaryDark: '#e11d48', foregroundOnPrimary: '#ffffff' },
+  { id: 'glossy-emerald', name: 'Glossy Emerald', primary: '#10b981', primaryBright: '#34d399', primaryDark: '#059669', foregroundOnPrimary: '#000000' },
+  { id: 'glossy-violet', name: 'Glossy Violet', primary: '#8b5cf6', primaryBright: '#a78bfa', primaryDark: '#7c3aed', foregroundOnPrimary: '#ffffff' },
+  /* Matte – muted, flat, soft */
+  { id: 'matte-slate', name: 'Matte Slate', primary: '#64748b', primaryBright: '#94a3b8', primaryDark: '#475569', foregroundOnPrimary: '#ffffff' },
+  { id: 'matte-sage', name: 'Matte Sage', primary: '#5a6b5a', primaryBright: '#739673', primaryDark: '#445d44', foregroundOnPrimary: '#ffffff' },
+  { id: 'matte-dust', name: 'Matte Dust', primary: '#a8a29e', primaryBright: '#d6d3d1', primaryDark: '#78716c', foregroundOnPrimary: '#000000' },
+  { id: 'matte-mauve', name: 'Matte Mauve', primary: '#8b7a8e', primaryBright: '#a594a8', primaryDark: '#6a5c6e', foregroundOnPrimary: '#ffffff' },
+  { id: 'matte-navy', name: 'Matte Navy', primary: '#334155', primaryBright: '#475569', primaryDark: '#1e293b', foregroundOnPrimary: '#ffffff' },
+  { id: 'matte-terracotta', name: 'Matte Terracotta', primary: '#a67c6b', primaryBright: '#c49a8a', primaryDark: '#7a5a4a', foregroundOnPrimary: '#ffffff' },
 ];
 
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */
@@ -228,10 +243,37 @@ export const THEME_TEXTURES = [
 export const DEFAULT_COLOUR_ID = 'gold';
 export const DEFAULT_TEXTURE_ID = 'none';
 
+/**
+ * Full presets: one-click theme bundles (colour + texture + optional button/accent).
+ * buttonColourId / accentLineColourId: null = use main colour.
+ */
+export const THEME_PRESETS = [
+  { id: 'default', name: 'Classic Mafia', description: 'Gold, no texture', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'dark-mode', name: 'Dark Mode', description: 'Slate accents, clean', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'telegram', name: 'Telegram', description: 'Teal / sky blue', colourId: 'sky', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'facebook', name: 'Facebook', description: 'Blue accent', colourId: 'blue', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'glossy-gold', name: 'Glossy Gold', description: 'Rich gold, subtle grain', colourId: 'glossy-gold', textureId: 'grain', buttonColourId: null, accentLineColourId: null },
+  { id: 'glossy-teal', name: 'Glossy Teal', description: 'Shiny teal', colourId: 'glossy-teal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'matte', name: 'Matte', description: 'Muted, flat look', colourId: 'matte-sage', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'midnight', name: 'Midnight', description: 'Deep blue / indigo', colourId: 'midnight', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'ocean', name: 'Ocean', description: 'Blue → teal gradient', colourId: 'tone-2-ocean', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'forest', name: 'Forest', description: 'Green tones', colourId: 'tone-2-forest', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'rose-gold', name: 'Rose Gold', description: 'Warm rose gold', colourId: 'rose-gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'ember', name: 'Ember', description: 'Dark red / orange', colourId: 'tone-4-ember', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'lavender-dream', name: 'Lavender Dream', description: 'Soft purple gradient', colourId: 'tone-3-lavender', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'noir-matte', name: 'Noir Matte', description: 'Charcoal, minimal', colourId: 'charcoal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'vintage-paper', name: 'Vintage Paper', description: 'Sepia + paper texture', colourId: 'sepia', textureId: 'paper', buttonColourId: null, accentLineColourId: null },
+  { id: 'carbon-pro', name: 'Carbon Pro', description: 'Dark with carbon texture', colourId: 'carbon', textureId: 'carbon', buttonColourId: null, accentLineColourId: null },
+];
+
 export function getThemeColour(id) {
   return THEME_COLOURS.find((c) => c.id === id) || THEME_COLOURS[0];
 }
 
 export function getThemeTexture(id) {
   return THEME_TEXTURES.find((t) => t.id === id) || THEME_TEXTURES[0];
+}
+
+export function getThemePreset(id) {
+  return THEME_PRESETS.find((p) => p.id === id) || THEME_PRESETS[0];
 }
