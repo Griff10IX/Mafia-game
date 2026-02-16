@@ -9,11 +9,13 @@ from server import (
     db,
     get_current_user,
     send_notification,
-    _booze_user_capacity,
     DEFAULT_GARAGE_BATCH_LIMIT,
     GARAGE_BATCH_UPGRADE_COST,
     GARAGE_BATCH_UPGRADE_INCREMENT,
     GARAGE_BATCH_LIMIT_MAX,
+)
+from routers.booze_run import (
+    _booze_user_capacity,
     BOOZE_CAPACITY_UPGRADE_COST,
     BOOZE_CAPACITY_UPGRADE_AMOUNT,
     BOOZE_CAPACITY_BONUS_MAX,
