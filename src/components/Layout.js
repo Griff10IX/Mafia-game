@@ -73,7 +73,8 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
   const [casinoOpen, setCasinoOpen] = useState(false);
-  const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null); // 'ranking' | 'casino' when bottom bar group is expanded
+  const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null); // 'ranking' | 'casino' | 'messaging' when bottom bar group is expanded
+  const [mobileFullMenuOpen, setMobileFullMenuOpen] = useState(false); // full nav overlay when bottom bar + More tapped
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
@@ -94,6 +95,7 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     setMobileBottomMenuOpen(null);
+    setMobileFullMenuOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -418,11 +420,11 @@ export default function Layout({ children }) {
 
   return (
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
-      {/* Sidebar */}
+      {/* Sidebar: hidden on mobile when bottom bar is selected; otherwise slide-out on mobile, always on md */}
       <div
         className={`fixed left-0 top-0 h-full w-48 ${styles.sidebar} z-50 transform transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0`}
+          mobileNavStyle === 'bottom' ? 'hidden md:translate-x-0 md:block' : `${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`
+        }`}
         style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
@@ -737,8 +739,8 @@ export default function Layout({ children }) {
         </div>
       </div>
 
-      {/* Mobile overlay */}
-      {sidebarOpen && (
+      {/* Mobile overlay (only when sidebar mode and menu open) */}
+      {sidebarOpen && mobileNavStyle !== 'bottom' && (
         <div
           className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setSidebarOpen(false)}
@@ -748,15 +750,17 @@ export default function Layout({ children }) {
       {/* Top bar */}
       <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-4 gap-2 md:gap-3 py-2 md:py-0`}>
         <div className="flex items-center gap-3 flex-1 min-w-0 shrink-0">
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          data-testid="mobile-menu-toggle"
-          className="md:hidden shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center -m-2"
-          style={{ color: 'var(--gm-gold)' }}
-          aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
-        >
-          {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
-        </button>
+        {mobileNavStyle !== 'bottom' && (
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            data-testid="mobile-menu-toggle"
+            className="md:hidden shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center -m-2"
+            style={{ color: 'var(--gm-gold)' }}
+            aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
+          >
+            {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        )}
 
         {/* Flash news ticker */}
         <div className="flex-1 min-w-0 overflow-hidden hidden sm:flex items-center gap-2">
@@ -1088,7 +1092,7 @@ export default function Layout({ children }) {
             })}
             <button
               type="button"
-              onClick={() => setSidebarOpen(true)}
+              onClick={() => { setMobileBottomMenuOpen(null); setMobileFullMenuOpen(true); }}
               className="flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border border-transparent"
               style={{ color: 'var(--noir-foreground)' }}
               aria-label="Open full menu"
@@ -1099,6 +1103,178 @@ export default function Layout({ children }) {
             </button>
           </nav>
         </div>
+      )}
+
+      {/* Full menu overlay (bottom bar mode): every sidebar link not in the bar + Theme + Logout */}
+      {mobileNavStyle === 'bottom' && mobileFullMenuOpen && (
+        <>
+          <div className="md:hidden fixed inset-0 bg-black/60 z-50" onClick={() => setMobileFullMenuOpen(false)} aria-hidden />
+          <div
+            className="md:hidden fixed inset-x-0 bottom-0 top-12 z-50 rounded-t-xl overflow-hidden flex flex-col"
+            style={{ backgroundColor: 'var(--gm-bg-top)', borderTop: '2px solid var(--noir-border-mid)' }}
+            role="dialog"
+            aria-label="Full menu"
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border-mid)' }}>
+              <h2 className="text-sm font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--gm-gold)' }}>Menu</h2>
+              <button
+                type="button"
+                onClick={() => setMobileFullMenuOpen(false)}
+                className="p-2 rounded-lg transition-colors"
+                style={{ color: 'var(--noir-foreground)' }}
+                aria-label="Close menu"
+              >
+                <X size={24} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto py-2">
+              {user && (
+                <div className="mb-4 px-4 py-3 rounded-lg border" style={{ backgroundColor: 'var(--gm-card)', borderColor: 'var(--noir-border-mid)' }}>
+                  <p className="text-[10px] font-heading font-bold uppercase tracking-widest mb-2" style={{ color: 'var(--gm-gold)', opacity: 0.9 }}>
+                    At a glance
+                  </p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                    <div>
+                      <span className="font-heading text-mutedForeground">Money</span>
+                      <p className="font-heading font-bold text-foreground truncate" title={formatMoney(user.money ?? 0)}>{formatMoneyCompact(user.money ?? 0)}</p>
+                    </div>
+                    <div>
+                      <span className="font-heading text-mutedForeground">Rank</span>
+                      <p className="font-heading font-bold text-foreground truncate">{user.rank_name ?? rankProgress?.current_rank_name ?? '—'}</p>
+                    </div>
+                    <div>
+                      <span className="font-heading text-mutedForeground">Location</span>
+                      <p className="font-heading font-bold text-foreground truncate">{user.current_state ?? '—'}</p>
+                    </div>
+                    <div>
+                      <span className="font-heading text-mutedForeground">Points</span>
+                      <p className="font-heading font-bold text-foreground truncate">{formatInt(user.points ?? 0)}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="font-heading text-mutedForeground">Casino profit</span>
+                      <p className={`font-heading font-bold truncate ${Number(user.casino_profit ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                        {formatMoney(user.casino_profit ?? 0)}
+                      </p>
+                    </div>
+                    {rankProgress && (Number(rankProgress.rank_points_current) + Number(rankProgress.rank_points_needed)) > 0 && (
+                      <div className="col-span-2">
+                        <span className="font-heading text-mutedForeground">Rank progress</span>
+                        <p className="font-heading font-bold text-foreground truncate">
+                          {formatInt(rankProgress.rank_points_current ?? 0)} / {formatInt((rankProgress.rank_points_current ?? 0) + (rankProgress.rank_points_needed ?? 0))} RP
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {(() => {
+                const navByPath = Object.fromEntries(navItems.map((i) => [i.path, i]));
+                const categories = [
+                  { label: 'You', paths: ['/objectives', '/profile', '/stats'] },
+                  { label: 'Money', paths: ['/bank'] },
+                  { label: 'Combat', paths: ['/attack', '/attempts', '/hitlist', '/bodyguards'] },
+                  { label: 'Travel', paths: ['/travel', '/states'] },
+                  { label: 'Properties', paths: ['/my-properties', '/properties'] },
+                  { label: 'Social', paths: ['/booze-run', '/users-online', '/families'] },
+                  { label: 'Weapons & more', paths: ['/armour-weapons', '/leaderboard', '/quick-trade', '/dead-alive'] },
+                ];
+                const renderNavLink = (item) => {
+                  const isActive = location.pathname === item.path;
+                  const isFamiliesAtWar = item.path === '/families' && atWar;
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setMobileFullMenuOpen(false)}
+                      className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${
+                        isFamiliesAtWar ? 'text-red-400' : isActive ? 'bg-primary/20' : ''
+                      }`}
+                      style={isActive && !isFamiliesAtWar ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                    >
+                      <item.icon size={20} className="shrink-0" style={{ color: isFamiliesAtWar ? '#f87171' : 'var(--gm-gold)' }} />
+                      <span className="font-heading uppercase tracking-wider text-sm">{item.label}</span>
+                      {item.badge > 0 && (
+                        <span className="ml-auto min-w-[20px] h-5 rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-1.5">
+                          {item.badge > 9 ? '9+' : item.badge}
+                        </span>
+                      )}
+                      {isFamiliesAtWar && <AlertTriangle size={18} className="shrink-0 text-red-400" />}
+                    </Link>
+                  );
+                };
+                return categories.map((cat) => {
+                  const items = cat.paths.map((p) => navByPath[p]).filter(Boolean);
+                  if (items.length === 0) return null;
+                  return (
+                    <div key={cat.label} className="mb-4">
+                      <p className="px-4 py-1.5 text-[10px] font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--gm-gold)', opacity: 0.9 }}>
+                        {cat.label}
+                      </p>
+                      {items.map(renderNavLink)}
+                    </div>
+                  );
+                });
+              })()}
+              {adminNavItems.length > 0 && (
+                <div className="mb-4">
+                  <p className="px-4 py-1.5 text-[10px] font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--gm-gold)', opacity: 0.9 }}>
+                    Admin
+                  </p>
+                  {adminNavItems.map((item) => {
+                    const isActive = location.pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        onClick={() => setMobileFullMenuOpen(false)}
+                        className={`flex items-center gap-3 px-4 py-2.5 transition-colors ${isActive ? 'bg-red-500/20' : 'text-red-400'}`}
+                      >
+                        <item.icon size={20} className="shrink-0" />
+                        <span className="font-heading uppercase tracking-wider text-sm">{item.label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+              {hasAdminEmail && !isAdmin && (
+                <div className="mb-4">
+                  <button
+                    type="button"
+                    onClick={() => { promoteToAdmin(); setMobileFullMenuOpen(false); }}
+                    className="flex items-center gap-3 px-4 py-2.5 w-full text-left text-amber-400 hover:bg-amber-500/10 transition-colors"
+                  >
+                    <Shield size={20} className="shrink-0" />
+                    <span className="font-heading uppercase tracking-wider text-sm">Use admin powers</span>
+                  </button>
+                </div>
+              )}
+              {user && (
+                <div className="border-t pt-2 mt-2" style={{ borderColor: 'var(--noir-border-mid)' }}>
+                  <p className="px-4 py-1.5 text-[10px] font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--gm-gold)', opacity: 0.9 }}>
+                    Account
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setThemePickerOpen(true); setMobileFullMenuOpen(false); }}
+                    className="flex items-center gap-3 px-4 py-2.5 w-full text-left transition-colors hover:bg-primary/10"
+                    style={{ color: 'var(--noir-foreground)' }}
+                  >
+                    <Palette size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
+                    <span className="font-heading uppercase tracking-wider text-sm">Theme</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { handleLogout(); setMobileFullMenuOpen(false); }}
+                    className="flex items-center gap-3 px-4 py-2.5 w-full text-left bg-red-900/30 text-red-300 hover:bg-red-900/50 transition-colors"
+                  >
+                    <LogOut size={20} className="shrink-0" />
+                    <span className="font-heading uppercase tracking-wider text-sm">Logout</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
