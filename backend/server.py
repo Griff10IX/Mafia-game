@@ -1444,14 +1444,6 @@ async def get_stats_overview(
         "top_dead_users": top_dead_users,
     }
 
-@api_router.get("/meta/ranks")
-async def get_meta_ranks(current_user: dict = Depends(get_current_user)):
-    return {"ranks": [{"id": int(r["id"]), "name": r["name"]} for r in RANKS]}
-
-@api_router.get("/meta/cars")
-async def get_meta_cars(current_user: dict = Depends(get_current_user)):
-    return {"cars": [{"id": c["id"], "name": c["name"], "rarity": c.get("rarity")} for c in CARS]}
-
 # ---- Sports Betting (live games / results) ----
 async def _sports_ensure_seed_events():
     """No seed events - all events are added by admin from live API templates."""
@@ -3841,7 +3833,7 @@ async def get_my_properties(current_user: dict = Depends(get_current_user)):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, notifications, hitlist, properties, store, racket, leaderboard, armour, meta
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -3880,6 +3872,7 @@ store.register(api_router)
 racket.register(api_router)
 leaderboard.register(api_router)
 armour.register(api_router)
+meta.register(api_router)
 
 app.include_router(api_router)
 
