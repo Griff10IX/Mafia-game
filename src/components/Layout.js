@@ -22,8 +22,17 @@ const MOBILE_BOTTOM_NAV_ITEMS = [
       { path: '/organised-crime', label: 'Organised Crime' },
     ],
   },
-  { type: 'link', path: '/forum', icon: MessageSquare, label: 'Forum' },
-  { type: 'link', path: '/inbox', icon: Mail, label: 'Inbox' },
+  {
+    type: 'group',
+    id: 'messaging',
+    icon: MessageSquare,
+    label: 'Messages',
+    items: [
+      { path: '/forum', label: 'Forum' },
+      { path: '/forum', label: 'Entertainer Forum', state: { category: 'entertainer' } },
+      { path: '/inbox', label: 'Inbox' },
+    ],
+  },
   { type: 'link', path: '/garage', icon: Car, label: 'Garage' },
   {
     type: 'group',
@@ -984,11 +993,16 @@ export default function Layout({ children }) {
               >
                 <div className="py-2">
                   {group.items.map((sub) => {
-                    const isActive = location.pathname === sub.path || (sub.path !== '/casino' && location.pathname.startsWith(sub.path + '/'));
+                    const to = sub.state ? { pathname: sub.path, state: sub.state } : sub.path;
+                    const isActive = sub.state
+                      ? location.pathname === sub.path && location.state?.category === sub.state?.category
+                      : sub.path === '/forum'
+                        ? location.pathname === '/forum' && !location.state?.category
+                        : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
                     return (
                       <Link
-                        key={sub.path}
-                        to={sub.path}
+                        key={`${sub.path}-${sub.label}`}
+                        to={to}
                         onClick={() => setMobileBottomMenuOpen(null)}
                         role="menuitem"
                         className={`block w-full px-4 py-2.5 text-left text-sm font-heading uppercase tracking-wider transition-colors ${
@@ -1040,9 +1054,11 @@ export default function Layout({ children }) {
               }
               if (item.type === 'group') {
                 const isOpen = mobileBottomMenuOpen === item.id;
-                const isActive = item.items.some(
-                  (sub) => location.pathname === sub.path || (sub.path !== '/casino' && location.pathname.startsWith(sub.path + '/'))
-                );
+                const isActive = item.items.some((sub) => {
+                  if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
+                  return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
+                });
+                const showInboxBadge = item.id === 'messaging' && unreadCount > 0;
                 return (
                   <button
                     key={item.id}
@@ -1056,7 +1072,14 @@ export default function Layout({ children }) {
                     aria-haspopup="true"
                     title={item.label}
                   >
-                    <Icon size={22} strokeWidth={2} />
+                    <span className="relative inline-flex">
+                      <Icon size={22} strokeWidth={2} />
+                      {showInboxBadge && (
+                        <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
+                          {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
+                      )}
+                    </span>
                     <span className="text-[9px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
                   </button>
                 );
