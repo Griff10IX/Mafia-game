@@ -120,9 +120,31 @@ export const THEME_COLOURS = [
   { id: 'wine-plum', name: 'Wine Plum', primary: '#7e3d5c', primaryBright: '#9a5278', primaryDark: '#5e2d45', foregroundOnPrimary: '#ffffff' },
   { id: 'frost-blue', name: 'Frost Blue', primary: '#6b9bb5', primaryBright: '#85b5ce', primaryDark: '#507890', foregroundOnPrimary: '#000000' },
   { id: 'moss', name: 'Moss', primary: '#5c7a4a', primaryBright: '#739662', primaryDark: '#445d36', foregroundOnPrimary: '#ffffff' },
+
+  /* More single & mixed */
+  { id: 'salmon', name: 'Salmon', primary: '#f9736e', primaryBright: '#fb9a96', primaryDark: '#e85a55', foregroundOnPrimary: '#000000' },
+  { id: 'mauve', name: 'Mauve', primary: '#9d7a9e', primaryBright: '#b894b9', primaryDark: '#7a5c7b', foregroundOnPrimary: '#ffffff' },
+  { id: 'sepia', name: 'Sepia', primary: '#8b7355', primaryBright: '#a88b6a', primaryDark: '#6b5842', foregroundOnPrimary: '#ffffff' },
+  { id: 'denim', name: 'Denim', primary: '#4a6fa5', primaryBright: '#5e86c4', primaryDark: '#385582', foregroundOnPrimary: '#ffffff' },
+  { id: 'clay', name: 'Clay', primary: '#a67c52', primaryBright: '#c4996a', primaryDark: '#805c3a', foregroundOnPrimary: '#ffffff' },
+  { id: 'moonlight', name: 'Moonlight', primary: '#7b8aa8', primaryBright: '#9aa8c4', primaryDark: '#5c6a85', foregroundOnPrimary: '#ffffff' },
+  { id: 'camel', name: 'Camel', primary: '#c4a574', primaryBright: '#d9bc8f', primaryDark: '#9a7d52', foregroundOnPrimary: '#000000' },
+  { id: 'aubergine', name: 'Aubergine', primary: '#5c3d5c', primaryBright: '#735073', primaryDark: '#452e45', foregroundOnPrimary: '#ffffff' },
+  { id: 'spruce', name: 'Spruce', primary: '#2d5a4a', primaryBright: '#387562', primaryDark: '#224438', foregroundOnPrimary: '#ffffff' },
+  { id: 'merlot', name: 'Merlot', primary: '#6b2d4a', primaryBright: '#853d62', primaryDark: '#502238', foregroundOnPrimary: '#ffffff' },
+  { id: 'pewter-blue', name: 'Pewter Blue', primary: '#6b7a8a', primaryBright: '#8596a8', primaryDark: '#505d6b', foregroundOnPrimary: '#ffffff' },
+  { id: 'apricot', name: 'Apricot', primary: '#e8a86a', primaryBright: '#f0c08e', primaryDark: '#c48348', foregroundOnPrimary: '#000000' },
+  { id: 'thistle', name: 'Thistle', primary: '#a87ab0', primaryBright: '#c49bcc', primaryDark: '#825c8a', foregroundOnPrimary: '#ffffff' },
+  { id: 'cedar', name: 'Cedar', primary: '#6b5344', primaryBright: '#856a5a', primaryDark: '#4d3d32', foregroundOnPrimary: '#ffffff' },
+  { id: 'lagoon', name: 'Lagoon', primary: '#2a8b82', primaryBright: '#35a89e', primaryDark: '#1f6b64', foregroundOnPrimary: '#ffffff' },
+  { id: 'mulberry', name: 'Mulberry', primary: '#7b4a7b', primaryBright: '#966296', primaryDark: '#5a385a', foregroundOnPrimary: '#ffffff' },
+  { id: 'tangerine', name: 'Tangerine', primary: '#f07838', primaryBright: '#f59a5c', primaryDark: '#c45c28', foregroundOnPrimary: '#000000' },
+  { id: 'steel-blue', name: 'Steel Blue', primary: '#4a6b8a', primaryBright: '#5e86aa', primaryDark: '#38526b', foregroundOnPrimary: '#ffffff' },
+  { id: 'rose-quartz', name: 'Rose Quartz', primary: '#b8a0a8', primaryBright: '#d4bcc6', primaryDark: '#8a767e', foregroundOnPrimary: '#000000' },
+  { id: 'bronze-green', name: 'Bronze Green', primary: '#5c6b4a', primaryBright: '#738662', primaryDark: '#445236', foregroundOnPrimary: '#ffffff' },
 ];
 
-/** Texture presets: applied as body/main background or overlay. id = class name or 'none'. */
+/** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */
 export const THEME_TEXTURES = [
   { id: 'none', name: 'None' },
   { id: 'noise', name: 'Noise' },
@@ -139,6 +161,18 @@ export const THEME_TEXTURES = [
   { id: 'weave', name: 'Weave' },
   { id: 'brushed', name: 'Brushed' },
   { id: 'sand', name: 'Sand' },
+  { id: 'diagonal', name: 'Diagonal' },
+  { id: 'herringbone', name: 'Herringbone' },
+  { id: 'speckle', name: 'Speckle' },
+  { id: 'linen', name: 'Linen' },
+  { id: 'hexagons', name: 'Hexagons' },
+  { id: 'circuit', name: 'Circuit' },
+  { id: 'waves', name: 'Waves' },
+  { id: 'brick', name: 'Brick' },
+  { id: 'concrete', name: 'Concrete' },
+  { id: 'subtle-dots', name: 'Subtle Dots' },
+  { id: 'fine-lines', name: 'Fine Lines' },
+  { id: 'scatter', name: 'Scatter' },
 ];
 
 export const DEFAULT_COLOUR_ID = 'gold';

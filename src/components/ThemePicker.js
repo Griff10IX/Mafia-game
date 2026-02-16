@@ -88,22 +88,30 @@ export default function ThemePicker({ open, onClose }) {
             )}
           </div>
 
-          {/* Texture */}
+          {/* Texture – preview swatches like colours */}
           <div>
             <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Texture</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
               {THEME_TEXTURES.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => setTexture(t.id)}
-                  className={`px-3 py-1.5 rounded text-xs font-heading uppercase tracking-wider border transition-all ${
+                  className={`flex flex-col items-center gap-1 rounded-md border-2 transition-all shrink-0 ${
                     textureId === t.id
-                      ? 'bg-primary/20 border-primary text-primary'
-                      : 'bg-zinc-800/50 border-zinc-600 text-mutedForeground hover:border-primary/30 hover:text-foreground'
+                      ? 'border-primary ring-2 ring-primary/30'
+                      : 'border-transparent hover:border-primary/50'
                   }`}
+                  title={t.name}
+                  aria-label={t.name}
                 >
-                  {t.name}
+                  <div
+                    className="theme-texture-swatch w-full aspect-square min-h-[44px]"
+                    data-texture={t.id}
+                  />
+                  <span className="text-[9px] sm:text-[10px] font-heading text-mutedForeground truncate w-full text-center px-0.5">
+                    {t.name}
+                  </span>
                 </button>
               ))}
             </div>
