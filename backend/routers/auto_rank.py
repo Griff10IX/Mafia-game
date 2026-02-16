@@ -507,6 +507,42 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
 
 
+async def run_booze_arrivals():
+    """Run booze for users who have just arrived (travel_arrives_at <= now) so they sell immediately after travel instead of waiting for the next full tick."""
+    import server as srv
+    from security import send_telegram_to_chat
+
+    db = srv.db
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    cursor = db.users.find(
+        {
+            "auto_rank_enabled": True,
+            "auto_rank_booze": True,
+            "travel_arrives_at": {"$lte": now_iso},
+            "in_jail": {"$ne": True},
+        },
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
+    )
+    users = await cursor.to_list(200)
+    for u in users:
+        chat_id = (u.get("telegram_chat_id") or "").strip()
+        if not chat_id:
+            continue
+        bot_token = (u.get("telegram_bot_token") or "").strip() or None
+        lines = [f"**Auto Rank** — {u.get('username', '?')}", ""]
+        try:
+            has_success = await _run_booze_for_user(
+                db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines
+            )
+            if has_success and len(lines) > 2:
+                msg = "\n".join(lines)
+                await send_telegram_to_chat(chat_id, msg, bot_token)
+        except Exception as e:
+            logger.exception("Auto rank booze arrival for user %s: %s", u.get("id"), e)
+        await asyncio.sleep(0.2)
+
+
 async def run_auto_rank_due_users():
     """Find users whose auto_rank_next_run_at is due (or unset), run each once, set their next_run_at = now + interval. Per-user cycles so everyone gets the interval they expect."""
     import server as srv
@@ -664,6 +700,10 @@ async def run_auto_rank_loop():
             await asyncio.sleep(10)
             continue
         try:
+            await run_booze_arrivals()  # sell right after travel completes (no wait for next tick)
+        except Exception as e:
+            logger.exception("Auto rank booze arrivals failed: %s", e)
+        try:
             await run_auto_rank_due_users()
         except Exception as e:
             logger.exception("Auto rank due-users run failed: %s", e)
@@ -723,8 +763,19 @@ def register(router):
                 "oc_cooldown_until": 1,
             },
         )
-        since = _parse_iso((u or {}).get("auto_rank_stats_since"))
         now = datetime.now(timezone.utc)
+        since = _parse_iso((u or {}).get("auto_rank_stats_since"))
+        # One-time backfill: users with stats but no since (e.g. legacy) get since=now so "Running" shows and ticks
+        has_activity = bool(
+            (u or {}).get("auto_rank_total_busts")
+            or (u or {}).get("auto_rank_total_crimes")
+            or (u or {}).get("auto_rank_total_gtas")
+            or (u or {}).get("auto_rank_total_booze_runs")
+        )
+        if not since and has_activity:
+            now_iso = now.isoformat()
+            await db.users.update_one({"id": current_user["id"]}, {"$set": {"auto_rank_stats_since": now_iso}})
+            since = now
         running_seconds = int((now - since).total_seconds()) if since and since <= now else 0
         best_cars = (u or {}).get("auto_rank_best_cars") or []
         oc_until = (u or {}).get("oc_cooldown_until")

@@ -43,7 +43,8 @@ export default function AutoRank() {
   });
 
   const formatRunningTime = (seconds) => {
-    if (seconds <= 0) return '—';
+    if (seconds == null || seconds < 0) return '—';
+    if (seconds === 0) return '0m';
     const d = Math.floor(seconds / 86400);
     const h = Math.floor((seconds % 86400) / 3600);
     const m = Math.floor((seconds % 3600) / 60);
