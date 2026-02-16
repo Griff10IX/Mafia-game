@@ -264,6 +264,20 @@ export const THEME_PRESETS = [
   { id: 'noir-matte', name: 'Noir Matte', description: 'Charcoal, minimal', colourId: 'charcoal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'vintage-paper', name: 'Vintage Paper', description: 'Sepia + paper texture', colourId: 'sepia', textureId: 'paper', buttonColourId: null, accentLineColourId: null },
   { id: 'carbon-pro', name: 'Carbon Pro', description: 'Dark with carbon texture', colourId: 'carbon', textureId: 'carbon', buttonColourId: null, accentLineColourId: null },
+
+  /* Mafia vibes */
+  { id: 'old-school-mafia', name: 'Old School Mafia', description: '1920s gold, paper grain', colourId: 'gold', textureId: 'paper', buttonColourId: null, accentLineColourId: null },
+  { id: 'old-school-mafia-noir', name: 'Old School Mafia Noir', description: 'Film noir, charcoal + gold', colourId: 'charcoal', textureId: 'grain', buttonColourId: null, accentLineColourId: null },
+  { id: 'modern-mafia', name: 'Modern Mafia', description: 'Clean slate blue', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'speakeasy', name: 'Speakeasy', description: 'Warm bronze, grain', colourId: 'bronze', textureId: 'grain', buttonColourId: null, accentLineColourId: null },
+  { id: 'godfather', name: 'The Godfather', description: 'Deep amber, linen', colourId: 'antique-brass', textureId: 'linen', buttonColourId: null, accentLineColourId: null },
+  { id: 'street-boss', name: 'Street Boss', description: 'Gunmetal + gold accent', colourId: 'gunmetal', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'sicilian', name: 'Sicilian', description: 'Terracotta warmth', colourId: 'terracotta', textureId: 'sand', buttonColourId: null, accentLineColourId: null },
+  { id: 'boardroom', name: 'Boardroom', description: 'Navy, minimal', colourId: 'navy', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'noir-gold', name: 'Noir Gold', description: 'Black & gold classic', colourId: 'gold', textureId: 'noise', buttonColourId: null, accentLineColourId: null },
+  { id: 'vintage-noir', name: 'Vintage Noir', description: 'Sepia noir, paper', colourId: 'sepia', textureId: 'paper', buttonColourId: null, accentLineColourId: null },
+  { id: 'concrete-boss', name: 'Concrete Boss', description: 'Steel, concrete texture', colourId: 'steel', textureId: 'concrete', buttonColourId: null, accentLineColourId: null },
+  { id: 'blood-money', name: 'Blood & Money', description: 'Wine red, dark', colourId: 'wine', textureId: 'none', buttonColourId: null, accentLineColourId: null },
 ];
 
 export function getThemeColour(id) {
