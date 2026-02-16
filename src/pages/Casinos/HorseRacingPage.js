@@ -380,6 +380,7 @@ export default function HorseRacingPage() {
         setResult({ won: data.won, payout: data.payout || 0, winner_name: data.winner_name, new_balance: data.new_balance });
         setRacing(false);
         setRaceStarted(false);
+        setRaceProgress(null);
         if (data.won) {
           toast.success(`${data.winner_name} wins! +${formatMoney(data.payout - betNum)}`);
           setShowWin(true);
@@ -396,7 +397,7 @@ export default function HorseRacingPage() {
     }
   };
 
-  const playAgain = () => { setResult(null); setRaceProgress(null); };
+  const playAgain = () => { setResult(null); setRaceProgress(null); setRaceStarted(false); };
 
   const raceLanes = raceProgress
     ? raceProgress.horses.map((h, idx) => ({ horse: h, finishPct: raceProgress.finishPcts[idx] }))
@@ -509,7 +510,7 @@ export default function HorseRacingPage() {
               }}
             >
               <span className="text-[10px] font-heading text-primary uppercase tracking-[0.2em]">Race Track</span>
-              {selectedHorse && !raceProgress && !result && (
+              {selectedHorse && !racing && !result && (
                 <span className="text-[10px] font-heading text-mutedForeground">
                   Pick: <span className="text-white font-bold">{selectedHorse.name}</span>
                   <span className="text-primary ml-1">({oddsLabel(selectedHorse.odds)})</span>
@@ -564,7 +565,7 @@ export default function HorseRacingPage() {
           </div>
 
           {/* Betting panel (below track) */}
-          {!raceProgress && !result && (
+          {!racing && !result && (
             <div
               className="rounded-xl overflow-hidden border-2"
               style={{
@@ -689,7 +690,7 @@ export default function HorseRacingPage() {
           )}
 
           {/* Play again buttons */}
-          {result && !raceProgress && (
+          {result && !racing && (
             <div className="flex gap-2">
               <button
                 onClick={() => { playAgain(); setTimeout(() => placeBet(true), 0); }}

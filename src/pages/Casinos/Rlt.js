@@ -81,19 +81,27 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
           boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.6), inset 0 -1px 3px rgba(255,255,255,0.05)',
         }}
       />
-      {/* Ball */}
+      {/* Ball orbit container — spins opposite direction then settles */}
       <div
-        className="absolute z-30 rounded-full"
+        className="absolute inset-0 z-30"
         style={{
-          width: 10,
-          height: 10,
-          top: 12,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          background: 'radial-gradient(circle at 35% 30%, #ffffff, #c0c0c0, #888)',
-          boxShadow: '0 0 8px rgba(255,255,255,0.7), 0 1px 3px rgba(0,0,0,0.5)',
+          animation: spinning ? `ball-orbit ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.55, 0.15, 1.0) forwards` : 'none',
+          transform: spinning ? undefined : 'rotate(0deg)',
         }}
-      />
+      >
+        <div
+          className="absolute rounded-full"
+          style={{
+            width: 10,
+            height: 10,
+            top: 12,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'radial-gradient(circle at 35% 30%, #ffffff, #e0e0e0, #999)',
+            boxShadow: '0 0 8px rgba(255,255,255,0.8), 0 1px 4px rgba(0,0,0,0.5)',
+          }}
+        />
+      </div>
       {/* SVG wheel face */}
       <div
         className="absolute rounded-full overflow-hidden"
@@ -429,6 +437,10 @@ export default function Rlt() {
         @keyframes spin-pulse {
           0%, 100% { box-shadow: 0 0 20px rgba(212,175,55,0.2); }
           50% { box-shadow: 0 0 40px rgba(212,175,55,0.5); }
+        }
+        @keyframes ball-orbit {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(-2520deg); }
         }
         .animate-result-glow { animation: result-glow 1s ease-in-out 3; }
         .animate-result-pop { animation: result-number-pop 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.1) forwards; }
