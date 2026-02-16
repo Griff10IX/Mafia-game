@@ -18,7 +18,7 @@ function customToColourEntry(c) {
 }
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, textStyleId, mobileNavStyle, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setMutedWritingColour, setTextStyle, setMobileNavStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, mobileNavStyle, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setMutedWritingColour, setToastTextColour, setTextStyle, setMobileNavStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
@@ -513,6 +513,45 @@ export default function ThemePicker({ open, onClose }) {
                               title={w.name}
                               aria-label={`Muted: ${w.name}`}
                             />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Toast text colour</p>
+                  <p className="text-[9px] text-mutedForeground">Colour of toast notification text. &quot;Same as main&quot; uses your main writing colour.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setToastTextColour(null)}
+                      className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                        toastTextColourId === null ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                      }`}
+                    >
+                      Same as main
+                    </button>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto space-y-3">
+                    {sectionedWriting.map(({ label, colours }) => (
+                      <div key={`toast-${label}`}>
+                        <p className="text-[10px] text-mutedForeground/80 mb-1.5">{label}</p>
+                        <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+                          {colours.map((w) => (
+                            <button
+                              key={w.id}
+                              type="button"
+                              onClick={() => setToastTextColour(w.id)}
+                              className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 flex flex-col items-center justify-center ${
+                                toastTextColourId === w.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'
+                              }`}
+                              style={{ backgroundColor: w.foreground }}
+                              title={w.name}
+                              aria-label={`Toast text: ${w.name}`}
+                            >
+                              <span className="w-1/2 h-0.5 rounded shrink-0 opacity-70" style={{ backgroundColor: w.muted }} aria-hidden />
+                            </button>
                           ))}
                         </div>
                       </div>

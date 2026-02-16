@@ -10,6 +10,7 @@ const STORAGE_KEY_FONT = 'app_theme_font';
 const STORAGE_KEY_BUTTON_STYLE = 'app_theme_button_style';
 const STORAGE_KEY_WRITING = 'app_theme_writing_colour';
 const STORAGE_KEY_MUTED_WRITING = 'app_theme_muted_writing_colour';
+const STORAGE_KEY_TOAST_TEXT = 'app_theme_toast_text_colour';
 const STORAGE_KEY_TEXT_STYLE = 'app_theme_text_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
 const STORAGE_KEY_MOBILE_NAV = 'app_theme_mobile_nav';
@@ -275,6 +276,14 @@ export function ThemeProvider({ children }) {
       return null;
     }
   });
+  const [toastTextColourId, setToastTextColourIdState] = useState(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEY_TOAST_TEXT);
+      return (v === '' || v == null) ? null : v;
+    } catch {
+      return null;
+    }
+  });
   const [textStyleId, setTextStyleIdState] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_TEXT_STYLE) || DEFAULT_TEXT_STYLE_ID;
@@ -325,6 +334,11 @@ export function ThemeProvider({ children }) {
       : w.muted;
     applyWritingColourToDocument(w.foreground, mutedHex);
   }, [writingColourId, mutedWritingColourId]);
+
+  useEffect(() => {
+    const toastW = getThemeWritingColour(toastTextColourId || writingColourId);
+    document.documentElement.style.setProperty('--noir-toast-foreground', toastW.foreground);
+  }, [toastTextColourId, writingColourId]);
 
   useEffect(() => {
     const style = getThemeTextStyle(textStyleId);
@@ -390,6 +404,7 @@ export function ThemeProvider({ children }) {
         if (prefs.buttonStyleId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, prefs.buttonStyleId); setButtonStyleIdState(prefs.buttonStyleId); }
         if (prefs.writingColourId != null) { localStorage.setItem(STORAGE_KEY_WRITING, prefs.writingColourId); setWritingColourIdState(prefs.writingColourId); }
         if (prefs.mutedWritingColourId !== undefined) { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, prefs.mutedWritingColourId || ''); setMutedWritingColourIdState(prefs.mutedWritingColourId || null); }
+        if (prefs.toastTextColourId !== undefined) { localStorage.setItem(STORAGE_KEY_TOAST_TEXT, prefs.toastTextColourId || ''); setToastTextColourIdState(prefs.toastTextColourId || null); }
         if (prefs.textStyleId != null) { localStorage.setItem(STORAGE_KEY_TEXT_STYLE, prefs.textStyleId); setTextStyleIdState(prefs.textStyleId); }
         if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
       } catch (_) {}
@@ -411,11 +426,12 @@ export function ThemeProvider({ children }) {
       button_style_id: buttonStyleId,
       writing_colour_id: writingColourId,
       muted_writing_colour_id: mutedWritingColourId || null,
+      toast_text_colour_id: toastTextColourId || null,
       text_style_id: textStyleId,
       custom_themes: customThemes,
     };
     api.patch('/profile/theme', payload).catch(() => {});
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, textStyleId, customThemes]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes]);
 
   const setColour = useCallback((id) => {
     setColourIdState(id);
@@ -488,6 +504,14 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setToastTextColour = useCallback((id) => {
+    const v = id || null;
+    setToastTextColourIdState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_TOAST_TEXT, v === null ? '' : v);
+    } catch (_) {}
+  }, []);
+
   const setTextStyle = useCallback((id) => {
     setTextStyleIdState(id);
     try {
@@ -522,6 +546,8 @@ export function ThemeProvider({ children }) {
     setWritingColour,
     mutedWritingColourId,
     setMutedWritingColour,
+    toastTextColourId,
+    setToastTextColour,
     textStyleId,
     setTextStyle,
     customThemes,
@@ -534,6 +560,7 @@ export function ThemeProvider({ children }) {
     buttonStyle: getThemeButtonStyle(buttonStyleId),
     writingColour: getThemeWritingColour(writingColourId),
     mutedWritingColour: mutedWritingColourId ? getThemeWritingColour(mutedWritingColourId) : null,
+    toastTextColour: toastTextColourId ? getThemeWritingColour(toastTextColourId) : null,
     textStyle: getThemeTextStyle(textStyleId),
     buttonColour: buttonColourId ? getResolvedColour(buttonColourId, customThemes) : null,
     accentLineColour: accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : null,

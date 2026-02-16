@@ -391,6 +391,7 @@ class UserResponse(BaseModel):
     admin_acting_as_normal: bool = False
     casino_profit: int = 0  # $ from owned casino table
     property_profit: int = 0  # points from owned property (e.g. airport)
+    has_casino_or_property: bool = False  # true if user owns a casino or property (airport, bullet factory, armory) — for menu visibility
     theme_preferences: Optional[Dict] = None  # saved theme (colour, font, etc.) for cross-device sync
 
 # Notification/Inbox models
@@ -459,6 +460,7 @@ class ThemePreferencesRequest(BaseModel):
     button_style_id: Optional[str] = None
     writing_colour_id: Optional[str] = None
     muted_writing_colour_id: Optional[str] = None
+    toast_text_colour_id: Optional[str] = None
     text_style_id: Optional[str] = None
     custom_themes: Optional[List[Dict]] = None
 
@@ -1560,7 +1562,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         rank_name = "Admin"
     wealth_id, wealth_name = get_wealth_rank(current_user.get("money", 0))
     wealth_range = get_wealth_rank_range(current_user.get("money", 0))
-    casino_cash, property_pts = await _get_casino_property_profit(current_user["id"])
+    casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(current_user["id"])
     return UserResponse(
         id=current_user["id"],
         email=current_user["email"],
@@ -1599,6 +1601,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         admin_acting_as_normal=bool(current_user.get("admin_acting_as_normal", False)),
         casino_profit=casino_cash,
         property_profit=property_pts,
+        has_casino_or_property=has_casino or has_property,
         theme_preferences=current_user.get("theme_preferences"),
     )
 
@@ -1776,6 +1779,7 @@ async def update_profile_theme(request: ThemePreferencesRequest, current_user: d
         "button_style_id": "buttonStyleId",
         "writing_colour_id": "writingColourId",
         "muted_writing_colour_id": "mutedWritingColourId",
+        "toast_text_colour_id": "toastTextColourId",
         "text_style_id": "textStyleId",
         "custom_themes": "customThemes",
     }
@@ -7160,8 +7164,9 @@ async def get_states(current_user: dict = Depends(get_current_user)):
 
 # ============ My Properties (1 casino + 1 property max) ============
 async def _get_casino_property_profit(user_id: str):
-    """Return (casino_profit_cash, property_profit_points) for header display."""
+    """Return (casino_profit_cash, property_profit_points, has_casino, has_property) for header display and menu visibility."""
     casino_cash = 0
+    has_casino = False
     for _game_type, coll in [
         ("dice", db.dice_ownership),
         ("roulette", db.roulette_ownership),
@@ -7171,10 +7176,12 @@ async def _get_casino_property_profit(user_id: str):
         doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1})
         if doc:
             casino_cash = int(doc.get("total_earnings") or doc.get("profit") or 0)
+            has_casino = True
             break
     prop = await _user_owns_any_property(user_id)
     property_pts = int(prop.get("total_earnings") or 0) if prop else 0
-    return (casino_cash, property_pts)
+    has_property = prop is not None
+    return (casino_cash, property_pts, has_casino, has_property)
 
 
 async def _user_owns_any_casino(user_id: str):
@@ -8914,6 +8921,12 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         price = min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
         you_own = doc.get("owner_id") == current_user.get("id")
         airports.append({"slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price, "you_own": you_own})
+    # Airport cost for display: use actual price from user's current location (default slot 1, same as POST /travel). Apply 5% owner discount if they own it.
+    airport_cost_display = AIRPORT_COST
+    if airports:
+        first_price = airports[0].get("price_per_travel") or AIRPORT_COST
+        first_you_own = airports[0].get("you_own", False)
+        airport_cost_display = max(1, round(first_price * 0.95)) if first_you_own else first_price
     return {
         "current_location": current_state,
         "traveling_to": traveling_to if seconds_remaining is not None and seconds_remaining > 0 else None,
@@ -8921,7 +8934,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "destinations": [s for s in STATES if s != current_state],
         "travels_this_hour": current_user.get("travels_this_hour", 0),
         "max_travels": max_travels,
-        "airport_cost": AIRPORT_COST,
+        "airport_cost": airport_cost_display,
         "airport_time": TRAVEL_TIMES["airport"],
         "airports": airports,
         "extra_airmiles_cost": EXTRA_AIRMILES_COST,

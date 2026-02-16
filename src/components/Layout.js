@@ -8,7 +8,14 @@ import ThemePicker from './ThemePicker';
 import styles from '../styles/noir.module.css';
 
 /** Bottom bar: direct links or expandable groups (tap icon → sub-menu above bar). No "More" – all links live in bar groups. */
-function getMobileBottomNavItems(isAdmin) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
+  const goItems = [
+    { path: '/travel', label: 'Travel' },
+    { path: '/states', label: 'States' },
+    ...(hasCasinoOrProperty ? [{ path: '/my-properties', label: 'My Properties' }] : []),
+    { path: '/properties', label: 'Properties' },
+    { path: '/garage', label: 'Garage' },
+  ];
   return [
     {
       type: 'group',
@@ -54,13 +61,7 @@ function getMobileBottomNavItems(isAdmin) {
       id: 'go',
       icon: Plane,
       label: 'Go',
-      items: [
-        { path: '/travel', label: 'Travel' },
-        { path: '/states', label: 'States' },
-        { path: '/my-properties', label: 'My Properties' },
-        { path: '/properties', label: 'Properties' },
-        { path: '/garage', label: 'Garage' },
-      ],
+      items: goItems,
     },
     {
       type: 'group',
@@ -156,8 +157,9 @@ export default function Layout({ children }) {
   const location = useLocation();
   const { mobileNavStyle } = useTheme();
 
+  const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const mobileBottomNavItems = useMemo(() => {
-    const items = getMobileBottomNavItems(isAdmin);
+    const items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty);
     if (hasAdminEmail && !isAdmin) {
       return items.map((i) =>
         i.type === 'group' && i.id === 'account'
@@ -166,7 +168,7 @@ export default function Layout({ children }) {
       );
     }
     return items;
-  }, [isAdmin, hasAdminEmail]);
+  }, [isAdmin, hasAdminEmail, hasCasinoOrProperty]);
 
   useEffect(() => {
     setMobileBottomMenuOpen(null);
@@ -453,7 +455,7 @@ export default function Layout({ children }) {
     return `$${Math.trunc(num).toLocaleString()}`;
   };
 
-  // Order: Home → You → Money → Combat → Travel → Social → Ranking → Assets → Casino → Shop → Other
+  // Order: Home → You → Money → Combat → Travel → Social → Ranking → Assets → Casino → Shop → Other. My Properties only if user has casino or property.
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
     { path: '/objectives', icon: ListChecks, label: 'Objectives' },
@@ -466,7 +468,7 @@ export default function Layout({ children }) {
     { path: '/bodyguards', icon: Shield, label: 'Bodyguards' },
     { path: '/travel', icon: Plane, label: 'Travel' },
     { path: '/states', icon: MapPin, label: 'States' },
-    { path: '/my-properties', icon: Building2, label: 'My Properties' },
+    ...(hasCasinoOrProperty ? [{ path: '/my-properties', icon: Building2, label: 'My Properties' }] : []),
     { path: '/booze-run', icon: Wine, label: 'Booze Run' },
     { path: '/users-online', icon: Users, label: 'Users Online' },
     { path: '/forum', icon: MessageSquare, label: 'Forum' },
