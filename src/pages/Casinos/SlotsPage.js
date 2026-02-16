@@ -42,8 +42,8 @@ const REEL_SYMBOL_HEIGHT = 40;
 
 function Reel({ spinning, revealed, symbolId }) {
   return (
-    <div className="relative w-[72px] h-[88px] sm:w-[88px] sm:h-[104px] flex-shrink-0 rounded-lg overflow-hidden bg-gradient-to-b from-zinc-900 to-black border-2 border-primary/50 shadow-inner">
-      <div className="absolute inset-0 rounded-lg overflow-hidden">
+    <div className="relative w-[72px] h-[88px] sm:w-[88px] sm:h-[104px] flex-shrink-0 rounded overflow-hidden bg-gradient-to-b from-zinc-700 via-zinc-800 to-zinc-900 border-2 border-amber-500/50 shadow-[inset_0_0_20px_rgba(0,0,0,0.5)]">
+      <div className="absolute inset-0.5 rounded overflow-hidden bg-zinc-900/80">
         {spinning && !revealed ? (
           <div
             className="absolute left-0 right-0 flex flex-col items-center justify-start"
@@ -56,7 +56,7 @@ function Reel({ spinning, revealed, symbolId }) {
             {SPIN_STRIP.map((id, k) => (
               <span
                 key={k}
-                className="text-2xl sm:text-3xl leading-none flex items-center justify-center w-full shrink-0"
+                className="text-2xl sm:text-3xl leading-none flex items-center justify-center w-full shrink-0 drop-shadow-md"
                 style={{ height: REEL_SYMBOL_HEIGHT }}
               >
                 {SYMBOL_EMOJI[id]}
@@ -68,12 +68,36 @@ function Reel({ spinning, revealed, symbolId }) {
             className={`absolute inset-0 flex items-center justify-center ${revealed ? 'animate-reel-pop' : ''}`}
             style={{ animationDuration: '0.28s' }}
           >
-            <span className="text-3xl sm:text-4xl leading-none">
+            <span className="text-3xl sm:text-4xl leading-none drop-shadow-lg">
               {symbolId ? getSymbolEmoji(symbolId) : '?'}
             </span>
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// Falling coins overlay when user wins
+function FallingCoins({ active }) {
+  if (!active) return null;
+  const coins = Array.from({ length: 24 }, (_, i) => i);
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl" aria-hidden>
+      {coins.map((i) => (
+        <span
+          key={i}
+          className="absolute text-xl opacity-90 animate-coin-fall"
+          style={{
+            left: `${8 + (i % 6) * 16}%`,
+            top: '-10%',
+            animationDelay: `${i * 0.08}s`,
+            animationDuration: '1.4s',
+          }}
+        >
+          🪙
+        </span>
+      ))}
     </div>
   );
 }
@@ -169,6 +193,16 @@ export default function SlotsPage() {
           60% { transform: scale(1.12); }
           100% { transform: scale(1); opacity: 1; }
         }
+        @keyframes coin-fall {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(120vh) rotate(360deg); opacity: 0; }
+        }
+        @keyframes cabinet-glow {
+          0%, 100% { box-shadow: 0 0 20px rgba(212,175,55,0.25), 0 0 40px rgba(212,175,55,0.1); }
+          50% { box-shadow: 0 0 30px rgba(212,175,55,0.45), 0 0 60px rgba(212,175,55,0.2); }
+        }
+        .animate-coin-fall { animation: coin-fall 1.4s ease-in forwards; }
+        .animate-cabinet-glow { animation: cabinet-glow 1.2s ease-in-out infinite; }
       `}</style>
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -185,57 +219,96 @@ export default function SlotsPage() {
         </div>
       </div>
 
-      {/* Slot machine cabinet */}
+      {/* Slot machine cabinet — classic 3-reel with lever, marquee, coin tray */}
       <div className="flex justify-center">
-        <div className="relative rounded-2xl sm:rounded-3xl bg-gradient-to-b from-zinc-800 via-zinc-900 to-zinc-950 border-4 border-primary/60 shadow-xl shadow-primary/10 p-4 sm:p-6 pb-8">
-          {/* Top marquee */}
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-0.5 rounded-full bg-primary/90 text-black text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider">
+        <div
+          className={`relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-b from-zinc-800 via-zinc-900 to-zinc-950 border-[3px] border-primary/70 p-4 sm:p-6 pb-2 transition-shadow duration-300 ${spinning || (result?.won) ? 'animate-cabinet-glow' : ''}`}
+          style={{
+            boxShadow: '0 0 24px rgba(212,175,55,0.2), 0 0 48px rgba(212,175,55,0.08), inset 0 1px 0 rgba(255,255,255,0.06)',
+          }}
+        >
+          <FallingCoins active={!!result?.won} />
+          {/* Illuminated marquee */}
+          <div
+            className="absolute -top-2 left-1/2 -translate-x-1/2 px-5 py-1.5 rounded-md border border-amber-500/60 bg-gradient-to-b from-amber-900/90 to-zinc-900 text-primary font-heading font-bold text-sm sm:text-base uppercase tracking-[0.2em]"
+            style={{ textShadow: '0 0 12px rgba(212,175,55,0.9), 0 0 24px rgba(212,175,55,0.5)' }}
+          >
             Lucky 7
           </div>
-          {/* Payline */}
-          <div className="flex justify-center gap-1 sm:gap-2 mb-1">
-            <div className="h-0.5 w-2 rounded-full bg-primary/40" />
-            <div className="h-0.5 flex-1 max-w-[200px] rounded-full bg-primary/60" />
-            <div className="h-0.5 w-2 rounded-full bg-primary/40" />
-          </div>
-          {/* Reels */}
-          <div className="flex justify-center gap-1 sm:gap-2 mb-4">
-            {[0, 1, 2].map((i) => (
-              <Reel
-                key={i}
-                spinning={spinning}
-                revealed={reelRevealed[i]}
-                symbolId={reelSymbolIds[i]}
+          <div className="flex items-stretch gap-0 sm:gap-1 pt-6">
+            {/* Reels block */}
+            <div className="flex flex-col items-center flex-1 min-w-0">
+              {/* Payline */}
+              <div className="flex justify-center gap-1 sm:gap-2 mb-1.5 w-full">
+                <div className="h-0.5 w-2 rounded-full bg-primary/50" />
+                <div className="h-0.5 flex-1 max-w-[220px] rounded-full bg-primary/70 shadow-[0_0_8px_rgba(212,175,55,0.4)]" />
+                <div className="h-0.5 w-2 rounded-full bg-primary/50" />
+              </div>
+              {/* Reels */}
+              <div className="flex justify-center gap-1 sm:gap-2 mb-3">
+                {[0, 1, 2].map((i) => (
+                  <Reel
+                    key={i}
+                    spinning={spinning}
+                    revealed={reelRevealed[i]}
+                    symbolId={reelSymbolIds[i]}
+                  />
+                ))}
+              </div>
+              {/* Coin tray */}
+              <div
+                className="w-full max-w-[260px] h-3 sm:h-4 rounded-b-md border border-amber-600/50 bg-gradient-to-b from-amber-900/40 to-zinc-800 mb-3"
+                style={{ boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.4)' }}
               />
-            ))}
-          </div>
-          {/* Result line */}
-          {result && (
-            <div className={`text-center text-sm font-heading mb-3 ${result.won ? 'text-emerald-400' : 'text-mutedForeground'}`}>
-              {result.won ? `+${formatMoney(result.payout)}` : 'No match'}
-              {result.new_balance != null && (
-                <span className="block text-[10px] text-mutedForeground mt-0.5">Balance: {formatMoney(result.new_balance)}</span>
+              {/* Result */}
+              {result && (
+                <div className={`text-center text-sm font-heading mb-2 ${result.won ? 'text-emerald-400' : 'text-mutedForeground'}`}>
+                  {result.won ? `+${formatMoney(result.payout)}` : 'No match'}
+                  {result.new_balance != null && (
+                    <span className="block text-[10px] text-mutedForeground mt-0.5">Balance: {formatMoney(result.new_balance)}</span>
+                  )}
+                </div>
               )}
+              {/* Bet + Spin button (below tray) */}
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <label className="text-xs font-heading text-mutedForeground">Bet:</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={bet}
+                  onChange={(e) => setBet(e.target.value)}
+                  placeholder="1000"
+                  className="w-24 sm:w-28 bg-zinc-800 border-2 border-primary/40 rounded-lg px-2 py-1.5 text-sm font-heading text-foreground focus:border-primary focus:outline-none"
+                />
+                <button
+                  onClick={spin}
+                  disabled={!canSpin}
+                  className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded-xl px-8 py-2.5 text-sm font-heading font-bold uppercase border-2 border-yellow-600/60 shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"
+                >
+                  {loading ? '...' : spinning ? 'Spinning...' : 'Spin'}
+                </button>
+              </div>
             </div>
-          )}
-          {/* Bet + Spin */}
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            <label className="text-xs font-heading text-mutedForeground">Bet:</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={bet}
-              onChange={(e) => setBet(e.target.value)}
-              placeholder="1000"
-              className="w-24 sm:w-28 bg-zinc-800 border-2 border-primary/40 rounded-lg px-2 py-1.5 text-sm font-heading text-foreground focus:border-primary focus:outline-none"
-            />
-            <button
-              onClick={spin}
-              disabled={!canSpin}
-              className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded-xl px-8 py-2.5 text-sm font-heading font-bold uppercase border-2 border-yellow-600/60 shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 transition-transform"
-            >
-              {loading ? '...' : spinning ? 'Spinning...' : 'Spin'}
-            </button>
+            {/* Lever */}
+            <div className="flex flex-col items-center justify-end pb-8 sm:pb-10">
+              <button
+                type="button"
+                onClick={spin}
+                disabled={!canSpin}
+                className="flex flex-col items-center gap-0 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Pull lever to spin"
+              >
+                <span
+                  className={`w-3 h-8 sm:w-4 sm:h-10 rounded-sm border-2 border-amber-600/80 bg-gradient-to-b from-amber-700 to-amber-900 shadow-md ${canSpin && !spinning ? 'hover:from-amber-600 hover:to-amber-800 active:translate-y-1' : ''} transition-all`}
+                  style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.15)' }}
+                />
+                <span
+                  className="w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-red-700/80 bg-gradient-to-b from-red-500 to-red-800 shadow-lg -mt-1"
+                  style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2)' }}
+                />
+              </button>
+              <span className="text-[10px] font-heading text-mutedForeground mt-1 hidden sm:block">PULL</span>
+            </div>
           </div>
         </div>
       </div>
