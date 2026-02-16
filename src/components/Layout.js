@@ -110,7 +110,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
       items: [
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
-        ...(isAdmin ? [{ path: '/auto-rank', label: 'Auto Rank' }, { path: '/admin', label: 'Admin Tools' }] : []),
+        { path: '/auto-rank', label: 'Auto Rank' },
+        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }] : []),
       ],
     },
   ];
@@ -483,10 +484,10 @@ export default function Layout({ children }) {
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
     { path: '/families', icon: Building2, label: 'Families' },
     { path: '/dead-alive', icon: Skull, label: 'Dead > Alive' },
+    { path: '/auto-rank', icon: Bot, label: 'Auto Rank' },
   ];
 
   const adminNavItems = isAdmin ? [
-    { path: '/auto-rank', icon: Bot, label: 'Auto Rank' },
     { path: '/admin', icon: Settings, label: 'Admin Tools' }
   ] : [];
 

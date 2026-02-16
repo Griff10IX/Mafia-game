@@ -146,7 +146,7 @@ async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
         )
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_enabled": True}}
+        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_crimes": True, "auto_rank_gta": True}}
     )
     return {
         "message": "Auto Rank purchased! Crimes and GTAs will run automatically; results go to your Telegram.",
