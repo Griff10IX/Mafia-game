@@ -1,14 +1,21 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, ChevronLeft, ChevronRight, CheckSquare, Square } from 'lucide-react';
+import { CheckSquare, Square, ChevronDown } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
-// Rarities and travel times – must match backend GTA (server CARS + gta.py TRAVEL_TIMES)
+// GTA rarities (match backend)
 const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
-const RARITY_ORDER = [...GTA_RARITIES].reverse(); // display best first: exclusive → common
-
+const RARITY_LABELS = {
+  common: 'Common',
+  uncommon: 'Uncommon',
+  rare: 'Rare',
+  ultra_rare: 'Ultra Rare',
+  legendary: 'Legendary',
+  custom: 'Customs',
+  exclusive: 'Exclusives',
+};
 const TRAVEL_TIMES = {
   exclusive: 7,
   legendary: 12,
@@ -19,51 +26,23 @@ const TRAVEL_TIMES = {
   custom: 20,
 };
 
-const RARITY_LABELS = {
-  common: 'Common',
-  uncommon: 'Uncommon',
-  rare: 'Rares',
-  ultra_rare: 'Ultra Rare',
-  legendary: 'Legendary',
-  custom: 'Customs',
-  exclusive: 'Exclusives',
-};
-const RARITY_COLOR = {
-  common: 'text-gray-400',
-  uncommon: 'text-green-400',
-  rare: 'text-blue-400',
-  ultra_rare: 'text-purple-400',
-  legendary: 'text-yellow-400',
-  custom: 'text-orange-400',
-  exclusive: 'text-red-400',
-};
-
 const PAGE_SIZE = 15;
 
 export default function SellCars() {
   const [cars, setCars] = useState([]);
-  const [dealerCars, setDealerCars] = useState([]);
-  const [marketplaceListings, setMarketplaceListings] = useState([]);
-  const [userMoney, setUserMoney] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [selectedRarity, setSelectedRarity] = useState(null);
+  const [filterRarity, setFilterRarity] = useState('all');
   const [selectedIds, setSelectedIds] = useState(new Set());
-  const [buying, setBuying] = useState(false);
+  const [listPrice, setListPrice] = useState('');
+  const [selling, setSelling] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [page, setPage] = useState(0);
 
-  const fetchAll = async () => {
+  const fetchCars = async () => {
     setLoading(true);
     try {
-      const [garageRes, saleRes, meRes, marketRes] = await Promise.all([
-        api.get('/gta/garage').catch(() => ({ data: { cars: [] } })),
-        api.get('/gta/cars-for-sale').catch(() => ({ data: { cars: [] } })),
-        api.get('/auth/me').catch(() => ({ data: {} })),
-        api.get('/gta/marketplace').catch(() => ({ data: { listings: [] } })),
-      ]);
-      setCars(Array.isArray(garageRes.data?.cars) ? garageRes.data.cars : []);
-      setDealerCars(Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : []);
-      setUserMoney(meRes.data?.money ?? null);
-      setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
+      const res = await api.get('/gta/garage').catch(() => ({ data: { cars: [] } }));
+      setCars(Array.isArray(res.data?.cars) ? res.data.cars : []);
     } catch (_) {}
     finally {
       setLoading(false);
@@ -71,86 +50,23 @@ export default function SellCars() {
   };
 
   useEffect(() => {
-    fetchAll();
+    fetchCars();
   }, []);
 
-  // Rarity summary: for each rarity, for_sale count (marketplace), total (dealer model count + for_sale)
-  const raritySummary = useMemo(() => {
-    const forSaleByRarity = {};
-    marketplaceListings.forEach((l) => {
-      const r = l.rarity || 'common';
-      forSaleByRarity[r] = (forSaleByRarity[r] || 0) + 1;
-    });
-    const dealerModelsByRarity = {};
-    dealerCars.forEach((c) => {
-      const r = c.rarity || 'common';
-      dealerModelsByRarity[r] = (dealerModelsByRarity[r] || 0) + 1;
-    });
-    return RARITY_ORDER.map((r) => ({
-      rarity: r,
-      label: RARITY_LABELS[r] || r,
-      speed: TRAVEL_TIMES[r] != null ? `${TRAVEL_TIMES[r]} secs` : '—',
-      forSale: forSaleByRarity[r] || 0,
-      total: (dealerModelsByRarity[r] || 0) + (forSaleByRarity[r] || 0),
-    })).filter((row) => row.total > 0 || row.forSale > 0);
-  }, [dealerCars, marketplaceListings]);
+  const filteredCars = useMemo(() => {
+    if (filterRarity === 'all') return cars;
+    return cars.filter((c) => (c.rarity || 'common') === filterRarity);
+  }, [cars, filterRarity]);
 
-  // Flat list of buyable rows: dealer + marketplace, with source and price
-  const allVehicles = useMemo(() => {
-    const rows = [];
-    dealerCars.forEach((c) => {
-      rows.push({
-        id: `dealer:${c.id}`,
-        source: 'dealer',
-        carId: c.id,
-        name: c.name,
-        price: c.dealer_price ?? 0,
-        speed: TRAVEL_TIMES[c.rarity] ?? 45,
-        owner: 'Dealer',
-        rarity: c.rarity || 'common',
-        canBuy: c.can_buy && (userMoney ?? 0) >= (c.dealer_price ?? 0),
-      });
-    });
-    marketplaceListings.forEach((l) => {
-      rows.push({
-        id: `listing:${l.user_car_id}`,
-        source: 'listing',
-        userCarId: l.user_car_id,
-        name: l.name,
-        price: l.sale_price ?? 0,
-        speed: TRAVEL_TIMES[l.rarity] ?? 45,
-        owner: l.seller_username ?? '?',
-        rarity: l.rarity || 'common',
-        canBuy: (userMoney ?? 0) >= (l.sale_price ?? 0),
-      });
-    });
-    return rows;
-  }, [dealerCars, marketplaceListings, userMoney]);
-
-  const filteredVehicles = useMemo(() => {
-    if (!selectedRarity) return allVehicles;
-    return allVehicles.filter((v) => v.rarity === selectedRarity);
-  }, [allVehicles, selectedRarity]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredVehicles.length / PAGE_SIZE));
-  const paginatedVehicles = useMemo(() => {
+  const totalPages = Math.max(1, Math.ceil(filteredCars.length / PAGE_SIZE));
+  const paginatedCars = useMemo(() => {
     const start = page * PAGE_SIZE;
-    return filteredVehicles.slice(start, start + PAGE_SIZE);
-  }, [filteredVehicles, page]);
+    return filteredCars.slice(start, start + PAGE_SIZE);
+  }, [filteredCars, page]);
 
   useEffect(() => {
     setPage(0);
-    setSelectedIds(new Set());
-  }, [selectedRarity]);
-
-  const selectedTotal = useMemo(() => {
-    let sum = 0;
-    selectedIds.forEach((id) => {
-      const row = allVehicles.find((v) => v.id === id);
-      if (row && row.canBuy) sum += row.price;
-    });
-    return sum;
-  }, [selectedIds, allVehicles]);
+  }, [filterRarity]);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -162,48 +78,82 @@ export default function SellCars() {
   };
 
   const toggleSelectAll = () => {
-    const canSelect = paginatedVehicles.filter((v) => v.canBuy).map((v) => v.id);
-    const allSelected = canSelect.length > 0 && canSelect.every((id) => selectedIds.has(id));
+    const ids = paginatedCars.map((c) => c.user_car_id);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedIds.has(id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allSelected) canSelect.forEach((id) => next.delete(id));
-      else canSelect.forEach((id) => next.add(id));
+      if (allSelected) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
       return next;
     });
   };
 
-  const handleBuySelected = async () => {
-    const toBuy = [...selectedIds].map((id) => allVehicles.find((v) => v.id === id)).filter(Boolean);
-    const valid = toBuy.filter((r) => r.canBuy);
-    if (valid.length === 0) {
-      toast.error('Select at least one car you can afford');
+  const handleSell = async () => {
+    const price = Math.floor(Number(String(listPrice).replace(/\D/g, '')) || 0);
+    if (price < 1) {
+      toast.error('Enter a price to list at');
       return;
     }
-    setBuying(true);
-    let bought = 0;
-    for (const row of valid) {
+    const toList = [...selectedIds];
+    if (toList.length === 0) {
+      toast.error('Select at least one car');
+      return;
+    }
+    setSelling(true);
+    let listed = 0;
+    for (const userCarId of toList) {
+      const car = cars.find((c) => c.user_car_id === userCarId);
+      if (car?.listed_for_sale) continue;
+      if (car?.car_id === 'car_custom') continue;
       try {
-        if (row.source === 'dealer') {
-          await api.post('/gta/buy-car', { car_id: row.carId });
-        } else {
-          await api.post('/gta/buy-listed-car', { user_car_id: row.userCarId });
-        }
-        bought++;
+        await api.post('/gta/list-car', { user_car_id: userCarId, price });
+        listed++;
         setSelectedIds((prev) => {
           const next = new Set(prev);
-          next.delete(row.id);
+          next.delete(userCarId);
           return next;
         });
       } catch (e) {
-        toast.error(e.response?.data?.detail || `Failed to buy ${row.name}`);
+        toast.error(e.response?.data?.detail || `Failed to list ${car?.name || 'car'}`);
       }
     }
-    if (bought > 0) {
-      toast.success(`Purchased ${bought} car(s)`);
+    if (listed > 0) {
+      toast.success(`Listed ${listed} car(s) for $${price.toLocaleString()}`);
       refreshUser();
-      fetchAll();
+      fetchCars();
     }
-    setBuying(false);
+    setSelling(false);
+  };
+
+  const handleStopSelling = async () => {
+    const toDelist = [...selectedIds];
+    if (toDelist.length === 0) {
+      toast.error('Select at least one listed car');
+      return;
+    }
+    setStopping(true);
+    let delisted = 0;
+    for (const userCarId of toDelist) {
+      const car = cars.find((c) => c.user_car_id === userCarId);
+      if (!car?.listed_for_sale) continue;
+      try {
+        await api.post('/gta/delist-car', { user_car_id: userCarId });
+        delisted++;
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(userCarId);
+          return next;
+        });
+      } catch (e) {
+        toast.error(e.response?.data?.detail || `Failed to delist ${car?.name || 'car'}`);
+      }
+    }
+    if (delisted > 0) {
+      toast.success(`Delisted ${delisted} car(s)`);
+      refreshUser();
+      fetchCars();
+    }
+    setStopping(false);
   };
 
   if (loading) {
@@ -216,197 +166,148 @@ export default function SellCars() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`}>
-      <div className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wide">Buy Cars</h1>
-        <Link
-          to="/garage"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/30 text-primary font-heading text-xs font-bold hover:bg-primary/10 transition-colors"
-        >
-          <Car size={14} />
-          View garage
-        </Link>
+      {/* Title */}
+      <div className={`${styles.panel} rounded-md border border-primary/20`}>
+        <div className="px-4 py-3 text-center border-b border-primary/20">
+          <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wide">Sell Cars</h1>
+        </div>
       </div>
 
-      {/* Rarity categories – click to filter */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className={`px-3 py-2 ${styles.panelHeader} border-b border-primary/20`}>
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">By Rarity</h2>
-          <p className="text-[10px] text-mutedForeground font-heading mt-0.5">Click a row to show vehicles in that category</p>
+      {/* Filter + Prev/Next */}
+      <div className={`${styles.panel} rounded-md border border-primary/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2`}>
+        <div className="flex items-center gap-2">
+          <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider">Filter:</label>
+          <select
+            value={filterRarity}
+            onChange={(e) => setFilterRarity(e.target.value)}
+            className="bg-input border border-border rounded px-2 py-1.5 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none min-w-[120px] flex items-center gap-1"
+          >
+            <option value="all">All</option>
+            {GTA_RARITIES.map((r) => (
+              <option key={r} value={r}>{RARITY_LABELS[r] || r}</option>
+            ))}
+          </select>
+          <ChevronDown size={12} className="text-mutedForeground shrink-0" />
         </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+            className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      {/* Table: Car | Price | Bullets | Damage | Speed */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
-                <th className="text-left py-2 px-3">Rarity</th>
-                <th className="text-right py-2 px-3">Speed</th>
-                <th className="text-right py-2 px-3">For Sale</th>
-                <th className="text-right py-2 px-3">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {raritySummary.map((row) => (
-                <tr
-                  key={row.rarity}
-                  onClick={() => setSelectedRarity(selectedRarity === row.rarity ? null : row.rarity)}
-                  className={`cursor-pointer transition-colors ${
-                    selectedRarity === row.rarity ? 'bg-primary/15 border-l-2 border-primary' : 'hover:bg-secondary/50'
-                  }`}
-                >
-                  <td className={`py-2 px-3 font-heading font-bold ${RARITY_COLOR[row.rarity] || 'text-foreground'}`}>
-                    {row.label}
-                  </td>
-                  <td className="py-2 px-3 text-right text-mutedForeground font-heading">{row.speed}</td>
-                  <td className="py-2 px-3 text-right font-heading">{row.forSale || '—'}</td>
-                  <td className="py-2 px-3 text-right font-heading">{row.total || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {raritySummary.length === 0 && (
-          <p className="p-3 text-xs text-mutedForeground font-heading">No dealer or marketplace cars right now.</p>
-        )}
-      </div>
-
-      {/* Vehicles table */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className={`px-3 py-2 ${styles.panelHeader} border-b border-primary/20 flex items-center justify-between`}>
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
-            Vehicles{selectedRarity ? ` — ${RARITY_LABELS[selectedRarity] || selectedRarity}` : ''}
-          </h2>
-          {selectedRarity && (
-            <button
-              type="button"
-              onClick={() => setSelectedRarity(null)}
-              className="text-[10px] font-heading text-mutedForeground hover:text-primary"
-            >
-              Show all
-            </button>
-          )}
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
-                <th className="w-8 py-2 pl-2 pr-0">
-                  <button
-                    type="button"
-                    onClick={toggleSelectAll}
-                    className="p-1 rounded hover:bg-primary/10 transition-colors"
-                    title="Check all"
-                  >
-                    {paginatedVehicles.filter((v) => v.canBuy).length > 0 &&
-                    paginatedVehicles.filter((v) => v.canBuy).every((v) => selectedIds.has(v.id)) ? (
-                      <CheckSquare size={14} className="text-primary" />
-                    ) : (
-                      <Square size={14} className="text-mutedForeground" />
-                    )}
-                  </button>
-                </th>
+                <th className="w-8 py-2 pl-2 pr-0" />
                 <th className="text-left py-2 px-3">Car</th>
                 <th className="text-right py-2 px-3">Price</th>
+                <th className="text-right py-2 px-3">Bullets</th>
+                <th className="text-right py-2 px-3">Damage</th>
                 <th className="text-right py-2 px-3">Speed</th>
-                <th className="text-right py-2 px-3">Owner</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paginatedVehicles.map((row) => (
-                <tr
-                  key={row.id}
-                  className={`hover:bg-secondary/30 transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}
-                >
-                  <td className="py-2 pl-2 pr-0">
-                    {row.canBuy ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleSelect(row.id)}
-                        className="p-1 rounded hover:bg-primary/10"
-                      >
-                        {selectedIds.has(row.id) ? (
-                          <CheckSquare size={14} className="text-primary" />
-                        ) : (
-                          <Square size={14} className="text-mutedForeground" />
-                        )}
-                      </button>
-                    ) : (
-                      <span className="inline-block w-5" />
-                    )}
-                  </td>
-                  <td className="py-2 px-3">
-                    <span className={`font-heading font-bold ${RARITY_COLOR[row.rarity] || 'text-foreground'}`}>
-                      {RARITY_LABELS[row.rarity] || row.rarity}:
-                    </span>{' '}
-                    <span className="font-heading text-foreground">{row.name}</span>
-                  </td>
-                  <td className="py-2 px-3 text-right font-heading font-bold text-emerald-400">
-                    ${(row.price || 0).toLocaleString()}
-                  </td>
-                  <td className="py-2 px-3 text-right text-mutedForeground font-heading">{row.speed} secs</td>
-                  <td className="py-2 px-3 text-right font-heading text-foreground">{row.owner}</td>
-                </tr>
-              ))}
+              {paginatedCars.map((car) => {
+                const bullets = Math.floor((car.value || 0) / 10);
+                const speed = TRAVEL_TIMES[car.rarity] ?? 45;
+                const isListed = !!car.listed_for_sale;
+                return (
+                  <tr key={car.user_car_id} className="hover:bg-secondary/30 transition-colors">
+                    <td className="py-2 pl-2 pr-0">
+                      {car.car_id !== 'car_custom' && (
+                        <button
+                          type="button"
+                          onClick={() => toggleSelect(car.user_car_id)}
+                          className="p-1 rounded hover:bg-primary/10"
+                        >
+                          {selectedIds.has(car.user_car_id) ? (
+                            <CheckSquare size={14} className="text-primary" />
+                          ) : (
+                            <Square size={14} className="text-mutedForeground" />
+                          )}
+                        </button>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 font-heading text-foreground">{car.name}</td>
+                    <td className="py-2 px-3 text-right font-heading text-emerald-400">
+                      {isListed ? `$${(car.sale_price ?? 0).toLocaleString()}` : '—'}
+                    </td>
+                    <td className="py-2 px-3 text-right text-mutedForeground font-heading">{bullets}</td>
+                    <td className="py-2 px-3 text-right text-mutedForeground font-heading">—</td>
+                    <td className="py-2 px-3 text-right text-mutedForeground font-heading">{speed} secs</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
-        {paginatedVehicles.length === 0 && (
-          <p className="p-3 text-xs text-mutedForeground font-heading">
-            {selectedRarity ? `No vehicles in ${RARITY_LABELS[selectedRarity]}.` : 'No vehicles for sale.'}
-          </p>
+        {paginatedCars.length === 0 && (
+          <p className="p-4 text-center text-sm text-mutedForeground font-heading">No cars to sell</p>
         )}
 
-        {/* Bottom bar: Check all label, Buy button, pagination */}
-        <div className={`px-3 py-2 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center justify-between gap-2`}>
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Check all</span>
+        {/* Bottom: Check all, Price, Sell, Stop Selling */}
+        <div className={`px-3 py-2 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center gap-3`}>
+          <label className="flex items-center gap-1.5 cursor-pointer">
             <button
               type="button"
-              disabled={selectedIds.size === 0 || buying}
-              onClick={handleBuySelected}
-              className={`px-4 py-1.5 rounded font-heading font-bold uppercase text-xs border transition-all ${
-                selectedIds.size > 0 && !buying
-                  ? 'bg-primary/20 text-primary border-primary/50 hover:bg-primary/30'
-                  : 'bg-secondary/50 text-mutedForeground border-border cursor-not-allowed'
-              }`}
+              onClick={toggleSelectAll}
+              className="p-1 rounded hover:bg-primary/10"
             >
-              Buy — ${selectedTotal.toLocaleString()}
+              {paginatedCars.length > 0 && paginatedCars.every((c) => selectedIds.has(c.user_car_id)) ? (
+                <CheckSquare size={14} className="text-primary" />
+              ) : (
+                <Square size={14} className="text-mutedForeground" />
+              )}
             </button>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
-            >
-              <ChevronLeft size={14} />
-              Prev
-            </button>
-            <span className="text-[10px] font-heading text-mutedForeground px-2">
-              {page + 1} / {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="p-1.5 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-xs"
-            >
-              Next
-              <ChevronRight size={14} />
-            </button>
-          </div>
+            <span className="text-[10px] font-heading text-mutedForeground uppercase">Check all</span>
+          </label>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="Price..."
+            value={listPrice}
+            onChange={(e) => setListPrice(e.target.value.replace(/\D/g, ''))}
+            className="w-24 bg-input border border-border rounded px-2 py-1 text-xs font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+          />
+          <button
+            type="button"
+            disabled={selectedIds.size === 0 || selling}
+            onClick={handleSell}
+            className="px-3 py-1.5 rounded bg-primary/20 text-primary border border-primary/50 font-heading font-bold uppercase text-xs hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Sell
+          </button>
+          <button
+            type="button"
+            disabled={selectedIds.size === 0 || stopping}
+            onClick={handleStopSelling}
+            className="px-3 py-1.5 rounded bg-secondary border border-border text-foreground font-heading font-bold uppercase text-xs hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Stop Selling
+          </button>
         </div>
       </div>
 
-      {/* List your car – compact link to garage for listing */}
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-3`}>
-        <p className="text-xs text-mutedForeground font-heading">
-          To <strong className="text-foreground">list your own cars</strong> for sale, go to your{' '}
-          <Link to="/garage" className="text-primary font-bold hover:underline">
-            Garage
-          </Link>
-          , then use the &quot;List your car for sale&quot; section there.
-        </p>
-      </div>
+      <p className="text-xs text-mutedForeground font-heading">
+        <Link to="/buy-cars" className="text-primary font-bold hover:underline">Buy cars</Link> from the dealer or other players.
+      </p>
     </div>
   );
 }
