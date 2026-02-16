@@ -306,7 +306,6 @@ export default function Rlt() {
   const clearBets = () => setBets([]);
 
   const applyResult = (data) => {
-    setWheelTargetResult(null);
     setLastResult(data.result);
     setRecentNumbers((prev) => [data.result, ...prev].slice(0, 12));
     if (data.win) {
