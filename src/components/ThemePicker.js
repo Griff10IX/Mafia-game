@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Palette, X } from 'lucide-react';
+import { Palette, X, RotateCcw } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { THEME_COLOURS, THEME_TEXTURES } from '../constants/themes';
+import { THEME_COLOURS, THEME_TEXTURES, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
 export default function ThemePicker({ open, onClose }) {
@@ -28,14 +28,26 @@ export default function ThemePicker({ open, onClose }) {
             <Palette className="w-5 h-5 text-primary" />
             <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">Theme</h2>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 rounded text-mutedForeground hover:text-primary hover:bg-primary/10 transition-colors"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => { setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); }}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+              data-testid="theme-reset-default"
+              title="Reset to default (Gold, no texture)"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              Reset to default
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded text-mutedForeground hover:text-primary hover:bg-primary/10 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 overflow-y-auto space-y-4">
