@@ -10,6 +10,7 @@ import Ranking from "./pages/Ranking";
 import Crimes from "./pages/Crimes";
 import GTA from "./pages/GTA";
 import Garage from "./pages/Garage";
+import SellCars from "./pages/SellCars";
 import CarProfile from "./pages/CarProfile";
 import Jail from "./pages/Jail";
 import OrganisedCrime from "./pages/OrganisedCrime";
@@ -231,6 +232,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Garage />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/sell-cars"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <SellCars />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

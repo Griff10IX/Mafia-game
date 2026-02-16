@@ -975,3 +975,5 @@ export default function Garage() {
     </div>
   );
 }
+
+export { BuySellSection };
