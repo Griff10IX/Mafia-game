@@ -402,7 +402,7 @@ export default function Jail() {
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Bust stats</span>
         </div>
         <div className="p-3 text-sm font-heading text-foreground">
-          Busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}  total successful busts {jailStats.success_today ?? 0}
+          Busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}  total successful busts {jailStatus.jail_busts ?? 0}
           <div className="mt-1.5 text-mutedForeground text-xs">
             Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts, {jailStats.success_week ?? 0} successful  ·  Profit today ${(jailStats.profit_today ?? 0).toLocaleString()}  ·  Past week ${(jailStats.profit_week ?? 0).toLocaleString()}
           </div>

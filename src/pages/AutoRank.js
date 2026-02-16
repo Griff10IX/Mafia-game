@@ -39,6 +39,7 @@ export default function AutoRank() {
     running_seconds: 0,
     best_cars: [],
     total_booze_runs: 0,
+    total_booze_profit: 0,
     next_oc_at: null,
   });
 
@@ -106,6 +107,7 @@ export default function AutoRank() {
             running_seconds: statsRes.data.running_seconds ?? 0,
             best_cars: statsRes.data.best_cars ?? [],
             total_booze_runs: statsRes.data.total_booze_runs ?? 0,
+            total_booze_profit: statsRes.data.total_booze_profit ?? 0,
             next_oc_at: statsRes.data.next_oc_at ?? null,
           });
         }
@@ -283,14 +285,14 @@ export default function AutoRank() {
             <Bot className="w-5 h-5 text-primary shrink-0" />
             <div>
               <h1 className="text-sm md:text-base font-heading font-bold text-primary uppercase tracking-wider">Auto Rank</h1>
-              <p className="text-[11px] text-mutedForeground font-heading mt-0.5">Automate crimes, GTA, busts, OC. Results to Telegram (successes only).</p>
+              <p className="text-[11px] text-mutedForeground font-heading mt-0.5">Automate crimes, GTA, busts, OC. Optional: add Telegram in <Link to="/profile" className="text-primary hover:underline">Profile → Settings</Link> to get notifications when runs succeed.</p>
             </div>
           </div>
           <div className="p-3 md:p-4 space-y-3">
             {!prefs.telegram_chat_id_set && (
-              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2">
-                <p className="text-xs font-heading text-amber-200/90 dark:text-amber-100/90">
-                  Set <strong>Telegram chat ID</strong> in <Link to="/profile" className="underline font-bold">Profile → Settings</Link> (get ID from <span className="font-mono">@userinfobot</span> on Telegram).
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
+                <p className="text-xs font-heading text-mutedForeground">
+                  No Telegram set — Auto Rank still runs; you won&apos;t get notifications. Set <strong>Telegram chat ID</strong> in <Link to="/profile" className="underline font-bold">Profile → Settings</Link> (get ID from <span className="font-mono">@userinfobot</span>) to receive success messages.
                 </p>
               </div>
             )}
@@ -313,7 +315,7 @@ export default function AutoRank() {
             <ToggleRow
               icon={Bot}
               label="Enable Auto Rank"
-              description="Master switch; notifies on Telegram (successes only)."
+              description="Master switch. Notifications to Telegram when set (successes only)."
               checked={prefs.auto_rank_enabled}
               disabled={savingPrefs || (prefs.auto_rank_enabled ? false : !canEnable)}
               onToggle={() => updatePref('auto_rank_enabled', !prefs.auto_rank_enabled)}
@@ -411,6 +413,9 @@ export default function AutoRank() {
                   <Wine className="w-4 h-4 text-primary" />
                   <span className="text-mutedForeground">Booze runs:</span>
                   <span className="text-foreground font-medium">{stats.total_booze_runs.toLocaleString()}</span>
+                  <span className="text-mutedForeground">·</span>
+                  <span className="text-mutedForeground">Profit:</span>
+                  <span className="text-emerald-500 dark:text-emerald-400 font-medium">${(stats.total_booze_profit ?? 0).toLocaleString()}</span>
                 </div>
               </div>
               {stats.best_cars && stats.best_cars.length > 0 && (

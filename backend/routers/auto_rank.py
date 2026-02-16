@@ -91,17 +91,19 @@ async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime
     )
 
 
-async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime):
+async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit: int = 0):
     """Record one completed booze run (sell for profit)."""
     await _ensure_stats_since(db, user_id, now)
     await db.users.update_one(
         {"id": user_id},
-        {"$inc": {"auto_rank_total_booze_runs": 1}},
+        {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": max(0, int(profit))}},
     )
 
 
 async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
-    """Send an immediate Telegram when Auto Rank puts the user in jail (bust/crime/GTA failed)."""
+    """Send an immediate Telegram when Auto Rank puts the user in jail (bust/crime/GTA failed). No-op if no chat_id."""
+    if not (telegram_chat_id or "").strip():
+        return
     from security import send_telegram_to_chat
     msg = f"**Auto Rank** — {username}\n\n🔒 You're in jail ({reason}). {jail_seconds}s."
     await send_telegram_to_chat(telegram_chat_id, msg, bot_token)
@@ -201,7 +203,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                     profit = out.get("profit") or 0
                     if out.get("is_run") and profit:
                         lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
-                        await _update_auto_rank_stats_booze(db, user_id, now)
+                        await _update_auto_rank_stats_booze(db, user_id, now, profit)
                         has_success = True
                     user = await db.users.find_one({"id": user_id}, {"_id": 0})
                     if not user:
@@ -263,7 +265,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                     profit = out.get("profit") or 0
                     if out.get("is_run") and profit:
                         lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
-                        await _update_auto_rank_stats_booze(db, user_id, now)
+                        await _update_auto_rank_stats_booze(db, user_id, now, profit)
                         has_success = True
                     user = await db.users.find_one({"id": user_id}, {"_id": 0})
                     if not user:
@@ -351,8 +353,9 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         parts = [f"Busted {bust_target_username}! +{rp} RP"]
         if cash:
             parts.append(f"${cash:,}")
-        msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
-        await send_telegram_to_chat(telegram_chat_id, msg, token)
+        if (telegram_chat_id or "").strip():
+            msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
+            await send_telegram_to_chat(telegram_chat_id, msg, token)
     except Exception as e:
         logger.exception("Auto rank bust-only for %s: %s", user_id, e)
 
@@ -492,7 +495,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         except Exception as e:
             logger.exception("Auto rank booze for %s: %s", user_id, e)
 
-    if has_success:
+    if has_success and (telegram_chat_id or "").strip():
         lines.append("")
         await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
 
@@ -517,15 +520,13 @@ async def run_booze_arrivals():
     users = await cursor.to_list(200)
     for u in users:
         chat_id = (u.get("telegram_chat_id") or "").strip()
-        if not chat_id:
-            continue
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
         lines = [f"**Auto Rank** — {u.get('username', '?')}", ""]
         try:
             has_success = await _run_booze_for_user(
                 db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines
             )
-            if has_success and len(lines) > 2:
+            if has_success and len(lines) > 2 and chat_id:
                 msg = "\n".join(lines)
                 await send_telegram_to_chat(chat_id, msg, bot_token)
         except Exception as e:
@@ -542,7 +543,6 @@ async def run_auto_rank_due_users():
     cursor = db.users.find(
         {
             "auto_rank_enabled": True,
-            "telegram_chat_id": {"$exists": True, "$nin": [None, ""]},
             "$or": [
                 {"auto_rank_next_run_at": {"$exists": False}},
                 {"auto_rank_next_run_at": None},
@@ -556,8 +556,6 @@ async def run_auto_rank_due_users():
     next_run_iso = datetime.fromtimestamp(next_run, tz=timezone.utc).isoformat()
     for u in users:
         chat_id = (u.get("telegram_chat_id") or "").strip()
-        if not chat_id:
-            continue
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
         try:
             await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token)
@@ -584,15 +582,12 @@ async def run_bust_5sec_loop():
                 {
                     "auto_rank_enabled": True,
                     "auto_rank_bust_every_5_sec": True,
-                    "telegram_chat_id": {"$exists": True, "$nin": [None, ""]},
                 },
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
             )
             users = await cursor.to_list(500)
             for u in users:
                 chat_id = (u.get("telegram_chat_id") or "").strip()
-                if not chat_id:
-                    continue
                 bot_token = (u.get("telegram_bot_token") or "").strip()
                 try:
                     bust_target_username = None
@@ -641,7 +636,6 @@ async def run_auto_rank_oc_loop():
                 {
                     "auto_rank_enabled": True,
                     "auto_rank_oc": True,
-                    "telegram_chat_id": {"$exists": True, "$nin": [None, ""]},
                 },
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
             )
@@ -651,8 +645,6 @@ async def run_auto_rank_oc_loop():
                 if retry_at and now < retry_at:
                     continue
                 chat_id = (u.get("telegram_chat_id") or "").strip()
-                if not chat_id:
-                    continue
                 bot_token = (u.get("telegram_bot_token") or "").strip() or None
                 try:
                     result = await run_oc_heist_npc_only(u["id"])
@@ -663,8 +655,8 @@ async def run_auto_rank_oc_loop():
                             {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}},
                         )
                         continue
-                    # Only send Telegram on success; never on failure (to cut spam)
-                    if result.get("ran") is True and result.get("success") is True:
+                    # Only send Telegram on success when user has chat_id
+                    if chat_id and result.get("ran") is True and result.get("success") is True:
                         msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
                         await send_telegram_to_chat(chat_id, msg, bot_token)
                     if result.get("ran"):
@@ -750,6 +742,7 @@ def register(router):
                 "auto_rank_total_cash": 1,
                 "auto_rank_best_cars": 1,
                 "auto_rank_total_booze_runs": 1,
+                "auto_rank_total_booze_profit": 1,
                 "oc_cooldown_until": 1,
             },
         )
@@ -783,6 +776,7 @@ def register(router):
             "running_seconds": max(0, running_seconds),
             "best_cars": [{"name": c.get("name", "?"), "value": int(c.get("value", 0) or 0)} for c in best_cars],
             "total_booze_runs": int((u or {}).get("auto_rank_total_booze_runs") or 0),
+            "total_booze_profit": int((u or {}).get("auto_rank_total_booze_profit") or 0),
             "next_oc_at": next_oc_at,
         }
 

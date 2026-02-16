@@ -172,6 +172,15 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     return {"players": players_data}
 
 
+async def _record_bust_event(user_id: str, success: bool, profit: int):
+    """Record a bust attempt for stats (today/week, profit). Called from _attempt_bust_impl so both manual and Auto Rank busts are counted."""
+    now = datetime.now(timezone.utc)
+    try:
+        await db.bust_events.insert_one({"user_id": user_id, "at": now, "success": success, "profit": profit})
+    except Exception as e:
+        logger.exception("Record bust event: %s", e)
+
+
 async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     """Attempt to bust target (NPC or player) out of jail. Returns dict with success, message, optional rank_points_earned, cash_reward, jail_time. On validation failure returns {success: False, error: str, error_code: int}."""
     target_name = (target_username or "").strip()
@@ -205,6 +214,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 await update_objectives_progress(current_user["id"], "busts", 1)
             except Exception:
                 pass
+            await _record_bust_event(current_user["id"], True, bust_reward_cash)
             msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
             return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash}
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
@@ -212,6 +222,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             {"id": current_user["id"]},
             {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
         )
+        await _record_bust_event(current_user["id"], False, 0)
         return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
 
     target = await db.users.find_one({"username": username_ci}, {"_id": 0})
@@ -258,6 +269,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             await update_objectives_progress(current_user["id"], "busts", 1)
         except Exception:
             pass
+        await _record_bust_event(current_user["id"], True, cash_to_pay)
         msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target["username"])
         return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay}
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
@@ -265,6 +277,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         {"id": current_user["id"]},
         {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
     )
+    await _record_bust_event(current_user["id"], False, 0)
     return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
 
 
@@ -274,12 +287,7 @@ async def bust_out_of_jail(
     result = await _attempt_bust_impl(current_user, request.target_username or "")
     if result.get("error"):
         raise HTTPException(status_code=result.get("error_code", 400), detail=result["error"])
-    now = datetime.now(timezone.utc)
-    success = result.get("success", False)
-    profit = int(result.get("cash_reward", 0) or 0)
-    await db.bust_events.insert_one(
-        {"user_id": current_user["id"], "at": now, "success": success, "profit": profit}
-    )
+    # bust_events are recorded inside _attempt_bust_impl (so Auto Rank busts are counted too)
     return result
 
 
