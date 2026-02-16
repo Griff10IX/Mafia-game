@@ -11,6 +11,7 @@ const STORAGE_KEY_BUTTON_STYLE = 'app_theme_button_style';
 const STORAGE_KEY_WRITING = 'app_theme_writing_colour';
 const STORAGE_KEY_TEXT_STYLE = 'app_theme_text_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
+const STORAGE_KEY_MOBILE_NAV = 'app_theme_mobile_nav';
 
 /** Convert saved custom theme to colour shape used by applyColourToDocument */
 function customToColour(custom) {
@@ -282,6 +283,14 @@ export function ThemeProvider({ children }) {
       return [];
     }
   });
+  const [mobileNavStyle, setMobileNavStyleState] = useState(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEY_MOBILE_NAV);
+      return v === 'bottom' ? 'bottom' : 'sidebar';
+    } catch {
+      return 'sidebar';
+    }
+  });
   useEffect(() => {
     const colour = getResolvedColour(colourId, customThemes);
     applyColourToDocument(colour);
@@ -464,6 +473,14 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setMobileNavStyle = useCallback((style) => {
+    const v = style === 'bottom' ? 'bottom' : 'sidebar';
+    setMobileNavStyleState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_MOBILE_NAV, v);
+    } catch (_) {}
+  }, []);
+
   const value = {
     colourId,
     textureId,
@@ -495,6 +512,8 @@ export function ThemeProvider({ children }) {
     textStyle: getThemeTextStyle(textStyleId),
     buttonColour: buttonColourId ? getResolvedColour(buttonColourId, customThemes) : null,
     accentLineColour: accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : null,
+    mobileNavStyle,
+    setMobileNavStyle,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

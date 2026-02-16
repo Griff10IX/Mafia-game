@@ -7,6 +7,17 @@ import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
 import styles from '../styles/noir.module.css';
 
+/** Bottom bar nav items when mobile nav style is "bottom" (icon + path; "more" opens sidebar) */
+const MOBILE_BOTTOM_NAV_ITEMS = [
+  { path: '/dashboard', icon: Home, label: 'Dashboard' },
+  { path: '/crimes', icon: Target, label: 'Crimes' },
+  { path: '/forum', icon: MessageSquare, label: 'Forum' },
+  { path: '/inbox', icon: Mail, label: 'Inbox' },
+  { path: '/garage', icon: Car, label: 'Garage' },
+  { path: '/casino', icon: Dice5, label: 'Casino' },
+  { path: '/store', icon: ShoppingBag, label: 'Store' },
+];
+
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
 const DEFAULT_STAT_ORDER = ['rank', 'bullets', 'kills', 'money', 'points', 'property', 'notifications'];
 
@@ -44,7 +55,7 @@ export default function Layout({ children }) {
   notificationPanelOpenRef.current = notificationPanelOpen;
   const navigate = useNavigate();
   const location = useLocation();
-  useTheme();
+  const { mobileNavStyle } = useTheme();
 
   useEffect(() => {
     if (!notificationPanelOpen) return;
@@ -913,9 +924,58 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className="md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden">
+      <main className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''}`}>
         {children}
       </main>
+
+      {/* Mobile bottom nav (only when theme set to "Bottom bar" and on small screens) */}
+      {mobileNavStyle === 'bottom' && (
+        <nav
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around py-2 safe-area-pb"
+          style={{ backgroundColor: 'var(--gm-bg-top)', borderTop: '1px solid var(--noir-border-mid)' }}
+          aria-label="Mobile navigation"
+        >
+          {MOBILE_BOTTOM_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
+            const isInbox = item.path === '/inbox';
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                onClick={() => setSidebarOpen(false)}
+                className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+                  isActive ? 'bg-primary/25 border border-primary/50' : ''
+                }`}
+                style={isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                aria-current={isActive ? 'page' : undefined}
+                title={item.label}
+              >
+                <span className="relative inline-flex">
+                  <Icon size={22} strokeWidth={2} />
+                  {isInbox && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[9px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors border border-transparent"
+            style={{ color: 'var(--noir-foreground)' }}
+            aria-label="Open full menu"
+            title="More"
+          >
+            <Menu size={22} strokeWidth={2} />
+            <span className="text-[9px] font-heading uppercase tracking-wider">More</span>
+          </button>
+        </nav>
+      )}
 
       <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
     </div>

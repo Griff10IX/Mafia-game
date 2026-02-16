@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box } from 'lucide-react';
+import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box, PanelLeft, LayoutDashboard } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_WRITING_COLOURS, THEME_TEXT_STYLES, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
@@ -18,7 +18,7 @@ function customToColourEntry(c) {
 }
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, textStyleId, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setTextStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, textStyleId, mobileNavStyle, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setTextStyle, setMobileNavStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
@@ -473,7 +473,7 @@ export default function ThemePicker({ open, onClose }) {
                 </div>
                 <div>
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Writing colour</p>
-                  <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-32 overflow-y-auto">
+                  <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5 max-h-48 overflow-y-auto">
                     {THEME_WRITING_COLOURS.map((w) => (
                       <button
                         key={w.id}
@@ -483,14 +483,13 @@ export default function ThemePicker({ open, onClose }) {
                           writingColourId === w.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'
                         }`}
                         style={{ backgroundColor: w.foreground }}
-                        title={`${w.name}: ${w.foreground} / ${w.muted}`}
+                        title={w.name}
                         aria-label={w.name}
                       >
                         <span className="w-1/2 h-0.5 rounded shrink-0 opacity-70" style={{ backgroundColor: w.muted }} aria-hidden />
                       </button>
                     ))}
                   </div>
-                  <p className="text-[9px] text-mutedForeground mt-1">Light, dark, and tinted text colours</p>
                 </div>
               </>
             )}
@@ -536,6 +535,35 @@ export default function ThemePicker({ open, onClose }) {
                         <span className="text-[9px] sm:text-[10px] font-heading text-mutedForeground truncate w-full text-center px-0.5">{t.name}</span>
                       </button>
                     ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <LayoutDashboard className="w-3.5 h-3.5" />
+                    Mobile nav
+                  </p>
+                  <p className="text-[9px] text-mutedForeground mb-1.5">On small screens: sidebar (slide-out menu) or bottom bar like the reference.</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setMobileNavStyle('sidebar')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                        mobileNavStyle === 'sidebar' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                      }`}
+                    >
+                      <PanelLeft className="w-3.5 h-3.5" />
+                      Sidebar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMobileNavStyle('bottom')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                        mobileNavStyle === 'bottom' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                      }`}
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                      Bottom bar
+                    </button>
                   </div>
                 </div>
               </>
