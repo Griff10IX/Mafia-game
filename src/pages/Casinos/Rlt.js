@@ -313,7 +313,7 @@ export default function Rlt() {
 
   const startWheelSpin = (resultNum) => {
     const idx = WHEEL_ORDER.indexOf(resultNum);
-    const finalRotation = 10 * 360 - (idx >= 0 ? idx : 0) * SEG;
+    const finalRotation = 10 * 360 - (idx >= 0 ? idx : 0) * SEG - SEG / 2;
     setSpinning(true);
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
