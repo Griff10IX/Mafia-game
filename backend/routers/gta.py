@@ -3,10 +3,49 @@ import logging
 from datetime import datetime, timezone, timedelta
 import random
 import uuid
+from typing import List, Optional, Dict
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# GTA options and request/response models
+# ---------------------------------------------------------------------------
+
+# Cooldowns: min 30s (easiest), best option 3-4 min (legendary). Unlock by rank.
+GTA_OPTIONS = [
+    {"id": "easy", "name": "Street Parking", "success_rate": 0.85, "jail_time": 10, "difficulty": 1, "cooldown": 30, "min_rank": 4},
+    {"id": "medium", "name": "Residential Area", "success_rate": 0.65, "jail_time": 20, "difficulty": 2, "cooldown": 90, "min_rank": 5},
+    {"id": "hard", "name": "Downtown District", "success_rate": 0.45, "jail_time": 35, "difficulty": 3, "cooldown": 150, "min_rank": 6},
+    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.30, "jail_time": 50, "difficulty": 4, "cooldown": 210, "min_rank": 7},
+    {"id": "legendary", "name": "Private Estate", "success_rate": 0.18, "jail_time": 60, "difficulty": 5, "cooldown": 240, "min_rank": 8},
+]
+
+
+class GTAAttemptRequest(BaseModel):
+    option_id: str
+
+
+class GTAMeltRequest(BaseModel):
+    car_ids: List[str]
+    action: str  # "bullets" or "cash"
+
+
+class GTAAttemptResponse(BaseModel):
+    success: bool
+    message: str
+    car: Optional[Dict]
+    jailed: bool
+    jail_until: Optional[str]
+    rank_points_earned: int
+    progress_after: Optional[int] = None
+
+
+# ---------------------------------------------------------------------------
+# Progress and messages
+# ---------------------------------------------------------------------------
 
 from server import (
     db,
@@ -17,12 +56,8 @@ from server import (
     RANKS,
     CARS,
     TRAVEL_TIMES,
-    GTA_OPTIONS,
     DEFAULT_GARAGE_BATCH_LIMIT,
     update_objectives_progress,
-    GTAAttemptRequest,
-    GTAAttemptResponse,
-    GTAMeltRequest,
 )
 
 

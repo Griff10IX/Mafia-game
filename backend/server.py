@@ -278,15 +278,6 @@ POINT_PACKAGES = {
     "platinum": {"points": 3500, "price": 99.99}
 }
 
-# GTA Options and Cars - Cooldowns: min 30s (easiest), best option 3-4 min (legendary). Unlock by rank.
-GTA_OPTIONS = [
-    {"id": "easy", "name": "Street Parking", "success_rate": 0.85, "jail_time": 10, "difficulty": 1, "cooldown": 30, "min_rank": 4},
-    {"id": "medium", "name": "Residential Area", "success_rate": 0.65, "jail_time": 20, "difficulty": 2, "cooldown": 90, "min_rank": 5},
-    {"id": "hard", "name": "Downtown District", "success_rate": 0.45, "jail_time": 35, "difficulty": 3, "cooldown": 150, "min_rank": 6},
-    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.30, "jail_time": 50, "difficulty": 4, "cooldown": 210, "min_rank": 7},
-    {"id": "legendary", "name": "Private Estate", "success_rate": 0.18, "jail_time": 60, "difficulty": 5, "cooldown": 240, "min_rank": 8}
-]
-
 # Travel times based on car rarity (in seconds)
 TRAVEL_TIMES = {
     "exclusive": 7,
@@ -814,26 +805,9 @@ class StatLeaderboardEntry(BaseModel):
     value: int
     is_current_user: bool = False
 
-class GTAAttemptRequest(BaseModel):
-    option_id: str
-
-class GTAMeltRequest(BaseModel):
-    car_ids: List[str]
-    action: str  # "bullets" or "cash"
-
-
 class CustomCarImageUpdate(BaseModel):
     image_url: Optional[str] = None  # URL for picture; empty or null to clear
 
-
-class GTAAttemptResponse(BaseModel):
-    success: bool
-    message: str
-    car: Optional[Dict]
-    jailed: bool
-    jail_until: Optional[str]
-    rank_points_earned: int
-    progress_after: Optional[int] = None  # GTA success rate % after attempt (for progress bar)
 
 class ArmourBuyRequest(BaseModel):
     level: int  # 1-5
