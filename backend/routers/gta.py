@@ -58,8 +58,8 @@ from server import (
     CARS,
     TRAVEL_TIMES,
     DEFAULT_GARAGE_BATCH_LIMIT,
-    update_objectives_progress,
 )
+from routers.objectives import update_objectives_progress
 
 
 # Progress bar: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor is 77% (same as crimes)

@@ -37,11 +37,11 @@ from server import (
     get_current_user,
     get_rank_info,
     maybe_process_rank_up,
-    update_objectives_progress,
     ADMIN_EMAILS,
     RANKS,
     STATES,
 )
+from routers.objectives import update_objectives_progress
 
 logger = logging.getLogger(__name__)
 

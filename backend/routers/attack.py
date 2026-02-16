@@ -32,7 +32,6 @@ from server import (
     send_notification,
     send_notification_to_family,
     maybe_process_rank_up,
-    update_objectives_progress,
     _find_user_by_username_case_insensitive,
     _apply_kill_inflation_decay,
     _increase_kill_inflation_on_kill,
@@ -44,6 +43,7 @@ from server import (
     _family_war_start,
     _family_war_check_wipe_and_award,
 )
+from routers.objectives import update_objectives_progress
 
 # ---------------------------------------------------------------------------
 # Request/Response models
