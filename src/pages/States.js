@@ -146,6 +146,7 @@ const CityCard = ({
                   <>
                     <span className="text-mutedForeground">{ap.owner_username}</span>
                     <span className="text-primary font-bold">{ap.price_per_travel} pts</span>
+                    <span className="text-[9px] text-amber-400/90" title="Owner pays 5% less when flying from this airport">5% off for owner</span>
                   </>
                 ) : canClaimAirport && onClaimAirport ? (
                   <button

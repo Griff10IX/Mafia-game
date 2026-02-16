@@ -1,123 +1,46 @@
-import { Dice1, Spade, Hash, TrendingUp, Target } from 'lucide-react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../styles/noir.module.css';
 
+const GAMES = [
+  { to: '/casino/rlt', label: 'Roulette', desc: 'Wheel of fortune', Icon: Dice1, testId: 'play-roulette' },
+  { to: '/casino/blackjack', label: 'Blackjack', desc: 'Beat the dealer to 21', Icon: Spade, testId: 'play-blackjack' },
+  { to: '/casino/dice', label: 'Dice', desc: 'Roll for riches', Icon: Hash, testId: 'play-dice' },
+  { to: '/casino/horseracing', label: 'Horse Racing', desc: 'Bet on the fastest', Icon: TrendingUp, testId: 'play-horse-racing' },
+  { to: '/sports-betting', label: 'Sports Betting', desc: 'Live games & results', Icon: Target, testId: 'sports-betting' },
+];
+
 export default function Casino() {
   return (
-    <div className={`space-y-8 ${styles.pageContent}`} data-testid="casino-page">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="casino-page">
       <div>
-        <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary mb-2">Casino</h1>
-        <p className="text-mutedForeground">Test your luck in the underground casino</p>
+        <h1 className="text-xl font-heading font-bold text-primary uppercase tracking-widest">Casino</h1>
+        <p className="text-[11px] text-mutedForeground font-heading mt-0.5">Test your luck — Roulette, Blackjack, Dice, Horse Racing, Sports</p>
       </div>
 
-      <div
-        className="relative h-64 rounded-sm overflow-hidden vintage-filter mb-8"
-        style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1745473383212-59428c1156bc?w=1920&q=80)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent"></div>
-        <div className="absolute bottom-6 left-6">
-          <h2 className="text-3xl font-heading font-bold text-primary">The Roaring Twenties</h2>
-          <p className="text-foreground/80 text-sm">Where fortunes are made and lost</p>
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Games</h2>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Link
-          to="/casino/rlt"
-          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
-          data-testid="play-roulette"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-2xl font-heading font-bold text-foreground mb-2">Roulette</h3>
-              <p className="text-sm text-mutedForeground">Classic wheel of fortune</p>
-            </div>
-            <Dice1 className="text-primary group-hover:rotate-180 transition-transform duration-500" size={32} />
-          </div>
-          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
-            Play Roulette
-          </span>
-        </Link>
-
-        <Link
-          to="/casino/blackjack"
-          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
-          data-testid="play-blackjack"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-2xl font-heading font-bold text-foreground mb-2">Blackjack</h3>
-              <p className="text-sm text-mutedForeground">Beat the dealer to 21</p>
-            </div>
-            <Spade className="text-primary group-hover:scale-110 transition-transform" size={32} />
-          </div>
-          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
-            Play Blackjack
-          </span>
-        </Link>
-
-        <Link
-          to="/casino/dice"
-          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
-          data-testid="play-dice"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-2xl font-heading font-bold text-foreground mb-2">Dice</h3>
-              <p className="text-sm text-mutedForeground">Roll for riches</p>
-            </div>
-            <Hash className="text-primary group-hover:rotate-45 transition-transform" size={32} />
-          </div>
-          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
-            Play Dice
-          </span>
-        </Link>
-
-        <Link
-          to="/casino/horseracing"
-          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
-          data-testid="play-horse-racing"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-2xl font-heading font-bold text-foreground mb-2">Horse Racing</h3>
-              <p className="text-sm text-mutedForeground">Bet on the fastest horse</p>
-            </div>
-            <TrendingUp className="text-primary group-hover:translate-x-2 transition-transform" size={32} />
-          </div>
-          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
-            Play Horse Racing
-          </span>
-        </Link>
-
-        <Link
-          to="/sports-betting"
-          className={`${styles.panel} rounded-md p-6 hover:border-primary/50 transition-smooth group block border border-transparent`}
-          data-testid="sports-betting"
-        >
-          <div className="flex items-start justify-between mb-4">
-            <div>
-              <h3 className="text-2xl font-heading font-bold text-foreground mb-2">Sports Betting</h3>
-              <p className="text-sm text-mutedForeground">Live games & results</p>
-            </div>
-            <Target className="text-primary group-hover:scale-110 transition-transform" size={32} />
-          </div>
-          <span className={`block w-full ${styles.btnPrimary} text-center rounded-md font-bold uppercase tracking-widest py-3 transition-smooth`}>
-            Place Bets
-          </span>
-        </Link>
-      </div>
-
-      <div className={`${styles.panel} rounded-md p-6`}>
-        <h3 className="text-xl font-heading font-semibold text-primary mb-3">Casino Games</h3>
-        <p className="text-sm text-mutedForeground">
-          The casino is under construction. Classic prohibition-era games coming soon, including Roulette, 
-          Blackjack, Dice, and Horse Racing. Check back later to test your luck!
-        </p>
+        <div className="p-2 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+          {GAMES.map(({ to, label, desc, Icon, testId }) => (
+            <Link
+              key={to}
+              to={to}
+              data-testid={testId}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-md border border-transparent hover:border-primary/40 bg-secondary/30 hover:bg-primary/10 transition-colors group"
+            >
+              <div className="p-1.5 rounded bg-primary/20 border border-primary/30 shrink-0">
+                <Icon className="text-primary" size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-heading font-bold text-foreground truncate">{label}</p>
+                <p className="text-[10px] text-mutedForeground font-heading truncate">{desc}</p>
+              </div>
+              <ChevronRight className="text-primary shrink-0 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" size={16} />
+            </Link>
+          ))}
+        </div>
       </div>
     </div>
   );

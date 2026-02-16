@@ -526,8 +526,11 @@ const TravelModal = ({
                 <Plane size={18} className="text-primary" />
                 <span className="text-sm font-heading font-bold text-primary">Airport</span>
               </span>
-              <span className="text-xs text-primary font-heading">
+              <span className="text-xs text-primary font-heading flex items-center gap-1.5">
                 {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost ?? 10} pts
+                {travelInfo.airports?.some((a) => a.you_own) && (
+                  <span className="text-[10px] text-amber-400/90 font-normal">(5% owner discount)</span>
+                )}
               </span>
             </button>
             
