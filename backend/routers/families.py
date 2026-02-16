@@ -260,6 +260,7 @@ def _invalidate_my_cache(user_id: str):
 
 # ============ Routes ============
 async def families_list(current_user: dict = Depends(get_current_user)):
+    global _list_cache
     now_ts = time.monotonic()
     if _list_cache is not None and _list_cache[1] > now_ts:
         return _list_cache[0]
@@ -279,7 +280,6 @@ async def families_list(current_user: dict = Depends(get_current_user)):
                 "id": f["id"], "name": f["name"], "tag": f["tag"],
                 "member_count": living_count, "treasury": f.get("treasury", 0),
             })
-    global _list_cache
     _list_cache = (out, now_ts + _list_cache_ttl_sec)
     return out
 
