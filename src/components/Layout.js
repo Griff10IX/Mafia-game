@@ -10,16 +10,17 @@ import styles from '../styles/noir.module.css';
 /** Bottom bar: direct links or expandable groups (tap icon → sub-menu above bar). No "More" – all links live in bar groups. */
 function getMobileBottomNavItems(isAdmin) {
   return [
-    { type: 'link', path: '/dashboard', icon: Home, label: 'Dashboard' },
     {
       type: 'group',
       id: 'you',
       icon: User,
       label: 'You',
       items: [
+        { path: '/dashboard', label: 'Dashboard' },
         { path: '/objectives', label: 'Objectives' },
         { path: '/profile', label: 'Profile' },
         { path: '/stats', label: 'Stats' },
+        { path: '/dead-alive', label: 'Dead > Alive' },
       ],
     },
     {
@@ -39,6 +40,7 @@ function getMobileBottomNavItems(isAdmin) {
         { path: '/attempts', label: 'Attempts' },
         { path: '/hitlist', label: 'Hitlist' },
         { path: '/bodyguards', label: 'Bodyguards' },
+        { path: '/armour-weapons', label: 'Armour & Weapons' },
       ],
     },
     {
@@ -51,17 +53,6 @@ function getMobileBottomNavItems(isAdmin) {
         { path: '/gta', label: 'GTA' },
         { path: '/jail', label: 'Jail' },
         { path: '/organised-crime', label: 'Organised Crime' },
-      ],
-    },
-    {
-      type: 'group',
-      id: 'messaging',
-      icon: MessageSquare,
-      label: 'Messages',
-      items: [
-        { path: '/forum', label: 'Forum' },
-        { path: '/forum', label: 'Entertainer Forum', state: { category: 'entertainer' } },
-        { path: '/inbox', label: 'Inbox' },
       ],
     },
     {
@@ -83,9 +74,13 @@ function getMobileBottomNavItems(isAdmin) {
       icon: Users,
       label: 'Social',
       items: [
+        { path: '/forum', label: 'Forum' },
+        { path: '/forum', label: 'Entertainer Forum', state: { category: 'entertainer' } },
+        { path: '/inbox', label: 'Inbox' },
         { path: '/booze-run', label: 'Booze Run' },
         { path: '/users-online', label: 'Users Online' },
         { path: '/families', label: 'Families' },
+        { path: '/leaderboard', label: 'Leaderboard' },
       ],
     },
     {
@@ -109,10 +104,7 @@ function getMobileBottomNavItems(isAdmin) {
       label: 'Shop',
       items: [
         { path: '/store', label: 'Store' },
-        { path: '/armour-weapons', label: 'Armour & Weapons' },
-        { path: '/leaderboard', label: 'Leaderboard' },
         { path: '/quick-trade', label: 'Quick Trade' },
-        { path: '/dead-alive', label: 'Dead > Alive' },
       ],
     },
     {
@@ -1190,7 +1182,7 @@ export default function Layout({ children }) {
                   if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
                   return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
                 });
-                const showInboxBadge = item.id === 'messaging' && unreadCount > 0;
+                const showInboxBadge = item.id === 'social' && unreadCount > 0;
                 return (
                   <button
                     key={item.id}
