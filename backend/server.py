@@ -1061,6 +1061,8 @@ async def startup_db():
     asyncio.create_task(auto_rank.run_auto_rank_loop())
     asyncio.create_task(auto_rank.run_bust_5sec_loop())
     asyncio.create_task(auto_rank.run_auto_rank_oc_loop())
+    from routers import gta as gta_router
+    asyncio.create_task(gta_router.run_dealer_replenish_loop())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

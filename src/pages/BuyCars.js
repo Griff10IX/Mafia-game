@@ -47,6 +47,7 @@ export default function BuyCars() {
   const [userMoney, setUserMoney] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedRarity, setSelectedRarity] = useState(null);
+  const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dealer' | 'listing'
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [buying, setBuying] = useState(false);
   const [page, setPage] = useState(0);
@@ -96,9 +97,9 @@ export default function BuyCars() {
 
   const allVehicles = useMemo(() => {
     const rows = [];
-    dealerCars.forEach((c) => {
+    dealerCars.forEach((c, i) => {
       rows.push({
-        id: `dealer:${c.id}`,
+        id: `dealer:${c.dealer_slot_id ?? c.id + ':' + i}`,
         source: 'dealer',
         carId: c.id,
         name: c.name,
@@ -128,9 +129,12 @@ export default function BuyCars() {
   }, [dealerCars, marketplaceListings, userMoney]);
 
   const filteredVehicles = useMemo(() => {
-    if (!selectedRarity) return allVehicles;
-    return allVehicles.filter((v) => v.rarity === selectedRarity);
-  }, [allVehicles, selectedRarity]);
+    let list = allVehicles;
+    if (sourceFilter === 'dealer') list = list.filter((v) => v.source === 'dealer');
+    else if (sourceFilter === 'listing') list = list.filter((v) => v.source === 'listing');
+    if (selectedRarity) list = list.filter((v) => v.rarity === selectedRarity);
+    return list;
+  }, [allVehicles, selectedRarity, sourceFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredVehicles.length / PAGE_SIZE));
   const paginatedVehicles = useMemo(() => {
@@ -141,7 +145,7 @@ export default function BuyCars() {
   useEffect(() => {
     setPage(0);
     setSelectedIds(new Set());
-  }, [selectedRarity]);
+  }, [selectedRarity, sourceFilter]);
 
   const selectedTotal = useMemo(() => {
     let sum = 0;
@@ -234,7 +238,22 @@ export default function BuyCars() {
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
         {/* Compact rarity row: click to filter */}
         <div className={`px-3 py-1 ${styles.panelHeader} border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1`}>
-          <span className="text-[10px] font-heading text-mutedForeground uppercase">By rarity:</span>
+          <span className="text-[10px] font-heading text-mutedForeground uppercase">Source:</span>
+          {['all', 'dealer', 'listing'].map((src) => (
+            <button
+              key={src}
+              type="button"
+              onClick={() => setSourceFilter(src)}
+              className={`text-[11px] font-heading font-bold py-0.5 px-1 rounded transition-colors ${
+                sourceFilter === src
+                  ? 'bg-primary/20 text-primary border border-primary/50'
+                  : 'border border-transparent hover:bg-secondary/50 text-mutedForeground hover:text-foreground'
+              }`}
+            >
+              {src === 'all' ? 'All' : src === 'dealer' ? 'Dealer only' : 'Players only'}
+            </button>
+          ))}
+          <span className="text-[10px] font-heading text-mutedForeground uppercase ml-1">By rarity:</span>
           {raritySummary.length === 0 ? (
             <span className="text-[10px] text-mutedForeground">None</span>
           ) : (
