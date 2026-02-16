@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
-const SPIN_DURATION_MS = 4200;
+const SPIN_DURATION_MS = 6000;
 
 const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
 const RED_NUMBERS = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
@@ -100,7 +100,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
         style={{
           inset: 14,
           transform: `rotate(${rotationDeg}deg)`,
-          transition: spinning ? `transform ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.15, 0.85, 0.25, 1)` : 'none',
+          transition: spinning ? `transform ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.6, 0.15, 1)` : 'none',
           willChange: 'transform',
         }}
       >
@@ -280,7 +280,7 @@ export default function Rlt() {
     if (wheelTargetResult == null) return;
     const idx = WHEEL_ORDER.indexOf(wheelTargetResult);
     if (idx < 0) return;
-    const finalRotation = 6 * 360 - idx * SEG;
+    const finalRotation = 12 * 360 - idx * SEG;
     requestAnimationFrame(() => requestAnimationFrame(() => setWheelRotation(finalRotation)));
   }, [wheelTargetResult]);
 
@@ -320,11 +320,11 @@ export default function Rlt() {
 
   const spin = async () => {
     if (!canSpin) return;
-    setSpinning(true);
     setLastResult(null);
     setShowWin(false);
-    setWheelRotation(0);
     setWheelTargetResult(null);
+    setSpinning(false);
+    setWheelRotation(0);
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
 
     try {
@@ -335,11 +335,16 @@ export default function Rlt() {
       if (!useAnimation) { applyResult(data); return; }
 
       pendingResultRef.current = data;
-      setWheelTargetResult(data.result);
+      setSpinning(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setWheelTargetResult(data.result);
+        });
+      });
       spinTimeoutRef.current = setTimeout(() => {
         spinTimeoutRef.current = null;
         if (pendingResultRef.current) applyResult(pendingResultRef.current);
-      }, SPIN_DURATION_MS);
+      }, SPIN_DURATION_MS + 80);
     } catch (e) {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
       setWheelTargetResult(null);
