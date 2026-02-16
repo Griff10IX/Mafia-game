@@ -139,11 +139,11 @@ const CrimeRow = ({ crime, onCommit }) => {
       }`}
       data-testid={`crime-row-${crime.id}`}
     >
-      {/* Crime info */}
+      {/* Crime info (same layout as GTA: name + unlock badge when locked) */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-primary/50 text-xs">▸</span>
+        <span className="text-primary/50 text-xs shrink-0">▸</span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap gap-y-0.5">
             <span className="text-sm font-heading font-bold text-foreground truncate">
               {crime.name}
             </span>
@@ -157,7 +157,7 @@ const CrimeRow = ({ crime, onCommit }) => {
               </span>
             )}
           </div>
-          <div className="text-[10px] text-mutedForeground truncate hidden sm:block">
+          <div className="text-[10px] text-mutedForeground truncate hidden sm:block mt-0.5">
             {crime.description}
           </div>
         </div>
@@ -168,25 +168,25 @@ const CrimeRow = ({ crime, onCommit }) => {
 
       {/* Risk */}
       <div className="shrink-0 w-12 text-center">
-        <span className={`text-xs font-bold ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
+        <span className={`text-xs font-bold tabular-nums ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
           {unavailable ? '—' : `${crime.risk}%`}
         </span>
       </div>
 
-      {/* Cooldown timer */}
+      {/* Cooldown */}
       <div className="shrink-0 w-14 text-center">
         {onCooldown && crime.remaining > 0 ? (
-          <div className="flex items-center justify-center gap-1 text-xs text-mutedForeground font-heading">
-            <Clock size={10} className="text-primary" />
+          <div className="flex items-center justify-center gap-1 text-xs text-mutedForeground font-heading whitespace-nowrap">
+            <Clock size={10} className="text-primary shrink-0" />
             <span>{crime.remaining}s</span>
           </div>
         ) : (
-          <span className="text-[10px] text-mutedForeground" title={crime.wait}>{crime.wait}</span>
+          <span className="text-[10px] text-mutedForeground whitespace-nowrap truncate block" title={crime.wait}>{crime.wait}</span>
         )}
       </div>
 
-      {/* Action */}
-      <div className="shrink-0">
+      {/* Action (Commit / Wait / — for rank-locked / Locked) */}
+      <div className="shrink-0 w-[72px] flex justify-end">
         {crime.can_commit ? (
           <button
             type="button"
@@ -207,14 +207,7 @@ const CrimeRow = ({ crime, onCommit }) => {
         ) : crime.unlocked === false && crime.min_rank_name ? (
           <span className="text-[10px] text-mutedForeground">—</span>
         ) : (
-          <button
-            type="button"
-            disabled
-            className="bg-zinc-800/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-700/50 cursor-not-allowed flex items-center gap-1"
-          >
-            <HelpCircle size={10} />
-            Locked
-          </button>
+          <span className="text-[10px] text-mutedForeground">Locked</span>
         )}
       </div>
     </div>
@@ -308,7 +301,7 @@ export default function Crimes() {
         : remaining && remaining > 0
           ? `${remaining}s`
           : lockedByRank
-            ? `Unavailable — Unlocked at rank ${crime.min_rank_name}`
+            ? '—'
             : 'Unavailable';
 
       return {
