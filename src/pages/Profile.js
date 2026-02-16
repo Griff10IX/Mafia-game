@@ -51,7 +51,7 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
   );
 };
 
-const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney }) => {
+const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney, onOpenSettings }) => {
   const profileRows = [
     { 
       label: 'Username', 
@@ -120,6 +120,17 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
               {profile.rank_name || '—'}
             </span>
           </div>
+          {isMe && onOpenSettings && (
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="inline-flex items-center justify-center h-8 w-8 md:h-9 md:w-9 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+              title="Profile settings"
+              aria-label="Profile settings"
+            >
+              <Settings size={14} className="md:w-4 md:h-4" />
+            </button>
+          )}
           {!isMe && (
             <>
               <button
@@ -683,6 +694,7 @@ export default function Profile() {
           onAddToSearch={addToAttackSearches}
           onSendMessage={profile.id ? () => navigate(`/inbox/chat/${profile.id}`) : undefined}
           onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
+          onOpenSettings={isMe ? openSettings : undefined}
         />
 
         {isMe && (
