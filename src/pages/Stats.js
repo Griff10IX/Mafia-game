@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { TrendingUp } from 'lucide-react';
 import api from '../utils/api';
@@ -210,7 +211,7 @@ const DeadUsersListView = ({ users }) => (
               key={u.username + (u.dead_at || '')} 
               className="grid grid-cols-12 gap-2 px-4 py-3 text-xs font-heading hover:bg-secondary/30 transition-colors"
             >
-              <div className="col-span-5 text-foreground font-bold truncate">{u.username}</div>
+              <div className="col-span-5 text-foreground font-bold truncate"><Link to={`/profile/${encodeURIComponent(u.username)}`} className="text-primary hover:underline">{u.username}</Link></div>
               <div className="col-span-2 text-center text-mutedForeground tabular-nums">
                 {formatNumber(u.total_kills)}
               </div>
@@ -236,7 +237,7 @@ const DeadUsersListView = ({ users }) => (
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-heading font-bold text-foreground truncate">
-                  {u.username}
+                  <Link to={`/profile/${encodeURIComponent(u.username)}`} className="text-primary hover:underline">{u.username}</Link>
                 </div>
                 <div className="text-xs text-mutedForeground mt-0.5">
                   {u.rank_name || '—'}

@@ -300,7 +300,8 @@ TRAVEL_TIMES = {
 }
 
 AIRPORT_COST = 10  # Default points per airport travel when unowned
-AIRPORT_PRICE_MAX = 50  # Max points per travel owner can set
+AIRPORT_PRICE_MIN = 10  # Lowest price owner can set per travel
+AIRPORT_PRICE_MAX = 30  # Highest price owner can set per travel
 AIRPORT_SLOTS_PER_STATE = 1
 MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25  # Points for 5 extra travels
@@ -751,60 +752,6 @@ class SportsBetCancelRequest(BaseModel):
     bet_id: str
 
 
-class AttackSearchRequest(BaseModel):
-    target_username: str
-    note: Optional[str] = None
-
-class AttackSearchResponse(BaseModel):
-    attack_id: str
-    status: str
-    message: str
-    estimated_completion: str
-
-class AttackStatusResponse(BaseModel):
-    attack_id: str
-    status: str
-    target_username: str
-    location_state: Optional[str]
-    can_travel: bool
-    can_attack: bool
-    message: str
-
-class AttackIdRequest(BaseModel):
-    attack_id: str
-
-class AttackDeleteRequest(BaseModel):
-    attack_ids: List[str]
-
-class AttackExecuteRequest(BaseModel):
-    attack_id: str
-    death_message: Optional[str] = None
-    make_public: bool = False
-    bullets_to_use: Optional[int] = None
-
-    @field_validator("bullets_to_use", mode="before")
-    @classmethod
-    def coerce_bullets_to_use(cls, v):
-        """Coerce empty/invalid to None; execute endpoint requires at least 1."""
-        if v is None or v == "":
-            return None
-        if isinstance(v, (int, float)):
-            return int(v) if v > 0 else None
-        if isinstance(v, str):
-            try:
-                n = int(v)
-                return n if n > 0 else None
-            except (ValueError, TypeError):
-                return None
-        return None
-
-class AttackExecuteResponse(BaseModel):
-    success: bool
-    message: str
-    rewards: Optional[Dict]
-    first_bodyguard: Optional[Dict] = None  # { display_name, search_username } when target has bodyguards
-
-
 class HitlistAddRequest(BaseModel):
     target_username: str
     target_type: str  # "user" | "bodyguards"
@@ -914,9 +861,6 @@ class GTAAttemptResponse(BaseModel):
 
 class ArmourBuyRequest(BaseModel):
     level: int  # 1-5
-
-class BulletCalcRequest(BaseModel):
-    target_username: str
 
 class BustOutRequest(BaseModel):
     target_username: str
@@ -1097,7 +1041,7 @@ async def _family_war_start(family_a_id: str, family_b_id: str):
             {"family_a_id": family_a_id, "family_b_id": family_b_id},
             {"family_a_id": family_b_id, "family_b_id": family_a_id},
         ],
-        "status": "active",
+        "status": {"$in": ["active", "truce_offered"]},
     })
     if existing:
         return
@@ -5520,223 +5464,6 @@ def _username_pattern(username: str):
     return re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
 
 
-@api_router.post("/attack/search", response_model=AttackSearchResponse)
-async def search_target(request: AttackSearchRequest, current_user: dict = Depends(get_current_user)):
-    # Prune expired searches (24h)
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
-    await db.attacks.delete_many({"attacker_id": current_user["id"], "search_started": {"$lte": cutoff.isoformat()}})
-
-    user_filter = _find_user_by_username_case_insensitive(request.target_username)
-    if not user_filter:
-        raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one(user_filter, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="Target user not found")
-    if target.get("email") in ADMIN_EMAILS:
-        raise HTTPException(status_code=404, detail="Target user not found")
-    if target.get("is_dead"):
-        raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
-    if target["id"] == current_user["id"]:
-        raise HTTPException(status_code=400, detail="Cannot attack yourself")
-    # Hitlist NPCs (added via Hitlist) are personal: you can only attack those you added. Robot bodyguards can be attacked when going after a player's guards.
-    if target.get("is_npc") and not target.get("is_bodyguard"):
-        hitlist_npc = await db.hitlist.find_one(
-            {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
-            {"_id": 1}
-        )
-        if not hitlist_npc:
-            raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
-
-    
-    now = datetime.now(timezone.utc)
-    override_minutes = current_user.get("search_minutes_override")
-    if override_minutes is not None:
-        try:
-            override_minutes = int(override_minutes)
-        except Exception:
-            override_minutes = None
-    if override_minutes is None or override_minutes <= 0:
-        config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "default_search_minutes": 1})
-        default_mins = config and config.get("default_search_minutes")
-        if default_mins is not None:
-            try:
-                override_minutes = int(default_mins)
-            except Exception:
-                override_minutes = None
-    search_duration = int(override_minutes) if override_minutes and override_minutes > 0 else random.randint(120, 180)
-    found_at = now + timedelta(minutes=search_duration)
-    expires_at = now + timedelta(hours=24)
-    
-    attack_id = str(uuid.uuid4())
-    note = (request.note or "").strip()
-    note = note[:80] if note else None
-    await db.attacks.insert_one({
-        "id": attack_id,
-        "attacker_id": current_user["id"],
-        "attacker_username": current_user["username"],
-        "target_id": target["id"],
-        "target_username": target["username"],
-        "note": note,
-        "status": "searching",
-        "search_started": now.isoformat(),
-        "found_at": found_at.isoformat(),
-        "expires_at": expires_at.isoformat(),
-        # Don't reveal location until found
-        "planned_location_state": random.choice(STATES),
-        "location_state": None,
-        "result": None,
-        "rewards": None
-    })
-    
-    return AttackSearchResponse(
-        attack_id=attack_id,
-        status="searching",
-        message=f"Searching for {request.target_username}...",
-        estimated_completion=found_at.isoformat()
-    )
-
-@api_router.get("/attack/status", response_model=AttackStatusResponse)
-async def get_attack_status(current_user: dict = Depends(get_current_user)):
-    attack = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "status": {"$in": ["searching", "found", "traveling"]}},
-        {"_id": 0}
-    )
-    
-    if not attack:
-        raise HTTPException(status_code=404, detail="No active attack")
-    
-    now = datetime.now(timezone.utc)
-    found_time = datetime.fromisoformat(attack["found_at"])
-    
-    if attack["status"] == "searching" and now >= found_time:
-        new_location = attack.get("location_state") or attack.get("planned_location_state") or random.choice(STATES)
-        await db.attacks.update_one(
-            {"id": attack["id"]},
-            {"$set": {"status": "found", "location_state": new_location}}
-        )
-        attack["status"] = "found"
-        attack["location_state"] = new_location
-    
-    can_travel = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] != attack["location_state"]
-    can_attack = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] == attack["location_state"]
-    
-    message = ""
-    if attack["status"] == "searching":
-        message = "Searching..."
-    elif attack["status"] == "found":
-        if can_attack:
-            message = f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!"
-        else:
-            message = f"Target found in {attack['location_state']}! Travel there to attack."
-    
-    return AttackStatusResponse(
-        attack_id=attack["id"],
-        status=attack["status"],
-        target_username=attack["target_username"],
-        location_state=attack.get("location_state"),
-        can_travel=can_travel,
-        can_attack=can_attack,
-        message=message
-    )
-
-@api_router.get("/attack/list")
-async def list_attacks(current_user: dict = Depends(get_current_user)):
-    """List all active attacks for the current user (searching/found)."""
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=24)
-
-    # Prune expired searches (new docs have expires_at, legacy fallback uses search_started)
-    await db.attacks.delete_many({"attacker_id": current_user["id"], "expires_at": {"$lte": now.isoformat()}})
-
-    attacks = await db.attacks.find(
-        {"attacker_id": current_user["id"], "status": {"$in": ["searching", "found"]}},
-        {"_id": 0}
-    ).sort("search_started", -1).to_list(50)
-    items = []
-    for attack in attacks:
-        # Legacy expiry fallback (no expires_at)
-        if not attack.get("expires_at"):
-            started_iso = attack.get("search_started") or attack.get("found_at")
-            try:
-                started = datetime.fromisoformat(started_iso) if started_iso else None
-                if started and started.tzinfo is None:
-                    started = started.replace(tzinfo=timezone.utc)
-            except Exception:
-                started = None
-            if started and started <= cutoff:
-                await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
-                continue
-            if started:
-                await db.attacks.update_one(
-                    {"id": attack["id"], "attacker_id": current_user["id"]},
-                    {"$set": {"expires_at": (started + timedelta(hours=24)).isoformat()}}
-                )
-
-        if attack["status"] == "searching":
-            found_time = datetime.fromisoformat(attack["found_at"])
-            if now >= found_time:
-                new_location = attack.get("location_state") or attack.get("planned_location_state") or random.choice(STATES)
-                await db.attacks.update_one({"id": attack["id"]}, {"$set": {"status": "found", "location_state": new_location}})
-                attack["status"] = "found"
-                attack["location_state"] = new_location
-
-        can_travel = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] != attack["location_state"]
-        can_attack = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] == attack["location_state"]
-
-        if attack["status"] == "searching":
-            msg = "Searching..."
-        else:
-            msg = (
-                f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!"
-                if can_attack
-                else f"Target found in {attack['location_state']}! Travel there to attack."
-            )
-
-        item = {
-            "attack_id": attack["id"],
-            "status": attack["status"],
-            "target_username": attack["target_username"],
-            "note": attack.get("note"),
-            # Never reveal location while searching (older records may still have it populated)
-            "location_state": attack.get("location_state") if attack["status"] == "found" else None,
-            "search_started": attack.get("search_started"),
-            "found_at": attack.get("found_at"),
-            "expires_at": attack.get("expires_at"),
-            "can_travel": can_travel,
-            "can_attack": can_attack,
-            "message": msg
-        }
-        # For found attacks, include first bodyguard so UI can show "has bodyguard in slot N, kill them first"
-        if attack["status"] == "found" and attack.get("target_id"):
-            target_bgs = await db.bodyguards.find({"user_id": attack["target_id"]}, {"_id": 0}).to_list(10)
-            if target_bgs:
-                first_bg = max(target_bgs, key=lambda b: b.get("slot_number", 0))
-                search_username = None
-                display_name = first_bg.get("robot_name") or "bodyguard"
-                if first_bg.get("bodyguard_user_id"):
-                    bg_user = await db.users.find_one({"id": first_bg["bodyguard_user_id"]}, {"_id": 0, "username": 1})
-                    if bg_user:
-                        search_username = bg_user.get("username")
-                        if not first_bg.get("robot_name"):
-                            display_name = search_username
-                slot_n = first_bg.get("slot_number")
-                item["first_bodyguard"] = {"display_name": display_name, "search_username": search_username, "slot_number": slot_n}
-                item["bodyguard_count"] = len(target_bgs)
-        items.append(item)
-
-    return {"attacks": items}
-
-@api_router.post("/attack/delete")
-async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user)):
-    ids = [x for x in (request.attack_ids or []) if isinstance(x, str) and x.strip()]
-    ids = list(dict.fromkeys(ids))  # dedupe
-    if not ids:
-        raise HTTPException(status_code=400, detail="No attack ids provided")
-
-    res = await db.attacks.delete_many({"attacker_id": current_user["id"], "id": {"$in": ids}})
-    return {"message": f"Deleted {res.deleted_count} search(es)", "deleted": res.deleted_count}
-
-
 # ============ Hitlist ============
 HITLIST_HIDDEN_MULTIPLIER = 1.5  # 50% extra for hidden
 HITLIST_BUY_OFF_MULTIPLIER = 1.5  # pay bounty amount + 50% per entry (cash or points, same as placed)
@@ -6165,23 +5892,6 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     return {"message": f"Paid {cost} points. Here is who hitlisted you.", "who": who}
 
 
-@api_router.post("/attack/travel")
-async def travel_to_target(request: AttackIdRequest, current_user: dict = Depends(get_current_user)):
-    attack = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
-        {"_id": 0}
-    )
-    
-    if not attack:
-        raise HTTPException(status_code=404, detail="No target found to travel to")
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"current_state": attack["location_state"]}}
-    )
-    
-    return {"message": f"Traveled to {attack['location_state']}"}
-
 async def _best_weapon_for_user(user_id: str, equipped_weapon_id: str | None = None) -> tuple[int, str]:
     """
     Return (damage, weapon_name) for combat.
@@ -6205,78 +5915,6 @@ async def _best_weapon_for_user(user_id: str, equipped_weapon_id: str | None = N
             best_damage = dmg
             best_name = w.get("name") or best_name
     return best_damage, best_name
-
-def _bullets_to_kill(
-    target_armour_level: int,
-    target_rank_id: int,
-    attacker_weapon_damage: int,
-    attacker_rank_id: int,
-) -> int:
-    """
-    Bullets required to kill target (clamped 5k–100k).
-
-    Design goals:
-    - Higher target rank => more bullets needed.
-    - Higher armour => more bullets needed.
-    - Higher attacker weapon/rank => fewer bullets needed.
-    - Big rank gaps still stay expensive (e.g. Goon vs Godfather >= 30k+ even with best weapon).
-    """
-    arm = min(max(0, int(target_armour_level or 0)), 5)
-    tr = min(max(1, int(target_rank_id or 1)), 11)
-    ar = min(max(1, int(attacker_rank_id or 1)), 11)
-    dmg = max(5, int(attacker_weapon_damage or 5))
-
-    base = ARMOUR_BASE_BULLETS.get(arm, MIN_BULLETS_TO_KILL)
-
-    # Defender scaling (rank + rank gap)
-    gap = max(0, tr - ar)
-    rank_factor = 1.0 + (tr - 1) * 0.20          # up to 3.0x at rank 11
-    gap_factor = 1.0 + gap * 0.60                # big gaps hurt a lot
-
-    # Attacker reductions (weapon + rank)
-    weapon_factor = 1.0 + (dmg / 140.0)          # best weapon ~1.85x
-    attacker_factor = 1.0 + (ar - 1) * 0.05      # rank 11 ~1.5x
-
-    needed_raw = (base * rank_factor * gap_factor) / weapon_factor / attacker_factor
-
-    needed_i = int(math.ceil(needed_raw))
-    # No artificial floor and no max cap (per request).
-    return max(1, needed_i)
-
-def _bullets_to_kill_breakdown(
-    target_armour_level: int,
-    target_rank_id: int,
-    attacker_weapon_damage: int,
-    attacker_rank_id: int,
-) -> dict:
-    """Same logic as _bullets_to_kill, but returns a breakdown for UI/debug."""
-    arm = min(max(0, int(target_armour_level or 0)), 5)
-    tr = min(max(1, int(target_rank_id or 1)), 11)
-    ar = min(max(1, int(attacker_rank_id or 1)), 11)
-    dmg = max(5, int(attacker_weapon_damage or 5))
-
-    base = ARMOUR_BASE_BULLETS.get(arm, MIN_BULLETS_TO_KILL)
-    gap = max(0, tr - ar)
-    rank_factor = 1.0 + (tr - 1) * 0.20
-    gap_factor = 1.0 + gap * 0.60
-    weapon_factor = 1.0 + (dmg / 140.0)
-    attacker_factor = 1.0 + (ar - 1) * 0.05
-
-    needed_raw = (base * rank_factor * gap_factor) / weapon_factor / attacker_factor
-    needed_before_clamp = int(math.ceil(needed_raw))
-    bullets_required = max(1, needed_before_clamp)
-
-    return {
-        "base_from_armour": base,
-        "rank_factor": round(rank_factor, 3),
-        "gap_factor": round(gap_factor, 3),
-        "weapon_factor": round(weapon_factor, 3),
-        "attacker_factor": round(attacker_factor, 3),
-        "rank_gap": gap,
-        "needed_raw": needed_raw,
-        "needed_before_clamp": needed_before_clamp,
-        "bullets_required": bullets_required,
-    }
 
 async def _apply_kill_inflation_decay(user_id: str) -> float:
     """
@@ -6333,477 +5971,11 @@ async def _increase_kill_inflation_on_kill(user_id: str) -> float:
     return new
 
 
-@api_router.post("/attack/bullets/calc")
-async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(get_current_user)):
-    """Bullet calculator helper for UI (does not spend bullets)."""
-    user_filter = _find_user_by_username_case_insensitive(request.target_username)
-    if not user_filter:
-        raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one(user_filter, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="Target user not found")
-    if target.get("is_dead"):
-        raise HTTPException(status_code=400, detail="Target is dead")
-
-    attacker_rank_id, attacker_rank_name = get_rank_info(current_user.get("rank_points", 0))
-    target_rank_id, target_rank_name = get_rank_info(target.get("rank_points", 0))
-    target_armour = int(target.get("armour_level", 0) or 0)
-
-    inflation = await _apply_kill_inflation_decay(current_user["id"])
-    best_damage, best_weapon_name = await _best_weapon_for_user(
-        current_user["id"],
-        current_user.get("equipped_weapon_id")
-    )
-
-    breakdown = _bullets_to_kill_breakdown(target_armour, target_rank_id, best_damage, attacker_rank_id)
-    bullets_base = int(breakdown["bullets_required"])
-    bullets_required = int(math.ceil(bullets_base * (1.0 + inflation)))
-
-    return {
-        "target_username": target["username"],
-        "target_rank": target_rank_id,
-        "target_rank_name": target_rank_name,
-        "target_armour_level": target_armour,
-        "attacker_rank": attacker_rank_id,
-        "attacker_rank_name": attacker_rank_name,
-        "weapon_name": best_weapon_name,
-        "weapon_damage": best_damage,
-        "bullets_required": bullets_required,
-        "bullets_base": bullets_base,
-        "inflation": inflation,
-        "inflation_pct": int(round(inflation * 100)),
-        "needed_before_clamp": breakdown["needed_before_clamp"],
-    }
-
-@api_router.get("/attack/inflation")
-async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
-    """Get current inflation % (decayed)."""
-    inflation = await _apply_kill_inflation_decay(current_user["id"])
-    return {
-        "inflation": inflation,
-        "inflation_pct": int(round(inflation * 100)),
-    }
-
-
-@api_router.post("/attack/execute", response_model=AttackExecuteResponse)
-async def execute_attack(request: AttackExecuteRequest, current_user: dict = Depends(get_current_user)):
-    attack = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
-        {"_id": 0}
-    )
-    
-    if not attack:
-        raise HTTPException(status_code=404, detail="No active attack to execute")
-    
-    if current_user["current_state"] != attack["location_state"]:
-        raise HTTPException(status_code=400, detail="You must travel to the target's location first")
-    
-    target = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="Target not found")
-    if target.get("is_dead"):
-        raise HTTPException(status_code=400, detail="Target is already dead")
-    
-    target_armour = target.get("armour_level", 0)
-    attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    target_rank_id, _ = get_rank_info(target.get("rank_points", 0))
-    attacker_bullets = current_user.get("bullets", 0)
-    
-    # Best weapon attacker has (by damage)
-    best_damage, best_weapon_name = await _best_weapon_for_user(
-        current_user["id"],
-        current_user.get("equipped_weapon_id")
-    )
-    inflation = await _apply_kill_inflation_decay(current_user["id"])
-    bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id)
-    bullets_required = int(math.ceil(bullets_base * (1.0 + inflation)))
-    
-    if attacker_bullets <= 0:
-        raise HTTPException(status_code=400, detail="You need bullets to attack.")
-
-    # If target has bodyguards, do not execute — tell frontend to show message and offer search for bodyguard
-    # Use highest slot first (4 → 3 → 2 → 1) so attacker must kill slot 4, then 3, then 2, then 1
-    target_bodyguards = await db.bodyguards.find({"user_id": target["id"]}, {"_id": 0}).to_list(10)
-    if target_bodyguards:
-        first_bg = max(target_bodyguards, key=lambda b: b.get("slot_number", 0))
-        display_name = first_bg.get("robot_name") or "bodyguard"
-        search_username = None
-        if first_bg.get("bodyguard_user_id"):
-            bg_user = await db.users.find_one({"id": first_bg["bodyguard_user_id"]}, {"_id": 0, "username": 1})
-            if bg_user:
-                search_username = bg_user.get("username")
-                if not first_bg.get("robot_name"):
-                    display_name = search_username
-        slot_n = first_bg.get("slot_number")
-        target_name = target["username"]
-        slot_msg = f" in slot {slot_n}" if slot_n else ""
-        if search_username:
-            return AttackExecuteResponse(
-                success=False,
-                message=f"{target_name} has a bodyguard{slot_msg} called {display_name}. You need to kill them first.",
-                rewards=None,
-                first_bodyguard={"display_name": display_name, "search_username": search_username, "slot_number": slot_n},
-            )
-        # fallback if no linked user
-        return AttackExecuteResponse(
-            success=False,
-            message=f"{target_name} has a bodyguard{slot_msg}. You need to kill them first.",
-            rewards=None,
-            first_bodyguard={"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n},
-        )
-    
-    target_name = target["username"]
-    target_health = float(target.get("health", DEFAULT_HEALTH))
-    # Require player to specify how many bullets to use (at least 1)
-    if not request.bullets_to_use or request.bullets_to_use < 1:
-        raise HTTPException(status_code=400, detail="You must enter how many bullets to use (at least 1).")
-    bullets_used = min(request.bullets_to_use, attacker_bullets, bullets_required)
-    health_dealt_pct = (bullets_used / bullets_required) * 100.0
-    killed = health_dealt_pct >= target_health
-    
-    # Spend bullets used
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"bullets": -bullets_used}}
-    )
-
-    # Record the attempt (success/fail) for history page
-    attempt_base = {
-        "id": str(uuid.uuid4()),
-        "attacker_id": current_user["id"],
-        "attacker_username": current_user["username"],
-        "target_id": target["id"],
-        "target_username": target_name,
-        "attack_id": attack["id"],
-        "location_state": attack.get("location_state"),
-        "bullets_used": int(bullets_used),
-        "bullets_required": int(bullets_required),
-        "bullets_base": int(bullets_base),
-        "inflation_pct": int(round(inflation * 100)),
-        "target_armour_level": int(target_armour or 0),
-        "target_rank_id": int(target_rank_id or 1),
-        "attacker_rank_id": int(attacker_rank_id or 1),
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    }
-
-    if killed:
-        death_message = (request.death_message or "").strip()
-        make_public = bool(request.make_public)
-
-        # Increase inflation on successful kill
-        await _increase_kill_inflation_on_kill(current_user["id"])
-        killer_id = current_user["id"]
-        victim_id = target["id"]
-
-        # NPC hitlist target: grant npc_rewards from hitlist entry, then remove entry and mark NPC dead
-        if target.get("is_npc"):
-            hitlist_entry = await db.hitlist.find_one({"target_id": victim_id, "target_type": "npc"}, {"_id": 0, "npc_rewards": 1})
-            if hitlist_entry:
-                rewards = hitlist_entry.get("npc_rewards") or {}
-                rp_added = int(rewards.get("rank_points", 0) or 0)
-                inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1}
-                booze = rewards.get("booze")
-                if isinstance(booze, dict) and booze:
-                    booze_ids = [b["id"] for b in BOOZE_TYPES]
-                    for bid, amt in booze.items():
-                        if bid in booze_ids and amt and int(amt) > 0:
-                            inc[f"booze_carrying.{bid}"] = int(amt)
-                            inc[f"booze_carrying_cost.{bid}"] = 0
-                if inc:
-                    rp_before = int(current_user.get("rank_points") or 0)
-                    await db.users.update_one({"id": killer_id}, {"$inc": inc})
-                    if rp_added > 0:
-                        try:
-                            await maybe_process_rank_up(killer_id, rp_before, rp_added, current_user.get("username", ""))
-                        except Exception as e:
-                            logging.exception("Rank-up notification (hitlist NPC): %s", e)
-                car_id = (rewards.get("car_id") or "").strip()
-                if car_id and next((c for c in CARS if c.get("id") == car_id), None):
-                    await db.user_cars.insert_one({"id": str(uuid.uuid4()), "user_id": killer_id, "car_id": car_id, "acquired_at": datetime.now(timezone.utc).isoformat()})
-                await db.hitlist.delete_one({"target_id": victim_id, "target_type": "npc"})
-                try:
-                    await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
-                except Exception:
-                    pass
-                now_iso = datetime.now(timezone.utc).isoformat()
-                await db.users.update_one({"id": victim_id}, {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0}, "$inc": {"total_deaths": 1}})
-                # Remove all of this attacker's searches for this target (incl. duplicate entries for same NPC)
-                await db.attacks.delete_many({"attacker_id": killer_id, "target_id": victim_id})
-                reward_parts = []
-                if inc.get("money"): reward_parts.append(f"${inc['money']:,} cash")
-                if inc.get("points"): reward_parts.append(f"{inc['points']} pts")
-                if inc.get("rank_points"): reward_parts.append(f"{inc['rank_points']} RP")
-                if inc.get("bullets"): reward_parts.append(f"{inc['bullets']} bullets")
-                if car_id: reward_parts.append("a car")
-                if isinstance(booze, dict) and booze: reward_parts.append("booze")
-                success_message = f"You killed {target_name}! (NPC) You got: " + ", ".join(reward_parts) + "."
-                try:
-                    await db.attack_attempts.insert_one({
-                        **attempt_base,
-                        "outcome": "killed",
-                        "death_message": death_message or None,
-                        "make_public": False,
-                        "rewards": rewards,
-                        "target_health_before": target_health,
-                        "target_health_after": 0.0,
-                        "is_npc_kill": True,
-                    })
-                except Exception:
-                    pass
-                try:
-                    await update_objectives_progress(killer_id, "hitlist_npc_kills", 1)
-                except Exception:
-                    pass
-                await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
-                return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
-
-        victim_money = int(target.get("money", 0))
-        cash_loot = int(victim_money * KILL_CASH_PERCENT)
-        rank_points = 25
-        ev = await get_effective_event()
-        cash_loot = int(cash_loot * ev.get("kill_cash", 1.0))
-        rank_points = int(rank_points * ev.get("rank_points", 1.0))
-        
-        victim_cars = await db.user_cars.find({"user_id": victim_id}, {"_id": 0, "car_id": 1}).to_list(500)
-        victim_props = await db.user_properties.find({"user_id": victim_id}, {"_id": 0, "property_id": 1}).to_list(100)
-        victim_cars_count = len(victim_cars)
-        victim_props_count = len(victim_props)
-        
-        exclusive_car_count = 0
-        for uc in victim_cars:
-            car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
-            if car_info and car_info.get("rarity") == "exclusive":
-                exclusive_car_count += 1
-        
-        prop_names = []
-        for up in victim_props:
-            p = await db.properties.find_one({"id": up["property_id"]}, {"_id": 0, "name": 1})
-            if p:
-                prop_names.append(p["name"])
-        
-        killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1})
-        killer_rp_before = int((killer_doc or {}).get("rank_points") or 0)
-        await db.users.update_one(
-            {"id": killer_id},
-            {"$inc": {"money": cash_loot, "total_kills": 1, "rank_points": rank_points}}
-        )
-        try:
-            await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""))
-        except Exception as e:
-            logging.exception("Rank-up notification (kill): %s", e)
-        await db.user_cars.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
-        await db.user_properties.update_many({"user_id": victim_id}, {"$set": {"user_id": killer_id}})
-        
-        now_iso = datetime.now(timezone.utc).isoformat()
-        await db.users.update_one(
-            {"id": victim_id},
-            {"$set": {
-                "is_dead": True,
-                "dead_at": now_iso,
-                "points_at_death": target.get("points", 0),
-                "money": 0,
-                "health": 0
-            }, "$inc": {"total_deaths": 1}}
-        )
-        # If the victim was someone's bodyguard: owner loses both the bodyguard and the slot (delete bodyguard, decrement slots; must buy that slot again). Remaining BGs renumber 1..n. Applies for any slot count.
-        victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
-        bodyguard_owner_username = None
-        for bg in victim_as_bodyguard:
-            owner_id = bg["user_id"]
-            owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
-            if owner_doc:
-                bodyguard_owner_username = owner_doc.get("username")
-            await db.bodyguards.delete_one({"id": bg["id"]})  # lose the bodyguard
-            await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})  # lose the slot
-            await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
-            try:
-                owner_family_id = (owner_doc or {}).get("family_id")
-                if owner_family_id and killer_family_id:
-                    bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
-                    if bg_war and bg_war.get("id"):
-                        await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
-            except Exception as e:
-                logging.exception("War stats bodyguard kill: %s", e)
-            # Renumber remaining bodyguards so slot_numbers are 1..n (e.g. had 1,2,4 left → become 1,2,3)
-            remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
-            for i, b in enumerate(remaining, 1):
-                if b["slot_number"] != i:
-                    await db.bodyguards.update_one({"id": b["id"]}, {"$set": {"slot_number": i}})
-        # Store bodyguard info in attempt_base for history
-        is_victim_bodyguard = bool(target.get("is_bodyguard"))
-        attempt_base["is_bodyguard_kill"] = is_victim_bodyguard
-        if is_victim_bodyguard and bodyguard_owner_username:
-            attempt_base["bodyguard_owner_username"] = bodyguard_owner_username
-
-        success_message = f"You killed {target_name}! You got ${cash_loot:,}"
-        extras = []
-        if victim_props_count:
-            p = f"their {victim_props_count} propert{'y' if victim_props_count == 1 else 'ies'}"
-            if prop_names:
-                p += f" ({', '.join(prop_names)})"
-            extras.append(p)
-        if victim_cars_count:
-            c = f"their {victim_cars_count} car{'s' if victim_cars_count != 1 else ''}"
-            if exclusive_car_count:
-                c += f" (including {'an' if exclusive_car_count == 1 else exclusive_car_count} exclusive car{'s' if exclusive_car_count != 1 else ''})"
-            extras.append(c)
-        if extras:
-            success_message += ", " + ", ".join(extras) + "."
-        else:
-            success_message += " and their assets."
-
-        if death_message:
-            success_message += f' Death message: "{death_message}"'
-
-        if make_public:
-            try:
-                await db.public_kills.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "killer_id": current_user["id"],
-                    "killer_username": current_user["username"],
-                    "victim_id": victim_id,
-                    "victim_username": target_name,
-                    "death_message": death_message or None,
-                    "bullets_used": bullets_used,
-                    "bullets_required": bullets_required,
-                    "make_public": True,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
-                })
-            except Exception:
-                pass
-        
-        # Remove all of this attacker's searches for this target (incl. duplicate entries)
-        await db.attacks.delete_many({"attacker_id": killer_id, "target_id": victim_id})
-        await send_notification(killer_id, "Kill", success_message, "attack", category="attacks")
-
-        # Witness statements: how many go out depends on weapon (worse gun = more) and silencer (reduces). Sent to random users (victim may or may not get one).
-        max_statements = max(0, min(6, 7 - (best_damage // 20)))
-        if current_user.get("has_silencer"):
-            max_statements = max(0, max_statements - 2)
-        number_to_send = random.randint(0, max_statements)
-        if number_to_send > 0:
-            location = attack.get("location_state") or "Unknown"
-            time_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-            victim_label = f"bodyguard {target_name}" if target.get("is_bodyguard") else target_name
-            witness_msg = f"{current_user.get('username') or 'Someone'} killed {victim_label}. Weapon: {best_weapon_name}. Bullets used: {bullets_used:,}. Location: {location}. Time: {time_str}."
-            all_user_ids = await db.users.find(
-                {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}, "id": {"$ne": killer_id}},
-                {"_id": 0, "id": 1}
-            ).to_list(5000)
-            recipient_ids = [u["id"] for u in all_user_ids]
-            if recipient_ids:
-                to_send = min(number_to_send, len(recipient_ids))
-                for uid in random.sample(recipient_ids, to_send):
-                    await send_notification(uid, "Witness statement", witness_msg, "attack", category="attacks")
-
-        victim_family_id = target.get("family_id")
-        killer_family_id = current_user.get("family_id")
-        # Record war stats first: use the war between killer's and victim's family so it shows in killer's modal
-        if victim_family_id:
-            try:
-                if killer_family_id:
-                    war = await _get_active_war_between(killer_family_id, victim_family_id)
-                else:
-                    war = await _get_active_war_for_family(victim_family_id)
-                if war and war.get("id"):
-                    await _record_war_stats_player_kill(war["id"], killer_id, killer_family_id, victim_id, victim_family_id)
-            except Exception as e:
-                logging.exception("War stats record on kill: %s", e)
-        # Notifications, war start, wipe check — don't fail the request if these error
-        if victim_family_id:
-            try:
-                await send_notification_to_family(
-                    victim_family_id,
-                    "💀 Family Member Killed",
-                    f"{target_name} was killed by {current_user['username']}.",
-                    "attack",
-                )
-                target_role = (target.get("family_role") or "").lower()
-                if target_role in ("boss", "underboss", "consigliere"):
-                    if killer_family_id:
-                        await _family_war_start(killer_family_id, victim_family_id)
-                await _family_war_check_wipe_and_award(victim_family_id)
-            except Exception as e:
-                logging.exception("Family notify/war on kill: %s", e)
-
-        try:
-            await db.attack_attempts.insert_one({
-                **attempt_base,
-                "outcome": "killed",
-                "death_message": death_message or None,
-                "make_public": make_public,
-                "rewards": {"money": cash_loot, "rank_points": rank_points, "cars_taken": victim_cars_count, "properties_taken": victim_props_count},
-                "target_health_before": target_health,
-                "target_health_after": 0.0,
-            })
-        except Exception:
-            pass
-        
-        return AttackExecuteResponse(
-            success=True,
-            message=success_message,
-            rewards={"money": cash_loot, "rank_points": rank_points, "cars_taken": victim_cars_count, "properties_taken": victim_props_count, "exclusive_cars": exclusive_car_count}
-        )
-    else:
-        new_health = max(0.0, target_health - health_dealt_pct)
-        await db.users.update_one(
-            {"id": target["id"]},
-            {"$set": {"health": new_health}}
-        )
-        # Keep status as "found" so user can attack again (don't delete the search)
-        # Only record the last_attack_attempt for history
-        await db.attacks.update_one(
-            {"id": attack["id"]},
-            {"$set": {"last_attack_result": "damaged", "last_attack_at": datetime.now(timezone.utc).isoformat()}}
-        )
-        health_pct_str = f"{health_dealt_pct:.1f}" if health_dealt_pct != int(health_dealt_pct) else str(int(health_dealt_pct))
-        fail_message = f'You failed to kill {target_name}. You used {bullets_used:,} bullets — they only lost {health_pct_str}% health.'
-
-        try:
-            await db.attack_attempts.insert_one({
-                **attempt_base,
-                "outcome": "failed",
-                "death_message": None,
-                "make_public": False,
-                "rewards": None,
-                "target_health_before": target_health,
-                "target_health_after": new_health,
-                "health_dealt_pct": float(health_dealt_pct),
-                "message": fail_message,
-            })
-        except Exception:
-            pass
-
-        return AttackExecuteResponse(
-            success=False,
-            message=fail_message,
-            rewards=None
-        )
-
-@api_router.get("/attack/attempts")
-async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
-    """History of attack attempts involving current user."""
-    docs = await db.attack_attempts.find(
-        {"$or": [{"attacker_id": current_user["id"]}, {"target_id": current_user["id"]}]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(200)
-    # Add a direction field for UI and resolve bodyguard owner for older records
-    for d in docs:
-        d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
-        # For older records missing bodyguard info, check if target was a bodyguard
-        if d.get("is_bodyguard_kill") and not d.get("bodyguard_owner_username"):
-            target_user = await db.users.find_one({"id": d.get("target_id")}, {"_id": 0, "is_bodyguard": 1, "bodyguard_owner_id": 1})
-            if target_user and target_user.get("bodyguard_owner_id"):
-                owner = await db.users.find_one({"id": target_user["bodyguard_owner_id"]}, {"_id": 0, "username": 1})
-                if owner:
-                    d["bodyguard_owner_username"] = owner.get("username")
-    return {"attempts": docs}
-
 # Leaderboard endpoints
 @api_router.get("/leaderboard", response_model=List[LeaderboardEntry])
 async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     users = await db.users.find(
-        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}},
+        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}},
         {"_id": 0, "username": 1, "money": 1, "total_kills": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "id": 1}
     ).sort("money", -1).limit(10).to_list(10)
     
@@ -6824,7 +5996,10 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
 
 async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
     limit = max(1, min(100, int(limit)))
-    query = {"is_dead": True} if dead else {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}}
+    if dead:
+        query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    else:
+        query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     users = await db.users.find(
         query,
         {"_id": 0, "username": 1, "id": 1, field: 1}
@@ -8989,22 +8164,22 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         except Exception:
             pass
     carrying_booze = _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0
-    # Airports: 1 per state, ownable; owner gets points (max 50 per travel)
+    # Airports: 1 per state, ownable; owner gets points (price 10–30 pts). Discount at ALL airports if user owns ANY airport.
+    user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": current_user.get("id")}, {"_id": 1})
     airports = []
     for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):
         doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
         if not doc:
             await db.airport_ownership.insert_one({"state": current_state, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
             doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
-        price = min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
+        price = max(AIRPORT_PRICE_MIN, min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
         you_own = doc.get("owner_id") == current_user.get("id")
         airports.append({"slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price, "you_own": you_own})
-    # Airport cost for display: use actual price from user's current location (default slot 1, same as POST /travel). Apply 5% owner discount if they own it.
+    # Display: apply 5% discount at all airports when user owns any airport
     airport_cost_display = AIRPORT_COST
     if airports:
         first_price = airports[0].get("price_per_travel") or AIRPORT_COST
-        first_you_own = airports[0].get("you_own", False)
-        airport_cost_display = max(1, round(first_price * 0.95)) if first_you_own else first_price
+        airport_cost_display = max(1, round(first_price * 0.95)) if user_owns_any_airport else first_price
     return {
         "current_location": current_state,
         "traveling_to": traveling_to if seconds_remaining is not None and seconds_remaining > 0 else None,
@@ -9014,6 +8189,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "max_travels": max_travels,
         "airport_cost": airport_cost_display,
         "airport_time": TRAVEL_TIMES["airport"],
+        "user_gets_airport_discount": bool(user_owns_any_airport),
         "airports": airports,
         "extra_airmiles_cost": EXTRA_AIRMILES_COST,
         "cars": cars_with_travel_times,
@@ -9059,11 +8235,12 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
         if not airport_doc:
             await db.airport_ownership.insert_one({"state": current_location, "slot": airport_slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
             airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": airport_slot}, {"_id": 0})
-        airport_price = min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
-        # 5% discount when you own the airport you're using
-        owner_id = airport_doc.get("owner_id")
-        if owner_id and owner_id == current_user["id"]:
+        airport_price = max(AIRPORT_PRICE_MIN, min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
+        # 5% discount at all airports when you own any airport
+        user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": current_user["id"]}, {"_id": 1})
+        if user_owns_any_airport:
             airport_price = max(1, round(airport_price * 0.95))
+        owner_id = airport_doc.get("owner_id")
         if current_user["points"] < airport_price:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
         travel_time = TRAVEL_TIMES["airport"]
@@ -9159,15 +8336,15 @@ async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):
     return {"message": f"Purchased {to_add} extra airmiles for {EXTRA_AIRMILES_COST} points. Total: {new_total}/{MAX_EXTRA_AIRMILES}"}
 
 
-# ============ AIRPORTS (4 per state, ownable; owner gets points, max 50/travel) ============
+# ============ AIRPORTS (1 per state, ownable; owner gets points, 10–30 pts/travel) ============
 class AirportClaimRequest(BaseModel):
     state: str
-    slot: int  # 1-4
+    slot: int  # 1
 
 class AirportSetPriceRequest(BaseModel):
     state: str
     slot: int
-    price_per_travel: int  # points, max 50
+    price_per_travel: int  # points, 10–30
 
 class AirportTransferRequest(BaseModel):
     state: str
@@ -9189,7 +8366,7 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
             if not doc:
                 await db.airport_ownership.insert_one({"state": state, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
                 doc = await db.airport_ownership.find_one({"state": state, "slot": slot}, {"_id": 0})
-            price = min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX)
+            price = max(AIRPORT_PRICE_MIN, min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
             result.append({"state": state, "slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price})
     return {"airports": result}
 
@@ -9216,7 +8393,7 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
         {"state": req.state, "slot": req.slot},
         {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "price_per_travel": AIRPORT_COST, "total_earnings": 0}}
     )
-    return {"message": f"You now own Airport #{req.slot} in {req.state}. Set price (max {AIRPORT_PRICE_MAX} pts) and earn points when players fly from here.", "state": req.state, "slot": req.slot}
+    return {"message": f"You now own Airport #{req.slot} in {req.state}. Set price ({AIRPORT_PRICE_MIN}–{AIRPORT_PRICE_MAX} pts) and earn points when players fly from here. You get 5% off at all airports.", "state": req.state, "slot": req.slot}
 
 @api_router.post("/airports/set-price")
 async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = Depends(get_current_user)):
@@ -9224,8 +8401,8 @@ async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = De
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
         raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
-    if req.price_per_travel < 0 or req.price_per_travel > AIRPORT_PRICE_MAX:
-        raise HTTPException(status_code=400, detail=f"Price must be 0–{AIRPORT_PRICE_MAX} points per travel")
+    if req.price_per_travel < AIRPORT_PRICE_MIN or req.price_per_travel > AIRPORT_PRICE_MAX:
+        raise HTTPException(status_code=400, detail=f"Price must be {AIRPORT_PRICE_MIN}–{AIRPORT_PRICE_MAX} points per travel")
     doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this airport slot")
@@ -10750,6 +9927,14 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
             "reward",
             category="crew_oc",
         )
+        applicant_username = current_user.get("username") or "?"
+        await send_notification_to_family(
+            family_id,
+            "Crew OC – New crew member",
+            f"{applicant_username} paid ${fee:,} and joined your Crew OC for the next run.",
+            "reward",
+            category="oc_invites",
+        )
         return {"message": "You paid and joined the crew. You'll get rewards when they commit.", "status": "accepted", "amount_paid": fee}
     await db.family_crew_oc_applications.insert_one({
         "id": application_id,
@@ -10760,6 +9945,14 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
         "amount_paid": 0,
         "created_at": now,
     })
+    applicant_username = current_user.get("username") or "?"
+    await send_notification_to_family(
+        family_id,
+        "Crew OC – New application",
+        f"{applicant_username} applied to join your Crew OC. Accept or reject in Families → Crew OC.",
+        "system",
+        category="oc_invites",
+    )
     return {"message": "Application sent. The family will accept or reject.", "status": "pending"}
 
 
@@ -11172,11 +10365,22 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
             by_user[uid]["family_name"] = (f or {}).get("name", "?")
             by_user[uid]["family_tag"] = (f or {}).get("tag", "?")
             by_user[uid]["username"] = usernames[uid]
+            by_user[uid]["impact"] = (by_user[uid].get("kills") or 0) + (by_user[uid].get("bodyguard_kills") or 0)
         top_bg = sorted(by_user.values(), key=lambda x: (-(x.get("bodyguard_kills") or 0), x.get("username", "")))[:10]
         top_lost = sorted(by_user.values(), key=lambda x: (-(x.get("bodyguards_lost") or 0), x.get("username", "")))[:10]
-        mvp = sorted(by_user.values(), key=lambda x: (-((x.get("kills") or 0) + (x.get("bodyguard_kills") or 0)), x.get("username", "")))[:10]
-        for i, e in enumerate(mvp):
-            e["impact"] = (e.get("kills") or 0) + (e.get("bodyguard_kills") or 0)
+        mvp = sorted(by_user.values(), key=lambda x: (-(x.get("impact") or 0), x.get("username", "")))[:10]
+        top_killers = sorted(by_user.values(), key=lambda x: (-(x.get("kills") or 0), x.get("username", "")))[:10]
+        family_totals = {}
+        for fid in (w["family_a_id"], w["family_b_id"]):
+            members = [e for e in by_user.values() if e.get("family_id") == fid]
+            family_totals[fid] = {
+                "kills": sum(e.get("kills") or 0 for e in members),
+                "deaths": sum(e.get("deaths") or 0 for e in members),
+                "bodyguard_kills": sum(e.get("bodyguard_kills") or 0 for e in members),
+                "bodyguards_lost": sum(e.get("bodyguards_lost") or 0 for e in members),
+            }
+        my_totals = family_totals.get(my_family_id) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
+        other_totals = family_totals.get(other_id) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
         out.append({
             "war": {
                 "id": w["id"],
@@ -11189,8 +10393,11 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
                 "truce_offered_by_family_id": w.get("truce_offered_by_family_id"),
             },
             "stats": {
+                "my_family_totals": my_totals,
+                "other_family_totals": other_totals,
                 "top_bodyguard_killers": top_bg,
                 "top_bodyguards_lost": top_lost,
+                "top_killers": top_killers,
                 "mvp": mvp,
             },
         })
@@ -11243,6 +10450,8 @@ async def families_war_truce_accept(request: WarTruceRequest, current_user: dict
         {"id": request.war_id},
         {"$set": {"status": "truce", "ended_at": now}},
     )
+    await send_notification_to_family(war["family_a_id"], "🤝 Truce accepted", "The war has ended by truce.", "system")
+    await send_notification_to_family(war["family_b_id"], "🤝 Truce accepted", "The war has ended by truce.", "system")
     return {"message": "Truce accepted. War ended."}
 
 
@@ -11282,8 +10491,8 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
     return {"wars": out}
 
 # Crime endpoints -> see routers/crimes.py
-# Register modular routers (crimes, gta, jail)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives
+# Register modular routers (crimes, gta, jail, attack, etc.)
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
@@ -11293,6 +10502,7 @@ forum.register(api_router)
 entertainer.register(api_router)
 bullet_factory.register(api_router)
 objectives.register(api_router)
+attack.register(api_router)
 
 app.include_router(api_router)
 

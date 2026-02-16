@@ -28,7 +28,10 @@ class StatLeaderboardEntry(BaseModel):
 
 async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
     limit = max(1, min(100, int(limit)))
-    query = {"is_dead": True} if dead else {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}}
+    if dead:
+        query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    else:
+        query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     users = await db.users.find(
         query,
         {"_id": 0, "username": 1, "id": 1, field: 1}
@@ -46,7 +49,7 @@ async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool
 
 async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     users = await db.users.find(
-        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}},
+        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}},
         {"_id": 0, "username": 1, "money": 1, "total_kills": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "id": 1}
     ).sort("money", -1).limit(10).to_list(10)
     result = []

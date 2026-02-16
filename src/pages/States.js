@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Factory, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -96,7 +97,7 @@ const CityCard = ({
                     <Icon size={12} className={color} />
                     <span className="text-xs font-heading font-bold text-foreground">{game.name}</span>
                     {owner ? (
-                      <span className="text-[10px] text-mutedForeground">· {owner.username}</span>
+                      <span className="text-[10px] text-mutedForeground">· <Link to={`/profile/${encodeURIComponent(owner.username)}`} className="text-primary hover:underline font-heading">{owner.username}</Link></span>
                     ) : (
                       <span className="text-[10px] text-zinc-500">Unclaimed</span>
                     )}
@@ -125,7 +126,7 @@ const CityCard = ({
               <div className="flex items-center gap-2 text-[10px]">
                 {bf?.owner_username ? (
                   <>
-                    <span className="text-mutedForeground">{bf.owner_username}</span>
+                    <Link to={`/profile/${encodeURIComponent(bf.owner_username)}`} className="text-primary hover:underline font-heading text-mutedForeground hover:text-primary">{bf.owner_username}</Link>
                     <span className="text-primary font-bold">${bf.price_per_bullet?.toLocaleString()}/ea</span>
                     <span className="text-foreground">{bf.accumulated_bullets} 🔫</span>
                   </>
@@ -144,9 +145,9 @@ const CityCard = ({
               <div className="flex items-center gap-2 text-[10px]">
                 {ap?.owner_username && ap.owner_username !== 'Unclaimed' ? (
                   <>
-                    <span className="text-mutedForeground">{ap.owner_username}</span>
+                    <Link to={`/profile/${encodeURIComponent(ap.owner_username)}`} className="text-primary hover:underline font-heading text-mutedForeground hover:text-primary">{ap.owner_username}</Link>
                     <span className="text-primary font-bold">{ap.price_per_travel} pts</span>
-                    <span className="text-[9px] text-amber-400/90" title="Owner pays 5% less when flying from this airport">5% off for owner</span>
+                    <span className="text-[9px] text-amber-400/90" title="Airport owners get 5% off at all airports">5% off for owners</span>
                   </>
                 ) : canClaimAirport && onClaimAirport ? (
                   <button

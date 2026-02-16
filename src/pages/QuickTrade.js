@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -346,7 +347,7 @@ export default function QuickTrade() {
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
                           <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : firstOffer.username)}
+                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link>)}
                           </span>
                           {totalOffers > 1 && (
                             <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>
@@ -434,7 +435,7 @@ export default function QuickTrade() {
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
                           <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : firstOffer.username)}
+                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link>)}
                           </span>
                           {totalOffers > 1 && (
                             <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>

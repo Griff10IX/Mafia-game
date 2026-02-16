@@ -146,7 +146,7 @@ export default function MyProperties() {
     const p = data.property;
     if (!p || p.type !== 'airport' || saving) return;
     const val = parseInt(String(airportPrice).replace(/\D/g, ''), 10);
-    if (Number.isNaN(val) || val < 0 || val > 50) { toast.error('Price 0–50 points'); return; }
+    if (Number.isNaN(val) || val < 10 || val > 30) { toast.error('Price 10–30 points'); return; }
     setSaving(true);
     try {
       await api.post('/airports/set-price', { state: p.state, slot: p.slot ?? 1, price_per_travel: val });
@@ -364,11 +364,11 @@ export default function MyProperties() {
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Set price</span>
                   <input
                     type="number"
-                    min={0}
-                    max={50}
+                    min={10}
+                    max={30}
                     value={airportPrice}
                     onChange={(e) => setAirportPrice(e.target.value)}
-                    placeholder="0–50 pts"
+                    placeholder="10–30 pts"
                     className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleAirportSetPrice} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">

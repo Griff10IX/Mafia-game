@@ -152,7 +152,7 @@ export default function FamilyProfilePage() {
                     c.is_family_member ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-zinc-700/50 text-mutedForeground border border-zinc-600/50'
                   }`}
                 >
-                  {c.username}
+                  <Link to={`/profile/${encodeURIComponent(c.username)}`} className="hover:underline">{c.username}</Link>
                   {!c.is_family_member && <span className="ml-0.5 opacity-80">(crew)</span>}
                 </span>
               ))}

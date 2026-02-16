@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Plane, Car, Clock, MapPin, Zap, ShoppingCart } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -87,7 +88,8 @@ const DestinationCard = ({
         {/* One airport option per destination (city) */}
         {hasAirports ? (() => {
           const fullPrice = airport.price_per_travel ?? 10;
-          const displayPrice = airport.you_own ? Math.max(1, Math.round(fullPrice * 0.95)) : fullPrice;
+          const getsDiscount = !!travelInfo.user_gets_airport_discount;
+          const displayPrice = getsDiscount ? Math.max(1, Math.round(fullPrice * 0.95)) : fullPrice;
           const canUse = !travelInfo.carrying_booze && travelInfo.user_points >= displayPrice;
           return (
             <button
@@ -100,16 +102,16 @@ const DestinationCard = ({
                   : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
               }`}
               data-testid={`airport-${destination}-${airport.slot}`}
-              title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${airport.owner_username} · ${displayPrice} pts${airport.you_own ? ' (5% owner discount)' : ''}`}
+              title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${airport.owner_username} · ${displayPrice} pts${getsDiscount ? ' (5% off – you own an airport)' : ''}`}
             >
               <span className="flex items-center gap-2">
                 <Plane size={18} className="text-primary" />
                 <span className="text-sm font-heading font-bold text-foreground">Airport</span>
-                <span className="text-[10px] text-mutedForeground font-heading truncate max-w-[80px]">{airport.owner_username}</span>
+                <span className="text-[10px] text-mutedForeground font-heading truncate max-w-[80px]">{airport.owner_username ? <Link to={`/profile/${encodeURIComponent(airport.owner_username)}`} className="text-primary hover:underline">{airport.owner_username}</Link> : '—'}</span>
               </span>
               <span className="text-xs text-mutedForeground font-heading">
                 {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {displayPrice}pts
-                {airport.you_own && <span className="text-emerald-400 ml-0.5">(5% off)</span>}
+                {getsDiscount && <span className="text-emerald-400 ml-0.5">(5% off)</span>}
               </span>
             </button>
           );

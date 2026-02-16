@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Factory, Package, User, DollarSign, ShoppingCart } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -153,7 +154,7 @@ export default function BulletFactory({ me }) {
               <div>
                 <div className="text-[10px] text-mutedForeground uppercase font-heading">Owner</div>
                 <div className="text-sm font-heading font-bold text-foreground">
-                  {hasOwner ? data.owner_username : 'Unclaimed'}
+                  {hasOwner ? <Link to={`/profile/${encodeURIComponent(data.owner_username)}`} className="text-primary hover:underline">{data.owner_username}</Link> : 'Unclaimed'}
                 </div>
               </div>
             </div>

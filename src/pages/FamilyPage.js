@@ -338,7 +338,7 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
           return (
             <div key={m.user_id} className="flex items-center justify-between px-3 py-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
               <div>
-                <span className="font-heading font-bold text-foreground text-xs block">{m.username}</span>
+                <span className="font-heading font-bold text-foreground text-xs block"><Link to={`/profile/${encodeURIComponent(m.username)}`} className="text-primary hover:underline">{m.username}</Link></span>
                 <span className={`text-[10px] ${cfg.color}`}>{cfg.icon} {cfg.label}</span>
               </div>
               {canManage && m.role !== 'boss' && (
@@ -451,29 +451,50 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
           )}
           
           {stats && (
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="p-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
-                <Shield size={14} className={`mx-auto mb-1 ${accent.bannerText}`} />
-                <div className="text-[9px] text-mutedForeground">BG Kills</div>
-                {stats.top_bodyguard_killers?.[0] && (
-                  <div className="text-[10px] text-foreground font-bold truncate">{stats.top_bodyguard_killers[0].username}: {stats.top_bodyguard_killers[0].bodyguard_kills}</div>
-                )}
+            <>
+              {(stats.my_family_totals || stats.other_family_totals) && (
+                <div className="grid grid-cols-2 gap-2 text-center border-b border-zinc-700/30 pb-3">
+                  <div className="p-2 bg-emerald-500/10 rounded-md border border-emerald-500/30">
+                    <div className="text-[9px] text-mutedForeground uppercase">Us</div>
+                    <div className="text-[10px] font-bold text-foreground">K {stats.my_family_totals?.kills ?? 0} / D {stats.my_family_totals?.deaths ?? 0}</div>
+                    <div className="text-[9px] text-mutedForeground">BG kills: {stats.my_family_totals?.bodyguard_kills ?? 0} · Lost: {stats.my_family_totals?.bodyguards_lost ?? 0}</div>
+                  </div>
+                  <div className="p-2 bg-red-500/10 rounded-md border border-red-500/30">
+                    <div className="text-[9px] text-mutedForeground uppercase">Them</div>
+                    <div className="text-[10px] font-bold text-foreground">K {stats.other_family_totals?.kills ?? 0} / D {stats.other_family_totals?.deaths ?? 0}</div>
+                    <div className="text-[9px] text-mutedForeground">BG kills: {stats.other_family_totals?.bodyguard_kills ?? 0} · Lost: {stats.other_family_totals?.bodyguards_lost ?? 0}</div>
+                  </div>
+                </div>
+              )}
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="p-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
+                  <Shield size={14} className={`mx-auto mb-1 ${accent.bannerText}`} />
+                  <div className="text-[9px] text-mutedForeground">Most BG Kills</div>
+                  {stats.top_bodyguard_killers?.[0] && (
+                    <div className="text-[10px] text-foreground font-bold truncate"><Link to={`/profile/${encodeURIComponent(stats.top_bodyguard_killers[0].username)}`} className="text-primary hover:underline">{stats.top_bodyguard_killers[0].username}</Link>: {stats.top_bodyguard_killers[0].bodyguard_kills}</div>
+                  )}
+                </div>
+                <div className="p-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
+                  <Skull size={14} className="mx-auto text-red-400 mb-1" />
+                  <div className="text-[9px] text-mutedForeground">Most BGs Lost</div>
+                  {stats.top_bodyguards_lost?.[0] && (
+                    <div className="text-[10px] text-foreground font-bold truncate"><Link to={`/profile/${encodeURIComponent(stats.top_bodyguards_lost[0].username)}`} className="text-primary hover:underline">{stats.top_bodyguards_lost[0].username}</Link>: {stats.top_bodyguards_lost[0].bodyguards_lost}</div>
+                  )}
+                </div>
+                <div className="p-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
+                  <Trophy size={14} className="mx-auto text-yellow-400 mb-1" />
+                  <div className="text-[9px] text-mutedForeground">MVP (kills+BG)</div>
+                  {stats.mvp?.[0] && (
+                    <div className="text-[10px] text-foreground font-bold truncate"><Link to={`/profile/${encodeURIComponent(stats.mvp[0].username)}`} className="text-primary hover:underline">{stats.mvp[0].username}</Link>: {(stats.mvp[0].impact ?? (stats.mvp[0].kills ?? 0) + (stats.mvp[0].bodyguard_kills ?? 0))}</div>
+                  )}
+                </div>
               </div>
-              <div className="p-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
-                <Skull size={14} className="mx-auto text-red-400 mb-1" />
-                <div className="text-[9px] text-mutedForeground">BGs Lost</div>
-                {stats.top_bodyguards_lost?.[0] && (
-                  <div className="text-[10px] text-foreground font-bold truncate">{stats.top_bodyguards_lost[0].username}: {stats.top_bodyguards_lost[0].bodyguards_lost}</div>
-                )}
-              </div>
-              <div className="p-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
-                <Trophy size={14} className="mx-auto text-yellow-400 mb-1" />
-                <div className="text-[9px] text-mutedForeground">MVP</div>
-                {stats.mvp?.[0] && (
-                  <div className="text-[10px] text-foreground font-bold truncate">{stats.mvp[0].username}</div>
-                )}
-              </div>
-            </div>
+              {stats.top_killers?.[0] && (
+                <div className="text-[9px] text-mutedForeground text-center pt-1">
+                  Most player kills: <Link to={`/profile/${encodeURIComponent(stats.top_killers[0].username)}`} className="text-primary font-bold hover:underline">{stats.top_killers[0].username}</Link> ({stats.top_killers[0].kills ?? 0})
+                </div>
+              )}
+            </>
           )}
           
           {canManage && (
@@ -612,12 +633,14 @@ const CrewOCTab = ({
           </span>
           {accepted.length > 0 && (
             <div className="text-[10px] text-mutedForeground">
-              In crew: {accepted.map((a) => a.username).join(', ')}
+              In crew: {accepted.map((a, i) => (
+              <span key={a.id}>{i > 0 && ', '}<Link to={`/profile/${encodeURIComponent(a.username)}`} className="text-primary hover:underline">{a.username}</Link></span>
+            ))}
             </div>
           )}
           {pending.map((a) => (
             <div key={a.id} className="flex items-center justify-between px-2 py-1.5 bg-zinc-800/30 rounded border border-zinc-700/30">
-              <span className="text-xs font-heading text-foreground">{a.username}</span>
+              <Link to={`/profile/${encodeURIComponent(a.username)}`} className="text-xs font-heading text-foreground text-primary hover:underline">{a.username}</Link>
               {canManageCrewOC && (
                 <div className="flex gap-1">
                   <button type="button" onClick={() => onAcceptApp(a.id)} className="text-[10px] font-bold text-emerald-400 hover:underline">Accept</button>

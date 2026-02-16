@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Dices } from 'lucide-react';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
@@ -395,7 +395,7 @@ export default function Dice() {
           </h1>
           <p className="text-xs text-mutedForeground">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
-            {ownership?.owner?.username && !isOwner && <span> · Owned by <span className="text-foreground">{ownership.owner.username}</span></span>}
+            {ownership?.owner?.username && !isOwner && <span> · Owned by <Link to={`/profile/${encodeURIComponent(ownership.owner.username)}`} className="text-primary hover:underline font-heading">{ownership.owner.username}</Link></span>}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs font-heading">

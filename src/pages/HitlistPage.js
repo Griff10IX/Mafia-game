@@ -355,7 +355,11 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                 <tr key={item.id} className="hover:bg-secondary/30 transition-colors">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <span className="text-foreground font-bold truncate">{item.target_username}</span>
+                      {item.target_type === 'npc' ? (
+                        <span className="text-foreground font-bold truncate">{item.target_username}</span>
+                      ) : (
+                        <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-bold truncate">{item.target_username}</Link>
+                      )}
                       <Link
                         to={`/attack?target=${encodeURIComponent(item.target_username)}`}
                         className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
@@ -435,9 +439,11 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className="text-foreground font-heading font-bold text-base truncate">
-                      {item.target_username}
-                    </span>
+                    {item.target_type === 'npc' ? (
+                      <span className="text-foreground font-heading font-bold text-base truncate">{item.target_username}</span>
+                    ) : (
+                      <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-heading font-bold text-base truncate">{item.target_username}</Link>
+                    )}
                     <Link
                       to={`/attack?target=${encodeURIComponent(item.target_username)}`}
                       className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"

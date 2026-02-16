@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Lock, Users, AlertCircle, DoorOpen } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -160,7 +161,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail }) => {
       <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="min-w-0">
           <div className="text-sm font-heading font-bold text-foreground truncate">
-            {player.username}
+            {player.is_npc ? player.username : <Link to={`/profile/${encodeURIComponent(player.username)}`} className="text-primary hover:underline">{player.username}</Link>}
           </div>
           <div className="text-[10px] text-mutedForeground truncate">
             {player.rank_name}
