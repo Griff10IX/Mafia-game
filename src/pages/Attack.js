@@ -241,7 +241,8 @@ const SearchesCard = ({
   loading,
   onDelete,
   onTravel,
-  onAttack
+  onAttack,
+  onFillKillTarget
 }) => {
   return (
     <div className="bg-card rounded-md overflow-hidden border border-primary/20">
@@ -360,13 +361,13 @@ const SearchesCard = ({
                             Travel
                           </button>
                         )}
-                        {a.can_attack && (
+                        {a.can_attack && onFillKillTarget && (
                           <button
                             type="button"
-                            disabled={loading}
-                            onClick={() => onAttack(a.attack_id)}
+                            onClick={() => onFillKillTarget(a.target_username)}
                             className="inline-flex items-center gap-1 text-red-400 hover:text-red-300 font-heading font-bold transition-colors disabled:opacity-50"
                             data-testid={`attack-kill-${a.attack_id}`}
+                            title="Fill username into Kill User form"
                           >
                             <Crosshair size={12} />
                             Kill
@@ -453,12 +454,12 @@ const SearchesCard = ({
                         Travel
                       </button>
                     )}
-                    {a.can_attack && (
+                    {a.can_attack && onFillKillTarget && (
                       <button
                         type="button"
-                        disabled={loading}
-                        onClick={() => onAttack(a.attack_id)}
+                        onClick={() => onFillKillTarget(a.target_username)}
                         className="flex-1 bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded-md px-3 py-2 text-sm font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1.5"
+                        title="Fill username into Kill User form"
                       >
                         <Crosshair size={14} />
                         Kill
@@ -1073,7 +1074,7 @@ export default function Attack() {
           loading={loading}
           onDelete={deleteSelected}
           onTravel={openTravelModal}
-          onAttack={executeAttack}
+          onFillKillTarget={setKillUsername}
         />
       </div>
 

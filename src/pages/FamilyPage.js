@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import { getRacketAccent } from '../constants';
 import styles from '../styles/noir.module.css';
 
 // ============================================================================
@@ -68,24 +69,26 @@ const StatCard = ({ label, value, highlight, icon }) => (
 // TAB BUTTON
 // ============================================================================
 
-const Tab = ({ active, onClick, children }) => (
-  <button
-    onClick={onClick}
-    className={`flex-1 px-2 py-2 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 ${
-      active
-        ? 'text-primary border-primary bg-primary/5'
-        : 'text-mutedForeground border-transparent hover:text-foreground'
-    }`}
-  >
-    {children}
-  </button>
-);
+const Tab = ({ active, onClick, children }) => {
+  const accent = getRacketAccent();
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 px-2 py-2 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 ${
+        active ? accent.tabActive : 'text-mutedForeground border-transparent hover:text-foreground'
+      }`}
+    >
+      {children}
+    </button>
+  );
+};
 
 // ============================================================================
-// RACKET CARD
+// RACKET CARD (accent from constants.js: change RACKET_ACCENT to switch everywhere)
 // ============================================================================
 
 const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlock }) => {
+  const accent = getRacketAccent();
   const timeLeft = formatTimeLeft(racket.next_collect_at);
   const onCooldown = timeLeft && timeLeft !== 'Ready';
   const isReady = racket.level > 0 && !onCooldown;
@@ -112,7 +115,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
       {/* Level Bar */}
       <div className="flex gap-0.5 mb-2">
         {[...Array(maxLevel)].map((_, i) => (
-          <div key={i} className={`flex-1 h-1.5 rounded-full ${i < racket.level ? 'bg-primary' : 'bg-zinc-700'}`} />
+          <div key={i} className={`flex-1 h-1.5 rounded-full ${i < racket.level ? accent.bar : 'bg-zinc-700'}`} />
         ))}
       </div>
 
@@ -123,7 +126,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
 
       {/* Footer */}
       <div className="flex items-center justify-between">
-        <span className={`font-heading font-bold ${locked ? 'text-zinc-500' : 'text-primary'}`}>
+        <span className={`font-heading font-bold ${locked ? 'text-zinc-500' : accent.text}`}>
           {locked ? '—' : formatMoney(income)}
         </span>
         <div className="flex gap-1">
@@ -131,7 +134,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
             <button
               onClick={() => onCollect(racket.id)}
               disabled={onCooldown}
-              className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground px-2.5 py-1 rounded text-[10px] font-bold border border-yellow-600/50 disabled:opacity-40 transition-all"
+              className={`px-2.5 py-1 rounded text-[10px] font-bold border disabled:opacity-40 transition-all ${accent.btn}`}
             >
               Collect
             </button>
@@ -162,16 +165,18 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
 // TREASURY TAB
 // ============================================================================
 
-const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
+const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => {
+  const accent = getRacketAccent();
+  return (
   <div className="space-y-3">
     <div className="text-center py-4 bg-zinc-800/30 rounded-md border border-zinc-700/30">
       <p className="text-[10px] text-mutedForeground uppercase tracking-wider mb-1">Family Treasury</p>
-      <p className="text-3xl font-heading font-bold text-primary">{formatMoneyFull(treasury)}</p>
+      <p className={`text-3xl font-heading font-bold ${accent.text}`}>{formatMoneyFull(treasury)}</p>
     </div>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
       <form onSubmit={onDeposit} className="flex gap-1">
         <input type="text" inputMode="numeric" placeholder="Amount" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none min-w-0" />
-        <button type="submit" className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-3 py-1.5 text-[10px] font-bold uppercase border border-yellow-600/50 shrink-0">Deposit</button>
+        <button type="submit" className={`rounded px-3 py-1.5 text-[10px] font-bold uppercase border shrink-0 ${accent.btn}`}>Deposit</button>
       </form>
       {canWithdraw && (
         <form onSubmit={onWithdraw} className="flex gap-1">
@@ -181,7 +186,8 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
       )}
     </div>
   </div>
-);
+  );
+};
 
 // ============================================================================
 // RACKETS TAB
@@ -189,13 +195,14 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
 
 const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnlock, event, eventsEnabled }) => {
   const maxLevel = config?.racket_max_level ?? 5;
+  const accent = getRacketAccent();
 
   return (
     <div className="space-y-3">
       {/* Event Banner */}
       {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
-        <div className="text-[10px] px-3 py-2 bg-primary/10 rounded-md border border-primary/20 flex items-center gap-2">
-          <span className="text-primary font-bold">✨ {event.name}</span>
+        <div className={`text-[10px] px-3 py-2 rounded-md flex items-center gap-2 ${accent.bannerBg} border ${accent.border}`}>
+          <span className={`font-bold ${accent.bannerText}`}>✨ {event.name}</span>
           <span className="text-mutedForeground">{event.message}</span>
         </div>
       )}
@@ -228,11 +235,13 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnloc
 // RAID TAB
 // ============================================================================
 
-const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
+const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => {
+  const accent = getRacketAccent();
+  return (
   <div className="space-y-2">
     <div className="flex items-center justify-between px-1">
       <span className="text-[10px] text-mutedForeground">Take 25% treasury · 2 raids per enemy family every 3h</span>
-      <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:text-primary/80 p-1">
+      <button onClick={onRefresh} disabled={refreshing} className={`${accent.text} hover:opacity-80 p-1`}>
         <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
       </button>
     </div>
@@ -252,7 +261,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <span className="font-heading font-bold text-foreground text-sm">{t.family_name}</span>
-                  <span className="text-primary text-[10px] ml-1">[{t.family_tag}]</span>
+                  <span className={`${accent.text} text-[10px] ml-1`}>[{t.family_tag}]</span>
                 </div>
                 <span className={`text-[10px] font-bold ${canRaid ? 'text-emerald-400' : 'text-red-400'}`}>{raidsLeft}/2</span>
               </div>
@@ -267,7 +276,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
                         <span className="text-mutedForeground ml-1">L{r.level}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-primary font-bold">{formatMoney(r.potential_take)}</span>
+                        <span className={`${accent.text} font-bold`}>{formatMoney(r.potential_take)}</span>
                         <button 
                           onClick={() => onRaid(t.family_id, r.racket_id)} 
                           disabled={isLoading || !canRaid}
@@ -286,7 +295,8 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
       </div>
     )}
   </div>
-);
+  );
+};
 
 // ============================================================================
 // ROSTER TAB
@@ -295,6 +305,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
 const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole }) => {
   const [assignUserId, setAssignUserId] = useState('');
   const [assignRole, setAssignRole] = useState('associate');
+  const accent = getRacketAccent();
 
   const handleAssign = (e) => {
     e.preventDefault();
@@ -333,7 +344,7 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
             <option value="">Member...</option>
             {members.filter((m) => m.role !== 'boss').map((m) => <option key={m.user_id} value={m.user_id}>{m.username}</option>)}
           </select>
-          <button type="submit" className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[9px] font-bold uppercase border border-yellow-600/50">Assign</button>
+          <button type="submit" className={`rounded px-2 py-1 text-[9px] font-bold uppercase border ${accent.btn}`}>Assign</button>
         </form>
       )}
     </div>
@@ -344,7 +355,9 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
 // ALL FAMILIES TAB
 // ============================================================================
 
-const FamiliesTab = ({ families, myFamilyId }) => (
+const FamiliesTab = ({ families, myFamilyId }) => {
+  const accent = getRacketAccent();
+  return (
   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto">
     {families.length === 0 ? (
       <p className="text-xs text-mutedForeground text-center py-4 col-span-2">No families yet</p>
@@ -352,22 +365,23 @@ const FamiliesTab = ({ families, myFamilyId }) => (
       <Link 
         key={f.id} 
         to={`/families/${encodeURIComponent(f.tag || f.id)}`} 
-        className={`flex items-center justify-between px-3 py-2 rounded-md border transition-colors ${myFamilyId === f.id ? 'bg-primary/10 border-primary/30' : 'bg-zinc-800/30 border-zinc-700/30 hover:border-primary/30'}`}
+        className={`flex items-center justify-between px-3 py-2 rounded-md border transition-colors ${myFamilyId === f.id ? `${accent.bannerBg} ${accent.border}` : 'bg-zinc-800/30 border-zinc-700/30 hover:border-zinc-600/50'}`}
       >
         <div>
           <span className="font-heading font-bold text-foreground text-xs">{f.name}</span>
-          <span className="text-primary text-[10px] ml-1">[{f.tag}]</span>
-          {myFamilyId === f.id && <span className="text-[9px] text-primary ml-1">(You)</span>}
+          <span className={`${accent.text} text-[10px] ml-1`}>[{f.tag}]</span>
+          {myFamilyId === f.id && <span className={`text-[9px] ${accent.text} ml-1`}>(You)</span>}
         </div>
         <div className="flex items-center gap-2 text-[10px]">
           <span className="text-mutedForeground">{f.member_count} 👥</span>
-          <span className="text-primary font-bold">{formatMoney(f.treasury)}</span>
+          <span className={`${accent.text} font-bold`}>{formatMoney(f.treasury)}</span>
           <ChevronRight size={12} className="text-mutedForeground" />
         </div>
       </Link>
     ))}
   </div>
-);
+  );
+};
 
 // ============================================================================
 // WAR HISTORY TAB
@@ -406,6 +420,7 @@ const WarHistoryTab = ({ wars }) => (
 
 const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcceptTruce }) => {
   if (!war) return null;
+  const accent = getRacketAccent();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
@@ -418,13 +433,13 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
         </div>
         <div className="p-3 space-y-3">
           {war.status === 'truce_offered' && (
-            <div className="text-[10px] text-primary bg-primary/10 border border-primary/30 rounded px-2 py-1">✋ Truce offered</div>
+            <div className={`text-[10px] rounded px-2 py-1 ${accent.bannerText} ${accent.bannerBg} border ${accent.border}`}>✋ Truce offered</div>
           )}
           
           {stats && (
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="p-2 bg-zinc-800/30 rounded-md border border-zinc-700/30">
-                <Shield size={14} className="mx-auto text-primary mb-1" />
+                <Shield size={14} className={`mx-auto mb-1 ${accent.bannerText}`} />
                 <div className="text-[9px] text-mutedForeground">BG Kills</div>
                 {stats.top_bodyguard_killers?.[0] && (
                   <div className="text-[10px] text-foreground font-bold truncate">{stats.top_bodyguard_killers[0].username}: {stats.top_bodyguard_killers[0].bodyguard_kills}</div>
@@ -453,7 +468,7 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                 <button onClick={onOfferTruce} className="flex-1 bg-zinc-700/50 text-foreground rounded px-2 py-1.5 text-[10px] font-bold uppercase border border-zinc-600/50">🤝 Offer Truce</button>
               )}
               {war.status === 'truce_offered' && war.truce_offered_by_family_id !== family?.id && (
-                <button onClick={onAcceptTruce} className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1.5 text-[10px] font-bold uppercase border border-yellow-600/50">✓ Accept Truce</button>
+                <button onClick={onAcceptTruce} className={`flex-1 rounded px-2 py-1.5 text-[10px] font-bold uppercase border ${accent.btn}`}>✓ Accept Truce</button>
               )}
             </div>
           )}
@@ -495,6 +510,7 @@ const CrewOCTab = ({
   const timeLeft = onCooldown ? formatTimeLeft(family.crew_oc_cooldown_until) : 'Ready';
   const pending = (crewOCApplications || []).filter((a) => a.status === 'pending');
   const accepted = (crewOCApplications || []).filter((a) => a.status === 'accepted');
+  const accent = getRacketAccent();
 
   return (
     <div className="space-y-3">
@@ -508,7 +524,7 @@ const CrewOCTab = ({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] text-mutedForeground font-heading">Join fee:</span>
             {(crewOCJoinFee ?? 0) > 0 && (
-              <span className="text-[10px] text-primary font-heading">Current: {formatMoney(crewOCJoinFee)}</span>
+              <span className={`text-[10px] font-heading ${accent.text}`}>Current: {formatMoney(crewOCJoinFee)}</span>
             )}
             {(crewOCJoinFee ?? 0) === 0 && <span className="text-[10px] text-mutedForeground font-heading">Current: Free</span>}
             <input
@@ -523,7 +539,7 @@ const CrewOCTab = ({
               type="button"
               onClick={onSetFee}
               disabled={setFeeLoading}
-              className="px-2 py-1 text-[10px] font-bold uppercase rounded border bg-primary/20 text-primary border-primary/50 hover:bg-primary/30 disabled:opacity-50"
+              className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${accent.btn} disabled:opacity-50`}
             >
               {setFeeLoading ? '...' : 'Set fee'}
             </button>
@@ -533,7 +549,7 @@ const CrewOCTab = ({
             {crewOCForumTopicId ? (
               <Link
                 to={`/forum/topic/${crewOCForumTopicId}`}
-                className="inline-flex items-center gap-1 text-xs font-heading text-primary hover:underline"
+                className={`inline-flex items-center gap-1 text-xs font-heading ${accent.text} hover:underline`}
               >
                 <MessageSquare size={12} /> View Crew OC topic
               </Link>
@@ -542,7 +558,7 @@ const CrewOCTab = ({
                 type="button"
                 onClick={onAdvertise}
                 disabled={advertiseLoading}
-                className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase rounded border bg-primary/20 text-primary border-primary/50 hover:bg-primary/30 disabled:opacity-50"
+                className={`inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase rounded border ${accent.btn} disabled:opacity-50`}
               >
                 <MessageSquare size={12} /> {advertiseLoading ? '...' : 'Advertise Crew OC'}
               </button>
@@ -565,7 +581,7 @@ const CrewOCTab = ({
           className={`w-full py-2.5 font-heading font-bold uppercase tracking-wider text-xs rounded-md border transition-all ${
             onCooldown || committing
               ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border-zinc-700'
-              : 'bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50 hover:opacity-90'
+              : `${accent.btn} hover:opacity-90`
           }`}
         >
           {committing ? 'Committing...' : onCooldown ? `Cooldown ${timeLeft}` : 'Commit Crew OC'}
@@ -577,7 +593,7 @@ const CrewOCTab = ({
       {/* Applications */}
       {(pending.length > 0 || accepted.length > 0) && (
         <div className="space-y-1.5">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+          <span className={`text-[10px] font-heading font-bold uppercase tracking-wider flex items-center gap-1 ${accent.bannerText}`}>
             <UserPlus size={12} /> Applications
           </span>
           {accepted.length > 0 && (
@@ -606,26 +622,28 @@ const CrewOCTab = ({
 // NO FAMILY VIEW
 // ============================================================================
 
-const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin }) => (
+const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin }) => {
+  const accent = getRacketAccent();
+  return (
   <div className="space-y-3">
     {/* Create */}
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🏛️ Create Family</span>
+    <div className={`${styles.panel} rounded-md overflow-hidden border ${accent.border}`}>
+      <div className={`px-3 py-2 border-b ${accent.bannerBg} ${accent.border}`}>
+        <span className={`text-xs font-heading font-bold uppercase tracking-widest ${accent.bannerText}`}>🏛️ Create Family</span>
       </div>
       <form onSubmit={onCreate} className="p-3 space-y-2">
         <div className="flex gap-2">
           <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Family name" maxLength={30} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
           <input type="text" value={createTag} onChange={(e) => setCreateTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="TAG" maxLength={4} className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground uppercase text-center focus:border-primary/50 focus:outline-none" />
         </div>
-        <button type="submit" className="w-full bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-3 py-2 text-xs font-heading font-bold uppercase border border-yellow-600/50">Create Family</button>
+        <button type="submit" className={`w-full rounded px-3 py-2 text-xs font-heading font-bold uppercase border ${accent.btn}`}>Create Family</button>
       </form>
     </div>
 
     {/* Join */}
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🤝 Join Family</span>
+    <div className={`${styles.panel} rounded-md overflow-hidden border ${accent.border}`}>
+      <div className={`px-3 py-2 border-b ${accent.bannerBg} ${accent.border}`}>
+        <span className={`text-xs font-heading font-bold uppercase tracking-widest ${accent.bannerText}`}>🤝 Join Family</span>
       </div>
       <form onSubmit={onJoin} className="p-3 flex gap-2">
         <select value={joinId} onChange={(e) => setJoinId(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none">
@@ -637,16 +655,17 @@ const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreat
     </div>
 
     {/* All Families */}
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📋 All Families</span>
+    <div className={`${styles.panel} rounded-md overflow-hidden border ${accent.border}`}>
+      <div className={`px-3 py-2 border-b ${accent.bannerBg} ${accent.border}`}>
+        <span className={`text-xs font-heading font-bold uppercase tracking-widest ${accent.bannerText}`}>📋 All Families</span>
       </div>
       <div className="p-2">
         <FamiliesTab families={families} myFamilyId={null} />
       </div>
     </div>
   </div>
-);
+  );
+};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -811,6 +830,11 @@ export default function FamilyPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
+  useEffect(() => {
+    const onThemeChange = () => setTick((t) => t + 1);
+    window.addEventListener('app:game-theme-changed', onThemeChange);
+    return () => window.removeEventListener('app:game-theme-changed', onThemeChange);
+  }, []);
   useEffect(() => { if (showWarModal && myFamily?.family) api.get('/families/war/stats').then((res) => setWarStats(res.data)).catch(() => {}); }, [showWarModal, myFamily?.family]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[60vh]"><div className="text-primary text-sm font-heading">Loading...</div></div>;

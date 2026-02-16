@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import { GAME_THEME_STORAGE_KEY, GAME_THEME_OPTIONS, DEFAULT_GAME_THEME } from '../constants';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import styles from '../styles/noir.module.css';
@@ -511,6 +512,13 @@ export default function Profile() {
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [changingPassword, setChangingPassword] = useState(false);
+  const [gameTheme, setGameTheme] = useState(() => {
+    try {
+      return localStorage.getItem(GAME_THEME_STORAGE_KEY) || DEFAULT_GAME_THEME;
+    } catch {
+      return DEFAULT_GAME_THEME;
+    }
+  });
 
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
@@ -569,8 +577,24 @@ export default function Profile() {
     }
   };
   useEffect(() => {
-    if (settingsOpen && isMe) fetchPrefs();
+    if (settingsOpen && isMe) {
+      fetchPrefs();
+      try {
+        setGameTheme(localStorage.getItem(GAME_THEME_STORAGE_KEY) || DEFAULT_GAME_THEME);
+      } catch (_) {}
+    }
   }, [settingsOpen, isMe]);
+
+  const setGameThemeAndSave = (value) => {
+    setGameTheme(value);
+    try {
+      localStorage.setItem(GAME_THEME_STORAGE_KEY, value);
+      window.dispatchEvent(new CustomEvent('app:game-theme-changed', { detail: value }));
+      toast.success('Game theme updated');
+    } catch (_) {
+      toast.error('Could not save theme');
+    }
+  };
 
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
@@ -841,6 +865,20 @@ export default function Profile() {
                     </div>
                   ))}
                 </div>
+              </div>
+              <div className="border-t border-border pt-4">
+                <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Game theme settings</h3>
+                <p className="text-xs text-mutedForeground mb-3">Colour for family rackets, treasury, and income UI.</p>
+                <select
+                  value={gameTheme}
+                  onChange={(e) => setGameThemeAndSave(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  data-testid="game-theme-select"
+                >
+                  {GAME_THEME_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
               </div>
               <div className="border-t border-border pt-4">
                 <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Change password</h3>
