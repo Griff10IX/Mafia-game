@@ -12,21 +12,29 @@ const QUICK_BUYS = [100, 500, 1000, 5000, 10000];
 /* ═══════════════════════════════════════════════════════
    Conveyor Belt — animated bullet casings rolling across
    ═══════════════════════════════════════════════════════ */
+function BulletCasing() {
+  return (
+    <div className="shrink-0 flex items-center" style={{ width: 32 }}>
+      <div className="w-2 h-4 rounded-t-full mx-auto" style={{ background: 'linear-gradient(135deg, #c9a84c, #8b6914, #d4af37)' }} />
+      <div className="w-2 h-3 -ml-2" style={{ background: 'linear-gradient(135deg, #b87333, #8b4513, #cd7f32)' }} />
+    </div>
+  );
+}
+
 function ConveyorBelt() {
+  const bulletCount = 40;
+  const setWidth = bulletCount * 32;
   return (
     <div className="relative w-full h-10 overflow-hidden rounded" style={{ background: 'linear-gradient(180deg, #2a2218 0%, #3d3225 40%, #2a2218 100%)' }}>
       {/* Belt rollers */}
-      <div className="absolute inset-x-0 top-0 h-[3px]" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
-      <div className="absolute inset-x-0 bottom-0 h-[3px]" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
+      <div className="absolute inset-x-0 top-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
+      <div className="absolute inset-x-0 bottom-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
       {/* Belt treads */}
-      <div className="absolute inset-0 animate-belt-scroll" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(0,0,0,0.3) 28px, rgba(0,0,0,0.3) 30px)', backgroundSize: '30px 100%' }} />
-      {/* Bullet casings */}
-      <div className="absolute inset-0 flex items-center animate-belt-scroll">
-        {Array.from({ length: 16 }).map((_, i) => (
-          <div key={i} className="shrink-0 mx-3 flex items-center">
-            <div className="w-2 h-4 rounded-t-full" style={{ background: 'linear-gradient(135deg, #c9a84c, #8b6914, #d4af37)' }} />
-            <div className="w-2 h-3 -ml-2" style={{ background: 'linear-gradient(135deg, #b87333, #8b4513, #cd7f32)' }} />
-          </div>
+      <div className="absolute inset-0 animate-belt-treads" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(0,0,0,0.3) 28px, rgba(0,0,0,0.3) 30px)', backgroundSize: '30px 100%' }} />
+      {/* Bullet casings — two identical sets for seamless looping */}
+      <div className="absolute top-0 left-0 h-full flex items-center animate-belt-bullets" style={{ width: setWidth * 2 }}>
+        {Array.from({ length: bulletCount * 2 }).map((_, i) => (
+          <BulletCasing key={i} />
         ))}
       </div>
     </div>
@@ -38,26 +46,35 @@ function ConveyorBelt() {
    ═══════════════════════════════════════════════════════ */
 function ProductionGauge({ production, maxProduction = 10000 }) {
   const pct = Math.min(production / maxProduction, 1);
-  const angle = pct * 240 - 120;
+  const startDeg = -120;
+  const sweepDeg = 240;
+  const needleDeg = startDeg + pct * sweepDeg;
+  const toXY = (deg, r) => ({
+    x: 50 + r * Math.sin(deg * Math.PI / 180),
+    y: 50 - r * Math.cos(deg * Math.PI / 180),
+  });
+  const arcStart = toXY(startDeg, 42);
+  const arcEnd = toXY(sweepDeg + startDeg, 42);
+  const arcPath = `M ${arcStart.x.toFixed(1)} ${arcStart.y.toFixed(1)} A 42 42 0 1 1 ${arcEnd.x.toFixed(1)} ${arcEnd.y.toFixed(1)}`;
+  const arcLen = 42 * sweepDeg * Math.PI / 180;
+  const needle = toXY(needleDeg, 30);
   return (
     <div className="relative w-24 h-24 sm:w-28 sm:h-28 mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full">
         {/* Gauge background arc */}
-        <path d="M 15 75 A 42 42 0 1 1 85 75" fill="none" stroke="#333" strokeWidth="6" strokeLinecap="round" />
+        <path d={arcPath} fill="none" stroke="#333" strokeWidth="6" strokeLinecap="round" />
         {/* Gauge fill arc */}
-        <path d="M 15 75 A 42 42 0 1 1 85 75" fill="none" stroke="url(#gauge-grad)" strokeWidth="6" strokeLinecap="round"
-          strokeDasharray={`${pct * 220} 999`} />
+        <path d={arcPath} fill="none" stroke="url(#gauge-grad)" strokeWidth="6" strokeLinecap="round"
+          strokeDasharray={`${pct * arcLen} ${arcLen}`} />
         {/* Tick marks */}
         {[...Array(9)].map((_, i) => {
-          const a = ((i / 8) * 240 - 120) * (Math.PI / 180);
-          const x1 = 50 + 38 * Math.cos(a), y1 = 50 + 38 * Math.sin(a);
-          const x2 = 50 + 42 * Math.cos(a), y2 = 50 + 42 * Math.sin(a);
-          return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#666" strokeWidth="1" />;
+          const deg = startDeg + (i / 8) * sweepDeg;
+          const t1 = toXY(deg, 37);
+          const t2 = toXY(deg, 43);
+          return <line key={i} x1={t1.x} y1={t1.y} x2={t2.x} y2={t2.y} stroke="#666" strokeWidth="1" />;
         })}
         {/* Needle */}
-        <line x1="50" y1="50"
-          x2={50 + 30 * Math.cos(angle * Math.PI / 180)}
-          y2={50 + 30 * Math.sin(angle * Math.PI / 180)}
+        <line x1="50" y1="50" x2={needle.x} y2={needle.y}
           stroke="#d4af37" strokeWidth="2" strokeLinecap="round"
           style={{ transition: 'all 1s ease-out' }}
         />
@@ -258,11 +275,16 @@ export default function BulletFactory({ me }) {
   return (
     <div className="space-y-4 relative" data-testid="bullet-factory-tab">
       <style>{`
-        @keyframes belt-scroll {
+        @keyframes belt-bullets {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-120px); }
+          100% { transform: translateX(-${40 * 32}px); }
         }
-        .animate-belt-scroll { animation: belt-scroll 2s linear infinite; }
+        @keyframes belt-treads {
+          0% { background-position-x: 0; }
+          100% { background-position-x: -30px; }
+        }
+        .animate-belt-bullets { animation: belt-bullets 12s linear infinite; }
+        .animate-belt-treads { animation: belt-treads 0.8s linear infinite; }
         @keyframes furnace-pulse {
           0%, 100% { opacity: 0.4; filter: blur(12px); }
           50% { opacity: 0.8; filter: blur(18px); }
