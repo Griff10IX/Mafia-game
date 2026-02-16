@@ -868,7 +868,7 @@ export default function Profile() {
               </div>
               <div className="border-t border-border pt-4">
                 <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Game theme settings</h3>
-                <p className="text-xs text-mutedForeground mb-3">Colour for family rackets, treasury, and income UI.</p>
+                <p className="text-xs text-mutedForeground mb-3">Accent colour applied to all pages (buttons, links, headers, rackets, treasury).</p>
                 <select
                   value={gameTheme}
                   onChange={(e) => setGameThemeAndSave(e.target.value)}

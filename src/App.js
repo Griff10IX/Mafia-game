@@ -46,6 +46,7 @@ import Objectives from "./pages/Objectives";
 import QuickTrade from "./pages/QuickTrade";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
+import { applyAppTheme } from "./constants";
 import "@/App.css";
 
 function App() {
@@ -53,11 +54,21 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    applyAppTheme();
+  }, []);
+
+  useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       setIsAuthenticated(true);
     }
     setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const onThemeChange = () => applyAppTheme();
+    window.addEventListener("app:game-theme-changed", onThemeChange);
+    return () => window.removeEventListener("app:game-theme-changed", onThemeChange);
   }, []);
 
   if (isLoading) {

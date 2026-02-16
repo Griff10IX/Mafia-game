@@ -1,23 +1,23 @@
 /* Noir 1920s–30s mafia theme – match reference: layered blacks, reflective gold */
 
-/* Palette: sidebar = true black; content = charcoal; cards = darker grey; gold accents; profit green */
+/* Palette: sidebar = true black; content = charcoal; cards = darker grey; accent from app theme (Profile → Game theme) */
 :root {
   --noir-bg: #000000;
   --noir-panel: #0d0d0d;
   --noir-content: #1a1a1a;
   --noir-surface: #282828;
   --noir-raised: #333333;
-  --noir-primary: #d4af37;
-  --noir-primary-bright: #e6c229;
-  --noir-primary-dark: #b8860b;
-  --noir-tab-bg: rgba(139, 107, 46, 0.5);
-  --noir-primary-foreground: #ffffff;
+  --noir-primary: var(--app-accent);
+  --noir-primary-bright: var(--app-accent-bright);
+  --noir-primary-dark: var(--app-accent-dark);
+  --noir-tab-bg: color-mix(in srgb, var(--app-accent) 50%, transparent);
+  --noir-primary-foreground: var(--app-accent-foreground);
   --noir-foreground: #f5f5f5;
   --noir-muted: #a1a1aa;
   --noir-profit: #5cb85c;
   --noir-border: #2d2d2d;
-  --noir-border-light: rgba(212, 175, 55, 0.2);
-  --noir-border-mid: rgba(212, 175, 55, 0.35);
+  --noir-border-light: color-mix(in srgb, var(--app-accent) 20%, transparent);
+  --noir-border-mid: color-mix(in srgb, var(--app-accent) 35%, transparent);
 }
 
 /* Page wrapper – main content area = charcoal (#1a1a1a) like reference */
@@ -42,7 +42,7 @@
 
 /* Card header strip */
 .panelHeader {
-  background: rgba(212, 175, 55, 0.08);
+  background: color-mix(in srgb, var(--app-accent) 8%, transparent);
   border-bottom: 1px solid var(--noir-border-light);
 }
 
@@ -159,7 +159,7 @@
 .input:focus {
   outline: none;
   border-color: var(--noir-primary);
-  box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.25);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent) 25%, transparent);
 }
 
 .input::placeholder {
@@ -170,7 +170,7 @@
 .btnPrimary {
   background: linear-gradient(to right, var(--noir-primary-bright), var(--noir-primary-dark));
   color: var(--noir-primary-foreground);
-  border: 1px solid rgba(212, 175, 55, 0.5);
+  border: 1px solid color-mix(in srgb, var(--app-accent) 50%, transparent);
   border-radius: 2px;
 }
 
@@ -182,7 +182,7 @@
 .btnGoldDarkText {
   background: linear-gradient(to bottom, var(--noir-primary-bright), var(--noir-primary-dark));
   color: #1a1a1a;
-  border: 1px solid rgba(212, 175, 55, 0.5);
+  border: 1px solid color-mix(in srgb, var(--app-accent) 50%, transparent);
   border-radius: 2px;
 }
 
@@ -194,7 +194,7 @@
 .tabActive {
   background: var(--noir-tab-bg);
   color: var(--noir-primary-bright);
-  border-color: rgba(212, 175, 55, 0.5);
+  border-color: color-mix(in srgb, var(--app-accent) 50%, transparent);
 }
 
 /* Profit / positive value – bright green like reference */
@@ -219,9 +219,9 @@
   --gm-card: #242424;
   --gm-card-hover: #2d2d2d;
   --gm-border: #333333;
-  --gm-gold: #d4af37;
-  --gm-gold-light: #e6c229;
-  --gm-gold-dim: rgba(212, 175, 55, 0.35);
+  --gm-gold: var(--app-accent);
+  --gm-gold-light: var(--app-accent-bright);
+  --gm-gold-dim: color-mix(in srgb, var(--app-accent) 35%, transparent);
   --gm-profit: #5cb85c;
   --gm-text: #f5f5f5;
   --gm-muted: #a1a1aa;

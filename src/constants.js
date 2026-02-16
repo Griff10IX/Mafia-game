@@ -1,10 +1,35 @@
 /**
- * Game theme (racket/income accent): level bar, income amount, Collect button, Treasury, Deposit, and all family UI.
- * Set via Profile → Settings → Game theme settings, or localStorage key below.
+ * App-wide theme: applies to all pages (primary/accent colour).
+ * Set via Profile → Settings → Game theme settings. Stored in localStorage.
  * Default theme: Gold. Options: 'gold' | 'emerald' | 'cyan' | 'amber' | 'violet' | 'rose'
  */
 export const GAME_THEME_STORAGE_KEY = 'game-theme';
 export const DEFAULT_GAME_THEME = 'gold';
+
+/** Hex palettes for CSS variables (--app-accent, --app-accent-foreground) so theme applies app-wide */
+export const APP_THEME_PALETTES = {
+  gold:    { accent: '#d4af37', accentForeground: '#ffffff', accentBright: '#e6c229', accentDark: '#b8860b' },
+  emerald: { accent: '#10b981', accentForeground: '#ffffff', accentBright: '#34d399', accentDark: '#059669' },
+  cyan:    { accent: '#06b6d4', accentForeground: '#ffffff', accentBright: '#22d3ee', accentDark: '#0891b2' },
+  amber:   { accent: '#f59e0b', accentForeground: '#ffffff', accentBright: '#fbbf24', accentDark: '#d97706' },
+  violet:  { accent: '#8b5cf6', accentForeground: '#ffffff', accentBright: '#a78bfa', accentDark: '#7c3aed' },
+  rose:    { accent: '#f43f5e', accentForeground: '#ffffff', accentBright: '#fb7185', accentDark: '#e11d48' },
+};
+
+/** Apply the selected theme to the document so all pages (noir CSS, Tailwind primary) use it. Call on mount and when theme changes. */
+export const applyAppTheme = () => {
+  if (typeof document === 'undefined') return;
+  try {
+    const saved = localStorage.getItem(GAME_THEME_STORAGE_KEY);
+    const key = saved && APP_THEME_PALETTES[saved] ? saved : DEFAULT_GAME_THEME;
+    const p = APP_THEME_PALETTES[key];
+    const root = document.documentElement;
+    root.style.setProperty('--app-accent', p.accent);
+    root.style.setProperty('--app-accent-foreground', p.accentForeground);
+    root.style.setProperty('--app-accent-bright', p.accentBright);
+    root.style.setProperty('--app-accent-dark', p.accentDark);
+  } catch (_) {}
+};
 export const RACKET_ACCENT_STYLES = {
   gold:    { bar: 'bg-primary', text: 'text-primary', btn: 'bg-primary text-primaryForeground hover:bg-primary/90 border-primary/50', bannerBg: 'bg-primary/10', bannerText: 'text-primary', border: 'border-primary/30', tabActive: 'text-primary border-primary bg-primary/5' },
   emerald: { bar: 'bg-emerald-500', text: 'text-emerald-400', btn: 'bg-emerald-600 text-white hover:bg-emerald-500 border-emerald-500/50', bannerBg: 'bg-emerald-500/10', bannerText: 'text-emerald-400', border: 'border-emerald-500/30', tabActive: 'text-emerald-400 border-emerald-500 bg-emerald-500/10' },
