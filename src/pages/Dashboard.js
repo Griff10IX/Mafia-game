@@ -24,17 +24,17 @@ import styles from '../styles/noir.module.css';
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex items-center justify-center min-h-[40vh]">
+    <div className="text-primary text-sm font-heading font-bold">Loading...</div>
   </div>
 );
 
 const PageHeader = ({ username, rankName, currentState }) => (
   <div>
-    <h1 className="text-2xl sm:text-4xl md:text-5xl font-heading font-bold text-primary mb-1 md:mb-2" data-testid="dashboard-title">
+    <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-primary mb-0.5 md:mb-1" data-testid="dashboard-title">
       Welcome, {username}
     </h1>
-    <p className="text-sm text-mutedForeground">
+    <p className="text-xs text-mutedForeground">
       {rankName ?? '—'} · {currentState ?? '—'}
     </p>
   </div>
@@ -51,31 +51,30 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-        <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+      <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+        <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
           Rank Progress
         </h2>
         {!hasPremiumBar && (
           <Link 
             to="/store" 
-            className="text-xs font-heading font-bold text-primary hover:text-primary/80 transition-colors"
+            className="text-[10px] font-heading font-bold text-primary hover:text-primary/80 transition-colors"
           >
             Premium bar →
           </Link>
         )}
       </div>
-      <div className="p-4 space-y-3">
+      <div className="p-3 space-y-2">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-heading text-foreground">
+          <p className="text-xs font-heading text-foreground">
             {rankProgress.current_rank_name}
             {rankProgress.next_rank && (
               <span className="text-mutedForeground"> → {rankProgress.next_rank_name}</span>
             )}
           </p>
         </div>
-        
-        <div className="space-y-2">
-          <div className="flex justify-between text-xs font-heading">
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-[10px] font-heading">
             <span className="text-mutedForeground">Rank Points</span>
             <span className="font-bold text-primary tabular-nums">
               {(rankProgress.rank_points_current || 0).toLocaleString()}
@@ -86,20 +85,18 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
               )}
             </span>
           </div>
-          
-<div className="relative w-full h-3 bg-secondary rounded-full overflow-hidden border border-primary/20">
-              <div
+          <div className="relative w-full h-2.5 bg-secondary rounded-full overflow-hidden border border-primary/20">
+            <div
               className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%`, minWidth: progressPct > 0 ? '8px' : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }}
+              style={{ width: `${progressPct}%`, minWidth: progressPct > 0 ? '6px' : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }}
               role="progressbar"
               aria-valuenow={progressPct}
               aria-valuemin={0}
               aria-valuemax={100}
             />
           </div>
-          
           {hasPremiumBar && rankProgress.rank_points_needed > 0 && (
-            <p className="text-xs font-heading text-mutedForeground text-right">
+            <p className="text-[10px] font-heading text-mutedForeground text-right">
               {rankProgress.rank_points_needed.toLocaleString()} RP to next rank
             </p>
           )}
@@ -114,39 +111,39 @@ const StatCard = ({ stat }) => {
   
   return (
     <div
-      className={`${styles.panel} border border-border rounded-md p-4 flex items-start gap-3 hover:border-primary/30 transition-all`}
+      className={`${styles.panel} border border-border rounded-md p-2.5 flex items-start gap-2 hover:border-primary/30 transition-all`}
       data-testid={stat.testId}
     >
-      <div className="p-2 rounded-md bg-primary/20 border border-primary/30 shrink-0">
-        <Icon className="text-primary" size={20} />
+      <div className="p-1.5 rounded bg-primary/20 border border-primary/30 shrink-0">
+        <Icon className="text-primary" size={16} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs text-mutedForeground uppercase tracking-wider mb-1">
+        <p className="text-[10px] text-mutedForeground uppercase tracking-wider mb-0.5">
           {stat.label}
         </p>
         {stat.tooltip ? (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <p className="text-base md:text-lg font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2">
+                <p className="text-sm font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2">
                   {stat.value}
                 </p>
               </TooltipTrigger>
               <TooltipContent 
                 side="top" 
-                className={`${styles.panel} text-foreground border-primary/30 rounded-md px-3 py-2 text-sm font-heading`}
+                className={`${styles.panel} text-foreground border-primary/30 rounded-md px-3 py-2 text-xs font-heading`}
               >
                 {stat.tooltip}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         ) : (
-          <p className="text-base md:text-lg font-heading font-bold text-foreground truncate">
+          <p className="text-sm font-heading font-bold text-foreground truncate">
             {stat.value}
           </p>
         )}
         {stat.sub && (
-          <p className="text-xs text-mutedForeground mt-0.5">{stat.sub}</p>
+          <p className="text-[10px] text-mutedForeground mt-0.5">{stat.sub}</p>
         )}
       </div>
     </div>
@@ -160,22 +157,22 @@ const QuickActionCard = ({ action }) => {
     <Link
       to={action.to}
       data-testid={`quick-action-${action.id}`}
-      className={`group ${styles.panel} border border-border rounded-md p-4 flex items-center gap-3 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 transition-all touch-manipulation`}
+      className={`group ${styles.panel} border border-border rounded-md p-2.5 flex items-center gap-2 hover:border-primary/50 hover:shadow-md hover:shadow-primary/10 transition-all touch-manipulation`}
     >
-      <div className="p-2 rounded-md bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0 transition-colors">
-        <Icon className="text-primary" size={20} />
+      <div className="p-1.5 rounded bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0 transition-colors">
+        <Icon className="text-primary" size={16} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-sm md:text-base font-heading font-bold text-foreground group-hover:text-primary transition-colors">
+        <p className="text-xs font-heading font-bold text-foreground group-hover:text-primary transition-colors">
           {action.title}
         </p>
-        <p className="text-xs text-mutedForeground truncate mt-0.5">
+        <p className="text-[10px] text-mutedForeground truncate mt-0.5">
           {action.desc}
         </p>
       </div>
       <ChevronRight 
         className="text-mutedForeground group-hover:text-primary shrink-0 transition-colors" 
-        size={18} 
+        size={14} 
       />
     </Link>
   );
@@ -183,26 +180,26 @@ const QuickActionCard = ({ action }) => {
 
 const GameSystemsCard = () => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
-      <Zap size={16} className="text-primary" />
-      <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+    <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+      <Zap size={14} className="text-primary" />
+      <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
         Game Systems
       </span>
     </div>
-    <div className="p-4 grid sm:grid-cols-2 gap-4">
+    <div className="p-3 grid sm:grid-cols-2 gap-3">
       <div>
-        <p className="font-bold text-primary text-sm mb-2 flex items-center gap-2">
+        <p className="font-bold text-primary text-xs mb-1 flex items-center gap-1.5">
           <span className="text-primary">▸</span> Ranks
         </p>
-        <p className="text-mutedForeground text-xs leading-relaxed">
+        <p className="text-mutedForeground text-[10px] leading-snug">
           Rise from Street Thug to The Commission. Each rank unlocks crimes, weapons, and opportunities.
         </p>
       </div>
       <div>
-        <p className="font-bold text-primary text-sm mb-2 flex items-center gap-2">
+        <p className="font-bold text-primary text-xs mb-1 flex items-center gap-1.5">
           <span className="text-primary">▸</span> Bodyguards
         </p>
-        <p className="text-mutedForeground text-xs leading-relaxed">
+        <p className="text-mutedForeground text-[10px] leading-snug">
           Hire up to 4 bodyguards (points). Human or robot guards protect you from attacks.
         </p>
       </div>
@@ -302,7 +299,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="dashboard-page">
+    <div className={`space-y-3 md:space-y-4 ${styles.pageContent}`} data-testid="dashboard-page">
       <PageHeader 
         username={user?.username} 
         rankName={user?.rank_name} 
@@ -318,13 +315,13 @@ export default function Dashboard() {
 
       {/* Stats grid */}
       <section>
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        <div className="flex items-center gap-2 mb-2">
+          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
             At a Glance
           </h2>
           <div className="flex-1 h-px opacity-30" style={{ backgroundColor: 'var(--noir-accent-line)' }} />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
           {stats.map((stat) => (
             <StatCard key={stat.id} stat={stat} />
           ))}
@@ -333,13 +330,13 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       <section>
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        <div className="flex items-center gap-2 mb-2">
+          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
             Quick Actions
           </h2>
           <div className="flex-1 h-px opacity-30" style={{ backgroundColor: 'var(--noir-accent-line)' }} />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
           {quickActions.map((action) => (
             <QuickActionCard key={action.id} action={action} />
           ))}
