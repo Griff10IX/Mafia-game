@@ -538,7 +538,7 @@ async def melt_cars(
     now = datetime.now(timezone.utc)
 
     if request.action == "bullets":
-        # Only 1 car per 45s for bullets; check cooldown first
+        # Bullets: up to garage_batch_limit cars per request; then 45s cooldown per car melted
         user_doc = await db.users.find_one(
             {"id": current_user["id"]},
             {"_id": 0, "melt_bullets_cooldown_until": 1},
@@ -548,10 +548,15 @@ async def melt_cars(
             secs = int((cooldown_until - now).total_seconds())
             raise HTTPException(
                 status_code=400,
-                detail=f"You can only melt 1 car for bullets every {MELT_BULLETS_COOLDOWN_SECONDS}s. Next melt in {secs}s.",
+                detail=f"Melt for bullets on cooldown. Next melt in {secs}s.",
             )
-        # Process only the first eligible car for bullets
-        limit = 1
+        batch_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
+        if len(request.car_ids) > batch_limit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You can only melt up to {batch_limit} cars at a time. Upgrade your limit in the Store.",
+            )
+        limit = min(batch_limit, len(request.car_ids))
     else:
         # Scrap (cash): no cooldown, batch limit applies
         limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
@@ -611,7 +616,8 @@ async def melt_cars(
                 processed += 1
     if deleted_count > 0:
         if request.action == "bullets":
-            cooldown_until = now + timedelta(seconds=MELT_BULLETS_COOLDOWN_SECONDS)
+            cooldown_seconds = MELT_BULLETS_COOLDOWN_SECONDS * deleted_count
+            cooldown_until = now + timedelta(seconds=cooldown_seconds)
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$inc": {"bullets": total_bullets}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
@@ -620,7 +626,7 @@ async def melt_cars(
                 "success": True,
                 "melted_count": deleted_count,
                 "total_bullets": total_bullets,
-                "message": f"Melted {deleted_count} car(s) for {total_bullets} bullets. Next melt in {MELT_BULLETS_COOLDOWN_SECONDS}s.",
+                "message": f"Melted {deleted_count} car(s) for {total_bullets} bullets. Next melt in {cooldown_seconds}s.",
                 "melt_bullets_cooldown_until": cooldown_until.isoformat(),
             }
         await db.users.update_one(
