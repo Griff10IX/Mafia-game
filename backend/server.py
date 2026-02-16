@@ -576,30 +576,6 @@ class BlackjackStartRequest(BaseModel):
         return int(v)
 
 
-class CrimeResponse(BaseModel):
-    id: str
-    name: str
-    description: str
-    min_rank: int
-    min_rank_name: Optional[str] = None  # rank name required to unlock (e.g. "Hustler")
-    reward_min: int
-    reward_max: int
-    cooldown_minutes: float
-    crime_type: str
-    can_commit: bool
-    next_available: Optional[str]
-    attempts: int = 0
-    successes: int = 0
-    progress: int = 10  # 10-92, success rate % (bar can drop max 15% on fail)
-    unlocked: bool = True  # rank requirement met (progress bar only shown when unlocked)
-
-class CommitCrimeResponse(BaseModel):
-    success: bool
-    message: str
-    reward: Optional[int]
-    next_available: str
-    progress_after: Optional[int] = None  # new progress % after commit (for bar)
-
 class WeaponResponse(BaseModel):
     id: str
     name: str
@@ -10610,23 +10586,10 @@ async def init_game_data():
     Initialize game data on server startup.
     NOTE: Be VERY careful with delete operations in this function as it runs on EVERY server restart!
     """
-    # Update crimes with new cooldowns (seconds instead of minutes for faster gameplay)
-    # SAFETY: Only updating crimes collection (game config), not user data
-    logging.info("🔄 Initializing game data (crimes, weapons)...")
-    await db.crimes.delete_many({})
-    # ECONOMY REBALANCE: Reduced payouts by ~70% to prevent inflation on fresh DB
-    crimes = [
-        {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 20, "reward_max": 60, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
-        {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 40, "reward_max": 120, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
-        {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 3, "reward_min": 200, "reward_max": 500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
-        {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 4, "reward_min": 800, "reward_max": 1800, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
-        {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 5, "reward_min": 2000, "reward_max": 4500, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
-        {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 6, "reward_min": 4000, "reward_max": 9000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
-        {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 8, "reward_min": 18000, "reward_max": 50000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
-        {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 10, "reward_min": 70000, "reward_max": 180000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
-    ]
-    await db.crimes.insert_many(crimes)
-    
+    from routers import crimes as crimes_router
+    await crimes_router.init_crimes_data(db)
+
+    logging.info("🔄 Initializing game data (weapons, properties...)...")
     weapons_count = await db.weapons.count_documents({})
     if weapons_count == 0:
         weapons = [

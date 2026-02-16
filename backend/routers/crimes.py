@@ -1,6 +1,7 @@
 # Crime endpoints: list crimes, commit crime
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timezone, timedelta
+from pydantic import BaseModel
 import random
 import os
 import sys
@@ -73,6 +74,65 @@ def _parse_iso_datetime(val):
     return datetime.fromisoformat(s)
 
 
+# ---------------------------------------------------------------------------
+# Request/Response models
+# ---------------------------------------------------------------------------
+
+class CrimeResponse(BaseModel):
+    id: str
+    name: str
+    description: str
+    min_rank: int
+    min_rank_name: Optional[str] = None
+    reward_min: int
+    reward_max: int
+    cooldown_minutes: float
+    crime_type: str
+    can_commit: bool
+    next_available: Optional[str]
+    attempts: int = 0
+    successes: int = 0
+    progress: int = 10
+    unlocked: bool = True
+
+
+class CommitCrimeResponse(BaseModel):
+    success: bool
+    message: str
+    reward: Optional[int]
+    next_available: str
+    progress_after: Optional[int] = None
+
+
+# ---------------------------------------------------------------------------
+# Game data init (called from server on startup)
+# ---------------------------------------------------------------------------
+
+CRIMES_SEED = [
+    {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 20, "reward_max": 60, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
+    {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 40, "reward_max": 120, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
+    {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 3, "reward_min": 200, "reward_max": 500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
+    {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 4, "reward_min": 800, "reward_max": 1800, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
+    {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 5, "reward_min": 2000, "reward_max": 4500, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
+    {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 6, "reward_min": 4000, "reward_max": 9000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
+    {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 8, "reward_min": 18000, "reward_max": 50000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
+    {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 10, "reward_min": 70000, "reward_max": 180000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"},
+]
+
+
+# In-memory cache for crime definitions (static until server restart / init). Cleared when init_crimes_data runs.
+_crimes_cache: Optional[List[dict]] = None
+
+
+async def init_crimes_data(db_instance):
+    """Initialize crimes collection on server startup. SAFETY: Only updates crimes collection (game config), not user data."""
+    global _crimes_cache
+    _crimes_cache = None  # invalidate cache so next request gets fresh data
+    logger.info("🔄 Initializing crimes data...")
+    await db_instance.crimes.delete_many({})
+    await db_instance.crimes.insert_many(CRIMES_SEED)
+
+
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
@@ -85,20 +145,23 @@ from server import (
     maybe_process_rank_up,
     update_objectives_progress,
     RANKS,
-    CrimeResponse,
-    CommitCrimeResponse,
 )
 
 
 async def get_crimes(current_user: dict = Depends(get_current_user)):
-    crimes = await db.crimes.find({}, {"_id": 0}).to_list(100)
+    global _crimes_cache
+    if _crimes_cache is None:
+        _crimes_cache = await db.crimes.find({}, {"_id": 0}).to_list(100)
+    crimes = _crimes_cache
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
+    user_crimes_list = await db.user_crimes.find(
+        {"user_id": current_user["id"], "crime_id": {"$in": [c["id"] for c in crimes]}},
+        {"_id": 0, "crime_id": 1, "cooldown_until": 1, "attempts": 1, "successes": 1, "progress": 1, "progress_max": 1},
+    ).to_list(len(crimes))
+    user_crime_by_id = {uc["crime_id"]: uc for uc in user_crimes_list}
     result = []
     for crime in crimes:
-        user_crime = await db.user_crimes.find_one(
-            {"user_id": current_user["id"], "crime_id": crime["id"]},
-            {"_id": 0},
-        )
+        user_crime = user_crime_by_id.get(crime["id"])
         can_commit = crime["min_rank"] <= user_rank
         next_available = None
         if user_crime and "cooldown_until" in user_crime:
@@ -151,8 +214,20 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
         raise HTTPException(status_code=500, detail=f"Server error: {e!s}")
 
 
+def _get_crime_by_id(crime_id: str):
+    """Return crime doc from cache if available, else None (caller may fall back to DB)."""
+    if _crimes_cache is None:
+        return None
+    for c in _crimes_cache:
+        if c.get("id") == crime_id:
+            return c
+    return None
+
+
 async def _commit_crime_impl(crime_id: str, current_user: dict):
-    crime = await db.crimes.find_one({"id": crime_id}, {"_id": 0})
+    crime = _get_crime_by_id(crime_id)
+    if not crime:
+        crime = await db.crimes.find_one({"id": crime_id}, {"_id": 0})
     if not crime:
         raise HTTPException(status_code=404, detail="Crime not found")
     if current_user.get("in_jail"):
