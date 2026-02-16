@@ -92,6 +92,29 @@ async def flush_telegram_alerts():
         logger.exception(f"Failed to send Telegram alert: {e}")
 
 
+async def send_telegram_to_chat(chat_id: str, message: str) -> bool:
+    """Send a message to a specific Telegram chat (e.g. for Auto Rank results). Uses same bot as security alerts."""
+    if not TELEGRAM_BOT_TOKEN or not (chat_id or "").strip():
+        return False
+    if not HTTPX_AVAILABLE:
+        logger.warning("httpx not installed - cannot send Telegram to user")
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            await client.post(
+                "https://api.telegram.org/bot{}/sendMessage".format(TELEGRAM_BOT_TOKEN),
+                json={
+                    "chat_id": chat_id.strip(),
+                    "text": message[:4000],
+                    "parse_mode": "Markdown",
+                },
+            )
+        return True
+    except Exception as e:
+        logger.exception("Failed to send Telegram to chat %s: %s", chat_id, e)
+        return False
+
+
 async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, reason: str, details: Dict = None):
     """Flag a user for suspicious activity. Stores in db.security_flags."""
     try:

@@ -25,6 +25,7 @@ from routers.booze_run import (
 SILENCER_COST_POINTS = 150
 OC_TIMER_COST_POINTS = 300
 CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
+AUTO_RANK_COST_POINTS = 200  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
 BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
 CUSTOM_CAR_COST = 500
 
@@ -128,6 +129,72 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
     return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
 
 
+async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
+    """Purchase Auto Rank: crimes and GTAs are committed automatically; results sent to your Telegram."""
+    if current_user.get("auto_rank_enabled", False):
+        raise HTTPException(status_code=400, detail="You already have Auto Rank")
+    if (current_user.get("points") or 0) < AUTO_RANK_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {AUTO_RANK_COST_POINTS})")
+    chat_id = (current_user.get("telegram_chat_id") or "").strip()
+    if not chat_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Set your Telegram Chat ID first (Profile / Telegram). Get it from @userinfobot on Telegram.",
+        )
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_enabled": True}}
+    )
+    return {
+        "message": "Auto Rank purchased! Crimes and GTAs will run automatically; results go to your Telegram.",
+        "cost": AUTO_RANK_COST_POINTS,
+    }
+
+
+async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
+    """Purchase Auto Rank: crimes and GTAs are committed automatically; results sent to your Telegram chat."""
+    if current_user.get("auto_rank_enabled", False):
+        raise HTTPException(status_code=400, detail="You already have Auto Rank")
+    if (current_user.get("points") or 0) < AUTO_RANK_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {AUTO_RANK_COST_POINTS}). Set your Telegram chat ID in Profile first so you can receive results.")
+    telegram_chat_id = (current_user.get("telegram_chat_id") or "").strip()
+    if not telegram_chat_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Set your Telegram chat ID in Profile before buying Auto Rank (get it from @userinfobot on Telegram). Cost: {AUTO_RANK_COST_POINTS} points.",
+        )
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_enabled": True}}
+    )
+    return {
+        "message": "Auto Rank purchased! Crimes and GTAs will run automatically; results will be sent to your Telegram.",
+        "cost": AUTO_RANK_COST_POINTS,
+    }
+
+
+async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
+    """Purchase Auto Rank: crimes and GTAs are committed automatically; results sent to your Telegram chat."""
+    if current_user.get("auto_rank_enabled", False):
+        raise HTTPException(status_code=400, detail="You already have Auto Rank")
+    if (current_user.get("points") or 0) < AUTO_RANK_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {AUTO_RANK_COST_POINTS}). Set your Telegram chat ID in Profile first so you can receive results.")
+    telegram_chat_id = (current_user.get("telegram_chat_id") or "").strip()
+    if not telegram_chat_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Set your Telegram chat ID in Profile before buying Auto Rank (get it from @userinfobot on Telegram). Cost: {AUTO_RANK_COST_POINTS} points.",
+        )
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_enabled": True}}
+    )
+    return {
+        "message": "Auto Rank purchased! Crimes and GTAs will run automatically; results will be sent to your Telegram.",
+        "cost": AUTO_RANK_COST_POINTS,
+    }
+
+
 async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
     if current_user["points"] < CUSTOM_CAR_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -160,6 +227,7 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
 
 def register(router):
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
+    router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
     router.add_api_route("/store/buy-silencer", buy_silencer, methods=["POST"])
     router.add_api_route("/store/buy-oc-timer", buy_oc_timer, methods=["POST"])
     router.add_api_route("/store/buy-crew-oc-timer", buy_crew_oc_timer, methods=["POST"])

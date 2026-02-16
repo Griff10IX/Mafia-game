@@ -1050,6 +1050,9 @@ async def startup_db():
             except Exception as e:
                 logging.exception("Entertainer auto-create: %s", e)
     asyncio.create_task(entertainer_auto_create_cycle())
+    # Auto Rank: auto-commit crimes + GTA for users who bought it; send results to Telegram
+    from routers import auto_rank
+    asyncio.create_task(auto_rank.run_auto_rank_loop())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

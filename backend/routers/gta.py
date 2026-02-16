@@ -178,30 +178,11 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
     return result
 
 
-async def attempt_gta(
-    request: GTAAttemptRequest, current_user: dict = Depends(get_current_user)
-):
-    if current_user.get("in_jail"):
-        jail_time = datetime.fromisoformat(current_user["jail_until"])
-        if jail_time > datetime.now(timezone.utc):
-            raise HTTPException(status_code=400, detail="You are in jail!")
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"in_jail": False, "jail_until": None}},
-        )
-    option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
+async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptResponse:
+    """Run one GTA attempt. Caller must ensure option exists, user rank OK, and cooldown passed. Used by route and auto_rank."""
+    option = next((o for o in GTA_OPTIONS if o["id"] == option_id), None)
     if not option:
-        raise HTTPException(status_code=404, detail="Invalid GTA option")
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    if rank_id < option["min_rank"]:
-        rank_name = next(
-            (r["name"] for r in RANKS if r["id"] == option["min_rank"]),
-            f"Rank {option['min_rank']}",
-        )
-        raise HTTPException(
-            status_code=403,
-            detail=f"Requires {rank_name} (rank {option['min_rank']})",
-        )
+        raise ValueError(f"Invalid GTA option: {option_id}")
     now = datetime.now(timezone.utc)
     cooldown_doc = await db.gta_cooldowns.find_one(
         {"user_id": current_user["id"]},
@@ -351,6 +332,45 @@ async def attempt_gta(
         rank_points_earned=0,
         progress_after=progress_after,
     )
+
+
+async def attempt_gta(
+    request: GTAAttemptRequest, current_user: dict = Depends(get_current_user)
+):
+    if current_user.get("in_jail"):
+        jail_time = datetime.fromisoformat(current_user["jail_until"])
+        if jail_time > datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="You are in jail!")
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"in_jail": False, "jail_until": None}},
+        )
+    option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
+    if not option:
+        raise HTTPException(status_code=404, detail="Invalid GTA option")
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    if rank_id < option["min_rank"]:
+        rank_name = next(
+            (r["name"] for r in RANKS if r["id"] == option["min_rank"]),
+            f"Rank {option['min_rank']}",
+        )
+        raise HTTPException(
+            status_code=403,
+            detail=f"Requires {rank_name} (rank {option['min_rank']})",
+        )
+    now = datetime.now(timezone.utc)
+    cooldown_doc = await db.gta_cooldowns.find_one(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "cooldown_until": 1},
+    )
+    if cooldown_doc:
+        until = datetime.fromisoformat(cooldown_doc["cooldown_until"])
+        if until > now:
+            secs = int((until - now).total_seconds())
+            raise HTTPException(
+                status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+            )
+    return await _attempt_gta_impl(request.option_id, current_user)
 
 
 async def get_garage(current_user: dict = Depends(get_current_user)):

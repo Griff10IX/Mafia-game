@@ -1,7 +1,8 @@
-# Profile: user profile view, avatar, theme, change-password
+# Profile: user profile view, avatar, theme, change-password, telegram (for Auto Rank)
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
-from fastapi import Depends, HTTPException
+from fastapi import Body, Depends, HTTPException
 
 
 def register(router):
@@ -213,3 +214,21 @@ def register(router):
             {"$set": {"password_hash": get_password_hash(request.new_password)}}
         )
         return {"message": "Password changed successfully"}
+
+    @router.get("/profile/telegram")
+    async def get_profile_telegram(current_user: dict = Depends(get_current_user)):
+        """Get Telegram chat ID (for Auto Rank results). Set via PATCH; get your chat_id from @userinfobot on Telegram."""
+        return {"telegram_chat_id": current_user.get("telegram_chat_id")}
+
+    @router.patch("/profile/telegram")
+    async def update_profile_telegram(
+        current_user: dict = Depends(get_current_user),
+        telegram_chat_id: Optional[str] = Body(None, embed=True),
+    ):
+        """Set or clear Telegram chat ID. Use your chat_id from @userinfobot so Auto Rank can send results. Send null/empty to clear."""
+        value = (telegram_chat_id or "").strip() or None
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"telegram_chat_id": value}}
+        )
+        return {"message": "Telegram chat ID updated" if value else "Telegram chat ID cleared", "telegram_chat_id": value}
