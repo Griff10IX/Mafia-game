@@ -45,7 +45,7 @@ export default function GifPicker({ onSelect, onClose, className = '' }) {
   }, [debouncedQuery, search]);
 
   return (
-    <div className={`rounded-md border border-primary/20 bg-card overflow-hidden ${className}`}>
+    <div className={`rounded-md border border-primary/20 ${styles.panel} overflow-hidden ${className}`}>
       <div className="p-2 border-b border-primary/20 flex items-center gap-2">
         <input
           type="text"
