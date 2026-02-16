@@ -235,6 +235,18 @@ async def get_attack_status(current_user: dict = Depends(get_current_user)):
     )
     if not attack:
         raise HTTPException(status_code=404, detail="No active attack")
+    # If target is dead or is a bodyguard who was killed (e.g. by someone else), remove this search and return 404
+    if attack.get("target_id"):
+        target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "is_dead": 1, "is_bodyguard": 1})
+        if target_user:
+            if target_user.get("is_dead"):
+                await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                raise HTTPException(status_code=404, detail="No active attack")
+            if target_user.get("is_bodyguard"):
+                still_bg = await db.bodyguards.find_one({"bodyguard_user_id": attack["target_id"]}, {"_id": 1})
+                if not still_bg:
+                    await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                    raise HTTPException(status_code=404, detail="No active attack")
     now = datetime.now(timezone.utc)
     found_time = datetime.fromisoformat(attack["found_at"])
     if attack["status"] == "searching" and now >= found_time:
@@ -272,6 +284,19 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     ).sort("search_started", -1).to_list(50)
     items = []
     for attack in attacks:
+        # Remove searches for dead targets (players or bodyguards; e.g. someone else killed them)
+        if attack.get("target_id"):
+            target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "is_dead": 1, "is_bodyguard": 1})
+            if target_user:
+                if target_user.get("is_dead"):
+                    await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                    continue
+                # Bodyguard no longer in bodyguards collection (killed, record deleted)
+                if target_user.get("is_bodyguard"):
+                    still_bg = await db.bodyguards.find_one({"bodyguard_user_id": attack["target_id"]}, {"_id": 1})
+                    if not still_bg:
+                        await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
+                        continue
         if not attack.get("expires_at"):
             started_iso = attack.get("search_started") or attack.get("found_at")
             try:
@@ -503,7 +528,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     pass
                 now_iso = datetime.now(timezone.utc).isoformat()
                 await db.users.update_one({"id": victim_id}, {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0}, "$inc": {"total_deaths": 1}})
-                await db.attacks.delete_many({"attacker_id": killer_id, "target_id": victim_id})
+                await db.attacks.delete_many({"target_id": victim_id})
                 reward_parts = []
                 if inc.get("money"): reward_parts.append(f"${inc['money']:,} cash")
                 if inc.get("points"): reward_parts.append(f"{inc['points']} pts")
@@ -625,7 +650,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 })
             except Exception:
                 pass
-        await db.attacks.delete_many({"attacker_id": killer_id, "target_id": victim_id})
+        await db.attacks.delete_many({"target_id": victim_id})
         await send_notification(killer_id, "Kill", success_message, "attack", category="attacks")
         max_statements = max(0, min(6, 7 - (best_damage // 20)))
         if current_user.get("has_silencer"):
