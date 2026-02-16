@@ -520,7 +520,7 @@ const HistoryCard = ({ history }) => (
   </div>
 );
 
-const InfoCard = ({ rotationHours, dailyEstimateRough }) => (
+const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
     <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
       <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
@@ -531,7 +531,7 @@ const InfoCard = ({ rotationHours, dailyEstimateRough }) => (
       <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
         <li className="flex items-start gap-1.5">
           <span className="text-primary shrink-0">•</span>
-          <span>Prices rotate every <strong className="text-foreground">{rotationHours ?? 3}h</strong></span>
+          <span>Prices rotate every <strong className="text-foreground">{rotationSeconds != null && rotationSeconds > 0 ? `${rotationSeconds}s` : `${rotationHours ?? 3}h`}</strong></span>
         </li>
         <li className="flex items-start gap-1.5">
           <span className="text-primary shrink-0">•</span>
@@ -764,7 +764,7 @@ export default function BoozeRun() {
 
       <HistoryCard history={historyList} />
 
-      <InfoCard rotationHours={config.rotation_hours} dailyEstimateRough={config.daily_estimate_rough} />
+      <InfoCard rotationHours={config.rotation_hours} rotationSeconds={config.rotation_seconds} dailyEstimateRough={config.daily_estimate_rough} />
     </div>
   );
 }

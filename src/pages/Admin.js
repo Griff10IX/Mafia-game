@@ -23,6 +23,7 @@ export default function Admin() {
   const [npcData, setNpcData] = useState({ npcs: [], npcs_enabled: false, npc_count: 0 });
   const [npcCount, setNpcCount] = useState(10);
   const [forceOnlineInfo, setForceOnlineInfo] = useState(null);
+  const [boozeRotationSeconds, setBoozeRotationSeconds] = useState(null);
   const [ranks, setRanks] = useState([]);
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
@@ -91,6 +92,7 @@ export default function Admin() {
         fetchNPCs();
         fetchMeta();
         fetchEventsStatus();
+        fetchBoozeRotation();
       }
     } catch { setIsAdmin(false); }
     finally { setLoading(false); }
@@ -109,6 +111,35 @@ export default function Admin() {
       setEventsEnabled(true);
       setAllEventsForTesting(false);
       setTodayEvent(null);
+    }
+  };
+
+  const fetchBoozeRotation = async () => {
+    try {
+      const res = await api.get('/admin/booze-rotation');
+      setBoozeRotationSeconds(res.data?.rotation_seconds ?? null);
+    } catch {
+      setBoozeRotationSeconds(null);
+    }
+  };
+
+  const handleBoozeRotation15s = async () => {
+    try {
+      await api.post('/admin/booze-rotation', { seconds: 15 });
+      setBoozeRotationSeconds(15);
+      toast.success('Booze rotation set to 15 seconds');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set rotation');
+    }
+  };
+
+  const handleBoozeRotationReset = async () => {
+    try {
+      await api.post('/admin/booze-rotation', { seconds: null });
+      setBoozeRotationSeconds(null);
+      toast.success('Booze rotation reset to 3 hours');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset rotation');
     }
   };
 
@@ -668,6 +699,34 @@ export default function Admin() {
               </BtnSecondary>
             </div>
             <p className="text-[10px] text-mutedForeground">All events (testing): applies every multiplier at once.</p>
+          </div>
+        )}
+      </div>
+
+      {/* Booze Run rotation (admin test) */}
+      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <SectionHeader
+          icon={Clock}
+          title="Booze Run rotation"
+          badge={
+            <span className="text-[10px] font-heading">
+              {boozeRotationSeconds != null ? (
+                <span className="text-amber-400">{boozeRotationSeconds}s (test)</span>
+              ) : (
+                <span className="text-mutedForeground">3h (normal)</span>
+              )}
+            </span>
+          }
+          isCollapsed={collapsed.boozeRun}
+          onToggle={() => toggleSection('boozeRun')}
+        />
+        {!collapsed.boozeRun && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">Set rotation to 15 seconds for testing; prices and best routes will update every 15s. Reset to use normal 3h.</p>
+            <div className="flex flex-wrap gap-2">
+              <BtnPrimary onClick={handleBoozeRotation15s}>Set rotation to 15s</BtnPrimary>
+              <BtnSecondary onClick={handleBoozeRotationReset}>Reset to 3h</BtnSecondary>
+            </div>
           </div>
         )}
       </div>

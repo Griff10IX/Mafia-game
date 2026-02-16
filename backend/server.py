@@ -4484,6 +4484,35 @@ async def admin_all_events_for_testing(request: AllEventsForTestingRequest, curr
     return {"message": "All events for testing " + ("enabled" if enabled else "disabled"), "all_events_for_testing": bool(enabled)}
 
 
+class AdminBoozeRotationRequest(BaseModel):
+    """Set booze run rotation interval to N seconds (admin test mode). Use null/0 to reset to normal (3h)."""
+    seconds: Optional[int] = None
+
+
+@api_router.get("/admin/booze-rotation")
+async def admin_get_booze_rotation(current_user: dict = Depends(get_current_user)):
+    """Get current booze rotation override (admin). None = normal 3h."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    return {"rotation_seconds": _booze_rotation_override_seconds, "normal_hours": BOOZE_ROTATION_HOURS}
+
+
+@api_router.post("/admin/booze-rotation")
+async def admin_set_booze_rotation(request: AdminBoozeRotationRequest, current_user: dict = Depends(get_current_user)):
+    """Set booze run rotation to N seconds for testing (admin). Pass seconds=15 for 15s; pass null or 0 to reset to 3h."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    global _booze_rotation_override_seconds
+    sec = request.seconds
+    if sec is None or sec <= 0:
+        _booze_rotation_override_seconds = None
+        return {"message": "Booze rotation reset to normal (3 hours)", "rotation_seconds": None}
+    if sec < 5 or sec > 86400:
+        raise HTTPException(status_code=400, detail="seconds must be between 5 and 86400 (1 day)")
+    _booze_rotation_override_seconds = sec
+    return {"message": f"Booze rotation set to {sec} seconds", "rotation_seconds": sec}
+
+
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
     {"name": "Baranco", "tag": "BARN", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
@@ -5395,12 +5424,13 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     except Exception:
         pass
 
-    # Booze run: prices rotate every BOOZE_ROTATION_HOURS. Show "Booze prices just changed!" for the first 3h of each rotation.
+    # Booze run: prices rotate every rotation interval. Show "Booze prices just changed!" for the first part of each rotation.
     try:
+        interval = _booze_rotation_interval_seconds()
         rotation_index = _booze_rotation_index()
-        rotation_start_ts = rotation_index * BOOZE_ROTATION_HOURS * 3600
+        rotation_start_ts = rotation_index * interval
         rotation_start_iso = datetime.fromtimestamp(rotation_start_ts, tz=timezone.utc).isoformat()
-        if now_ts - rotation_start_ts < BOOZE_ROTATION_HOURS * 3600:  # within current rotation window
+        if now_ts - rotation_start_ts < interval:  # within current rotation window
             items.append({
                 "id": f"booze_rotation_{rotation_index}",
                 "type": "booze_prices",
@@ -7018,6 +7048,8 @@ async def giphy_search(
 # ============ BOOZE RUN (Supply Run / Prohibition) ============
 # 6 historically accurate prohibition-era booze types. Prices rotate every 3 hours per location.
 BOOZE_ROTATION_HOURS = 3
+# Admin override: when set (e.g. 15), rotation uses this many seconds instead of BOOZE_ROTATION_HOURS. None = normal.
+_booze_rotation_override_seconds = None
 BOOZE_TYPES = [
     {"id": "bathtub_gin", "name": "Bathtub Gin"},
     {"id": "moonshine", "name": "Moonshine"},
@@ -7040,15 +7072,23 @@ BOOZE_RUN_JAIL_CHANCE_MAX = 0.06
 BOOZE_RUN_JAIL_SECONDS = 20
 
 
+def _booze_rotation_interval_seconds():
+    """Seconds per rotation window. Admin can override to e.g. 15 for testing."""
+    global _booze_rotation_override_seconds
+    if _booze_rotation_override_seconds is not None and _booze_rotation_override_seconds > 0:
+        return _booze_rotation_override_seconds
+    return BOOZE_ROTATION_HOURS * 3600
+
+
 def _booze_rotation_index():
-    """Current 3-hour window index (same for all users)."""
-    return int(datetime.now(timezone.utc).timestamp() // (BOOZE_ROTATION_HOURS * 3600))
+    """Current rotation window index (same for all users)."""
+    return int(datetime.now(timezone.utc).timestamp() // _booze_rotation_interval_seconds())
 
 
 def _booze_rotation_ends_at():
     """ISO timestamp when current rotation ends."""
     idx = _booze_rotation_index()
-    end_ts = (idx + 1) * BOOZE_ROTATION_HOURS * 3600
+    end_ts = (idx + 1) * _booze_rotation_interval_seconds()
     return datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat()
 
 
@@ -9293,6 +9333,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "carrying_total": _booze_user_carrying_total(carrying),
         "rotation_ends_at": _booze_rotation_ends_at(),
         "rotation_hours": BOOZE_ROTATION_HOURS,
+        "rotation_seconds": _booze_rotation_override_seconds,
         "profit_today": profit_today,
         "profit_total": profit_total,
         "runs_count": runs_count,
