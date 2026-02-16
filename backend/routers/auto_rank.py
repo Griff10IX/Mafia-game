@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
-AUTO_RANK_INTERVAL_SECONDS = 5 * 60  # Run every 5 minutes
+AUTO_RANK_INTERVAL_SECONDS = 2 * 60  # Run every 2 minutes
 
 
 def _parse_iso(s):
@@ -20,7 +20,7 @@ def _parse_iso(s):
 
 
 async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: str):
-    """Run one crime and one GTA (if off cooldown) for this user; send summary to Telegram."""
+    """Commit all crimes that are off cooldown, then one GTA (if off cooldown); send summary to Telegram."""
     import server as srv
     from routers.crimes import _commit_crime_impl
     from routers.gta import _attempt_gta_impl, GTA_OPTIONS
@@ -42,36 +42,40 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     now = datetime.now(timezone.utc)
     lines = [f"**Auto Rank** — {username}", ""]
 
-    # --- Crime: pick first crime that's off cooldown and rank-eligible ---
+    # --- Crimes: commit ALL that are off cooldown and rank-eligible (loop until none left) ---
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
-    user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(100)
-    cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
-    rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
-
-    crime_done = False
-    for c in crimes:
-        if c["min_rank"] > rank_id:
-            continue
-        until = cooldown_by_crime.get(c["id"])
-        if until is not None and until > now:
-            continue
+    crime_count = 0
+    while True:
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user or user.get("in_jail"):
+            break
+        user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(100)
+        cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
+        rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
+        available = [
+            c for c in crimes
+            if c["min_rank"] <= rank_id
+            and (cooldown_by_crime.get(c["id"]) is None or cooldown_by_crime.get(c["id"]) <= now)
+        ]
+        if not available:
+            break
+        c = available[0]
         try:
             out = await _commit_crime_impl(c["id"], user)
-            crime_done = True
+            crime_count += 1
             if out.success:
                 r = out.reward if out.reward is not None else 0
                 lines.append(f"**Crime** — Success: ${r:,} + RP. {out.message}")
             else:
                 lines.append(f"**Crime** — Failed. {out.message}")
-            break
         except Exception as e:
             logger.exception("Auto rank crime for %s: %s", user_id, e)
             lines.append(f"**Crime** — Error: {e!s}")
             break
-    if not crime_done:
-        lines.append("**Crime** — None off cooldown.")
+    if crime_count == 0:
+        lines.append("**Crimes** — None off cooldown.")
 
-    # Refresh user after crime (money/rank may have changed; might be in_jail from something else)
+    # Refresh user after crimes (money/rank may have changed; might be in_jail)
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         lines.append("")
@@ -118,7 +122,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
 
 
 async def run_auto_rank_cycle():
-    """One cycle: find all auto_rank users with telegram_chat_id and run crime + GTA for each."""
+    """One cycle: find all auto_rank users with telegram_chat_id; for each, commit all crimes (off cooldown) + one GTA, send to Telegram."""
     import server as srv
     db = srv.db
     cursor = db.users.find(
