@@ -159,6 +159,24 @@ export default function FamilyProfilePage() {
               {crewOCAvailable ? 'Available' : `Next in ${formatTimeLeft(crewOCCooldown)}`}
             </span>
           </div>
+          {(family.crew_oc_crew?.length > 0) && (
+            <div>
+              <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">In crew</p>
+              <div className="flex flex-wrap gap-1.5">
+                {family.crew_oc_crew.map((c, i) => (
+                  <span
+                    key={`${c.username}-${i}`}
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-heading ${
+                      c.is_family_member ? 'bg-primary/20 text-primary border border-primary/30' : 'bg-zinc-700/50 text-mutedForeground border border-zinc-600/50'
+                    }`}
+                  >
+                    {c.username}
+                    {!c.is_family_member && <span className="ml-1 text-[10px] opacity-80">(crew)</span>}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {!isMyFamily && (
             <div>
               {crewOCApp ? (

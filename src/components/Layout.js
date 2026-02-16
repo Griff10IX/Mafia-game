@@ -289,6 +289,29 @@ export default function Layout({ children }) {
     return `$${Math.trunc(num).toLocaleString()}`;
   };
 
+  const formatCompact = (n) => {
+    const num = Number(n ?? 0);
+    if (Number.isNaN(num)) return '0';
+    const abs = Math.abs(num);
+    if (abs >= 1e12) return (num / 1e12).toFixed(1).replace(/\.0$/, '') + 'T';
+    if (abs >= 1e9) return (num / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+    if (abs >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (abs >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
+    return Math.trunc(num).toLocaleString();
+  };
+
+  const formatMoneyCompact = (n) => {
+    const num = Number(n ?? 0);
+    if (Number.isNaN(num)) return '$0';
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '';
+    if (abs >= 1e12) return `${sign}$${(abs / 1e12).toFixed(1).replace(/\.0$/, '')}T`;
+    if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1).replace(/\.0$/, '')}B`;
+    if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1).replace(/\.0$/, '')}M`;
+    if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(1).replace(/\.0$/, '')}K`;
+    return `$${Math.trunc(num).toLocaleString()}`;
+  };
+
   // Order: Home → You → Money → Combat → Travel → Social → Ranking → Assets → Casino → Shop → Other
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -649,7 +672,8 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className={`fixed top-0 right-0 left-0 md:left-56 min-h-[48px] h-12 ${styles.topBar} backdrop-blur-md z-30 flex items-center px-4 gap-3`}>
+      <div className={`fixed top-0 right-0 left-0 md:left-56 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-4 gap-2 md:gap-3 py-2 md:py-0`}>
+        <div className="flex items-center gap-3 flex-1 min-w-0 shrink-0">
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           data-testid="mobile-menu-toggle"
@@ -735,11 +759,11 @@ export default function Layout({ children }) {
                 ? Math.min(100, Math.max(0, pct))
                 : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
               return (
-                <div className={`${chipClass} gap-1.5 sm:gap-2 px-1.5 py-1 sm:px-2 sm:py-1 min-w-0`} title={`Rank progress: ${progress.toFixed(2)}%`}>
+                <div className={`${chipClass} gap-1.5 sm:gap-2 px-1.5 py-1 sm:px-2 sm:py-1 min-w-0`} title={`${rankProgress.current_rank_name}: ${progress.toFixed(2)}%`}>
                   <TrendingUp size={12} className="text-primary shrink-0" />
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                    <div style={{ position: 'relative', width: 64, height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+                    <div className="w-10 sm:w-16" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, #d4af37, #ca8a04)', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
@@ -765,32 +789,38 @@ export default function Layout({ children }) {
             }
             if (statId === 'money') {
               return (
-                <div className={chipClass} title="Cash">
-                  <DollarSign size={12} className="text-primary" />
-                  <span className="font-heading text-xs text-primary" data-testid="topbar-money">{formatMoney(user.money)}</span>
+                <div className={chipClass} title={`Cash: ${formatMoney(user.money)}`}>
+                  <DollarSign size={12} className="text-primary shrink-0" />
+                  <span className="font-heading text-xs text-primary md:hidden" data-testid="topbar-money">{formatMoneyCompact(user.money)}</span>
+                  <span className="font-heading text-xs text-primary hidden md:inline" data-testid="topbar-money-full">{formatMoney(user.money)}</span>
                 </div>
               );
             }
             if (statId === 'points') {
               return (
-                <div className={chipClass} title="Premium Points">
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                  <span className="font-heading text-xs text-foreground" data-testid="topbar-points">{formatInt(user.points)}</span>
+                <div className={chipClass} title={`Premium Points: ${formatInt(user.points)}`}>
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
+                  <span className="font-heading text-xs text-foreground md:hidden" data-testid="topbar-points">{formatCompact(user.points)}</span>
+                  <span className="font-heading text-xs text-foreground hidden md:inline" data-testid="topbar-points-full">{formatInt(user.points)}</span>
                 </div>
               );
             }
             if (statId === 'property') {
               const casinoStr = `$${Number(casinoProfit).toLocaleString()}`;
               const propertyStr = `${Number(propertyProfit).toLocaleString()} pts`;
+              const casinoShort = formatMoneyCompact(casinoProfit);
+              const propertyShort = formatCompact(propertyProfit) + ' pts';
               return (
-                <div className={chipClass} title="Casino profit ($) · Property profit (pts)">
+                <div className={chipClass} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
                   <Building2 size={12} className="text-emerald-400 shrink-0" />
                   <span className="font-heading text-[11px] text-foreground whitespace-nowrap">
-                    <span className="text-mutedForeground">Casino </span>
-                    <span className={casinoProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}>{casinoStr}</span>
+                    <span className="text-mutedForeground md:inline hidden">Casino </span>
+                    <span className="text-mutedForeground md:hidden">C </span>
+                    <span className={casinoProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{casinoStr}</span></span>
                     <span className="text-mutedForeground mx-0.5">·</span>
-                    <span className="text-mutedForeground">Property </span>
-                    <span className={propertyProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}>{propertyStr}</span>
+                    <span className="text-mutedForeground md:inline hidden">Property </span>
+                    <span className="text-mutedForeground md:hidden">P </span>
+                    <span className={propertyProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{propertyStr}</span></span>
                   </span>
                 </div>
               );
@@ -801,7 +831,7 @@ export default function Layout({ children }) {
             return null;
           };
           return (
-            <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible gap-2 md:gap-1.5 -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0">
               {statOrder.map((statId) => {
                 if (statId === 'notifications') {
                   return (
@@ -866,6 +896,7 @@ export default function Layout({ children }) {
             </div>
           );
         })()}
+        </div>
       </div>
 
       {/* Main content */}

@@ -10290,6 +10290,12 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
     )
     if app:
         crew_oc_application = {"status": app.get("status"), "amount_paid": int(app.get("amount_paid") or 0)}
+    accepted_apps = await db.family_crew_oc_applications.find(
+        {"family_id": fam["id"], "status": "accepted"},
+        {"_id": 0, "username": 1},
+    ).to_list(50)
+    crew_oc_crew = [{"username": m["username"], "is_family_member": True} for m in members]
+    crew_oc_crew += [{"username": a.get("username") or "?", "is_family_member": False} for a in accepted_apps]
     return {
         "id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0),
         "member_count": len(members), "members": members, "rackets": rackets, "my_role": my_role,
@@ -10297,6 +10303,7 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
         "crew_oc_cooldown_until": crew_oc_cooldown_until,
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
         "crew_oc_application": crew_oc_application,
+        "crew_oc_crew": crew_oc_crew,
     }
 
 
