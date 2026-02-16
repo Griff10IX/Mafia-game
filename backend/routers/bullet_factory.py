@@ -1,5 +1,6 @@
 # Bullet Factory: one per state, produces 3000 bullets/hour. When unowned, still produces; price $2,500–$4,000.
 # Owner can claim (pay), set price, collect. Others buy at owner's price (or unowned price).
+# Also: store buy-bullets (points), admin add-bullets.
 from datetime import datetime, timezone, timedelta
 import os
 import sys
@@ -9,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 from typing import Optional
-from server import db, get_current_user, STATES
+from server import db, get_current_user, STATES, _is_admin, _username_pattern
 
 BULLET_FACTORY_PRODUCTION_PER_HOUR = 3000
 BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production
@@ -18,6 +19,9 @@ BULLET_FACTORY_PRICE_MIN = 1
 BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
 BULLET_FACTORY_UNOWNED_PRICE_MIN = 2500
 BULLET_FACTORY_UNOWNED_PRICE_MAX = 4000
+
+# Store: buy bullets with points (pack size -> points cost)
+BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
 
 
 class StateOptionalRequest(BaseModel):
@@ -303,6 +307,37 @@ async def buy_bullets(
     }
 
 
+async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
+    """Buy bullets with points (store)."""
+    cost = BULLET_PACKS.get(bullets)
+    if cost is None:
+        raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
+    if current_user["points"] < cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost}, have {current_user['points']}")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -cost, "bullets": bullets}}
+    )
+    return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
+
+
+async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(get_current_user)):
+    """Admin: add bullets to a user."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if bullets <= 0:
+        raise HTTPException(status_code=400, detail="Bullets must be greater than 0")
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    await db.users.update_one(
+        {"id": target["id"]},
+        {"$inc": {"bullets": int(bullets)}}
+    )
+    return {"message": f"Added {int(bullets):,} bullets to {target_username}"}
+
+
 def register(router):
     router.add_api_route("/bullet-factory", get_bullet_factory, methods=["GET"])
     router.add_api_route("/bullet-factory/list", get_bullet_factory_list, methods=["GET"])
@@ -310,3 +345,5 @@ def register(router):
     router.add_api_route("/bullet-factory/collect", collect_bullets, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
     router.add_api_route("/bullet-factory/buy", buy_bullets, methods=["POST"])
+    router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
+    router.add_api_route("/admin/add-bullets", admin_add_bullets, methods=["POST"])

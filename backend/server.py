@@ -3226,27 +3226,6 @@ async def admin_give_all_money(amount: int, current_user: dict = Depends(get_cur
     )
     return {"message": f"Gave ${amount:,} to {result.modified_count} accounts", "updated": result.modified_count}
 
-@api_router.post("/admin/add-bullets")
-async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
-
-    if bullets <= 0:
-        raise HTTPException(status_code=400, detail="Bullets must be greater than 0")
-
-    # Case-insensitive username lookup
-    username_pattern = _username_pattern(target_username)
-    target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    await db.users.update_one(
-        {"id": target["id"]},
-        {"$inc": {"bullets": int(bullets)}}
-    )
-
-    return {"message": f"Added {int(bullets):,} bullets to {target_username}"}
-
 @api_router.post("/admin/add-car")
 async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
@@ -8353,27 +8332,6 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
     return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 
-
-BULLET_PACKS = {
-    5000: 500,
-    10000: 1000,
-    50000: 5000,
-    100000: 10000,
-}
-
-@api_router.post("/store/buy-bullets")
-async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
-    """Buy bullets with points."""
-    cost = BULLET_PACKS.get(bullets)
-    if cost is None:
-        raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost}, have {current_user['points']}")
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bullets": bullets}}
-    )
-    return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
 
 @api_router.post("/store/buy-custom-car")
 async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
