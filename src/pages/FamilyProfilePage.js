@@ -83,7 +83,7 @@ export default function FamilyProfilePage() {
         <button type="button" onClick={() => navigate('/families')} className="flex items-center gap-2 text-zinc-500 hover:text-primary text-xs font-heading uppercase tracking-wider transition-colors">
           <ArrowLeft size={14} /> Back to families
         </button>
-        <div className="text-center py-16 rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.6), rgba(20,20,18,0.7))', border: '1px solid #3a3a38' }}>
+        <div className="text-center py-16 bg-zinc-800/30 rounded-xl border border-zinc-700/30">
           <Building2 size={32} className="mx-auto text-zinc-600 mb-2" />
           <p className="text-zinc-500 font-heading">Family not found.</p>
         </div>
@@ -123,11 +123,8 @@ export default function FamilyProfilePage() {
       </button>
 
       {/* ── Family Banner ── */}
-      <div className="relative rounded-xl overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #1a1a1a 0%, #1e1e1c 50%, #141414 100%)',
-        border: '2px solid rgba(212,175,55,0.2)',
-      }}>
-        <div className="h-1" style={{ background: 'linear-gradient(90deg, transparent, #d4af37, transparent)' }} />
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25`}>
+        <div className="h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
 
         <div className="px-4 py-4 sm:px-6">
@@ -163,15 +160,12 @@ export default function FamilyProfilePage() {
           </div>
         </div>
 
-        <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.15), transparent)' }} />
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
       </div>
 
       {/* ── Crew OC ── */}
-      <div className="rounded-xl overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-        border: '1px solid #3a3a38',
-      }}>
-        <div className="px-4 py-2.5 flex items-center justify-between" style={{ borderBottom: '1px solid #3a3a38' }}>
+      <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+        <div className="px-4 py-2.5 flex items-center justify-between border-b border-primary/20">
           <div className="flex items-center gap-2">
             <Crosshair size={13} className="text-primary" />
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Crew OC</h3>
@@ -228,11 +222,8 @@ export default function FamilyProfilePage() {
       </div>
 
       {/* ── Rackets ── */}
-      <div className="rounded-xl overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-        border: '1px solid #3a3a38',
-      }}>
-        <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: '1px solid #3a3a38' }}>
+      <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+        <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/20">
           <TrendingUp size={13} className="text-primary" />
           <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Rackets</h3>
           <span className="text-[10px] text-zinc-500 font-heading ml-auto">{rackets.filter(r => r.level > 0).length}/{rackets.length} active</span>
@@ -243,13 +234,9 @@ export default function FamilyProfilePage() {
               {rackets.map((r) => {
                 const locked = r.locked || r.level <= 0;
                 return (
-                  <div key={r.id} className="rounded-lg p-2.5 transition-all" style={{
-                    background: locked
-                      ? 'linear-gradient(135deg, rgba(20,20,18,0.4), rgba(15,15,13,0.5))'
-                      : 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-                    border: locked ? '1px dashed #333' : '1px solid #3a3a38',
-                    opacity: locked ? 0.5 : 1,
-                  }}>
+                  <div key={r.id} className={`rounded-lg p-2.5 transition-all bg-zinc-800/30 border ${
+                    locked ? 'border-dashed border-zinc-700/30 opacity-50' : 'border-zinc-700/30'
+                  }`}>
                     <p className={`font-heading font-bold text-[11px] truncate ${locked ? 'text-zinc-500' : 'text-foreground'}`}>{r.name}</p>
                     <div className="flex items-center justify-between mt-1">
                       <span className={`text-[10px] font-heading font-bold ${locked ? 'text-zinc-600' : 'text-primary'}`}>
@@ -275,11 +262,8 @@ export default function FamilyProfilePage() {
       </div>
 
       {/* ── Members ── */}
-      <div className="rounded-xl overflow-hidden" style={{
-        background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-        border: '1px solid #3a3a38',
-      }}>
-        <div className="px-4 py-2.5 flex items-center gap-2" style={{ borderBottom: '1px solid #3a3a38' }}>
+      <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+        <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/20">
           <Users size={13} className="text-primary" />
           <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Members</h3>
           <span className="text-[10px] text-zinc-500 font-heading ml-auto">{members.length}</span>
@@ -296,12 +280,9 @@ export default function FamilyProfilePage() {
                 const cfg = getRoleConfig(m.role);
                 const isBoss = m.role === 'boss';
                 return (
-                  <div key={m.user_id} className="flex items-center justify-between px-3 py-2 rounded-lg transition-all" style={{
-                    background: isBoss
-                      ? 'linear-gradient(135deg, rgba(212,175,55,0.06), rgba(30,30,28,0.8))'
-                      : 'linear-gradient(135deg, rgba(30,30,28,0.6), rgba(20,20,18,0.7))',
-                    border: isBoss ? '1px solid rgba(212,175,55,0.2)' : '1px solid #2a2a28',
-                  }}>
+                  <div key={m.user_id} className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all ${
+                    isBoss ? 'bg-primary/5 border border-primary/20' : 'bg-zinc-800/30 border border-zinc-700/30'
+                  }`}>
                     <div className="min-w-0">
                       <Link to={`/profile/${encodeURIComponent(m.username)}`} className="font-heading font-bold text-foreground text-xs hover:text-primary transition-colors block truncate">
                         {m.username}

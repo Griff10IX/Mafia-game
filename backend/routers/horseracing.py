@@ -74,7 +74,7 @@ def _horseracing_pick_winner() -> dict:
     horses = list(HORSERACING_HORSES)
     if not horses:
         return None
-    weights = [1.0 / max(1, h.get("odds") or 1) for h in horses]
+    weights = [1.0 / max(1, (h.get("odds") or 1) + 1) for h in horses]
     total = sum(weights)
     if total <= 0:
         return random.choice(horses)
