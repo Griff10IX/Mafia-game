@@ -59,6 +59,7 @@ function RaceTrack({
   liveCommentary,
   livePositions,
   showGates,
+  result,
 }) {
   const skyGradient = 'linear-gradient(180deg, #87ceeb 0%, #b0d4e8 25%, #c9e0ed 60%, #2d5a12 85%, #1a3a0a 100%)';
   return (
@@ -769,6 +770,7 @@ export default function HorseRacingPage() {
               liveCommentary={liveCommentary}
               livePositions={livePositions}
               showGates={!skipAnimation && !!raceProgress}
+              result={result}
             />
 
             {/* Bottom scoreboard */}
