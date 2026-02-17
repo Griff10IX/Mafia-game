@@ -1,4 +1,5 @@
 # Profile: user profile view, avatar, theme, change-password, telegram (for Auto Rank)
+import asyncio
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -61,12 +62,6 @@ def register(router):
         wealth_range = get_wealth_rank_range(user.get("money", 0))
         user_id = user["id"]
 
-        family_name = None
-        if user.get("family_id"):
-            fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1})
-            if fam:
-                family_name = fam.get("name")
-
         async def _rank_for_field(field: str, value: int) -> int:
             if value is None:
                 value = 0
@@ -77,26 +72,8 @@ def register(router):
             })
             return n_better + 1
 
-        kills_rank = await _rank_for_field("total_kills", int(user.get("total_kills") or 0))
-        crimes_rank = await _rank_for_field("total_crimes", int(user.get("total_crimes") or 0))
-        gta_rank = await _rank_for_field("total_gta", int(user.get("total_gta") or 0))
-        jail_rank = await _rank_for_field("jail_busts", int(user.get("jail_busts") or 0))
-        rank_points_rank = await _rank_for_field("rank_points", int(user.get("rank_points") or 0))
-        honours = [
-            {"rank": rank_points_rank, "label": "Most Rank Points Earned"},
-            {"rank": kills_rank, "label": "Most Kills"},
-            {"rank": crimes_rank, "label": "Most Crimes Committed"},
-            {"rank": gta_rank, "label": "Most GTAs Committed"},
-            {"rank": jail_rank, "label": "Most Jail Busts"},
-        ]
-
-        owned_casinos = []
-        for game_type, coll in [
-            ("dice", db.dice_ownership),
-            ("roulette", db.roulette_ownership),
-            ("blackjack", db.blackjack_ownership),
-            ("horseracing", db.horseracing_ownership),
-        ]:
+        async def _casinos_for_type(game_type: str, coll):
+            out = []
             cursor = coll.find(
                 {"owner_id": user_id},
                 {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1},
@@ -105,13 +82,54 @@ def register(router):
                 item = {"type": game_type, "city": d.get("city", "?"), "max_bet": int(d.get("max_bet") or 0)}
                 if d.get("buy_back_reward") is not None:
                     item["buy_back_reward"] = int(d.get("buy_back_reward") or 0)
-                owned_casinos.append(item)
+                out.append(item)
+            return out
 
-        property_ = await _user_owns_any_property(user_id)
+        async def _family_name():
+            if not user.get("family_id"):
+                return None
+            fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1})
+            return fam.get("name") if fam else None
+
+        (
+            family_name,
+            kills_rank,
+            crimes_rank,
+            gta_rank,
+            jail_rank,
+            rank_points_rank,
+            dice_casinos,
+            roulette_casinos,
+            blackjack_casinos,
+            horseracing_casinos,
+            property_,
+            messages_received,
+        ) = await asyncio.gather(
+            _family_name(),
+            _rank_for_field("total_kills", int(user.get("total_kills") or 0)),
+            _rank_for_field("total_crimes", int(user.get("total_crimes") or 0)),
+            _rank_for_field("total_gta", int(user.get("total_gta") or 0)),
+            _rank_for_field("jail_busts", int(user.get("jail_busts") or 0)),
+            _rank_for_field("rank_points", int(user.get("rank_points") or 0)),
+            _casinos_for_type("dice", db.dice_ownership),
+            _casinos_for_type("roulette", db.roulette_ownership),
+            _casinos_for_type("blackjack", db.blackjack_ownership),
+            _casinos_for_type("horseracing", db.horseracing_ownership),
+            _user_owns_any_property(user_id),
+            db.notifications.count_documents({"user_id": user_id}),
+        )
+
+        honours = [
+            {"rank": rank_points_rank, "label": "Most Rank Points Earned"},
+            {"rank": kills_rank, "label": "Most Kills"},
+            {"rank": crimes_rank, "label": "Most Crimes Committed"},
+            {"rank": gta_rank, "label": "Most GTAs Committed"},
+            {"rank": jail_rank, "label": "Most Jail Busts"},
+        ]
+        owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos
+
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
-
-        messages_received = await db.notifications.count_documents({"user_id": user_id})
         messages_sent = 0
 
         out = {
