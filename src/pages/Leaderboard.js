@@ -5,17 +5,24 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const LB_STYLES = `
+  .lb-fade-in { animation: lb-fade-in 0.4s ease-out both; }
+  @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .lb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const TOP_OPTIONS = [5, 10, 20, 50, 100];
 
 function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
   const list = entries || [];
   return (
-    <section className={`${styles.panel} rounded-sm overflow-hidden shadow-lg shadow-primary/5`}>
-      <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex items-center gap-2">
+    <section className={`relative ${styles.panel} rounded-lg overflow-hidden shadow-lg shadow-primary/5`}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
         <Icon className="text-primary shrink-0" size={18} />
         <div>
-          <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">{title}</h2>
-          <p className="text-xs text-mutedForeground font-heading">{topLabel}</p>
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{title}</h2>
+          <p className="text-[10px] text-zinc-500 font-heading italic">{topLabel}</p>
         </div>
       </div>
       <div className="p-3 space-y-1.5">
@@ -77,6 +84,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
           ))
         )}
       </div>
+      <div className="lb-art-line text-primary mx-3" />
     </section>
   );
 }
@@ -107,26 +115,24 @@ export default function Leaderboard() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
-        <p className="text-mutedForeground text-sm font-medium">Loading leaderboards…</p>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <Trophy size={28} className="text-primary/40 animate-pulse" />
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
+        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading leaderboards…</span>
       </div>
     );
   }
 
   return (
     <div className={`space-y-5 ${styles.pageContent}`} data-testid="leaderboard-page">
-      {/* Art Deco Header */}
-      <header>
-        <div className="flex items-center gap-4 mb-3">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/40 to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-3">
-            <Trophy size={24} className="text-primary/80" />
-            Leaderboard
-          </h1>
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
-        </div>
-        <p className="text-center text-sm text-mutedForeground font-heading tracking-wide mb-4">
+      <style>{LB_STYLES}</style>
+      <header className="relative lb-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Rankings</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2 mb-1">
+          <Trophy size={22} className="text-primary/80" />
+          Leaderboard
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mb-4">
           {viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats'}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-3 mb-3">
@@ -221,16 +227,14 @@ export default function Leaderboard() {
 
       {/* Weekly Rewards (alive only) */}
       {viewMode === 'alive' && (
-      <section className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+      <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
-              <Trophy size={16} /> Weekly Rewards
-            </h2>
-            <div className="flex-1 h-px bg-primary/50" />
+            <Trophy size={16} className="text-primary" />
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Weekly Rewards</h2>
           </div>
-          <p className="text-xs text-mutedForeground mt-1 font-heading">
+          <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
             Top 10 each week receive cash, points, and rare vehicles.
           </p>
         </div>
@@ -265,6 +269,7 @@ export default function Leaderboard() {
             </div>
           </div>
         </div>
+        <div className="lb-art-line text-primary mx-3" />
       </section>
       )}
     </div>

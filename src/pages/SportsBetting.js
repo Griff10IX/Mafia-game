@@ -5,6 +5,12 @@ import { toast } from 'sonner';
 import { refreshUser } from '../utils/api';
 import styles from '../styles/noir.module.css';
 
+const SB_STYLES = `
+  .sb-fade-in { animation: sb-fade-in 0.4s ease-out both; }
+  @keyframes sb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .sb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -312,17 +318,18 @@ export default function SportsBetting() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
-        <div className="w-10 h-10 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <p className="text-mutedForeground text-sm font-heading font-bold uppercase tracking-wider">Loading the book...</p>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <Trophy size={28} className="text-primary/40 animate-pulse" />
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading the book...</span>
       </div>
     );
   }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="sports-betting-page">
+      <style>{SB_STYLES}</style>
       <style>{`
-        @keyframes sb-fade-in { 0% { opacity: 0; transform: translateY(8px); } 100% { opacity: 1; transform: translateY(0); } }
         @keyframes sb-slide-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
         @keyframes sb-pulse-gold { 0%, 100% { box-shadow: 0 0 8px rgba(212,175,55,0.15); } 50% { box-shadow: 0 0 20px rgba(212,175,55,0.35); } }
         .animate-sb-fade-in { animation: sb-fade-in 0.3s ease-out backwards; }
@@ -330,18 +337,11 @@ export default function SportsBetting() {
         .animate-sb-pulse-gold { animation: sb-pulse-gold 2s ease-in-out infinite; }
       `}</style>
 
-      {/* ═══ Header ═══ */}
-      <div className="text-center">
-        <div className="flex items-center justify-center gap-3 mb-1">
-          <div className="h-px flex-1 max-w-[60px] bg-gradient-to-r from-transparent to-primary/40" />
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary uppercase tracking-[0.15em]">
-            The Book
-          </h1>
-          <div className="h-px flex-1 max-w-[60px] bg-gradient-to-l from-transparent to-primary/40" />
-        </div>
-        <p className="text-[10px] font-heading text-mutedForeground uppercase tracking-[0.2em]">
-          Underground Sports Betting — Closes 10 min before start
-        </p>
+      {/* Page header */}
+      <div className="relative sb-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Sports</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">The Book</h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic">Underground — closes 10 min before start</p>
       </div>
 
       {/* ═══ Stats bar ═══ */}
@@ -398,11 +398,12 @@ export default function SportsBetting() {
             <Shield size={12} /> Show admin panel <ChevronDown size={12} />
           </button>
         ) : (
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 sb-fade-in`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Shield size={14} className="text-primary" />
-                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Admin — Add Events</span>
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Admin — Add Events</span>
               </div>
               <button onClick={() => toggleAdminPanel(true)} className="text-[10px] font-heading text-zinc-500 hover:text-primary flex items-center gap-1"><ChevronUp size={12} /> Hide</button>
             </div>
@@ -463,6 +464,7 @@ export default function SportsBetting() {
                 </div>
               </div>
             </div>
+            <div className="sb-art-line text-primary mx-3" />
           </div>
         )
       )}
@@ -498,10 +500,11 @@ export default function SportsBetting() {
       {activeTab === 'bets' && (
         <div className="space-y-4">
           {/* Open bets */}
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div>
-                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Open Bets</span>
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Open Bets</span>
                 {myBets.open.length > 0 && (
                   <span className="text-[9px] font-heading text-zinc-500 ml-2">
                     Risk: {formatMoney(openBetsTotalStake)} · Return: {formatMoney(openBetsPotentialReturn)}
@@ -532,12 +535,14 @@ export default function SportsBetting() {
                 );
               })}
             </div>
+            <div className="sb-art-line text-primary mx-3" />
           </div>
 
           {/* Settled bets */}
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/20">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Settled Bets</span>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Settled Bets</span>
             </div>
             <div className="p-2">
               {myBets.closed.length === 0 ? (
@@ -562,6 +567,7 @@ export default function SportsBetting() {
                 </div>
               )}
             </div>
+            <div className="sb-art-line text-primary mx-3" />
           </div>
         </div>
       )}
@@ -570,10 +576,11 @@ export default function SportsBetting() {
       {activeTab === 'stats' && (
         <div className="space-y-4">
           {/* Stats */}
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <TrendingUp size={14} className="text-primary" />
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Betting Record</span>
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Betting Record</span>
             </div>
             <div className="divide-y divide-zinc-800/50">
               {[
@@ -588,14 +595,16 @@ export default function SportsBetting() {
                 </div>
               ))}
             </div>
+            <div className="sb-art-line text-primary mx-3" />
           </div>
 
           {/* Recent results */}
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/20 flex items-center justify-between">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Clock size={14} className="text-primary" />
-                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Recent Results</span>
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Recent Results</span>
               </div>
               <span className="text-[9px] text-zinc-600 font-heading">Last 25</span>
             </div>
@@ -618,6 +627,7 @@ export default function SportsBetting() {
                 </div>
               ))}
             </div>
+            <div className="sb-art-line text-primary mx-3" />
           </div>
         </div>
       )}

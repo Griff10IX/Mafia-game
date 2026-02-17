@@ -4,6 +4,12 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const STORE_STYLES = `
+  .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
+  @keyframes store-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .store-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const PACKAGES = [
   { id: 'starter', name: 'Starter', points: 100, price: 4.99, popular: false },
   { id: 'bronze', name: 'Bronze', points: 250, price: 9.99, popular: false },
@@ -43,9 +49,10 @@ const Tab = ({ active, onClick, children }) => (
 );
 
 const StoreCard = ({ title, Icon, desc, price, owned, onBuy, loading, disabled, children }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
-      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider truncate">{title}</span>
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{title}</span>
       {Icon && <Icon className="text-primary shrink-0" size={14} />}
     </div>
     <div className="p-2.5">
@@ -64,6 +71,7 @@ const StoreCard = ({ title, Icon, desc, price, owned, onBuy, loading, disabled, 
         </button>
       )}
     </div>
+    <div className="store-art-line text-primary mx-3" />
   </div>
 );
 
@@ -155,21 +163,22 @@ export default function Store() {
 
   if (checkingPayment) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <p className="text-primary font-heading font-bold text-sm">Verifying payment...</p>
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+        <ShoppingBag size={28} className="text-primary/40 animate-pulse" />
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Verifying payment…</span>
       </div>
     );
   }
 
   return (
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="store-page">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <ShoppingBag className="w-8 h-8 text-primary shrink-0" />
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary">Store</h1>
-            <p className="text-sm text-mutedForeground">Points, upgrades, bullets & bodyguards</p>
-          </div>
+      <style>{STORE_STYLES}</style>
+      <div className="relative store-fade-in flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Shop</p>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Store</h1>
+          <p className="text-[10px] text-zinc-500 font-heading italic">Points, upgrades, bullets & bodyguards</p>
         </div>
         {user != null && (
           <span className="text-sm font-heading font-bold text-primary">{user.points} pts</span>
@@ -177,9 +186,13 @@ export default function Store() {
       </div>
 
       {eventsEnabled && event?.name && (
-        <div className="px-4 py-3 rounded-md border border-primary/20 bg-primary/10 border-b border-primary/30">
-          <p className="text-xs font-heading font-bold text-primary">{event.name}</p>
-          <p className="text-[10px] text-mutedForeground font-heading mt-0.5">{event.message}</p>
+        <div className="relative rounded-lg border border-primary/20 overflow-hidden">
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-3 bg-primary/8 border-b border-primary/20">
+            <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{event.name}</p>
+            <p className="text-[10px] text-zinc-500 font-heading italic mt-0.5">{event.message}</p>
+          </div>
+          <div className="store-art-line text-primary mx-3" />
         </div>
       )}
 
@@ -249,9 +262,10 @@ export default function Store() {
             );
           })}
           {/* Custom Car */}
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Custom Car</span>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom Car</span>
               <Car className="text-primary shrink-0" size={14} />
             </div>
             <div className="p-2.5">
@@ -285,6 +299,7 @@ export default function Store() {
                 </>
               )}
             </div>
+            <div className="store-art-line text-primary mx-3" />
           </div>
         </div>
       )}
@@ -312,7 +327,8 @@ export default function Store() {
       {activeTab === 'bodyguards' && user && (
         <div className="space-y-3">
           {user.bodyguard_slots < 4 && (
-            <div className="flex items-center justify-between p-2.5 rounded-md border border-primary/20 bg-zinc-900/50">
+            <div className="relative flex items-center justify-between p-2.5 rounded-lg border border-primary/20 bg-zinc-900/50">
+              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <span className="text-xs font-heading text-foreground">Slots: {user.bodyguard_slots}/4</span>
               <button
                 type="button"
