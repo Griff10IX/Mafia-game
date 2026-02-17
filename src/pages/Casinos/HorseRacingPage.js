@@ -323,7 +323,6 @@ export default function HorseRacingPage() {
   const [transferUsername, setTransferUsername] = useState('');
   const [sellPoints, setSellPoints] = useState('');
   const [skipAnimation, setSkipAnimation] = useState(false);
-  const [skipReplay, setSkipReplay] = useState(false);
   const [gatesOpen, setGatesOpen] = useState(false);
   const [liveCommentary, setLiveCommentary] = useState('');
   const [livePositions, setLivePositions] = useState(null);
@@ -333,7 +332,6 @@ export default function HorseRacingPage() {
   const raceStartTimeRef = useRef(null);
   const liveIntervalRef = useRef(null);
   const commentaryIntervalRef = useRef(null);
-  const lastRaceForReplayRef = useRef(null);
   const trackContainerRef = useRef(null);
 
   const fetchHistory = useCallback(() => {
@@ -535,7 +533,6 @@ export default function HorseRacingPage() {
           horses: horsesList,
           photoFinish,
         };
-        lastRaceForReplayRef.current = { winnerId, finishPcts, horses: horsesList, animationDelays, finishOrder, photoFinish };
         if (photoFinish) {
           setResult({ ...resultPayload, photoFinishPending: true });
           setPhotoFinishRevealed(false);
@@ -564,64 +561,6 @@ export default function HorseRacingPage() {
   };
 
   const playAgain = () => { setResult(null); setRaceProgress(null); setRaceStarted(false); setGatesOpen(false); };
-
-  const replayRace = () => {
-    const last = lastRaceForReplayRef.current;
-    if (!last) return;
-    if (skipReplay) return;
-    if (gateTimeoutRef.current) clearTimeout(gateTimeoutRef.current);
-    if (raceEndRef.current) clearTimeout(raceEndRef.current);
-    if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
-    if (commentaryIntervalRef.current) clearInterval(commentaryIntervalRef.current);
-    setResult(null);
-    setPhotoFinishRevealed(false);
-    setLiveCommentary(COMMENTARY_LINES[0]);
-    setLivePositions(null);
-    setGatesOpen(false);
-    setRaceProgress({
-      winnerId: last.winnerId,
-      finishPcts: last.finishPcts,
-      horses: last.horses,
-      finishOrder: last.finishOrder,
-      photoFinish: last.photoFinish,
-      animationDelays: last.animationDelays,
-    });
-    setRacing(true);
-    setRaceStarted(true);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        trackContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    });
-    gateTimeoutRef.current = setTimeout(() => {
-        setGatesOpen(true);
-        raceStartTimeRef.current = Date.now();
-        let commentaryIdx = 0;
-        commentaryIntervalRef.current = setInterval(() => {
-          commentaryIdx = (commentaryIdx + 1) % COMMENTARY_LINES.length;
-          setLiveCommentary(COMMENTARY_LINES[commentaryIdx]);
-        }, 1300);
-        const horsesList = last.horses;
-        const finishPcts = last.finishPcts;
-        liveIntervalRef.current = setInterval(() => {
-          const elapsed = Date.now() - raceStartTimeRef.current;
-          const pct = Math.min(1, elapsed / RACE_DURATION_MS);
-          const currentPcts = horsesList.map((h, idx) => pct * finishPcts[idx]);
-          const order = horsesList.map((h, idx) => ({ id: h.id, pct: currentPcts[idx] })).sort((a, b) => b.pct - a.pct);
-          const positions = {};
-          order.forEach((o, rank) => { positions[o.id] = rank + 1; });
-          setLivePositions(positions);
-        }, 180);
-      }, GATE_DELAY_MS);
-      raceEndRef.current = setTimeout(() => {
-        if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
-        if (commentaryIntervalRef.current) { clearInterval(commentaryIntervalRef.current); commentaryIntervalRef.current = null; }
-        setLivePositions(null);
-        setRacing(false);
-        setRaceStarted(false);
-        setRaceProgress(null);
-    }, GATE_DELAY_MS + RACE_DURATION_MS);
-  };
 
   const progressHorses = raceProgress && Array.isArray(raceProgress.horses) ? raceProgress.horses : [];
   const progressPcts = raceProgress && Array.isArray(raceProgress.finishPcts) ? raceProgress.finishPcts : [];
@@ -826,15 +765,6 @@ export default function HorseRacingPage() {
                           </div>
                         </div>
                       )}
-                      {lastRaceForReplayRef.current && (
-                        <button
-                          type="button"
-                          onClick={replayRace}
-                          className="mt-2 w-full py-1.5 rounded text-[10px] font-heading font-bold uppercase border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
-                        >
-                          Watch again
-                        </button>
-                      )}
                     </>
                   )}
                 </div>
@@ -951,10 +881,6 @@ export default function HorseRacingPage() {
                   <label className="flex items-center gap-2 cursor-pointer select-none">
                     <input type="checkbox" checked={skipAnimation} onChange={(e) => setSkipAnimation(e.target.checked)} className="w-3.5 h-3.5 rounded accent-primary" />
                     <span className="text-[10px] text-emerald-200/50 font-heading">Skip animation</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <input type="checkbox" checked={skipReplay} onChange={(e) => setSkipReplay(e.target.checked)} className="w-3.5 h-3.5 rounded accent-primary" />
-                    <span className="text-[10px] text-emerald-200/50 font-heading">Skip replay</span>
                   </label>
                 </div>
 
