@@ -5,6 +5,25 @@ import { toast } from 'sonner';
 import api, { refreshUser } from '../utils/api';
 import styles from '../styles/noir.module.css';
 
+const BANK_STYLES = `
+  @keyframes bank-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .bank-fade-in { animation: bank-fade-in 0.4s ease-out both; }
+  @keyframes bank-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+  .bank-scale-in { animation: bank-scale-in 0.35s ease-out both; }
+  @keyframes bank-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .bank-glow { animation: bank-glow 4s ease-in-out infinite; }
+  .bank-corner::before, .bank-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .bank-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .bank-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .bank-card { transition: all 0.3s ease; }
+  .bank-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .bank-row { transition: all 0.2s ease; }
+  .bank-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .bank-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 // Utility functions
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -47,26 +66,33 @@ function timeLeft(iso) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]" data-testid="bank-loading">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className={`space-y-4 ${styles.pageContent}`}>
+    <style>{BANK_STYLES}</style>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3" data-testid="bank-loading">
+      <Landmark size={28} className="text-primary/40 animate-pulse" />
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading bank...</span>
+    </div>
   </div>
 );
 
-const InterestBankCard = ({ 
-  overview, 
-  meta, 
-  depositAmount, 
-  onDepositAmountChange, 
-  durationHours, 
+const InterestBankCard = ({
+  overview,
+  meta,
+  depositAmount,
+  onDepositAmountChange,
+  durationHours,
   onDurationChange,
   preview,
-  onDeposit 
+  onDeposit
 }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`}>
+    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none bank-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <Landmark size={18} className="text-primary" />
-        <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
           Interest Bank
         </span>
       </div>
@@ -135,21 +161,24 @@ const InterestBankCard = ({
         💰 Deposit
       </button>
     </div>
+    <div className="bank-art-line text-primary mx-4" />
   </div>
 );
 
-const SwissBankCard = ({ 
-  overview, 
-  swissAmount, 
-  onSwissAmountChange, 
-  onDeposit, 
-  onWithdraw 
+const SwissBankCard = ({
+  overview,
+  swissAmount,
+  onSwissAmountChange,
+  onDeposit,
+  onWithdraw
 }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none bank-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
       <div className="flex items-center gap-2">
         <ShieldCheck size={18} className="text-primary" />
-        <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
           Swiss Bank
         </span>
       </div>
@@ -197,17 +226,18 @@ const SwissBankCard = ({
         </button>
       </div>
     </div>
+    <div className="bank-art-line text-primary mx-4" />
   </div>
 );
 
-const DepositCard = ({ deposit, onClaim }) => {
+const DepositCard = ({ deposit, onClaim, delay = 0 }) => {
   const left = timeLeft(deposit.matures_at);
   const matured = !!deposit.matured;
   const claimed = !!deposit.claimed_at;
   const canClaim = matured && !claimed;
 
   return (
-    <div className={`${styles.panel} border border-border rounded-md p-4 hover:border-primary/30 transition-all`}>
+    <div className={`${styles.panel} border border-primary/20 rounded-lg p-4 bank-row bank-fade-in`} style={{ animationDelay: `${delay}s` }}>
       <div className="space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4">
         <div className="flex-1 space-y-2">
           <div className="flex items-center justify-between">
@@ -250,19 +280,20 @@ const DepositCard = ({ deposit, onClaim }) => {
   );
 };
 
-const SendMoneyCard = ({ 
-  transferTo, 
-  onTransferToChange, 
-  transferAmount, 
-  onTransferAmountChange, 
+const SendMoneyCard = ({
+  transferTo,
+  onTransferToChange,
+  transferAmount,
+  onTransferAmountChange,
   transferNum,
-  onSend 
+  onSend
 }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
       <div className="flex items-center gap-2">
         <ArrowRightLeft size={18} className="text-primary" />
-        <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
           Send Money
         </span>
       </div>
@@ -302,11 +333,12 @@ const SendMoneyCard = ({
         📤 Send
       </button>
     </div>
+    <div className="bank-art-line text-primary mx-4" />
   </div>
 );
 
-const TransferCard = ({ transfer }) => (
-  <div className={`${styles.panel} border border-border rounded-md p-4 hover:border-primary/30 transition-all`}>
+const TransferCard = ({ transfer, delay = 0 }) => (
+  <div className={`${styles.panel} border border-primary/20 rounded-lg p-4 bank-row bank-fade-in`} style={{ animationDelay: `${delay}s` }}>
     <div className="flex items-center justify-between gap-3">
       <div className="flex-1 min-w-0">
         <div className={`text-sm font-heading font-bold mb-1 ${
@@ -493,16 +525,28 @@ export default function Bank() {
   const transfers = Array.isArray(overview?.transfers) ? overview.transfers : [];
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="bank-page">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="bank-page">
+      <style>{BANK_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative bank-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Vault</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+          Bank
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Interest deposits, Swiss account, and transfers.</p>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <div className="rounded-md overflow-hidden border border-primary/20">
+        <div className="relative rounded-lg overflow-hidden border border-primary/20 bank-corner bank-fade-in">
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
             onClick={() => toggleSection('interestBank')}
-            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+            className="w-full px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2 text-left hover:bg-primary/12 transition-colors"
           >
             <span className="shrink-0 text-primary/80">{isCollapsed('interestBank') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Interest Bank</span>
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Interest Bank</span>
           </button>
           {!isCollapsed('interestBank') && (
             <div>
@@ -520,14 +564,15 @@ export default function Bank() {
           )}
         </div>
 
-        <div className="rounded-md overflow-hidden border border-primary/20">
+        <div className="relative rounded-lg overflow-hidden border border-primary/20 bank-corner bank-fade-in" style={{ animationDelay: '0.05s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
             onClick={() => toggleSection('swissBank')}
-            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+            className="w-full px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2 text-left hover:bg-primary/12 transition-colors"
           >
             <span className="shrink-0 text-primary/80">{isCollapsed('swissBank') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Swiss Bank</span>
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Swiss Bank</span>
           </button>
           {!isCollapsed('swissBank') && (
             <div>
@@ -544,16 +589,17 @@ export default function Bank() {
       </div>
 
       {/* Interest Deposits */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bank-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <button
           type="button"
           onClick={() => toggleSection('interestDeposits')}
-          className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+          className="w-full px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2 text-left hover:bg-primary/12 transition-colors"
         >
           <span className="shrink-0 text-primary/80">{isCollapsed('interestDeposits') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
           <div className="flex items-center gap-2 flex-1">
             <Coins size={18} className="text-primary" />
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Interest Deposits</span>
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Interest Deposits</span>
           </div>
           <span className="text-xs text-mutedForeground">{deposits.length} total</span>
         </button>
@@ -565,24 +611,26 @@ export default function Bank() {
               </div>
             ) : (
               <div className="p-3 md:p-4 space-y-3">
-                {deposits.map((d) => (
-                  <DepositCard key={d.id} deposit={d} onClaim={claimDeposit} />
+                {deposits.map((d, i) => (
+                  <DepositCard key={d.id} deposit={d} onClaim={claimDeposit} delay={i * 0.03} />
                 ))}
               </div>
             )}
+            <div className="bank-art-line text-primary mx-4" />
           </>
         )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        <div className={`${styles.panel} border border-primary/20 rounded-md overflow-hidden`}>
+        <div className={`relative ${styles.panel} border border-primary/20 rounded-lg overflow-hidden bank-fade-in`} style={{ animationDelay: '0.1s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
             onClick={() => toggleSection('sendMoney')}
-            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+            className="w-full px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2 text-left hover:bg-primary/12 transition-colors"
           >
             <span className="shrink-0 text-primary/80">{isCollapsed('sendMoney') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Send Money</span>
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Send Money</span>
           </button>
           {!isCollapsed('sendMoney') && (
             <div>
@@ -598,14 +646,15 @@ export default function Bank() {
           )}
         </div>
 
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bank-fade-in`} style={{ animationDelay: '0.15s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
             onClick={() => toggleSection('transfers')}
-            className="w-full px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2 text-left hover:bg-primary/15 transition-colors"
+            className="w-full px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2 text-left hover:bg-primary/12 transition-colors"
           >
             <span className="shrink-0 text-primary/80">{isCollapsed('transfers') ? <ChevronRight size={18} /> : <ChevronDown size={18} />}</span>
-            <span className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex-1">Sent / Received</span>
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex-1">Sent / Received</span>
             <span className="text-xs text-mutedForeground">{transfers.length} recent</span>
           </button>
           {!isCollapsed('transfers') && (
@@ -616,11 +665,12 @@ export default function Bank() {
                 </div>
               ) : (
                 <div className="p-3 md:p-4 space-y-3">
-                  {transfers.map((t) => (
-                    <TransferCard key={t.id} transfer={t} />
+                  {transfers.map((t, i) => (
+                    <TransferCard key={t.id} transfer={t} delay={i * 0.03} />
                   ))}
                 </div>
               )}
+              <div className="bank-art-line text-primary mx-4" />
             </>
           )}
         </div>
