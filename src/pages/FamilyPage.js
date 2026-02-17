@@ -84,12 +84,7 @@ function AnimatedCounter({ target, prefix = '', duration = 1000 }) {
 // ============================================================================
 
 const StatCard = ({ label, value, highlight, icon, accent: accentColor }) => (
-  <div className="relative overflow-hidden rounded-lg p-3 transition-all group" style={{
-    background: highlight
-      ? 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.04))'
-      : 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-    border: highlight ? '1px solid rgba(16,185,129,0.3)' : '1px solid #3a3a38',
-  }}>
+  <div className={`relative overflow-hidden rounded-lg p-3 transition-all group ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`}>
     {highlight && <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-emerald-500/10 blur-xl" />}
     <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-wider mb-1 font-heading">
       {icon}
@@ -147,14 +142,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
   const pct = maxLevel ? (racket.level / maxLevel) * 100 : 0;
 
   return (
-    <div className={`relative rounded-lg overflow-hidden transition-all ${isReady ? 'animate-ready-pulse' : ''}`} style={{
-      background: locked
-        ? 'linear-gradient(135deg, rgba(20,20,18,0.5), rgba(15,15,13,0.6))'
-        : isReady
-          ? 'linear-gradient(135deg, rgba(16,185,129,0.08), rgba(30,30,28,0.8))'
-          : 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-      border: isReady ? '1px solid rgba(16,185,129,0.35)' : locked ? '1px dashed #333' : '1px solid #3a3a38',
-    }}>
+    <div className={`relative rounded-lg overflow-hidden transition-all ${isReady ? 'animate-ready-pulse bg-emerald-500/5 border border-emerald-500/35' : locked ? 'bg-zinc-900/50 border border-dashed border-zinc-700/50' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
       {isReady && <div className="absolute -top-3 -right-3 w-12 h-12 rounded-full bg-emerald-500/15 blur-lg pointer-events-none" />}
 
       <div className="p-3">
@@ -174,12 +162,8 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
         {/* Level progress bar */}
         <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-2">
           <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${pct}%`,
-              minWidth: racket.level > 0 ? 4 : 0,
-              background: locked ? '#555' : isMax ? 'linear-gradient(90deg, #d4af37, #f59e0b)' : 'linear-gradient(90deg, #d4af37, #b8860b)',
-            }}
+            className={`h-full rounded-full transition-all duration-500 ${locked ? 'bg-zinc-600' : isMax ? 'bg-gradient-to-r from-primary to-amber-500' : 'bg-gradient-to-r from-primary to-yellow-700'}`}
+            style={{ width: `${pct}%`, minWidth: racket.level > 0 ? 4 : 0 }}
           />
         </div>
 
@@ -240,10 +224,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
 const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
   <div className="space-y-4">
     {/* Vault display */}
-    <div className="relative rounded-lg overflow-hidden p-6 text-center" style={{
-      background: 'linear-gradient(135deg, rgba(30,30,28,0.9), rgba(20,20,18,0.95))',
-      border: '1px solid #3a3a38',
-    }}>
+    <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-6 text-center border border-primary/20`}>
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
       <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-40 h-20 rounded-full bg-primary/10 blur-2xl pointer-events-none" />
       <DollarSign size={20} className="mx-auto text-primary/60 mb-1" />
@@ -254,7 +235,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
     </div>
 
     {/* Deposit */}
-    <div className="rounded-lg p-3" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3">
       <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2">Deposit</p>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {TREASURY_QUICK.map((q) => (
@@ -275,7 +256,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
 
     {/* Withdraw */}
     {canWithdraw && (
-      <div className="rounded-lg p-3" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+      <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3">
         <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2">Withdraw</p>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {TREASURY_QUICK.map((q) => (
@@ -308,9 +289,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnloc
     <div className="space-y-3">
       {/* Event Banner */}
       {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] border border-primary/30" style={{
-          background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))',
-        }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] border border-primary/30 bg-primary/5">
           <span className="text-primary font-heading font-bold">✨ {event.name}</span>
           <span className="text-zinc-400">{event.message}</span>
         </div>
@@ -346,7 +325,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
     </div>
     
     {targets.length === 0 ? (
-      <div className="text-center py-10 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.6), rgba(20,20,18,0.7))', border: '1px solid #3a3a38' }}>
+      <div className="text-center py-10 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
         <Crosshair size={28} className="mx-auto text-zinc-600 mb-2" />
         <p className="text-xs text-zinc-500 font-heading">No targets available</p>
       </div>
@@ -356,13 +335,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
           const raidsLeft = t.raids_remaining ?? 2;
           const canRaid = raidsLeft > 0;
           return (
-            <div key={t.family_id} className="rounded-lg overflow-hidden" style={{
-              background: canRaid
-                ? 'linear-gradient(135deg, rgba(239,68,68,0.06), rgba(30,30,28,0.8))'
-                : 'linear-gradient(135deg, rgba(30,30,28,0.4), rgba(20,20,18,0.5))',
-              border: canRaid ? '1px solid rgba(239,68,68,0.25)' : '1px solid #2a2a28',
-              opacity: canRaid ? 1 : 0.5,
-            }}>
+            <div key={t.family_id} className={`rounded-lg overflow-hidden ${canRaid ? 'bg-red-500/5 border border-red-500/25' : 'bg-zinc-800/30 border border-zinc-800/30 opacity-50'}`}>
               <div className="px-3 py-2 flex items-center justify-between border-b border-zinc-700/30">
                 <div className="flex items-center gap-2 min-w-0">
                   <Crosshair size={12} className={canRaid ? 'text-red-400' : 'text-zinc-600'} />
@@ -435,12 +408,7 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
           const cfg = getRoleConfig(m.role);
           const isBoss = m.role === 'boss';
           return (
-            <div key={m.user_id} className="flex items-center justify-between px-3 py-2.5 rounded-lg transition-all" style={{
-              background: isBoss
-                ? 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(30,30,28,0.8))'
-                : 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-              border: isBoss ? '1px solid rgba(212,175,55,0.25)' : '1px solid #3a3a38',
-            }}>
+            <div key={m.user_id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-all ${isBoss ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
               <div className="min-w-0">
                 <Link to={`/profile/${encodeURIComponent(m.username)}`} className="font-heading font-bold text-foreground text-xs hover:text-primary transition-colors block truncate">
                   {m.username}
@@ -489,13 +457,7 @@ const FamiliesTab = ({ families, myFamilyId }) => (
       <Link 
         key={f.id} 
         to={`/families/${encodeURIComponent(f.tag || f.id)}`} 
-        className="flex items-center justify-between px-3 py-2.5 rounded-lg transition-all group"
-        style={{
-          background: myFamilyId === f.id
-            ? 'linear-gradient(135deg, rgba(212,175,55,0.08), rgba(30,30,28,0.8))'
-            : 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-          border: myFamilyId === f.id ? '1px solid rgba(212,175,55,0.25)' : '1px solid #3a3a38',
-        }}
+        className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-all group ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30'}`}
       >
         <div className="min-w-0">
           <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors">{f.name}</span>
@@ -519,7 +481,7 @@ const FamiliesTab = ({ families, myFamilyId }) => (
 const WarHistoryTab = ({ wars }) => (
   <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
     {wars.length === 0 ? (
-      <div className="text-center py-10 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.6), rgba(20,20,18,0.7))', border: '1px solid #3a3a38' }}>
+      <div className="text-center py-10 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
         <Swords size={28} className="mx-auto text-zinc-600 mb-2" />
         <p className="text-xs text-zinc-500 font-heading italic">No war history</p>
       </div>
@@ -527,12 +489,7 @@ const WarHistoryTab = ({ wars }) => (
       const isActive = w.status === 'active' || w.status === 'truce_offered';
       const hasWinner = w.status === 'family_a_wins' || w.status === 'family_b_wins';
       return (
-        <div key={w.id} className="px-3 py-2.5 rounded-lg transition-all" style={{
-          background: isActive
-            ? 'linear-gradient(135deg, rgba(239,68,68,0.08), rgba(30,30,28,0.8))'
-            : 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-          border: isActive ? '1px solid rgba(239,68,68,0.3)' : '1px solid #3a3a38',
-        }}>
+        <div key={w.id} className={`px-3 py-2.5 rounded-lg transition-all ${isActive ? 'bg-red-500/10 border border-red-500/30' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
           <div className="flex items-center justify-between">
             <div className="text-xs font-heading">
               <span className="text-foreground font-bold">{w.family_a_name}</span>
@@ -560,15 +517,9 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative w-full max-w-md rounded-xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()} style={{
-        background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-        border: '2px solid rgba(239,68,68,0.3)',
-      }}>
+      <div className={`relative w-full max-w-md ${styles.panel} rounded-xl overflow-hidden border-2 border-red-500/30 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
         {/* War header */}
-        <div className="px-4 py-3 flex items-center justify-between" style={{
-          background: 'linear-gradient(135deg, rgba(239,68,68,0.15), rgba(239,68,68,0.05))',
-          borderBottom: '1px solid rgba(239,68,68,0.2)',
-        }}>
+        <div className="px-4 py-3 flex items-center justify-between bg-red-500/10 border-b border-red-500/20">
           <span className="text-sm font-heading font-bold text-red-400 uppercase flex items-center gap-2">
             <Swords size={16} /> War: {war.other_family_name}
           </span>
@@ -586,14 +537,14 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
             <>
               {(stats.my_family_totals || stats.other_family_totals) && (
                 <div className="grid grid-cols-2 gap-3 pb-3 border-b border-zinc-700/30">
-                  <div className="p-3 rounded-lg text-center" style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.1), rgba(30,30,28,0.8))', border: '1px solid rgba(16,185,129,0.25)' }}>
+                  <div className="p-3 rounded-lg text-center bg-emerald-500/10 border border-emerald-500/25">
                     <div className="text-[9px] text-zinc-400 uppercase font-heading mb-1">Our Family</div>
                     <div className="text-base font-heading font-bold text-emerald-400">
                       {stats.my_family_totals?.kills ?? 0}K / {stats.my_family_totals?.deaths ?? 0}D
                     </div>
                     <div className="text-[9px] text-zinc-500 mt-0.5">BG kills: {stats.my_family_totals?.bodyguard_kills ?? 0} · Lost: {stats.my_family_totals?.bodyguards_lost ?? 0}</div>
                   </div>
-                  <div className="p-3 rounded-lg text-center" style={{ background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(30,30,28,0.8))', border: '1px solid rgba(239,68,68,0.25)' }}>
+                  <div className="p-3 rounded-lg text-center bg-red-500/10 border border-red-500/25">
                     <div className="text-[9px] text-zinc-400 uppercase font-heading mb-1">Enemy</div>
                     <div className="text-base font-heading font-bold text-red-400">
                       {stats.other_family_totals?.kills ?? 0}K / {stats.other_family_totals?.deaths ?? 0}D
@@ -603,7 +554,7 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                 </div>
               )}
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="p-2.5 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+                <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
                   <Shield size={14} className="mx-auto mb-1 text-primary" />
                   <div className="text-[9px] text-zinc-500 font-heading">Top BG Kills</div>
                   {stats.top_bodyguard_killers?.[0] && (
@@ -612,7 +563,7 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                     </div>
                   )}
                 </div>
-                <div className="p-2.5 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+                <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
                   <Skull size={14} className="mx-auto text-red-400 mb-1" />
                   <div className="text-[9px] text-zinc-500 font-heading">Most BGs Lost</div>
                   {stats.top_bodyguards_lost?.[0] && (
@@ -621,7 +572,7 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                     </div>
                   )}
                 </div>
-                <div className="p-2.5 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+                <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
                   <Trophy size={14} className="mx-auto text-yellow-400 mb-1" />
                   <div className="text-[9px] text-zinc-500 font-heading">MVP</div>
                   {stats.mvp?.[0] && (
@@ -685,7 +636,7 @@ const CrewOCTab = ({
 
       {/* Set join fee & Advertise */}
       {canManageCrewOC && (
-        <div className="space-y-2 p-3 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+        <div className="space-y-2 p-3 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] text-zinc-500 font-heading">Join fee:</span>
             <span className="text-[10px] font-heading text-primary">{(crewOCJoinFee ?? 0) > 0 ? `Current: ${formatMoney(crewOCJoinFee)}` : 'Free'}</span>
@@ -714,7 +665,7 @@ const CrewOCTab = ({
       )}
 
       {/* Cooldown & commit */}
-      <div className="flex items-center justify-between px-3 py-2.5 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+      <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
         <span className="text-[10px] text-zinc-500 font-heading flex items-center gap-1"><Clock size={10} /> Next commit</span>
         <span className={`text-xs font-heading font-bold ${onCooldown ? 'text-amber-400' : 'text-emerald-400'}`}>{timeLeft}</span>
       </div>
@@ -746,7 +697,7 @@ const CrewOCTab = ({
             </div>
           )}
           {pending.map((a) => (
-            <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg" style={{ background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))', border: '1px solid #3a3a38' }}>
+            <div key={a.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
               <Link to={`/profile/${encodeURIComponent(a.username)}`} className="text-xs font-heading text-primary hover:underline">{a.username}</Link>
               {canManageCrewOC && (
                 <div className="flex gap-2">
@@ -769,11 +720,8 @@ const CrewOCTab = ({
 const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin }) => (
   <div className="space-y-4">
     {/* Create Family — signing a charter */}
-    <div className="rounded-xl overflow-hidden" style={{
-      background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-      border: '2px solid rgba(212,175,55,0.25)',
-    }}>
-      <div className="px-4 py-3 flex items-center gap-2" style={{ background: 'linear-gradient(135deg, rgba(212,175,55,0.1), rgba(212,175,55,0.03))', borderBottom: '1px solid rgba(212,175,55,0.2)' }}>
+    <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25`}>
+      <div className="px-4 py-3 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
         <Building2 size={16} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Establish a Family</span>
       </div>
@@ -791,11 +739,8 @@ const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreat
     </div>
 
     {/* Join Family */}
-    <div className="rounded-xl overflow-hidden" style={{
-      background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-      border: '1px solid #3a3a38',
-    }}>
-      <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid #3a3a38' }}>
+    <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
         <Users size={16} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Join a Family</span>
       </div>
@@ -812,11 +757,8 @@ const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreat
     </div>
 
     {/* All Families */}
-    <div className="rounded-xl overflow-hidden" style={{
-      background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-      border: '1px solid #3a3a38',
-    }}>
-      <div className="px-4 py-3 flex items-center gap-2" style={{ borderBottom: '1px solid #3a3a38' }}>
+    <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
         <Building2 size={16} className="text-zinc-400" />
         <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">All Families</span>
       </div>
@@ -964,22 +906,17 @@ export default function FamilyPage() {
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="families-page">
       <style>{`
         @keyframes ready-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
-          50% { box-shadow: 0 0 12px 2px rgba(16,185,129,0.15); }
+          0%, 100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb), 0); }
+          50% { box-shadow: 0 0 12px 2px rgba(var(--noir-primary-rgb), 0.15); }
         }
         .animate-ready-pulse { animation: ready-pulse 2s ease-in-out infinite; }
       `}</style>
 
       {/* ── Family HQ Header ── */}
-      <div className="relative rounded-xl overflow-hidden" style={{
-        background: family
-          ? 'linear-gradient(135deg, #1a1a1a 0%, #1e1e1c 50%, #141414 100%)'
-          : 'transparent',
-        border: family ? '2px solid rgba(212,175,55,0.2)' : 'none',
-      }}>
+      <div className={`relative rounded-xl overflow-hidden ${family ? `${styles.panel} border-2 border-primary/20` : ''}`}>
         {family && <>
           {/* Decorative top bar */}
-          <div className="h-1" style={{ background: 'linear-gradient(90deg, transparent, #d4af37, transparent)' }} />
+          <div className="h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
         </>}
 
@@ -1010,7 +947,7 @@ export default function FamilyPage() {
           </div>
         </div>
 
-        {family && <div className="h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,175,55,0.15), transparent)' }} />}
+        {family && <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />}
       </div>
 
       {family ? (
@@ -1025,10 +962,7 @@ export default function FamilyPage() {
 
           {/* ── War Banner ── */}
           {activeWars.length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 rounded-lg" style={{
-              background: 'linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.03))',
-              border: '1px solid rgba(239,68,68,0.25)',
-            }}>
+            <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
               <div className="flex items-center gap-2 flex-wrap">
                 <Swords size={15} className="text-red-400 animate-pulse shrink-0" />
                 <span className="text-xs text-red-400 font-heading font-bold">At War:</span>
@@ -1046,12 +980,9 @@ export default function FamilyPage() {
           )}
 
           {/* ── Tabbed Content ── */}
-          <div className="rounded-xl overflow-hidden" style={{
-            background: 'linear-gradient(135deg, #1a1a1a, #0f0f0f)',
-            border: '1px solid #3a3a38',
-          }}>
+          <div className={`${styles.panel} rounded-xl overflow-hidden`}>
             {/* Tab bar */}
-            <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-700/40" style={{ background: 'linear-gradient(180deg, rgba(30,30,28,0.6), rgba(20,20,18,0.8))' }}>
+            <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-700/40 bg-zinc-900/60">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Raid</Tab>
               <Tab active={activeTab === 'crewoc'} onClick={() => setActiveTab('crewoc')} icon={<Crosshair size={10} />}>Crew OC</Tab>
