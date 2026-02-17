@@ -58,20 +58,42 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Armour not found")
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
-    updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
+    price = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN * mult) if armour.get("cost_money") is not None else int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN * mult)
     if armour.get("cost_money") is not None:
-        # Player pays sell price (production cost * 1.35 * event)
-        price = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN * mult)
         if current_user.get("money", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient cash")
-        updates["$inc"] = {"money": -price}
-    elif armour.get("cost_points") is not None:
-        price = int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN * mult)
+    else:
         if current_user.get("points", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient points")
-        updates["$inc"] = {"points": -price}
+
+    # Fulfill from armoury in same state if available (owner gets 35% margin)
+    from routers.bullet_factory import get_armoury_for_state
+    state = (current_user.get("current_state") or "").strip()
+    factory = await get_armoury_for_state(state) if state else None
+    armour_stock = factory.get("armour_stock") or {}
+    owner_id = factory.get("owner_id") if factory else None
+    if owner_id and owner_id != current_user["id"] and armour_stock.get(str(level), 0) >= 1:
+        armour_stock = dict(armour_stock)
+        armour_stock[str(level)] = armour_stock[str(level)] - 1
+        if armour_stock[str(level)] <= 0:
+            del armour_stock[str(level)]
+        await db.bullet_factory.update_one(
+            {"state": factory.get("state")},
+            {"$set": {"armour_stock": armour_stock}},
+        )
+        if armour.get("cost_money") is not None:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": price}})
+        else:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"points": price}})
+        return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
+
+    updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
+    if armour.get("cost_money") is not None:
+        updates["$inc"] = {"money": -price}
     else:
-        raise HTTPException(status_code=500, detail="Armour cost misconfigured")
+        updates["$inc"] = {"points": -price}
     await db.users.update_one({"id": current_user["id"]}, updates)
     return {"message": f"Purchased {armour['name']} (Armour Lv.{level})", "new_level": level}
 

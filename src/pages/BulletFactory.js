@@ -246,6 +246,10 @@ export default function BulletFactory({ me }) {
   const [priceInput, setPriceInput] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
   const [showParticles, setShowParticles] = useState(false);
+  const [producingArmour, setProducingArmour] = useState(false);
+  const [producingWeapon, setProducingWeapon] = useState(false);
+  const [armourOptions, setArmourOptions] = useState([]);
+  const [weaponsList, setWeaponsList] = useState([]);
 
   const currentState = me?.current_state;
 
@@ -264,6 +268,25 @@ export default function BulletFactory({ me }) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!data?.is_owner) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [armourRes, weaponsRes] = await Promise.all([
+          api.get('/armour/options'),
+          api.get('/weapons'),
+        ]);
+        if (!cancelled && armourRes.data?.options) setArmourOptions(armourRes.data.options);
+        if (!cancelled && Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+      } catch {
+        if (!cancelled) setArmourOptions([]);
+        if (!cancelled) setWeaponsList([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [data?.is_owner]);
 
   const claim = async () => {
     setClaiming(true);
@@ -333,6 +356,34 @@ export default function BulletFactory({ me }) {
       toast.error(e.response?.data?.detail || 'Failed to buy bullets');
     } finally {
       setBuying(false);
+    }
+  };
+
+  const startArmourProduction = async (level) => {
+    setProducingArmour(true);
+    try {
+      const res = await api.post('/bullet-factory/start-armour-production', { level, state: data?.state || currentState });
+      toast.success(res.data?.message || 'Armour production started');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to start armour production');
+    } finally {
+      setProducingArmour(false);
+    }
+  };
+
+  const startWeaponProduction = async (weaponId) => {
+    setProducingWeapon(true);
+    try {
+      const res = await api.post('/bullet-factory/start-weapon-production', { weapon_id: weaponId, state: data?.state || currentState });
+      toast.success(res.data?.message || 'Weapon production started');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to start weapon production');
+    } finally {
+      setProducingWeapon(false);
     }
   };
 
@@ -646,6 +697,95 @@ export default function BulletFactory({ me }) {
                 {pricePerBullet != null && (
                   <p className="text-[10px] text-zinc-500 mt-1.5">Current: {formatMoney(pricePerBullet)} per bullet</p>
                 )}
+              </div>
+            )}
+
+            {/* Armoury: Produce armour & weapons (owner only) */}
+            {isOwner && (
+              <div className="rounded-lg p-3" style={{
+                background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
+                border: '1px solid #3a3a38',
+              }}>
+                <div className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Shield size={11} />
+                  Armoury — Produce (pay per hour, stock builds)
+                </div>
+                <p className="text-[10px] text-zinc-400 font-heading mb-2">
+                  {(data?.armour_producing || data?.weapon_producing) ? (
+                    <>Producing: {data.armour_producing && `Armour Lv.${data.armour_production_level} (${(data.armour_production_hours_remaining ?? 0).toFixed(1)}h left)`}
+                      {data.armour_producing && data.weapon_producing && ' · '}
+                      {data.weapon_producing && `Weapon (${(data.weapon_production_hours_remaining ?? 0).toFixed(1)}h left)`}
+                    </>
+                  ) : (
+                    'Click Produce to pay for 1 hour; items accumulate per hour. Sell at 35% margin.'
+                  )}
+                </p>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <p className="text-[9px] text-zinc-500 font-heading uppercase mb-1">Armour stock</p>
+                    <div className="text-[11px] font-heading text-foreground">
+                      {Object.entries(data?.armour_stock || {}).filter(([, q]) => q > 0).length
+                        ? Object.entries(data.armour_stock).filter(([, q]) => q > 0).map(([lv, q]) => <span key={lv} className="mr-1.5">Lv.{lv}: {q}</span>)
+                        : '—'}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-zinc-500 font-heading uppercase mb-1">Weapon stock</p>
+                    <div className="text-[11px] font-heading text-foreground">
+                      {Object.entries(data?.weapon_stock || {}).filter(([, q]) => q > 0).length
+                        ? Object.values(data.weapon_stock).reduce((a, b) => a + b, 0) + ' units'
+                        : '—'}
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-1">Produce armour (1 hr)</p>
+                    <div className="flex flex-wrap gap-1">
+                      {armourOptions.length
+                        ? armourOptions.map((opt) => {
+                            const costPerHr = (opt.cost_money != null ? opt.cost_money : opt.cost_points ?? 0) * (data?.armour_rate_per_hour ?? 2);
+                            const isPoints = opt.cost_points != null;
+                            const canAfford = isPoints ? (me?.points ?? 0) >= costPerHr : (me?.money ?? 0) >= costPerHr;
+                            return (
+                              <button
+                                key={opt.level}
+                                type="button"
+                                disabled={producingArmour || !canAfford}
+                                onClick={() => startArmourProduction(opt.level)}
+                                className="px-2 py-1 rounded text-[10px] font-heading font-bold border bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Lv.{opt.level} {isPoints ? `${costPerHr} pts` : formatMoney(costPerHr)}
+                              </button>
+                            );
+                          })
+                        : <span className="text-[10px] text-zinc-500">Loading...</span>}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-1">Produce weapon (1 hr)</p>
+                    <div className="flex flex-wrap gap-1">
+                      {weaponsList.slice(0, 6).map((w) => {
+                        const costPerHr = (w.price_money ?? w.price_points ?? 0) * (data?.weapon_rate_per_hour ?? 1);
+                        const isPoints = w.price_points != null;
+                        const canAfford = isPoints ? (me?.points ?? 0) >= costPerHr : (me?.money ?? 0) >= costPerHr;
+                        return (
+                          <button
+                            key={w.id}
+                            type="button"
+                            disabled={producingWeapon || !canAfford}
+                            onClick={() => startWeaponProduction(w.id)}
+                            className="px-2 py-1 rounded text-[10px] font-heading border bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 truncate max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
+                            title={w.name}
+                          >
+                            {w.name?.replace(/\s*\(.*\)/, '') || w.id} {isPoints ? `${costPerHr} pts` : formatMoney(costPerHr)}
+                          </button>
+                        );
+                      })}
+                      {!weaponsList.length && <span className="text-[10px] text-zinc-500">Loading...</span>}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

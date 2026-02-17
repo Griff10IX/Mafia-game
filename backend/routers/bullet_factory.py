@@ -1,6 +1,6 @@
-# Bullet Factory: one per state, produces 3000 bullets/hour. When unowned, still produces; price $2,500–$4,000.
-# Owner can claim (pay), set price, collect. Others buy at owner's price (or unowned price).
-# Also: store buy-bullets (points), admin add-bullets.
+# Bullet Factory / Armoury: one per state. Bullets 3000/hour; owner can also produce armour & weapons (pay per hour, stock accumulates).
+# Owner can claim (pay), set price, collect bullets. Others buy at owner's price (or unowned price).
+# Armoury: owner clicks "Produce" for armour or weapons, pays production cost for 1 hour; stock accumulates at rate/hour.
 from datetime import datetime, timezone, timedelta
 import os
 import sys
@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 from typing import Optional
-from server import db, get_current_user, STATES, _is_admin, _username_pattern
+
+from server import db, get_current_user, STATES, _is_admin, _username_pattern, ARMOUR_SETS
 
 BULLET_FACTORY_PRODUCTION_PER_HOUR = 3000
 BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production
@@ -19,6 +20,10 @@ BULLET_FACTORY_PRICE_MIN = 1
 BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
 BULLET_FACTORY_UNOWNED_PRICE_MIN = 2500
 BULLET_FACTORY_UNOWNED_PRICE_MAX = 4000
+
+# Armoury production: rate per hour; owner pays production cost per unit × rate for each hour of production
+ARMOURY_ARMOUR_RATE_PER_HOUR = 2
+ARMOURY_WEAPON_RATE_PER_HOUR = 1
 
 # Store: buy bullets with points (pack size -> points cost)
 BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
@@ -38,10 +43,30 @@ class BuyBulletsRequest(BaseModel):
     state: Optional[str] = None
 
 
+class StartArmourProductionRequest(BaseModel):
+    level: int  # 1-5
+    state: Optional[str] = None
+
+
+class StartWeaponProductionRequest(BaseModel):
+    weapon_id: str
+    state: Optional[str] = None
+
+
 def _normalize_state(state: str) -> str:
     if not state or state not in STATES:
         return STATES[0] if STATES else ""
     return state
+
+
+async def get_armoury_for_state(state: str):
+    """Get factory for state after ticking armoury production. Used by armour/weapon buy to fulfill from armoury."""
+    state = _normalize_state(state)
+    if not state:
+        return None
+    factory = await _get_or_create_factory(state)
+    factory = await _tick_armoury_production(state, factory)
+    return factory
 
 
 async def _get_or_create_factory(state: str):
@@ -61,6 +86,61 @@ async def _get_or_create_factory(state: str):
         "unowned_price": unowned_price,
     })
     return await db.bullet_factory.find_one({"state": state}, {"_id": 0})
+
+
+async def _tick_armoury_production(state: str, factory: dict) -> dict:
+    """Advance armour/weapon stock by elapsed time; update DB. Returns updated factory."""
+    now = datetime.now(timezone.utc)
+    updates = {}
+    # Armour
+    if factory.get("armour_producing") and factory.get("armour_production_started_at"):
+        try:
+            started = datetime.fromisoformat(factory["armour_production_started_at"].replace("Z", "+00:00"))
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            hours_remaining = float(factory.get("armour_production_hours_remaining") or 0)
+            elapsed_hours = (now - started).total_seconds() / 3600
+            use_hours = min(elapsed_hours, hours_remaining)
+            if use_hours > 0:
+                level = int(factory.get("armour_production_level") or 1)
+                add_units = int(use_hours * ARMOURY_ARMOUR_RATE_PER_HOUR)
+                armour_stock = dict(factory.get("armour_stock") or {})
+                key = str(level)
+                armour_stock[key] = armour_stock.get(key, 0) + add_units
+                updates["armour_stock"] = armour_stock
+                hours_remaining -= use_hours
+                updates["armour_production_hours_remaining"] = max(0, hours_remaining)
+                if hours_remaining <= 0:
+                    updates["armour_producing"] = False
+            updates["armour_production_started_at"] = now.isoformat()
+        except Exception:
+            pass
+    # Weapon
+    if factory.get("weapon_producing") and factory.get("weapon_production_started_at"):
+        try:
+            started = datetime.fromisoformat(factory["weapon_production_started_at"].replace("Z", "+00:00"))
+            if started.tzinfo is None:
+                started = started.replace(tzinfo=timezone.utc)
+            hours_remaining = float(factory.get("weapon_production_hours_remaining") or 0)
+            elapsed_hours = (now - started).total_seconds() / 3600
+            use_hours = min(elapsed_hours, hours_remaining)
+            if use_hours > 0:
+                wid = factory.get("weapon_production_id") or ""
+                add_units = int(use_hours * ARMOURY_WEAPON_RATE_PER_HOUR)
+                weapon_stock = dict(factory.get("weapon_stock") or {})
+                weapon_stock[wid] = weapon_stock.get(wid, 0) + add_units
+                updates["weapon_stock"] = weapon_stock
+                hours_remaining -= use_hours
+                updates["weapon_production_hours_remaining"] = max(0, hours_remaining)
+                if hours_remaining <= 0:
+                    updates["weapon_producing"] = False
+            updates["weapon_production_started_at"] = now.isoformat()
+        except Exception:
+            pass
+    if updates:
+        await db.bullet_factory.update_one({"state": state}, {"$set": updates})
+        factory = {**factory, **updates}
+    return factory
 
 
 def _accumulated_bullets(factory: dict) -> int:
@@ -84,10 +164,12 @@ async def get_bullet_factory(
     state: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
 ):
-    """Status for one state (default: user's current state). Production, owner, accumulated, can_collect, can_buy."""
+    """Status for one state (default: user's current state). Bullets + armoury production/stock."""
     state = _normalize_state(state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     owner_id = factory.get("owner_id")
+    if owner_id:
+        factory = await _tick_armoury_production(state, factory)
     owner_username = factory.get("owner_username")
     if owner_id and not owner_username:
         user = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
@@ -98,14 +180,13 @@ async def get_bullet_factory(
     unowned_price = factory.get("unowned_price")
     if unowned_price is None:
         unowned_price = random.randint(BULLET_FACTORY_UNOWNED_PRICE_MIN, BULLET_FACTORY_UNOWNED_PRICE_MAX)
-    # When unowned: anyone can buy at unowned_price. When owned: non-owner buys at price (owner sets).
     if owner_id:
         can_buy = price is not None and price >= BULLET_FACTORY_PRICE_MIN and not is_owner and accumulated > 0
         effective_price = price
     else:
         can_buy = accumulated > 0
         effective_price = unowned_price
-    return {
+    out = {
         "state": state,
         "production_per_hour": BULLET_FACTORY_PRODUCTION_PER_HOUR,
         "claim_cost": BULLET_FACTORY_CLAIM_COST,
@@ -123,6 +204,19 @@ async def get_bullet_factory(
         "last_collected_at": factory.get("last_collected_at"),
         "is_owner": is_owner,
     }
+    # Armoury (owner only)
+    if owner_id:
+        out["armour_producing"] = bool(factory.get("armour_producing"))
+        out["armour_production_level"] = factory.get("armour_production_level")
+        out["armour_production_hours_remaining"] = float(factory.get("armour_production_hours_remaining") or 0)
+        out["armour_stock"] = factory.get("armour_stock") or {}
+        out["armour_rate_per_hour"] = ARMOURY_ARMOUR_RATE_PER_HOUR
+        out["weapon_producing"] = bool(factory.get("weapon_producing"))
+        out["weapon_production_id"] = factory.get("weapon_production_id")
+        out["weapon_production_hours_remaining"] = float(factory.get("weapon_production_hours_remaining") or 0)
+        out["weapon_stock"] = factory.get("weapon_stock") or {}
+        out["weapon_rate_per_hour"] = ARMOURY_WEAPON_RATE_PER_HOUR
+    return out
 
 
 async def get_bullet_factory_list(current_user: dict = Depends(get_current_user)):
@@ -219,6 +313,107 @@ async def collect_bullets(
         "message": f"Collected {accumulated:,} bullets",
         "collected": accumulated,
         "new_total": (current_user.get("bullets") or 0) + accumulated,
+    }
+
+
+async def start_armour_production(
+    request: StartArmourProductionRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Owner pays for 1 hour of armour production; stock accumulates at ARMOURY_ARMOUR_RATE_PER_HOUR."""
+    state = _normalize_state(request.state or current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    if factory.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    level = int(request.level or 0)
+    if level < 1 or level > 5:
+        raise HTTPException(status_code=400, detail="Armour level must be 1–5")
+    armour = next((a for a in ARMOUR_SETS if a["level"] == level), None)
+    if not armour:
+        raise HTTPException(status_code=404, detail="Armour level not found")
+    # Cost for 1 hour = production cost per unit × rate per hour
+    cost_money = armour.get("cost_money")
+    cost_points = armour.get("cost_points")
+    if cost_money is not None:
+        pay = cost_money * ARMOURY_ARMOUR_RATE_PER_HOUR
+        if (current_user.get("money") or 0) < pay:
+            raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${pay:,} for 1 hour of production.")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -pay}})
+    elif cost_points is not None:
+        pay = cost_points * ARMOURY_ARMOUR_RATE_PER_HOUR
+        if (current_user.get("points") or 0) < pay:
+            raise HTTPException(status_code=400, detail=f"Insufficient points. Need {pay} for 1 hour of production.")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -pay}})
+    else:
+        raise HTTPException(status_code=400, detail="Armour level has no production cost")
+    now = datetime.now(timezone.utc).isoformat()
+    armour_stock = dict(factory.get("armour_stock") or {})
+    hours_remaining = float(factory.get("armour_production_hours_remaining") or 0) + 1.0
+    await db.bullet_factory.update_one(
+        {"state": state},
+        {"$set": {
+            "armour_producing": True,
+            "armour_production_level": level,
+            "armour_production_started_at": now,
+            "armour_production_hours_remaining": hours_remaining,
+            "armour_stock": armour_stock,
+        }},
+    )
+    return {
+        "message": f"Started armour (level {level}) production. {ARMOURY_ARMOUR_RATE_PER_HOUR}/hour for the next {int(hours_remaining)} hour(s).",
+        "state": state,
+        "armour_production_level": level,
+        "armour_production_hours_remaining": hours_remaining,
+    }
+
+
+async def start_weapon_production(
+    request: StartWeaponProductionRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Owner pays for 1 hour of weapon production; stock accumulates at ARMOURY_WEAPON_RATE_PER_HOUR."""
+    state = _normalize_state(request.state or current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    if factory.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    weapon_id = (request.weapon_id or "").strip()
+    if not weapon_id:
+        raise HTTPException(status_code=400, detail="weapon_id required")
+    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0, "price_money": 1, "price_points": 1, "name": 1})
+    if not weapon:
+        raise HTTPException(status_code=404, detail="Weapon not found")
+    pm = weapon.get("price_money")
+    pp = weapon.get("price_points")
+    if pm is not None:
+        pay = pm * ARMOURY_WEAPON_RATE_PER_HOUR
+        if (current_user.get("money") or 0) < pay:
+            raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${pay:,} for 1 hour of production.")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -pay}})
+    elif pp is not None:
+        pay = pp * ARMOURY_WEAPON_RATE_PER_HOUR
+        if (current_user.get("points") or 0) < pay:
+            raise HTTPException(status_code=400, detail=f"Insufficient points. Need {pay} for 1 hour of production.")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -pay}})
+    else:
+        raise HTTPException(status_code=400, detail="Weapon has no production cost")
+    now = datetime.now(timezone.utc).isoformat()
+    weapon_stock = dict(factory.get("weapon_stock") or {})
+    hours_remaining = float(factory.get("weapon_production_hours_remaining") or 0) + 1.0
+    await db.bullet_factory.update_one(
+        {"state": state},
+        {"$set": {
+            "weapon_producing": True,
+            "weapon_production_id": weapon_id,
+            "weapon_production_started_at": now,
+            "weapon_production_hours_remaining": hours_remaining,
+            "weapon_stock": weapon_stock,
+        }},
+    )
+    return {
+        "message": f"Started {weapon.get('name', weapon_id)} production. {ARMOURY_WEAPON_RATE_PER_HOUR}/hour for the next {int(hours_remaining)} hour(s).",
+        "state": state,
+        "weapon_production_id": weapon_id,
+        "weapon_production_hours_remaining": hours_remaining,
     }
 
 
@@ -345,5 +540,7 @@ def register(router):
     router.add_api_route("/bullet-factory/collect", collect_bullets, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
     router.add_api_route("/bullet-factory/buy", buy_bullets, methods=["POST"])
+    router.add_api_route("/bullet-factory/start-armour-production", start_armour_production, methods=["POST"])
+    router.add_api_route("/bullet-factory/start-weapon-production", start_weapon_production, methods=["POST"])
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
     router.add_api_route("/admin/add-bullets", admin_add_bullets, methods=["POST"])

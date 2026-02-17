@@ -156,20 +156,51 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
     currency = (request.currency or "").strip().lower()
     if currency not in ("money", "points"):
         raise HTTPException(status_code=400, detail="Invalid currency")
-    # Player pays sell price (production cost * 1.35 * event)
     if currency == "money":
         if weapon.get("price_money") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with points")
         price = int(weapon["price_money"] * ARMOUR_WEAPON_MARGIN * mult)
         if current_user.get("money", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient money")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
-    elif currency == "points":
+    else:
         if weapon.get("price_points") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with money")
         price = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN * mult)
         if current_user.get("points", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient points")
+
+    # Fulfill from armoury in same state if available (owner gets 35% margin)
+    from routers.bullet_factory import get_armoury_for_state
+    state = (current_user.get("current_state") or "").strip()
+    factory = await get_armoury_for_state(state) if state else None
+    weapon_stock = factory.get("weapon_stock") or {}
+    owner_id = factory.get("owner_id") if factory else None
+    if owner_id and owner_id != current_user["id"] and weapon_stock.get(weapon_id, 0) >= 1:
+        weapon_stock = dict(weapon_stock)
+        weapon_stock[weapon_id] = weapon_stock[weapon_id] - 1
+        if weapon_stock[weapon_id] <= 0:
+            del weapon_stock[weapon_id]
+        await db.bullet_factory.update_one(
+            {"state": factory.get("state")},
+            {"$set": {"weapon_stock": weapon_stock}},
+        )
+        if currency == "money":
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": price}})
+        else:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"points": price}})
+        await db.user_weapons.update_one(
+            {"user_id": current_user["id"], "weapon_id": weapon_id},
+            {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+        _invalidate_weapons_cache(current_user["id"])
+        return {"message": f"Successfully purchased {weapon['name']} from armoury"}
+
+    if currency == "money":
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
+    else:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
     await db.user_weapons.update_one(
         {"user_id": current_user["id"], "weapon_id": weapon_id},
