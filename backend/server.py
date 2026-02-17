@@ -1055,6 +1055,8 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_db():
     await init_game_data()
+    from routers.profile import ensure_profile_indexes
+    await ensure_profile_indexes(db)
     from routers.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
     # Start security monitoring background task

@@ -1,9 +1,40 @@
 # Profile: user profile view, avatar, theme, change-password, telegram (for Auto Rank)
 import asyncio
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from fastapi import Body, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
+
+
+async def ensure_profile_indexes(db):
+    """
+    Create indexes used by the profile endpoint so profile loads stay fast.
+    Idempotent: safe to run on every startup.
+    """
+    try:
+        # users: lookup by username (regex) and by id
+        await db.users.create_index("username")
+        await db.users.create_index("id", unique=True)
+        # users: rank counts use filter is_dead, is_bodyguard + range on one field
+        for field in ("total_kills", "total_crimes", "total_gta", "jail_busts", "rank_points"):
+            await db.users.create_index([
+                ("is_dead", 1),
+                ("is_bodyguard", 1),
+                (field, -1),
+            ])
+        # families: lookup by id
+        await db.families.create_index("id", unique=True)
+        # casino ownership: list by owner_id
+        for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership"):
+            await db[coll_name].create_index("owner_id")
+        # notifications: count by user_id
+        await db.notifications.create_index("user_id")
+        logger.info("Profile indexes ensured.")
+    except Exception as e:
+        logger.warning("ensure_profile_indexes: %s", e)
 
 
 def register(router):
