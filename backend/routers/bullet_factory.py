@@ -1,5 +1,5 @@
 # Bullet Factory / Armoury: one per state. Bullets 3000/hour; owner can also produce armour & weapons (pay per hour, stock accumulates).
-# Owner can claim (pay), set price, collect bullets. Others buy at owner's price (or unowned price).
+# Owner can claim (pay), set price. Bullets are sold from factory stock (no collect); others buy at owner's price (or unowned price).
 # Armoury: owner clicks "Produce" for armour or weapons, pays production cost for 1 hour; stock accumulates at rate/hour.
 from datetime import datetime, timezone, timedelta
 import os
@@ -204,7 +204,6 @@ async def get_bullet_factory(
         "owner_id": owner_id,
         "owner_username": owner_username,
         "accumulated_bullets": accumulated,
-        "can_collect": is_owner and accumulated > 0,
         "can_buy": can_buy,
         "price_per_bullet": effective_price,
         "price_min": BULLET_FACTORY_PRICE_MIN,
@@ -298,34 +297,6 @@ async def claim_bullet_factory(
         "message": f"You now own the Bullet Factory in {state}. It produces 3,000 bullets per hour.",
         "state": state,
         "owner_id": current_user["id"],
-    }
-
-
-async def collect_bullets(
-    body: StateOptionalRequest = Body(default=StateOptionalRequest()),
-    current_user: dict = Depends(get_current_user),
-):
-    """Owner collects accumulated bullets in this state."""
-    state = _normalize_state(body.state or current_user.get("current_state"))
-    factory = await _get_or_create_factory(state)
-    if factory.get("owner_id") != current_user["id"]:
-        raise HTTPException(status_code=403, detail="You do not own the bullet factory in this state")
-    accumulated = _accumulated_bullets(factory)
-    if accumulated <= 0:
-        raise HTTPException(status_code=400, detail="No bullets to collect yet")
-    now = datetime.now(timezone.utc).isoformat()
-    await db.bullet_factory.update_one(
-        {"state": state},
-        {"$set": {"last_collected_at": now}},
-    )
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$inc": {"bullets": accumulated}},
-    )
-    return {
-        "message": f"Collected {accumulated:,} bullets",
-        "collected": accumulated,
-        "new_total": (current_user.get("bullets") or 0) + accumulated,
     }
 
 
@@ -471,7 +442,7 @@ async def buy_bullets(
         )
     if owner_id:
         if owner_id == current_user["id"]:
-            raise HTTPException(status_code=400, detail="Owner collects for free; use Collect instead")
+            raise HTTPException(status_code=400, detail="You own this factory; bullets are sold to other players from stock.")
         price = factory.get("price_per_bullet")
         if price is None or price < BULLET_FACTORY_PRICE_MIN:
             raise HTTPException(status_code=400, detail="Owner has not set a price yet")
@@ -550,7 +521,6 @@ def register(router):
     router.add_api_route("/bullet-factory", get_bullet_factory, methods=["GET"])
     router.add_api_route("/bullet-factory/list", get_bullet_factory_list, methods=["GET"])
     router.add_api_route("/bullet-factory/claim", claim_bullet_factory, methods=["POST"])
-    router.add_api_route("/bullet-factory/collect", collect_bullets, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
     router.add_api_route("/bullet-factory/buy", buy_bullets, methods=["POST"])
     router.add_api_route("/bullet-factory/start-armour-production", start_armour_production, methods=["POST"])

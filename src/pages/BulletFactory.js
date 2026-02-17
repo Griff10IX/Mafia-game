@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Factory, Package, User, ShoppingCart, Flame, Gauge, Shield, Crosshair } from 'lucide-react';
+import { Factory, Package, User, ShoppingCart, Flame, Gauge, Shield, Crosshair, Swords } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -207,31 +207,18 @@ function AnimatedCounter({ target, duration = 1200 }) {
   return <span>{display.toLocaleString()}</span>;
 }
 
-/* ═══════════════════════════════════════════════════════
-   Collect Particles — bullets, weapons, armour, cash on collect (armoury)
-   ═══════════════════════════════════════════════════════ */
-function CollectParticles({ show }) {
-  if (!show) return null;
-  const emojis = ['🔫', '💰', '✨', '🎯', '🛡️', '⚔️'];
-  const items = Array.from({ length: 24 }).map((_, i) => ({
-    id: i,
-    emoji: emojis[i % emojis.length],
-    left: Math.random() * 100,
-    delay: Math.random() * 0.5,
-    dur: 1.5 + Math.random() * 1.5,
-    rot: Math.random() * 360,
-  }));
-  return (
-    <div className="absolute inset-0 pointer-events-none overflow-hidden z-50">
-      {items.map((p) => (
-        <div key={p.id} className="absolute text-lg animate-factory-particle"
-          style={{ left: `${p.left}%`, bottom: '10%', animationDelay: `${p.delay}s`, animationDuration: `${p.dur}s`, '--r': `${p.rot}deg` }}>
-          {p.emoji}
-        </div>
-      ))}
-    </div>
-  );
-}
+/* Tab button for Shop / Production */
+const Tab = ({ active, onClick, icon: Icon, children }) => (
+  <button
+    onClick={onClick}
+    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-heading font-bold uppercase tracking-wider transition-all border-b-2 ${
+      active ? 'text-primary border-primary bg-primary/5' : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-primary/30'
+    }`}
+  >
+    <Icon size={12} />
+    {children}
+  </button>
+);
 
 /* ═══════════════════════════════════════════════════════
    Main BulletFactory Component
@@ -239,17 +226,18 @@ function CollectParticles({ show }) {
 export default function BulletFactory({ me }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('shop');
   const [claiming, setClaiming] = useState(false);
-  const [collecting, setCollecting] = useState(false);
   const [settingPrice, setSettingPrice] = useState(false);
   const [buying, setBuying] = useState(false);
   const [priceInput, setPriceInput] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
-  const [showParticles, setShowParticles] = useState(false);
   const [producingArmour, setProducingArmour] = useState(false);
   const [producingWeapon, setProducingWeapon] = useState(false);
   const [armourOptions, setArmourOptions] = useState([]);
   const [weaponsList, setWeaponsList] = useState([]);
+  const [buyingArmourLevel, setBuyingArmourLevel] = useState(null);
+  const [buyingWeaponId, setBuyingWeaponId] = useState(null);
 
   const currentState = me?.current_state;
 
@@ -270,7 +258,7 @@ export default function BulletFactory({ me }) {
   }, [fetchData]);
 
   useEffect(() => {
-    if (!data?.is_owner) return;
+    if (!data) return;
     let cancelled = false;
     (async () => {
       try {
@@ -286,7 +274,7 @@ export default function BulletFactory({ me }) {
       }
     })();
     return () => { cancelled = true; };
-  }, [data?.is_owner]);
+  }, [data]);
 
   const claim = async () => {
     setClaiming(true);
@@ -302,19 +290,38 @@ export default function BulletFactory({ me }) {
     }
   };
 
-  const collect = async () => {
-    setCollecting(true);
+  const buyArmour = async (level) => {
+    setBuyingArmourLevel(level);
     try {
-      const res = await api.post('/bullet-factory/collect', { state: data?.state || currentState });
-      toast.success(res.data?.message || 'Bullets collected');
-      setShowParticles(true);
-      setTimeout(() => setShowParticles(false), 3000);
+      const res = await api.post('/armour/buy', { level });
+      toast.success(res.data?.message || 'Purchased armour');
       refreshUser();
       fetchData();
+      if (armourOptions.length) {
+        const optsRes = await api.get('/armour/options');
+        if (optsRes.data?.options) setArmourOptions(optsRes.data.options);
+      }
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to collect bullets');
+      toast.error(e.response?.data?.detail || 'Failed to purchase armour');
     } finally {
-      setCollecting(false);
+      setBuyingArmourLevel(null);
+    }
+  };
+
+  const buyWeapon = async (weaponId, currency) => {
+    setBuyingWeaponId(weaponId);
+    try {
+      await api.post(`/weapons/${weaponId}/buy`, { currency });
+      toast.success('Weapon purchased');
+      refreshUser();
+      fetchData();
+      const weaponsRes = await api.get('/weapons');
+      if (Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+    } catch (e) {
+      const detail = e.response?.data?.detail;
+      toast.error(Array.isArray(detail) ? detail[0]?.msg || 'Failed to buy weapon' : detail || 'Failed to buy weapon');
+    } finally {
+      setBuyingWeaponId(null);
     }
   };
 
@@ -400,7 +407,6 @@ export default function BulletFactory({ me }) {
 
   const hasOwner = !!data?.owner_id;
   const isOwner = data?.is_owner ?? false;
-  const canCollect = data?.can_collect ?? false;
   const canBuy = data?.can_buy ?? false;
   const accumulated = data?.accumulated_bullets ?? 0;
   const production = data?.production_per_hour ?? 3000;
@@ -450,7 +456,6 @@ export default function BulletFactory({ me }) {
         .animate-smoke { animation: smoke-rise 3s ease-out infinite; }
       `}</style>
 
-      <CollectParticles show={showParticles} />
 
       {/* Factory Header — industrial steel plate */}
       <div className="relative rounded-xl overflow-hidden" style={{
@@ -504,7 +509,162 @@ export default function BulletFactory({ me }) {
           <ConveyorBelt />
         </div>
 
-        {/* Main Content — two column layout */}
+        {/* Tabs: Shop (everyone), Production (owner only; or everyone when unclaimed so they can claim) */}
+        <div className="flex border-b border-zinc-700/50 px-4">
+          <Tab active={activeTab === 'shop'} onClick={() => setActiveTab('shop')} icon={ShoppingCart}>
+            Shop
+          </Tab>
+          {(!hasOwner || isOwner) && (
+            <Tab active={activeTab === 'production'} onClick={() => setActiveTab('production')} icon={Factory}>
+              Production
+            </Tab>
+          )}
+        </div>
+
+        {/* Tab content */}
+        {activeTab === 'shop' && (
+        <div className="p-4 space-y-4">
+          {/* Buy Bullets */}
+          {canBuy && pricePerBullet != null && (
+            <div className="rounded-lg p-3" style={{
+              background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
+              border: '1px solid #3a3a38',
+            }}>
+              <div className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Crosshair size={11} />
+                Buy Bullets
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {QUICK_BUYS.map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => setBuyAmount(String(amt))}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-heading font-bold border transition-all ${
+                      buyAmountNum === amt
+                        ? 'bg-primary/25 border-primary/60 text-primary shadow-sm shadow-primary/10'
+                        : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                    }`}
+                  >
+                    {amt.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+              <form onSubmit={buyBullets} className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={accumulated}
+                    placeholder="Custom amount"
+                    value={buyAmount}
+                    onChange={(e) => setBuyAmount(e.target.value)}
+                    className="flex-1 min-w-[100px] px-3 py-2 bg-zinc-900/80 border border-zinc-600/40 rounded-lg text-foreground font-heading text-sm focus:border-primary/50 focus:outline-none transition-colors"
+                  />
+                </div>
+                {buyAmountNum > 0 && (
+                  <div className="flex items-center justify-between text-[11px] font-heading px-1">
+                    <span className="text-zinc-500">{buyAmountNum.toLocaleString()} x {formatMoney(pricePerBullet)}</span>
+                    <span className="text-primary font-bold">= {formatMoney(buyTotal)}</span>
+                  </div>
+                )}
+                <button
+                  type="submit"
+                  disabled={buying || buyAmountNum <= 0 || !canAffordBuy || buyAmountNum > accumulated}
+                  className={`w-full px-4 py-2.5 font-heading font-bold text-xs uppercase rounded-lg border-2 transition-all ${
+                    canAffordBuy && buyAmountNum > 0 && buyAmountNum <= accumulated
+                      ? 'bg-gradient-to-b from-emerald-900/40 to-emerald-900/20 border-emerald-600/50 text-emerald-400 hover:from-emerald-900/50 hover:border-emerald-500/60'
+                      : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
+                  } disabled:opacity-50`}
+                >
+                  {buying ? 'Buying...' : `Buy ${buyAmountNum > 0 ? buyAmountNum.toLocaleString() : ''} Bullets`}
+                </button>
+              </form>
+              <p className="text-[10px] text-zinc-500 mt-1.5">{accumulated.toLocaleString()} in stock</p>
+            </div>
+          )}
+
+          {hasOwner && !isOwner && (pricePerBullet == null || accumulated === 0) && (
+            <div className="rounded-lg p-3 text-center" style={{
+              background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
+              border: '1px solid #3a3a38',
+            }}>
+              <p className="text-[11px] text-zinc-500 font-heading">
+                {pricePerBullet == null ? 'Owner has not set a price yet.' : 'No bullets in stock right now.'}
+              </p>
+            </div>
+          )}
+
+          {/* Buy Armour */}
+          <div className="rounded-lg p-3" style={{
+            background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
+            border: '1px solid #3a3a38',
+          }}>
+            <div className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Shield size={11} />
+              Buy Armour
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {armourOptions.length
+                ? armourOptions.map((opt) => {
+                    const cost = opt.effective_cost_money != null ? opt.effective_cost_money : opt.effective_cost_points;
+                    const isPoints = opt.effective_cost_points != null;
+                    const canAffordArmour = opt.affordable && !opt.owned;
+                    return (
+                      <button
+                        key={opt.level}
+                        type="button"
+                        disabled={opt.owned || buyingArmourLevel != null || !canAffordArmour}
+                        onClick={() => buyArmour(opt.level)}
+                        className="px-2.5 py-1.5 rounded text-[10px] font-heading font-bold border bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {opt.owned ? `Lv.${opt.level} Owned` : `Lv.${opt.level} ${isPoints ? `${cost} pts` : formatMoney(cost)}`}
+                      </button>
+                    );
+                  })
+                : <span className="text-[10px] text-zinc-500">Loading...</span>}
+            </div>
+          </div>
+
+          {/* Buy Weapons */}
+          <div className="rounded-lg p-3" style={{
+            background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
+            border: '1px solid #3a3a38',
+          }}>
+            <div className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Swords size={11} />
+              Buy Weapons
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {weaponsList.length
+                ? weaponsList.slice(0, 8).map((w) => {
+                    const priceMoney = w.effective_price_money ?? w.price_money;
+                    const pricePoints = w.effective_price_points ?? w.price_points;
+                    const canAffordMoney = priceMoney != null && (me?.money ?? 0) >= priceMoney;
+                    const canAffordPoints = pricePoints != null && (me?.points ?? 0) >= pricePoints;
+                    const canBuyW = !w.owned && !w.locked && (canAffordMoney || canAffordPoints);
+                    const usePoints = canBuyW && pricePoints != null && (canAffordPoints || !canAffordMoney);
+                    return (
+                      <button
+                        key={w.id}
+                        type="button"
+                        disabled={w.owned || w.locked || buyingWeaponId != null || !canBuyW}
+                        onClick={() => buyWeapon(w.id, usePoints ? 'points' : 'money')}
+                        className="px-2.5 py-1.5 rounded text-[10px] font-heading border bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 truncate max-w-[130px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={w.name}
+                      >
+                        {w.owned ? `${w.name?.replace(/\s*\(.*\)/, '')} ✓` : (w.name?.replace(/\s*\(.*\)/, '') || w.id) + (pricePoints != null ? ` ${pricePoints} pts` : ` ${formatMoney(priceMoney)}`)}
+                      </button>
+                    );
+                  })
+                : <span className="text-[10px] text-zinc-500">Loading...</span>}
+            </div>
+          </div>
+        </div>
+        )}
+
+        {activeTab === 'production' && (!hasOwner || isOwner) && (
+        {/* Main Content — two column layout (Production) */}
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Left Column — Stats & Gauge */}
@@ -544,7 +704,7 @@ export default function BulletFactory({ me }) {
                 </div>
               </div>
 
-              {/* Accumulated */}
+              {/* In stock (for sale) */}
               <div className="rounded-lg p-3 relative overflow-hidden" style={{
                 background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
                 border: '1px solid #3a3a38',
@@ -554,7 +714,7 @@ export default function BulletFactory({ me }) {
                 )}
                 <div className="flex items-center gap-1.5 mb-1">
                   <Package size={11} className="text-zinc-500" />
-                  <span className="text-[9px] text-zinc-500 font-heading uppercase">{hasOwner ? 'Stock' : 'Available'}</span>
+                  <span className="text-[9px] text-zinc-500 font-heading uppercase">In stock</span>
                 </div>
                 <div className="text-sm font-heading font-bold text-foreground">
                   <AnimatedCounter target={accumulated} />
@@ -610,7 +770,7 @@ export default function BulletFactory({ me }) {
 
               <div className="relative z-10 space-y-3">
                 <p className="text-xs text-zinc-400 font-heading leading-relaxed">
-                  Produces <strong className="text-primary">{production.toLocaleString()}</strong> bullets per hour.
+                  Produces <strong className="text-primary">{production.toLocaleString()}</strong> bullets per hour (sold from stock in Shop).
                   {!hasOwner && claimCost > 0 && (
                     <span> Pay <strong className="text-primary">{formatMoney(claimCost)}</strong> to claim ownership.</span>
                   )}
@@ -633,31 +793,6 @@ export default function BulletFactory({ me }) {
                       {claiming ? 'Claiming...' : canAffordClaim ? `Claim Factory — ${formatMoney(claimCost)}` : `Need ${formatMoney(claimCost)}`}
                     </div>
                   </button>
-                )}
-
-                {/* Collect Button */}
-                {canCollect && (
-                  <button
-                    type="button"
-                    onClick={collect}
-                    disabled={collecting}
-                    className="w-full group"
-                  >
-                    <div className="flex items-center justify-center gap-2 px-4 py-3 rounded-lg border-2 border-primary/60 font-heading font-bold uppercase tracking-wider transition-all bg-gradient-to-b from-primary/30 via-primary/20 to-amber-900/20 text-primary hover:from-primary/40 hover:to-amber-900/30 hover:shadow-lg hover:shadow-primary/20 disabled:opacity-50"
-                      style={{ boxShadow: '0 0 20px rgba(212,175,55,0.15)' }}>
-                      <Package size={18} className="group-hover:animate-bounce" />
-                      {collecting ? 'Collecting...' : `Collect ${accumulated.toLocaleString()} Bullets`}
-                    </div>
-                  </button>
-                )}
-
-                {hasOwner && !canCollect && accumulated === 0 && isOwner && (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
-                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                    <p className="text-[11px] text-zinc-400 font-heading">
-                      Producing... check back later to collect.
-                    </p>
-                  </div>
                 )}
               </div>
             </div>
@@ -789,81 +924,9 @@ export default function BulletFactory({ me }) {
               </div>
             )}
 
-            {/* Buy Bullets */}
-            {canBuy && pricePerBullet != null && (
-              <div className="rounded-lg p-3" style={{
-                background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-                border: '1px solid #3a3a38',
-              }}>
-                <div className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <ShoppingCart size={11} />
-                  {hasOwner ? 'Buy Bullets' : 'Buy (System Price)'}
-                </div>
-
-                {/* Quick Buy Chips */}
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {QUICK_BUYS.map((amt) => (
-                    <button
-                      key={amt}
-                      type="button"
-                      onClick={() => setBuyAmount(String(amt))}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-heading font-bold border transition-all ${
-                        buyAmountNum === amt
-                          ? 'bg-primary/25 border-primary/60 text-primary shadow-sm shadow-primary/10'
-                          : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
-                      }`}
-                    >
-                      {amt.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-
-                <form onSubmit={buyBullets} className="space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <input
-                      type="number"
-                      min={1}
-                      max={accumulated}
-                      placeholder="Custom amount"
-                      value={buyAmount}
-                      onChange={(e) => setBuyAmount(e.target.value)}
-                      className="flex-1 min-w-[100px] px-3 py-2 bg-zinc-900/80 border border-zinc-600/40 rounded-lg text-foreground font-heading text-sm focus:border-primary/50 focus:outline-none transition-colors"
-                    />
-                  </div>
-                  {buyAmountNum > 0 && (
-                    <div className="flex items-center justify-between text-[11px] font-heading px-1">
-                      <span className="text-zinc-500">{buyAmountNum.toLocaleString()} x {formatMoney(pricePerBullet)}</span>
-                      <span className="text-primary font-bold">= {formatMoney(buyTotal)}</span>
-                    </div>
-                  )}
-                  <button
-                    type="submit"
-                    disabled={buying || buyAmountNum <= 0 || !canAffordBuy || buyAmountNum > accumulated}
-                    className={`w-full px-4 py-2.5 font-heading font-bold text-xs uppercase rounded-lg border-2 transition-all ${
-                      canAffordBuy && buyAmountNum > 0 && buyAmountNum <= accumulated
-                        ? 'bg-gradient-to-b from-emerald-900/40 to-emerald-900/20 border-emerald-600/50 text-emerald-400 hover:from-emerald-900/50 hover:border-emerald-500/60'
-                        : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
-                    } disabled:opacity-50`}
-                  >
-                    {buying ? 'Buying...' : `Buy ${buyAmountNum > 0 ? buyAmountNum.toLocaleString() : ''} Bullets`}
-                  </button>
-                </form>
-                <p className="text-[10px] text-zinc-500 mt-1.5">{accumulated.toLocaleString()} in stock</p>
-              </div>
-            )}
-
-            {hasOwner && !isOwner && (pricePerBullet == null || accumulated === 0) && (
-              <div className="rounded-lg p-3 text-center" style={{
-                background: 'linear-gradient(135deg, rgba(30,30,28,0.8), rgba(20,20,18,0.9))',
-                border: '1px solid #3a3a38',
-              }}>
-                <p className="text-[11px] text-zinc-500 font-heading">
-                  {pricePerBullet == null ? 'Owner has not set a price yet.' : 'No bullets in stock right now.'}
-                </p>
-              </div>
-            )}
           </div>
         </div>
+        )}
 
         {/* Warning stripes bottom bar */}
         <div className="h-2" style={{
