@@ -37,14 +37,16 @@ def register(router):
             if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
                 continue
             rank_id, rank_name = get_rank_info(user.get("rank_points", 0))
-            if user.get("email") in ADMIN_EMAILS:
+            is_admin = user.get("email") in ADMIN_EMAILS
+            if is_admin:
                 rank_name = "Admin"
             users_data.append({
                 "username": user["username"],
                 "rank": rank_id,
                 "rank_name": rank_name,
                 "location": user["current_state"],
-                "in_jail": user.get("in_jail", False)
+                "in_jail": user.get("in_jail", False),
+                "is_admin": is_admin,
             })
 
         return OnlineUsersResponse(total_online=len(users_data), users=users_data)

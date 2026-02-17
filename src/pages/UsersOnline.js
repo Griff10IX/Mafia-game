@@ -82,10 +82,11 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
           <HoverCardTrigger asChild>
             <Link
               to={`/profile/${encodeURIComponent(user.username)}`}
-              className="relative z-10 text-[11px] font-heading font-bold text-foreground hover:text-primary transition-colors"
+              className={`relative z-10 text-[11px] font-heading font-bold transition-colors ${user.is_admin ? 'text-violet-400 hover:text-violet-300' : 'text-foreground hover:text-primary'}`}
               data-testid={`user-profile-link-${user.username}`}
             >
               {user.username}
+              {user.is_admin && <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-violet-500/20 text-violet-400">Admin</span>}
             </Link>
           </HoverCardTrigger>
           <HoverCardPortal>
