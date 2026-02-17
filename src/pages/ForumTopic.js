@@ -290,7 +290,7 @@ export default function ForumTopic() {
                 type="button"
                 onClick={applyCrewOC}
                 disabled={crewOCApplyLoading}
-                className="w-full py-2 font-heading font-bold uppercase tracking-wider text-xs rounded border bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground border-yellow-600/50 disabled:opacity-50"
+                className="w-full py-2 font-heading font-bold uppercase tracking-wider text-xs rounded bg-primary text-primaryForeground disabled:opacity-50"
               >
                 {crewOCApplyLoading ? '...' : topic.crew_oc_join_fee > 0 ? `Apply — pay $${(topic.crew_oc_join_fee || 0).toLocaleString()}` : 'Apply (free)'}
               </button>
@@ -336,7 +336,7 @@ export default function ForumTopic() {
                 <span className="text-xs font-heading text-foreground">Manual roll — I&apos;ll roll when ready (no auto-roll)</span>
               </label>
               <div className="flex gap-2 pt-1">
-                <button type="submit" disabled={createGameSubmitting} className="px-4 py-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 disabled:opacity-50">
+                <button type="submit" disabled={createGameSubmitting} className="px-4 py-2 bg-primary text-primaryForeground text-xs font-heading font-bold uppercase rounded disabled:opacity-50">
                   {createGameSubmitting ? '...' : 'Create game'}
                 </button>
               </div>
@@ -455,7 +455,7 @@ export default function ForumTopic() {
                 <button
                   type="submit"
                   disabled={posting}
-                  className="flex items-center gap-1.5 px-4 py-1.5 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 disabled:opacity-50 transition-all touch-manipulation"
+                  className="flex items-center gap-1.5 px-4 py-1.5 bg-primary text-primaryForeground text-xs font-heading font-bold uppercase rounded disabled:opacity-50 transition-all touch-manipulation"
                 >
                   <Send size={12} /> {posting ? '...' : 'Post'}
                 </button>

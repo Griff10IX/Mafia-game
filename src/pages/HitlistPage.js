@@ -62,7 +62,7 @@ const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
             type="button"
             onClick={onAddNpc}
             disabled={addingNpc}
-            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center gap-2 touch-manipulation whitespace-nowrap"
+            className="bg-primary text-primaryForeground hover:opacity-90 rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center gap-2 touch-manipulation whitespace-nowrap"
             data-testid="hitlist-add-npc"
           >
             <UserPlus size={16} />
@@ -160,7 +160,7 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
             <button
               onClick={onBuyOff}
               disabled={submitting || !canAfford}
-              className="flex-1 bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
+              className="flex-1 bg-primary text-primaryForeground hover:opacity-90 rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
             >
               <ShieldOff size={16} />
               Buy Off ({costLabel})
@@ -312,7 +312,7 @@ const PlaceBountyCard = ({
         <button
           type="submit"
           disabled={submitting || !targetUsername.trim() || !hasReward}
-          className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-3 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+          className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg px-4 py-3 font-heading font-bold uppercase tracking-wide text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         >
           {submitting ? 'Placing...' : 'Place Bounty'}
         </button>

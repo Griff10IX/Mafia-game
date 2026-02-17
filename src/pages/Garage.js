@@ -203,7 +203,7 @@ const ActionsBar = ({
               className={`rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide border inline-flex items-center gap-1.5 touch-manipulation transition-all ${
                 meltOnCooldown
                   ? 'bg-secondary/50 text-mutedForeground border-border cursor-not-allowed'
-                  : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground border border-yellow-600/50 shadow shadow-primary/20 active:scale-95'
+                  : 'bg-primary text-primaryForeground hover:opacity-90 shadow shadow-primary/20 active:scale-95'
               }`}
             >
               <Flame size={12} />
@@ -368,7 +368,7 @@ const SettingsModal = ({
             <button
               type="button"
               onClick={onSave}
-              className="flex-1 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-yellow-600/50 transition-all active:scale-95"
+              className="flex-1 bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs transition-all active:scale-95"
             >
               Save
             </button>
@@ -442,7 +442,7 @@ const CustomCarModal = ({
               type="button"
               onClick={onSave}
               disabled={saving}
-              className="flex-1 bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-yellow-600/50 transition-all disabled:opacity-50 active:scale-95"
+              className="flex-1 bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs transition-all disabled:opacity-50 active:scale-95"
             >
               {saving ? 'Saving...' : 'Save'}
             </button>

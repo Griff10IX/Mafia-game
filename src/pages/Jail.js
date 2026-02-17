@@ -91,7 +91,7 @@ const JailStatusCard = ({
             type="button"
             onClick={onLeaveJail}
             disabled={leavingJail}
-            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wide shadow-lg shadow-primary/20 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1.5 border border-yellow-600/50"
+            className="bg-primary text-primaryForeground hover:opacity-90 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wide shadow-lg shadow-primary/20 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1.5"
           >
             <DoorOpen size={14} />
             {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
@@ -228,7 +228,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
             type="button"
             onClick={() => onBust(player.username, player.is_npc)}
             disabled={loading || userInJail}
-            className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation border border-yellow-600/50 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+            className="bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
             data-testid={`bust-out-${index}`}
           >
             🔓 Bust

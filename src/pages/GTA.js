@@ -186,7 +186,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             type="button"
             onClick={() => onAttempt(option.id)}
             disabled={attemptingOptionId !== null}
-            className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation border border-yellow-600/50 disabled:opacity-60"
+            className="bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation disabled:opacity-60"
             data-testid={`attempt-gta-${option.id}`}
           >
             {attemptingOptionId === option.id ? '...' : '🚗 Steal'}

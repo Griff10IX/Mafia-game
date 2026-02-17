@@ -349,7 +349,7 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
           className={`w-full mt-2 rounded px-4 py-2 text-xs font-bold uppercase tracking-wide touch-manipulation border ${
             manualPlayDisabled
               ? 'bg-zinc-700/50 text-mutedForeground border-zinc-600/50 cursor-not-allowed'
-              : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground shadow shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed border-yellow-600/50'
+              : 'bg-primary text-primaryForeground shadow shadow-primary/20 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed'
           }`}
         >
           {manualPlayDisabled ? 'Locked' : executing ? 'Running...' : '🎯 Run Heist'}
@@ -814,7 +814,7 @@ export default function OrganisedCrime() {
           className={`w-full py-3 font-heading font-bold uppercase tracking-wider text-sm transition-all touch-manipulation rounded-lg ${
             autoRankOcDisabled || !canExecute || onCooldown || executing
               ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border border-zinc-700'
-              : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground shadow-lg shadow-primary/20 border border-yellow-600/50'
+              : 'bg-primary text-primaryForeground shadow-lg shadow-primary/20 hover:opacity-90'
           }`}
         >
           {autoRankOcDisabled ? 'Locked' : executing ? 'Running...' : onCooldown ? `Cooldown ${cooldownStr}` : hasInviteSlot() ? '📨 Send Invites' : '🎯 Run Heist'}

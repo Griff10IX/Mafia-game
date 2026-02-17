@@ -137,7 +137,7 @@ a.bg-primary,
 a.from-primary {
   background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
   color: var(--noir-button-foreground) !important;
-  border: 1px solid rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5) !important;
+  border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5)) !important;
   border-radius: 2px !important;
 }
 
@@ -245,7 +245,7 @@ a.from-primary {
 [data-button-style="outline"] a.from-primary {
   background: rgba(var(--noir-button-primary-rgb, 212, 175, 55), 0.12) !important;
   color: var(--noir-button-foreground) !important;
-  border: 2px solid var(--noir-button-gradient-2) !important;
+  border: 2px solid var(--noir-button-border, var(--noir-button-gradient-2)) !important;
   box-shadow: none !important;
   border-radius: 4px !important;
 }
@@ -254,7 +254,7 @@ a.from-primary {
 [data-button-style="outline"] a.bg-primary:hover,
 [data-button-style="outline"] a.from-primary:hover {
   background: rgba(var(--noir-button-primary-rgb, 212, 175, 55), 0.22) !important;
-  border-color: var(--noir-button-gradient-1) !important;
+  border-color: var(--noir-button-border, var(--noir-button-gradient-1)) !important;
 }
 
 /* Glitch / chromatic aberration text effect for buttons (add class .btn-glitch-text) */

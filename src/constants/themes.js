@@ -6,6 +6,8 @@
 /** Hex colour presets: { id, name, primary, primaryBright, primaryDark, foregroundOnPrimary } */
 export const THEME_COLOURS = [
   { id: 'gold', name: 'Gold', primary: '#d4af37', primaryBright: '#e6c229', primaryDark: '#b8860b', foregroundOnPrimary: '#ffffff' },
+  /* Button default: dark olive-gold fill, bright gold border, golden text (Assign button look) */
+  { id: 'dark-gold', name: 'Dark Gold', primary: '#61562C', primaryBright: '#DCB450', primaryDark: '#4a4522', foregroundOnPrimary: '#F0C864' },
   { id: 'amber', name: 'Amber', primary: '#f59e0b', primaryBright: '#fbbf24', primaryDark: '#d97706', foregroundOnPrimary: '#000000' },
   { id: 'yellow', name: 'Yellow', primary: '#eab308', primaryBright: '#facc15', primaryDark: '#ca8a04', foregroundOnPrimary: '#000000' },
   { id: 'orange', name: 'Orange', primary: '#ea580c', primaryBright: '#f97316', primaryDark: '#c2410c', foregroundOnPrimary: '#ffffff' },
@@ -519,6 +521,8 @@ export const THEME_WRITING_SECTIONS = [
 ];
 
 export const DEFAULT_COLOUR_ID = 'gold';
+/** Default button colour when user has not set one (Assign-button style: dark olive-gold, bright border). */
+export const DEFAULT_BUTTON_COLOUR_ID = 'dark-gold';
 export const DEFAULT_WRITING_COLOUR_ID = 'default';
 export const DEFAULT_TEXT_STYLE_ID = 'normal';
 export const DEFAULT_FONT_ID = 'classic';

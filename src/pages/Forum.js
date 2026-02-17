@@ -129,7 +129,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading font-bold uppercase rounded border border-zinc-600/50 hover:bg-zinc-600/50 transition-all">
               Cancel
             </button>
-            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 disabled:opacity-50 transition-all">
+            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-primary text-primaryForeground text-xs font-heading font-bold uppercase rounded disabled:opacity-50 transition-all">
               {submitting ? '...' : 'Create'}
             </button>
           </div>
@@ -208,7 +208,7 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
           </label>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading uppercase rounded border border-zinc-600/50">Cancel</button>
-            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading uppercase rounded border border-yellow-600/50 disabled:opacity-50">{submitting ? '...' : 'Create'}</button>
+            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-primary text-primaryForeground text-xs font-heading uppercase rounded disabled:opacity-50">{submitting ? '...' : 'Create'}</button>
           </div>
         </form>
       </div>
@@ -523,7 +523,7 @@ export default function Forum() {
           {activeTab !== 'crew_oc' && (
             <button
               onClick={() => setModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground text-xs font-heading font-bold uppercase rounded border border-yellow-600/50 hover:from-yellow-500 hover:to-yellow-600 transition-all touch-manipulation"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primaryForeground text-xs font-heading font-bold uppercase rounded hover:opacity-90 transition-all touch-manipulation"
             >
               <Plus size={14} /> New Topic
             </button>

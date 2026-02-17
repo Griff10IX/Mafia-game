@@ -23,6 +23,7 @@
   --noir-button-gradient-4: var(--noir-gradient-4);
   --noir-button-foreground: var(--noir-primary-foreground);
   --noir-button-primary-rgb: var(--noir-primary-rgb);
+  --noir-button-border: var(--noir-primary-bright);
   /* Accent lines & progress bars (dividers, progress fill); default = main theme */
   --noir-accent-line: var(--noir-primary);
   --noir-accent-line-dark: var(--noir-primary-dark);
@@ -186,7 +187,7 @@
 .btnPrimary {
   background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4));
   color: var(--noir-button-foreground);
-  border: 1px solid rgba(var(--noir-button-primary-rgb), 0.5);
+  border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb), 0.5));
   border-radius: 2px;
 }
 
@@ -198,7 +199,7 @@
 .btnGoldDarkText {
   background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4));
   color: #1a1a1a;
-  border: 1px solid rgba(var(--noir-button-primary-rgb), 0.5);
+  border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb), 0.5));
   border-radius: 2px;
 }
 
@@ -289,7 +290,7 @@
   background: var(--noir-button-gradient-2) !important;
   box-shadow: none;
   border-radius: 2px;
-  border: 1px solid rgba(var(--noir-button-primary-rgb), 0.4);
+  border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb), 0.4));
 }
 [data-button-style="flat"] .btnPrimary:hover,
 [data-button-style="flat"] .btnGoldDarkText:hover {
@@ -301,13 +302,13 @@
 [data-button-style="outline"] .btnGoldDarkText {
   background: rgba(var(--noir-button-primary-rgb), 0.12) !important;
   color: var(--noir-button-foreground) !important;
-  border: 2px solid var(--noir-button-gradient-2);
+  border: 2px solid var(--noir-button-border, var(--noir-button-gradient-2));
   box-shadow: none;
   border-radius: 4px;
 }
 [data-button-style="outline"] .btnGoldDarkText {
   color: #1a1a1a !important;
-  border-color: var(--noir-button-gradient-2);
+  border-color: var(--noir-button-border, var(--noir-button-gradient-2));
   background: rgba(var(--noir-button-primary-rgb), 0.18) !important;
 }
 [data-button-style="outline"] .btnPrimary:hover,

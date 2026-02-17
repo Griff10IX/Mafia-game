@@ -288,7 +288,7 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
         <button
           onClick={onBuyAirmiles}
           disabled={travelInfo?.user_points < (travelInfo?.extra_airmiles_cost || 25)}
-          className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-black rounded-lg px-4 py-3 font-heading font-bold uppercase tracking-wide text-sm border-2 border-yellow-600/50 shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation flex items-center justify-center gap-2"
+          className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg px-4 py-3 font-heading font-bold uppercase tracking-wide text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation flex items-center justify-center gap-2"
         >
           <ShoppingCart size={18} />
           Buy +5 Airmiles ({travelInfo?.extra_airmiles_cost || 25} pts)

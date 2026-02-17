@@ -399,7 +399,7 @@ export default function SportsBetting() {
             </div>
             <div className="p-3 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={checkForEvents} disabled={checkingEvents} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-yellow-600/50 disabled:opacity-50">
+                <button onClick={checkForEvents} disabled={checkingEvents} className="bg-primary text-primaryForeground rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase disabled:opacity-50">
                   {checkingEvents ? 'Checking...' : 'Check for events'}
                 </button>
                 {(() => { const total = Object.values(templates.templates || {}).reduce((s, arr) => s + (arr?.length || 0), 0); return total > 0 ? <span className="text-[10px] text-zinc-500 font-heading">{total} loaded</span> : null; })()}
@@ -424,7 +424,7 @@ export default function SportsBetting() {
                       <span className="text-[11px] font-heading text-foreground truncate block">{t.name}</span>
                       {(t.start_time_display || t.start_time) && <span className="text-[9px] text-zinc-600 font-heading">{t.start_time_display || formatDateTime(t.start_time)}</span>}
                     </div>
-                    <button onClick={() => addEventFromTemplate(t.id)} disabled={addingTemplateId !== null} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-2 py-1 text-[9px] font-heading font-bold border border-yellow-600/50 disabled:opacity-50 flex items-center gap-1">
+                    <button onClick={() => addEventFromTemplate(t.id)} disabled={addingTemplateId !== null} className="bg-primary text-primaryForeground rounded px-2 py-1 text-[9px] font-heading font-bold disabled:opacity-50 flex items-center gap-1">
                       <Plus size={10} /> {addingTemplateId === t.id ? '...' : 'Add'}
                     </button>
                   </div>
@@ -448,7 +448,7 @@ export default function SportsBetting() {
                 <div className="flex items-center gap-2">
                   <button onClick={() => setCustomEventOptions((p) => [...p, { name: '', odds: 2 }])} className="text-[9px] font-heading text-primary hover:underline">+ Option</button>
                   <div className="flex-1" />
-                  <button onClick={addCustomEvent} disabled={addingCustom} className="bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-yellow-600/50 disabled:opacity-50">
+                  <button onClick={addCustomEvent} disabled={addingCustom} className="bg-primary text-primaryForeground rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase disabled:opacity-50">
                     {addingCustom ? '...' : 'Create'}
                   </button>
                 </div>
@@ -640,7 +640,7 @@ export default function SportsBetting() {
               ))}
             </div>
             <div className="mt-4 flex gap-2">
-              <button onClick={runSettle} disabled={settling || !settleWinningId} className="flex-1 bg-gradient-to-b from-primary to-yellow-700 text-primaryForeground py-2.5 rounded font-heading font-bold text-sm uppercase border border-yellow-600/50 disabled:opacity-40">
+              <button onClick={runSettle} disabled={settling || !settleWinningId} className="flex-1 bg-primary text-primaryForeground py-2.5 rounded font-heading font-bold text-sm uppercase disabled:opacity-40">
                 {settling ? '...' : 'Settle & Pay'}
               </button>
               <button onClick={() => { setSettleEvent(null); setSettleWinningId(''); }} className="px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded text-foreground font-heading text-sm hover:bg-zinc-700">

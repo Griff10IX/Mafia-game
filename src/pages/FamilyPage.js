@@ -462,7 +462,7 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
               <option value="">Member...</option>
               {members.filter((m) => m.role !== 'boss').map((m) => <option key={m.user_id} value={m.user_id}>{m.username}</option>)}
             </select>
-            <button type="submit" className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all">
+            <button type="submit" className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider bg-primary text-primaryForeground hover:opacity-90 transition-all">
               Assign
             </button>
           </form>

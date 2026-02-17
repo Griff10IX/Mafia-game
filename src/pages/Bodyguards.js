@@ -144,7 +144,7 @@ export default function Bodyguards() {
             <button
               onClick={buySlot}
               data-testid="buy-slot-button"
-              className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-2.5 py-1 text-[10px] font-bold uppercase border border-yellow-600/50 transition-all inline-flex items-center gap-1"
+              className="bg-primary text-primaryForeground hover:opacity-90 rounded px-2.5 py-1 text-[10px] font-bold uppercase transition-all inline-flex items-center gap-1"
             >
               <Plus size={12} />
               Buy Slot ({getSlotCost(user.bodyguard_slots + 1)} pts)
@@ -272,7 +272,7 @@ export default function Bodyguards() {
                           upgradeArmour(bg.slot_number);
                         }}
                         disabled={(bg.armour_level || 0) >= 5}
-                        className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation border border-yellow-600/50 disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed"
                         data-testid={`upgrade-armour-${bg.slot_number}`}
                       >
                         🛡️ Upgrade
@@ -284,7 +284,7 @@ export default function Bodyguards() {
                           hireBodyguard(bg.slot_number, true);
                         }}
                         data-testid={`hire-robot-${bg.slot_number}`}
-                        className="bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation border border-yellow-600/50"
+                        className="bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation"
                       >
                         🤖 Hire ({getHireCost(bg.slot_number, true)} pts)
                       </button>

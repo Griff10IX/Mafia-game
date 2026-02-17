@@ -156,7 +156,7 @@ const InterestBankCard = ({
       <button
         type="button"
         onClick={onDeposit}
-        className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-lg font-heading font-bold uppercase tracking-wide py-3 border-2 border-yellow-600/50 transition-all shadow-lg shadow-primary/20 touch-manipulation"
+        className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg font-heading font-bold uppercase tracking-wide py-3 transition-all shadow-lg shadow-primary/20 touch-manipulation"
       >
         💰 Deposit
       </button>
@@ -213,7 +213,7 @@ const SwissBankCard = ({
         <button
           type="button"
           onClick={onDeposit}
-          className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md font-heading font-bold uppercase tracking-wide py-2.5 text-sm border border-yellow-600/50 transition-all touch-manipulation"
+          className="bg-primary text-primaryForeground hover:opacity-90 rounded-md font-heading font-bold uppercase tracking-wide py-2.5 text-sm transition-all touch-manipulation"
         >
           Deposit
         </button>
@@ -270,7 +270,7 @@ const DepositCard = ({ deposit, onClaim, delay = 0 }) => {
             type="button"
             onClick={() => onClaim(deposit.id)}
             disabled={!canClaim}
-            className="bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-md px-4 py-2 text-sm font-bold uppercase border border-yellow-600/50 transition-all disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+            className="bg-primary text-primaryForeground hover:opacity-90 rounded-md px-4 py-2 text-sm font-bold uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
           >
             Claim
           </button>
@@ -328,7 +328,7 @@ const SendMoneyCard = ({
       <button
         type="button"
         onClick={onSend}
-        className="w-full bg-gradient-to-r from-primary via-yellow-600 to-primary hover:from-yellow-500 hover:via-yellow-600 hover:to-yellow-500 text-primaryForeground rounded-lg font-heading font-bold uppercase tracking-wide py-3 border-2 border-yellow-600/50 transition-all shadow-lg shadow-primary/20 touch-manipulation"
+        className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg font-heading font-bold uppercase tracking-wide py-3 transition-all shadow-lg shadow-primary/20 touch-manipulation"
       >
         📤 Send
       </button>
