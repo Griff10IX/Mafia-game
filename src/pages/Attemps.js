@@ -43,12 +43,12 @@ function money(n) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-4 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent}`}>
     <style>{ATTEMPTS_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-      <Crosshair size={28} className="text-primary/40 animate-pulse" />
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading attempts...</span>
+    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+      <Crosshair size={22} className="text-primary/40 animate-pulse" />
+      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading attempts...</span>
     </div>
   </div>
 );
@@ -63,42 +63,42 @@ const AttemptRow = ({ attempt }) => {
   const bgOwner = attempt.bodyguard_owner_username;
 
   return (
-    <div className="atmp-row px-4 py-3 border-b border-zinc-700/30">
-      <div className="flex items-start md:items-center justify-between gap-3">
+    <div className="atmp-row px-2 py-1.5 border-b border-zinc-700/30">
+      <div className="flex items-start md:items-center justify-between gap-2">
         {/* Left side - Main info */}
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className={`p-1 rounded ${outgoingRow ? 'bg-primary/20' : 'bg-secondary'}`}>
-              <DirIcon size={14} className={outgoingRow ? 'text-primary' : 'text-mutedForeground'} />
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <div className={`p-0.5 rounded ${outgoingRow ? 'bg-primary/20' : 'bg-secondary'}`}>
+              <DirIcon size={10} className={outgoingRow ? 'text-primary' : 'text-mutedForeground'} />
             </div>
             
             <Link
               to={`/profile/${encodeURIComponent(otherUser || '')}`}
-              className="font-heading font-bold text-foreground hover:text-primary transition-colors text-sm truncate"
+              className="font-heading font-bold text-foreground hover:text-primary transition-colors text-[11px] truncate"
             >
               {otherUser}
             </Link>
             
-            <span className={`shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-heading font-bold uppercase ${
+            <span className={`shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase ${
               killed
                 ? 'bg-primary/20 text-primary border border-primary/30'
                 : 'bg-secondary text-mutedForeground border border-border'
             }`}>
-              {killed ? <Skull size={12} /> : <Crosshair size={12} />}
+              {killed ? <Skull size={9} /> : <Crosshair size={9} />}
               {killed ? 'Killed' : 'Failed'}
             </span>
             
             {isBodyguardKill && (
-              <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-heading font-bold uppercase bg-secondary text-mutedForeground border border-border">
-                <Shield size={12} />
+              <span className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase bg-secondary text-mutedForeground border border-border">
+                <Shield size={9} />
                 Bodyguard
               </span>
             )}
           </div>
 
           {isBodyguardKill && bgOwner && (
-            <div className="text-xs text-mutedForeground font-heading flex items-center gap-1.5 pl-7">
-              <Shield size={12} className="text-primary" />
+            <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1 pl-5">
+              <Shield size={9} className="text-primary" />
               <span>Protecting</span>
               <Link 
                 to={`/profile/${encodeURIComponent(bgOwner)}`} 
@@ -110,20 +110,20 @@ const AttemptRow = ({ attempt }) => {
           )}
 
           {attempt.death_message && (
-            <div className="text-xs text-mutedForeground font-heading italic pl-7">
+            <div className="text-[9px] text-mutedForeground font-heading italic pl-5">
               &quot;{attempt.death_message}&quot;
             </div>
           )}
 
-          <div className="flex items-center gap-4 text-xs pl-7">
+          <div className="flex items-center gap-3 text-[9px] pl-5">
             {rewardMoney != null && (
-              <div className="flex items-center gap-1.5 text-emerald-400 font-heading font-bold">
-                <DollarSign size={12} />
+              <div className="flex items-center gap-1 text-emerald-400 font-heading font-bold">
+                <DollarSign size={9} />
                 {money(rewardMoney)}
               </div>
             )}
-            <div className="flex items-center gap-1.5 text-mutedForeground font-heading">
-              <Clock size={12} />
+            <div className="flex items-center gap-1 text-mutedForeground font-heading">
+              <Clock size={9} />
               {formatDateTime(attempt.created_at)}
             </div>
           </div>
@@ -131,14 +131,14 @@ const AttemptRow = ({ attempt }) => {
 
         {/* Right side - Bullets */}
         <div className="shrink-0 text-right">
-          <div className="text-base font-heading font-bold text-primary tabular-nums">
+          <div className="text-sm font-heading font-bold text-primary tabular-nums">
             {Number(attempt.bullets_used || 0).toLocaleString()}
           </div>
-          <div className="text-xs text-mutedForeground font-heading">
+          <div className="text-[9px] text-mutedForeground font-heading">
             bullets
           </div>
           {!killed && attempt.bullets_required && (
-            <div className="text-xs text-mutedForeground font-heading mt-1">
+            <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
               / {Number(attempt.bullets_required || 0).toLocaleString()}
             </div>
           )}
@@ -149,24 +149,24 @@ const AttemptRow = ({ attempt }) => {
 };
 
 const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage, delay = 0 }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atmp-card atmp-corner atmp-fade-in`} style={{ animationDelay: `${delay}s` }}>
-    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none atmp-glow" />
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-        <Icon size={16} />
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atmp-card atmp-corner atmp-fade-in`} style={{ animationDelay: `${delay}s` }}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atmp-glow" />
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
+        <Icon size={12} />
         {title}
       </h2>
-      <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/30">
+      <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-heading font-bold border border-primary/30">
         {attempts.length}
       </span>
     </div>
 
-    <div className="max-h-[600px] overflow-y-auto">
+    <div className="max-h-[480px] overflow-y-auto">
       {attempts.length === 0 ? (
-        <div className="py-16 text-center">
-          <Icon size={48} className="mx-auto text-primary/30 mb-3" />
-          <p className="text-sm text-mutedForeground font-heading">
+        <div className="py-8 text-center">
+          <Icon size={28} className="mx-auto text-primary/30 mb-2" />
+          <p className="text-[10px] text-mutedForeground font-heading">
             {emptyMessage}
           </p>
         </div>
@@ -178,7 +178,7 @@ const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage, delay = 0 }) 
         </div>
       )}
     </div>
-    <div className="atmp-art-line text-primary mx-4" />
+    <div className="atmp-art-line text-primary mx-2.5" />
   </div>
 );
 
@@ -212,19 +212,19 @@ export default function Attempts() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="attempts-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="attempts-page">
       <style>{ATTEMPTS_STYLES}</style>
 
       {/* Page header */}
       <div className="relative atmp-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Ledger</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Ledger</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase">
           Attempts
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Outgoing hits and incoming strikes — who lived, who didn&apos;t.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Outgoing hits and incoming strikes — who lived, who didn&apos;t.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-3">
         <AttemptsCard
           title="My Attempts"
           attempts={outgoing}
