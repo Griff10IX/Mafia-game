@@ -72,18 +72,16 @@ function PokerCard({ card, held, onToggleHold, canHold, index, dealing, revealed
   const isRed = card?.suit === 'H' || card?.suit === 'D';
 
   return (
-    <div className="flex flex-col items-center gap-0.5 sm:gap-1.5 min-w-0 w-full">
+    <div className="flex flex-col items-center gap-0.5 sm:gap-1.5 min-w-0 w-full sm:w-auto sm:shrink-0">
       <button
         type="button"
         onClick={canHold ? onToggleHold : undefined}
-        className={`relative rounded-md sm:rounded-lg overflow-hidden transition-all w-full ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
+        className={`vp-card-btn relative rounded-md sm:rounded-lg overflow-hidden transition-all ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
         style={{
-          aspectRatio: '2/3',
-          maxHeight: '96px',
           boxShadow: held
             ? '0 0 0 3px #d4af37, 0 6px 20px rgba(212,175,55,0.4)'
             : '0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)',
-          transform: held ? 'translateY(-4px)' : 'translateY(0)',
+          transform: held ? 'translateY(-6px)' : 'translateY(0)',
           animation: dealing ? `card-deal-vp 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) ${index * 0.1}s backwards` : undefined,
         }}
       >
@@ -329,6 +327,10 @@ export default function VideoPoker() {
         }
         .animate-vp-particle { animation: vp-particle ease-in forwards; }
         .animate-vp-result-banner { animation: vp-result-banner 0.4s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
+        .vp-card-btn { width: 100%; aspect-ratio: 2/3; max-height: 96px; }
+        @media (min-width: 640px) {
+          .vp-card-btn { width: clamp(52px, 18vw, 68px); height: clamp(72px, 24vw, 96px); aspect-ratio: auto; max-height: none; }
+        }
       `}</style>
 
       <WinParticles active={showWin} />
@@ -488,8 +490,8 @@ export default function VideoPoker() {
                   )}
                 </div>
 
-                {/* Cards — 5 equal columns so they always fit on mobile without overflow */}
-                <div className="grid grid-cols-5 gap-1 sm:gap-2 max-w-full w-full px-1 sm:px-2">
+                {/* Cards — grid on mobile (fit 5), centered flex on desktop (fixed card size) */}
+                <div className="grid grid-cols-5 gap-1 sm:flex sm:flex-nowrap sm:justify-center sm:gap-3 max-w-full w-full px-1 sm:px-0">
                   {(game.hand || []).map((card, i) => (
                     <PokerCard
                       key={`${card.suit}-${card.value}-${i}`}
