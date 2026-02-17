@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../utils/api';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const BANK_STYLES = `
@@ -107,10 +108,10 @@ const InterestBankCard = ({
           <label className="block text-[9px] font-heading text-mutedForeground mb-0.5 uppercase tracking-wider">
             Amount
           </label>
-          <input
+          <FormattedNumberInput
             value={depositAmount}
-            onChange={(e) => onDepositAmountChange(e.target.value)}
-            placeholder="e.g. 250000"
+            onChange={onDepositAmountChange}
+            placeholder="e.g. 250,000"
             className="w-full bg-input border border-border rounded h-8 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none"
           />
         </div>
@@ -201,10 +202,10 @@ const SwissBankCard = ({
         <label className="block text-[9px] font-heading text-mutedForeground mb-0.5 uppercase tracking-wider">
           Amount
         </label>
-        <input
+        <FormattedNumberInput
           value={swissAmount}
-          onChange={(e) => onSwissAmountChange(e.target.value)}
-          placeholder="e.g. 100000"
+          onChange={onSwissAmountChange}
+          placeholder="e.g. 100,000"
           className="w-full bg-input border border-border rounded h-8 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none"
         />
       </div>
@@ -315,10 +316,10 @@ const SendMoneyCard = ({
         <label className="block text-[9px] font-heading text-mutedForeground mb-0.5 uppercase tracking-wider">
           Amount
         </label>
-        <input
+        <FormattedNumberInput
           value={transferAmount}
-          onChange={(e) => onTransferAmountChange(e.target.value)}
-          placeholder="e.g. 50000"
+          onChange={onTransferAmountChange}
+          placeholder="e.g. 50,000"
           className="w-full bg-input border border-border rounded h-8 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none"
         />
         <div className="mt-1 text-[9px] text-mutedForeground">

@@ -4,6 +4,7 @@ import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shiel
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../constants';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 // ============================================================================
@@ -256,8 +257,12 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
         ))}
       </div>
       <form onSubmit={onDeposit} className="flex gap-2">
-        <input type="text" inputMode="numeric" placeholder="Custom amount" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
-          className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors" />
+        <FormattedNumberInput
+          value={depositAmount}
+          onChange={setDepositAmount}
+          placeholder="Custom amount"
+          className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors"
+        />
         <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all shrink-0">
           Deposit
         </button>
@@ -279,8 +284,12 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
           ))}
         </div>
         <form onSubmit={onWithdraw} className="flex gap-2">
-          <input type="text" inputMode="numeric" placeholder="Custom amount" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)}
-            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors" />
+          <FormattedNumberInput
+            value={withdrawAmount}
+            onChange={setWithdrawAmount}
+            placeholder="Custom amount"
+            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors"
+          />
           <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0">
             Withdraw
           </button>

@@ -3,6 +3,7 @@ import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const HITLIST_STYLES = `
@@ -261,11 +262,9 @@ const PlaceBountyCard = ({
             <label className="block text-[10px] text-mutedForeground font-heading mb-1">
               Cash reward ($)
             </label>
-            <input
-              type="number"
-              min="0"
+            <FormattedNumberInput
               value={rewardCash}
-              onChange={(e) => setRewardCash(e.target.value)}
+              onChange={setRewardCash}
               placeholder="0"
               className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
             />
@@ -274,11 +273,9 @@ const PlaceBountyCard = ({
             <label className="block text-[10px] text-mutedForeground font-heading mb-1">
               Points reward
             </label>
-            <input
-              type="number"
-              min="0"
+            <FormattedNumberInput
               value={rewardPoints}
-              onChange={(e) => setRewardPoints(e.target.value)}
+              onChange={setRewardPoints}
               placeholder="0"
               className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
             />

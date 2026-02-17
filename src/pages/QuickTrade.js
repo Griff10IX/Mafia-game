@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const QT_STYLES = `
@@ -195,20 +196,18 @@ export default function QuickTrade() {
           <div className="p-4 space-y-2.5">
             <div>
               <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Points</label>
-              <input
-                type="number"
+              <FormattedNumberInput
                 value={sellPoints}
-                onChange={(e) => setSellPoints(e.target.value)}
+                onChange={setSellPoints}
                 placeholder="Enter points"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
             </div>
             <div>
               <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Cost ($)</label>
-              <input
-                type="number"
+              <FormattedNumberInput
                 value={sellCost}
-                onChange={(e) => setSellCost(e.target.value)}
+                onChange={setSellCost}
                 placeholder="Price"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
@@ -258,20 +257,18 @@ export default function QuickTrade() {
           <div className="p-4 space-y-2.5">
             <div>
               <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Points</label>
-              <input
-                type="number"
+              <FormattedNumberInput
                 value={buyPoints}
-                onChange={(e) => setBuyPoints(e.target.value)}
+                onChange={setBuyPoints}
                 placeholder="Points wanted"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
             </div>
             <div>
               <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Offer ($)</label>
-              <input
-                type="number"
+              <FormattedNumberInput
                 value={buyOffer}
-                onChange={(e) => setBuyOffer(e.target.value)}
+                onChange={setBuyOffer}
                 placeholder="Your offer"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />

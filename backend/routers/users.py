@@ -66,11 +66,17 @@ def register(router):
         ).limit(limit)
         users = await cursor.to_list(limit)
         result = []
+        q_lower = q_clean.lower()
         for u in users:
+            is_bg = bool(u.get("is_bodyguard"))
+            username = u.get("username") or ""
+            # Robot bodyguards only appear when search matches their full name
+            if is_bg and q_lower != username.lower():
+                continue
             result.append({
-                "username": u.get("username"),
+                "username": username,
                 "is_dead": bool(u.get("is_dead")),
                 "in_jail": bool(u.get("in_jail")),
-                "is_bodyguard": bool(u.get("is_bodyguard")),
+                "is_bodyguard": is_bg,
             })
         return {"users": result}

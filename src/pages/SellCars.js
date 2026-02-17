@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CheckSquare, Square, DollarSign } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const SELL_STYLES = `
@@ -290,12 +291,10 @@ export default function SellCars() {
             </button>
             <span className="text-[10px] font-heading text-mutedForeground uppercase">Check all</span>
           </label>
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="Price..."
+          <FormattedNumberInput
             value={listPrice}
-            onChange={(e) => setListPrice(e.target.value.replace(/\D/g, ''))}
+            onChange={setListPrice}
+            placeholder="Price..."
             className="w-20 bg-input border border-border rounded px-1.5 py-1 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
           />
           <button

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const ADMIN_STYLES = `
@@ -770,11 +771,11 @@ export default function Admin() {
               <BtnPrimary onClick={handleForceOnline}>Force</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">
-              <Input type="number" min="1" max="999999999" value={giveAllPoints} onChange={(e) => setGiveAllPoints(parseInt(e.target.value) || 1)} />
+              <FormattedNumberInput value={String(giveAllPoints)} onChange={(raw) => setGiveAllPoints(parseInt(raw, 10) || 1)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleGiveAllPoints}>Give</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Gift} label="Give All Money" description="Give money to all alive accounts">
-              <Input type="number" min="1" max="999999999" value={giveAllMoney} onChange={(e) => setGiveAllMoney(parseInt(e.target.value) || 10000)} />
+              <FormattedNumberInput value={String(giveAllMoney)} onChange={(raw) => setGiveAllMoney(parseInt(raw, 10) || 10000)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleGiveAllMoney}>Give</BtnPrimary>
             </ActionRow>
           </div>
@@ -804,7 +805,7 @@ export default function Admin() {
             </ActionRow>
 
             <ActionRow icon={Coins} label="Add Points">
-              <Input type="number" value={formData.points} onChange={(e) => setFormData({ ...formData, points: parseInt(e.target.value) })} />
+              <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData({ ...formData, points: raw === '' ? 0 : parseInt(raw, 10) })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
             </ActionRow>
 

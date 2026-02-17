@@ -3,6 +3,7 @@ import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, F
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const ATTACK_STYLES = `
@@ -125,13 +126,11 @@ const KillUserCard = ({
         <label className="block text-[9px] text-mutedForeground font-heading uppercase tracking-wider mb-0.5">
           Bullets <span className="text-primary">({Number(userBullets).toLocaleString()} available)</span>
         </label>
-        <input
-          type="number"
+        <FormattedNumberInput
           value={bulletsToUse}
-          onChange={(e) => setBulletsToUse(e.target.value)}
+          onChange={setBulletsToUse}
           className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
           placeholder="Enter amount (min 1)"
-          min="1"
           data-testid="kill-bullets-inline"
         />
       </div>

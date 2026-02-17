@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Lock, Users, AlertCircle, DoorOpen, Bot } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const JAIL_STYLES = `
@@ -67,13 +68,11 @@ const JailStatusCard = ({
             <div className="flex gap-1">
               <div className="relative flex-1">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-white/60 text-[10px]">$</span>
-                <input
-                  type="number"
-                  min="0"
+                <FormattedNumberInput
                   value={bustRewardInput}
-                  onChange={(e) => onBustRewardChange(e.target.value)}
-                  className="w-full h-7 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+                  onChange={onBustRewardChange}
                   placeholder="0"
+                  className="w-full h-7 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
                 />
               </div>
               <button
@@ -130,13 +129,11 @@ const JailStatusCard = ({
           <div className="flex gap-1">
             <div className="relative flex-1">
               <span className="absolute left-2 top-1/2 -translate-y-1/2 text-white/60 text-[10px]">$</span>
-              <input
-                type="number"
-                min="0"
+              <FormattedNumberInput
                 value={bustRewardInput}
-                onChange={(e) => onBustRewardChange(e.target.value)}
-                className="w-full h-7 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+                onChange={onBustRewardChange}
                 placeholder="0"
+                className="w-full h-7 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
               />
             </div>
             <button
