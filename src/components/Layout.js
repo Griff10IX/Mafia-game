@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search } from 'lucide-react';
 import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -154,6 +154,12 @@ export default function Layout({ children }) {
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [notificationList, setNotificationList] = useState([]);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [userSearchOpen, setUserSearchOpen] = useState(false);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const userSearchRef = useRef(null);
+  const userSearchDebounceRef = useRef(null);
   const notificationPanelRef = useRef(null);
   const notificationPanelOpenRef = useRef(false);
   notificationPanelOpenRef.current = notificationPanelOpen;
@@ -200,6 +206,40 @@ export default function Layout({ children }) {
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, [notificationPanelOpen]);
+
+  useEffect(() => {
+    if (!userSearchOpen) return;
+    const handleClickOutside = (e) => {
+      if (userSearchRef.current && !userSearchRef.current.contains(e.target)) {
+        setUserSearchOpen(false);
+      }
+    };
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [userSearchOpen]);
+
+  useEffect(() => {
+    const q = (userSearchQuery || '').trim();
+    if (!q || q.length < 1) {
+      setUserSearchResults([]);
+      return;
+    }
+    if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
+    userSearchDebounceRef.current = setTimeout(async () => {
+      setUserSearchLoading(true);
+      try {
+        const res = await api.get('/users/search', { params: { q, limit: 15 } });
+        setUserSearchResults(res.data?.users || []);
+      } catch {
+        setUserSearchResults([]);
+      } finally {
+        setUserSearchLoading(false);
+      }
+    }, 280);
+    return () => {
+      if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
+    };
+  }, [userSearchQuery]);
 
   useEffect(() => {
     fetchData();
@@ -1042,6 +1082,57 @@ export default function Layout({ children }) {
           };
           return (
             <div className="flex items-center gap-1.5 shrink-0 flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible gap-2 md:gap-1.5 -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0">
+              {/* Global user search: find any user (online, offline, dead) */}
+              <div className="relative shrink-0 min-w-[120px] max-w-[180px]" ref={userSearchRef}>
+                <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-1.5 py-0.5">
+                  <Search size={12} className="text-primary/50 shrink-0" aria-hidden />
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
+                    onFocus={() => setUserSearchOpen(true)}
+                    placeholder="Search user..."
+                    className="flex-1 min-w-0 py-0.5 bg-transparent text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0"
+                    data-testid="topbar-user-search"
+                  />
+                </div>
+                {userSearchOpen && (userSearchQuery.trim() || userSearchResults.length > 0) && (
+                  <div
+                    className="absolute top-full left-0 mt-1 w-[260px] max-h-[280px] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
+                    style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
+                  >
+                    <div className="p-2 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+                      <p className="text-[10px] font-heading text-mutedForeground">Find any user — online, offline, or dead</p>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                      {userSearchLoading ? (
+                        <div className="p-3 text-center text-[11px] font-heading text-mutedForeground">Searching...</div>
+                      ) : userSearchResults.length === 0 ? (
+                        <div className="p-3 text-center text-[11px] font-heading text-mutedForeground">
+                          {userSearchQuery.trim().length < 1 ? 'Type to search' : 'No users found'}
+                        </div>
+                      ) : (
+                        userSearchResults.map((u) => (
+                          <Link
+                            key={u.username}
+                            to={`/profile/${encodeURIComponent(u.username)}`}
+                            onClick={() => { setUserSearchOpen(false); setUserSearchQuery(''); setUserSearchResults([]); }}
+                            className="flex items-center justify-between gap-2 w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
+                            style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
+                          >
+                            <span className="truncate font-semibold">{u.username}</span>
+                            <div className="flex gap-1 shrink-0">
+                              {u.is_dead && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400">Dead</span>}
+                              {u.in_jail && !u.is_dead && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400">Jail</span>}
+                              {u.is_bodyguard && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-500/20 text-blue-400">Robot</span>}
+                            </div>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
               {statOrder.map((statId) => {
                 if (statId === 'notifications') {
                   return (

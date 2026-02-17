@@ -1,7 +1,8 @@
-# Users: online list
+# Users: online list, search (all users incl. offline/dead)
 from datetime import datetime, timezone, timedelta
+import re
 
-from fastapi import Depends
+from fastapi import Depends, Query
 
 
 def register(router):
@@ -47,3 +48,29 @@ def register(router):
             })
 
         return OnlineUsersResponse(total_online=len(users_data), users=users_data)
+
+    @router.get("/users/search")
+    async def search_users(
+        q: str = Query(..., min_length=1, max_length=80),
+        limit: int = Query(20, ge=1, le=50),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Search all users by username (substring, case-insensitive). Returns online, offline, and dead. No robots unless full name matches."""
+        q_clean = (q or "").strip()
+        if not q_clean:
+            return {"users": []}
+        pattern = re.compile(re.escape(q_clean), re.IGNORECASE)
+        cursor = db.users.find(
+            {"username": {"$regex": pattern}},
+            {"_id": 0, "password_hash": 0, "email": 0},
+        ).limit(limit)
+        users = await cursor.to_list(limit)
+        result = []
+        for u in users:
+            result.append({
+                "username": u.get("username"),
+                "is_dead": bool(u.get("is_dead")),
+                "in_jail": bool(u.get("in_jail")),
+                "is_bodyguard": bool(u.get("is_bodyguard")),
+            })
+        return {"users": result}

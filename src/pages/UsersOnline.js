@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Clock, MapPin, Search } from 'lucide-react';
+import { Users, User, Clock, MapPin } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
@@ -240,7 +240,7 @@ const InfoCard = () => (
         <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
-            You can search for all users on the game. No robots appear unless you type their full robot name.
+            Search any user (including offline or dead) from the top bar.
           </span>
         </p>
         <p className="flex items-start gap-1">
@@ -274,7 +274,6 @@ export default function UsersOnline() {
   const [loading, setLoading] = useState(true);
   const [profileCache, setProfileCache] = useState({});
   const [profileLoading, setProfileLoading] = useState({});
-  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchOnlineUsers = useCallback(async () => {
     try {
@@ -310,12 +309,6 @@ export default function UsersOnline() {
     return () => clearInterval(interval);
   }, [fetchOnlineUsers]);
 
-  const filteredUsers = useMemo(() => {
-    const q = (searchQuery || '').trim().toLowerCase();
-    if (!q) return users;
-    return users.filter((u) => (u.username || '').toLowerCase().includes(q));
-  }, [users, searchQuery]);
-
   if (loading) {
     return (
       <div className={`space-y-2 ${styles.pageContent}`}>
@@ -335,19 +328,6 @@ export default function UsersOnline() {
 
       <OnlineCountCard totalOnline={totalOnline} />
 
-      {/* Search: filter by username */}
-      <div className="relative uo-fade-in" style={{ animationDelay: '0.02s' }}>
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-primary/50 pointer-events-none" aria-hidden />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search users..."
-          className="w-full pl-8 pr-2.5 py-2 text-[12px] font-heading bg-background/80 border border-primary/20 rounded-md text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/40"
-          data-testid="users-online-search"
-        />
-      </div>
-
       {users.length === 0 ? (
         <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -364,15 +344,12 @@ export default function UsersOnline() {
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-              👤 Active Users ({filteredUsers.length}{searchQuery.trim() ? ` of ${users.length}` : ''})
+              👤 Active Users ({users.length})
             </h2>
           </div>
           <div className="p-2">
-            {filteredUsers.length === 0 ? (
-              <p className="text-[11px] text-mutedForeground font-heading text-center py-3">No users match your search.</p>
-            ) : (
-              <div className="flex flex-wrap gap-1" data-testid="users-grid">
-                {filteredUsers.map((user, idx) => (
+            <div className="flex flex-wrap gap-1" data-testid="users-grid">
+                {users.map((user, idx) => (
                   <UserCard
                     key={idx}
                     user={user}
@@ -382,7 +359,6 @@ export default function UsersOnline() {
                   />
                 ))}
               </div>
-            )}
           </div>
           <div className="uo-art-line text-primary mx-2.5" />
         </div>
