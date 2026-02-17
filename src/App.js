@@ -453,7 +453,9 @@ function App() {
             element={
               isAuthenticated ? (
                 <Layout>
-                  <HorseRacing />
+                  <ErrorBoundary>
+                    <HorseRacing />
+                  </ErrorBoundary>
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

@@ -342,16 +342,16 @@ export default function HorseRacingPage() {
   const fetchConfigAndOwnership = useCallback(() => {
     api.get('/casino/horseracing/config').then((r) => {
       const data = r.data || {};
+      const horsesList = Array.isArray(data.horses) ? data.horses : [];
       setConfig({
-        horses: data.horses || [],
+        horses: horsesList,
         max_bet: data.max_bet || 10_000_000,
         house_edge: data.house_edge ?? 0.05,
         claim_cost: data.claim_cost ?? 500_000_000,
       });
       setSelectedHorseId((prev) => {
         if (prev) return prev;
-        const horses = data.horses || [];
-        return horses.length ? horses[0].id : null;
+        return horsesList.length && horsesList[0] ? horsesList[0].id : null;
       });
     }).catch(() => {});
     api.get('/casino/horseracing/ownership').then((r) => setOwnership(r.data || null)).catch(() => setOwnership(null));
@@ -431,11 +431,11 @@ export default function HorseRacingPage() {
     finally { setOwnerLoading(false); }
   };
 
-  const horses = config.horses || [];
-  const selectedHorse = horses.find((h) => h.id === selectedHorseId);
+  const horses = Array.isArray(config.horses) ? config.horses : [];
+  const selectedHorse = horses.find((h) => h && h.id === selectedHorseId);
   const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const maxBet = ownership?.max_bet ?? config.max_bet ?? 10_000_000;
-  const returnsAmount = selectedHorse && betNum > 0
+  const returnsAmount = selectedHorse && betNum > 0 && typeof selectedHorse.odds === 'number'
     ? Math.floor(betNum * (1 + selectedHorse.odds) * (1 - (config.house_edge || 0.05)))
     : 0;
   const isOwner = !!ownership?.is_owner;
@@ -459,7 +459,7 @@ export default function HorseRacingPage() {
       setRaceStarted(false);
 
       const winnerId = data.winner_id;
-      const horsesList = data.horses || horses;
+      const horsesList = Array.isArray(data.horses) ? data.horses : horses;
       const finishPcts = Array.isArray(data.finish_pcts) && data.finish_pcts.length === horsesList.length
         ? data.finish_pcts
         : horsesList.map((h) => (h.id === winnerId ? 100 : 55 + Math.random() * 40));
@@ -622,11 +622,13 @@ export default function HorseRacingPage() {
     }, GATE_DELAY_MS + RACE_DURATION_MS);
   };
 
-  const raceLanes = raceProgress
-    ? raceProgress.horses.map((h, idx) => ({
+  const progressHorses = raceProgress && Array.isArray(raceProgress.horses) ? raceProgress.horses : [];
+  const progressPcts = raceProgress && Array.isArray(raceProgress.finishPcts) ? raceProgress.finishPcts : [];
+  const raceLanes = raceProgress && progressHorses.length > 0
+    ? progressHorses.map((h, idx) => ({
         horse: h,
-        finishPct: raceProgress.finishPcts[idx],
-        animationDelayMs: (raceProgress.animationDelays || [])[idx] ?? 0,
+        finishPct: progressPcts[idx] ?? 0,
+        animationDelayMs: (raceProgress.animationDelays && raceProgress.animationDelays[idx]) ?? 0,
       }))
     : horses.map((h) => ({ horse: h, finishPct: 0, animationDelayMs: 0 }));
 
