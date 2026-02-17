@@ -36,41 +36,37 @@ const ObjectiveRow = ({ obj, delay = 0 }) => {
   const progressPct = obj.target > 0 ? Math.min(100, (obj.current / obj.target) * 100) : 0;
   return (
     <div
-      className={`obj-row flex items-center gap-1.5 px-2 py-1 rounded border obj-fade-in ${
+      className={`obj-row flex items-center gap-1.5 px-1.5 py-0.5 rounded border obj-fade-in ${
         obj.done ? 'bg-primary/10 border-primary/30' : 'bg-zinc-800/20 border-zinc-700/30'
       }`}
       style={{ animationDelay: `${delay}s` }}
     >
       <span className="shrink-0">
-        {obj.done ? <CheckCircle2 className="w-3.5 h-3.5 text-primary" /> : <Circle className="w-3.5 h-3.5 text-mutedForeground" />}
+        {obj.done ? <CheckCircle2 className="w-3 h-3 text-primary" /> : <Circle className="w-3 h-3 text-mutedForeground" />}
       </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-[10px] font-heading text-foreground truncate flex-1 min-w-0">{obj.label}</p>
-          <span className="text-[9px] font-heading font-bold text-primary tabular-nums shrink-0">
-            {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 mt-0.5">
-          <div className="relative flex-1 min-w-0 h-1.5 bg-secondary rounded-full overflow-hidden border border-primary/20" style={{ maxWidth: 80 }}>
-            <div
-              className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
-              style={{
-                width: `${progressPct}%`,
-                minWidth: progressPct > 0 ? 3 : 0,
-                background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
-              }}
-              role="progressbar"
-              aria-valuenow={obj.current}
-              aria-valuemin={0}
-              aria-valuemax={obj.target}
-            />
-          </div>
-          {obj.reward && (
-            <span className="text-[8px] text-primary/80 font-heading shrink-0">Reward: {formatReward(obj.reward)}</span>
-          )}
-        </div>
+      <p className="text-[9px] font-heading text-foreground truncate min-w-0 flex-1">{obj.label}</p>
+      <div className="relative w-12 h-1 bg-secondary rounded-full overflow-hidden border border-primary/20 shrink-0">
+        <div
+          className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
+          style={{
+            width: `${progressPct}%`,
+            minWidth: progressPct > 0 ? 2 : 0,
+            background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
+          }}
+          role="progressbar"
+          aria-valuenow={obj.current}
+          aria-valuemin={0}
+          aria-valuemax={obj.target}
+        />
       </div>
+      <span className="text-[8px] font-heading font-bold text-primary tabular-nums shrink-0 w-14 text-right">
+        {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
+      </span>
+      {obj.reward && (
+        <span className="text-[7px] text-primary/80 font-heading shrink-0 max-w-[72px] truncate" title={formatReward(obj.reward)}>
+          {formatReward(obj.reward)}
+        </span>
+      )}
     </div>
   );
 };
@@ -160,7 +156,7 @@ export default function Objectives() {
             </div>
             <p className="text-[8px] text-mutedForeground font-heading mt-0.5">Resets midnight UTC · New objectives & rewards each day</p>
           </div>
-          <div className="px-2 py-1.5 space-y-1 flex-1 min-h-0 overflow-auto">
+          <div className="px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-auto">
             {daily.claimed && (
               <div className="flex items-center gap-1 px-2 py-1 rounded bg-primary/20 border border-primary/30 text-[10px] font-heading text-primary obj-fade-in">
                 <Gift className="w-3 h-3 shrink-0" />
@@ -203,7 +199,7 @@ export default function Objectives() {
             </div>
             <p className="text-[8px] text-mutedForeground font-heading mt-0.5">Resets Monday 00:00 UTC · New objectives & rewards each week</p>
           </div>
-          <div className="px-2 py-1.5 space-y-1 flex-1 min-h-0 overflow-auto">
+          <div className="px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-auto">
             {weekly.claimed && (
               <div className="flex items-center gap-1 px-2 py-1 rounded bg-primary/20 border border-primary/30 text-[10px] font-heading text-primary obj-fade-in">
                 <Gift className="w-3 h-3 shrink-0" />
@@ -246,7 +242,7 @@ export default function Objectives() {
             </div>
             <p className="text-[8px] text-mutedForeground font-heading mt-0.5">Resets 1st of month 00:00 UTC · New objectives & rewards each month</p>
           </div>
-          <div className="px-2 py-1.5 space-y-1 flex-1 min-h-0 overflow-auto">
+          <div className="px-2 py-1 space-y-0.5 flex-1 min-h-0 overflow-auto">
             {monthly.claimed && (
               <div className="flex items-center gap-1 px-2 py-1 rounded bg-primary/20 border border-primary/30 text-[10px] font-heading text-primary obj-fade-in">
                 <Gift className="w-3 h-3 shrink-0" />
