@@ -40,10 +40,11 @@ const Tab = ({ active, onClick, children }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`flex-1 min-w-0 py-2 px-3 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all ${
-      active ? 'text-primary' : 'text-zinc-500 hover:text-zinc-300'
+    className={`flex-1 min-w-0 py-2 px-3 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all border ${
+      active
+        ? 'text-primary bg-primary/10 border-primary/20'
+        : 'text-zinc-500 hover:text-zinc-300 border-transparent'
     }`}
-    style={active ? { background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)' } : { border: '1px solid transparent' }}
   >
     {children}
   </button>
@@ -197,7 +198,8 @@ export default function Store() {
         </div>
       )}
 
-      <div className="flex gap-1 p-1 rounded-lg overflow-x-auto store-fade-in" style={{ background: 'rgba(20,15,10,0.6)', border: '1px solid rgba(201,168,76,0.1)' }}>
+      <div className="relative flex gap-1 p-1 rounded-lg overflow-x-auto store-fade-in border border-primary/20 bg-primary/5">
+        <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
         <Tab active={activeTab === 'points'} onClick={() => setActiveTab('points')}>Points</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => setActiveTab('bullets')}>Bullets</Tab>

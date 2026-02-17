@@ -368,12 +368,11 @@ export default function SportsBetting() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 px-3 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all ${
+            className={`flex-1 py-2 px-3 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all border ${
               activeTab === tab.id
-                ? 'text-primary'
-                : 'text-zinc-500 hover:text-zinc-300'
+                ? 'text-primary bg-primary/10 border-primary/20'
+                : 'text-zinc-500 hover:text-zinc-300 border-transparent'
             }`}
-            style={activeTab === tab.id ? { background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)' } : { border: '1px solid transparent' }}
           >
             {tab.label}
             {tab.count != null && <span className="ml-1 text-primary/60">({tab.count})</span>}
@@ -464,7 +463,8 @@ export default function SportsBetting() {
       {activeTab === 'events' && (
         <div className="space-y-3">
           {events.length === 0 ? (
-            <div className="text-center py-12" style={{ background: 'linear-gradient(180deg, rgba(20,15,10,0.6), rgba(15,12,8,0.8))', borderRadius: 8, border: '1px solid rgba(201,168,76,0.1)' }}>
+            <div className="relative text-center py-12 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+              <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <p className="text-sm font-heading font-bold text-zinc-500 uppercase tracking-wider">No events on the board</p>
               <p className="text-[10px] font-heading text-zinc-600 mt-1">Check back later — new games added by the house.</p>
             </div>
@@ -655,13 +655,12 @@ export default function SportsBetting() {
       {selectedEvent && selectedOption && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => setSelectedEvent(null)}>
           <div
-            className="w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-sb-slide-up"
-            style={{ background: 'linear-gradient(180deg, #1a1510, #0f0d0a)', border: '2px solid rgba(201,168,76,0.3)' }}
+            className="w-full max-w-sm rounded-xl overflow-hidden shadow-2xl animate-sb-slide-up border-2 border-primary/20 bg-zinc-900"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Slip header */}
-            <div className="px-4 py-3 text-center" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)', background: 'rgba(201,168,76,0.05)' }}>
-              <p className="text-[9px] font-heading text-primary/60 uppercase tracking-[0.2em]">Betting Slip</p>
+            <div className="px-4 py-3 text-center border-b border-primary/20 bg-primary/8">
+              <p className="text-[9px] font-heading text-primary/80 uppercase tracking-[0.2em]">Betting Slip</p>
             </div>
 
             <div className="p-4 space-y-4">
@@ -669,7 +668,7 @@ export default function SportsBetting() {
               <div className="text-center">
                 <p className="text-xs font-heading text-zinc-500">{selectedEvent.category}</p>
                 <p className="text-sm font-heading font-bold text-foreground mt-0.5">{selectedEvent.name}</p>
-                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded" style={{ background: 'rgba(201,168,76,0.08)', border: '1px solid rgba(201,168,76,0.2)' }}>
+                <div className="mt-2 inline-flex items-center gap-2 px-3 py-1.5 rounded bg-primary/10 border border-primary/20">
                   <span className="text-[10px] font-heading text-zinc-400">{selectedOption.name}</span>
                   <span className="text-lg font-heading font-black text-primary">{Number(selectedOption.odds).toFixed(2)}</span>
                 </div>
@@ -713,7 +712,7 @@ export default function SportsBetting() {
                 const totalReturn = Math.floor(s * Number(selectedOption.odds));
                 const profit = totalReturn - s;
                 return (
-                  <div className="text-center py-2 rounded" style={{ background: 'rgba(52,211,153,0.05)', border: '1px solid rgba(52,211,153,0.15)' }}>
+                  <div className="text-center py-2 rounded bg-emerald-500/5 border border-emerald-500/20">
                     <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider">Potential Return</p>
                     <p className="text-lg font-heading font-black text-emerald-400">{formatMoney(totalReturn)}</p>
                     <p className="text-[10px] font-heading text-emerald-400/60">Profit: {formatMoney(profit)}</p>
@@ -726,12 +725,7 @@ export default function SportsBetting() {
                 <button
                   onClick={placeBet}
                   disabled={placing}
-                  className="flex-1 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
-                  style={{
-                    background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
-                    borderColor: '#c9a84c', color: '#1a1200',
-                    boxShadow: '0 4px 16px rgba(212,175,55,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-                  }}
+                  className="flex-1 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 border-primary bg-primary text-primaryForeground hover:opacity-90 disabled:opacity-40 active:scale-[0.98] transition-all"
                 >
                   {placing ? '...' : 'Place Bet'}
                 </button>
