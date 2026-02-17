@@ -26,7 +26,14 @@ function BulletCasing() {
 function BeltWeapon() {
   return (
     <div className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
-      <div className="w-3 h-4 rounded-sm rotate-[-30deg]" style={{ background: 'linear-gradient(180deg, #4a4a4a, #2a2a2a)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)' }} />
+      <svg viewBox="0 0 24 14" className="w-6 h-4" style={{ filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.4))' }}>
+        {/* Pistol side view: barrel, slide, grip */}
+        <ellipse cx="4" cy="7" rx="2.5" ry="3" fill="url(#belt-gun-metal)" />
+        <rect x="2" y="5.5" width="14" height="3" rx="0.8" fill="url(#belt-gun-metal)" />
+        <rect x="14" y="6" width="6" height="2" rx="0.5" fill="url(#belt-gun-dark)" />
+        <path d="M16 6.5 L16 12 L20 12 L20 8.5 Q18 6.5 16 6.5 Z" fill="url(#belt-gun-grip)" stroke="#2a2a2a" strokeWidth="0.4" />
+        <circle cx="18" cy="7" r="0.6" fill="#1a1a1a" />
+      </svg>
     </div>
   );
 }
@@ -34,7 +41,16 @@ function BeltWeapon() {
 function BeltArmour() {
   return (
     <div className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
-      <div className="w-5 h-4 rounded-sm" style={{ background: 'linear-gradient(180deg, #5a5a5a, #3a3a3a)', border: '1px solid #4a4a4a', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)' }} />
+      <svg viewBox="0 0 20 16" className="w-5 h-4" style={{ filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.3))' }}>
+        {/* Shield / vest: rounded top, curved sides, metallic */}
+        <path
+          d="M2 4 Q2 1 10 1 Q18 1 18 4 L18 12 Q18 15 10 15 Q2 15 2 12 Z"
+          fill="url(#belt-armour-plate)"
+          stroke="url(#belt-armour-edge)"
+          strokeWidth="0.6"
+        />
+        <path d="M6 4 L14 4 M10 4 L10 12" stroke="rgba(0,0,0,0.25)" strokeWidth="0.4" fill="none" />
+      </svg>
     </div>
   );
 }
@@ -48,6 +64,34 @@ function ConveyorBelt() {
   const items = Array.from({ length: bulletCount * 2 }, (_, i) => BELT_ITEM_TYPES[i % BELT_ITEM_TYPES.length]);
   return (
     <div className="relative w-full h-10 overflow-hidden rounded" style={{ background: 'linear-gradient(180deg, #2a2218 0%, #3d3225 40%, #2a2218 100%)' }}>
+      {/* Shared SVG gradients for belt weapons/armour (avoids duplicate IDs) */}
+      <svg width={0} height={0} className="absolute" aria-hidden="true">
+        <defs>
+          <linearGradient id="belt-gun-metal" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#6b6b6b" />
+            <stop offset="50%" stopColor="#4a4a4a" />
+            <stop offset="100%" stopColor="#2e2e2e" />
+          </linearGradient>
+          <linearGradient id="belt-gun-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#3a3a3a" />
+            <stop offset="100%" stopColor="#1e1e1e" />
+          </linearGradient>
+          <linearGradient id="belt-gun-grip" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#5c4033" />
+            <stop offset="100%" stopColor="#3e2723" />
+          </linearGradient>
+          <linearGradient id="belt-armour-plate" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#7a7a7a" />
+            <stop offset="30%" stopColor="#5a5a5a" />
+            <stop offset="70%" stopColor="#454545" />
+            <stop offset="100%" stopColor="#353535" />
+          </linearGradient>
+          <linearGradient id="belt-armour-edge" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#8a8a8a" />
+            <stop offset="100%" stopColor="#2a2a2a" />
+          </linearGradient>
+        </defs>
+      </svg>
       {/* Belt rollers */}
       <div className="absolute inset-x-0 top-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
       <div className="absolute inset-x-0 bottom-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
