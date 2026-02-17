@@ -336,10 +336,8 @@ export default function SportsBetting() {
       </div>
 
       {/* ═══ Stats bar ═══ */}
-      <div
-        className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-lg"
-        style={{ background: 'linear-gradient(180deg, rgba(20,15,10,0.9), rgba(15,12,8,0.95))', border: '1px solid rgba(201,168,76,0.15)' }}
-      >
+      <div className="relative flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+        <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="flex flex-wrap items-center gap-4 text-[10px] font-heading uppercase tracking-wider">
           <span className="text-zinc-500">{events.length} <span className="text-zinc-600">events</span></span>
           <span className="text-zinc-500">{myBets.open.length} <span className="text-zinc-600">open bets</span></span>
@@ -360,7 +358,8 @@ export default function SportsBetting() {
       </div>
 
       {/* ═══ Tab navigation ═══ */}
-      <div className="flex gap-1 p-1 rounded-lg" style={{ background: 'rgba(20,15,10,0.6)', border: '1px solid rgba(201,168,76,0.1)' }}>
+      <div className="relative flex gap-1 p-1 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+        <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
         {[
           { id: 'events', label: 'Events', count: events.length },
           { id: 'bets', label: 'My Bets', count: myBets.open.length },
@@ -385,7 +384,8 @@ export default function SportsBetting() {
       {/* ═══ Admin panel ═══ */}
       {isAdmin && (
         adminPanelHidden ? (
-          <button onClick={() => toggleAdminPanel(false)} className="w-full flex items-center justify-center gap-2 py-2 text-[10px] font-heading text-zinc-600 hover:text-primary transition-all">
+          <button onClick={() => toggleAdminPanel(false)} className="relative w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-[10px] font-heading text-zinc-500 hover:text-primary transition-all">
+            <span className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg" aria-hidden />
             <Shield size={12} /> Show admin panel <ChevronDown size={12} />
           </button>
         ) : (
