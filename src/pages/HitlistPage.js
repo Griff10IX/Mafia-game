@@ -24,12 +24,12 @@ const HITLIST_STYLES = `
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-4 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent}`}>
     <style>{HITLIST_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-      <Target size={28} className="text-primary/40 animate-pulse" />
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading hitlist...</span>
+    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+      <Target size={22} className="text-primary/40 animate-pulse" />
+      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading hitlist...</span>
     </div>
   </div>
 );
@@ -38,21 +38,21 @@ const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
   if (!npcStatus) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`}>
-      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none hit-glow" />
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-          <UserPlus size={16} />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`}>
+      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none hit-glow" />
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
+          <UserPlus size={12} />
           Add NPC Target
         </h2>
       </div>
-      <div className="p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-        <div className="flex-1">
-          <p className="text-sm text-foreground font-heading mb-1">
+      <div className="px-2.5 py-2 flex flex-col md:flex-row items-start md:items-center justify-between gap-2">
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] text-foreground font-heading mb-0.5">
             Add a random NPC to practice attacking
           </p>
-          <p className="text-xs text-mutedForeground font-heading">
+          <p className="text-[9px] text-mutedForeground font-heading">
             Max {npcStatus.max_per_window ?? 3} per {npcStatus.window_hours ?? 3} hours · Attack from the Attack page
           </p>
         </div>
@@ -62,16 +62,16 @@ const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
             type="button"
             onClick={onAddNpc}
             disabled={addingNpc}
-            className="bg-primary/20 text-primary rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center gap-2 touch-manipulation whitespace-nowrap"
+            className="bg-primary/20 text-primary rounded-md px-2.5 py-1.5 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center gap-1 touch-manipulation whitespace-nowrap"
             data-testid="hitlist-add-npc"
           >
-            <UserPlus size={16} />
+            <UserPlus size={10} />
             {addingNpc ? 'Adding...' : 'Add NPC'}
           </button>
         ) : (
-          <div className="flex items-center gap-2 text-sm text-mutedForeground font-heading bg-secondary/50 px-4 py-2 rounded-md border border-border">
-            <Clock size={16} />
-            <span className="text-xs">
+          <div className="flex items-center gap-1.5 text-[10px] text-mutedForeground font-heading bg-secondary/50 px-2 py-1 rounded border border-border">
+            <Clock size={10} />
+            <span className="text-[9px]">
               {npcStatus.adds_used_in_window ?? 0}/{npcStatus.max_per_window ?? 3} used
               {npcStatus.next_add_at && (
                 <span className="block mt-0.5">
@@ -82,7 +82,7 @@ const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
           </div>
         )}
       </div>
-      <div className="hit-art-line text-primary mx-4" />
+      <div className="hit-art-line text-primary mx-2.5" />
     </div>
   );
 };
@@ -95,20 +95,20 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
       // Optional: show past "who placed" if they had revealed and are no longer on list
       if (revealed && who?.length > 0) {
       return (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-fade-in`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-            <h2 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-[0.15em]">
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hit-fade-in`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-[0.12em]">
               Previously on hitlist (revealed)
             </h2>
           </div>
-          <div className="p-4">
-            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-3">Who had placed bounties</h3>
-            <div className="space-y-2">
+          <div className="p-2">
+            <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest mb-1.5">Who had placed bounties</h3>
+            <div className="space-y-1">
               {who.map((w, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-sm font-heading bg-secondary/30 rounded-md p-2 border border-border">
+                <div key={i} className="flex items-center justify-between gap-1.5 text-[10px] font-heading bg-secondary/30 rounded p-1.5 border border-border">
                   <span className="text-foreground font-bold">{w.placer_username}</span>
-                  <span className="text-mutedForeground text-xs">
+                  <span className="text-mutedForeground text-[9px]">
                     {w.reward_amount} {w.reward_type} · {w.target_type}
                   </span>
                 </div>
@@ -129,24 +129,24 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
   const costLabel = [needCash > 0 && `$${Number(needCash).toLocaleString()}`, needPoints > 0 && `${Number(needPoints).toLocaleString()} pts`].filter(Boolean).join(' + ');
   
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 border-red-500/30 shadow-lg shadow-red-500/10 hit-fade-in`}>
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
-      <div className="px-4 py-2.5 bg-red-500/10 border-b border-red-500/30">
-        <h2 className="text-[10px] font-heading font-bold text-red-400 uppercase tracking-[0.15em] flex items-center gap-2">
-          <Target size={16} />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border-2 border-red-500/30 shadow-md shadow-red-500/10 hit-fade-in`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-red-500/10 border-b border-red-500/30">
+        <h2 className="text-[9px] font-heading font-bold text-red-400 uppercase tracking-[0.12em] flex items-center gap-1">
+          <Target size={12} />
           You're on the Hitlist
         </h2>
       </div>
-      <div className="p-4 space-y-4">
+      <div className="p-2 space-y-2">
         {onHitlist && (
-          <div className="bg-secondary/50 rounded-md p-3 border border-border">
-            <div className="text-sm font-heading">
-              <span className="text-primary font-bold text-lg">{me.count}</span>{' '}
+          <div className="bg-secondary/50 rounded p-2 border border-border">
+            <div className="text-[11px] font-heading">
+              <span className="text-primary font-bold text-sm">{me.count}</span>{' '}
               <span className="text-mutedForeground">
                 {me.count === 1 ? 'bounty' : 'bounties'} placed on you
               </span>
             </div>
-            <div className="text-sm text-mutedForeground font-heading mt-1">
+            <div className="text-[10px] text-mutedForeground font-heading mt-0.5">
               Total reward:{' '}
               {me.total_cash > 0 && <span className="text-emerald-400 font-bold">${Number(me.total_cash).toLocaleString()}</span>}
               {me.total_cash > 0 && me.total_points > 0 && <span className="text-mutedForeground"> + </span>}
@@ -155,14 +155,14 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
           </div>
         )}
         
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-1.5">
           {onHitlist && (
             <button
               onClick={onBuyOff}
               disabled={submitting || !canAfford}
-              className="flex-1 bg-primary/20 text-primary rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
+              className="flex-1 bg-primary/20 text-primary rounded-md px-2.5 py-1.5 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1 touch-manipulation"
             >
-              <ShieldOff size={16} />
+              <ShieldOff size={10} />
               Buy Off ({costLabel})
             </button>
           )}
@@ -171,24 +171,24 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
             <button
               onClick={onReveal}
               disabled={submitting || (user?.points ?? 0) < 5000}
-              className="flex-1 bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded-lg px-4 py-2.5 font-heading font-bold uppercase tracking-wide text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
+              className="flex-1 bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded-md px-2.5 py-1.5 font-heading font-bold uppercase tracking-wide text-[10px] transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1 touch-manipulation"
             >
-              <Eye size={16} />
+              <Eye size={10} />
               Reveal (5,000 pts)
             </button>
           )}
         </div>
         
         {revealed && who.length > 0 && (
-          <div className="pt-4 border-t border-border">
-            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest mb-3">
+          <div className="pt-2 border-t border-border">
+            <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest mb-1.5">
               Who Placed Bounties
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-1">
               {who.map((w, i) => (
-                <div key={i} className="flex items-center justify-between gap-2 text-sm font-heading bg-secondary/30 rounded-md p-2 border border-border">
+                <div key={i} className="flex items-center justify-between gap-1.5 text-[10px] font-heading bg-secondary/30 rounded p-1.5 border border-border">
                   <span className="text-foreground font-bold">{w.placer_username}</span>
-                  <span className="text-mutedForeground text-xs">
+                  <span className="text-mutedForeground text-[9px]">
                     {w.reward_amount} {w.reward_type} · {w.target_type}
                   </span>
                 </div>
@@ -218,18 +218,18 @@ const PlaceBountyCard = ({
   onSubmit,
   hasReward,
 }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`} style={{ animationDelay: '0.05s' }}>
-    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none hit-glow" />
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none hit-glow" />
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         💰 Place a Bounty
       </h2>
     </div>
-    <div className="p-4">
-      <form onSubmit={onSubmit} className="space-y-4">
+    <div className="p-2">
+      <form onSubmit={onSubmit} className="space-y-2">
         <div>
-          <label className="block text-sm text-mutedForeground font-heading mb-2">
+          <label className="block text-[10px] text-mutedForeground font-heading mb-1">
             Target Username
           </label>
           <input
@@ -237,28 +237,28 @@ const PlaceBountyCard = ({
             value={targetUsername}
             onChange={(e) => setTargetUsername(e.target.value)}
             placeholder="Enter username..."
-            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
+            className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
             required
           />
         </div>
 
         <div>
-          <label className="block text-sm text-mutedForeground font-heading mb-2">
+          <label className="block text-[10px] text-mutedForeground font-heading mb-1">
             Target Type
           </label>
           <select
             value={targetType}
             onChange={(e) => setTargetType(e.target.value)}
-            className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground focus:border-primary/50 focus:outline-none transition-colors font-heading"
+            className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground focus:border-primary/50 focus:outline-none transition-colors font-heading"
           >
             <option value="user">User</option>
             <option value="bodyguards">Bodyguards</option>
           </select>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <div>
-            <label className="block text-sm text-mutedForeground font-heading mb-2">
+            <label className="block text-[10px] text-mutedForeground font-heading mb-1">
               Cash reward ($)
             </label>
             <input
@@ -267,11 +267,11 @@ const PlaceBountyCard = ({
               value={rewardCash}
               onChange={(e) => setRewardCash(e.target.value)}
               placeholder="0"
-              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
+              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
             />
           </div>
           <div>
-            <label className="block text-sm text-mutedForeground font-heading mb-2">
+            <label className="block text-[10px] text-mutedForeground font-heading mb-1">
               Points reward
             </label>
             <input
@@ -280,15 +280,15 @@ const PlaceBountyCard = ({
               value={rewardPoints}
               onChange={(e) => setRewardPoints(e.target.value)}
               placeholder="0"
-              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
+              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors font-heading"
             />
           </div>
         </div>
-        <p className="text-xs text-mutedForeground font-heading">
+        <p className="text-[9px] text-mutedForeground font-heading">
           Use one or both. At least one reward must be greater than 0.
         </p>
         {(totalCostCash > 0 || totalCostPoints > 0) && (
-          <p className="text-xs text-mutedForeground font-heading">
+          <p className="text-[9px] text-mutedForeground font-heading">
             Cost to you:{' '}
             <span className="text-foreground font-bold">
               {[totalCostCash > 0 && `$${totalCostCash.toLocaleString()}`, totalCostPoints > 0 && `${totalCostPoints.toLocaleString()} pts`].filter(Boolean).join(' + ')}
@@ -297,14 +297,14 @@ const PlaceBountyCard = ({
           </p>
         )}
 
-        <label className="flex items-center gap-3 cursor-pointer p-3 rounded-md bg-secondary/30 border border-border hover:bg-secondary/50 transition-colors">
+        <label className="flex items-center gap-2 cursor-pointer p-2 rounded bg-secondary/30 border border-border hover:bg-secondary/50 transition-colors">
           <input
             type="checkbox"
             checked={hidden}
             onChange={(e) => setHidden(e.target.checked)}
-            className="w-4 h-4 rounded border-border text-primary focus:ring-primary/50 cursor-pointer"
+            className="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary/50 cursor-pointer"
           />
-          <span className="text-sm font-heading text-foreground">
+          <span className="text-[10px] font-heading text-foreground">
             Hidden bounty <span className="text-mutedForeground">(+50% cost · your name won't show)</span>
           </span>
         </label>
@@ -312,13 +312,13 @@ const PlaceBountyCard = ({
         <button
           type="submit"
           disabled={submitting || !targetUsername.trim() || !hasReward}
-          className="w-full bg-primary/20 text-primary rounded-lg px-4 py-3 font-heading font-bold uppercase tracking-wide text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+          className="w-full bg-primary/20 text-primary rounded-md px-2.5 py-2 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         >
           {submitting ? 'Placing...' : 'Place Bounty'}
         </button>
       </form>
     </div>
-    <div className="hit-art-line text-primary mx-4" />
+    <div className="hit-art-line text-primary mx-2.5" />
   </div>
 );
 
@@ -341,22 +341,22 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
     (cash === 0 || haveCash >= cash) && (points === 0 || havePoints >= points);
 
   return (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`} style={{ animationDelay: '0.1s' }}>
-    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none hit-glow" />
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center justify-between">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none hit-glow" />
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center justify-between">
         <span>🎯 Active Bounties</span>
-        <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs border border-primary/30">
+        <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-heading font-bold border border-primary/30">
           {list.length}
         </span>
       </h2>
     </div>
     
     {list.length === 0 ? (
-      <div className="py-16 text-center">
-        <Target size={48} className="mx-auto text-primary/30 mb-3" />
-        <p className="text-sm text-mutedForeground font-heading">
+      <div className="py-8 text-center">
+        <Target size={28} className="mx-auto text-primary/30 mb-2" />
+        <p className="text-[10px] text-mutedForeground font-heading">
           No active bounties
         </p>
       </div>
@@ -364,14 +364,14 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
       <>
         {/* Desktop: Table */}
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-sm font-heading">
+          <table className="w-full text-[11px] font-heading">
             <thead>
-              <tr className="bg-zinc-800/50 text-[9px] uppercase tracking-[0.12em] font-heading text-zinc-500 border-b border-zinc-700/40">
-                <th className="text-left py-2.5 px-4">Target</th>
-                <th className="text-left py-2.5 px-4">Type</th>
-                <th className="text-left py-2.5 px-4">Reward</th>
-                <th className="text-left py-2.5 px-4">Placed By</th>
-                <th className="text-left py-2.5 px-4">Buy Off</th>
+              <tr className="bg-zinc-800/50 text-[8px] uppercase tracking-[0.1em] font-heading text-zinc-500 border-b border-zinc-700/40">
+                <th className="text-left py-1.5 px-2">Target</th>
+                <th className="text-left py-1.5 px-2">Type</th>
+                <th className="text-left py-1.5 px-2">Reward</th>
+                <th className="text-left py-1.5 px-2">Placed By</th>
+                <th className="text-left py-1.5 px-2">Buy Off</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-700/30">
@@ -385,66 +385,66 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                 const afford = cost && canAffordBuyOff(cost.cash, cost.points);
                 return (
                 <tr key={item.id} className="hit-row">
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-2">
+                  <td className="py-1.5 px-2">
+                    <div className="flex items-center gap-1">
                       {item.target_type === 'npc' ? (
-                        <span className="text-foreground font-bold truncate">{item.target_username}</span>
+                        <span className="text-foreground font-bold truncate text-[11px]">{item.target_username}</span>
                       ) : (
-                        <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-bold truncate">{item.target_username}</Link>
+                        <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-bold truncate text-[11px]">{item.target_username}</Link>
                       )}
                       <Link
                         to={`/attack?target=${encodeURIComponent(item.target_username)}`}
-                        className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
+                        className="shrink-0 p-0.5 rounded hover:bg-primary/20 text-primary transition-colors"
                         title="Search on Attack page"
                       >
-                        <Search size={14} />
+                        <Search size={10} />
                       </Link>
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-mutedForeground">
-                    <div className="flex items-center gap-1.5">
+                  <td className="py-1.5 px-2 text-mutedForeground">
+                    <div className="flex items-center gap-0.5">
                       {item.target_type === 'bodyguards' ? (
                         <>
-                          <Users size={14} />
+                          <Users size={10} />
                           Bodyguards
                         </>
                       ) : item.target_type === 'npc' ? (
                         <>NPC</>
                       ) : (
                         <>
-                          <User size={14} />
+                          <User size={10} />
                           User
                         </>
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-4">
-                    <div className="flex items-center gap-1.5 text-primary font-bold">
+                  <td className="py-1.5 px-2">
+                    <div className="flex items-center gap-0.5 text-primary font-bold">
                       {item.reward_type === 'cash' ? (
                         <>
-                          <DollarSign size={14} />
+                          <DollarSign size={10} />
                           ${Number(item.reward_amount).toLocaleString()}
                         </>
                       ) : (
                         <>
-                          <Coins size={14} />
+                          <Coins size={10} />
                           {Number(item.reward_amount).toLocaleString()} pts
                         </>
                       )}
                     </div>
                   </td>
-                  <td className="py-3 px-4 text-mutedForeground">
+                  <td className="py-1.5 px-2 text-mutedForeground">
                     {item.placer_username ?? 'Hidden'}
                   </td>
-                  <td className="py-3 px-4">
+                  <td className="py-1.5 px-2">
                     {showBuyOff && costLabel && (
                       <button
                         type="button"
                         onClick={() => onBuyOffUser?.(item.target_username)}
                         disabled={buying || !afford}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
-                        <ShieldOff size={12} />
+                        <ShieldOff size={9} />
                         {buying ? '...' : `Buy off (${costLabel})`}
                       </button>
                     )}
@@ -467,34 +467,34 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
             const buying = buyingOffTarget === item.target_username;
             const afford = cost && canAffordBuyOff(cost.cash, cost.points);
             return (
-            <div key={item.id} className="hit-row p-4 space-y-3">
-              <div className="flex items-start justify-between gap-2">
+            <div key={item.id} className="hit-row p-2 space-y-1.5">
+              <div className="flex items-start justify-between gap-1.5">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-1 mb-0.5">
                     {item.target_type === 'npc' ? (
-                      <span className="text-foreground font-heading font-bold text-base truncate">{item.target_username}</span>
+                      <span className="text-foreground font-heading font-bold text-[11px] truncate">{item.target_username}</span>
                     ) : (
-                      <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-heading font-bold text-base truncate">{item.target_username}</Link>
+                      <Link to={`/profile/${encodeURIComponent(item.target_username)}`} className="text-primary hover:underline font-heading font-bold text-[11px] truncate">{item.target_username}</Link>
                     )}
                     <Link
                       to={`/attack?target=${encodeURIComponent(item.target_username)}`}
-                      className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
+                      className="shrink-0 p-0.5 rounded hover:bg-primary/20 text-primary transition-colors"
                       title="Search on Attack page"
                     >
-                      <Search size={14} />
+                      <Search size={10} />
                     </Link>
                   </div>
-                  <div className="flex items-center gap-1.5 text-xs text-mutedForeground font-heading">
+                  <div className="flex items-center gap-0.5 text-[9px] text-mutedForeground font-heading">
                     {item.target_type === 'bodyguards' ? (
                       <>
-                        <Users size={12} />
+                        <Users size={9} />
                         Bodyguards
                       </>
                     ) : item.target_type === 'npc' ? (
                       <>NPC</>
                     ) : (
                       <>
-                        <User size={12} />
+                        <User size={9} />
                         User
                       </>
                     )}
@@ -502,15 +502,15 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                 </div>
                 
                 <div className="text-right">
-                  <div className="flex items-center gap-1.5 text-primary font-heading font-bold text-sm">
+                  <div className="flex items-center gap-0.5 text-primary font-heading font-bold text-[11px]">
                     {item.reward_type === 'cash' ? (
                       <>
-                        <DollarSign size={14} />
+                        <DollarSign size={10} />
                         ${Number(item.reward_amount).toLocaleString()}
                       </>
                     ) : (
                       <>
-                        <Coins size={14} />
+                        <Coins size={10} />
                         {Number(item.reward_amount).toLocaleString()}
                       </>
                     )}
@@ -518,7 +518,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                 </div>
               </div>
               
-              <div className="text-xs text-mutedForeground font-heading">
+              <div className="text-[9px] text-mutedForeground font-heading">
                 Placed by: <span className="text-foreground">{item.placer_username ?? 'Hidden'}</span>
               </div>
               {showBuyOff && costLabel && (
@@ -526,9 +526,9 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                   type="button"
                   onClick={() => onBuyOffUser?.(item.target_username)}
                   disabled={buying || !afford}
-                  className="w-full inline-flex items-center justify-center gap-2 py-2 rounded-md text-xs font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full inline-flex items-center justify-center gap-1 py-1.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  <ShieldOff size={14} />
+                  <ShieldOff size={9} />
                   {buying ? 'Buying off...' : `Buy off ${item.target_username} (${costLabel})`}
                 </button>
               )}
@@ -538,40 +538,40 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
         </div>
       </>
     )}
-    <div className="hit-art-line text-primary mx-4" />
+    <div className="hit-art-line text-primary mx-2.5" />
   </div>
   );
 };
 
 const InfoCard = () => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-fade-in`} style={{ animationDelay: '0.15s' }}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hit-fade-in`} style={{ animationDelay: '0.15s' }}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         ℹ️ How It Works
       </h3>
     </div>
-    <div className="p-4">
-      <div className="space-y-2 text-sm text-mutedForeground font-heading leading-relaxed">
-        <p className="flex items-start gap-2">
+    <div className="p-2">
+      <div className="space-y-1 text-[10px] text-mutedForeground font-heading leading-snug">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             Place bounties on <strong className="text-foreground">users</strong> or their <strong className="text-foreground">bodyguards</strong> using cash or points
           </span>
         </p>
-        <p className="flex items-start gap-2">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             <strong className="text-amber-400">Hidden bounties</strong> cost 50% extra · your name won't appear as the placer
           </span>
         </p>
-        <p className="flex items-start gap-2">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             <strong className="text-foreground">Buy yourself off</strong> at bounty amount + 50% (same currency: $1M bounty = $1.5M to remove)
           </span>
         </p>
-        <p className="flex items-start gap-2">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             Pay <strong className="text-primary">5,000 points</strong> once to reveal who placed bounties on you
@@ -579,7 +579,7 @@ const InfoCard = () => (
         </p>
       </div>
     </div>
-    <div className="hit-art-line text-primary mx-4" />
+    <div className="hit-art-line text-primary mx-2.5" />
   </div>
 );
 
@@ -730,16 +730,16 @@ export default function HitlistPage() {
   const who = me?.who ?? [];
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="hitlist-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="hitlist-page">
       <style>{HITLIST_STYLES}</style>
 
       {/* Page header */}
       <div className="relative hit-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Bounties</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Bounties</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase">
           Hitlist
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Place bounties, buy yourself off, see who wants you dead.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Place bounties, buy yourself off, see who wants you dead.</p>
       </div>
 
       <AddNpcCard
