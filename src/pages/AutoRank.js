@@ -5,6 +5,12 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const AR_STYLES = `
+  .ar-fade-in { animation: ar-fade-in 0.4s ease-out both; }
+  @keyframes ar-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .ar-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const MIN_INTERVAL = 5;
 
 export default function AutoRank() {
@@ -245,7 +251,12 @@ export default function AutoRank() {
   if (loading) {
     return (
       <div className={styles.pageContent}>
-        <div className="font-heading text-primary text-lg">Loading...</div>
+        <style>{AR_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
+          <Bot size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading…</span>
+        </div>
       </div>
     );
   }
@@ -278,14 +289,25 @@ export default function AutoRank() {
 
   return (
     <div className={styles.pageContent}>
+      <style>{AR_STYLES}</style>
       <div className="max-w-xl mx-auto space-y-4">
+        <div className="relative ar-fade-in">
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Automation</p>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+            <Bot size={22} className="text-primary/80" />
+            Auto Rank
+          </h1>
+          <p className="text-[10px] text-zinc-500 font-heading italic">Automate crimes, GTA, busts, OC. Set Telegram in Profile for notifications.</p>
+        </div>
+
         {/* Hero / intro */}
-        <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-          <div className="px-4 py-2 md:px-5 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-3">
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 md:px-5 md:py-3 bg-primary/8 border-b border-primary/20 flex items-center gap-3">
             <Bot className="w-5 h-5 text-primary shrink-0" />
             <div>
-              <h1 className="text-sm md:text-base font-heading font-bold text-primary uppercase tracking-wider">Auto Rank</h1>
-              <p className="text-[11px] text-mutedForeground font-heading mt-0.5">Automate crimes, GTA, busts, OC. Optional: add Telegram in <Link to="/profile" className="text-primary hover:underline">Profile → Settings</Link> to get notifications when runs succeed.</p>
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Setup &amp; status</h2>
+              <p className="text-[11px] text-zinc-500 font-heading mt-0.5">Add Telegram in <Link to="/profile" className="text-primary hover:underline">Profile → Settings</Link> to get notifications when runs succeed.</p>
             </div>
           </div>
           <div className="p-3 md:p-4 space-y-3">
@@ -304,12 +326,14 @@ export default function AutoRank() {
               </div>
             )}
           </div>
+          <div className="ar-art-line text-primary mx-3" />
         </div>
 
         {/* Your settings */}
-        <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-          <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your settings</span>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Your settings</span>
           </div>
           <div className="p-3 md:p-4 space-y-1">
             <ToggleRow
@@ -362,14 +386,16 @@ export default function AutoRank() {
               onToggle={() => updatePref('auto_rank_booze', !prefs.auto_rank_booze)}
             />
           </div>
+          <div className="ar-art-line text-primary mx-3" />
         </div>
 
         {/* Stats card */}
         {canEnable && (
-          <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-            <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <BarChart3 className="w-4 h-4 text-primary" />
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-wider">Your Auto Rank stats</span>
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Your Auto Rank stats</span>
             </div>
             <div className="p-3 md:p-4">
               <p className="text-[11px] text-mutedForeground font-heading mb-3">Lifetime busts, crimes, GTAs, cash. Running = time since first stats.</p>
@@ -435,15 +461,17 @@ export default function AutoRank() {
                 </div>
               )}
             </div>
+            <div className="ar-art-line text-primary mx-3" />
           </div>
         )}
 
         {/* Admin only: global loop */}
         {isAdmin && (
-          <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Shield className="w-5 h-5 text-primary" />
-              <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Admin — Global loop</span>
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Admin — Global loop</span>
             </div>
             <div className="p-4 md:p-5 space-y-4">
               <p className="text-xs text-mutedForeground font-heading">
@@ -496,16 +524,18 @@ export default function AutoRank() {
                 </div>
               </div>
             </div>
+            <div className="ar-art-line text-primary mx-3" />
           </div>
         )}
 
         {/* Admin: list all alive users with Auto Rank purchased */}
         {isAdmin && (
-          <div className={`${styles.panel} rounded-lg overflow-hidden border-2 border-primary/20`}>
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-primary" />
-                <span className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Auto Rank users (alive)</span>
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Auto Rank users (alive)</span>
               </div>
               <button
                 type="button"
@@ -657,6 +687,7 @@ export default function AutoRank() {
                 </table>
               )}
             </div>
+            <div className="ar-art-line text-primary mx-3" />
           </div>
         )}
       </div>

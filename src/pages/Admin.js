@@ -4,6 +4,12 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const ADMIN_STYLES = `
+  .admin-fade-in { animation: admin-fade-in 0.4s ease-out both; }
+  @keyframes admin-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .admin-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const SECTIONS_KEY = 'admin_sections_collapsed';
 
 function loadCollapsed() {
@@ -543,8 +549,13 @@ export default function Admin() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+      <div className={`${styles.pageContent}`}>
+        <style>{ADMIN_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <Settings size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading…</span>
+        </div>
       </div>
     );
   }
@@ -565,11 +576,11 @@ export default function Admin() {
     <button
       type="button"
       onClick={onToggle}
-      className="w-full px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between hover:bg-primary/15 transition-colors"
+      className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
     >
       <div className="flex items-center gap-2">
         <Icon size={14} className={color} />
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">{title}</span>
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{title}</span>
       </div>
       <div className="flex items-center gap-2">
         {badge}
@@ -625,21 +636,21 @@ export default function Admin() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="admin-page">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-            <Settings className="w-6 h-6 sm:w-7 sm:h-7" />
-            Admin Tools
-          </h1>
-          <p className="text-xs text-mutedForeground">Use with caution</p>
-        </div>
+      <style>{ADMIN_STYLES}</style>
+      <div className="relative admin-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Back office</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Settings className="w-6 h-6 text-primary/80" />
+          Admin Tools
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
       </div>
 
       {/* Target Username */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎯 Target Username</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎯 Target Username</span>
         </div>
         <div className="p-3">
           <input
@@ -650,10 +661,12 @@ export default function Admin() {
             placeholder="Enter username for actions below"
           />
         </div>
+        <div className="admin-art-line text-primary mx-3" />
       </div>
 
       {/* NPC Management */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Bot}
           title="NPC Management"
@@ -688,7 +701,8 @@ export default function Admin() {
       </div>
 
       {/* Game Events */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Zap}
           title="Game Events"
@@ -715,7 +729,8 @@ export default function Admin() {
       </div>
 
       {/* Booze Run rotation (admin test) */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Clock}
           title="Booze Run rotation"
@@ -743,7 +758,8 @@ export default function Admin() {
       </div>
 
       {/* Quick Actions */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Zap}
           title="Quick Actions"
@@ -771,7 +787,8 @@ export default function Admin() {
       </div>
 
       {/* Player Actions */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={UserCog}
           title="Player Actions"
@@ -821,7 +838,8 @@ export default function Admin() {
       </div>
 
       {/* Search & Attack Tools */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Clock}
           title="Search & Attack Tools"
@@ -861,7 +879,8 @@ export default function Admin() {
       </div>
 
       {/* Bodyguard Tools */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Shield}
           title="Bodyguard Tools"
@@ -987,7 +1006,8 @@ export default function Admin() {
       </div>
 
       {/* Security & Anti-Cheat */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Shield}
           title="Security & Anti-Cheat"
@@ -1146,7 +1166,8 @@ export default function Admin() {
       </div>
 
       {/* Activity Log */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={ScrollText}
           title="Activity Log"
@@ -1196,7 +1217,8 @@ export default function Admin() {
       </div>
 
       {/* Gambling Log */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Dice5}
           title="Gambling Log"

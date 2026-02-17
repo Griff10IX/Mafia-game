@@ -4,6 +4,12 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const DA_STYLES = `
+  .da-fade-in { animation: da-fade-in 0.4s ease-out both; }
+  @keyframes da-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .da-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 export default function DeadAlive() {
   const [deadUsername, setDeadUsername] = useState('');
   const [deadPassword, setDeadPassword] = useState('');
@@ -33,24 +39,23 @@ export default function DeadAlive() {
 
   return (
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="dead-alive-page">
-      <div className="flex items-center justify-center flex-col gap-2 text-center">
-        <div className="flex items-center gap-3 w-full justify-center">
-          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/60" />
-          <h1 className="text-2xl md:text-3xl font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-            <Skull size={28} />
-            Dead &gt; Alive
-          </h1>
-          <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/60" />
-        </div>
-        <p className="text-xs font-heading text-mutedForeground uppercase tracking-widest max-w-xl">
+      <style>{DA_STYLES}</style>
+      <div className="relative da-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Recovery</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Skull size={22} className="text-primary/80" />
+          Dead → Alive
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic max-w-xl">
           Recover a portion of points from a dead account into this account (one-time per dead account).
         </p>
       </div>
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-md shadow-lg shadow-primary/5`}>
-        <div className="px-4 py-3 bg-amber-500/20 border-b border-amber-500/40 flex items-center gap-2">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden max-w-md shadow-lg shadow-primary/5 border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-2.5 bg-amber-500/15 border-b border-amber-500/30 flex items-center gap-2">
           <AlertCircle size={18} className="text-amber-400 shrink-0" />
-          <span className="text-sm font-heading font-bold text-amber-200">You must be logged into your new account. Enter the credentials of the account that died.</span>
+          <span className="text-[10px] font-heading font-bold text-amber-200/90">You must be logged into your new account. Enter the credentials of the account that died.</span>
         </div>
         <form onSubmit={handleRetrieve} className="p-6 space-y-4">
           <div>
@@ -85,15 +90,13 @@ export default function DeadAlive() {
             {loading ? 'Retrieving...' : 'Retrieve points'}
           </button>
         </form>
+        <div className="da-art-line text-primary mx-3" />
       </div>
 
-      <div className={`${styles.panel} rounded-sm overflow-hidden max-w-2xl`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">How it works</h3>
-            <div className="flex-1 h-px bg-primary/50" />
-          </div>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden max-w-2xl border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">How it works</h3>
         </div>
         <div className="p-6">
           <ul className="space-y-2 text-sm text-mutedForeground font-heading">
@@ -103,6 +106,7 @@ export default function DeadAlive() {
             <li className="flex items-start gap-2"><span className="text-primary mt-0.5">◆</span> Retrieval is <strong className="text-foreground">one-time per dead account</strong>. After that, the dead account cannot be used for retrieval again.</li>
           </ul>
         </div>
+        <div className="da-art-line text-primary mx-3" />
       </div>
     </div>
   );
