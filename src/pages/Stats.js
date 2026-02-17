@@ -5,6 +5,25 @@ import { TrendingUp } from 'lucide-react';
 import api from '../utils/api';
 import styles from '../styles/noir.module.css';
 
+const STATS_STYLES = `
+  @keyframes stat-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .stat-fade-in { animation: stat-fade-in 0.4s ease-out both; }
+  @keyframes stat-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+  .stat-scale-in { animation: stat-scale-in 0.35s ease-out both; }
+  @keyframes stat-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .stat-glow { animation: stat-glow 4s ease-in-out infinite; }
+  .stat-corner::before, .stat-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .stat-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .stat-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .stat-card { transition: all 0.3s ease; }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .stat-row { transition: all 0.2s ease; }
+  .stat-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .stat-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 // Utility functions
 function formatNumber(n) {
   if (n == null) return '—';
@@ -34,18 +53,25 @@ function formatDateTime(iso) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]" data-testid="stats-loading">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className={`space-y-4 ${styles.pageContent}`}>
+    <style>{STATS_STYLES}</style>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3" data-testid="stats-loading">
+      <TrendingUp size={28} className="text-primary/40 animate-pulse" />
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading stats...</span>
+    </div>
   </div>
 );
 
-const StatCard = ({ title, rows }) => {
+const StatCard = ({ title, rows, delay = 0 }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
-  
+
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
-        <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: `${delay}s` }}>
+      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none stat-glow" />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
           {title}
         </h2>
       </div>
@@ -54,11 +80,11 @@ const StatCard = ({ title, rows }) => {
           No data available
         </div>
       ) : (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-zinc-700/30">
           {safeRows.map((r) => (
-            <div 
-              key={r.label} 
-              className="flex items-center justify-between px-4 py-2.5 text-sm font-heading hover:bg-secondary/30 transition-colors"
+            <div
+              key={r.label}
+              className="stat-row flex items-center justify-between px-4 py-2.5 text-sm font-heading"
             >
               <span className="text-mutedForeground">{r.label}</span>
               <span className="font-bold text-foreground tabular-nums">{r.value}</span>
@@ -66,14 +92,17 @@ const StatCard = ({ title, rows }) => {
           ))}
         </div>
       )}
+      <div className="stat-art-line text-primary mx-4" />
     </div>
   );
 };
 
 const RankStatsCard = ({ rankStats }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none stat-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         Rank Stats
       </h2>
     </div>
@@ -82,11 +111,11 @@ const RankStatsCard = ({ rankStats }) => (
         No rank data yet.
       </div>
     ) : (
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-zinc-700/30">
         {rankStats.map((r) => (
-          <div 
-            key={r.rank_id} 
-            className="flex items-center justify-between px-4 py-2.5 text-sm font-heading hover:bg-secondary/30 transition-colors"
+          <div
+            key={r.rank_id}
+            className="stat-row flex items-center justify-between px-4 py-2.5 text-sm font-heading"
           >
             <span className="font-bold text-foreground flex-1 truncate">{r.rank_name}</span>
             <span className="text-emerald-400 font-bold tabular-nums w-16 text-center">
@@ -99,13 +128,15 @@ const RankStatsCard = ({ rankStats }) => (
         ))}
       </div>
     )}
+    <div className="stat-art-line text-primary mx-4" />
   </div>
 );
 
 const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between flex-wrap gap-2">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         Last 15 Kills
       </h2>
       <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading select-none cursor-pointer">
@@ -118,10 +149,10 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
         show users only
       </label>
     </div>
-    
+
     {/* Desktop view */}
     <div className="hidden md:block">
-      <div className="px-4 py-2 bg-secondary/30 text-xs font-heading font-bold text-primary/80 uppercase tracking-wider grid grid-cols-12 gap-2 border-b border-border">
+      <div className="px-4 py-2 bg-zinc-800/50 text-[9px] font-heading font-bold text-zinc-500 uppercase tracking-[0.12em] grid grid-cols-12 gap-2 border-b border-zinc-700/40">
         <div className="col-span-4">Victim</div>
         <div className="col-span-3">Rank</div>
         <div className="col-span-3">Killer</div>
@@ -132,11 +163,11 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
           No kills yet.
         </div>
       ) : (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-zinc-700/30">
           {kills.map((k) => (
-            <div 
-              key={k.id} 
-              className="grid grid-cols-12 gap-2 px-4 py-3 text-xs font-heading hover:bg-secondary/30 transition-colors"
+            <div
+              key={k.id}
+              className="stat-row grid grid-cols-12 gap-2 px-4 py-3 text-xs font-heading"
             >
               <div className="col-span-4 text-foreground font-bold truncate">{k.victim_username}</div>
               <div className="col-span-3 text-mutedForeground truncate">{k.victim_rank_name || '—'}</div>
@@ -151,16 +182,16 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
         </div>
       )}
     </div>
-    
+
     {/* Mobile view */}
-    <div className="md:hidden divide-y divide-border">
+    <div className="md:hidden divide-y divide-zinc-700/30">
       {kills.length === 0 ? (
         <div className="px-4 py-8 text-sm text-mutedForeground font-heading text-center">
           No kills yet.
         </div>
       ) : (
         kills.map((k) => (
-          <div key={k.id} className="p-4 space-y-2 hover:bg-secondary/30 transition-colors">
+          <div key={k.id} className="stat-row p-4 space-y-2">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-heading font-bold text-foreground truncate">
@@ -181,20 +212,22 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
         ))
       )}
     </div>
+    <div className="stat-art-line text-primary mx-4" />
   </div>
 );
 
 const DeadUsersListView = ({ users }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         Top Dead Users
       </h2>
     </div>
-    
+
     {/* Desktop view */}
     <div className="hidden md:block">
-      <div className="px-4 py-2 bg-secondary/30 text-xs font-heading font-bold text-primary/80 uppercase tracking-wider grid grid-cols-12 gap-2 border-b border-border">
+      <div className="px-4 py-2 bg-zinc-800/50 text-[9px] font-heading font-bold text-zinc-500 uppercase tracking-[0.12em] grid grid-cols-12 gap-2 border-b border-zinc-700/40">
         <div className="col-span-5">Username</div>
         <div className="col-span-2 text-center">Kills</div>
         <div className="col-span-3">Rank</div>
@@ -205,11 +238,11 @@ const DeadUsersListView = ({ users }) => (
           No dead users yet.
         </div>
       ) : (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-zinc-700/30">
           {users.map((u) => (
-            <div 
-              key={u.username + (u.dead_at || '')} 
-              className="grid grid-cols-12 gap-2 px-4 py-3 text-xs font-heading hover:bg-secondary/30 transition-colors"
+            <div
+              key={u.username + (u.dead_at || '')}
+              className="stat-row grid grid-cols-12 gap-2 px-4 py-3 text-xs font-heading"
             >
               <div className="col-span-5 text-foreground font-bold truncate"><Link to={`/profile/${encodeURIComponent(u.username)}`} className="text-primary hover:underline">{u.username}</Link></div>
               <div className="col-span-2 text-center text-mutedForeground tabular-nums">
@@ -224,16 +257,16 @@ const DeadUsersListView = ({ users }) => (
         </div>
       )}
     </div>
-    
+
     {/* Mobile view */}
-    <div className="md:hidden divide-y divide-border">
+    <div className="md:hidden divide-y divide-zinc-700/30">
       {users.length === 0 ? (
         <div className="px-4 py-8 text-sm text-mutedForeground font-heading text-center">
           No dead users yet.
         </div>
       ) : (
         users.map((u) => (
-          <div key={u.username + (u.dead_at || '')} className="p-4 space-y-2 hover:bg-secondary/30 transition-colors">
+          <div key={u.username + (u.dead_at || '')} className="stat-row p-4 space-y-2">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-heading font-bold text-foreground truncate">
@@ -254,6 +287,7 @@ const DeadUsersListView = ({ users }) => (
         ))
       )}
     </div>
+    <div className="stat-art-line text-primary mx-4" />
   </div>
 );
 
@@ -331,27 +365,38 @@ export default function Stats() {
   const vehicleRows = buildVehicleRows(data);
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="stats-page">
-      {/* Stats grid — items-start so short cards (Game Capital, Vehicle Stats) don't stretch */}
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="stats-page">
+      <style>{STATS_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative stat-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Numbers</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+          Stats
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Game capital, users, vehicles, ranks — and the body count.</p>
+      </div>
+
+      {/* Stats grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
-        <StatCard title="Game Capital" rows={gameCapitalRows} />
-        <StatCard title="User Stats" rows={userStatsRows} />
+        <StatCard title="Game Capital" rows={gameCapitalRows} delay={0} />
+        <StatCard title="User Stats" rows={userStatsRows} delay={0.04} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
-        <StatCard title="Vehicle Stats" rows={vehicleRows} />
+        <StatCard title="Vehicle Stats" rows={vehicleRows} delay={0.05} />
         <RankStatsCard rankStats={rankStats} />
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2">
+      <div className="flex items-center gap-0 border-b-2 border-zinc-700/50">
         <button
           type="button"
           onClick={() => setStatsListTab('kills')}
-          className={`px-4 py-2 rounded-md text-sm font-heading font-bold uppercase tracking-wide transition-all touch-manipulation ${
+          className={`flex items-center gap-1 px-3 py-2.5 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 -mb-0.5 touch-manipulation ${
             statsListTab === 'kills'
-              ? 'bg-primary/20 text-primary border border-primary/40'
-              : 'bg-secondary text-mutedForeground border border-border hover:text-foreground'
+              ? 'text-primary border-primary bg-primary/5'
+              : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
           }`}
         >
           Last 15 Kills
@@ -359,10 +404,10 @@ export default function Stats() {
         <button
           type="button"
           onClick={() => setStatsListTab('dead')}
-          className={`px-4 py-2 rounded-md text-sm font-heading font-bold uppercase tracking-wide transition-all touch-manipulation ${
+          className={`flex items-center gap-1 px-3 py-2.5 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 -mb-0.5 touch-manipulation ${
             statsListTab === 'dead'
-              ? 'bg-primary/20 text-primary border border-primary/40'
-              : 'bg-secondary text-mutedForeground border border-border hover:text-foreground'
+              ? 'text-primary border-primary bg-primary/5'
+              : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
           }`}
         >
           Top Dead Users
@@ -371,13 +416,13 @@ export default function Stats() {
 
       {/* List views */}
       {statsListTab === 'kills' && (
-        <KillsListView 
-          kills={recentKills} 
+        <KillsListView
+          kills={recentKills}
           usersOnly={usersOnlyKills}
           onToggleUsersOnly={setUsersOnlyKills}
         />
       )}
-      
+
       {statsListTab === 'dead' && (
         <DeadUsersListView users={topDeadUsers} />
       )}
