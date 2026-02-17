@@ -10,16 +10,19 @@ async def ensure_all_indexes(db):
     try:
         # --- Bank ---
         await db.bank_deposits.create_index([("user_id", 1), ("created_at", -1)])
+        await db.bank_deposits.create_index([("user_id", 1), ("claimed_at", 1)])
         await db.money_transfers.create_index([("from_user_id", 1), ("created_at", -1)])
         await db.money_transfers.create_index([("to_user_id", 1), ("created_at", -1)])
         await db.bank_deposits.create_index([("id", 1), ("user_id", 1)])
 
         # --- Game config / settings ---
         await db.game_config.create_index("id", unique=True)
+        await db.game_config.create_index("key", unique=True)
         await db.game_settings.create_index("key", unique=True)
 
         # --- Families ---
         await db.family_members.create_index("family_id")
+        await db.family_members.create_index([("family_id", 1), ("user_id", 1)])
         await db.family_wars.create_index("id", unique=True)
         await db.family_wars.create_index([("family_a_id", 1), ("family_b_id", 1)])
         await db.family_wars.create_index([("status", 1), ("created_at", -1)])
@@ -28,8 +31,11 @@ async def ensure_all_indexes(db):
         await db.family_crew_oc_applications.create_index([("family_id", 1), ("created_at", -1)])
         await db.family_crew_oc_applications.create_index([("family_id", 1), ("status", 1)])
         await db.family_crew_oc_applications.create_index([("family_id", 1), ("user_id", 1)])
+        await db.family_crew_oc_applications.create_index([("id", 1), ("family_id", 1)])
         await db.family_racket_attacks.create_index([("attacker_family_id", 1), ("target_family_id", 1), ("last_at", -1)])
         await db.family_war_stats.create_index("war_id")
+        await db.families.create_index("name")
+        await db.families.create_index("tag")
 
         # --- Attack ---
         await db.attacks.create_index([("attacker_id", 1), ("search_started", -1)])
@@ -57,6 +63,7 @@ async def ensure_all_indexes(db):
         await db.airport_ownership.create_index("owner_id")
         await db.airport_ownership.create_index([("state", 1), ("slot", 1)], unique=True)
         await db.bullet_factory.create_index("owner_id")
+        await db.bullet_factory.create_index("state")
 
         # --- Casino ownership: city lookup (profile has owner_id) ---
         for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership"):
@@ -67,6 +74,7 @@ async def ensure_all_indexes(db):
         await db.dice_buy_back_offers.create_index("to_user_id")
         await db.blackjack_buy_back_offers.create_index("id")
         await db.blackjack_buy_back_offers.create_index("to_user_id")
+        await db.blackjack_games.create_index("user_id")
         await db.videopoker_games.create_index("user_id")
 
         # --- Organised crime ---
@@ -75,7 +83,9 @@ async def ensure_all_indexes(db):
         await db.oc_pending_heists.create_index("id", unique=True)
         await db.oc_invites.create_index("id", unique=True)
         await db.oc_invites.create_index([("pending_heist_id", 1), ("role", 1)])
+        await db.oc_invites.create_index("pending_heist_id")
         await db.user_crimes.create_index("user_id")
+        await db.user_crimes.create_index([("user_id", 1), ("crime_id", 1)])
 
         # --- Jail ---
         await db.jail_npcs.create_index("username", unique=True)
@@ -86,6 +96,7 @@ async def ensure_all_indexes(db):
         await db.bodyguards.create_index([("user_id", 1), ("slot_number", 1)])
         await db.hitlist.create_index("target_id")
         await db.hitlist.create_index([("target_id", 1), ("target_type", 1)])
+        await db.hitlist.create_index([("reward_amount", -1), ("created_at", -1)])
 
         # --- Crimes ---
         await db.crimes.create_index("id", unique=True)
@@ -105,6 +116,9 @@ async def ensure_all_indexes(db):
         # --- Notifications: unread count (profile has user_id) ---
         await db.notifications.create_index([("user_id", 1), ("read", 1)])
         await db.notifications.create_index([("user_id", 1), ("created_at", -1)])
+        await db.notifications.create_index([("id", 1), ("user_id", 1)])
+        await db.notifications.create_index([("user_id", 1), ("sender_id", 1), ("created_at", 1)])
+        await db.notifications.create_index([("user_id", 1), ("recipient_id", 1), ("created_at", 1)])
 
         # --- Sports betting ---
         await db.sports_events.create_index("id", unique=True)
@@ -133,7 +147,10 @@ async def ensure_all_indexes(db):
         await db.security_flags.create_index([("user_id", 1), ("created_at", -1)])
         await db.security_logs.create_index([("created_at", -1)])
         await db.activity_log.create_index([("created_at", -1)])
+        await db.activity_log.create_index([("username", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("created_at", -1)])
+        await db.gambling_log.create_index([("username", 1), ("created_at", -1)])
+        await db.gambling_log.create_index([("game_type", 1), ("created_at", -1)])
 
         # --- Entertainer ---
         await db.entertainer_games.create_index("id", unique=True)
