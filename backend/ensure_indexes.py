@@ -14,6 +14,7 @@ async def ensure_all_indexes(db):
         await db.money_transfers.create_index([("from_user_id", 1), ("created_at", -1)])
         await db.money_transfers.create_index([("to_user_id", 1), ("created_at", -1)])
         await db.bank_deposits.create_index([("id", 1), ("user_id", 1)])
+        await db.bank_deposits.create_index("id")
 
         # --- Game config / settings ---
         await db.game_config.create_index("id", unique=True)
@@ -34,6 +35,8 @@ async def ensure_all_indexes(db):
         await db.family_crew_oc_applications.create_index([("id", 1), ("family_id", 1)])
         await db.family_racket_attacks.create_index([("attacker_family_id", 1), ("target_family_id", 1), ("last_at", -1)])
         await db.family_war_stats.create_index("war_id")
+        await db.family_war_stats.create_index([("war_id", 1), ("user_id", 1)], unique=True)
+        await db.families.create_index("id", unique=True)
         await db.families.create_index("name")
         await db.families.create_index("tag")
 
@@ -41,6 +44,7 @@ async def ensure_all_indexes(db):
         await db.attacks.create_index([("attacker_id", 1), ("search_started", -1)])
         await db.attacks.create_index([("attacker_id", 1), ("expires_at", 1)])
         await db.attacks.create_index("id")
+        await db.attacks.create_index([("attacker_id", 1), ("id", 1)])
         await db.attacks.create_index("target_id")
         await db.attack_attempts.create_index([("attacker_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("target_id", 1), ("created_at", -1)])
@@ -48,6 +52,8 @@ async def ensure_all_indexes(db):
 
         # --- User cars / GTA ---
         await db.user_cars.create_index("user_id")
+        await db.user_cars.create_index([("user_id", 1), ("acquired_at", -1)])
+        await db.user_cars.create_index([("listed_for_sale", 1), ("listed_at", -1)])
         await db.user_cars.create_index("id", unique=True)
         await db.user_cars.create_index([("user_id", 1), ("car_id", 1)])
         await db.gta_cooldowns.create_index("user_id", unique=True)
@@ -72,8 +78,10 @@ async def ensure_all_indexes(db):
         # --- Casino buy-back offers ---
         await db.dice_buy_back_offers.create_index("id")
         await db.dice_buy_back_offers.create_index("to_user_id")
+        await db.dice_buy_back_offers.create_index([("to_user_id", 1), ("expires_at", 1)])
         await db.blackjack_buy_back_offers.create_index("id")
         await db.blackjack_buy_back_offers.create_index("to_user_id")
+        await db.blackjack_buy_back_offers.create_index([("to_user_id", 1), ("expires_at", 1)])
         await db.blackjack_games.create_index("user_id")
         await db.videopoker_games.create_index("user_id")
 
@@ -82,6 +90,7 @@ async def ensure_all_indexes(db):
         await db.oc_pending_heists.create_index("creator_id")
         await db.oc_pending_heists.create_index("id", unique=True)
         await db.oc_invites.create_index("id", unique=True)
+        await db.oc_invites.create_index("creator_id")
         await db.oc_invites.create_index([("pending_heist_id", 1), ("role", 1)])
         await db.oc_invites.create_index("pending_heist_id")
         await db.user_crimes.create_index("user_id")
@@ -91,6 +100,7 @@ async def ensure_all_indexes(db):
         await db.jail_npcs.create_index("username", unique=True)
 
         # --- Bodyguards / hitlist ---
+        await db.bodyguards.create_index("id", unique=True)
         await db.bodyguards.create_index("user_id")
         await db.bodyguards.create_index("bodyguard_user_id")
         await db.bodyguards.create_index([("user_id", 1), ("slot_number", 1)])
@@ -123,7 +133,10 @@ async def ensure_all_indexes(db):
         # --- Sports betting ---
         await db.sports_events.create_index("id", unique=True)
         await db.sports_events.create_index([("id", 1), ("status", 1)])
+        await db.sports_events.create_index([("status", 1), ("start_time", 1)])
         await db.sports_bets.create_index([("user_id", 1), ("status", 1)])
+        await db.sports_bets.create_index([("user_id", 1), ("status", 1), ("created_at", -1)])
+        await db.sports_bets.create_index([("user_id", 1), ("status", 1), ("settled_at", -1)])
         await db.sports_bets.create_index("id")
 
         # --- Quick trade ---
@@ -155,6 +168,7 @@ async def ensure_all_indexes(db):
         # --- Entertainer ---
         await db.entertainer_games.create_index("id", unique=True)
         await db.entertainer_games.create_index([("status", 1)])
+        await db.entertainer_games.create_index([("status", 1), ("completed_at", -1)])
         await db.entertainer_games.create_index([("created_at", -1)])
 
         # --- Racket / extortions ---
@@ -165,6 +179,7 @@ async def ensure_all_indexes(db):
         await db.users.create_index([("is_dead", 1), ("total_kills", -1)])
         await db.users.create_index([("money", -1)])
         await db.users.create_index("in_jail")
+        await db.users.create_index([("auto_rank_enabled", 1), ("auto_rank_next_run_at", 1)])
 
         logger.info("All non-profile indexes ensured.")
     except Exception as e:
