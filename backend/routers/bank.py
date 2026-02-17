@@ -1,4 +1,5 @@
 # Bank endpoints: meta, overview, interest deposit/claim, Swiss deposit/withdraw, transfer
+import asyncio
 from datetime import datetime, timezone, timedelta
 import re
 import time
@@ -96,18 +97,18 @@ async def bank_overview(current_user: dict = Depends(get_current_user)):
     swiss_balance = int((user or {}).get("swiss_balance", 0) or 0)
     swiss_limit = int((user or {}).get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START)
 
-    deposits = await db.bank_deposits.find(
-        {"user_id": uid},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    deposits_raw, transfers_raw = await asyncio.gather(
+        db.bank_deposits.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(50),
+        db.money_transfers.find(
+            {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]},
+            {"_id": 0}
+        ).sort("created_at", -1).to_list(50),
+    )
+    deposits = list(deposits_raw)
     for d in deposits:
         mat = _parse_matures_at(d.get("matures_at"))
         d["matured"] = bool(mat is not None and now >= mat)
-
-    transfers = await db.money_transfers.find(
-        {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]},
-        {"_id": 0}
-    ).sort("created_at", -1).to_list(50)
+    transfers = list(transfers_raw)
     for t in transfers:
         t["direction"] = "sent" if t.get("from_user_id") == uid else "received"
 

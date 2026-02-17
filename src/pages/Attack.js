@@ -798,21 +798,24 @@ export default function Attack() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    refreshAttacks();
+    const load = async () => {
+      try {
+        const [attacksRes, inflationRes, meRes, eventsRes] = await Promise.all([
+          api.get('/attack/list'),
+          api.get('/attack/inflation').catch(() => ({ data: {} })),
+          api.get('/auth/me').catch(() => ({ data: {} })),
+          api.get('/events/active').catch(() => ({ data: {} })),
+        ]);
+        setAttacks(attacksRes.data?.attacks ?? []);
+        setInflationPct(Number(inflationRes.data?.inflation_pct ?? 0));
+        setUserBullets(meRes.data?.bullets ?? 0);
+        setEvent(eventsRes.data?.event ?? null);
+        setEventsEnabled(!!eventsRes.data?.events_enabled);
+      } catch (_) {}
+    };
+    load();
     const interval = setInterval(refreshAttacks, 10000);
     return () => clearInterval(interval);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    fetchInflation();
-    fetchBullets();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    api.get('/events/active').then((r) => {
-      setEvent(r.data?.event ?? null);
-      setEventsEnabled(!!r.data?.events_enabled);
-    }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

@@ -42,15 +42,21 @@ export default function MyProperties() {
 
   const fetchMyProperties = useCallback(async () => {
     try {
-      const res = await api.get('/my-properties');
-      setData({ casino: res.data?.casino ?? null, property: res.data?.property ?? null });
-      if (res.data?.casino?.max_bet != null) setCasinoMaxBet(String(res.data.casino.max_bet));
-      if (res.data?.casino?.buy_back_reward != null) setCasinoBuyBack(String(res.data.casino.buy_back_reward));
-      if (res.data?.property?.type === 'airport' && res.data?.property?.price_per_travel != null)
-        setAirportPrice(String(res.data.property.price_per_travel));
-      if (res.data?.property?.type === 'bullet_factory') {
-        const list = await api.get('/bullet-factory/list').then((r) => r.data?.factories ?? []).catch(() => []);
-        const f = list.find((x) => x.state === res.data.property.state);
+      const [res, bulletListRes] = await Promise.all([
+        api.get('/my-properties'),
+        api.get('/bullet-factory/list').catch(() => ({ data: { factories: [] } })),
+      ]);
+      const props = res.data;
+      const casino = props?.casino ?? null;
+      const property = props?.property ?? null;
+      setData({ casino, property });
+      if (casino?.max_bet != null) setCasinoMaxBet(String(casino.max_bet));
+      if (casino?.buy_back_reward != null) setCasinoBuyBack(String(casino.buy_back_reward));
+      if (property?.type === 'airport' && property?.price_per_travel != null)
+        setAirportPrice(String(property.price_per_travel));
+      if (property?.type === 'bullet_factory') {
+        const list = bulletListRes.data?.factories ?? [];
+        const f = list.find((x) => x.state === property.state);
         if (f?.price_per_bullet != null) setBulletPrice(String(f.price_per_bullet));
       }
     } catch {
