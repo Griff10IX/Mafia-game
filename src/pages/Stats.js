@@ -53,12 +53,12 @@ function formatDateTime(iso) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-4 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent}`}>
     <style>{STATS_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3" data-testid="stats-loading">
-      <TrendingUp size={28} className="text-primary/40 animate-pulse" />
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading stats...</span>
+    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2" data-testid="stats-loading">
+      <TrendingUp size={20} className="text-primary/40 animate-pulse" />
+      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading stats...</span>
     </div>
   </div>
 );
@@ -67,16 +67,16 @@ const StatCard = ({ title, rows, delay = 0 }) => {
   const safeRows = Array.isArray(rows) ? rows : [];
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: `${delay}s` }}>
-      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none stat-glow" />
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: `${delay}s` }}>
+      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+        <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
           {title}
         </h2>
       </div>
       {safeRows.length === 0 ? (
-        <div className="px-4 py-6 text-sm text-mutedForeground font-heading text-center">
+        <div className="px-2 py-3 text-[10px] text-mutedForeground font-heading text-center">
           No data available
         </div>
       ) : (
@@ -84,7 +84,7 @@ const StatCard = ({ title, rows, delay = 0 }) => {
           {safeRows.map((r) => (
             <div
               key={r.label}
-              className="stat-row flex items-center justify-between px-4 py-2.5 text-sm font-heading"
+              className="stat-row flex items-center justify-between px-2 py-1.5 text-[10px] font-heading"
             >
               <span className="text-mutedForeground">{r.label}</span>
               <span className="font-bold text-foreground tabular-nums">{r.value}</span>
@@ -92,22 +92,22 @@ const StatCard = ({ title, rows, delay = 0 }) => {
           ))}
         </div>
       )}
-      <div className="stat-art-line text-primary mx-4" />
+      <div className="stat-art-line text-primary mx-2" />
     </div>
   );
 };
 
 const RankStatsCard = ({ rankStats }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.05s' }}>
-    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none stat-glow" />
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
         Rank Stats
       </h2>
     </div>
     {rankStats.length === 0 ? (
-      <div className="px-4 py-6 text-sm text-mutedForeground font-heading text-center">
+      <div className="px-2 py-3 text-[10px] text-mutedForeground font-heading text-center">
         No rank data yet.
       </div>
     ) : (
@@ -115,34 +115,34 @@ const RankStatsCard = ({ rankStats }) => (
         {rankStats.map((r) => (
           <div
             key={r.rank_id}
-            className="stat-row flex items-center justify-between px-4 py-2.5 text-sm font-heading"
+            className="stat-row flex items-center justify-between px-2 py-1.5 text-[10px] font-heading"
           >
             <span className="font-bold text-foreground flex-1 truncate">{r.rank_name}</span>
-            <span className="text-emerald-400 font-bold tabular-nums w-16 text-center">
+            <span className="text-emerald-400 font-bold tabular-nums w-12 text-center">
               {formatNumber(r.alive)}
             </span>
-            <span className="text-mutedForeground tabular-nums w-16 text-right">
+            <span className="text-mutedForeground tabular-nums w-12 text-right">
               {formatNumber(r.dead)}
             </span>
           </div>
         ))}
       </div>
     )}
-    <div className="stat-art-line text-primary mx-4" />
+    <div className="stat-art-line text-primary mx-2" />
   </div>
 );
 
 const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.1s' }}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-1">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
         Last 15 Kills
       </h2>
-      <label className="inline-flex items-center gap-2 text-xs text-mutedForeground font-heading select-none cursor-pointer">
+      <label className="inline-flex items-center gap-1 text-[9px] text-mutedForeground font-heading select-none cursor-pointer">
         <input
           type="checkbox"
-          className="h-4 w-4 accent-primary rounded border-primary/30 cursor-pointer"
+          className="h-3 w-3 accent-primary rounded border-primary/30 cursor-pointer"
           checked={usersOnly}
           onChange={(e) => onToggleUsersOnly(e.target.checked)}
         />
@@ -152,14 +152,14 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
 
     {/* Desktop view */}
     <div className="hidden md:block">
-      <div className="px-4 py-2 bg-zinc-800/50 text-[9px] font-heading font-bold text-zinc-500 uppercase tracking-[0.12em] grid grid-cols-12 gap-2 border-b border-zinc-700/40">
+      <div className="px-2 py-1 bg-zinc-800/50 text-[8px] font-heading font-bold text-zinc-500 uppercase tracking-wider grid grid-cols-12 gap-1 border-b border-zinc-700/40">
         <div className="col-span-4">Victim</div>
         <div className="col-span-3">Rank</div>
         <div className="col-span-3">Killer</div>
         <div className="col-span-2 text-right">Time</div>
       </div>
       {kills.length === 0 ? (
-        <div className="px-4 py-8 text-sm text-mutedForeground font-heading text-center">
+        <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
           No kills yet.
         </div>
       ) : (
@@ -167,7 +167,7 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
           {kills.map((k) => (
             <div
               key={k.id}
-              className="stat-row grid grid-cols-12 gap-2 px-4 py-3 text-xs font-heading"
+              className="stat-row grid grid-cols-12 gap-1 px-2 py-1.5 text-[10px] font-heading"
             >
               <div className="col-span-4 text-foreground font-bold truncate">{k.victim_username}</div>
               <div className="col-span-3 text-mutedForeground truncate">{k.victim_rank_name || '—'}</div>
@@ -186,55 +186,55 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
     {/* Mobile view */}
     <div className="md:hidden divide-y divide-zinc-700/30">
       {kills.length === 0 ? (
-        <div className="px-4 py-8 text-sm text-mutedForeground font-heading text-center">
+        <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
           No kills yet.
         </div>
       ) : (
         kills.map((k) => (
-          <div key={k.id} className="stat-row p-4 space-y-2">
+          <div key={k.id} className="stat-row p-2 space-y-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-heading font-bold text-foreground truncate">
+                <div className="text-[10px] font-heading font-bold text-foreground truncate">
                   {k.victim_username}
                 </div>
-                <div className="text-xs text-mutedForeground mt-0.5">
+                <div className="text-[9px] text-mutedForeground mt-0.5">
                   {k.victim_rank_name || '—'}
                 </div>
               </div>
-              <div className="text-xs text-mutedForeground tabular-nums">
+              <div className="text-[9px] text-mutedForeground tabular-nums">
                 {formatDateTime(k.created_at)}
               </div>
             </div>
-            <div className="text-xs text-mutedForeground">
+            <div className="text-[9px] text-mutedForeground">
               Killed by {k.killer_username || '(private)'}
             </div>
           </div>
         ))
       )}
     </div>
-    <div className="stat-art-line text-primary mx-4" />
+    <div className="stat-art-line text-primary mx-2" />
   </div>
 );
 
 const DeadUsersListView = ({ users }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.1s' }}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
         Top Dead Users
       </h2>
     </div>
 
     {/* Desktop view */}
     <div className="hidden md:block">
-      <div className="px-4 py-2 bg-zinc-800/50 text-[9px] font-heading font-bold text-zinc-500 uppercase tracking-[0.12em] grid grid-cols-12 gap-2 border-b border-zinc-700/40">
+      <div className="px-2 py-1 bg-zinc-800/50 text-[8px] font-heading font-bold text-zinc-500 uppercase tracking-wider grid grid-cols-12 gap-1 border-b border-zinc-700/40">
         <div className="col-span-5">Username</div>
         <div className="col-span-2 text-center">Kills</div>
         <div className="col-span-3">Rank</div>
         <div className="col-span-2 text-right">Died</div>
       </div>
       {users.length === 0 ? (
-        <div className="px-4 py-8 text-sm text-mutedForeground font-heading text-center">
+        <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
           No dead users yet.
         </div>
       ) : (
@@ -242,7 +242,7 @@ const DeadUsersListView = ({ users }) => (
           {users.map((u) => (
             <div
               key={u.username + (u.dead_at || '')}
-              className="stat-row grid grid-cols-12 gap-2 px-4 py-3 text-xs font-heading"
+              className="stat-row grid grid-cols-12 gap-1 px-2 py-1.5 text-[10px] font-heading"
             >
               <div className="col-span-5 text-foreground font-bold truncate"><Link to={`/profile/${encodeURIComponent(u.username)}`} className="text-primary hover:underline">{u.username}</Link></div>
               <div className="col-span-2 text-center text-mutedForeground tabular-nums">
@@ -261,33 +261,33 @@ const DeadUsersListView = ({ users }) => (
     {/* Mobile view */}
     <div className="md:hidden divide-y divide-zinc-700/30">
       {users.length === 0 ? (
-        <div className="px-4 py-8 text-sm text-mutedForeground font-heading text-center">
+        <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
           No dead users yet.
         </div>
       ) : (
         users.map((u) => (
-          <div key={u.username + (u.dead_at || '')} className="stat-row p-4 space-y-2">
+          <div key={u.username + (u.dead_at || '')} className="stat-row p-2 space-y-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-heading font-bold text-foreground truncate">
+                <div className="text-[10px] font-heading font-bold text-foreground truncate">
                   <Link to={`/profile/${encodeURIComponent(u.username)}`} className="text-primary hover:underline">{u.username}</Link>
                 </div>
-                <div className="text-xs text-mutedForeground mt-0.5">
+                <div className="text-[9px] text-mutedForeground mt-0.5">
                   {u.rank_name || '—'}
                 </div>
               </div>
-              <div className="text-xs text-emerald-400 font-bold tabular-nums">
+              <div className="text-[9px] text-emerald-400 font-bold tabular-nums">
                 {formatNumber(u.total_kills)} kills
               </div>
             </div>
-            <div className="text-xs text-mutedForeground tabular-nums">
+            <div className="text-[9px] text-mutedForeground tabular-nums">
               Died {formatDateTime(u.dead_at)}
             </div>
           </div>
         ))
       )}
     </div>
-    <div className="stat-art-line text-primary mx-4" />
+    <div className="stat-art-line text-primary mx-2" />
   </div>
 );
 
@@ -365,35 +365,26 @@ export default function Stats() {
   const vehicleRows = buildVehicleRows(data);
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="stats-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="stats-page">
       <style>{STATS_STYLES}</style>
 
-      {/* Page header */}
-      <div className="relative stat-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Numbers</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
-          Stats
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Game capital, users, vehicles, ranks — and the body count.</p>
-      </div>
+      <p className="text-[9px] text-zinc-500 font-heading italic">Game capital, users, vehicles, ranks — and the body count.</p>
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
         <StatCard title="Game Capital" rows={gameCapitalRows} delay={0} />
         <StatCard title="User Stats" rows={userStatsRows} delay={0.04} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 items-start">
         <StatCard title="Vehicle Stats" rows={vehicleRows} delay={0.05} />
         <RankStatsCard rankStats={rankStats} />
       </div>
 
-      {/* Tabs */}
       <div className="flex items-center gap-0 border-b-2 border-zinc-700/50">
         <button
           type="button"
           onClick={() => setStatsListTab('kills')}
-          className={`flex items-center gap-1 px-3 py-2.5 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 -mb-0.5 touch-manipulation ${
+          className={`flex items-center gap-1 px-2 py-1.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 -mb-0.5 touch-manipulation ${
             statsListTab === 'kills'
               ? 'text-primary border-primary bg-primary/5'
               : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
@@ -404,7 +395,7 @@ export default function Stats() {
         <button
           type="button"
           onClick={() => setStatsListTab('dead')}
-          className={`flex items-center gap-1 px-3 py-2.5 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 -mb-0.5 touch-manipulation ${
+          className={`flex items-center gap-1 px-2 py-1.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 -mb-0.5 touch-manipulation ${
             statsListTab === 'dead'
               ? 'text-primary border-primary bg-primary/5'
               : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
