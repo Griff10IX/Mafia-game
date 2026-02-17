@@ -237,17 +237,16 @@ export default function Dice() {
   const config = diceConfig && typeof diceConfig === 'object' ? diceConfig : { sides_min: 2, sides_max: 5000, max_bet: 5_000_000 };
   const stakeNum = parseInt(String(stake || '').replace(/[^\d]/g, ''), 10) || 0;
   const sidesNum = Math.max(config.sides_min || 2, Math.min(config.sides_max || 5000, parseInt(String(sides || ''), 10) || 100));
-  const actualSidesNum = Math.max(2, Math.ceil(sidesNum * 1.05));
-  const chosenNum = Math.max(1, Math.min(actualSidesNum, parseInt(String(chosenNumber || ''), 10) || 101));
+  const chosenNum = Math.max(1, Math.min(sidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
   const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
-  const canBet = stakeNum > 0 && stakeNum <= (config.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= actualSidesNum;
+  const canBet = stakeNum > 0 && stakeNum <= (config.max_bet || 0) && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= sidesNum;
 
   useEffect(() => {
     const n = parseInt(String(chosenNumber || ''), 10);
     if (chosenNumber === '' || Number.isNaN(n)) return;
     if (n < 1) setChosenNumber('1');
-    else if (n > actualSidesNum) setChosenNumber(String(actualSidesNum));
-  }, [sides, actualSidesNum, chosenNumber]);
+    else if (n > sidesNum) setChosenNumber(String(sidesNum));
+  }, [sides, sidesNum, chosenNumber]);
 
   useEffect(() => {
     if (!buyBackOffer?.expires_at) { setBuyBackSecondsLeft(null); return; }
@@ -263,15 +262,15 @@ export default function Dice() {
   }, [buyBackOffer]);
 
   useEffect(() => {
-    if (!diceLoading || actualSidesNum < 2) return;
+    if (!diceLoading || sidesNum < 2) return;
     setLastResult(null);
     rollIntervalRef.current = setInterval(() => {
-      setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
+      setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
     }, 60);
     return () => {
       if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
     };
-  }, [diceLoading, actualSidesNum]);
+  }, [diceLoading, sidesNum]);
 
   const applyRollResult = (data) => {
     if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
@@ -301,7 +300,7 @@ export default function Dice() {
     if (!canBet || playing) {
       if (stakeNum <= 0) toast.error('Enter a stake amount');
       else if (stakeNum > (config.max_bet || 0)) toast.error(`Max bet is ${formatMoney(config.max_bet)}`);
-      else if (chosenNum < 1 || chosenNum > actualSidesNum) toast.error(`Pick 1-${actualSidesNum}`);
+      else if (chosenNum < 1 || chosenNum > sidesNum) toast.error(`Pick 1-${sidesNum}`);
       return;
     }
     setChosenNumber(String(chosenNum));
@@ -310,7 +309,7 @@ export default function Dice() {
     if (!skipAnimation) {
       setDiceLoading(true);
       setLastResult(null);
-      setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
+      setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
     }
     if (rollTimeoutRef.current) { clearTimeout(rollTimeoutRef.current); rollTimeoutRef.current = null; }
     try {
@@ -592,10 +591,10 @@ export default function Dice() {
                 {/* Odds info strip */}
                 <div className="flex items-center gap-4 mt-2 text-[10px] font-heading">
                   <span className="text-emerald-200/50">
-                    Sides: <span className="text-white font-bold">{actualSidesNum}</span>
+                    Sides: <span className="text-white font-bold">{sidesNum}</span>
                   </span>
                   <span className="text-emerald-200/50">
-                    Odds: <span className="text-primary font-bold">1 in {actualSidesNum}</span>
+                    Odds: <span className="text-primary font-bold">1 in {sidesNum}</span>
                   </span>
                   <span className="text-emerald-200/50">
                     Pays: <span className="text-emerald-300 font-bold">{formatMoney(returnsAmount)}</span>
@@ -648,7 +647,7 @@ export default function Dice() {
                 {/* Sides */}
                 <div>
                   <label className="block text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1.5">
-                    Sides <span className="text-emerald-200/40">(5% edge)</span>
+                    Sides
                   </label>
                   <input
                     type="number"
@@ -659,11 +658,6 @@ export default function Dice() {
                     onChange={(e) => setSides(e.target.value)}
                     className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 px-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
                   />
-                  {actualSidesNum > sidesNum && (
-                    <p className="text-[9px] text-emerald-200/40 font-heading mt-1">
-                      Actual: {actualSidesNum} ({sidesNum} + 5%)
-                    </p>
-                  )}
                 </div>
 
                 {/* Chosen number */}
@@ -672,14 +666,14 @@ export default function Dice() {
                   <input
                     type="number"
                     min={1}
-                    max={actualSidesNum}
-                    placeholder={`1-${actualSidesNum}`}
+                    max={sidesNum}
+                    placeholder={`1-${sidesNum}`}
                     value={chosenNumber === '' ? '' : String(chosenNum)}
                     onChange={(e) => {
                       const v = e.target.value;
                       if (v === '') { setChosenNumber(''); return; }
                       const n = parseInt(v, 10);
-                      if (!Number.isNaN(n)) setChosenNumber(String(Math.max(1, Math.min(actualSidesNum, n))));
+                      if (!Number.isNaN(n)) setChosenNumber(String(Math.max(1, Math.min(sidesNum, n))));
                     }}
                     onBlur={() => { if (chosenNumber === '') setChosenNumber('1'); }}
                     className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 px-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
@@ -729,9 +723,9 @@ export default function Dice() {
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{actualSidesNum}, match the roll to win</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pick 1–{sidesNum}, match the roll to win</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payout = sides × stake × 0.95</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>5% house edge (extra sides)</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>5% house edge on winnings</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Max bet: {formatMoney(maxBet)}</li>
           </ul>
         </div>

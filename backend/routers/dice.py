@@ -2,7 +2,7 @@
 from datetime import datetime, timezone, timedelta
 import re
 import random
-import math
+
 import uuid
 import time
 from pydantic import BaseModel
@@ -194,10 +194,9 @@ def register(router):
             raise HTTPException(status_code=400, detail="No current city")
         stake = max(0, int(request.stake))
         sides = max(DICE_SIDES_MIN, min(DICE_SIDES_MAX, int(request.sides)))
-        actual_sides = math.ceil(sides * 1.05)  # 5% extra sides per game rules (e.g. 1000 -> 1050)
         chosen_raw = int(request.chosen_number)
-        if chosen_raw < 1 or chosen_raw > actual_sides:
-            raise HTTPException(status_code=400, detail=f"Chosen number must be between 1 and {actual_sides} (actual sides)")
+        if chosen_raw < 1 or chosen_raw > sides:
+            raise HTTPException(status_code=400, detail=f"Chosen number must be between 1 and {sides}")
         chosen = chosen_raw
         if stake <= 0:
             raise HTTPException(status_code=400, detail="Stake must be positive")
@@ -216,18 +215,18 @@ def register(router):
         if player_money < stake:
             raise HTTPException(status_code=400, detail="Not enough cash")
         payout_full = int(stake * sides * (1 - DICE_HOUSE_EDGE))
-        roll = random.randint(1, actual_sides)
+        roll = random.randint(1, sides)
         win = roll == chosen
         if not win:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
             if owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                 await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake}})
-            await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": actual_sides, "chosen": chosen, "roll": roll, "win": False, "payout": 0})
+            await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": False, "payout": 0})
             return {"roll": roll, "win": False, "payout": 0, "actual_payout": 0, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
         if not owner_id:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout_full - stake}})
-            await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": actual_sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full})
+            await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full})
             return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": payout_full, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None}
         owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
         owner_money = int((owner.get("money") or 0) or 0)
@@ -266,7 +265,7 @@ def register(router):
         else:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
             await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
-        await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": actual_sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
+        await log_gambling(current_user["id"], current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer}
 
     @router.post("/casino/dice/claim")
