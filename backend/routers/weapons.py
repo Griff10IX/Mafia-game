@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, get_effective_event
+from server import db, get_current_user, get_effective_event, ARMOUR_WEAPON_MARGIN
 
 
 # Per-user cache for GET /weapons (10s TTL); invalidate on equip/unequip/buy/sell
@@ -70,6 +70,7 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
         quantity = weapons_map.get(weapon["id"], 0)
         pm = weapon.get("price_money")
         pp = weapon.get("price_points")
+        # price_* = production cost; sell price = production * 1.35 * event (35% margin)
         locked = False
         required_weapon_name = None
         weapon_num = int(weapon["id"].replace("weapon", "")) if weapon["id"].startswith("weapon") else 0
@@ -90,8 +91,8 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
             rank_required=weapon["rank_required"],
             price_money=pm,
             price_points=pp,
-            effective_price_money=int(pm * mult) if pm is not None else None,
-            effective_price_points=int(pp * mult) if pp is not None else None,
+            effective_price_money=int(pm * ARMOUR_WEAPON_MARGIN * mult) if pm is not None else None,
+            effective_price_points=int(pp * ARMOUR_WEAPON_MARGIN * mult) if pp is not None else None,
             owned=quantity > 0,
             quantity=quantity,
             equipped=(quantity > 0 and equipped_weapon_id == weapon["id"]),
@@ -155,20 +156,21 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
     currency = (request.currency or "").strip().lower()
     if currency not in ("money", "points"):
         raise HTTPException(status_code=400, detail="Invalid currency")
+    # Player pays sell price (production cost * 1.35 * event)
     if currency == "money":
         if weapon.get("price_money") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with points")
-        cost = int(weapon["price_money"] * mult)
-        if current_user.get("money", 0) < cost:
+        price = int(weapon["price_money"] * ARMOUR_WEAPON_MARGIN * mult)
+        if current_user.get("money", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient money")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -cost}})
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
     elif currency == "points":
         if weapon.get("price_points") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with money")
-        cost = int(weapon["price_points"] * mult)
-        if current_user.get("points", 0) < cost:
+        price = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN * mult)
+        if current_user.get("points", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient points")
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -cost}})
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
     await db.user_weapons.update_one(
         {"user_id": current_user["id"], "weapon_id": weapon_id},
         {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
@@ -187,8 +189,11 @@ async def sell_weapon(weapon_id: str, current_user: dict = Depends(get_current_u
     quantity = (uw or {}).get("quantity", 0) or 0
     if quantity < 1:
         raise HTTPException(status_code=400, detail="You do not own this weapon")
-    refund_money = int(weapon["price_money"] * 0.5) if weapon.get("price_money") is not None else None
-    refund_points = int(weapon["price_points"] * 0.5) if weapon.get("price_points") is not None else None
+    # Refund 50% of sell price (production * 1.35)
+    sell_money = int(weapon["price_money"] * ARMOUR_WEAPON_MARGIN) if weapon.get("price_money") is not None else None
+    sell_points = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN) if weapon.get("price_points") is not None else None
+    refund_money = int(sell_money * 0.5) if sell_money is not None else None
+    refund_points = int(sell_points * 0.5) if sell_points is not None else None
     if refund_money is None and refund_points is None:
         raise HTTPException(status_code=400, detail="Weapon has no sell value")
     if refund_money is not None:

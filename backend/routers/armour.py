@@ -3,7 +3,7 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, get_effective_event, ARMOUR_SETS
+from server import db, get_current_user, get_effective_event, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN
 
 
 class ArmourBuyRequest(BaseModel):
@@ -11,7 +11,7 @@ class ArmourBuyRequest(BaseModel):
 
 
 async def get_armour_options(current_user: dict = Depends(get_current_user)):
-    """List available armour sets and affordability. Costs use event multiplier when set."""
+    """List available armour sets. cost_* = production cost; effective_* = sell price (production * 1.35 * event)."""
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
     equipped_level = int(current_user.get("armour_level", 0) or 0)
@@ -22,8 +22,9 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
     for s in ARMOUR_SETS:
         cost_money = s.get("cost_money")
         cost_points = s.get("cost_points")
-        effective_money = int(cost_money * mult) if cost_money is not None else None
-        effective_points = int(cost_points * mult) if cost_points is not None else None
+        # Sell price = production cost * 35% margin, then event multiplier
+        effective_money = int(cost_money * ARMOUR_WEAPON_MARGIN * mult) if cost_money is not None else None
+        effective_points = int(cost_points * ARMOUR_WEAPON_MARGIN * mult) if cost_points is not None else None
         affordable = True
         if effective_money is not None and money < effective_money:
             affordable = False
@@ -59,15 +60,16 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     mult = ev.get("armour_weapon_cost", 1.0)
     updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
     if armour.get("cost_money") is not None:
-        cost = int(armour["cost_money"] * mult)
-        if current_user.get("money", 0) < cost:
+        # Player pays sell price (production cost * 1.35 * event)
+        price = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN * mult)
+        if current_user.get("money", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient cash")
-        updates["$inc"] = {"money": -cost}
+        updates["$inc"] = {"money": -price}
     elif armour.get("cost_points") is not None:
-        cost = int(armour["cost_points"] * mult)
-        if current_user.get("points", 0) < cost:
+        price = int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN * mult)
+        if current_user.get("points", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient points")
-        updates["$inc"] = {"points": -cost}
+        updates["$inc"] = {"points": -price}
     else:
         raise HTTPException(status_code=500, detail="Armour cost misconfigured")
     await db.users.update_one({"id": current_user["id"]}, updates)
@@ -97,15 +99,18 @@ async def unequip_armour(current_user: dict = Depends(get_current_user)):
 
 
 async def sell_armour(current_user: dict = Depends(get_current_user)):
-    """Sell your highest owned armour tier for 50% of its base purchase price."""
+    """Sell your highest owned armour tier for 50% of what you paid (sell price)."""
     owned_max = int(current_user.get("armour_owned_level_max", 0) or 0)
     if owned_max < 1:
         raise HTTPException(status_code=400, detail="You have no armour to sell")
     armour = next((a for a in ARMOUR_SETS if a["level"] == owned_max), None)
     if not armour:
         raise HTTPException(status_code=404, detail="Armour tier not found")
-    refund_money = int(armour["cost_money"] * 0.5) if armour.get("cost_money") is not None else None
-    refund_points = int(armour["cost_points"] * 0.5) if armour.get("cost_points") is not None else None
+    # Refund 50% of sell price (production * 1.35)
+    sell_price_money = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN) if armour.get("cost_money") is not None else None
+    sell_price_points = int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN) if armour.get("cost_points") is not None else None
+    refund_money = int(sell_price_money * 0.5) if sell_price_money is not None else None
+    refund_points = int(sell_price_points * 0.5) if sell_price_points is not None else None
     new_owned_max = owned_max - 1
     equipped = int(current_user.get("armour_level", 0) or 0)
     updates = {"$set": {"armour_owned_level_max": new_owned_max}}

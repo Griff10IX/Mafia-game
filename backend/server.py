@@ -211,7 +211,10 @@ async def get_effective_event():
     except Exception:
         return NO_EVENT.copy()
 
-# Armour shop (5 tiers): first 3 cash, top 2 points
+# Armoury/weapons: production cost is paid to produce; sell price = production_cost * ARMOUR_WEAPON_MARGIN (35% profit)
+ARMOUR_WEAPON_MARGIN = 1.35  # sell at 1.35× production cost → 35% profit per item
+
+# Armour shop (5 tiers): first 3 cash, top 2 points (cost_* = production cost; players pay cost * ARMOUR_WEAPON_MARGIN)
 ARMOUR_SETS = [
     {
         "level": 1,
