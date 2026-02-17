@@ -6,6 +6,20 @@ import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card";
 import styles from '../styles/noir.module.css';
 
+const UO_STYLES = `
+  @keyframes uo-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .uo-fade-in { animation: uo-fade-in 0.4s ease-out both; }
+  .uo-corner::before, .uo-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .uo-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .uo-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .uo-card { transition: all 0.3s ease; }
+  .uo-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .uo-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .uo-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -20,21 +34,24 @@ function formatDateTime(iso) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <Users size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
   </div>
 );
 
 const OnlineCountCard = ({ totalOnline }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 uo-card uo-corner uo-fade-in`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         👥 Activity Status
       </h2>
     </div>
     <div className="p-4">
       <div className="flex items-center gap-4">
-        <div className="p-3 rounded-md bg-primary/20 border border-primary/30">
+        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
           <Users className="text-primary" size={32} />
         </div>
         <div>
@@ -47,6 +64,7 @@ const OnlineCountCard = ({ totalOnline }) => (
         </div>
       </div>
     </div>
+    <div className="uo-art-line text-primary mx-4" />
   </div>
 );
 
@@ -56,7 +74,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 
   return (
     <div
-      className={`${styles.panel} rounded-md border border-border hover:border-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all px-3 py-2`}
+      className={`${styles.panel} rounded-lg border border-primary/20 uo-row uo-card uo-fade-in px-3 py-2`}
       data-testid="user-card"
     >
       <div className="flex items-center gap-2">
@@ -85,8 +103,8 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
               </div>
             ) : preview ? (
               <>
-                <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
-                  <h3 className="text-base font-heading font-bold text-primary">
+                <div className="px-4 py-3 bg-primary/8 border-b border-primary/20">
+                  <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
                     Profile Preview
                   </h3>
                 </div>
@@ -196,9 +214,10 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 };
 
 const InfoCard = () => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.08s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         ℹ️ How It Works
       </h3>
     </div>
@@ -236,6 +255,7 @@ const InfoCard = () => (
         </p>
       </div>
     </div>
+    <div className="uo-art-line text-primary mx-4" />
   </div>
 );
 
@@ -282,27 +302,44 @@ export default function UsersOnline() {
   }, [fetchOnlineUsers]);
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{UO_STYLES}</style>
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   return (
     <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="users-online-page">
+      <style>{UO_STYLES}</style>
+
+      <div className="relative uo-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Activity</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Users size={24} /> Users Online
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Who&apos;s active now. Hover for quick stats.</p>
+      </div>
+
       <OnlineCountCard totalOnline={totalOnline} />
 
       {users.length === 0 ? (
-        <div className={`${styles.panel} rounded-md border border-border py-16 text-center`} data-testid="no-users">
+        <div className={`relative ${styles.panel} rounded-lg border border-primary/20 py-16 text-center uo-fade-in`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <Users size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">
             No other users online
           </p>
           <p className="text-sm text-mutedForeground font-heading">
-            Check back soon to see who's active
+            Check back soon to see who&apos;s active
           </p>
         </div>
       ) : (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-          <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-            <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.03s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
               👤 Active Users ({users.length})
             </h2>
           </div>
@@ -320,6 +357,7 @@ export default function UsersOnline() {
               ))}
             </div>
           </div>
+          <div className="uo-art-line text-primary mx-4" />
         </div>
       )}
 

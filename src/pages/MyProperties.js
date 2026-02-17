@@ -5,6 +5,19 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const MP_STYLES = `
+  @keyframes mp-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .mp-fade-in { animation: mp-fade-in 0.4s ease-out both; }
+  .mp-corner::before, .mp-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .mp-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .mp-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .mp-card { transition: all 0.3s ease; }
+  .mp-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .mp-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -228,26 +241,35 @@ export default function MyProperties() {
 
   if (loading) {
     return (
-      <div className={`${styles.pageContent} flex items-center justify-center min-h-[40vh]`}>
-        <p className="text-primary text-sm font-heading">Loading...</p>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{MP_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
+          <Building2 size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="my-properties-page">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2">
+      <style>{MP_STYLES}</style>
+
+      <div className="relative mp-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Holdings</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2 tracking-wider uppercase">
           <Building2 size={24} /> My Properties
         </h1>
-        <p className="text-xs text-mutedForeground mt-1">You may own 1 casino and 1 property (e.g. Dice + Airport, Blackjack + Bullet Factory, or Roulette + Armory).</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">One casino and one property. Dice + Airport, Blackjack + Bullet Factory, or Roulette + Armory.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Casino slot */}
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎰 Casino</span>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-corner mp-fade-in`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎰 Casino</span>
           </div>
           <div className="p-3">
             {data.casino ? (
@@ -331,6 +353,7 @@ export default function MyProperties() {
                     Relinquish
                   </button>
                 </div>
+                <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
             ) : (
               <p className="text-sm text-mutedForeground">
@@ -341,9 +364,10 @@ export default function MyProperties() {
         </div>
 
         {/* Property slot */}
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🏭 Property</span>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-corner mp-fade-in`} style={{ animationDelay: '0.05s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🏭 Property</span>
           </div>
           <div className="p-3">
             {data.property?.type === 'airport' ? (
@@ -407,6 +431,7 @@ export default function MyProperties() {
                     <LinkIcon size={12} /> Travel
                   </Link>
                 </div>
+                <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
             ) : data.property?.type === 'bullet_factory' ? (
               <>
@@ -434,6 +459,7 @@ export default function MyProperties() {
                 <Link to="/armour-weapons" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
                   <LinkIcon size={12} /> Armour & Weapons (Bullet Factory)
                 </Link>
+                <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
             ) : data.property?.type === 'armory' ? (
               <>
@@ -443,6 +469,7 @@ export default function MyProperties() {
                   {data.property.state && <span className="text-mutedForeground text-sm">· {data.property.state}</span>}
                 </div>
                 <p className="text-[11px] text-mutedForeground">Manage in Armory page (coming soon).</p>
+                <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
             ) : (
               <p className="text-sm text-mutedForeground">
@@ -453,10 +480,17 @@ export default function MyProperties() {
         </div>
       </div>
 
-      <div className={`${styles.panel} rounded-md border border-zinc-700/30 p-3`}>
-        <p className="text-[11px] text-mutedForeground">
-          <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong> (one of: Dice, Blackjack, Roulette, Horse Racing) and <strong>1 property</strong> (one of: Airport, Bullet Factory, Armory). Not two casinos or two properties.
-        </p>
+      <div className={`relative ${styles.panel} rounded-lg border border-primary/20 mp-fade-in`} style={{ animationDelay: '0.08s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Rule</span>
+        </div>
+        <div className="p-3">
+          <p className="text-[11px] text-mutedForeground">
+            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong> (one of: Dice, Blackjack, Roulette, Horse Racing) and <strong>1 property</strong> (one of: Airport, Bullet Factory, Armory). Not two casinos or two properties.
+          </p>
+        </div>
+        <div className="mp-art-line text-primary mx-3" />
       </div>
     </div>
   );
