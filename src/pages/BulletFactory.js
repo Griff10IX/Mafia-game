@@ -10,20 +10,42 @@ const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 const QUICK_BUYS = [100, 500, 1000, 5000, 10000];
 
 /* ═══════════════════════════════════════════════════════
-   Conveyor Belt — animated bullet casings rolling across
+   Conveyor Belt — bullets, weapons, armour (armoury)
    ═══════════════════════════════════════════════════════ */
+const ITEM_WIDTH = 32;
+
 function BulletCasing() {
   return (
-    <div className="shrink-0 flex items-center" style={{ width: 32 }}>
+    <div className="shrink-0 flex items-center" style={{ width: ITEM_WIDTH }}>
       <div className="w-2 h-4 rounded-t-full mx-auto" style={{ background: 'linear-gradient(135deg, #c9a84c, #8b6914, #d4af37)' }} />
       <div className="w-2 h-3 -ml-2" style={{ background: 'linear-gradient(135deg, #b87333, #8b4513, #cd7f32)' }} />
     </div>
   );
 }
 
+function BeltWeapon() {
+  return (
+    <div className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
+      <div className="w-3 h-4 rounded-sm rotate-[-30deg]" style={{ background: 'linear-gradient(180deg, #4a4a4a, #2a2a2a)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1)' }} />
+    </div>
+  );
+}
+
+function BeltArmour() {
+  return (
+    <div className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
+      <div className="w-5 h-4 rounded-sm" style={{ background: 'linear-gradient(180deg, #5a5a5a, #3a3a3a)', border: '1px solid #4a4a4a', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)' }} />
+    </div>
+  );
+}
+
+// Pattern: mostly bullets, occasional weapon/armour (armoury mix)
+const BELT_ITEM_TYPES = ['bullet', 'bullet', 'bullet', 'weapon', 'bullet', 'bullet', 'armour', 'bullet', 'bullet', 'weapon', 'bullet', 'armour', 'bullet', 'bullet', 'bullet'];
+
 function ConveyorBelt() {
   const bulletCount = 40;
-  const setWidth = bulletCount * 32;
+  const setWidth = bulletCount * ITEM_WIDTH;
+  const items = Array.from({ length: bulletCount * 2 }, (_, i) => BELT_ITEM_TYPES[i % BELT_ITEM_TYPES.length]);
   return (
     <div className="relative w-full h-10 overflow-hidden rounded" style={{ background: 'linear-gradient(180deg, #2a2218 0%, #3d3225 40%, #2a2218 100%)' }}>
       {/* Belt rollers */}
@@ -31,10 +53,10 @@ function ConveyorBelt() {
       <div className="absolute inset-x-0 bottom-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
       {/* Belt treads */}
       <div className="absolute inset-0 animate-belt-treads" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(0,0,0,0.3) 28px, rgba(0,0,0,0.3) 30px)', backgroundSize: '30px 100%' }} />
-      {/* Bullet casings — two identical sets for seamless looping */}
+      {/* Items — bullets, weapons, armour (two sets for seamless loop) */}
       <div className="absolute top-0 left-0 h-full flex items-center animate-belt-bullets" style={{ width: setWidth * 2 }}>
-        {Array.from({ length: bulletCount * 2 }).map((_, i) => (
-          <BulletCasing key={i} />
+        {items.map((type, i) => (
+          type === 'weapon' ? <BeltWeapon key={i} /> : type === 'armour' ? <BeltArmour key={i} /> : <BulletCasing key={i} />
         ))}
       </div>
     </div>
@@ -118,13 +140,14 @@ function AnimatedCounter({ target, duration = 1200 }) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   Collect Particles — bullet casings flying on collect
+   Collect Particles — bullets, weapons, armour, cash on collect (armoury)
    ═══════════════════════════════════════════════════════ */
 function CollectParticles({ show }) {
   if (!show) return null;
-  const items = Array.from({ length: 20 }).map((_, i) => ({
+  const emojis = ['🔫', '💰', '✨', '🎯', '🛡️', '⚔️'];
+  const items = Array.from({ length: 24 }).map((_, i) => ({
     id: i,
-    emoji: ['🔫', '💰', '✨', '🎯'][i % 4],
+    emoji: emojis[i % emojis.length],
     left: Math.random() * 100,
     delay: Math.random() * 0.5,
     dur: 1.5 + Math.random() * 1.5,
