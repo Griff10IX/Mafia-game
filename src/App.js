@@ -28,6 +28,7 @@ import Rlt from "./pages/Casinos/Rlt.js";
 import Blackjack from "./pages/Casinos/BlackjackPage";
 import HorseRacing from "./pages/Casinos/HorseRacingPage";
 import Slots from "./pages/Casinos/SlotsPage";
+import VideoPoker from "./pages/Casinos/VideoPokerPage";
 import SportsBetting from "./pages/SportsBetting";
 import Bank from "./pages/Bank";
 import ArmourWeapons from "./pages/ArmourWeapons";
@@ -465,6 +466,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Slots />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/casino/videopoker"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <VideoPoker />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
