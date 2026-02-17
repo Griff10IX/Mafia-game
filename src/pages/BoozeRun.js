@@ -67,21 +67,21 @@ const BOOZE_STYLES = `
 `;
 
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <Wine size={28} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading the shipment...</span>
+  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+    <Wine size={22} className="text-primary/40 animate-pulse" />
+    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading the shipment...</span>
   </div>
 );
 
 const AutoRankBoozeNotice = () => (
-  <div className={`relative p-3 ${styles.panel} border border-amber-500/30 rounded-lg overflow-hidden bz-fade-in`}>
+  <div className={`relative p-2 ${styles.panel} border border-amber-500/30 rounded-md overflow-hidden bz-fade-in`}>
     <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-amber-500/50" />
-    <div className="flex items-center gap-2.5">
-      <Bot size={15} className="text-amber-400 shrink-0" />
+    <div className="flex items-center gap-1.5">
+      <Bot size={10} className="text-amber-400 shrink-0" />
       <div>
-        <span className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-wider">Auto Rank Active</span>
-        <p className="text-[10px] text-amber-200/60 font-heading mt-0.5">Booze running is automated — buy, travel, sell. Manual trading disabled.</p>
+        <span className="text-[9px] font-heading font-bold text-amber-300 uppercase tracking-wider">Auto Rank Active</span>
+        <p className="text-[9px] text-amber-200/60 font-heading mt-0.5">Booze running is automated — buy, travel, sell. Manual trading disabled.</p>
       </div>
     </div>
   </div>
@@ -93,120 +93,120 @@ const StatsCard = ({ config, timer }) => {
   const pctFull = capacity > 0 ? (carryingTotal / capacity) * 100 : 0;
   
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bz-corner bz-scale-in`}>
-      <div className="absolute top-0 left-0 w-28 h-28 bg-primary/5 rounded-full blur-3xl pointer-events-none bz-glow" />
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="p-4 grid grid-cols-3 md:grid-cols-6 gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-heading">
-            <Clock size={10} className="text-primary" />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-corner bz-scale-in`}>
+      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bz-glow" />
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="p-2 grid grid-cols-3 md:grid-cols-6 gap-2">
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-0.5 text-[8px] text-zinc-500 uppercase tracking-[0.1em] font-heading">
+            <Clock size={8} className="text-primary" />
             Rotation
           </div>
-          <div className={`text-sm font-heading font-bold tabular-nums ${timer === '00:00:00' ? 'text-amber-400 bz-timer-pulse' : 'text-foreground'}`}>{timer}</div>
+          <div className={`text-[11px] font-heading font-bold tabular-nums ${timer === '00:00:00' ? 'text-amber-400 bz-timer-pulse' : 'text-foreground'}`}>{timer}</div>
         </div>
         
-        <div className="space-y-1">
-          <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-heading">
-            <MapPin size={10} className="text-primary" />
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-0.5 text-[8px] text-zinc-500 uppercase tracking-[0.1em] font-heading">
+            <MapPin size={8} className="text-primary" />
             Your City
           </div>
-          <div className="text-sm font-heading font-bold text-primary truncate">{config.current_location}</div>
+          <div className="text-[11px] font-heading font-bold text-primary truncate">{config.current_location}</div>
         </div>
         
-        <div className="space-y-1">
-          <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-heading">
-            <Package size={10} className="text-primary" />
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-0.5 text-[8px] text-zinc-500 uppercase tracking-[0.1em] font-heading">
+            <Package size={8} className="text-primary" />
             Cargo
           </div>
-          <div className="text-sm font-heading font-bold text-foreground tabular-nums">
+          <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
             {carryingTotal} / {capacity}
           </div>
-          <div className="w-full h-1 bg-zinc-800 rounded-full overflow-hidden">
+          <div className="w-full h-0.5 bg-zinc-800 rounded-full overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-500 ${pctFull > 80 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${pctFull}%` }} />
           </div>
         </div>
         
-        <div className="space-y-1">
-          <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-heading">
-            <DollarSign size={10} className="text-primary" />
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-0.5 text-[8px] text-zinc-500 uppercase tracking-[0.1em] font-heading">
+            <DollarSign size={8} className="text-primary" />
             Today's Take
           </div>
-          <div className={`text-sm font-heading font-bold tabular-nums ${
+          <div className={`text-[11px] font-heading font-bold tabular-nums ${
             (config.profit_today ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
           }`}>
             {formatMoney(config.profit_today)}
           </div>
         </div>
         
-        <div className="space-y-1">
-          <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-heading">
-            <TrendingUp size={10} className="text-primary" />
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-0.5 text-[8px] text-zinc-500 uppercase tracking-[0.1em] font-heading">
+            <TrendingUp size={8} className="text-primary" />
             Total Profit
           </div>
-          <div className={`text-sm font-heading font-bold tabular-nums ${
+          <div className={`text-[11px] font-heading font-bold tabular-nums ${
             (config.profit_total ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
           }`}>
             {formatMoney(config.profit_total)}
           </div>
         </div>
         
-        <div className="space-y-1">
-          <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-[0.15em] font-heading">
-            <ShoppingCart size={10} className="text-primary" />
+        <div className="space-y-0.5">
+          <div className="flex items-center gap-0.5 text-[8px] text-zinc-500 uppercase tracking-[0.1em] font-heading">
+            <ShoppingCart size={8} className="text-primary" />
             Runs Made
           </div>
-          <div className="text-sm font-heading font-bold text-foreground tabular-nums">
+          <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
             {config.runs_count ?? 0}
           </div>
         </div>
       </div>
-      <div className="bz-art-line text-primary mx-4" />
+      <div className="bz-art-line text-primary mx-2.5" />
     </div>
   );
 };
 
 const RouteItem = ({ r, delay = 0 }) => (
-  <div className="relative bg-zinc-800/40 rounded-lg p-2.5 border border-zinc-700/30 bz-card bz-fade-in overflow-hidden" style={{ animationDelay: `${delay}s` }}>
+  <div className="relative bg-zinc-800/40 rounded-md p-1.5 border border-zinc-700/30 bz-card bz-fade-in overflow-hidden" style={{ animationDelay: `${delay}s` }}>
     <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent" />
-    <div className="font-heading font-bold text-foreground text-sm mb-1.5 tracking-wide">{r.booze.name}</div>
-    <div className="text-[11px] text-zinc-400 font-heading space-y-0.5">
-      <div className="flex items-center gap-1">
-        <span className="text-[9px] text-zinc-500 uppercase w-7">Buy</span>
+    <div className="font-heading font-bold text-foreground text-[11px] mb-1 tracking-wide">{r.booze.name}</div>
+    <div className="text-[9px] text-zinc-400 font-heading space-y-0.5">
+      <div className="flex items-center gap-0.5">
+        <span className="text-[8px] text-zinc-500 uppercase w-6">Buy</span>
         <span className="text-primary font-bold">{r.bestBuyCity}</span>
         <span className="text-zinc-600 mx-0.5">—</span>
         <span className="text-foreground font-heading">{formatMoney(r.bestBuyPrice)}</span>
       </div>
-      <div className="flex items-center gap-1">
-        <span className="text-[9px] text-zinc-500 uppercase w-7">Sell</span>
+      <div className="flex items-center gap-0.5">
+        <span className="text-[8px] text-zinc-500 uppercase w-6">Sell</span>
         <span className="text-primary font-bold">{r.bestSellCity}</span>
         <span className="text-zinc-600 mx-0.5">—</span>
         <span className="text-foreground font-heading">{formatMoney(r.bestSellPrice)}</span>
       </div>
     </div>
-    <div className={`mt-2 pt-1.5 border-t border-zinc-700/30 font-heading font-bold text-sm ${(r.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-      {(r.profit ?? 0) >= 0 ? '+' : ''}{formatMoney(r.profit)}<span className="text-[10px] text-zinc-500 font-normal">/unit</span>
+    <div className={`mt-1 pt-1 border-t border-zinc-700/30 font-heading font-bold text-[11px] ${(r.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+      {(r.profit ?? 0) >= 0 ? '+' : ''}{formatMoney(r.profit)}<span className="text-[8px] text-zinc-500 font-normal">/unit</span>
     </div>
   </div>
 );
 
 const BestRoutesCard = ({ routes, title }) => (
-  <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 bz-fade-in`}>
-    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`}>
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         {title}
       </h2>
     </div>
-    <div className="p-2.5">
+    <div className="p-2">
       {routes.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-1.5">
           {routes.map((r, i) => (
             <RouteItem key={r.booze.id} r={r} delay={i * 0.05} />
           ))}
         </div>
       ) : (
-        <div className="text-center py-6">
-          <Wine size={20} className="mx-auto text-zinc-700 mb-2" />
-          <p className="text-[10px] text-zinc-500 font-heading italic">No profitable routes this rotation</p>
+        <div className="text-center py-4">
+          <Wine size={16} className="mx-auto text-zinc-700 mb-1" />
+          <p className="text-[9px] text-zinc-500 font-heading italic">No profitable routes this rotation</p>
         </div>
       )}
     </div>
@@ -214,41 +214,41 @@ const BestRoutesCard = ({ routes, title }) => (
 );
 
 const RoundTripCard = ({ cityA, cityB, buyASellBRoutes, buyBSellARoutes }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.05s' }}>
-    <div className="px-4 py-3 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         Smuggling Route: {cityA} ↔ {cityB}
       </h2>
-      <p className="text-[9px] text-zinc-500 mt-0.5 font-heading italic">Load up in one city, sell in the other — then reverse the run. Maximum profit both ways.</p>
+      <p className="text-[8px] text-zinc-500 mt-0.5 font-heading italic">Load up in one city, sell in the other — then reverse the run. Maximum profit both ways.</p>
     </div>
-    <div className="p-3 space-y-4">
+    <div className="p-2 space-y-2">
       <div>
-        <h3 className="text-[10px] font-heading font-bold text-zinc-400 uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5">
+        <h3 className="text-[9px] font-heading font-bold text-zinc-400 uppercase tracking-[0.1em] mb-1 flex items-center gap-1">
           <span className="text-primary">→</span> {cityA} to {cityB}
         </h3>
         {buyASellBRoutes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
             {buyASellBRoutes.map((r, i) => (
               <RouteItem key={`ab-${r.booze.id}`} r={r} delay={i * 0.05} />
             ))}
           </div>
         ) : (
-          <p className="text-[10px] text-zinc-500 font-heading py-2 italic">No profitable cargo this direction</p>
+          <p className="text-[9px] text-zinc-500 font-heading py-1 italic">No profitable cargo this direction</p>
         )}
       </div>
       <div className="bz-art-line text-primary" />
       <div>
-        <h3 className="text-[10px] font-heading font-bold text-zinc-400 uppercase tracking-[0.12em] mb-2 flex items-center gap-1.5">
+        <h3 className="text-[9px] font-heading font-bold text-zinc-400 uppercase tracking-[0.1em] mb-1 flex items-center gap-1">
           <span className="text-primary">←</span> {cityB} to {cityA}
         </h3>
         {buyBSellARoutes.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
             {buyBSellARoutes.map((r, i) => (
               <RouteItem key={`ba-${r.booze.id}`} r={r} delay={i * 0.05} />
             ))}
           </div>
         ) : (
-          <p className="text-[10px] text-zinc-500 font-heading py-2 italic">No profitable cargo this direction</p>
+          <p className="text-[9px] text-zinc-500 font-heading py-1 italic">No profitable cargo this direction</p>
         )}
       </div>
     </div>
@@ -256,32 +256,32 @@ const RoundTripCard = ({ cityA, cityB, buyASellBRoutes, buyBSellARoutes }) => (
 );
 
 const CityPricesCard = ({ citySummary }) => (
-  <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.1s' }}>
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         Black Market Prices
       </h2>
     </div>
     
     {/* Desktop: Table */}
     <div className="hidden md:block overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full text-[11px]">
         <thead>
-          <tr className="bg-zinc-800/50 text-[9px] uppercase tracking-[0.12em] font-heading text-zinc-500 border-b border-zinc-700/40">
-            <th className="text-left py-2 px-4">City</th>
-            <th className="text-right py-2 px-4">Cheapest</th>
-            <th className="text-right py-2 px-4">Priciest</th>
+          <tr className="bg-zinc-800/50 text-[8px] uppercase tracking-[0.1em] font-heading text-zinc-500 border-b border-zinc-700/40">
+            <th className="text-left py-1.5 px-2">City</th>
+            <th className="text-right py-1.5 px-2">Cheapest</th>
+            <th className="text-right py-1.5 px-2">Priciest</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-700/30">
           {citySummary.map((c, idx) => (
             <tr key={c.city} className="bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.04}s` }}>
-              <td className="py-2 px-4 font-heading font-bold text-foreground tracking-wide">{c.city}</td>
-              <td className="py-2 px-4 text-right text-zinc-400 font-heading">
-                {formatMoney(c.minPrice)} <span className="text-[9px] text-zinc-500">({c.lowestBooze})</span>
+              <td className="py-1.5 px-2 font-heading font-bold text-foreground tracking-wide">{c.city}</td>
+              <td className="py-1.5 px-2 text-right text-zinc-400 font-heading">
+                {formatMoney(c.minPrice)} <span className="text-[8px] text-zinc-500">({c.lowestBooze})</span>
               </td>
-              <td className="py-2 px-4 text-right text-zinc-400 font-heading">
-                {formatMoney(c.maxPrice)} <span className="text-[9px] text-zinc-500">({c.highestBooze})</span>
+              <td className="py-1.5 px-2 text-right text-zinc-400 font-heading">
+                {formatMoney(c.maxPrice)} <span className="text-[8px] text-zinc-500">({c.highestBooze})</span>
               </td>
             </tr>
           ))}
@@ -292,19 +292,19 @@ const CityPricesCard = ({ citySummary }) => (
     {/* Mobile: Cards */}
     <div className="md:hidden divide-y divide-zinc-700/30">
       {citySummary.map((c, idx) => (
-        <div key={c.city} className="p-3 bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.04}s` }}>
-          <div className="font-heading font-bold text-foreground text-sm mb-1.5 tracking-wide">{c.city}</div>
-          <div className="space-y-1 text-xs">
+        <div key={c.city} className="p-2 bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.04}s` }}>
+          <div className="font-heading font-bold text-foreground text-[11px] mb-1 tracking-wide">{c.city}</div>
+          <div className="space-y-0.5 text-[10px]">
             <div className="flex justify-between">
-              <span className="text-zinc-500 text-[10px]">Cheapest:</span>
+              <span className="text-zinc-500 text-[9px]">Cheapest:</span>
               <span className="font-heading text-foreground">
-                {formatMoney(c.minPrice)} <span className="text-[9px] text-zinc-500">({c.lowestBooze})</span>
+                {formatMoney(c.minPrice)} <span className="text-[8px] text-zinc-500">({c.lowestBooze})</span>
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-zinc-500 text-[10px]">Priciest:</span>
+              <span className="text-zinc-500 text-[9px]">Priciest:</span>
               <span className="font-heading text-foreground">
-                {formatMoney(c.maxPrice)} <span className="text-[9px] text-zinc-500">({c.highestBooze})</span>
+                {formatMoney(c.maxPrice)} <span className="text-[8px] text-zinc-500">({c.highestBooze})</span>
               </span>
             </div>
           </div>
@@ -329,38 +329,38 @@ const SuppliesCard = ({
 }) => {
   const maxBuy = Math.max(0, capacity - carryingTotal);
   return (
-  <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.15s' }}>
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.15s' }}>
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         The Warehouse — {location}
       </h2>
-      <span className="text-[9px] text-zinc-500 font-heading">{carryingTotal}/{capacity} loaded</span>
+      <span className="text-[8px] text-zinc-500 font-heading">{carryingTotal}/{capacity} loaded</span>
     </div>
     
     {/* Desktop: Table */}
     <div className="hidden md:block overflow-x-auto">
-      <table className="w-full text-xs">
+      <table className="w-full text-[11px]">
         <thead>
-          <tr className="bg-zinc-800/50 text-[9px] uppercase tracking-[0.12em] font-heading text-zinc-500 border-b border-zinc-700/40">
-            <th className="text-left py-2 px-4">Liquor</th>
-            <th className="text-right py-2 px-4">Price</th>
-            <th className="text-right py-2 px-4">Stash</th>
-            <th className="text-right py-2 px-4">Quantity</th>
-            <th className="text-right py-2 px-4">Trade</th>
+          <tr className="bg-zinc-800/50 text-[8px] uppercase tracking-[0.1em] font-heading text-zinc-500 border-b border-zinc-700/40">
+            <th className="text-left py-1.5 px-2">Liquor</th>
+            <th className="text-right py-1.5 px-2">Price</th>
+            <th className="text-right py-1.5 px-2">Stash</th>
+            <th className="text-right py-1.5 px-2">Quantity</th>
+            <th className="text-right py-1.5 px-2">Trade</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-700/30">
           {supplies.map((row, idx) => (
             <tr key={row.booze_id} className="bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.03}s` }}>
-              <td className="py-2 px-4 font-heading font-bold text-foreground tracking-wide">{row.name}</td>
-              <td className="py-2 px-4 text-right text-zinc-400 font-heading tabular-nums">
+              <td className="py-1.5 px-2 font-heading font-bold text-foreground tracking-wide">{row.name}</td>
+              <td className="py-1.5 px-2 text-right text-zinc-400 font-heading tabular-nums">
                 {formatMoney(row.buy_price)}
               </td>
-              <td className="py-2 px-4 text-right font-heading font-bold text-foreground tabular-nums">
+              <td className="py-1.5 px-2 text-right font-heading font-bold text-foreground tabular-nums">
                 {row.carrying ?? 0}
               </td>
-              <td className="py-2 px-4 text-right">
-                <div className="flex items-center justify-end gap-1">
+              <td className="py-1.5 px-2 text-right">
+                <div className="flex items-center justify-end gap-0.5">
                   <input
                     type="text"
                     inputMode="numeric"
@@ -368,7 +368,7 @@ const SuppliesCard = ({
                     value={buyAmounts[row.booze_id] ?? ''}
                     onChange={(e) => setBuyAmount(row.booze_id, e.target.value)}
                     onFocus={() => setBuyAmount(row.booze_id, String(maxBuy))}
-                    className="w-14 text-right bg-zinc-900/80 border border-zinc-600/40 rounded-md px-1.5 py-1 text-xs font-heading focus:border-primary/50 focus:outline-none transition-colors"
+                    className="w-12 text-right bg-zinc-900/80 border border-zinc-600/40 rounded px-1 py-0.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
                   />
                   <input
                     type="text"
@@ -377,23 +377,23 @@ const SuppliesCard = ({
                     value={sellAmounts[row.booze_id] ?? ''}
                     onChange={(e) => setSellAmount(row.booze_id, e.target.value)}
                     onFocus={() => setSellAmount(row.booze_id, String(row.carrying ?? 0))}
-                    className="w-14 text-right bg-zinc-900/80 border border-zinc-600/40 rounded-md px-1.5 py-1 text-xs font-heading focus:border-primary/50 focus:outline-none transition-colors"
+                    className="w-12 text-right bg-zinc-900/80 border border-zinc-600/40 rounded px-1 py-0.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
                   />
                 </div>
               </td>
-              <td className="py-2 px-4 text-right">
-                <div className="flex items-center justify-end gap-1.5">
+              <td className="py-1.5 px-2 text-right">
+                <div className="flex items-center justify-end gap-0.5">
                   <button
                     onClick={() => handleBuy(row.booze_id)}
                     disabled={disabled}
-                    className="px-2.5 py-1 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider border transition-all bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 hover:shadow-sm hover:shadow-primary/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider border transition-all bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Buy
                   </button>
                   <button
                     onClick={() => handleSell(row.booze_id)}
                     disabled={disabled || !(row.carrying > 0)}
-                    className="px-2.5 py-1 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider border transition-all bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider border transition-all bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Sell
                   </button>
@@ -408,20 +408,20 @@ const SuppliesCard = ({
     {/* Mobile: Cards */}
     <div className="md:hidden divide-y divide-zinc-700/30">
       {supplies.map((row, idx) => (
-        <div key={row.booze_id} className="p-3 space-y-2 bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.04}s` }}>
-          <div className="flex items-start justify-between gap-2">
+        <div key={row.booze_id} className="p-2 space-y-1 bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.04}s` }}>
+          <div className="flex items-start justify-between gap-1.5">
             <div>
-              <div className="font-heading font-bold text-foreground text-sm tracking-wide">{row.name}</div>
-              <div className="text-[10px] text-zinc-500 font-heading">
+              <div className="font-heading font-bold text-foreground text-[11px] tracking-wide">{row.name}</div>
+              <div className="text-[9px] text-zinc-500 font-heading">
                 Stash: <span className="text-foreground font-bold">{row.carrying ?? 0}</span>
               </div>
             </div>
-            <div className="text-right text-xs">
+            <div className="text-right text-[10px]">
               <div className="text-zinc-400 font-heading">{formatMoney(row.buy_price)}</div>
             </div>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <input
               type="text"
               inputMode="numeric"
@@ -429,7 +429,7 @@ const SuppliesCard = ({
               value={buyAmounts[row.booze_id] ?? ''}
               onChange={(e) => setBuyAmount(row.booze_id, e.target.value)}
               onFocus={() => setBuyAmount(row.booze_id, String(maxBuy))}
-              className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2.5 py-1.5 text-xs font-heading focus:border-primary/50 focus:outline-none transition-colors"
+              className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded px-2 py-1 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
             />
             <input
               type="text"
@@ -438,22 +438,22 @@ const SuppliesCard = ({
               value={sellAmounts[row.booze_id] ?? ''}
               onChange={(e) => setSellAmount(row.booze_id, e.target.value)}
               onFocus={() => setSellAmount(row.booze_id, String(row.carrying ?? 0))}
-              className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2.5 py-1.5 text-xs font-heading focus:border-primary/50 focus:outline-none transition-colors"
+              className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded px-2 py-1 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
             />
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <button
               onClick={() => handleBuy(row.booze_id)}
               disabled={disabled}
-              className="flex-1 py-2 rounded-lg font-heading font-bold uppercase text-[10px] tracking-wider border-2 transition-all touch-manipulation bg-gradient-to-b from-primary/25 to-primary/10 border-primary/40 text-primary hover:from-primary/35 disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-1.5 rounded-md font-heading font-bold uppercase text-[9px] tracking-wider border transition-all touch-manipulation bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Buy
             </button>
             <button
               onClick={() => handleSell(row.booze_id)}
               disabled={disabled || !(row.carrying > 0)}
-              className="flex-1 py-2 rounded-lg font-heading font-bold uppercase text-[10px] tracking-wider border transition-all touch-manipulation bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-1.5 rounded-md font-heading font-bold uppercase text-[9px] tracking-wider border transition-all touch-manipulation bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Sell
             </button>
@@ -466,34 +466,34 @@ const SuppliesCard = ({
 };
 
 const HistoryCard = ({ history }) => (
-  <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.2s' }}>
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in`} style={{ animationDelay: '0.2s' }}>
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         The Ledger
       </h2>
-      <span className="text-[9px] font-heading text-zinc-500">{history.length} entries</span>
+      <span className="text-[8px] font-heading text-zinc-500">{history.length} entries</span>
     </div>
     
     {history.length === 0 ? (
-      <div className="p-6 text-center">
-        <Wine size={24} className="mx-auto text-zinc-700 mb-2" />
-        <p className="text-[10px] text-zinc-500 font-heading italic">No transactions recorded yet</p>
-        <p className="text-[9px] text-zinc-600 font-heading mt-0.5">Make your first run to start the books</p>
+      <div className="p-4 text-center">
+        <Wine size={18} className="mx-auto text-zinc-700 mb-1" />
+        <p className="text-[9px] text-zinc-500 font-heading italic">No transactions recorded yet</p>
+        <p className="text-[8px] text-zinc-600 font-heading mt-0.5">Make your first run to start the books</p>
       </div>
     ) : (
       <>
         {/* Desktop: Table */}
-        <div className="hidden md:block overflow-x-auto max-h-52 overflow-y-auto">
-          <table className="w-full text-xs">
+        <div className="hidden md:block overflow-x-auto max-h-40 overflow-y-auto">
+          <table className="w-full text-[11px]">
             <thead>
-              <tr className="bg-zinc-800/50 text-[9px] uppercase tracking-[0.12em] font-heading text-zinc-500 border-b border-zinc-700/40 sticky top-0">
-                <th className="text-left py-2 px-4">Time</th>
-                <th className="text-left py-2 px-4">Action</th>
-                <th className="text-left py-2 px-4">Liquor</th>
-                <th className="text-right py-2 px-4">Qty</th>
-                <th className="text-right py-2 px-4">Price</th>
-                <th className="text-right py-2 px-4">Total</th>
-                <th className="text-right py-2 px-4">Profit</th>
+              <tr className="bg-zinc-800/50 text-[8px] uppercase tracking-[0.1em] font-heading text-zinc-500 border-b border-zinc-700/40 sticky top-0">
+                <th className="text-left py-1.5 px-2">Time</th>
+                <th className="text-left py-1.5 px-2">Action</th>
+                <th className="text-left py-1.5 px-2">Liquor</th>
+                <th className="text-right py-1.5 px-2">Qty</th>
+                <th className="text-right py-1.5 px-2">Price</th>
+                <th className="text-right py-1.5 px-2">Total</th>
+                <th className="text-right py-1.5 px-2">Profit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-700/30">
@@ -503,23 +503,23 @@ const HistoryCard = ({ history }) => (
                 
                 return (
                   <tr key={i} className="bz-row">
-                    <td className="py-2 px-4 text-zinc-500 font-heading text-[10px]">{at}</td>
-                    <td className="py-2 px-4">
-                      <span className={`font-heading font-bold text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded ${isSell ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-300 bg-zinc-700/30'}`}>
+                    <td className="py-1.5 px-2 text-zinc-500 font-heading text-[9px]">{at}</td>
+                    <td className="py-1.5 px-2">
+                      <span className={`font-heading font-bold text-[9px] uppercase tracking-wider px-1 py-0.5 rounded ${isSell ? 'text-emerald-400 bg-emerald-500/10' : 'text-zinc-300 bg-zinc-700/30'}`}>
                         {isSell ? 'Sold' : 'Bought'}
                       </span>
                     </td>
-                    <td className="py-2 px-4 text-foreground font-heading">{h.booze_name ?? '—'}</td>
-                    <td className="py-2 px-4 text-right font-heading font-bold tabular-nums">{h.amount ?? 0}</td>
-                    <td className="py-2 px-4 text-right text-zinc-400 font-heading tabular-nums">
+                    <td className="py-1.5 px-2 text-foreground font-heading">{h.booze_name ?? '—'}</td>
+                    <td className="py-1.5 px-2 text-right font-heading font-bold tabular-nums">{h.amount ?? 0}</td>
+                    <td className="py-1.5 px-2 text-right text-zinc-400 font-heading tabular-nums">
                       {formatMoney(h.unit_price)}
                     </td>
-                    <td className="py-2 px-4 text-right font-heading font-bold text-foreground tabular-nums">
+                    <td className="py-1.5 px-2 text-right font-heading font-bold text-foreground tabular-nums">
                       {formatMoney(h.total)}
                     </td>
-                    <td className="py-2 px-4 text-right">
+                    <td className="py-1.5 px-2 text-right">
                       {isSell && h.profit != null ? (
-                        <span className={`font-heading font-bold tabular-nums ${
+                        <span className={`font-heading font-bold tabular-nums text-[10px] ${
                           h.profit >= 0 ? 'text-emerald-400' : 'text-red-400'
                         }`}>
                           {h.profit >= 0 ? '+' : ''}{formatMoney(h.profit)}
@@ -534,24 +534,24 @@ const HistoryCard = ({ history }) => (
         </div>
         
         {/* Mobile: Cards */}
-        <div className="md:hidden divide-y divide-zinc-700/30 max-h-52 overflow-y-auto">
+        <div className="md:hidden divide-y divide-zinc-700/30 max-h-40 overflow-y-auto">
           {history.map((h, i) => {
             const at = h.at ? new Date(h.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '—';
             const isSell = h.action === 'sell';
             
             return (
-              <div key={i} className="p-3 space-y-1 bz-row">
-                <div className="flex items-start justify-between gap-2">
+              <div key={i} className="p-2 space-y-0.5 bz-row">
+                <div className="flex items-start justify-between gap-1.5">
                   <div>
-                    <div className={`font-heading font-bold text-sm ${isSell ? 'text-emerald-400' : 'text-foreground'}`}>
+                    <div className={`font-heading font-bold text-[11px] ${isSell ? 'text-emerald-400' : 'text-foreground'}`}>
                       {isSell ? 'Sold' : 'Bought'} {h.booze_name ?? '—'}
                     </div>
-                    <div className="text-[10px] text-zinc-500 font-heading">{at}</div>
+                    <div className="text-[9px] text-zinc-500 font-heading">{at}</div>
                   </div>
                   <div className="text-right">
-                    <div className="font-heading font-bold text-foreground text-sm">{formatMoney(h.total)}</div>
+                    <div className="font-heading font-bold text-foreground text-[11px]">{formatMoney(h.total)}</div>
                     {isSell && h.profit != null && (
-                      <div className={`text-[10px] font-heading font-bold ${
+                      <div className={`text-[9px] font-heading font-bold ${
                         h.profit >= 0 ? 'text-emerald-400' : 'text-red-400'
                       }`}>
                         {h.profit >= 0 ? '+' : ''}{formatMoney(h.profit)}
@@ -559,7 +559,7 @@ const HistoryCard = ({ history }) => (
                     )}
                   </div>
                 </div>
-                <div className="flex gap-3 text-xs text-zinc-500">
+                <div className="flex gap-2 text-[9px] text-zinc-500">
                   <span>Qty: <span className="text-foreground font-bold">{h.amount ?? 0}</span></span>
                   <span>@ {formatMoney(h.unit_price)}</span>
                 </div>
@@ -573,34 +573,34 @@ const HistoryCard = ({ history }) => (
 );
 
 const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
-  <div className={`${styles.panel} rounded-lg overflow-hidden border border-zinc-700/30 bz-fade-in`} style={{ animationDelay: '0.25s' }}>
-    <div className="px-4 py-2.5 border-b border-zinc-700/30">
-      <h3 className="text-[10px] font-heading font-bold text-zinc-400 uppercase tracking-[0.15em]">
+  <div className={`${styles.panel} rounded-md overflow-hidden border border-zinc-700/30 bz-fade-in`} style={{ animationDelay: '0.25s' }}>
+    <div className="px-2.5 py-1.5 border-b border-zinc-700/30">
+      <h3 className="text-[9px] font-heading font-bold text-zinc-400 uppercase tracking-[0.12em]">
         Bootlegger's Guide
       </h3>
     </div>
-    <div className="p-4">
-      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-[11px] text-zinc-400 font-heading">
-        <li className="flex items-start gap-2">
-          <Clock size={10} className="text-primary shrink-0 mt-0.5" />
+    <div className="p-2">
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-zinc-400 font-heading">
+        <li className="flex items-start gap-1">
+          <Clock size={8} className="text-primary shrink-0 mt-0.5" />
           <span>Prices rotate every <strong className="text-foreground">{rotationSeconds != null && rotationSeconds > 0 ? `${rotationSeconds}s` : `${rotationHours ?? 3}h`}</strong></span>
         </li>
-        <li className="flex items-start gap-2">
-          <MapPin size={10} className="text-primary shrink-0 mt-0.5" />
+        <li className="flex items-start gap-1">
+          <MapPin size={8} className="text-primary shrink-0 mt-0.5" />
           <span>Must travel by car while carrying cargo</span>
         </li>
-        <li className="flex items-start gap-2">
-          <Package size={10} className="text-primary shrink-0 mt-0.5" />
+        <li className="flex items-start gap-1">
+          <Package size={8} className="text-primary shrink-0 mt-0.5" />
           <span>Cargo capacity increases with rank; upgrade in Points Store</span>
         </li>
         {dailyEstimateRough != null && dailyEstimateRough > 0 && (
-          <li className="flex items-start gap-2">
-            <TrendingUp size={10} className="text-emerald-400 shrink-0 mt-0.5" />
+          <li className="flex items-start gap-1">
+            <TrendingUp size={8} className="text-emerald-400 shrink-0 mt-0.5" />
             <span>24h estimate (custom car, best route, non-stop): <strong className="text-emerald-400">~${Number(dailyEstimateRough).toLocaleString()}</strong></span>
           </li>
         )}
-        <li className="flex items-start gap-2 md:col-span-2">
-          <span className="text-amber-400 shrink-0 mt-0.5 text-[10px]">⚠</span>
+        <li className="flex items-start gap-1 md:col-span-2">
+          <span className="text-amber-400 shrink-0 mt-0.5 text-[9px]">⚠</span>
           <span className="text-amber-400/80">Bigger shipments attract more heat from the Feds — higher amounts means higher bust risk!</span>
         </li>
       </ul>
@@ -786,16 +786,16 @@ export default function BoozeRun() {
   });
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="booze-run-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="booze-run-page">
       <style>{BOOZE_STYLES}</style>
 
       {/* ── Page Header ── */}
       <div className="relative bz-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Prohibition Era</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Prohibition Era</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase">
           The Rum Run
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Buy low, smuggle fast, sell high — and pray the Feds don't catch you.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Buy low, smuggle fast, sell high — and pray the Feds don't catch you.</p>
       </div>
 
       {autoRankBoozeDisabled && <AutoRankBoozeNotice />}
