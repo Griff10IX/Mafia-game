@@ -71,11 +71,12 @@ async def _get_horseracing_ownership_doc(city: str):
 
 
 def _horseracing_pick_winner() -> dict:
-    """Pick a winner weighted by inverse odds (lower odds = favourite = higher win probability)."""
+    """Pick a winner weighted by inverse odds (evens = favourite wins much more often)."""
     horses = list(HORSERACING_HORSES)
     if not horses:
         return None
-    weights = [1.0 / max(1, (h.get("odds") or 1) + 1) for h in horses]
+    # Weight = 1/odds so evens (1) has highest, 2:1 half that, etc. Evens then ~48% vs ~38% with 1/(odds+1).
+    weights = [1.0 / max(1, h.get("odds") or 1) for h in horses]
     total = sum(weights)
     if total <= 0:
         return random.choice(horses)
@@ -86,6 +87,45 @@ def _horseracing_pick_winner() -> dict:
         if r <= acc:
             return h
     return horses[-1]
+
+
+def _horseracing_finish_order(winner_id: int):
+    """
+    Return finish_pcts (list of 7 floats, one per horse in HORSERACING_HORSES order).
+    Winner is at 100. Some races are neck-and-neck (small gaps), some are blowouts (large gaps).
+    """
+    horses = list(HORSERACING_HORSES)
+    winner = next((h for h in horses if h["id"] == winner_id), horses[0])
+    others = [h for h in horses if h["id"] != winner_id]
+    # 2nd–7th: order by inverse-odds (better horses tend to finish ahead), with randomness
+    # Sort 2nd–7th by weighted random: better (lower odds) horses tend to finish ahead
+    order_others = sorted(
+        others,
+        key=lambda h: (random.random() * 0.4 + 1.0 / max(1, h.get("odds") or 1)),
+        reverse=True,
+    )
+    finish_order_ids = [winner["id"]] + [h["id"] for h in order_others]
+
+    # Race closeness: ~35% neck-and-neck, ~45% medium, ~20% blowout
+    r = random.random()
+    if r < 0.35:
+        margins = [random.uniform(0.15, 0.7) for _ in range(6)]
+    elif r < 0.80:
+        margins = [random.uniform(0.8, 2.5) for _ in range(6)]
+    else:
+        margins = [random.uniform(3, 10) for _ in range(6)]
+
+    positions = [100.0]
+    for m in margins:
+        positions.append(positions[-1] - m)
+    # Clamp so last place is still on screen (e.g. >= 45)
+    min_pos = min(45, positions[-1])
+    if positions[-1] < min_pos:
+        step = (positions[0] - min_pos) / 6
+        positions = [100.0 - i * step for i in range(7)]
+
+    id_to_pct = dict(zip(finish_order_ids, positions))
+    return [id_to_pct.get(h["id"], 50.0) for h in horses]
 
 
 def register(router):
@@ -314,9 +354,11 @@ def register(router):
             {"id": current_user["id"]},
             {"$push": {"horseracing_history": {"$each": [history_entry], "$slice": -HORSERACING_HISTORY_MAX}}}
         )
+        finish_pcts = _horseracing_finish_order(winner["id"])
         return {
             "winner_id": winner["id"],
             "horses": list(HORSERACING_HORSES),
+            "finish_pcts": finish_pcts,
             "won": won,
             "payout": payout,
             "winner_name": winner["name"],

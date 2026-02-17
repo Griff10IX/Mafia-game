@@ -115,7 +115,9 @@ function RaceTrack({ lanes, racing, raceStarted, winnerId, selectedHorseId }) {
                     className="absolute top-0 h-full flex items-center"
                     style={{
                       left: raceStarted ? `calc(${lane.finishPct}% - 28px)` : '2px',
-                      transition: raceStarted ? `left ${RACE_DURATION_MS}ms cubic-bezier(0.25, 0.46, 0.45, 0.94)` : 'none',
+                      transition: raceStarted
+                        ? `left ${RACE_DURATION_MS}ms cubic-bezier(0.12, 0.6, 0.25, 1)` : 'none',
+                      transitionDelay: raceStarted ? `${lane.animationDelayMs ?? 0}ms` : '0ms',
                     }}
                   >
                     {/* Dust trail when racing */}
@@ -370,13 +372,13 @@ export default function HorseRacingPage() {
 
       const winnerId = data.winner_id;
       const horsesList = data.horses || horses;
-      const finishOrder = horsesList.map((h) => {
-        if (h.id === winnerId) return 100;
-        return 55 + Math.random() * 40;
-      });
+      const finishPcts = Array.isArray(data.finish_pcts) && data.finish_pcts.length === horsesList.length
+        ? data.finish_pcts
+        : horsesList.map((h) => (h.id === winnerId ? 100 : 55 + Math.random() * 40));
+      const animationDelays = horsesList.map(() => Math.floor(Math.random() * 120));
 
       const durationMs = skipAnimation ? 0 : RACE_DURATION_MS;
-      setRaceProgress({ winnerId, finishPcts: finishOrder, horses: horsesList, won: data.won, payout: data.payout || 0 });
+      setRaceProgress({ winnerId, finishPcts, horses: horsesList, won: data.won, payout: data.payout || 0, animationDelays });
 
       if (!skipAnimation) {
         requestAnimationFrame(() => { requestAnimationFrame(() => setRaceStarted(true)); });
@@ -406,8 +408,12 @@ export default function HorseRacingPage() {
   const playAgain = () => { setResult(null); setRaceProgress(null); setRaceStarted(false); };
 
   const raceLanes = raceProgress
-    ? raceProgress.horses.map((h, idx) => ({ horse: h, finishPct: raceProgress.finishPcts[idx] }))
-    : horses.map((h) => ({ horse: h, finishPct: 0 }));
+    ? raceProgress.horses.map((h, idx) => ({
+        horse: h,
+        finishPct: raceProgress.finishPcts[idx],
+        animationDelayMs: (raceProgress.animationDelays || [])[idx] ?? 0,
+      }))
+    : horses.map((h) => ({ horse: h, finishPct: 0, animationDelayMs: 0 }));
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="horse-racing-page">
@@ -415,11 +421,14 @@ export default function HorseRacingPage() {
       <style>{`
         @keyframes horse-bounce {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-3px); }
+          18% { transform: translateY(-2px); }
+          36% { transform: translateY(0); }
+          54% { transform: translateY(-3px); }
+          72% { transform: translateY(-1px); }
         }
         @keyframes dust {
-          0% { opacity: 0.5; transform: translateX(0) scale(1); }
-          100% { opacity: 0; transform: translateX(-10px) scale(0.3); }
+          0% { opacity: 0.6; transform: translateX(0) scale(1); }
+          100% { opacity: 0; transform: translateX(-14px) scale(0.2); }
         }
         @keyframes race-particle {
           0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
