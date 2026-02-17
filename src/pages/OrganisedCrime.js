@@ -4,6 +4,13 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const OC_STYLES = `
+  @keyframes oc-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .oc-fade-in { animation: oc-fade-in 0.4s ease-out both; }
+  .oc-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .oc-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
 const ROLE_IDS = ['driver', 'weapons', 'explosives', 'hacker'];
@@ -56,13 +63,16 @@ const useCooldownTicker = (cooldownUntil, onCooldownExpired) => {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <UserCheck size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
   </div>
 );
 
 const AutoRankOCNotice = () => (
-  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg oc-fade-in overflow-hidden`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
     <div className="flex items-center gap-2">
       <Bot size={14} className="text-amber-400 shrink-0" />
       <span className="text-amber-200/80">
@@ -80,9 +90,10 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
   if (list.length === 0) return null;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
           <Wrench size={14} />
           Equipment
         </span>
@@ -132,6 +143,7 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
           })}
         </div>
       </div>
+      <div className="oc-art-line text-primary mx-3" />
     </div>
   );
 };
@@ -201,7 +213,7 @@ const RoleToggleGroup = ({ roleId, value, onValueChange }) => {
 
 // Compact role slot row
 const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange, pct, onPctChange, isNpc }) => (
-  <div className="flex items-center gap-3 px-3 py-2 rounded-md bg-zinc-800/20 border border-transparent hover:border-primary/10">
+  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-zinc-800/20 border border-transparent oc-row">
     {/* Role name */}
     <div className="w-24 flex items-center gap-1.5">
       <span className="text-sm">{ROLE_ICONS[roleId]}</span>
@@ -247,9 +259,10 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
   if (!status?.pending_heist) return null;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
-      <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center justify-between">
-        <span className="text-xs font-heading font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 oc-fade-in`}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+      <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
+        <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em] flex items-center gap-2">
           <UserCheck size={14} />
           Pending Heist
         </span>
@@ -347,13 +360,14 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
 };
 
 const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.06s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <button
       type="button"
       onClick={onToggle}
-      className="w-full px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between hover:bg-primary/15 transition-colors"
+      className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
     >
-      <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         ℹ️ Rules
       </span>
       <span className="text-primary/80">
@@ -361,26 +375,29 @@ const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
       </span>
     </button>
     {!isCollapsed && (
-      <div className="p-3">
-        <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-          <li className="flex items-start gap-1.5">
-            <span className="text-primary shrink-0">•</span>
-            <span>Team of 4: Driver, Weapons, Explosives, Hacker</span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-primary shrink-0">•</span>
-            <span>Exactly one slot must be "You"</span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-primary shrink-0">•</span>
-            <span>Cut % must sum to 100. NPCs auto-assigned</span>
-          </li>
-          <li className="flex items-start gap-1.5">
-            <span className="text-primary shrink-0">•</span>
-            <span>Cooldown: {cooldownHours ?? 6}h (4h with upgrade)</span>
-          </li>
-        </ul>
-      </div>
+      <>
+        <div className="p-3">
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
+            <li className="flex items-start gap-1.5">
+              <span className="text-primary shrink-0">•</span>
+              <span>Team of 4: Driver, Weapons, Explosives, Hacker</span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <span className="text-primary shrink-0">•</span>
+              <span>Exactly one slot must be "You"</span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <span className="text-primary shrink-0">•</span>
+              <span>Cut % must sum to 100. NPCs auto-assigned</span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <span className="text-primary shrink-0">•</span>
+              <span>Cooldown: {cooldownHours ?? 6}h (4h with upgrade)</span>
+            </li>
+          </ul>
+        </div>
+        <div className="oc-art-line text-primary mx-3" />
+      </>
     )}
   </div>
 );
@@ -679,10 +696,27 @@ export default function OrganisedCrime() {
   const onCooldown = status?.cooldown_until && new Date(status.cooldown_until) > new Date();
   const cooldownStr = formatCooldown(status?.cooldown_until);
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) {
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{OC_STYLES}</style>
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="organised-crime-page">
+      <style>{OC_STYLES}</style>
+
+      <div className="relative oc-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Heist</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <UserCheck size={24} /> Organised Crime
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Pick a job, fill your crew, set cuts. Run the heist.</p>
+      </div>
+
       {autoRankOcDisabled && <AutoRankOCNotice />}
       {/* Pending Heist */}
       <PendingHeistSection
@@ -707,9 +741,10 @@ export default function OrganisedCrime() {
       )}
 
       {/* Job Selection */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             Select Job
           </span>
         </div>
@@ -723,12 +758,14 @@ export default function OrganisedCrime() {
             ))}
           </div>
         </div>
+        <div className="oc-art-line text-primary mx-3" />
       </div>
 
       {/* Team Slots */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.04s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             Team & Cut %
           </span>
           <span className={`text-xs font-heading font-bold ${pctTotal === 100 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -765,6 +802,7 @@ export default function OrganisedCrime() {
             </p>
           </div>
         )}
+        <div className="oc-art-line text-primary mx-3" />
       </div>
 
       {/* Execute Button */}
@@ -773,7 +811,7 @@ export default function OrganisedCrime() {
           type="button"
           onClick={autoRankOcDisabled ? undefined : execute}
           disabled={autoRankOcDisabled || !canExecute || onCooldown || executing}
-          className={`w-full py-3 font-heading font-bold uppercase tracking-wider text-sm transition-all touch-manipulation rounded-md ${
+          className={`w-full py-3 font-heading font-bold uppercase tracking-wider text-sm transition-all touch-manipulation rounded-lg ${
             autoRankOcDisabled || !canExecute || onCooldown || executing
               ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border border-zinc-700'
               : 'bg-gradient-to-b from-primary to-yellow-700 hover:from-yellow-500 hover:to-yellow-600 text-primaryForeground shadow-lg shadow-primary/20 border border-yellow-600/50'

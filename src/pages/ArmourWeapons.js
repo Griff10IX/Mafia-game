@@ -5,6 +5,13 @@ import BulletFactory from './BulletFactory';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const AW_STYLES = `
+  @keyframes aw-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .aw-fade-in { animation: aw-fade-in 0.4s ease-out both; }
+  .aw-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .aw-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
 const formatCost = (opt, useEffective = true) => {
@@ -218,23 +225,29 @@ export default function ArmourWeapons() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{AW_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <Swords size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="armour-weapons-page">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <style>{AW_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative aw-fade-in flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-            ⚔️ Arsenal
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Arsenal</p>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2 tracking-wider uppercase">
+            ⚔️ Armour & Weapons
           </h1>
-          <p className="text-xs text-mutedForeground">
-            Equip weapons and armour for combat
-          </p>
+          <p className="text-[10px] text-zinc-500 font-heading italic">Equip weapons and armour for combat.</p>
         </div>
         <div className="flex items-center gap-4 text-xs font-heading">
           <span className="text-mutedForeground">Cash: <span className="text-primary font-bold">{formatMoney(me?.money)}</span></span>
@@ -244,7 +257,7 @@ export default function ArmourWeapons() {
 
       {/* Event Banner */}
       {eventsEnabled && event && event.armour_weapon_cost !== 1 && event?.name && (
-        <div className="px-3 py-2 bg-primary/10 border border-primary/30 rounded-md">
+        <div className="px-3 py-2 bg-primary/8 border border-primary/20 rounded-lg aw-fade-in">
           <p className="text-xs font-heading">
             <span className="text-primary font-bold">✨ {event.name}</span>
             <span className="text-mutedForeground ml-2">{event.message}</span>
@@ -253,9 +266,10 @@ export default function ArmourWeapons() {
       )}
 
       {/* Loadout Summary */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Current Loadout</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 aw-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Current Loadout</span>
         </div>
         <div className="p-3 grid grid-cols-2 gap-4">
           <div className="flex items-center gap-3">
@@ -287,11 +301,13 @@ export default function ArmourWeapons() {
             </div>
           </div>
         </div>
+        <div className="aw-art-line text-primary mx-3" />
       </div>
 
       {/* Tabbed Content */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="flex border-b border-primary/20 bg-zinc-900/30">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 aw-fade-in`} style={{ animationDelay: '0.04s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="flex border-b border-primary/20 bg-primary/5">
           <Tab active={activeTab === 'weapons'} onClick={() => setActiveTab('weapons')} icon={Swords}>
             Weapons
           </Tab>
@@ -327,8 +343,8 @@ export default function ArmourWeapons() {
                   return (
                     <div
                       key={w.id}
-                      className={`grid grid-cols-[1fr_5rem_5rem_7rem] gap-2 px-2 py-2 rounded items-center transition-all ${
-                        isEquipped ? 'bg-primary/10 border border-primary/30' : 'hover:bg-zinc-800/30'
+                      className={`grid grid-cols-[1fr_5rem_5rem_7rem] gap-2 px-2 py-2 rounded-lg items-center transition-all aw-row ${
+                        isEquipped ? 'bg-primary/10 border border-primary/30' : ''
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -414,8 +430,8 @@ export default function ArmourWeapons() {
                   return (
                     <div
                       key={o.level}
-                      className={`grid grid-cols-[1fr_4rem_5rem_7rem] gap-2 px-2 py-2 rounded items-center transition-all ${
-                        isEquipped ? 'bg-primary/10 border border-primary/30' : 'hover:bg-zinc-800/30'
+                      className={`grid grid-cols-[1fr_4rem_5rem_7rem] gap-2 px-2 py-2 rounded-lg items-center transition-all aw-row ${
+                        isEquipped ? 'bg-primary/10 border border-primary/30' : ''
                       }`}
                     >
                       <div className="flex items-center gap-2 min-w-0">
@@ -484,18 +500,21 @@ export default function ArmourWeapons() {
             </div>
           )}
         </div>
+        <div className="aw-art-line text-primary mx-3" />
       </div>
 
       {/* Info Panel */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Info</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 aw-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Info</span>
         </div>
         <div className="p-3 space-y-1.5 text-xs text-mutedForeground">
           <p>• <span className="text-foreground">Weapons</span> increase your damage in combat. Higher damage = fewer bullets needed.</p>
           <p>• <span className="text-foreground">Armour</span> protects you from bullets. 5 tiers available (Lv.1-3 cash, Lv.4-5 points).</p>
           <p>• Your <span className="text-primary">best owned weapon</span> is auto-selected if none equipped.</p>
         </div>
+        <div className="aw-art-line text-primary mx-3" />
       </div>
     </div>
   );

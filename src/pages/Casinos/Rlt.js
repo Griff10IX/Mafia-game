@@ -3,6 +3,12 @@ import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
+const CG_STYLES = `
+  .cg-fade-in { animation: cg-fade-in 0.4s ease-out both; }
+  @keyframes cg-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .cg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const SPIN_DURATION_MS = 6000;
 
 const WHEEL_ORDER = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
@@ -448,6 +454,7 @@ export default function Rlt() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="roulette-page">
+      <style>{CG_STYLES}</style>
       <style>{`
         @keyframes result-glow {
           0%, 100% { opacity: 0.4; }
@@ -473,13 +480,12 @@ export default function Rlt() {
         .animate-spin-pulse { animation: spin-pulse 1s ease-in-out infinite; }
       `}</style>
 
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      {/* Page header */}
+      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-            Roulette
-          </h1>
-          <p className="text-xs text-mutedForeground">
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Casino</p>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 tracking-wider uppercase">Roulette</h1>
+          <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
             {ownership?.owner_name && !isOwner && <span> · Owned by <span className="text-foreground">{ownership.owner_name}</span></span>}
           </p>
@@ -496,9 +502,10 @@ export default function Rlt() {
 
       {/* ═══ Owner Controls ═══ */}
       {isOwner && (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/30`}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Owner Controls</span>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cg-fade-in`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Owner Controls</span>
             <span className={`text-xs font-heading font-bold ${(ownership?.profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
               P/L: {formatMoney(ownership?.profit ?? ownership?.total_earnings ?? 0)}
             </span>
@@ -523,6 +530,7 @@ export default function Rlt() {
               <button onClick={handleRelinquish} disabled={ownerLoading} className="text-[10px] text-red-400 hover:text-red-300 font-heading">Relinquish</button>
             </div>
           </div>
+          <div className="cg-art-line text-primary mx-3" />
         </div>
       )}
 
