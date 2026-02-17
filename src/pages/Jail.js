@@ -91,7 +91,7 @@ const JailStatusCard = ({
             type="button"
             onClick={onLeaveJail}
             disabled={leavingJail}
-            className="bg-primary text-primaryForeground hover:opacity-90 rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wide shadow-lg shadow-primary/20 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1.5"
+            className="bg-primary/20 text-primary rounded-md px-4 py-2 text-xs font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1.5 font-heading"
           >
             <DoorOpen size={14} />
             {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
@@ -228,7 +228,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
             type="button"
             onClick={() => onBust(player.username, player.is_npc)}
             disabled={loading || userInJail}
-            className="bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1"
+            className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1 font-heading"
             data-testid={`bust-out-${index}`}
           >
             🔓 Bust

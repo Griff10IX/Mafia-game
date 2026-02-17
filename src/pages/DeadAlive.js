@@ -83,7 +83,7 @@ export default function DeadAlive() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-primary text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-wider py-3 transition-smooth disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 bg-primary/20 text-primary rounded-sm font-heading font-bold uppercase tracking-wider py-3 border border-primary/40 hover:bg-primary/30 transition-smooth disabled:opacity-50"
             data-testid="retrieve-submit"
           >
             <KeyRound size={18} />

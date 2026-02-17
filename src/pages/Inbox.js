@@ -171,7 +171,7 @@ const ComposeModal = ({
             <button
               type="submit"
               disabled={sending}
-              className="flex-1 bg-primary text-primaryForeground hover:opacity-90 rounded-lg px-6 py-3 font-heading font-bold uppercase tracking-wide text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="flex-1 bg-primary/20 text-primary rounded-lg px-6 py-3 font-heading font-bold uppercase tracking-wide text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               {sending ? 'Sending...' : 'Send'}
             </button>
@@ -403,7 +403,7 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
               <div className="flex gap-2">
                 <button
                   onClick={() => onOcAccept(notification.oc_invite_id)}
-                  className="bg-primary text-primaryForeground hover:opacity-90 border rounded-md px-4 py-2 text-sm font-heading font-bold uppercase shadow-md shadow-primary/20 transition-all active:scale-95"
+                  className="bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded-md px-4 py-2 text-sm font-heading font-bold uppercase transition-all active:scale-95"
                 >
                   ✓ Accept Invitation
                 </button>
@@ -668,7 +668,7 @@ export default function Inbox() {
             {/* Compose button - integrated with toolbar */}
             <button
               onClick={() => setShowCompose(true)}
-              className="bg-primary text-primaryForeground hover:opacity-90 rounded-md px-4 py-1.5 font-heading font-bold uppercase tracking-wide text-xs shadow-lg shadow-primary/20 transition-all active:scale-95 touch-manipulation flex items-center gap-1.5 shrink-0"
+              className="bg-primary/20 text-primary rounded-md px-4 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation flex items-center gap-1.5 shrink-0"
             >
               <Send size={14} />
               <span className="hidden sm:inline">Compose</span>

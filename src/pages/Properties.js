@@ -182,7 +182,7 @@ export default function Properties() {
                       <button
                         onClick={() => collectIncome(property.id)}
                         data-testid={`collect-income-${property.id}`}
-                        className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-sm font-heading font-bold uppercase tracking-widest py-2 text-sm transition-smooth shadow-lg shadow-primary/20"
+                        className="w-full bg-primary/20 text-primary rounded-sm font-heading font-bold uppercase tracking-widest py-2 text-sm border border-primary/40 hover:bg-primary/30 transition-smooth"
                       >
                         <div className="flex items-center justify-center gap-2">
                           <DollarSign size={16} />
@@ -211,7 +211,7 @@ export default function Properties() {
                     className={`w-full rounded-sm font-heading font-bold uppercase tracking-widest py-2 text-sm transition-smooth border ${
                       property.locked
                         ? 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 cursor-not-allowed opacity-70'
-                        : 'bg-primary text-primaryForeground hover:opacity-90 shadow-lg shadow-primary/20'
+                        : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow-lg'
                     }`}
                   >
                     {property.locked ? (

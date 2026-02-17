@@ -494,7 +494,7 @@ const AvatarCard = ({
             <button
               onClick={handleUpdateImage}
               disabled={!imageUrl.trim()}
-              className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg font-heading font-bold uppercase tracking-wide px-6 py-2.5 text-[11px] md:text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
+              className="w-full bg-primary/20 text-primary rounded-lg font-heading font-bold uppercase tracking-wide px-6 py-2.5 text-[11px] md:text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-2 touch-manipulation"
             >
               📤 Update Profile Picture
             </button>

@@ -162,7 +162,7 @@ export default function Armour() {
                       type="button"
                       onClick={() => equip(o.level)}
                       disabled={equippingLevel != null}
-                      className="bg-primary text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-widest transition-smooth gold-glow disabled:opacity-50"
+                      className="bg-primary/20 text-primary rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-widest border border-primary/40 hover:bg-primary/30 transition-smooth disabled:opacity-50 font-heading"
                       data-testid={`armour-equip-${o.level}`}
                     >
                       {equippingLevel === o.level ? '...' : 'Equip'}
@@ -172,7 +172,7 @@ export default function Armour() {
                       type="button"
                       onClick={() => buy(o.level)}
                       disabled={buyingLevel != null}
-                      className="bg-primary text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-widest transition-smooth gold-glow disabled:opacity-50"
+                      className="bg-primary/20 text-primary rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-widest border border-primary/40 hover:bg-primary/30 transition-smooth disabled:opacity-50 font-heading"
                       data-testid={`armour-buy-${o.level}`}
                     >
                       {buyingLevel === o.level ? '...' : 'Buy'}

@@ -207,7 +207,7 @@ export default function Weapons() {
                         type="button"
                         onClick={() => equipWeapon(w.id)}
                         disabled={buyingId != null}
-                        className="bg-primary text-primaryForeground hover:opacity-90 rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-widest transition-smooth gold-glow disabled:opacity-50"
+                        className="bg-primary/20 text-primary rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-widest border border-primary/40 hover:bg-primary/30 transition-smooth disabled:opacity-50 font-heading"
                         data-testid={`equip-weapon-${w.id}`}
                       >
                         {buyingId === w.id ? '...' : 'Equip'}
@@ -220,7 +220,7 @@ export default function Weapons() {
                       disabled={buyingId != null}
                       className={`rounded-sm px-3 py-1.5 text-xs font-bold uppercase tracking-widest transition-smooth disabled:opacity-50 ${
                         usingPoints
-                          ? 'bg-primary text-primaryForeground hover:opacity-90 gold-glow'
+                          ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                           : 'bg-secondary border border-primary text-primary hover:bg-primary hover:text-primaryForeground'
                       }`}
                       data-testid={`buy-weapon-${w.id}`}

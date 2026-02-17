@@ -234,7 +234,7 @@ const FindUserCard = ({
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+        className="w-full bg-primary/20 text-primary rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="search-target-button"
       >
         {loading ? '⏳ Searching...' : '🔍 Start Search'}
@@ -688,7 +688,7 @@ const CalcModal = ({
             type="button"
             onClick={onCalculate}
             disabled={calcLoading || !calcTarget.trim()}
-            className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm shadow-lg shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+            className="w-full bg-primary/20 text-primary rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
             data-testid="bullet-calc-run"
           >
             {calcLoading ? '⏳ Calculating...' : '🔢 Calculate Bullets'}

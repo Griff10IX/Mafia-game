@@ -239,7 +239,7 @@ export default function QuickTrade() {
             <button
               onClick={handleCreateSellOffer}
               disabled={!sellPoints || !sellCost}
-              className="w-full px-4 py-2 rounded bg-primary text-primaryForeground text-xs font-heading font-bold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Add ${sellCost ? formatNumber(sellCost) : '0'}
               {sellPoints && <span className="text-[10px] opacity-90 ml-1">({formatNumber(sellAfterFee)} after fee)</span>}
@@ -302,7 +302,7 @@ export default function QuickTrade() {
             <button
               onClick={handleCreateBuyOffer}
               disabled={!buyPoints || !buyOffer}
-              className="w-full px-4 py-2 rounded bg-primary text-primaryForeground text-xs font-heading font-bold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Add ${buyOffer ? formatNumber(buyOffer) : '0'}
               {buyPoints && <span className="text-[10px] opacity-90 ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
@@ -379,7 +379,7 @@ export default function QuickTrade() {
                                     Cancel
                                   </button>
                                 ) : (
-                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'sell')} className="px-2.5 py-1 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90 whitespace-nowrap">
+                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'sell')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
                                     Accept
                                   </button>
                                 )
@@ -469,7 +469,7 @@ export default function QuickTrade() {
                                     Cancel
                                   </button>
                                 ) : (
-                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'buy')} className="px-2.5 py-1 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90 whitespace-nowrap">
+                                  <button key={idIdx} onClick={() => handleAcceptOffer(id, 'buy')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
                                     Accept
                                   </button>
                                 )
@@ -531,7 +531,7 @@ export default function QuickTrade() {
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.owner}</td>
                     <td className="px-4 py-2 text-right font-heading text-xs text-primary font-bold">{prop.points?.toLocaleString()}</td>
                     <td className="px-4 py-2 text-center">
-                      <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="px-2.5 py-1 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90">
+                      <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
                         Buy
                       </button>
                     </td>
@@ -559,7 +559,7 @@ export default function QuickTrade() {
                     <div>Location: <span className="text-foreground">{prop.location}</span></div>
                     <div>Owner: <span className="text-foreground">{prop.owner}</span></div>
                   </div>
-                  <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="w-full mt-2 px-3 py-1.5 rounded bg-primary text-primaryForeground text-[10px] font-heading font-bold hover:bg-primary/90">
+                  <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="w-full mt-2 px-3 py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
                     Buy Property
                   </button>
                 </div>

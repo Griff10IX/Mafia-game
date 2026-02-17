@@ -42,7 +42,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
               <div
                 className={`flex items-center justify-center w-8 h-8 rounded-sm font-heading font-bold text-sm shrink-0 ${
                   entry.rank === 1
-                    ? 'bg-primary text-primaryForeground'
+                    ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                     : entry.rank === 2
                     ? 'bg-gradient-to-b from-zinc-400 to-zinc-600 text-zinc-900'
                     : entry.rank === 3
@@ -143,7 +143,7 @@ export default function Leaderboard() {
               onClick={() => setViewMode('alive')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
                 viewMode === 'alive'
-                  ? 'bg-primary text-primaryForeground'
+                  ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                   : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
               }`}
             >
@@ -155,7 +155,7 @@ export default function Leaderboard() {
               onClick={() => setViewMode('dead')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
                 viewMode === 'dead'
-                  ? 'bg-primary text-primaryForeground'
+                  ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                   : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
               }`}
             >
@@ -174,7 +174,7 @@ export default function Leaderboard() {
                 onClick={() => setTopLimit(n)}
                 className={`px-2.5 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
                   topLimit === n
-                    ? 'bg-primary text-primaryForeground'
+                    ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                     : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
                 }`}
               >

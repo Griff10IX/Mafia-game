@@ -502,7 +502,7 @@ export default function Dice() {
         <div className="flex items-center gap-3 text-xs font-heading">
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(maxBet)}</span></span>
           {canClaim && (
-            <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase disabled:opacity-50">
+            <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
               Claim
             </button>
           )}
@@ -557,7 +557,7 @@ export default function Dice() {
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
               <input type="text" placeholder="e.g. 100000000" value={newMaxBet} onChange={(e) => setNewMaxBet(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
-              <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-primary text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase disabled:opacity-50">Set</button>
+              <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Transfer</span>
@@ -567,7 +567,7 @@ export default function Dice() {
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Sell (pts)</span>
               <input type="text" inputMode="numeric" placeholder="10000" value={sellPoints} onChange={(e) => setSellPoints(e.target.value)} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
-              <button onClick={handleSellOnTrade} disabled={ownerLoading} className="bg-primary text-primaryForeground rounded px-2 py-1 text-[10px] font-bold uppercase disabled:opacity-50">List</button>
+              <button onClick={handleSellOnTrade} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">List</button>
             </div>
             <div className="flex justify-end">
               <button onClick={handleRelinquish} disabled={ownerLoading} className="text-[10px] text-red-400 hover:text-red-300 font-heading">Relinquish</button>

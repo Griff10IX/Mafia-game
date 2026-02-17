@@ -6,8 +6,8 @@
 /** Hex colour presets: { id, name, primary, primaryBright, primaryDark, foregroundOnPrimary } */
 export const THEME_COLOURS = [
   { id: 'gold', name: 'Gold', primary: '#d4af37', primaryBright: '#e6c229', primaryDark: '#b8860b', foregroundOnPrimary: '#ffffff' },
-  /* Button default: vertical gold gradient (light top → dark olive bottom), bright border, light embossed text (Assign reference) */
-  { id: 'dark-gold', name: 'Dark Gold', stops: ['#FFD777', '#E8C55E', '#967B2C', '#7A6422'], primary: '#967B2C', primaryBright: '#DCB450', primaryDark: '#7A6422', foregroundOnPrimary: '#F5E5C0' },
+  /* Button default: solid dark olive fill, bright gold border, gold-to-orange gradient text (Assign reference) */
+  { id: 'dark-gold', name: 'Dark Gold', stops: ['#61562C', '#61562C', '#61562C', '#61562C'], primary: '#61562C', primaryBright: '#DCB450', primaryDark: '#4a4522', foregroundOnPrimary: '#F0C864', foregroundShadow: '#B48C46' },
   { id: 'amber', name: 'Amber', primary: '#f59e0b', primaryBright: '#fbbf24', primaryDark: '#d97706', foregroundOnPrimary: '#000000' },
   { id: 'yellow', name: 'Yellow', primary: '#eab308', primaryBright: '#facc15', primaryDark: '#ca8a04', foregroundOnPrimary: '#000000' },
   { id: 'orange', name: 'Orange', primary: '#ea580c', primaryBright: '#f97316', primaryDark: '#c2410c', foregroundOnPrimary: '#ffffff' },

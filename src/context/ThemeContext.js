@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { getThemeColour, getThemeTexture, getThemeFont, getThemeButtonStyle, getThemeWritingColour, getThemeTextStyle, DEFAULT_COLOUR_ID, DEFAULT_BUTTON_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID } from '../constants/themes';
+import { getThemeColour, getThemeTexture, getThemeFont, getThemeButtonStyle, getThemeWritingColour, getThemeTextStyle, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID } from '../constants/themes';
 import api from '../utils/api';
 
 const STORAGE_KEY_COLOUR = 'app_theme_colour';
@@ -143,6 +143,11 @@ function applyButtonColourToDocument(buttonColour) {
   const fgIsWhite = buttonColour.foregroundOnPrimary.toLowerCase() === '#ffffff' || buttonColour.foregroundOnPrimary.toLowerCase() === '#fff';
   root.style.setProperty('--button-foreground', fgIsWhite ? '0 0% 100%' : '0 0% 0%');
   root.style.setProperty('--noir-button-foreground', buttonColour.foregroundOnPrimary);
+  if (buttonColour.foregroundShadow) {
+    root.style.setProperty('--noir-button-text-shadow', buttonColour.foregroundShadow);
+  } else {
+    root.style.removeProperty('--noir-button-text-shadow');
+  }
 
   if (stops) {
     const g1 = stops[0];
@@ -235,11 +240,11 @@ export function ThemeProvider({ children }) {
   const [buttonColourId, setButtonColourIdState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEY_BUTTON);
-      if (v === null) return DEFAULT_BUTTON_COLOUR_ID;
+      if (v === null) return null;
       if (v === '') return null;
       return v;
     } catch {
-      return DEFAULT_BUTTON_COLOUR_ID;
+      return null;
     }
   });
   const [accentLineColourId, setAccentLineColourIdState] = useState(() => {
@@ -315,7 +320,9 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     const colour = getResolvedColour(colourId, customThemes);
     applyColourToDocument(colour);
-    const buttonColour = buttonColourId ? getResolvedColour(buttonColourId, customThemes) : colour;
+    const buttonColour = buttonColourId
+      ? getResolvedColour(buttonColourId, customThemes)
+      : { ...colour, stops: [colour.primary, colour.primary, colour.primary, colour.primary] };
     applyButtonColourToDocument(buttonColour);
     const accentLineColour = accentLineColourId ? getResolvedColour(accentLineColourId, customThemes) : colour;
     applyAccentLineToDocument(accentLineColour);

@@ -156,7 +156,7 @@ const InterestBankCard = ({
       <button
         type="button"
         onClick={onDeposit}
-        className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg font-heading font-bold uppercase tracking-wide py-3 transition-all shadow-lg shadow-primary/20 touch-manipulation"
+        className="w-full bg-primary/20 text-primary rounded-lg font-heading font-bold uppercase tracking-wide py-3 border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation"
       >
         💰 Deposit
       </button>
@@ -213,7 +213,7 @@ const SwissBankCard = ({
         <button
           type="button"
           onClick={onDeposit}
-          className="bg-primary text-primaryForeground hover:opacity-90 rounded-md font-heading font-bold uppercase tracking-wide py-2.5 text-sm transition-all touch-manipulation"
+          className="bg-primary/20 text-primary rounded-md font-heading font-bold uppercase tracking-wide py-2.5 text-sm border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation"
         >
           Deposit
         </button>
@@ -270,7 +270,7 @@ const DepositCard = ({ deposit, onClaim, delay = 0 }) => {
             type="button"
             onClick={() => onClaim(deposit.id)}
             disabled={!canClaim}
-            className="bg-primary text-primaryForeground hover:opacity-90 rounded-md px-4 py-2 text-sm font-bold uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+            className="bg-primary/20 text-primary rounded-md px-4 py-2 text-sm font-bold uppercase border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation font-heading"
           >
             Claim
           </button>
@@ -328,7 +328,7 @@ const SendMoneyCard = ({
       <button
         type="button"
         onClick={onSend}
-        className="w-full bg-primary text-primaryForeground hover:opacity-90 rounded-lg font-heading font-bold uppercase tracking-wide py-3 transition-all shadow-lg shadow-primary/20 touch-manipulation"
+        className="w-full bg-primary/20 text-primary rounded-lg font-heading font-bold uppercase tracking-wide py-3 border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation"
       >
         📤 Send
       </button>

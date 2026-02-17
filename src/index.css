@@ -139,7 +139,7 @@ a.from-primary {
   color: var(--noir-button-foreground) !important;
   border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5)) !important;
   border-radius: 2px !important;
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
+  text-shadow: 0 1px 0 var(--noir-button-text-shadow, rgba(0, 0, 0, 0.2));
 }
 
 /* Glossy button style (when user selects Glossy in theme) */

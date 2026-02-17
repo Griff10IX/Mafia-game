@@ -374,7 +374,7 @@ export default function ArmourWeapons() {
                               <button
                                 onClick={() => equipWeapon(w.id)}
                                 disabled={buyingId != null}
-                                className="bg-primary text-primaryForeground rounded px-2 py-1 text-[9px] font-bold uppercase disabled:opacity-50"
+                                className="bg-primary/20 text-primary rounded px-2 py-1 text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading"
                               >
                                 {buyingId === w.id ? '...' : 'Equip'}
                               </button>
@@ -394,7 +394,7 @@ export default function ArmourWeapons() {
                             title={w.locked ? `Requires ${w.required_weapon_name ?? 'previous weapon'}` : !canBuy ? 'Not enough cash or points' : ''}
                             className={`rounded px-2 py-1 text-[9px] font-bold uppercase border ${
                               canBuy && buyingId == null
-                                ? 'bg-primary text-primaryForeground'
+                                ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                                 : 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 opacity-60 cursor-not-allowed'
                             } disabled:opacity-60 disabled:cursor-not-allowed`}
                           >
@@ -468,7 +468,7 @@ export default function ArmourWeapons() {
                             <button
                               onClick={() => equipArmour(o.level)}
                               disabled={equippingLevel != null}
-                              className="bg-primary text-primaryForeground rounded px-2 py-1 text-[9px] font-bold uppercase disabled:opacity-50"
+                              className="bg-primary/20 text-primary rounded px-2 py-1 text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading"
                             >
                               {equippingLevel === o.level ? '...' : 'Equip'}
                             </button>
@@ -485,7 +485,7 @@ export default function ArmourWeapons() {
                             title={o.locked ? `Requires ${o.required_armour_name ?? 'previous armour'}` : !o.affordable ? 'Not enough cash or points' : ''}
                             className={`rounded px-2 py-1 text-[9px] font-bold uppercase border ${
                               o.canBuy && buyingLevel == null
-                                ? 'bg-primary text-primaryForeground'
+                                ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                                 : 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 opacity-60 cursor-not-allowed'
                             } disabled:opacity-60 disabled:cursor-not-allowed`}
                           >

@@ -617,7 +617,7 @@ export default function Admin() {
   );
 
   const BtnPrimary = ({ children, ...props }) => (
-    <button {...props} className="bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide transition-all disabled:opacity-50 touch-manipulation">
+    <button {...props} className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 touch-manipulation font-heading">
       {children}
     </button>
   );

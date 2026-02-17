@@ -1,6 +1,6 @@
 /** Racket/family UI accent – original gold theme only */
 export const RACKET_ACCENT_STYLES = {
-  gold: { bar: 'bg-primary', text: 'text-primary', btn: 'bg-primary text-primaryForeground hover:bg-primary/90 border-primary/50', bannerBg: 'bg-primary/10', bannerText: 'text-primary', border: 'border-primary/30', tabActive: 'text-primary border-primary bg-primary/5' },
+  gold: { bar: 'bg-primary', text: 'text-primary', btn: 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30', bannerBg: 'bg-primary/10', bannerText: 'text-primary', border: 'border-primary/30', tabActive: 'text-primary border-primary bg-primary/5' },
 };
 export const getRacketAccent = () => RACKET_ACCENT_STYLES.gold;
 

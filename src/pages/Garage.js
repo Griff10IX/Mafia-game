@@ -203,7 +203,7 @@ const ActionsBar = ({
               className={`rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide border inline-flex items-center gap-1.5 touch-manipulation transition-all ${
                 meltOnCooldown
                   ? 'bg-secondary/50 text-mutedForeground border-border cursor-not-allowed'
-                  : 'bg-primary text-primaryForeground hover:opacity-90 shadow shadow-primary/20 active:scale-95'
+                  : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow active:scale-95'
               }`}
             >
               <Flame size={12} />
@@ -368,7 +368,7 @@ const SettingsModal = ({
             <button
               type="button"
               onClick={onSave}
-              className="flex-1 bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs transition-all active:scale-95"
+              className="flex-1 bg-primary/20 text-primary rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-primary/40 hover:bg-primary/30 transition-all active:scale-95"
             >
               Save
             </button>
@@ -442,7 +442,7 @@ const CustomCarModal = ({
               type="button"
               onClick={onSave}
               disabled={saving}
-              className="flex-1 bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs transition-all disabled:opacity-50 active:scale-95"
+              className="flex-1 bg-primary/20 text-primary rounded px-3 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 active:scale-95"
             >
               {saving ? 'Saving...' : 'Save'}
             </button>

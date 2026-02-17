@@ -67,7 +67,7 @@ const StoreCard = ({ title, Icon, desc, price, owned, onBuy, loading, disabled, 
           type="button"
           onClick={onBuy}
           disabled={loading || disabled}
-          className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
+          className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
         >
           {loading ? '...' : `${price} pts`}
         </button>
@@ -219,7 +219,7 @@ export default function Store() {
               >
                 <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                 {pkg.popular && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 z-10 bg-primary text-primaryForeground px-2 py-0.5 rounded-b text-[9px] font-heading font-bold">Popular</span>
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 z-10 bg-primary/20 text-primary border border-primary/40 px-2 py-0.5 rounded-b text-[9px] font-heading font-bold">Popular</span>
                 )}
                 <div className="p-3 text-center">
                   <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{pkg.name}</p>
@@ -232,7 +232,7 @@ export default function Store() {
                     onClick={() => handlePurchase(pkg.id)}
                     data-testid={`buy-package-${pkg.id}`}
                     disabled={loading}
-                    className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
+                    className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
                   >
                     {loading ? '...' : 'Buy'}
                   </button>
@@ -299,7 +299,7 @@ export default function Store() {
                       apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
                     }}
                     disabled={!user || user.points < 500 || !customCarName.trim()}
-                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
+                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
                   >
                     500 pts
                   </button>
@@ -326,7 +326,7 @@ export default function Store() {
                   type="button"
                   onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
                   disabled={!user || user.points < pack.cost}
-                  className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
+                  className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
                 >
                   Buy
                 </button>
@@ -346,7 +346,7 @@ export default function Store() {
               <button
                 type="button"
                 onClick={() => apiBuy('/bodyguards/slot/buy', {}, 'Slot purchased')}
-                className="py-1.5 px-3 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90"
+                className="py-1.5 px-3 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30"
               >
                 Buy slot ({getSlotCost(user.bodyguard_slots + 1)} pts)
               </button>
@@ -377,7 +377,7 @@ export default function Store() {
                       <button
                         type="button"
                         onClick={() => apiBuy('/bodyguards/hire', { slot: bg.slot_number, is_robot: true }, 'Hired')}
-                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90"
+                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30"
                       >
                         Robot ({getHireCost(bg.slot_number, true)})
                       </button>

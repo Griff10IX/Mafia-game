@@ -222,7 +222,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
           <button
             type="button"
             onClick={() => onCommit(crime.id)}
-            className="bg-primary text-primaryForeground hover:opacity-90 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide shadow shadow-primary/20 transition-all touch-manipulation"
+            className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading"
             data-testid={`commit-crime-${crime.id}`}
           >
             💰 Commit

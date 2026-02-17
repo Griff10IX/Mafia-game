@@ -142,7 +142,7 @@ export default function InboxChat() {
               <div
                 className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-4 py-2.5 ${
                   msg.from_me
-                    ? 'bg-primary text-primaryForeground rounded-br-md'
+                    ? 'bg-primary/20 text-primary border border-primary/40 rounded-br-md'
                     : `${styles.panel} border border-primary/20 text-foreground rounded-bl-md`
                 }`}
               >
@@ -204,7 +204,7 @@ export default function InboxChat() {
           <button
             type="submit"
             disabled={sending || !replyText.trim()}
-            className="shrink-0 w-10 h-10 rounded-full bg-primary text-primaryForeground flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+            className="shrink-0 w-10 h-10 rounded-full bg-primary/20 text-primary border border-primary/40 flex items-center justify-center hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-heading"
             aria-label="Send"
           >
             <Send size={18} />
