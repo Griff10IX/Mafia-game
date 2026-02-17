@@ -78,8 +78,10 @@ function PokerCard({ card, held, onToggleHold, canHold, index, dealing, revealed
         onClick={canHold ? onToggleHold : undefined}
         className={`relative rounded-lg overflow-hidden transition-all ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
         style={{
-          width: 68,
-          height: 96,
+          width: 'clamp(52px, 18vw, 68px)',
+          height: 'clamp(72px, 24vw, 96px)',
+          minWidth: 52,
+          minHeight: 72,
           boxShadow: held
             ? '0 0 0 3px #d4af37, 0 6px 20px rgba(212,175,55,0.4)'
             : '0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)',
@@ -284,16 +286,17 @@ export default function VideoPoker() {
       setDealing(true);
       setTimeout(() => setDealing(false), 600);
       setGame(data);
+      const handLabel = data.hand_name || (data.hand_key === 'nothing' ? 'Nothing' : 'Hand');
       if (data.hand_key && data.hand_key !== 'nothing') {
         if (data.multiplier > 1) {
-          toast.success(`${data.hand_name}! Won ${formatMoney(data.payout - data.bet)}`);
+          toast.success(`${handLabel}. Won ${formatMoney(data.payout - data.bet)}`);
           setShowWin(true);
           setTimeout(() => setShowWin(false), 3000);
         } else {
-          toast.info(`${data.hand_name} — Bet returned`);
+          toast.info(`${handLabel}. Bet returned`);
         }
       } else {
-        toast.error(`Nothing. Lost ${formatMoney(data.bet)}`);
+        toast.error(`${handLabel}. Lost ${formatMoney(data.bet)}`);
       }
       refreshUser();
       fetchHistory();
@@ -487,8 +490,8 @@ export default function VideoPoker() {
                   )}
                 </div>
 
-                {/* Cards */}
-                <div className="flex justify-center gap-2 sm:gap-3">
+                {/* Cards — responsive so 5 cards + gaps fit on narrow mobile */}
+                <div className="flex justify-center gap-1.5 sm:gap-3 max-w-full overflow-hidden px-0.5">
                   {(game.hand || []).map((card, i) => (
                     <PokerCard
                       key={`${card.suit}-${card.value}-${i}`}
