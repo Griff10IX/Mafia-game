@@ -4,7 +4,7 @@ import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
 const RACE_DURATION_MS = 5000;
-const HORSE_COLORS = ['#dc2626','#2563eb','#16a34a','#eab308','#9333ea','#ec4899','#f97316','#14b8a6'];
+const HORSE_COLORS = ['#1a5c2a','#dc2626','#2563eb','#16a34a','#6b7280','#ec4899','#18181b'];
 
 function formatMoney(n) {
   const num = Number(n ?? 0);

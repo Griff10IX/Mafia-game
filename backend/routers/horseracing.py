@@ -24,12 +24,13 @@ HORSERACING_CLAIM_COST = 500_000_000  # $500M to claim track (per city)
 HORSERACING_ABSOLUTE_MAX_BET = 50_000_000  # owner can set max_bet up to this
 HORSERACING_HOUSE_EDGE = 0.05
 HORSERACING_HORSES = [
-    {"id": 1, "name": "Thunder Bolt", "odds": 2},
-    {"id": 2, "name": "Midnight Runner", "odds": 3},
+    {"id": 1, "name": "Thunder Bolt", "odds": 1},
+    {"id": 2, "name": "Midnight Runner", "odds": 2},
     {"id": 3, "name": "Golden Star", "odds": 4},
-    {"id": 4, "name": "Shadow Fox", "odds": 5},
-    {"id": 5, "name": "Storm Chaser", "odds": 6},
-    {"id": 6, "name": "Dark Horse", "odds": 8},
+    {"id": 4, "name": "Shadow Fox", "odds": 6},
+    {"id": 5, "name": "Storm Chaser", "odds": 12},
+    {"id": 6, "name": "Dark Horse", "odds": 20},
+    {"id": 7, "name": "Wild Card", "odds": 40},
 ]
 HORSERACING_HISTORY_MAX = 20
 
