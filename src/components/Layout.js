@@ -157,9 +157,13 @@ export default function Layout({ children }) {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
+  const [userSearchExpanded, setUserSearchExpanded] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const userSearchRef = useRef(null);
+  const userSearchInputRef = useRef(null);
   const userSearchDebounceRef = useRef(null);
+  const userSearchQueryRef = useRef('');
+  userSearchQueryRef.current = (userSearchQuery || '').trim();
   const notificationPanelRef = useRef(null);
   const notificationPanelOpenRef = useRef(false);
   notificationPanelOpenRef.current = notificationPanelOpen;
@@ -212,6 +216,7 @@ export default function Layout({ children }) {
     const handleClickOutside = (e) => {
       if (userSearchRef.current && !userSearchRef.current.contains(e.target)) {
         setUserSearchOpen(false);
+        setUserSearchExpanded(false);
       }
     };
     document.addEventListener('click', handleClickOutside);
@@ -227,13 +232,21 @@ export default function Layout({ children }) {
     if (userSearchDebounceRef.current) clearTimeout(userSearchDebounceRef.current);
     userSearchDebounceRef.current = setTimeout(async () => {
       setUserSearchLoading(true);
+      setUserSearchResults([]); // clear previous results so we don't show stale list while loading
       try {
         const res = await api.get('/users/search', { params: { q, limit: 15 } });
-        setUserSearchResults(res.data?.users || []);
+        // Only apply results if the query hasn't changed (avoid stale response overwriting "No users found")
+        if (userSearchQueryRef.current === q) {
+          setUserSearchResults(res.data?.users || []);
+        }
       } catch {
-        setUserSearchResults([]);
+        if (userSearchQueryRef.current === q) {
+          setUserSearchResults([]);
+        }
       } finally {
-        setUserSearchLoading(false);
+        if (userSearchQueryRef.current === q) {
+          setUserSearchLoading(false);
+        }
       }
     }, 280);
     return () => {
@@ -1082,21 +1095,38 @@ export default function Layout({ children }) {
           };
           return (
             <div className="flex items-center gap-1.5 shrink-0 flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible gap-2 md:gap-1.5 -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0">
-              {/* Global user search: find any user (online, offline, dead) */}
-              <div className="relative shrink-0 min-w-[120px] max-w-[180px]" ref={userSearchRef}>
-                <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-1.5 py-0.5">
-                  <Search size={12} className="text-primary/50 shrink-0" aria-hidden />
-                  <input
-                    type="text"
-                    value={userSearchQuery}
-                    onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
-                    onFocus={() => setUserSearchOpen(true)}
-                    placeholder="Search user..."
-                    className="flex-1 min-w-0 py-0.5 bg-transparent text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0"
-                    data-testid="topbar-user-search"
-                  />
-                </div>
-                {userSearchOpen && (userSearchQuery.trim() || userSearchResults.length > 0) && (
+              {/* Global user search: click icon to reveal search bar */}
+              <div className="relative shrink-0" ref={userSearchRef}>
+                {!userSearchExpanded ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setUserSearchExpanded(true);
+                      setUserSearchOpen(true);
+                      setTimeout(() => userSearchInputRef.current?.focus(), 0);
+                    }}
+                    className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors"
+                    aria-label="Search user"
+                    title="Search user"
+                  >
+                    <Search size={12} strokeWidth={2} />
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-1.5 py-0.5 min-w-[120px] max-w-[180px]">
+                    <Search size={12} className="text-primary/50 shrink-0" aria-hidden />
+                    <input
+                      ref={userSearchInputRef}
+                      type="text"
+                      value={userSearchQuery}
+                      onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
+                      onFocus={() => setUserSearchOpen(true)}
+                      placeholder="Search user..."
+                      className="flex-1 min-w-0 py-0.5 bg-transparent text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0"
+                      data-testid="topbar-user-search"
+                    />
+                  </div>
+                )}
+                {userSearchExpanded && userSearchOpen && (
                   <div
                     className="absolute top-full left-0 mt-1 w-[260px] max-h-[280px] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
                     style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
@@ -1116,7 +1146,7 @@ export default function Layout({ children }) {
                           <Link
                             key={u.username}
                             to={`/profile/${encodeURIComponent(u.username)}`}
-                            onClick={() => { setUserSearchOpen(false); setUserSearchQuery(''); setUserSearchResults([]); }}
+                            onClick={() => { setUserSearchOpen(false); setUserSearchExpanded(false); setUserSearchQuery(''); setUserSearchResults([]); }}
                             className="flex items-center justify-between gap-2 w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
                             style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
                           >
