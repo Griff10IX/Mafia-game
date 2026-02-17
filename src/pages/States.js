@@ -73,31 +73,31 @@ const CityCard = ({
   const highestBet = games.length ? Math.max(...games.map(g => getEffectiveMaxBet(g, city))) : 0;
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 st-card st-corner st-fade-in`}>
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-corner st-fade-in`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       {/* Header - Always visible */}
       <button
         onClick={onToggle}
-        className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+        className="w-full px-2 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
       >
-        <div className="flex items-center gap-2">
-          <MapPin size={14} className="text-primary" />
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{city}</h2>
+        <div className="flex items-center gap-1">
+          <MapPin size={10} className="text-primary" />
+          <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">{city}</h2>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-[10px]">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 text-[9px]">
             <span className="text-mutedForeground">{ownedCount}/{games.length} owned</span>
             <span className="text-primary font-bold">Max: {formatMaxBet(highestBet)}</span>
           </div>
-          {expanded ? <ChevronDown size={14} className="text-primary" /> : <ChevronRight size={14} className="text-primary" />}
+          {expanded ? <ChevronDown size={10} className="text-primary" /> : <ChevronRight size={10} className="text-primary" />}
         </div>
       </button>
 
       {expanded && (
         <>
           {/* Casino Games */}
-          <div className="p-2 space-y-1">
-            <div className="text-[9px] text-mutedForeground uppercase tracking-wider px-1 mb-1">🎰 Casinos</div>
+          <div className="p-1.5 space-y-0.5">
+            <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5">🎰 Casinos</div>
             {games.map((game) => {
               const Icon = GAME_ICONS[game.id] || Dice5;
               const color = GAME_COLORS[game.id] || 'text-primary';
@@ -107,21 +107,21 @@ const CityCard = ({
               return (
                 <div
                   key={game.id}
-                  className={`flex items-center justify-between px-2 py-1.5 rounded transition-colors ${isTop ? 'bg-primary/10' : 'bg-zinc-800/30'}`}
+                  className={`flex items-center justify-between px-1.5 py-1 rounded transition-colors ${isTop ? 'bg-primary/10' : 'bg-zinc-800/30'}`}
                 >
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Icon size={12} className={color} />
-                    <span className="text-xs font-heading font-bold text-foreground">{game.name}</span>
+                  <div className="flex items-center gap-1 flex-wrap min-w-0">
+                    <Icon size={10} className={color} />
+                    <span className="text-[10px] font-heading font-bold text-foreground">{game.name}</span>
                     {owner ? (
-                      <span className="text-[10px] text-mutedForeground">· <Link to={`/profile/${encodeURIComponent(owner.username)}`} className="text-primary hover:underline font-heading">{owner.username}</Link></span>
+                      <span className="text-[9px] text-mutedForeground">· <Link to={`/profile/${encodeURIComponent(owner.username)}`} className="text-primary hover:underline font-heading">{owner.username}</Link></span>
                     ) : (
-                      <span className="text-[10px] text-zinc-500">Unclaimed</span>
+                      <span className="text-[9px] text-zinc-500">Unclaimed</span>
                     )}
                     {(game.id === 'dice' || game.id === 'blackjack') && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
-                      <span className="text-[9px] text-amber-400/90">Buy-back: {Number(owner.buy_back_reward).toLocaleString()} pts</span>
+                      <span className="text-[8px] text-amber-400/90">Buy-back: {Number(owner.buy_back_reward).toLocaleString()} pts</span>
                     )}
                   </div>
-                  <span className={`text-xs font-heading font-bold tabular-nums shrink-0 ${isTop ? 'text-primary' : 'text-foreground'}`}>
+                  <span className={`text-[10px] font-heading font-bold tabular-nums shrink-0 ${isTop ? 'text-primary' : 'text-foreground'}`}>
                     {formatMaxBet(effectiveBet)}
                   </span>
                 </div>
@@ -130,16 +130,16 @@ const CityCard = ({
           </div>
 
           {/* Properties */}
-          <div className="border-t border-zinc-700/30 p-2 space-y-1">
-            <div className="text-[9px] text-mutedForeground uppercase tracking-wider px-1 mb-1">🏭 Properties</div>
+          <div className="border-t border-zinc-700/30 p-1.5 space-y-0.5">
+            <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5">🏭 Properties</div>
             
             {/* Bullet Factory */}
-            <div className="flex items-center justify-between px-2 py-1.5 bg-zinc-800/30 rounded">
-              <div className="flex items-center gap-2">
-                <Factory size={12} className="text-orange-400" />
-                <span className="text-xs font-heading text-foreground">Bullet Factory</span>
+            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded">
+              <div className="flex items-center gap-1">
+                <Factory size={10} className="text-orange-400" />
+                <span className="text-[10px] font-heading text-foreground">Bullet Factory</span>
               </div>
-              <div className="flex items-center gap-2 text-[10px]">
+              <div className="flex items-center gap-1 text-[9px]">
                 {bf?.owner_username ? (
                   <>
                     <Link to={`/profile/${encodeURIComponent(bf.owner_username)}`} className="text-primary hover:underline font-heading text-mutedForeground hover:text-primary">{bf.owner_username}</Link>
@@ -153,32 +153,32 @@ const CityCard = ({
             </div>
             
             {/* Airport */}
-            <div className="flex items-center justify-between px-2 py-1.5 bg-zinc-800/30 rounded">
-              <div className="flex items-center gap-2">
-                <Plane size={12} className="text-sky-400" />
-                <span className="text-xs font-heading text-foreground">Airport</span>
+            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded">
+              <div className="flex items-center gap-1">
+                <Plane size={10} className="text-sky-400" />
+                <span className="text-[10px] font-heading text-foreground">Airport</span>
               </div>
-              <div className="flex items-center gap-2 text-[10px]">
+              <div className="flex items-center gap-1 text-[9px]">
                 {ap?.owner_username && ap.owner_username !== 'Unclaimed' ? (
                   <>
                     <Link to={`/profile/${encodeURIComponent(ap.owner_username)}`} className="text-primary hover:underline font-heading text-mutedForeground hover:text-primary">{ap.owner_username}</Link>
                     <span className="text-primary font-bold">{ap.price_per_travel} pts</span>
-                    <span className="text-[9px] text-amber-400/90" title="Airport owners get 5% off at all airports">5% off for owners</span>
+                    <span className="text-[8px] text-amber-400/90" title="Airport owners get 5% off at all airports">5% off</span>
                   </>
                 ) : canClaimAirport && onClaimAirport ? (
                   <button
                     type="button"
                     onClick={() => onClaimAirport(city)}
                     disabled={claimingCity === city}
-                    className="px-2 py-0.5 rounded bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
+                    className="px-1.5 py-0.5 rounded bg-primary/20 border border-primary/50 text-primary text-[9px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
                   >
                     {claimingCity === city ? '...' : 'Take over'}
                   </button>
                 ) : (
-                  <span className="text-[10px]">
+                  <span className="text-[9px]">
                     <span className="text-zinc-500">Unclaimed</span>
                     {airportUnclaimed && userCurrentCity && userCurrentCity !== city && (
-                      <span className="text-zinc-600 ml-1">(Must be in {city})</span>
+                      <span className="text-zinc-600 ml-0.5">(Must be in {city})</span>
                     )}
                   </span>
                 )}
@@ -186,15 +186,15 @@ const CityCard = ({
             </div>
             
             {/* Armoury */}
-            <div className="flex items-center justify-between px-2 py-1.5 bg-zinc-800/20 rounded opacity-60">
-              <div className="flex items-center gap-2">
-                <Shield size={12} className="text-zinc-400" />
-                <span className="text-xs font-heading text-zinc-400">Armoury</span>
+            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/20 rounded opacity-60">
+              <div className="flex items-center gap-1">
+                <Shield size={10} className="text-zinc-400" />
+                <span className="text-[10px] font-heading text-zinc-400">Armoury</span>
               </div>
-              <span className="text-[10px] text-amber-400">Coming soon</span>
+              <span className="text-[9px] text-amber-400">Coming soon</span>
             </div>
           </div>
-          <div className="st-art-line text-primary mx-4" />
+          <div className="st-art-line text-primary mx-2.5" />
         </>
       )}
     </div>
@@ -214,22 +214,22 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
   const ownedAirports = airports.filter(a => a.owner_username).length;
 
   return (
-    <div className="grid grid-cols-4 gap-2">
-      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in">
-        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Cities</div>
-        <div className="text-lg font-heading font-bold text-foreground">{cities.length}</div>
+    <div className="grid grid-cols-4 gap-1.5">
+      <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in">
+        <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Cities</div>
+        <div className="text-sm font-heading font-bold text-foreground">{cities.length}</div>
       </div>
-      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.03s' }}>
-        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Casinos</div>
-        <div className="text-lg font-heading font-bold text-foreground">{ownedCasinos}/{totalCasinos}</div>
+      <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.03s' }}>
+        <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Casinos</div>
+        <div className="text-sm font-heading font-bold text-foreground">{ownedCasinos}/{totalCasinos}</div>
       </div>
-      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.06s' }}>
-        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Factories</div>
-        <div className="text-lg font-heading font-bold text-foreground">{ownedFactories}/{cities.length}</div>
+      <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.06s' }}>
+        <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Factories</div>
+        <div className="text-sm font-heading font-bold text-foreground">{ownedFactories}/{cities.length}</div>
       </div>
-      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.09s' }}>
-        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Airports</div>
-        <div className="text-lg font-heading font-bold text-foreground">{ownedAirports}/{cities.length}</div>
+      <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.09s' }}>
+        <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Airports</div>
+        <div className="text-sm font-heading font-bold text-foreground">{ownedAirports}/{cities.length}</div>
       </div>
     </div>
   );
@@ -370,12 +370,12 @@ export default function States() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent}`}>
         <style>{STATES_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-          <MapPin size={28} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading states...</span>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+          <MapPin size={22} className="text-primary/40 animate-pulse" />
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading states...</span>
         </div>
       </div>
     );
@@ -383,16 +383,16 @@ export default function States() {
 
   if (cities.length === 0) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`} data-testid="states-page">
+      <div className={`space-y-2 ${styles.pageContent}`} data-testid="states-page">
         <style>{STATES_STYLES}</style>
         <div className="relative st-fade-in">
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Map</p>
-          <h1 className="text-xl font-heading font-bold text-primary uppercase">States & Cities</h1>
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Map</p>
+          <h1 className="text-base font-heading font-bold text-primary uppercase">States & Cities</h1>
         </div>
-        <div className="relative p-6 rounded-lg border border-primary/20 bg-zinc-800/30 text-center st-fade-in" style={{ animationDelay: '0.05s' }}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <p className="text-sm text-mutedForeground mb-3">Couldn&apos;t load states. Make sure you&apos;re logged in.</p>
-          <button type="button" onClick={fetchStates} className="px-4 py-2 rounded-lg bg-primary/20 border border-primary/50 text-primary text-sm font-heading uppercase hover:bg-primary/30">
+        <div className="relative p-3 rounded-md border border-primary/20 bg-zinc-800/30 text-center st-fade-in" style={{ animationDelay: '0.05s' }}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <p className="text-[11px] text-mutedForeground mb-2">Couldn&apos;t load states. Make sure you&apos;re logged in.</p>
+          <button type="button" onClick={fetchStates} className="px-2.5 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading uppercase hover:bg-primary/30">
             Retry
           </button>
         </div>
@@ -401,22 +401,22 @@ export default function States() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="states-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="states-page">
       <style>{STATES_STYLES}</style>
 
       {/* Page header */}
       <div className="relative st-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Map</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Map</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
           🗺️ States & Cities
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Travel · Casinos · Properties. Who owns what where.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Travel · Casinos · Properties. Who owns what where.</p>
       </div>
       
-      <div className="flex items-center justify-end gap-2 st-fade-in" style={{ animationDelay: '0.03s' }}>
-        <button onClick={expandAll} className="text-[10px] text-mutedForeground hover:text-foreground font-heading">Expand all</button>
-        <span className="text-zinc-600">|</span>
-        <button onClick={collapseAll} className="text-[10px] text-mutedForeground hover:text-foreground font-heading">Collapse all</button>
+      <div className="flex items-center justify-end gap-1 st-fade-in" style={{ animationDelay: '0.03s' }}>
+        <button onClick={expandAll} className="text-[9px] text-mutedForeground hover:text-foreground font-heading">Expand all</button>
+        <span className="text-zinc-600 text-[9px]">|</span>
+        <button onClick={collapseAll} className="text-[9px] text-mutedForeground hover:text-foreground font-heading">Collapse all</button>
       </div>
 
       {/* Stats Overview */}
@@ -430,12 +430,12 @@ export default function States() {
 
       {/* Destinations section */}
       <div className="st-fade-in" style={{ animationDelay: '0.06s' }}>
-        <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] mb-2">Destinations</p>
-        <div className="h-0.5 bg-gradient-to-r from-primary/40 via-primary/20 to-transparent mb-3" />
+        <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] mb-1">Destinations</p>
+        <div className="h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent mb-2" />
       </div>
 
       {/* City Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 st-fade-in" style={{ animationDelay: '0.08s' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5 st-fade-in" style={{ animationDelay: '0.08s' }}>
         {cities.map((city) => (
           <CityCard
             key={city}
@@ -456,20 +456,20 @@ export default function States() {
       </div>
 
       {/* Info */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 st-fade-in`} style={{ animationDelay: '0.1s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">ℹ️ Info</span>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">ℹ️ Info</span>
         </div>
-        <div className="p-3">
-          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Use Travel to move between cities</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Access Casino games from the Casino menu</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Highest max bets highlighted in gold</li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>HOT/COLD city events coming soon</li>
+        <div className="p-2">
+          <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading">
+            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Use Travel to move between cities</li>
+            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Access Casino games from the Casino menu</li>
+            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Highest max bets highlighted in gold</li>
+            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>HOT/COLD city events coming soon</li>
           </ul>
         </div>
-        <div className="st-art-line text-primary mx-4" />
+        <div className="st-art-line text-primary mx-2.5" />
       </div>
     </div>
   );
