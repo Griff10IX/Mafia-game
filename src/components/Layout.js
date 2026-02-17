@@ -1095,7 +1095,7 @@ export default function Layout({ children }) {
           };
           return (
             <div className="flex items-center gap-1.5 shrink-0 flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible gap-2 md:gap-1.5 -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0">
-              {/* Global user search: click icon to reveal search bar */}
+              {/* Global user search: click icon to reveal search bar — mobile-friendly touch targets */}
               <div className="relative shrink-0 z-10" ref={userSearchRef}>
                 {!userSearchExpanded ? (
                   <button
@@ -1111,15 +1111,15 @@ export default function Layout({ children }) {
                     onMouseDown={(e) => {
                       e.stopPropagation();
                     }}
-                    className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors cursor-pointer min-w-[28px] min-h-[28px]"
+                    className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation min-w-[44px] min-h-[44px] px-3 py-2 md:min-w-[28px] md:min-h-[28px] md:px-2 md:py-1"
                     aria-label="Search user"
                     title="Search user"
                   >
-                    <Search size={12} strokeWidth={2} />
+                    <Search size={18} strokeWidth={2} className="md:w-3 md:h-3" />
                   </button>
                 ) : (
-                  <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-1.5 py-0.5 min-w-[120px] max-w-[180px]">
-                    <Search size={12} className="text-primary/50 shrink-0" aria-hidden />
+                  <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5">
+                    <Search size={14} className="text-primary/50 shrink-0 md:w-3 md:h-3" aria-hidden />
                     <input
                       ref={userSearchInputRef}
                       type="text"
@@ -1127,24 +1127,25 @@ export default function Layout({ children }) {
                       onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
                       onFocus={() => setUserSearchOpen(true)}
                       placeholder="Search user..."
-                      className="flex-1 min-w-0 py-0.5 bg-transparent text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0"
+                      className="flex-1 min-w-0 py-0.5 bg-transparent font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0 text-[16px] md:text-[11px]"
                       data-testid="topbar-user-search"
+                      autoComplete="off"
                     />
                   </div>
                 )}
                 {userSearchExpanded && userSearchOpen && (
                   <div
-                    className="absolute top-full left-0 mt-1 w-[260px] max-h-[280px] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
+                    className="absolute top-full left-0 mt-1 w-[min(calc(100vw-2rem),260px)] max-w-[260px] max-h-[min(60vh,280px)] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
                     style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
                   >
-                    <div className="p-2 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-                      <p className="text-[10px] font-heading text-mutedForeground">Find any user — online, offline, or dead</p>
+                    <div className="p-2.5 border-b shrink-0 md:p-2" style={{ borderColor: 'var(--noir-border)' }}>
+                      <p className="text-xs font-heading text-mutedForeground md:text-[10px]">Find any user — online, offline, or dead</p>
                     </div>
                     <div className="flex-1 min-h-0">
                       {userSearchLoading ? (
-                        <div className="p-3 text-center text-[11px] font-heading text-mutedForeground">Searching...</div>
+                        <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">Searching...</div>
                       ) : userSearchResults.length === 0 ? (
-                        <div className="p-3 text-center text-[11px] font-heading text-mutedForeground">
+                        <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">
                           {userSearchQuery.trim().length < 1 ? 'Type to search' : 'No users found'}
                         </div>
                       ) : (
@@ -1153,14 +1154,14 @@ export default function Layout({ children }) {
                             key={u.username}
                             to={`/profile/${encodeURIComponent(u.username)}`}
                             onClick={() => { setUserSearchOpen(false); setUserSearchExpanded(false); setUserSearchQuery(''); setUserSearchResults([]); }}
-                            className="flex items-center justify-between gap-2 w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
+                            className="flex items-center justify-between gap-2 w-full text-left px-3 py-3 min-h-[44px] border-b font-heading text-sm hover:bg-noir-raised/80 active:bg-noir-raised/90 transition-colors touch-manipulation md:py-2 md:min-h-0"
                             style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
                           >
                             <span className="truncate font-semibold">{u.username}</span>
                             <div className="flex gap-1 shrink-0">
-                              {u.is_dead && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-400">Dead</span>}
-                              {u.in_jail && !u.is_dead && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-amber-500/20 text-amber-400">Jail</span>}
-                              {u.is_bodyguard && <span className="px-1 py-0.5 rounded text-[9px] font-bold bg-blue-500/20 text-blue-400">Robot</span>}
+                              {u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 md:text-[9px] md:px-1">Dead</span>}
+                              {u.in_jail && !u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 md:text-[9px] md:px-1">Jail</span>}
+                              {u.is_bodyguard && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 md:text-[9px] md:px-1">Robot</span>}
                             </div>
                           </Link>
                         ))
