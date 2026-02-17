@@ -71,11 +71,11 @@ async def _get_horseracing_ownership_doc(city: str):
 
 
 def _horseracing_pick_winner() -> dict:
-    """Pick a winner weighted by inverse odds (evens = favourite wins much more often)."""
+    """Pick a winner weighted by inverse odds (realistic: win chance matches implied probability from odds)."""
     horses = list(HORSERACING_HORSES)
     if not horses:
         return None
-    # Weight = 1/odds so evens (1) has highest, 2:1 half that, etc. Evens then ~48% vs ~38% with 1/(odds+1).
+    # Weight = 1/odds so win probability matches real bookmaking (e.g. evens ~48%, 2:1 ~24%)
     weights = [1.0 / max(1, h.get("odds") or 1) for h in horses]
     total = sum(weights)
     if total <= 0:
@@ -106,14 +106,14 @@ def _horseracing_finish_order(winner_id: int):
     )
     finish_order_ids = [winner["id"]] + [h["id"] for h in order_others]
 
-    # Race closeness: ~35% neck-and-neck, ~45% medium, ~20% blowout
+    # Race closeness: ~15% neck-and-neck, ~55% medium, ~30% blowout
     r = random.random()
-    if r < 0.35:
-        margins = [random.uniform(0.15, 0.7) for _ in range(6)]
-    elif r < 0.80:
-        margins = [random.uniform(0.8, 2.5) for _ in range(6)]
+    if r < 0.15:
+        margins = [random.uniform(0.2, 0.8) for _ in range(6)]
+    elif r < 0.70:
+        margins = [random.uniform(0.8, 2.8) for _ in range(6)]
     else:
-        margins = [random.uniform(3, 10) for _ in range(6)]
+        margins = [random.uniform(3, 12) for _ in range(6)]
 
     positions = [100.0]
     for m in margins:

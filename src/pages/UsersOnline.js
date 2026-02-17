@@ -74,7 +74,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 
   return (
     <div
-      className={`${styles.panel} rounded-md border border-primary/20 uo-row uo-card uo-fade-in px-2 py-1`}
+      className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-row uo-card uo-fade-in px-2 py-1`}
       data-testid="user-card"
     >
       <div className="flex items-center gap-1">
@@ -82,7 +82,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
           <HoverCardTrigger asChild>
             <Link
               to={`/profile/${encodeURIComponent(user.username)}`}
-              className="text-[11px] font-heading font-bold text-foreground hover:text-primary transition-colors"
+              className="relative z-10 text-[11px] font-heading font-bold text-foreground hover:text-primary transition-colors"
               data-testid={`user-profile-link-${user.username}`}
             >
               {user.username}
@@ -91,7 +91,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
           <HoverCardContent 
             align="start" 
             sideOffset={8} 
-            className={`w-72 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl p-0 overflow-hidden`}
+            className={`z-[100] w-72 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl p-0 overflow-hidden`}
           >
             {preview?.error ? (
               <div className="p-2 text-[10px] text-mutedForeground font-heading">
@@ -336,7 +336,7 @@ export default function UsersOnline() {
           </p>
         </div>
       ) : (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className={`relative z-10 ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.03s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
