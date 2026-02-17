@@ -4,6 +4,13 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const PROP_STYLES = `
+  @keyframes prop-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .prop-fade-in { animation: prop-fade-in 0.4s ease-out both; }
+  .prop-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .prop-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -86,36 +93,43 @@ export default function Properties() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{PROP_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <Building size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="properties-page">
-      {/* Art Deco Header */}
-      <div>
-        <div className="flex items-center gap-4 mb-3">
-          <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/40 to-primary/60" />
-          <h1 className="text-3xl md:text-4xl font-heading font-bold text-primary tracking-wider uppercase">Properties</h1>
-          <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
-        </div>
-        <p className="text-center text-mutedForeground font-heading tracking-wide">Invest in businesses to generate passive income</p>
+      <style>{PROP_STYLES}</style>
+
+      <div className="relative prop-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Investments</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Building size={24} /> Properties
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Invest in businesses to generate passive income.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {properties.map((property) => (
+        {properties.map((property, idx) => (
           <div
             key={property.id}
             data-testid={`property-card-${property.id}`}
-            className={`${styles.panel} rounded-sm overflow-hidden hover:border-primary/60 transition-smooth shadow-lg shadow-primary/5`}
+            className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-card prop-fade-in transition-all`}
+            style={{ animationDelay: `${0.03 + idx * 0.02}s` }}
           >
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             {/* Card Header */}
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
+            <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-lg font-heading font-bold text-primary tracking-wide">{property.name}</h3>
+                  <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{property.name}</h3>
                   <p className="text-xs text-mutedForeground capitalize font-heading tracking-wider">{property.property_type}</p>
                 </div>
                 <Building className="text-primary/60" size={24} />
@@ -212,18 +226,16 @@ export default function Properties() {
                 )}
               </div>
             </div>
+            <div className="prop-art-line text-primary mx-4" />
           </div>
         ))}
       </div>
 
       {/* Info Box */}
-      <div className={`${styles.panel} rounded-sm overflow-hidden`}>
-        <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-px bg-primary/50" />
-            <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">Investment Tips</h3>
-            <div className="flex-1 h-px bg-primary/50" />
-          </div>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Investment Tips</h3>
         </div>
         <div className="p-4">
           <ul className="space-y-1 text-xs text-mutedForeground font-heading">
@@ -234,6 +246,7 @@ export default function Properties() {
             <li className="flex items-center gap-2"><span className="text-primary">◆</span> Collect income regularly to maximize earnings</li>
           </ul>
         </div>
+        <div className="prop-art-line text-primary mx-4" />
       </div>
     </div>
   );

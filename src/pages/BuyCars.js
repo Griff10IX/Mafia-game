@@ -5,6 +5,13 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const BUY_STYLES = `
+  @keyframes bc-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .bc-fade-in { animation: bc-fade-in 0.4s ease-out both; }
+  .bc-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .bc-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 // Rarities and travel times – must match backend GTA (server CARS + gta.py TRAVEL_TIMES)
 const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
 const RARITY_ORDER = [...GTA_RARITIES].reverse();
@@ -212,32 +219,40 @@ export default function BuyCars() {
 
   if (loading) {
     return (
-      <div className={styles.pageContent}>
-        <div className="font-heading text-primary text-lg">Loading...</div>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{BUY_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <Car size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`}>
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wide">Buy Cars</h1>
+    <div className={`space-y-4 ${styles.pageContent}`}>
+      <style>{BUY_STYLES}</style>
+
+      <div className="relative bc-fade-in flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Marketplace</p>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">Buy Cars</h1>
+          <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Dealer and player listings. Owner shows seller.</p>
+        </div>
         <Link
           to="/garage"
-          className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/30 text-primary font-heading text-[11px] font-bold hover:bg-primary/10"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 text-primary font-heading text-[11px] font-bold hover:bg-primary/10"
         >
           <Car size={12} />
           Garage
         </Link>
       </div>
 
-      <p className="text-[10px] text-mutedForeground font-heading">
-        Dealer stock replenishes in 1–2 hours; dealer prices are inflated. Player listings appear in the table below (Owner shows seller).
-      </p>
-
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bc-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Compact rarity row: click to filter */}
-        <div className={`px-3 py-1 ${styles.panelHeader} border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1`}>
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1">
           <span className="text-[10px] font-heading text-mutedForeground uppercase">Source:</span>
           {['all', 'dealer', 'listing'].map((src) => (
             <button
@@ -306,7 +321,7 @@ export default function BuyCars() {
             </thead>
             <tbody className="divide-y divide-border">
               {paginatedVehicles.map((row) => (
-                <tr key={row.id} className={`hover:bg-secondary/30 transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}>
+                <tr key={row.id} className={`bc-row transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}>
                   <td className="py-1 pl-1.5 pr-0">
                     {row.canBuy ? (
                       <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10">
@@ -351,7 +366,7 @@ export default function BuyCars() {
           </p>
         )}
 
-        <div className={`px-3 py-1.5 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center justify-between gap-2`}>
+        <div className="px-3 py-2.5 bg-primary/8 border-t border-primary/20 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-mutedForeground font-heading uppercase">Check all</span>
             <button
@@ -387,6 +402,7 @@ export default function BuyCars() {
             </button>
           </div>
         </div>
+        <div className="bc-art-line text-primary mx-3" />
       </div>
     </div>
   );

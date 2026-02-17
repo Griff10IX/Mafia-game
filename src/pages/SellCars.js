@@ -1,9 +1,16 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckSquare, Square } from 'lucide-react';
+import { CheckSquare, Square, DollarSign } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
+
+const SELL_STYLES = `
+  @keyframes sc-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .sc-fade-in { animation: sc-fade-in 0.4s ease-out both; }
+  .sc-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .sc-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
 
 // GTA rarities (match backend)
 const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
@@ -158,19 +165,32 @@ export default function SellCars() {
 
   if (loading) {
     return (
-      <div className={styles.pageContent}>
-        <div className="font-heading text-primary text-lg">Loading...</div>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{SELL_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <DollarSign size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`}>
-      {/* Single panel: title + filter + table + actions */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className={`space-y-4 ${styles.pageContent}`}>
+      <style>{SELL_STYLES}</style>
+
+      <div className="relative sc-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">List for Sale</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Sell Cars</h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">List cars from your garage. Select cars and set a price.</p>
+      </div>
+
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 sc-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Title + Filter + Pagination in one bar */}
-        <div className={`px-3 py-1.5 ${styles.panelHeader} border-b border-primary/20 flex flex-wrap items-center justify-between gap-2`}>
-          <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wide">Sell Cars</h1>
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell Cars</span>
           <div className="flex items-center gap-2">
             <label className="text-[10px] font-heading text-mutedForeground uppercase">Filter:</label>
             <select
@@ -222,7 +242,7 @@ export default function SellCars() {
                 const speed = TRAVEL_TIMES[car.rarity] ?? 45;
                 const isListed = !!car.listed_for_sale;
                 return (
-                  <tr key={car.user_car_id} className="hover:bg-secondary/30 transition-colors">
+                  <tr key={car.user_car_id} className="sc-row transition-colors">
                     <td className="py-1 pl-1.5 pr-0">
                       {car.car_id !== 'car_custom' && (
                         <button
@@ -259,7 +279,7 @@ export default function SellCars() {
           <p className="py-2 text-center text-[11px] text-mutedForeground font-heading">No cars to sell</p>
         )}
 
-        <div className={`px-3 py-1.5 ${styles.panelHeader} border-t border-primary/20 flex flex-wrap items-center gap-2`}>
+        <div className="px-3 py-2.5 bg-primary/8 border-t border-primary/20 flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1 cursor-pointer">
             <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10">
               {paginatedCars.length > 0 && paginatedCars.every((c) => selectedIds.has(c.user_car_id)) ? (
@@ -295,9 +315,10 @@ export default function SellCars() {
             Stop Selling
           </button>
         </div>
+        <div className="sc-art-line text-primary mx-3" />
       </div>
 
-      <p className="text-[10px] text-mutedForeground font-heading">
+      <p className="text-[10px] text-mutedForeground font-heading sc-fade-in" style={{ animationDelay: '0.05s' }}>
         <Link to="/buy-cars" className="text-primary font-bold hover:underline">Buy cars</Link> from dealer or other players.
       </p>
     </div>

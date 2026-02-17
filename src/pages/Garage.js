@@ -5,6 +5,13 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const GARAGE_STYLES = `
+  @keyframes gar-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .gar-fade-in { animation: gar-fade-in 0.4s ease-out both; }
+  .gar-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .gar-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const RARITY_ORDER = { exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 16;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
@@ -30,8 +37,10 @@ function saveMeltScrapRarities(rarities) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <Car size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
   </div>
 );
 
@@ -46,9 +55,10 @@ const RARITY_COLORS = {
 };
 
 const EmptyGarageCard = () => (
-  <div className={`${styles.panel} rounded-md border border-border py-12 text-center`}>
+  <div className={`relative ${styles.panel} rounded-lg border border-primary/20 py-12 text-center gar-fade-in overflow-hidden`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <Car size={48} className="mx-auto text-primary/30 mb-3" />
-    <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wide mb-1">
+    <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] mb-1">
       Empty Garage
     </h3>
     <p className="text-xs text-mutedForeground font-heading">
@@ -58,9 +68,10 @@ const EmptyGarageCard = () => (
 );
 
 const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gar-fade-in`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-1.5">
         <Filter size={14} />
         Sort & Filter
       </h2>
@@ -104,6 +115,7 @@ const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) =
         </div>
       </div>
     </div>
+    <div className="gar-art-line text-primary mx-3" />
   </div>
 );
 
@@ -124,7 +136,8 @@ const ActionsBar = ({
 }) => {
   const meltOnCooldown = meltBulletsSecondsRemaining != null && meltBulletsSecondsRemaining > 0;
   return (
-    <div className={`${styles.panel} rounded-md border border-primary/20 p-3`}>
+    <div className={`relative ${styles.panel} rounded-lg border border-primary/20 p-3 gar-fade-in overflow-hidden`}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {!showAll && hiddenCount > 0 && (
@@ -223,10 +236,10 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
   return (
     <div
       onClick={handleClick}
-      className={`${styles.panel} rounded-md border p-1.5 transition-all ${
+      className={`${styles.panel} rounded-lg border p-1.5 transition-all gar-card ${
         isListed ? 'border-amber-500/40 opacity-90' : 'cursor-pointer'
       } ${
-        !isListed && (isSelected ? 'border-primary shadow-md shadow-primary/20' : 'border-border hover:border-primary/30 hover:shadow-sm')
+        !isListed && (isSelected ? 'border-primary shadow-md shadow-primary/20' : 'border-border hover:border-primary/30')
       }`}
     >
       <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
@@ -308,9 +321,10 @@ const SettingsModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl max-w-sm w-full`} onClick={e => e.stopPropagation()}>
-        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
+      <div className={`${styles.panel} border border-primary/20 rounded-lg shadow-2xl max-w-sm w-full overflow-hidden`} onClick={e => e.stopPropagation()}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-3 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
             <Settings size={16} />
             Select All Filter
           </h3>
@@ -377,9 +391,10 @@ const CustomCarModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={onClose}>
-      <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl max-w-md w-full`} onClick={e => e.stopPropagation()}>
-        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wide flex items-center gap-2">
+      <div className={`${styles.panel} border border-primary/20 rounded-lg shadow-2xl max-w-md w-full overflow-hidden`} onClick={e => e.stopPropagation()}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-3 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
             <ImageIcon size={16} />
             Custom Car Picture
           </h3>
@@ -632,10 +647,27 @@ export default function Garage() {
     );
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (loading) {
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{GARAGE_STYLES}</style>
+        <LoadingSpinner />
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`}>
+      <style>{GARAGE_STYLES}</style>
+
+      <div className="relative gar-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Fleet</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Car size={24} /> Garage
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">View, melt, scrap, and list your cars.</p>
+      </div>
+
       {cars.length === 0 ? (
         <EmptyGarageCard />
       ) : (
