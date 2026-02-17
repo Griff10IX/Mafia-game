@@ -218,29 +218,29 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
       <button
         type="button"
         onClick={onToggle}
-        className="w-full px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+        className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
       >
-        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">
           🚗 Last 10 cars stolen
         </span>
-        <div className="flex items-center gap-1">
-          <span className="text-[10px] text-primary font-heading font-bold">{recentStolen.length} cars</span>
+        <div className="flex items-center gap-0.5">
+          <span className="text-[9px] text-primary font-heading font-bold">{recentStolen.length} cars</span>
           <span className="text-primary/80">
-            {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
+            {isCollapsed ? <ChevronRight size={8} /> : <ChevronDown size={8} />}
           </span>
         </div>
       </button>
       
       {!isCollapsed && (
-        <div className="p-2">
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1">
+        <div className="p-1.5">
+          <div className="grid grid-cols-5 gap-0.5">
             {recentStolen.map((car, index) => (
               <div
                 key={car.user_car_id ?? index}
                 data-testid={`recent-stolen-car-${index}`}
-                className="bg-zinc-800/30 border border-primary/10 rounded p-0.5 flex flex-col items-center text-center hover:border-primary/30 transition-all"
+                className="bg-zinc-800/30 border border-primary/10 rounded p-0.5 flex flex-col items-center text-center hover:border-primary/30 transition-all min-w-0"
               >
-                <div className="w-full aspect-square rounded overflow-hidden bg-zinc-900/50 shrink-0 mb-0.5">
+                <div className="w-full aspect-square rounded overflow-hidden bg-zinc-900/50 shrink-0">
                   {car.image ? (
                     <img
                       src={car.image}
@@ -250,17 +250,17 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Car size={14} className="text-primary/40" />
+                      <Car size={10} className="text-primary/40" />
                     </div>
                   )}
                 </div>
-                <div className="text-[8px] font-heading font-bold text-primary truncate w-full leading-tight">
+                <div className="text-[7px] font-heading font-bold text-primary truncate w-full leading-tight mt-0.5">
                   {car.car_name}
                 </div>
               </div>
             ))}
           </div>
-          <p className="text-[9px] text-mutedForeground font-heading mt-1 text-center">
+          <p className="text-[8px] text-mutedForeground font-heading mt-0.5 text-center">
             <Link to="/garage" className="text-primary hover:underline">View full garage →</Link>
           </p>
         </div>

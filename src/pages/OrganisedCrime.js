@@ -63,19 +63,19 @@ const useCooldownTicker = (cooldownUntil, onCooldownExpired) => {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <UserCheck size={28} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+    <UserCheck size={22} className="text-primary/40 animate-pulse" />
+    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
   </div>
 );
 
 const AutoRankOCNotice = () => (
-  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg oc-fade-in overflow-hidden`}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-    <div className="flex items-center gap-2">
-      <Bot size={14} className="text-amber-400 shrink-0" />
-      <span className="text-amber-200/80">
+  <div className={`relative p-2 ${styles.panel} border border-amber-500/40 rounded-md oc-fade-in overflow-hidden`}>
+    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+    <div className="flex items-center gap-1.5">
+      <Bot size={10} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80 text-[10px]">
         <strong className="text-amber-300">Auto Rank</strong> — Organised Crime is running automatically. Manual play disabled.
       </span>
     </div>
@@ -90,45 +90,45 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
   if (list.length === 0) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`}>
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-          <Wrench size={14} />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
+          <Wrench size={10} />
           Equipment
         </span>
       </div>
-      <div className="p-3 space-y-2">
-        <p className="text-[10px] text-mutedForeground">
+      <div className="p-2 space-y-1">
+        <p className="text-[9px] text-mutedForeground">
           Pick gear for your next heist. Cost is charged when you run the heist. Better gear = higher success %.
         </p>
-        <div className="space-y-1.5">
+        <div className="space-y-0.5">
           {list.map((eq) => {
             const isSelected = eq.id === selectedId;
             const canAfford = eq.can_afford;
             return (
               <div
                 key={eq.id}
-                className={`flex items-center justify-between gap-2 px-3 py-2 rounded-md border ${
+                className={`flex items-center justify-between gap-1.5 px-2 py-1 rounded border ${
                   isSelected ? 'bg-primary/10 border-primary/40' : 'bg-zinc-800/20 border-zinc-700/50'
                 }`}
               >
                 <div className="min-w-0">
-                  <div className="text-sm font-heading font-bold text-foreground">{eq.name}</div>
-                  <div className="text-[10px] text-mutedForeground">{eq.description}</div>
+                  <div className="text-[11px] font-heading font-bold text-foreground">{eq.name}</div>
+                  <div className="text-[9px] text-mutedForeground">{eq.description}</div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-xs text-primary font-bold">{formatMoney(eq.cost)}</span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <span className="text-[10px] text-primary font-bold">{formatMoney(eq.cost)}</span>
                   {isSelected ? (
-                    <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-heading">
-                      <Check size={12} /> Selected
+                    <span className="flex items-center gap-0.5 text-[9px] text-emerald-400 font-heading">
+                      <Check size={10} /> Selected
                     </span>
                   ) : (
                     <button
                       type="button"
                       onClick={() => onSelect(eq.id)}
                       disabled={selecting || (eq.cost > 0 && !canAfford)}
-                      className={`px-2 py-1 text-[10px] font-bold uppercase rounded border ${
+                      className={`px-1.5 py-0.5 text-[9px] font-bold uppercase rounded border ${
                         selecting || (eq.cost > 0 && !canAfford)
                           ? 'opacity-50 cursor-not-allowed bg-zinc-800/50 text-zinc-500 border-zinc-600/50'
                           : 'bg-primary/20 text-primary border-primary/50 hover:bg-primary/30'
@@ -143,7 +143,7 @@ const EquipmentSection = ({ equipmentData, onSelect, selecting }) => {
           })}
         </div>
       </div>
-      <div className="oc-art-line text-primary mx-3" />
+      <div className="oc-art-line text-primary mx-2.5" />
     </div>
   );
 };
@@ -153,28 +153,28 @@ const JobCard = ({ job, selected, onSelect }) => (
   <button
     type="button"
     onClick={() => onSelect(job.id)}
-    className={`flex flex-col p-3 rounded-lg transition-all text-left ${
+    className={`flex flex-col p-2 rounded-md transition-all text-left ${
       selected 
-        ? 'bg-primary/15 border-2 border-primary/50 shadow-lg shadow-primary/10' 
+        ? 'bg-primary/15 border-2 border-primary/50 shadow shadow-primary/10' 
         : 'bg-zinc-800/30 border border-zinc-700/50 hover:border-primary/30 hover:bg-zinc-800/50'
     }`}
   >
-    <div className="flex items-center gap-2 mb-2">
-      <span className={`w-3 h-3 rounded-full border-2 flex items-center justify-center shrink-0 ${
+    <div className="flex items-center gap-1 mb-1">
+      <span className={`w-2.5 h-2.5 rounded-full border-2 flex items-center justify-center shrink-0 ${
         selected ? 'border-primary bg-primary' : 'border-zinc-600'
       }`}>
-        {selected && <span className="w-1 h-1 rounded-full bg-primaryForeground" />}
+        {selected && <span className="w-0.5 h-0.5 rounded-full bg-primaryForeground" />}
       </span>
-      <span className="text-sm font-heading font-bold text-foreground truncate">{job.name}</span>
+      <span className="text-[11px] font-heading font-bold text-foreground truncate">{job.name}</span>
     </div>
-    <div className="flex items-center justify-between gap-2 text-xs font-heading">
+    <div className="flex items-center justify-between gap-1 text-[10px] font-heading">
       <span className={`${selected ? 'text-foreground' : 'text-mutedForeground'}`} title="Base success chance; equipment adds more">
         {(job.success_rate * 100).toFixed(0)}%
       </span>
       <span className="text-primary font-bold">${(job.cash || 0).toLocaleString()}</span>
     </div>
-    <div className="text-[10px] text-mutedForeground font-heading mt-0.5">
-      Reward on success · +{job.rp || 0} RP
+    <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
+      +{job.rp || 0} RP
     </div>
   </button>
 );
@@ -188,13 +188,13 @@ const RoleToggleGroup = ({ roleId, value, onValueChange }) => {
   ];
 
   return (
-    <div className="flex rounded-md overflow-hidden border border-zinc-700/50">
+    <div className="flex rounded overflow-hidden border border-zinc-700/50">
       {options.map((opt) => (
         <button
           key={opt.id}
           type="button"
           onClick={() => onValueChange(opt.id)}
-          className={`px-3 py-1.5 text-[10px] font-heading font-bold uppercase transition-all ${
+          className={`px-2 py-1 text-[9px] font-heading font-bold uppercase transition-all ${
             value === opt.id
               ? opt.id === 'self'
                 ? 'bg-emerald-500/20 text-emerald-400 border-r border-emerald-500/30'
@@ -213,11 +213,11 @@ const RoleToggleGroup = ({ roleId, value, onValueChange }) => {
 
 // Compact role slot row
 const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange, pct, onPctChange, isNpc }) => (
-  <div className="flex items-center gap-3 px-3 py-2 rounded-lg bg-zinc-800/20 border border-transparent oc-row">
+  <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-zinc-800/20 border border-transparent oc-row">
     {/* Role name */}
-    <div className="w-24 flex items-center gap-1.5">
-      <span className="text-sm">{ROLE_ICONS[roleId]}</span>
-      <span className="text-xs font-heading font-bold text-primary capitalize">{roleId}</span>
+    <div className="w-20 flex items-center gap-1">
+      <span className="text-[11px]">{ROLE_ICONS[roleId]}</span>
+      <span className="text-[10px] font-heading font-bold text-primary capitalize">{roleId}</span>
     </div>
 
     {/* Toggle buttons */}
@@ -230,12 +230,12 @@ const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange
         placeholder="Username"
         value={inviteInput}
         onChange={(e) => onInviteChange(e.target.value)}
-        className="w-28 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+        className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-1.5 py-0.5 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
       />
     )}
 
     {/* Percentage */}
-    <div className="flex items-center gap-1 ml-auto">
+    <div className="flex items-center gap-0.5 ml-auto">
       <input
         type="number"
         min={0}
@@ -243,13 +243,13 @@ const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange
         value={pct}
         onChange={(e) => onPctChange(e.target.value)}
         readOnly={isNpc}
-        className={`w-12 border rounded px-2 py-1 text-xs text-right focus:outline-none ${
+        className={`w-10 border rounded px-1 py-0.5 text-[10px] text-right focus:outline-none ${
           isNpc 
             ? 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground cursor-default' 
             : 'bg-zinc-900/50 border-zinc-700/50 text-foreground focus:border-primary/50'
         }`}
       />
-      <span className="text-[10px] text-mutedForeground">%</span>
+      <span className="text-[9px] text-mutedForeground">%</span>
     </div>
   </div>
 );
@@ -259,15 +259,15 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
   if (!status?.pending_heist) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 oc-fade-in`}>
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-      <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
-        <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em] flex items-center gap-2">
-          <UserCheck size={14} />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 oc-fade-in`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
+        <span className="text-[9px] font-heading font-bold text-amber-400 uppercase tracking-[0.12em] flex items-center gap-1">
+          <UserCheck size={10} />
           Pending Heist
         </span>
       </div>
-      <div className="p-3 space-y-2">
+      <div className="p-2 space-y-1">
         {ROLE_IDS.map((roleId) => {
           const val = status.pending_heist[roleId];
           const inv = (status.pending_invites || []).find((i) => i.role === roleId);
@@ -278,13 +278,13 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
           const editing = pendingSlotEdit.role === roleId;
           
           return (
-            <div key={roleId} className="flex items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 text-xs">
-              <span className="w-20 font-heading font-bold text-primary capitalize flex items-center gap-1">
+            <div key={roleId} className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/30 text-[10px]">
+              <span className="w-16 font-heading font-bold text-primary capitalize flex items-center gap-0.5">
                 <span>{ROLE_ICONS[roleId]}</span> {roleId}
               </span>
               <span className="font-heading text-foreground">{displayVal}</span>
               {inv && (
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                <span className={`px-1 py-0.5 rounded text-[9px] font-bold ${
                   statusStr === 'accepted' 
                     ? 'bg-emerald-500/20 text-emerald-400' 
                     : statusStr === 'pending'
@@ -296,38 +296,38 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
               )}
               {canClear && (
                 <button type="button" onClick={() => onCancel(inv.invite_id)} className="text-mutedForeground hover:text-red-400 ml-auto">
-                  <XCircle size={14} />
+                  <XCircle size={10} />
                 </button>
               )}
               {isEmpty && !editing && (
                 <button
                   type="button"
                   onClick={() => setPendingSlotEdit({ role: roleId, value: '' })}
-                  className="text-[10px] font-heading text-primary hover:underline ml-auto"
+                  className="text-[9px] font-heading text-primary hover:underline ml-auto"
                 >
                   Set
                 </button>
               )}
               {isEmpty && editing && (
-                <div className="flex items-center gap-1 ml-auto">
+                <div className="flex items-center gap-0.5 ml-auto">
                   <input
                     type="text"
                     placeholder="npc / username"
                     value={pendingSlotEdit.value}
                     onChange={(e) => setPendingSlotEdit((p) => ({ ...p, value: e.target.value }))}
-                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-0.5 text-[10px] w-24 text-foreground focus:border-primary/50 focus:outline-none"
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-1.5 py-0.5 text-[9px] w-20 text-foreground focus:border-primary/50 focus:outline-none"
                   />
                   <button
                     type="button"
                     onClick={() => { setPendingSlot(pendingSlotEdit.role, pendingSlotEdit.value); setPendingSlotEdit({ role: null, value: '' }); }}
-                    className="text-[10px] font-bold text-primary"
+                    className="text-[9px] font-bold text-primary"
                   >
                     ✓
                   </button>
                   <button
                     type="button"
                     onClick={() => setPendingSlotEdit({ role: null, value: '' })}
-                    className="text-[10px] text-mutedForeground"
+                    className="text-[9px] text-mutedForeground"
                   >
                     ✕
                   </button>
@@ -346,7 +346,7 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
             (status.pending_invites || []).some((i) => i.status === 'pending') ||
             ROLE_IDS.some((r) => status.pending_heist[r] == null || status.pending_heist[r] === '')
           }
-          className={`w-full mt-2 rounded px-4 py-2 text-xs font-bold uppercase tracking-wide touch-manipulation border ${
+          className={`w-full mt-1 rounded px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide touch-manipulation border ${
             manualPlayDisabled
               ? 'bg-zinc-700/50 text-mutedForeground border-zinc-600/50 cursor-not-allowed'
               : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed'
@@ -360,43 +360,43 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
 };
 
 const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.06s' }}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.06s' }}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <button
       type="button"
       onClick={onToggle}
-      className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+      className="w-full px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
     >
-      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+      <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         ℹ️ Rules
       </span>
       <span className="text-primary/80">
-        {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+        {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
       </span>
     </button>
     {!isCollapsed && (
       <>
-        <div className="p-3">
-          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5">
+        <div className="p-2">
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading">
+            <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
               <span>Team of 4: Driver, Weapons, Explosives, Hacker</span>
             </li>
-            <li className="flex items-start gap-1.5">
+            <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
               <span>Exactly one slot must be "You"</span>
             </li>
-            <li className="flex items-start gap-1.5">
+            <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
               <span>Cut % must sum to 100. NPCs auto-assigned</span>
             </li>
-            <li className="flex items-start gap-1.5">
+            <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
               <span>Cooldown: {cooldownHours ?? 6}h (4h with upgrade)</span>
             </li>
           </ul>
         </div>
-        <div className="oc-art-line text-primary mx-3" />
+        <div className="oc-art-line text-primary mx-2.5" />
       </>
     )}
   </div>
@@ -698,7 +698,7 @@ export default function OrganisedCrime() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent}`}>
         <style>{OC_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -706,15 +706,15 @@ export default function OrganisedCrime() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="organised-crime-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="organised-crime-page">
       <style>{OC_STYLES}</style>
 
       <div className="relative oc-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Heist</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <UserCheck size={24} /> Organised Crime
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Heist</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
+          <UserCheck size={18} /> Organised Crime
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Pick a job, fill your crew, set cuts. Run the heist.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Pick a job, fill your crew, set cuts. Run the heist.</p>
       </div>
 
       {autoRankOcDisabled && <AutoRankOCNotice />}
@@ -741,38 +741,38 @@ export default function OrganisedCrime() {
       )}
 
       {/* Job Selection */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Select Job
           </span>
         </div>
-        <div className="p-3">
-          <p className="text-[10px] text-mutedForeground font-heading mb-2">
+        <div className="p-2">
+          <p className="text-[9px] text-mutedForeground font-heading mb-1">
             Cash shown is your reward if the heist succeeds. Equipment above raises success chance (max 92%).
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {(config.jobs || []).map((job) => (
               <JobCard key={job.id} job={job} selected={selectedJobId === job.id} onSelect={setSelectedJobId} />
             ))}
           </div>
         </div>
-        <div className="oc-art-line text-primary mx-3" />
+        <div className="oc-art-line text-primary mx-2.5" />
       </div>
 
       {/* Team Slots */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.04s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 oc-fade-in`} style={{ animationDelay: '0.04s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Team & Cut %
           </span>
-          <span className={`text-xs font-heading font-bold ${pctTotal === 100 ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className={`text-[10px] font-heading font-bold ${pctTotal === 100 ? 'text-emerald-400' : 'text-red-400'}`}>
             {pctTotal}%
           </span>
         </div>
-        <div className="p-2 space-y-1">
+        <div className="p-1.5 space-y-0.5">
           {ROLE_IDS.map((roleId) => (
             <RoleSlotRow
               key={roleId}
@@ -789,20 +789,20 @@ export default function OrganisedCrime() {
         </div>
         
         {selfCount !== 1 && (
-          <div className="px-3 pb-2">
-            <p className="text-[10px] font-heading flex items-center gap-1 text-amber-400">
-              <AlertCircle size={12} /> Exactly one slot must be "You"
+          <div className="px-2.5 pb-1">
+            <p className="text-[9px] font-heading flex items-center gap-0.5 text-amber-400">
+              <AlertCircle size={10} /> Exactly one slot must be "You"
             </p>
           </div>
         )}
         {pctTotal !== 100 && (
-          <div className="px-3 pb-2">
-            <p className="text-[10px] font-heading text-mutedForeground">
+          <div className="px-2.5 pb-1">
+            <p className="text-[9px] font-heading text-mutedForeground">
               Percentages must sum to 100
             </p>
           </div>
         )}
-        <div className="oc-art-line text-primary mx-3" />
+        <div className="oc-art-line text-primary mx-2.5" />
       </div>
 
       {/* Execute Button */}
@@ -811,10 +811,10 @@ export default function OrganisedCrime() {
           type="button"
           onClick={autoRankOcDisabled ? undefined : execute}
           disabled={autoRankOcDisabled || !canExecute || onCooldown || executing}
-          className={`w-full py-3 font-heading font-bold uppercase tracking-wider text-sm transition-all touch-manipulation rounded-lg ${
+          className={`w-full py-2 font-heading font-bold uppercase tracking-wider text-[10px] transition-all touch-manipulation rounded-md ${
             autoRankOcDisabled || !canExecute || onCooldown || executing
               ? 'opacity-50 cursor-not-allowed bg-zinc-800 text-mutedForeground border border-zinc-700'
-              : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow-lg'
+              : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 shadow'
           }`}
         >
           {autoRankOcDisabled ? 'Locked' : executing ? 'Running...' : onCooldown ? `Cooldown ${cooldownStr}` : hasInviteSlot() ? '📨 Send Invites' : '🎯 Run Heist'}
