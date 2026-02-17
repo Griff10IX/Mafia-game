@@ -14,11 +14,16 @@ const QUICK_BUYS = [100, 500, 1000, 5000, 10000];
    ═══════════════════════════════════════════════════════ */
 const ITEM_WIDTH = 32;
 
+/* Realistic cartridge: lead tip + brass casing (the "orange" was the old casing colour – now brass) */
 function BulletCasing() {
   return (
-    <div className="shrink-0 flex items-center" style={{ width: ITEM_WIDTH }}>
-      <div className="w-2 h-4 rounded-t-full mx-auto" style={{ background: 'linear-gradient(135deg, #c9a84c, #8b6914, #d4af37)' }} />
-      <div className="w-2 h-3 -ml-2" style={{ background: 'linear-gradient(135deg, #b87333, #8b4513, #cd7f32)' }} />
+    <div className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
+      <svg viewBox="0 0 12 22" className="w-3 h-5" style={{ filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.25))' }}>
+        {/* Brass casing */}
+        <path d="M2 6 L2 20 L10 20 L10 6 Q10 3 6 3 Q2 3 2 6 Z" fill="url(#belt-brass)" stroke="url(#belt-brass-edge)" strokeWidth="0.35" />
+        {/* Lead projectile tip (ogive) */}
+        <path d="M2 6 Q6 0 10 6 L10 7 Q6 3 2 7 Z" fill="url(#belt-lead)" stroke="rgba(0,0,0,0.15)" strokeWidth="0.25" />
+      </svg>
     </div>
   );
 }
@@ -41,32 +46,50 @@ function BeltWeapon() {
 function BeltArmour() {
   return (
     <div className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
-      <svg viewBox="0 0 20 16" className="w-5 h-4" style={{ filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.3))' }}>
-        {/* Shield / vest: rounded top, curved sides, metallic */}
+      <svg viewBox="0 0 20 18" className="w-5 h-4" style={{ filter: 'drop-shadow(0 1px 0 rgba(0,0,0,0.3))' }}>
+        {/* Bulletproof vest front view: shoulders, V-neck, torso panels */}
         <path
-          d="M2 4 Q2 1 10 1 Q18 1 18 4 L18 12 Q18 15 10 15 Q2 15 2 12 Z"
-          fill="url(#belt-armour-plate)"
+          d="M4 2 L8 2 L8 5 L12 5 L12 2 L16 2 L16 6 L18 8 L18 14 Q18 17 10 17 Q2 17 2 14 L2 8 L4 6 Z"
+          fill="url(#belt-vest-fabric)"
           stroke="url(#belt-armour-edge)"
-          strokeWidth="0.6"
+          strokeWidth="0.5"
         />
-        <path d="M6 4 L14 4 M10 4 L10 12" stroke="rgba(0,0,0,0.25)" strokeWidth="0.4" fill="none" />
+        {/* Neck opening */}
+        <path d="M8 5 L10 8 L12 5" fill="none" stroke="#1a1a1a" strokeWidth="0.5" />
+        {/* Center zip / seam */}
+        <line x1="10" y1="8" x2="10" y2="14" stroke="rgba(0,0,0,0.35)" strokeWidth="0.4" />
+        {/* Chest panel lines */}
+        <path d="M5 7 L8 10 L8 14 M15 7 L12 10 L12 14" stroke="rgba(0,0,0,0.2)" strokeWidth="0.35" fill="none" />
       </svg>
     </div>
   );
 }
 
-// Pattern: mostly bullets, occasional weapon/armour (armoury mix)
-const BELT_ITEM_TYPES = ['bullet', 'bullet', 'bullet', 'weapon', 'bullet', 'bullet', 'armour', 'bullet', 'bullet', 'weapon', 'bullet', 'armour', 'bullet', 'bullet', 'bullet'];
+/* Organised pattern: blocks of bullets, then weapon, then bullets, then armour (repeat) */
+const BELT_BLOCK = [...Array(6).fill('bullet'), 'weapon', ...Array(6).fill('bullet'), 'armour'];
+const BELT_ITEM_COUNT = 40;
 
 function ConveyorBelt() {
-  const bulletCount = 40;
-  const setWidth = bulletCount * ITEM_WIDTH;
-  const items = Array.from({ length: bulletCount * 2 }, (_, i) => BELT_ITEM_TYPES[i % BELT_ITEM_TYPES.length]);
+  const setWidth = BELT_ITEM_COUNT * ITEM_WIDTH;
+  const items = Array.from({ length: BELT_ITEM_COUNT * 2 }, (_, i) => BELT_BLOCK[i % BELT_BLOCK.length]);
   return (
     <div className="relative w-full h-10 overflow-hidden rounded" style={{ background: 'linear-gradient(180deg, #2a2218 0%, #3d3225 40%, #2a2218 100%)' }}>
       {/* Shared SVG gradients for belt weapons/armour (avoids duplicate IDs) */}
       <svg width={0} height={0} className="absolute" aria-hidden="true">
         <defs>
+          <linearGradient id="belt-brass" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#d4a84c" />
+            <stop offset="50%" stopColor="#b8860b" />
+            <stop offset="100%" stopColor="#8b6914" />
+          </linearGradient>
+          <linearGradient id="belt-brass-edge" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#c9a227" />
+            <stop offset="100%" stopColor="#6b5009" />
+          </linearGradient>
+          <linearGradient id="belt-lead" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#7a7a7a" />
+            <stop offset="100%" stopColor="#4a4a4a" />
+          </linearGradient>
           <linearGradient id="belt-gun-metal" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#6b6b6b" />
             <stop offset="50%" stopColor="#4a4a4a" />
@@ -80,11 +103,10 @@ function ConveyorBelt() {
             <stop offset="0%" stopColor="#5c4033" />
             <stop offset="100%" stopColor="#3e2723" />
           </linearGradient>
-          <linearGradient id="belt-armour-plate" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#7a7a7a" />
-            <stop offset="30%" stopColor="#5a5a5a" />
-            <stop offset="70%" stopColor="#454545" />
-            <stop offset="100%" stopColor="#353535" />
+          <linearGradient id="belt-vest-fabric" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#4a4a4a" />
+            <stop offset="40%" stopColor="#353535" />
+            <stop offset="100%" stopColor="#2a2a2a" />
           </linearGradient>
           <linearGradient id="belt-armour-edge" x1="0%" y1="0%" x2="0%" y2="100%">
             <stop offset="0%" stopColor="#8a8a8a" />
@@ -97,10 +119,12 @@ function ConveyorBelt() {
       <div className="absolute inset-x-0 bottom-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
       {/* Belt treads */}
       <div className="absolute inset-0 animate-belt-treads" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(0,0,0,0.3) 28px, rgba(0,0,0,0.3) 30px)', backgroundSize: '30px 100%' }} />
-      {/* Items — bullets, weapons, armour (two sets for seamless loop) */}
+      {/* Items — one per slot, centred; two sets for seamless loop */}
       <div className="absolute top-0 left-0 h-full flex items-center animate-belt-bullets" style={{ width: setWidth * 2 }}>
         {items.map((type, i) => (
-          type === 'weapon' ? <BeltWeapon key={i} /> : type === 'armour' ? <BeltArmour key={i} /> : <BulletCasing key={i} />
+          <div key={i} className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
+            {type === 'weapon' ? <BeltWeapon /> : type === 'armour' ? <BeltArmour /> : <BulletCasing />}
+          </div>
         ))}
       </div>
     </div>
@@ -344,13 +368,13 @@ export default function BulletFactory({ me }) {
       <style>{`
         @keyframes belt-bullets {
           0% { transform: translateX(0); }
-          100% { transform: translateX(-${40 * 32}px); }
+          100% { transform: translateX(-${BELT_ITEM_COUNT * ITEM_WIDTH}px); }
         }
         @keyframes belt-treads {
           0% { background-position-x: 0; }
           100% { background-position-x: -30px; }
         }
-        .animate-belt-bullets { animation: belt-bullets 12s linear infinite; }
+        .animate-belt-bullets { animation: belt-bullets 34.13s linear infinite; }
         .animate-belt-treads { animation: belt-treads 0.8s linear infinite; }
         @keyframes furnace-pulse {
           0%, 100% { opacity: 0.4; filter: blur(12px); }
