@@ -49,7 +49,7 @@ function StatusDot({ status }) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   Event Card — chalkboard-style betting card
+   Event Card — themed panel
    ═══════════════════════════════════════════════════════ */
 function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancellingEventId }) {
   const options = event.options || [];
@@ -57,18 +57,12 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancel
   const icon = CATEGORY_ICONS[event.category] || '🎲';
 
   return (
-    <div
-      className="rounded-lg border overflow-hidden transition-all hover:border-primary/40 group"
-      style={{
-        borderColor: 'rgba(90,62,27,0.5)',
-        background: 'linear-gradient(180deg, rgba(20,15,10,0.95), rgba(15,12,8,0.98))',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(201,168,76,0.05)',
-      }}
-    >
+    <div className="relative rounded-lg border border-primary/20 overflow-hidden transition-all hover:border-primary/40 group bg-zinc-900/50">
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       {/* Header */}
-      <div className="px-3 py-2 flex items-center gap-2" style={{ borderBottom: '1px solid rgba(201,168,76,0.15)' }}>
+      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
         <span className="text-sm">{icon}</span>
-        <span className="text-[9px] font-heading uppercase tracking-widest text-primary/60">{event.category}</span>
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{event.category}</span>
         <div className="flex-1" />
         <StatusDot status={event.status} />
         <span className="text-[9px] font-heading text-zinc-500">{event.start_time_display || formatDateTime(event.start_time)}</span>
@@ -87,13 +81,9 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancel
             type="button"
             onClick={() => bettingOpen && onPlaceBet(event, opt)}
             disabled={!bettingOpen}
-            className="flex-1 min-w-[80px] relative rounded py-2 px-2 text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] group/opt"
-            style={{
-              background: bettingOpen
-                ? 'linear-gradient(180deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))'
-                : 'rgba(40,40,40,0.3)',
-              border: '1px solid rgba(201,168,76,0.25)',
-            }}
+            className={`flex-1 min-w-[80px] relative rounded py-2 px-2 text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] group/opt border ${
+              bettingOpen ? 'bg-primary/10 border-primary/20 hover:bg-primary/15' : 'bg-zinc-800/50 border-zinc-700/50'
+            }`}
           >
             <span className="block text-[10px] font-heading text-zinc-400 truncate">{opt.name}</span>
             <span className="block text-sm font-heading font-black text-primary mt-0.5">{Number(opt.odds).toFixed(2)}</span>
@@ -103,7 +93,7 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancel
 
       {/* Admin row */}
       {isAdmin && (
-        <div className="px-3 pb-2 flex gap-1.5 justify-end" style={{ borderTop: '1px solid rgba(255,255,255,0.03)' }}>
+        <div className="px-3 pb-2 pt-1 flex gap-1.5 justify-end border-t border-primary/10">
           <button type="button" onClick={() => onSettle(event)} className="text-[9px] font-heading font-bold text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 px-2 py-1 rounded transition-all">
             Settle
           </button>
@@ -117,6 +107,7 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancel
           </button>
         </div>
       )}
+      <div className="sb-art-line text-primary mx-3" />
     </div>
   );
 }

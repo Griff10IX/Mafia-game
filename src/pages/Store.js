@@ -40,9 +40,10 @@ const Tab = ({ active, onClick, children }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`flex-1 min-w-0 px-2 py-2 text-[10px] font-heading font-bold uppercase tracking-wider border-b-2 transition-all ${
-      active ? 'text-primary border-primary bg-primary/5' : 'text-mutedForeground border-transparent hover:text-foreground'
+    className={`flex-1 min-w-0 py-2 px-3 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all ${
+      active ? 'text-primary' : 'text-zinc-500 hover:text-zinc-300'
     }`}
+    style={active ? { background: 'rgba(201,168,76,0.1)', border: '1px solid rgba(201,168,76,0.2)' } : { border: '1px solid transparent' }}
   >
     {children}
   </button>
@@ -196,7 +197,7 @@ export default function Store() {
         </div>
       )}
 
-      <div className="flex border-b border-primary/30 bg-zinc-900/50 overflow-x-auto">
+      <div className="flex gap-1 p-1 rounded-lg overflow-x-auto store-fade-in" style={{ background: 'rgba(20,15,10,0.6)', border: '1px solid rgba(201,168,76,0.1)' }}>
         <Tab active={activeTab === 'points'} onClick={() => setActiveTab('points')}>Points</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => setActiveTab('bullets')}>Bullets</Tab>
@@ -210,27 +211,31 @@ export default function Store() {
               <div
                 key={pkg.id}
                 data-testid={`package-${pkg.id}`}
-                className={`relative rounded-md border p-3 transition-all ${
-                  pkg.popular ? 'border-primary/50 bg-primary/10' : 'border-primary/20 bg-zinc-900/50'
+                className={`relative rounded-lg border border-primary/20 overflow-hidden transition-all ${
+                  pkg.popular ? 'bg-primary/5' : 'bg-zinc-900/50'
                 }`}
               >
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                 {pkg.popular && (
-                  <span className="absolute -top-1 left-1/2 -translate-x-1/2 bg-primary text-primaryForeground px-2 py-0.5 rounded text-[9px] font-heading font-bold">Popular</span>
+                  <span className="absolute top-0 left-1/2 -translate-x-1/2 z-10 bg-primary text-primaryForeground px-2 py-0.5 rounded-b text-[9px] font-heading font-bold">Popular</span>
                 )}
-                <div className="text-center">
-                  <p className="text-xs font-heading font-bold text-foreground">{pkg.name}</p>
-                  <p className="text-lg font-heading font-bold text-primary">{pkg.points}</p>
-                  <p className="text-[10px] text-mutedForeground">pts · ${pkg.price}</p>
+                <div className="p-3 text-center">
+                  <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{pkg.name}</p>
+                  <p className="text-lg font-heading font-bold text-primary mt-1">{pkg.points}</p>
+                  <p className="text-[10px] text-zinc-500 font-heading italic">pts · ${pkg.price}</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handlePurchase(pkg.id)}
-                  data-testid={`buy-package-${pkg.id}`}
-                  disabled={loading}
-                  className="w-full mt-2 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {loading ? '...' : 'Buy'}
-                </button>
+                <div className="px-3 pb-3">
+                  <button
+                    type="button"
+                    onClick={() => handlePurchase(pkg.id)}
+                    data-testid={`buy-package-${pkg.id}`}
+                    disabled={loading}
+                    className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
+                  >
+                    {loading ? '...' : 'Buy'}
+                  </button>
+                </div>
+                <div className="store-art-line text-primary mx-3" />
               </div>
             ))}
           </div>
@@ -307,18 +312,24 @@ export default function Store() {
       {activeTab === 'bullets' && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {BULLET_PACKS.map((pack) => (
-            <div key={pack.bullets} className={`${styles.panel} rounded-md border border-primary/20 p-2.5 text-center`}>
-              <Crosshair size={14} className="text-primary mx-auto mb-1" />
-              <p className="text-sm font-heading font-bold text-foreground">{(pack.bullets / 1000).toFixed(0)}k</p>
-              <p className="text-[10px] text-mutedForeground mb-2">{pack.cost} pts</p>
-              <button
-                type="button"
-                onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
-                disabled={!user || user.points < pack.cost}
-                className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
-              >
-                Buy
-              </button>
+            <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
+                <Crosshair size={14} className="text-primary shrink-0" />
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{(pack.bullets / 1000).toFixed(0)}k bullets</span>
+              </div>
+              <div className="p-2.5 text-center">
+                <p className="text-[10px] text-zinc-500 font-heading mb-2">{pack.cost} pts</p>
+                <button
+                  type="button"
+                  onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
+                  disabled={!user || user.points < pack.cost}
+                  className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary text-primaryForeground hover:bg-primary/90 disabled:opacity-50"
+                >
+                  Buy
+                </button>
+              </div>
+              <div className="store-art-line text-primary mx-3" />
             </div>
           ))}
         </div>
@@ -341,10 +352,11 @@ export default function Store() {
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {bodyguards.map((bg) => (
-              <div key={bg.slot_number} className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden`}>
-                <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-                  <span className="text-[10px] font-heading font-bold text-primary">Slot {bg.slot_number}</span>
-                  <Shield size={14} className="text-primary" />
+              <div key={bg.slot_number} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+                  <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Slot {bg.slot_number}</span>
+                  <Shield size={14} className="text-primary shrink-0" />
                 </div>
                 <div className="p-2.5">
                   {bg.bodyguard_username ? (
@@ -372,16 +384,24 @@ export default function Store() {
                     <p className="text-[10px] text-mutedForeground font-heading">Buy slot first</p>
                   )}
                 </div>
+                <div className="store-art-line text-primary mx-3" />
               </div>
             ))}
           </div>
         </div>
       )}
 
-      <div className="px-4 py-3 rounded-md border border-primary/20 bg-zinc-900/50">
-        <p className="text-[10px] text-mutedForeground font-heading">
-          Payments via Stripe. Points added after purchase.
-        </p>
+      <div className="relative rounded-lg border border-primary/20 overflow-hidden">
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+          <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Payments</p>
+        </div>
+        <div className="px-4 py-3">
+          <p className="text-[10px] text-zinc-500 font-heading italic">
+            Payments via Stripe. Points added after purchase.
+          </p>
+        </div>
+        <div className="store-art-line text-primary mx-3" />
       </div>
     </div>
   );
