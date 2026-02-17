@@ -8,6 +8,25 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../com
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import styles from '../styles/noir.module.css';
 
+const PROFILE_STYLES = `
+  @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .prof-fade-in { animation: prof-fade-in 0.4s ease-out both; }
+  @keyframes prof-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+  .prof-scale-in { animation: prof-scale-in 0.35s ease-out both; }
+  @keyframes prof-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .prof-glow { animation: prof-glow 4s ease-in-out infinite; }
+  .prof-corner::before, .prof-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .prof-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .prof-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .prof-card { transition: all 0.3s ease; }
+  .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .prof-row { transition: all 0.2s ease; }
+  .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -23,8 +42,13 @@ function formatDateTime(iso) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className={`space-y-4 ${styles.pageContent}`}>
+    <style>{PROFILE_STYLES}</style>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+      <UserIcon size={28} className="text-primary/40 animate-pulse" />
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading profile...</span>
+    </div>
   </div>
 );
 
@@ -108,9 +132,11 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
   const avatarSrc = isRobotBodyguard ? null : profile.avatar_url;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
-        <h2 className="text-sm md:text-base lg:text-lg font-heading font-bold text-primary uppercase tracking-wider truncate">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`}>
+      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none prof-glow" />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-3 py-2.5 md:px-4 md:py-3 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+        <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">
           {profile.username}
         </h2>
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
@@ -168,13 +194,13 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
         </div>
       </div>
 
-      <div className="divide-y divide-border">
+      <div className="divide-y divide-zinc-700/30">
         {profileRows.map((row) => {
           const Icon = row.icon;
           return (
-            <div 
-              key={row.label} 
-              className={`grid grid-cols-12 gap-2 md:gap-3 px-3 py-2 md:px-4 md:py-3 hover:bg-secondary/20 transition-colors ${
+            <div
+              key={row.label}
+              className={`prof-row grid grid-cols-12 gap-2 md:gap-3 px-3 py-2 md:px-4 md:py-3 ${
                 row.highlight ? 'border-l-4 border-l-primary/50' : ''
               }`}
             >
@@ -210,20 +236,23 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
       </div>
 
       {profile.is_npc && (
-        <div className="px-3 py-2 md:px-4 border-t border-border bg-secondary/20">
-          <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] md:text-xs uppercase tracking-wider font-heading font-bold bg-secondary text-mutedForeground border border-border">
+        <div className="px-3 py-2 md:px-4 border-t border-zinc-700/30 bg-zinc-800/30">
+          <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] md:text-xs uppercase tracking-wider font-heading font-bold bg-zinc-800 text-mutedForeground border border-zinc-700/40">
             🤖 NPC
           </span>
         </div>
       )}
+      <div className="prof-art-line text-primary mx-4" />
     </div>
   );
 };
 
 const HonoursCard = ({ honours }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-1.5">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-3xl pointer-events-none prof-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center justify-center gap-1.5">
         <Trophy size={14} className="md:w-4 md:h-4" />
         Honours ({honours.length})
       </h3>
@@ -239,9 +268,9 @@ const HonoursCard = ({ honours }) => (
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           {honours.map((h, i) => (
-            <div 
-              key={i} 
-              className="flex items-center gap-2.5 rounded-md border border-primary/20 px-3 py-2 bg-primary/5 hover:bg-primary/10 transition-colors"
+            <div
+              key={i}
+              className="prof-row flex items-center gap-2.5 rounded-lg border border-primary/20 px-3 py-2 bg-primary/5"
             >
               <div className="flex items-center justify-center w-7 h-7 md:w-8 md:h-8 rounded-full bg-primary/20 border border-primary/30 shrink-0">
                 <span className="text-primary font-heading font-bold text-[11px] md:text-sm">
@@ -256,6 +285,7 @@ const HonoursCard = ({ honours }) => (
         </div>
       )}
     </div>
+    <div className="prof-art-line text-primary mx-4" />
   </div>
 );
 
@@ -265,9 +295,11 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
   const isEmpty = !hasCasinos && !hasProperty;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-        <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-center gap-1.5">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-3xl pointer-events-none prof-glow" />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+        <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center justify-center gap-1.5">
           <Building2 size={14} className="md:w-4 md:h-4" />
           Properties
         </h3>
@@ -288,7 +320,7 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
                   const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type || 'Casino';
                   const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : '🎰';
                   return (
-                    <div key={`${c.type}-${c.city}-${i}`} className="rounded-md border border-primary/20 px-3 py-2 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-2.5">
+                    <div key={`${c.type}-${c.city}-${i}`} className="prof-row rounded-lg border border-primary/20 px-3 py-2 bg-zinc-800/30 flex items-start gap-2.5">
                       <span className="text-xl md:text-2xl shrink-0 mt-0.5" aria-hidden>{typeEmoji}</span>
                       <div className="min-w-0 flex-1">
                         <div className="font-heading font-bold text-foreground text-[13px] md:text-base leading-tight">
@@ -313,7 +345,7 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
               </div>
             )}
             {property?.type === 'airport' && (
-              <div className="rounded-md border border-primary/20 px-3 py-2 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-2.5">
+              <div className="prof-row rounded-lg border border-primary/20 px-3 py-2 bg-zinc-800/30 flex items-start gap-2.5">
                 <Plane size={20} className="md:w-6 md:h-6 text-primary shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <div className="font-heading font-bold text-foreground text-[13px] md:text-base leading-tight">
@@ -335,7 +367,7 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
               </div>
             )}
             {property?.type === 'bullet_factory' && (
-              <div className="rounded-md border border-primary/20 px-3 py-2 bg-secondary/50 hover:bg-secondary/70 transition-colors flex items-start gap-2.5">
+              <div className="prof-row rounded-lg border border-primary/20 px-3 py-2 bg-zinc-800/30 flex items-start gap-2.5">
                 <Factory size={20} className="md:w-6 md:h-6 text-primary shrink-0 mt-0.5" />
                 <div className="min-w-0 flex-1">
                   <div className="font-heading font-bold text-foreground text-[13px] md:text-base leading-tight">
@@ -353,14 +385,16 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
           </div>
         )}
       </div>
+      <div className="prof-art-line text-primary mx-4" />
     </div>
   );
 };
 
 const AdminStatsCard = ({ adminStats }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/40 shadow-lg shadow-primary/10`}>
-    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 border-primary/30 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] text-center">
         🔐 Admin Info
       </h3>
     </div>
@@ -391,6 +425,7 @@ const AdminStatsCard = ({ adminStats }) => (
         </div>
       ))}
     </div>
+    <div className="prof-art-line text-primary mx-4" />
   </div>
 );
 
@@ -418,9 +453,10 @@ const AvatarCard = ({
   };
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-        <h3 class="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-widest text-center">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+        <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] text-center">
           📸 Profile Picture
         </h3>
       </div>
@@ -469,6 +505,7 @@ const AvatarCard = ({
           </div>
         )}
       </div>
+      <div className="prof-art-line text-primary mx-4" />
     </div>
   );
 };
@@ -698,7 +735,13 @@ export default function Profile() {
   if (!profile) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
-        <div className={`${styles.panel} rounded-md border border-border py-16 text-center`}>
+        <style>{PROFILE_STYLES}</style>
+        <div className="relative prof-fade-in">
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Dossier</p>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Profile</h1>
+        </div>
+        <div className={`relative ${styles.panel} rounded-lg border border-primary/20 prof-corner prof-fade-in py-16 text-center overflow-hidden`} style={{ animationDelay: '0.05s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <UserIcon size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">
             Profile not found
@@ -717,7 +760,18 @@ export default function Profile() {
   const ownedCasinos = profile.owned_casinos || [];
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="profile-page">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="profile-page">
+      <style>{PROFILE_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative prof-fade-in max-w-3xl mx-auto">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Dossier</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+          {profile.username}
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Rank, crew, honours and property.</p>
+      </div>
+
       <div className="max-w-3xl mx-auto space-y-4 md:space-y-6">
         <ProfileInfoCard 
           profile={profile} 
@@ -742,11 +796,12 @@ export default function Profile() {
         {isMe && hasAdminEmail && (
           <>
             {isAdmin && (
-              <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/30`}>
-                <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
+              <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-fade-in`}>
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-3 py-2.5 md:px-4 md:py-3 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 md:gap-2">
                     <Ghost className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                    <span className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-wider">Admin ghost mode</span>
+                    <span className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.15em]">Admin ghost mode</span>
                   </div>
                   <button
                     type="button"
@@ -764,11 +819,12 @@ export default function Profile() {
                 </p>
               </div>
             )}
-            <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-primary/30`}>
-              <div className="px-3 py-2 md:px-4 md:py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2">
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-fade-in`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-3 py-2.5 md:px-4 md:py-3 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 md:gap-2">
                   <Shield className="w-4 h-4 md:w-5 md:h-5 text-primary" />
-                  <span className="text-[11px] md:text-sm font-heading font-bold text-primary uppercase tracking-wider">
+                  <span className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.15em]">
                     {me?.admin_acting_as_normal ? 'Acting as normal user' : 'Admin powers'}
                   </span>
                 </div>
@@ -801,15 +857,17 @@ export default function Profile() {
           <AdminStatsCard adminStats={profile.admin_stats} />
         )}
 
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-border`}>
-          <div className="px-3 py-2 md:px-4 md:py-2.5 bg-secondary/30 border-b border-border text-center">
-            <span className="text-[10px] md:text-xs font-heading font-bold text-mutedForeground uppercase tracking-wider">
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-fade-in`} style={{ animationDelay: '0.1s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 md:px-4 bg-primary/8 border-b border-primary/20 text-center">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
               Account Created
             </span>
           </div>
           <div className="px-3 py-2 md:px-4 md:py-3 text-foreground font-heading text-[11px] md:text-sm text-center">
             {formatDateTime(profile.created_at)}
           </div>
+          <div className="prof-art-line text-primary mx-4" />
         </div>
       </div>
 
