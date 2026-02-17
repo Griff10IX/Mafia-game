@@ -62,10 +62,10 @@ const useCooldownTicker = (options, onCooldownExpired) => {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <Car size={28} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+    <Car size={22} className="text-primary/40 animate-pulse" />
+    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
   </div>
 );
 
@@ -75,21 +75,21 @@ const EventBanner = ({ event, eventsEnabled }) => {
   }
 
   return (
-    <div className="px-3 py-2 bg-primary/8 border border-primary/20 rounded-lg gta-fade-in">
-      <p className="text-xs font-heading">
+    <div className="px-2 py-1.5 bg-primary/8 border border-primary/20 rounded-md gta-fade-in">
+      <p className="text-[10px] font-heading">
         <span className="text-primary font-bold">✨ {event.name}</span>
-        <span className="text-mutedForeground ml-2">{event.message}</span>
+        <span className="text-mutedForeground ml-1">{event.message}</span>
       </p>
     </div>
   );
 };
 
 const AutoRankGtaNotice = () => (
-  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg gta-fade-in overflow-hidden`}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-    <div className="flex items-center gap-2">
-      <Bot size={14} className="text-amber-400 shrink-0" />
-      <span className="text-amber-200/80">
+  <div className={`relative p-2 ${styles.panel} border border-amber-500/40 rounded-md gta-fade-in overflow-hidden`}>
+    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+    <div className="flex items-center gap-1.5">
+      <Bot size={10} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80 text-[10px]">
         <strong className="text-amber-300">Auto Rank</strong> — GTA is running automatically. Manual play disabled.
       </span>
     </div>
@@ -108,7 +108,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-all gta-row ${
+      className={`flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-all gta-row ${
         unlocked && !onCooldown
           ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20' 
           : 'bg-zinc-800/20 border border-transparent opacity-60'
@@ -116,28 +116,28 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
       data-testid={`gta-option-${option.id}`}
     >
       {/* Car info */}
-      <div className="flex items-center gap-2 min-w-0 flex-1">
+      <div className="flex items-center gap-1 min-w-0 flex-1">
         {unlocked ? (
-          <Car className="text-primary/50 w-4 h-4 shrink-0" />
+          <Car className="text-primary/50 w-3.5 h-3.5 shrink-0" />
         ) : (
-          <Lock className="text-mutedForeground/50 w-4 h-4 shrink-0" />
+          <Lock className="text-mutedForeground/50 w-3.5 h-3.5 shrink-0" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-heading font-bold text-foreground truncate block">
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-[11px] font-heading font-bold text-foreground truncate block">
               {option.name}
             </span>
             {!unlocked && option.min_rank_name && (
               <span
-                className="shrink-0 inline-flex items-center gap-1 bg-zinc-800/50 text-mutedForeground rounded px-2 py-0.5 text-[10px] font-bold uppercase border border-zinc-700/50"
+                className="shrink-0 inline-flex items-center gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50"
                 title={`Unlocked at rank ${option.min_rank_name}`}
               >
-                <Lock size={10} />
+                <Lock size={8} />
                 Unlocked at rank {option.min_rank_name}
               </span>
             )}
           </div>
-          <div className="text-[10px] text-mutedForeground truncate">
+          <div className="text-[9px] text-mutedForeground truncate">
             {!unlocked && option.min_rank_name
               ? 'Unavailable'
               : `Difficulty ${option.difficulty}/5`}
@@ -149,25 +149,25 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
       {unlocked && <GTAProgressBar progress={option.progress} />}
 
       {/* Success rate */}
-      <div className="shrink-0 w-12 text-center">
-        <span className={`text-xs font-bold ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
+      <div className="shrink-0 w-8 text-center">
+        <span className={`text-[10px] font-bold ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
           {successRateDisplay}%
         </span>
       </div>
 
       {/* Jail time */}
-      <div className="shrink-0 w-10 text-center">
-        <span className="text-xs font-bold text-red-400">{option.jail_time}s</span>
+      <div className="shrink-0 w-8 text-center">
+        <span className="text-[10px] font-bold text-red-400">{option.jail_time}s</span>
       </div>
 
       {/* Cooldown */}
-      <div className="shrink-0 w-14 text-center">
+      <div className="shrink-0 w-10 text-center">
         {onCooldown ? (
-          <span className="text-xs text-mutedForeground font-heading">{onCooldown}</span>
+          <span className="text-[10px] text-mutedForeground font-heading">{onCooldown}</span>
         ) : unlocked ? (
-          <span className="text-[10px] text-mutedForeground/60">{defaultCooldown}</span>
+          <span className="text-[9px] text-mutedForeground/60">{defaultCooldown}</span>
         ) : (
-          <span className="text-[10px] text-mutedForeground">—</span>
+          <span className="text-[9px] text-mutedForeground">—</span>
         )}
       </div>
 
@@ -177,7 +177,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
           <button
             type="button"
             disabled
-            className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+            className="bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Locked
           </button>
@@ -186,7 +186,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             type="button"
             onClick={() => onAttempt(option.id)}
             disabled={attemptingOptionId !== null}
-            className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-60 font-heading"
+            className="bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-60 font-heading"
             data-testid={`attempt-gta-${option.id}`}
           >
             {attemptingOptionId === option.id ? '...' : '🚗 Steal'}
@@ -195,12 +195,12 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
           <button
             type="button"
             disabled
-            className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+            className="bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Wait
           </button>
         ) : (
-          <span className="text-[10px] text-mutedForeground">
+          <span className="text-[9px] text-mutedForeground">
             {option.min_rank_name ? '—' : 'Locked'}
           </span>
         )}
@@ -213,34 +213,34 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
   if (recentStolen.length === 0) return null;
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`}>
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <button
         type="button"
         onClick={onToggle}
-        className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+        className="w-full px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
       >
-        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
           🚗 Last 10 cars stolen
         </span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-primary font-heading font-bold">{recentStolen.length} cars</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] text-primary font-heading font-bold">{recentStolen.length} cars</span>
           <span className="text-primary/80">
-            {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+            {isCollapsed ? <ChevronRight size={10} /> : <ChevronDown size={10} />}
           </span>
         </div>
       </button>
       
       {!isCollapsed && (
-        <div className="p-3">
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+        <div className="p-2">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-1">
             {recentStolen.map((car, index) => (
               <div
                 key={car.user_car_id ?? index}
                 data-testid={`recent-stolen-car-${index}`}
-                className="bg-zinc-800/30 border border-primary/10 rounded-sm p-1 flex flex-col items-center text-center hover:border-primary/30 transition-all"
+                className="bg-zinc-800/30 border border-primary/10 rounded p-0.5 flex flex-col items-center text-center hover:border-primary/30 transition-all"
               >
-                <div className="w-full aspect-square rounded-sm overflow-hidden bg-zinc-900/50 shrink-0 mb-0.5">
+                <div className="w-full aspect-square rounded overflow-hidden bg-zinc-900/50 shrink-0 mb-0.5">
                   {car.image ? (
                     <img
                       src={car.image}
@@ -250,22 +250,22 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                      <Car size={20} className="text-primary/40" />
+                      <Car size={14} className="text-primary/40" />
                     </div>
                   )}
                 </div>
-                <div className="text-[9px] font-heading font-bold text-primary truncate w-full leading-tight">
+                <div className="text-[8px] font-heading font-bold text-primary truncate w-full leading-tight">
                   {car.car_name}
                 </div>
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-mutedForeground font-heading mt-2 text-center">
+          <p className="text-[9px] text-mutedForeground font-heading mt-1 text-center">
             <Link to="/garage" className="text-primary hover:underline">View full garage →</Link>
           </p>
         </div>
       )}
-      <div className="gta-art-line text-primary mx-3" />
+      <div className="gta-art-line text-primary mx-2.5" />
     </div>
   );
 };
@@ -276,13 +276,13 @@ const GTAProgressBar = ({ progress }) => {
   const barPct = ((pct - 10) / 82) * 100;
   return (
     <div
-      className="flex items-center gap-1.5 shrink-0"
+      className="flex items-center gap-1 shrink-0"
       title={`Success rate: ${pct}%. Success +3–5%; fail -1–3%; once you've hit 92%, it never goes below 77%.`}
     >
       <div
         style={{
-          width: 48,
-          height: 5,
+          width: 36,
+          height: 4,
           backgroundColor: '#333333',
           borderRadius: 9999,
           overflow: 'hidden',
@@ -292,7 +292,7 @@ const GTAProgressBar = ({ progress }) => {
           style={{
             height: '100%',
             width: `${barPct}%`,
-            minWidth: barPct > 0 ? 4 : 0,
+            minWidth: barPct > 0 ? 3 : 0,
             background: 'linear-gradient(to right, #d4af37, #ca8a04)',
             borderRadius: 9999,
             transition: 'width 0.3s ease',
@@ -303,40 +303,40 @@ const GTAProgressBar = ({ progress }) => {
           aria-valuemax={92}
         />
       </div>
-      <span className="text-[10px] text-primary font-heading w-7">{pct}%</span>
+      <span className="text-[9px] text-primary font-heading w-6">{pct}%</span>
     </div>
   );
 };
 
 const InfoSection = () => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.08s' }}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.08s' }}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         ℹ️ GTA System
       </h3>
     </div>
-    <div className="p-3">
-      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-        <li className="flex items-start gap-1.5">
+    <div className="p-2">
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading">
+        <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>Unlock by rank (Goon → Consigliere)</span>
         </li>
-        <li className="flex items-start gap-1.5">
+        <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>One attempt = all on cooldown</span>
         </li>
-        <li className="flex items-start gap-1.5">
+        <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>Higher difficulty = rarer cars + more RP</span>
         </li>
-        <li className="flex items-start gap-1.5">
+        <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>Failed = jail. Better cars = travel bonus</span>
         </li>
       </ul>
     </div>
-    <div className="gta-art-line text-primary mx-3" />
+    <div className="gta-art-line text-primary mx-2.5" />
   </div>
 );
 
@@ -480,7 +480,7 @@ export default function GTA() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent}`}>
         <style>{GTA_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -488,42 +488,42 @@ export default function GTA() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="gta-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="gta-page">
       <style>{GTA_STYLES}</style>
 
       <div className="relative gta-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Grand Theft Auto</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Car size={24} /> GTA
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Grand Theft Auto</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
+          <Car size={18} /> GTA
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
       </div>
 
       {autoRankGtaDisabled && <AutoRankGtaNotice />}
       <EventBanner event={event} eventsEnabled={eventsEnabled} />
 
       {/* GTA stats */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">GTA stats</span>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">GTA stats</span>
         </div>
-        <div className="p-3 text-sm font-heading text-foreground">
+        <div className="p-2 text-[10px] font-heading text-foreground">
           GTAs today: {gtaStats.count_today ?? 0}  successful today {gtaStats.success_today ?? 0}  past week {gtaStats.count_week ?? 0} ({gtaStats.success_week ?? 0} successful)
         </div>
-        <div className="gta-art-line text-primary mx-3" />
+        <div className="gta-art-line text-primary mx-2.5" />
       </div>
 
       {/* GTA options list */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.05s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Available Vehicles
           </span>
         </div>
 
-        <div className="p-2 space-y-1">
+        <div className="p-1.5 space-y-0.5">
           {options.map((option) => (
             <GTARow
               key={option.id}
@@ -536,7 +536,7 @@ export default function GTA() {
             />
           ))}
         </div>
-        <div className="gta-art-line text-primary mx-3" />
+        <div className="gta-art-line text-primary mx-2.5" />
       </div>
 
       <RecentStolenSection 

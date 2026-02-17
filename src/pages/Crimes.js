@@ -63,19 +63,19 @@ const useCooldownTicker = (crimes, onCooldownExpired) => {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <Skull size={28} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+    <Skull size={22} className="text-primary/40 animate-pulse" />
+    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
   </div>
 );
 
 const JailNotice = () => (
-  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg cr-fade-in overflow-hidden`}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-    <div className="flex items-center gap-2">
-      <AlertCircle size={14} className="text-amber-400 shrink-0" />
-      <span className="text-amber-200/80">
+  <div className={`relative p-2 ${styles.panel} border border-amber-500/40 rounded-md cr-fade-in overflow-hidden`}>
+    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+    <div className="flex items-center gap-1.5">
+      <AlertCircle size={10} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80 text-[10px]">
         <strong className="text-amber-300">Incarcerated</strong> — Can't commit crimes while in jail
       </span>
     </div>
@@ -83,11 +83,11 @@ const JailNotice = () => (
 );
 
 const AutoRankCrimesNotice = () => (
-  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg cr-fade-in overflow-hidden`}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-    <div className="flex items-center gap-2">
-      <Bot size={14} className="text-amber-400 shrink-0" />
-      <span className="text-amber-200/80">
+  <div className={`relative p-2 ${styles.panel} border border-amber-500/40 rounded-md cr-fade-in overflow-hidden`}>
+    <div className="h-px bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+    <div className="flex items-center gap-1.5">
+      <Bot size={10} className="text-amber-400 shrink-0" />
+      <span className="text-amber-200/80 text-[10px]">
         <strong className="text-amber-300">Auto Rank</strong> — Crimes are running automatically. Manual play disabled.
       </span>
     </div>
@@ -100,10 +100,10 @@ const EventBanner = ({ event }) => {
   }
 
   return (
-    <div className="px-3 py-2 bg-primary/8 border border-primary/20 rounded-lg cr-fade-in">
-      <p className="text-xs font-heading">
+    <div className="px-2 py-1.5 bg-primary/8 border border-primary/20 rounded-md cr-fade-in">
+      <p className="text-[10px] font-heading">
         <span className="text-primary font-bold">✨ {event.name}</span>
-        <span className="text-mutedForeground ml-2">{event.message}</span>
+        <span className="text-mutedForeground ml-1">{event.message}</span>
       </p>
     </div>
   );
@@ -115,13 +115,13 @@ const CrimeProgressBar = ({ progress }) => {
   const barPct = ((pct - 10) / 82) * 100; // 10% = 0% fill, 92% = 100% fill
   return (
     <div
-      className="flex items-center gap-1.5 shrink-0"
+      className="flex items-center gap-1 shrink-0"
       title={`Crime success rate: ${pct}%. Success +3–5%; fail -1–3%; once you've hit 92%, it never goes below 77%.`}
     >
       <div
         style={{
-          width: 48,
-          height: 5,
+          width: 36,
+          height: 4,
           backgroundColor: '#333333',
           borderRadius: 9999,
           overflow: 'hidden',
@@ -131,7 +131,7 @@ const CrimeProgressBar = ({ progress }) => {
           style={{
             height: '100%',
             width: `${barPct}%`,
-            minWidth: barPct > 0 ? 4 : 0,
+            minWidth: barPct > 0 ? 3 : 0,
             background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))',
             borderRadius: 9999,
             transition: 'width 0.3s ease',
@@ -142,7 +142,7 @@ const CrimeProgressBar = ({ progress }) => {
           aria-valuemax={92}
         />
       </div>
-      <span className="text-[10px] text-primary font-heading w-7">{pct}%</span>
+      <span className="text-[9px] text-primary font-heading w-6">{pct}%</span>
     </div>
   );
 };
@@ -155,7 +155,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-all cr-row ${
+      className={`flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-all cr-row ${
         crime.can_commit 
           ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20' 
           : 'bg-zinc-800/20 border border-transparent opacity-60'
@@ -163,24 +163,24 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
       data-testid={`crime-row-${crime.id}`}
     >
       {/* Crime info (same layout as GTA: name + unlock badge when locked) */}
-      <div className="flex items-center gap-2 min-w-0 flex-1">
-        <span className="text-primary/50 text-xs shrink-0">▸</span>
+      <div className="flex items-center gap-1 min-w-0 flex-1">
+        <span className="text-primary/50 text-[10px] shrink-0">▸</span>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap gap-y-0.5">
-            <span className="text-sm font-heading font-bold text-foreground truncate">
+          <div className="flex items-center gap-1 flex-wrap gap-y-0.5">
+            <span className="text-[11px] font-heading font-bold text-foreground truncate">
               {crime.name}
             </span>
             {crime.unlocked === false && crime.min_rank_name && (
               <span
-                className="shrink-0 inline-flex items-center gap-1 bg-zinc-800/50 text-mutedForeground rounded px-2 py-0.5 text-[10px] font-bold uppercase border border-zinc-700/50"
+                className="shrink-0 inline-flex items-center gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50"
                 title={`Unlocked at rank ${crime.min_rank_name}`}
               >
-                <HelpCircle size={10} />
+                <HelpCircle size={8} />
                 Unlocked at rank {crime.min_rank_name}
               </span>
             )}
           </div>
-          <div className="text-[10px] text-mutedForeground truncate hidden sm:block mt-0.5">
+          <div className="text-[9px] text-mutedForeground truncate hidden sm:block mt-0.5">
             {crime.description}
           </div>
         </div>
@@ -190,31 +190,31 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
       {crime.unlocked !== false && <CrimeProgressBar progress={crime.progress} />}
 
       {/* Risk */}
-      <div className="shrink-0 w-12 text-center">
-        <span className={`text-xs font-bold tabular-nums ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
+      <div className="shrink-0 w-8 text-center">
+        <span className={`text-[10px] font-bold tabular-nums ${crime.can_commit ? 'text-red-400' : 'text-mutedForeground'}`}>
           {unavailable ? '—' : `${crime.risk}%`}
         </span>
       </div>
 
       {/* Cooldown */}
-      <div className="shrink-0 w-14 text-center">
+      <div className="shrink-0 w-10 text-center">
         {onCooldown && crime.remaining > 0 ? (
-          <div className="flex items-center justify-center gap-1 text-xs text-mutedForeground font-heading whitespace-nowrap">
-            <Clock size={10} className="text-primary shrink-0" />
+          <div className="flex items-center justify-center gap-0.5 text-[10px] text-mutedForeground font-heading whitespace-nowrap">
+            <Clock size={8} className="text-primary shrink-0" />
             <span>{crime.remaining}s</span>
           </div>
         ) : (
-          <span className="text-[10px] text-mutedForeground whitespace-nowrap truncate block" title={crime.wait}>{crime.wait}</span>
+          <span className="text-[9px] text-mutedForeground whitespace-nowrap truncate block" title={crime.wait}>{crime.wait}</span>
         )}
       </div>
 
       {/* Action (Commit / Wait / — for rank-locked / Locked when Auto Rank) */}
-      <div className="shrink-0 w-[72px] flex justify-end">
+      <div className="shrink-0 w-[60px] flex justify-end">
         {showLocked ? (
           <button
             type="button"
             disabled
-            className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+            className="bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Locked
           </button>
@@ -222,7 +222,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
           <button
             type="button"
             onClick={() => onCommit(crime.id)}
-            className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading"
+            className="bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading"
             data-testid={`commit-crime-${crime.id}`}
           >
             💰 Commit
@@ -231,14 +231,14 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
           <button
             type="button"
             disabled
-            className="bg-zinc-700/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+            className="bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Wait
           </button>
         ) : crime.unlocked === false && crime.min_rank_name ? (
-          <span className="text-[10px] text-mutedForeground">—</span>
+          <span className="text-[9px] text-mutedForeground">—</span>
         ) : (
-          <span className="text-[10px] text-mutedForeground">Locked</span>
+          <span className="text-[9px] text-mutedForeground">Locked</span>
         )}
       </div>
     </div>
@@ -417,7 +417,7 @@ export default function Crimes() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent}`}>
         <style>{CRIMES_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -425,15 +425,15 @@ export default function Crimes() {
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="crimes-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="crimes-page">
       <style>{CRIMES_STYLES}</style>
 
       <div className="relative cr-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Grind</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Skull size={24} /> Crimes
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Grind</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
+          <Skull size={18} /> Crimes
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Commit crimes for cash and rank. Fail and you risk jail.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Commit crimes for cash and rank. Fail and you risk jail.</p>
       </div>
 
       {user?.in_jail && <JailNotice />}
@@ -442,25 +442,25 @@ export default function Crimes() {
       {eventsEnabled && <EventBanner event={event} />}
 
       {/* Stats */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Crimes stats</span>
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crimes stats</span>
         </div>
-        <div className="p-3 text-sm font-heading text-foreground">
+        <div className="p-2 text-[10px] font-heading text-foreground">
           Crimes today: {crimeStats.count_today ?? 0}  successful today {crimeStats.success_today ?? 0}  past week {crimeStats.count_week ?? 0} ({crimeStats.success_week ?? 0} successful)
-          <div className="mt-1.5 text-mutedForeground text-xs">
+          <div className="mt-1 text-mutedForeground text-[9px]">
             Profit today ${(crimeStats.profit_today ?? 0).toLocaleString()}  ·  Past 24h ${(crimeStats.profit_24h ?? 0).toLocaleString()}  ·  Past week ${(crimeStats.profit_week ?? 0).toLocaleString()}
           </div>
         </div>
-        <div className="cr-art-line text-primary mx-3" />
+        <div className="cr-art-line text-primary mx-2.5" />
       </div>
 
       {/* Crimes list */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.05s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Available Crimes
           </span>
           {!user?.in_jail && !autoRankCrimesDisabled && commitAllCount > 0 && (
@@ -468,19 +468,19 @@ export default function Crimes() {
               type="button"
               onClick={commitAll}
               disabled={commitAllLoading}
-              className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+              className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-1.5 py-0.5 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
             >
               {commitAllLoading ? '...' : `Commit All (${commitAllCount})`}
             </button>
           )}
         </div>
 
-        <div className="p-2 space-y-1">
+        <div className="p-1.5 space-y-0.5">
           {crimeRows.map((crime) => (
             <CrimeRow key={crime.id} crime={crime} onCommit={commitCrime} manualPlayDisabled={autoRankCrimesDisabled} />
           ))}
         </div>
-        <div className="cr-art-line text-primary mx-3" />
+        <div className="cr-art-line text-primary mx-2.5" />
       </div>
     </div>
   );
