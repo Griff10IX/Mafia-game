@@ -141,14 +141,7 @@ export default function Objectives() {
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="objectives-page">
       <style>{OBJ_STYLES}</style>
 
-      {/* Page header */}
-      <div className="relative obj-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Goals</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
-          Objectives
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Complete daily, weekly, and monthly goals for extra rewards. New objectives each period.</p>
-      </div>
+      <p className="text-[9px] text-zinc-500 font-heading italic">Complete daily, weekly, and monthly goals for extra rewards. New objectives each period.</p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
         {/* Today */}
