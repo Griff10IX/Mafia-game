@@ -44,10 +44,10 @@ function getTimeAgo(dateString) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <Mail size={28} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+    <Mail size={22} className="text-primary/40 animate-pulse" />
+    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
   </div>
 );
 
@@ -71,27 +71,27 @@ const ComposeModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} rounded-lg border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 bg-black/80 backdrop-blur-sm">
+      <div className={`${styles.panel} rounded-md border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}>
         {/* Header */}
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-4 md:px-6 py-4 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-            <Send size={20} />
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
+            <Send size={14} />
             New Message
           </h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-secondary rounded transition-colors"
+            className="p-0.5 hover:bg-secondary rounded transition-colors"
           >
-            <X size={20} className="text-mutedForeground" />
+            <X size={14} className="text-mutedForeground" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={onSendMessage} className="p-4 md:p-6 space-y-4 overflow-y-auto">
+        <form onSubmit={onSendMessage} className="p-2 space-y-2 overflow-y-auto">
           <div>
-            <label className="block text-sm font-heading text-mutedForeground mb-2">
+            <label className="block text-[10px] font-heading text-mutedForeground mb-1">
               To
             </label>
             <input
@@ -99,29 +99,29 @@ const ComposeModal = ({
               value={sendTo}
               onChange={(e) => onSendToChange(e.target.value)}
               placeholder="Enter username..."
-              className="w-full bg-input border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
               autoFocus
             />
           </div>
           
           <div>
-            <label className="block text-sm font-heading text-mutedForeground mb-2">
+            <label className="block text-[10px] font-heading text-mutedForeground mb-1">
               Message
             </label>
             <textarea
               value={sendMessage}
               onChange={(e) => onSendMessageChange(e.target.value)}
               placeholder="Type your message..."
-              rows={5}
-              className="w-full bg-input border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
+              rows={3}
+              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
             />
-            <div className="mt-2 flex flex-wrap gap-1">
+            <div className="mt-1 flex flex-wrap gap-0.5">
               {EMOJI_ROWS.flat().map((emoji) => (
                 <button 
                   key={emoji} 
                   type="button" 
                   onClick={() => onInsertEmoji(emoji)} 
-                  className="text-base p-1.5 rounded hover:bg-primary/20 active:scale-95 transition-all" 
+                  className="text-sm p-1 rounded hover:bg-primary/20 active:scale-95 transition-all" 
                 >
                   {emoji}
                 </button>
@@ -130,15 +130,15 @@ const ComposeModal = ({
           </div>
           
           <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-heading text-mutedForeground">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-[10px] font-heading text-mutedForeground">
                 GIF (Optional)
               </label>
               {onOpenGifPicker && (
                 <button
                   type="button"
                   onClick={onOpenGifPicker}
-                  className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase"
+                  className="text-[9px] font-heading font-bold text-primary hover:text-primary/80 uppercase"
                 >
                   Search GIPHY →
                 </button>
@@ -148,7 +148,7 @@ const ComposeModal = ({
               <GifPicker
                 onSelect={gifPickerOnSelect}
                 onClose={gifPickerOnClose}
-                className="mb-2"
+                className="mb-1"
               />
             )}
             <input
@@ -156,22 +156,22 @@ const ComposeModal = ({
               value={sendGifUrl}
               onChange={(e) => onSendGifUrlChange(e.target.value)}
               placeholder="Paste GIF URL..."
-              className="w-full bg-input border border-border rounded-md px-4 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
             />
           </div>
           
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-1.5 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 bg-secondary text-foreground border border-border hover:bg-secondary/80 rounded-lg px-6 py-3 font-heading font-bold uppercase tracking-wide text-sm transition-all active:scale-95"
+              className="flex-1 bg-secondary text-foreground border border-border hover:bg-secondary/80 rounded-md px-2.5 py-1.5 font-heading font-bold uppercase tracking-wide text-[10px] transition-all active:scale-95"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={sending}
-              className="flex-1 bg-primary/20 text-primary rounded-lg px-6 py-3 font-heading font-bold uppercase tracking-wide text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+              className="flex-1 bg-primary/20 text-primary rounded-md px-2.5 py-1.5 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             >
               {sending ? 'Sending...' : 'Send'}
             </button>
@@ -197,7 +197,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
       onClick={onClick}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
-      className={`group relative flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ib-row ${
+      className={`group relative flex items-center gap-2 px-2 py-1.5 border-b border-border cursor-pointer transition-all ib-row ${
         isSelected 
           ? 'bg-primary/10 border-l-4 border-l-primary' 
           : isSent
@@ -208,44 +208,44 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
       }`}
     >
       {/* Icon */}
-      <div className={`p-2 rounded-md shrink-0 ${
+      <div className={`p-1 rounded shrink-0 ${
         isSent ? 'bg-primary/20' : notification.read ? 'bg-secondary' : 'bg-primary/20'
       }`}>
         {isSent ? (
-          <Send size={18} className="text-primary" />
+          <Send size={12} className="text-primary" />
         ) : (
-          <Icon size={18} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
+          <Icon size={12} className={notification.read ? 'text-mutedForeground' : 'text-primary'} />
         )}
       </div>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <h3 className={`text-sm font-heading truncate ${
+        <div className="flex items-center justify-between gap-1 mb-0.5">
+          <h3 className={`text-[11px] font-heading truncate ${
             isSent ? 'text-foreground' : notification.read ? 'text-foreground' : 'text-foreground font-bold'
           }`}>
             {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
           </h3>
-          <span className="text-xs text-mutedForeground whitespace-nowrap">
+          <span className="text-[9px] text-mutedForeground whitespace-nowrap">
             {timeAgo}
           </span>
         </div>
-        <p className="text-xs text-mutedForeground truncate">
+        <p className="text-[9px] text-mutedForeground truncate">
           {notification.message}
         </p>
       </div>
 
       {/* Unread indicator or Sent badge */}
       {isSent ? (
-        <div className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold shrink-0">
+        <div className="px-1 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-bold shrink-0">
           SENT
         </div>
       ) : !notification.read ? (
-        <div className="w-2 h-2 rounded-full bg-primary shrink-0" />
+        <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
       ) : null}
 
       {/* Arrow */}
-      <ChevronRight size={16} className="text-mutedForeground shrink-0" />
+      <ChevronRight size={10} className="text-mutedForeground shrink-0" />
       
       {/* Hover Preview Tooltip - Fixed positioning */}
       {showPreview && (
@@ -257,50 +257,50 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
             transform: 'translate(-50%, -50%)'
           }}
         >
-          <div className="bg-zinc-900 border-2 border-primary/40 rounded-lg p-4 shadow-2xl shadow-black/50 w-96 animate-in fade-in duration-150">
+          <div className="bg-zinc-900 border-2 border-primary/40 rounded-md p-2 shadow-2xl shadow-black/50 w-80 animate-in fade-in duration-150">
             {/* Preview Header */}
-            <div className="flex items-start gap-3 mb-3 pb-3 border-b border-primary/20">
-              <div className="p-2.5 rounded-md bg-primary/20 border border-primary/30">
+            <div className="flex items-start gap-2 mb-2 pb-2 border-b border-primary/20">
+              <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
                 {isSent ? (
-                  <Send size={18} className="text-primary" />
+                  <Send size={12} className="text-primary" />
                 ) : (
-                  <Icon size={18} className="text-primary" />
+                  <Icon size={12} className="text-primary" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-base font-heading font-bold text-primary mb-1">
+                <h4 className="text-[11px] font-heading font-bold text-primary mb-0.5">
                   {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
                 </h4>
-                <p className="text-xs text-mutedForeground">
+                <p className="text-[9px] text-mutedForeground">
                   {timeAgo}
                 </p>
               </div>
               {!isSent && !notification.read && (
-                <div className="px-2 py-0.5 rounded-full bg-primary/20 text-primary text-xs font-bold">
+                <div className="px-1 py-0.5 rounded bg-primary/20 text-primary text-[9px] font-bold">
                   NEW
                 </div>
               )}
             </div>
             
             {/* Preview Body */}
-            <p className="text-sm text-foreground leading-relaxed max-h-40 overflow-y-auto whitespace-pre-wrap">
+            <p className="text-[10px] text-foreground leading-snug max-h-32 overflow-y-auto whitespace-pre-wrap">
               {notification.message}
             </p>
             
             {/* GIF Preview */}
             {notification.gif_url && (
-              <div className="mt-3 pt-3 border-t border-primary/20">
+              <div className="mt-2 pt-2 border-t border-primary/20">
                 <img 
                   src={notification.gif_url} 
                   alt="GIF preview" 
-                  className="max-w-full max-h-32 rounded border border-primary/20 mx-auto" 
+                  className="max-w-full max-h-24 rounded border border-primary/20 mx-auto" 
                 />
               </div>
             )}
             
             {/* Click hint */}
-            <div className="mt-3 pt-3 border-t border-primary/20 text-center">
-              <span className="text-xs text-mutedForeground">Click to view full message</span>
+            <div className="mt-2 pt-2 border-t border-primary/20 text-center">
+              <span className="text-[9px] text-mutedForeground">Click to view full message</span>
             </div>
           </div>
         </div>
@@ -314,8 +314,8 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
     return (
       <div className="flex-1 flex items-center justify-center bg-secondary/20">
         <div className="text-center">
-          <MailOpen size={64} className="mx-auto text-primary/30 mb-4" />
-          <p className="text-mutedForeground font-heading">
+          <MailOpen size={36} className="mx-auto text-primary/30 mb-2" />
+          <p className="text-[10px] text-mutedForeground font-heading">
             Select a message to read
           </p>
         </div>
@@ -333,18 +333,18 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
   return (
     <div className={`flex-1 flex flex-col ${styles.panel}`}>
       {/* Message Header */}
-      <div className="px-4 md:px-6 py-4 border-b border-primary/20 bg-primary/8">
-        <div className="flex items-start justify-between gap-4 mb-3">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20">
-              <Icon size={24} className="text-primary" />
+      <div className="px-2.5 py-2 border-b border-primary/20 bg-primary/8">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-start gap-2">
+            <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20">
+              <Icon size={16} className="text-primary" />
             </div>
             <div>
-              <h2 className="text-lg md:text-xl font-heading font-bold text-foreground mb-1">
+              <h2 className="text-sm font-heading font-bold text-foreground mb-0.5">
                 {isSent ? `To: ${recipient || 'Unknown'}` : notification.title}
               </h2>
-              <p className="text-sm text-mutedForeground">
-                {isSent && <span className="text-primary font-bold mr-2">Sent</span>}
+              <p className="text-[10px] text-mutedForeground">
+                {isSent && <span className="text-primary font-bold mr-1">Sent</span>}
                 {getTimeAgo(notification.created_at)}
               </p>
             </div>
@@ -352,11 +352,11 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
         </div>
 
         {/* Actions */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1">
           {!isSent && !notification.read && (
             <button
               onClick={() => onMarkRead(notification.id)}
-              className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase transition-all"
+              className="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-[9px] font-heading font-bold uppercase transition-all"
             >
               ✓ Mark Read
             </button>
@@ -364,14 +364,14 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
           {!isSent && isUserMessage && (
             <button
               onClick={() => onOpenChat(notification)}
-              className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase transition-all"
+              className="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-[9px] font-heading font-bold uppercase transition-all"
             >
               💬 Reply
             </button>
           )}
           <button
             onClick={() => onDelete(notification.id)}
-            className="px-3 py-1.5 rounded-md bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-xs font-heading font-bold uppercase transition-all"
+            className="px-2 py-0.5 rounded bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-[9px] font-heading font-bold uppercase transition-all"
           >
             🗑️ Delete
           </button>
@@ -379,37 +379,37 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
       </div>
 
       {/* Message Body */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6">
+      <div className="flex-1 overflow-y-auto p-2">
         <div className="prose prose-invert max-w-none">
-          <p className="text-foreground leading-relaxed whitespace-pre-wrap">
+          <p className="text-[11px] text-foreground leading-snug whitespace-pre-wrap">
             {notification.message}
           </p>
           
           {notification.gif_url && (
-            <div className="mt-4">
+            <div className="mt-2">
               <img 
                 src={notification.gif_url} 
                 alt="GIF" 
-                className="max-w-full max-h-[400px] rounded-md border border-primary/20 shadow-lg" 
+                className="max-w-full max-h-[280px] rounded border border-primary/20 shadow-lg" 
               />
             </div>
           )}
 
           {!isSent && isOcInvite && (
-            <div className="mt-6 p-4 bg-primary/10 border border-primary/30 rounded-md">
-              <p className="text-sm text-foreground font-heading font-bold mb-3">
+            <div className="mt-3 p-2 bg-primary/10 border border-primary/30 rounded-md">
+              <p className="text-[10px] text-foreground font-heading font-bold mb-2">
                 Organised Crime Invitation
               </p>
-              <div className="flex gap-2">
+              <div className="flex gap-1">
                 <button
                   onClick={() => onOcAccept(notification.oc_invite_id)}
-                  className="bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded-md px-4 py-2 text-sm font-heading font-bold uppercase transition-all active:scale-95"
+                  className="bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all active:scale-95"
                 >
-                  ✓ Accept Invitation
+                  ✓ Accept
                 </button>
                 <button
                   onClick={() => onOcDecline(notification.oc_invite_id)}
-                  className="bg-secondary text-foreground border border-border hover:border-primary/30 rounded-md px-4 py-2 text-sm font-heading font-bold uppercase transition-all active:scale-95"
+                  className="bg-secondary text-foreground border border-border hover:border-primary/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all active:scale-95"
                 >
                   ✗ Decline
                 </button>
@@ -591,7 +591,7 @@ export default function Inbox() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent}`}>
         <style>{INBOX_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -609,15 +609,15 @@ export default function Inbox() {
   ];
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="inbox-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="inbox-page">
       <style>{INBOX_STYLES}</style>
 
       <div className="relative ib-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Messages</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Mail size={24} /> Inbox
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Messages</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
+          <Mail size={18} /> Inbox
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Notifications, DMs, rank-ups & more.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Notifications, DMs, rank-ups & more.</p>
       </div>
 
       <ComposeModal
@@ -639,26 +639,26 @@ export default function Inbox() {
       />
 
       {/* Inbox Layout */}
-      <div className={`relative ${styles.panel} border border-primary/20 rounded-lg overflow-hidden ib-fade-in`} style={{ animationDelay: '0.03s' }}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden ib-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Toolbar */}
-        <div className="px-4 py-3 bg-primary/8 border-b border-primary/20">
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           {/* Top row: Filters + Compose */}
-          <div className="flex items-center justify-between gap-3 mb-3">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1">
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="flex items-center gap-1 overflow-x-auto pb-0.5 flex-1">
               {filterButtons.map(btn => {
                 const Icon = btn.icon;
                 return (
                   <button
                     key={btn.value}
                     onClick={() => setFilter(btn.value)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-heading font-bold whitespace-nowrap transition-all border ${
+                    className={`flex items-center gap-0.5 px-2 py-0.5 rounded text-[10px] font-heading font-bold whitespace-nowrap transition-all border ${
                       filter === btn.value
                         ? 'bg-primary/20 text-primary border-primary/50'
                         : 'bg-secondary/50 text-mutedForeground border-border hover:text-foreground'
                     }`}
                   >
-                    <Icon size={14} />
+                    <Icon size={10} />
                     {btn.label}
                   </button>
                 );
@@ -668,19 +668,19 @@ export default function Inbox() {
             {/* Compose button - integrated with toolbar */}
             <button
               onClick={() => setShowCompose(true)}
-              className="bg-primary/20 text-primary rounded-md px-4 py-1.5 font-heading font-bold uppercase tracking-wide text-xs border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation flex items-center gap-1.5 shrink-0"
+              className="bg-primary/20 text-primary rounded px-2 py-0.5 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation flex items-center gap-0.5 shrink-0"
             >
-              <Send size={14} />
+              <Send size={10} />
               <span className="hidden sm:inline">Compose</span>
             </button>
           </div>
           
           {/* Bottom row: Actions */}
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-1">
             {unreadCount > 0 && (
               <button
                 onClick={markAllAsRead}
-                className="px-3 py-1.5 rounded-md bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-xs font-heading font-bold uppercase whitespace-nowrap transition-all"
+                className="px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 text-[9px] font-heading font-bold uppercase whitespace-nowrap transition-all"
               >
                 ✓ Mark All Read
               </button>
@@ -688,7 +688,7 @@ export default function Inbox() {
             {notifications.length > 0 && (
               <button
                 onClick={deleteAllMessages}
-                className="px-3 py-1.5 rounded-md bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-xs font-heading font-bold uppercase whitespace-nowrap transition-all"
+                className="px-2 py-0.5 rounded bg-secondary text-mutedForeground border border-border hover:text-red-400 hover:border-red-400/50 text-[9px] font-heading font-bold uppercase whitespace-nowrap transition-all"
               >
                 🗑️ Delete All
               </button>
@@ -699,12 +699,12 @@ export default function Inbox() {
         {/* Inbox Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-5">
           {/* Message List */}
-          <div className="lg:col-span-2 border-r border-primary/20 bg-secondary/20 max-h-[600px] overflow-y-auto">
+          <div className="lg:col-span-2 border-r border-primary/20 bg-secondary/20 max-h-[480px] overflow-y-auto">
             {filteredNotifications.length === 0 ? (
-              <div className="p-8 text-center">
-                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
-                <MailOpen size={48} className="mx-auto text-primary/30 mb-3" />
-                <p className="text-sm text-mutedForeground font-heading">
+              <div className="p-4 text-center">
+                <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+                <MailOpen size={28} className="mx-auto text-primary/30 mb-2" />
+                <p className="text-[10px] text-mutedForeground font-heading">
                   No messages
                 </p>
               </div>
@@ -744,14 +744,14 @@ export default function Inbox() {
       {selectedNotification && (
         <div className="lg:hidden fixed inset-0 z-40 bg-background">
           <div className="flex flex-col h-full">
-            <div className="px-4 py-3 bg-primary/8 border-b border-primary/20 flex items-center gap-3">
+            <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <button
                 onClick={() => setSelectedNotification(null)}
-                className="p-2 hover:bg-secondary rounded transition-colors"
+                className="p-1 hover:bg-secondary rounded transition-colors"
               >
-                <X size={20} className="text-foreground" />
+                <X size={16} className="text-foreground" />
               </button>
-              <h2 className="text-sm font-heading font-bold text-primary uppercase">
+              <h2 className="text-[11px] font-heading font-bold text-primary uppercase">
                 Message
               </h2>
             </div>

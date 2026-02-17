@@ -50,9 +50,20 @@ export default function Landing({ setIsAuthenticated }) {
   };
 
   return (
-    <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`} data-testid="landing-page">
-      {/* Same content-area background as other pages */}
-      <div className="min-h-screen flex items-center justify-center px-4 py-8">
+    <div
+      className={`relative min-h-screen ${styles.page} ${styles.themeGangsterModern}`}
+      data-testid="landing-page"
+      style={{
+        backgroundImage: `url(${process.env.PUBLIC_URL || ''}/landing-bg.png)`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      {/* Dark overlay for readability */}
+      <div className="absolute inset-0 bg-black/60 pointer-events-none" aria-hidden />
+      <div className="relative min-h-screen flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">
           {/* Logo – same style as sidebar header */}
           <div className="text-center mb-8">
