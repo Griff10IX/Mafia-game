@@ -130,15 +130,16 @@ code {
   box-shadow: 0 0 15px rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.3);
 }
 
-/* Buttons and primary-styled links – original by default */
+/* Buttons and primary-styled links – vertical gradient (light top → dark bottom), bright border */
 button.bg-primary,
 button.from-primary,
 a.bg-primary,
 a.from-primary {
-  background: linear-gradient(to right, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
+  background: linear-gradient(to bottom, var(--noir-button-gradient-1), var(--noir-button-gradient-2), var(--noir-button-gradient-3), var(--noir-button-gradient-4)) !important;
   color: var(--noir-button-foreground) !important;
   border: 1px solid var(--noir-button-border, rgba(var(--noir-button-primary-rgb, var(--noir-primary-rgb)), 0.5)) !important;
   border-radius: 2px !important;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* Glossy button style (when user selects Glossy in theme) */

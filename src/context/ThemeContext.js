@@ -164,7 +164,7 @@ function applyButtonColourToDocument(buttonColour) {
   if (rgb) {
     root.style.setProperty('--noir-button-primary-rgb', `${rgb.r}, ${rgb.g}, ${rgb.b}`);
   }
-  root.style.setProperty('--noir-button-border', primaryBright);
+  root.style.setProperty('--noir-button-border', buttonColour.primaryBright ?? primaryBright);
 }
 
 function applyAccentLineToDocument(accentLineColour) {
