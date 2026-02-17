@@ -72,20 +72,18 @@ function PokerCard({ card, held, onToggleHold, canHold, index, dealing, revealed
   const isRed = card?.suit === 'H' || card?.suit === 'D';
 
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="flex flex-col items-center gap-0.5 sm:gap-1.5 min-w-0 w-full">
       <button
         type="button"
         onClick={canHold ? onToggleHold : undefined}
-        className={`relative rounded-lg overflow-hidden transition-all ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
+        className={`relative rounded-md sm:rounded-lg overflow-hidden transition-all w-full ${canHold ? 'cursor-pointer hover:scale-[1.03] active:scale-[0.97]' : 'cursor-default'}`}
         style={{
-          width: 'clamp(52px, 18vw, 68px)',
-          height: 'clamp(72px, 24vw, 96px)',
-          minWidth: 52,
-          minHeight: 72,
+          aspectRatio: '2/3',
+          maxHeight: '96px',
           boxShadow: held
             ? '0 0 0 3px #d4af37, 0 6px 20px rgba(212,175,55,0.4)'
             : '0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.2)',
-          transform: held ? 'translateY(-6px)' : 'translateY(0)',
+          transform: held ? 'translateY(-4px)' : 'translateY(0)',
           animation: dealing ? `card-deal-vp 0.35s cubic-bezier(0.2, 0.8, 0.3, 1) ${index * 0.1}s backwards` : undefined,
         }}
       >
@@ -114,23 +112,23 @@ function PokerCard({ card, held, onToggleHold, canHold, index, dealing, revealed
               border: `2px solid ${isRed ? '#fca5a5' : '#d4d4d8'}`,
             }}
           >
-            <div className="absolute top-1 left-1.5 leading-none" style={{ color: s.color }}>
-              <div className="text-[11px] sm:text-xs font-bold">{card.value}</div>
-              <div className="text-[10px] sm:text-[11px] -mt-0.5">{s.sym}</div>
+            <div className="absolute top-0.5 left-1 sm:top-1 sm:left-1.5 leading-none" style={{ color: s.color }}>
+              <div className="text-[8px] sm:text-[11px] md:text-xs font-bold">{card.value}</div>
+              <div className="text-[7px] sm:text-[10px] md:text-[11px] -mt-0.5">{s.sym}</div>
             </div>
             <div className="absolute inset-0 flex items-center justify-center" style={{ color: s.color }}>
-              <span className="text-2xl sm:text-3xl opacity-90" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}>{s.sym}</span>
+              <span className="text-lg sm:text-2xl md:text-3xl opacity-90" style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}>{s.sym}</span>
             </div>
-            <div className="absolute bottom-1 right-1.5 leading-none rotate-180" style={{ color: s.color }}>
-              <div className="text-[11px] sm:text-xs font-bold">{card.value}</div>
-              <div className="text-[10px] sm:text-[11px] -mt-0.5">{s.sym}</div>
+            <div className="absolute bottom-0.5 right-1 sm:bottom-1 sm:right-1.5 leading-none rotate-180" style={{ color: s.color }}>
+              <div className="text-[8px] sm:text-[11px] md:text-xs font-bold">{card.value}</div>
+              <div className="text-[7px] sm:text-[10px] md:text-[11px] -mt-0.5">{s.sym}</div>
             </div>
           </div>
         )}
       </button>
       {canHold && (
         <span
-          className={`text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${held ? 'text-primary' : 'text-emerald-200/40'}`}
+          className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider transition-all truncate w-full text-center ${held ? 'text-primary' : 'text-emerald-200/40'}`}
         >
           {held ? 'HELD' : 'HOLD'}
         </span>
@@ -483,15 +481,15 @@ export default function VideoPoker() {
               /* ── Active Game ── */
               <div className="space-y-4">
                 {/* Bet info */}
-                <div className="flex items-center justify-center gap-4 text-[10px] font-heading">
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[10px] font-heading px-1">
                   <span className="text-emerald-200/60">Bet: <span className="text-white font-bold">{formatMoney(game.bet)}</span></span>
                   {isDealPhase && (
-                    <span className="text-emerald-200/40 uppercase tracking-wider">Select cards to hold, then draw</span>
+                    <span className="text-emerald-200/40 uppercase tracking-wider text-center">Select cards to hold, then draw</span>
                   )}
                 </div>
 
-                {/* Cards — responsive so 5 cards + gaps fit on narrow mobile */}
-                <div className="flex justify-center gap-1.5 sm:gap-3 max-w-full overflow-hidden px-0.5">
+                {/* Cards — 5 equal columns so they always fit on mobile without overflow */}
+                <div className="grid grid-cols-5 gap-1 sm:gap-2 max-w-full w-full px-1 sm:px-2">
                   {(game.hand || []).map((card, i) => (
                     <PokerCard
                       key={`${card.suit}-${card.value}-${i}`}

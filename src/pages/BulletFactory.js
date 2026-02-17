@@ -664,7 +664,6 @@ export default function BulletFactory({ me }) {
         )}
 
         {activeTab === 'production' && (!hasOwner || isOwner) && (
-        {/* Main Content — two column layout (Production) */}
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Left Column — Stats & Gauge */}
