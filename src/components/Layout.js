@@ -1096,16 +1096,22 @@ export default function Layout({ children }) {
           return (
             <div className="flex items-center gap-1.5 shrink-0 flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible gap-2 md:gap-1.5 -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0">
               {/* Global user search: click icon to reveal search bar */}
-              <div className="relative shrink-0" ref={userSearchRef}>
+              <div className="relative shrink-0 z-10" ref={userSearchRef}>
                 {!userSearchExpanded ? (
                   <button
                     type="button"
-                    onClick={() => {
+                    draggable={false}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
                       setUserSearchExpanded(true);
                       setUserSearchOpen(true);
                       setTimeout(() => userSearchInputRef.current?.focus(), 0);
                     }}
-                    className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                    }}
+                    className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors cursor-pointer min-w-[28px] min-h-[28px]"
                     aria-label="Search user"
                     title="Search user"
                   >
