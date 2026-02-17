@@ -4,7 +4,6 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-# Short-lived cache for game_config (enabled + interval) so multiple loops share one read per 3s
 _auto_rank_config_cache: Optional[dict] = None
 _auto_rank_config_cache_until: Optional[datetime] = None
 AUTO_RANK_CONFIG_CACHE_SECONDS = 3
@@ -14,54 +13,51 @@ from fastapi import HTTPException
 logger = logging.getLogger(__name__)
 
 MIN_INTERVAL_SECONDS = 5
-DEFAULT_INTERVAL_SECONDS = 2 * 60  # 2 minutes
+DEFAULT_INTERVAL_SECONDS = 2 * 60
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 5
-CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 30  # 30 seconds when jail empty (bust-every-5s fallback)
+CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 30
+LOOP_WAKE_SECONDS = 15
+OC_LOOP_INTERVAL_SECONDS = 60
+OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
 
+
+# ─── Config helpers ───────────────────────────────────────────────
 
 def _invalidate_auto_rank_config_cache():
-    """Invalidate cached game_config so next get_auto_rank_config fetches fresh (e.g. after admin start/stop/interval)."""
     global _auto_rank_config_cache, _auto_rank_config_cache_until
     _auto_rank_config_cache = None
     _auto_rank_config_cache_until = None
 
 
 async def get_auto_rank_config(db) -> dict:
-    """One game_config read for auto_rank: returns enabled and interval_seconds. Cached for AUTO_RANK_CONFIG_CACHE_SECONDS so multiple loops share one read."""
     global _auto_rank_config_cache, _auto_rank_config_cache_until
     now = datetime.now(timezone.utc)
     if _auto_rank_config_cache is not None and _auto_rank_config_cache_until is not None and now < _auto_rank_config_cache_until:
         return _auto_rank_config_cache
-    doc = await db.game_config.find_one(
-        {"id": GAME_CONFIG_ID}, {"_id": 0, "enabled": 1, "interval_seconds": 1}
-    )
+    doc = await db.game_config.find_one({"id": GAME_CONFIG_ID}, {"_id": 0, "enabled": 1, "interval_seconds": 1})
     if doc is None:
         config = {"enabled": True, "interval_seconds": DEFAULT_INTERVAL_SECONDS}
     else:
-        raw = doc.get("interval_seconds")
         try:
-            interval = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
+            interval = int(doc.get("interval_seconds")) if doc.get("interval_seconds") is not None else DEFAULT_INTERVAL_SECONDS
         except (TypeError, ValueError):
             interval = DEFAULT_INTERVAL_SECONDS
-        config = {
-            "enabled": doc.get("enabled", True),
-            "interval_seconds": max(MIN_INTERVAL_SECONDS, interval),
-        }
+        config = {"enabled": doc.get("enabled", True), "interval_seconds": max(MIN_INTERVAL_SECONDS, interval)}
     _auto_rank_config_cache = config
     _auto_rank_config_cache_until = now + timedelta(seconds=AUTO_RANK_CONFIG_CACHE_SECONDS)
     return config
 
 
 async def get_auto_rank_interval_seconds(db) -> int:
-    """Return configured interval (seconds) between full cycles. Min MIN_INTERVAL_SECONDS."""
     return (await get_auto_rank_config(db))["interval_seconds"]
 
 
 async def get_auto_rank_enabled(db) -> bool:
-    """Return whether the Auto Rank loop is allowed to run (start/stop). Default True."""
     return (await get_auto_rank_config(db))["enabled"]
 
+
+# ─── Utility helpers ──────────────────────────────────────────────
 
 def _parse_iso(s):
     if not s:
@@ -74,35 +70,61 @@ def _parse_iso(s):
         return None
 
 
+async def _get_travel_method(db, user_id: str) -> Optional[str]:
+    """Find the best travel method for a user: custom car first, then any car."""
+    custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom"}, {"_id": 0, "id": 1})
+    if custom:
+        return "custom"
+    car = await db.user_cars.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
+    if car:
+        return car.get("id") or str(car.get("_id", ""))
+    return None
+
+
+async def _apply_overdue_travel(db, user_id: str, user: dict, now: datetime) -> dict:
+    """If user has overdue travel, apply arrival and return refreshed user doc."""
+    arrives_at = user.get("travel_arrives_at")
+    traveling_to = user.get("traveling_to")
+    if not arrives_at or not traveling_to:
+        return user
+    arrives_dt = _parse_iso(arrives_at)
+    if not arrives_dt or now < arrives_dt:
+        return user
+    for _ in range(2):
+        try:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"current_state": traveling_to}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+            )
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if not user or not user.get("travel_arrives_at"):
+                break
+        except Exception as e:
+            logger.warning("Auto rank: arrival update failed for %s: %s", user_id, e)
+    return user or {}
+
+
+# ─── Stats helpers ────────────────────────────────────────────────
+
 async def _ensure_stats_since(db, user_id: str, now: datetime):
-    """Set auto_rank_stats_since to now if not already set."""
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_stats_since": 1})
     if u and not u.get("auto_rank_stats_since"):
         await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_stats_since": now.isoformat()}})
 
 
 async def _update_auto_rank_stats_bust(db, user_id: str, cash: int, now: datetime):
-    """Record one successful bust: increment total_busts, add cash, ensure stats_since."""
     await _ensure_stats_since(db, user_id, now)
-    await db.users.update_one(
-        {"id": user_id},
-        {"$inc": {"auto_rank_total_busts": 1, "auto_rank_total_cash": cash}},
-    )
+    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_busts": 1, "auto_rank_total_cash": cash}})
 
 
 async def _update_auto_rank_stats_crimes(db, user_id: str, count: int, cash: int, now: datetime):
-    """Record crime run: increment total_crimes, add cash, ensure stats_since."""
     if count <= 0 and cash <= 0:
         return
     await _ensure_stats_since(db, user_id, now)
-    await db.users.update_one(
-        {"id": user_id},
-        {"$inc": {"auto_rank_total_crimes": count, "auto_rank_total_cash": cash}},
-    )
+    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_crimes": count, "auto_rank_total_cash": cash}})
 
 
 async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime):
-    """Record one successful GTA: increment total_gtas, add car to best_cars (top 3 by value)."""
     await _ensure_stats_since(db, user_id, now)
     car_name = (car or {}).get("name") or "Car"
     car_value = int((car or {}).get("value", 0) or 0)
@@ -110,27 +132,17 @@ async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime
     best = list((u or {}).get("auto_rank_best_cars") or [])
     best.append({"name": car_name, "value": car_value})
     best.sort(key=lambda x: x.get("value", 0), reverse=True)
-    best = best[:3]
-    await db.users.update_one(
-        {"id": user_id},
-        {
-            "$inc": {"auto_rank_total_gtas": 1},
-            "$set": {"auto_rank_best_cars": best},
-        },
-    )
+    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_gtas": 1}, "$set": {"auto_rank_best_cars": best[:3]}})
 
 
 async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit: int = 0):
-    """Record one completed booze run (sell for profit)."""
     await _ensure_stats_since(db, user_id, now)
-    await db.users.update_one(
-        {"id": user_id},
-        {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": max(0, int(profit))}},
-    )
+    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": max(0, int(profit))}})
 
+
+# ─── Telegram helper ──────────────────────────────────────────────
 
 async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
-    """Send an immediate Telegram when Auto Rank puts the user in jail (bust/crime/GTA failed). No-op if no chat_id."""
     if not (telegram_chat_id or "").strip():
         return
     from security import send_telegram_to_chat
@@ -138,78 +150,116 @@ async def _send_jail_notification(telegram_chat_id: str, username: str, reason: 
     await send_telegram_to_chat(telegram_chat_id, msg, bot_token)
 
 
-async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str], now: datetime, lines: list) -> bool:
-    """Run one booze step: apply travel arrival, then sell if carrying else buy and start travel. Returns True if any action succeeded."""
-    from server import STATES
-    from routers.booze_run import (
-        BOOZE_TYPES,
-        _booze_round_trip_cities,
-        _booze_prices_for_rotation,
-        _booze_user_capacity,
-        _booze_user_carrying_total,
-        _booze_buy_impl,
-        _booze_sell_impl,
-    )
+# ─── Booze running ────────────────────────────────────────────────
+
+async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list):
+    """Sell all carried booze that wasn't bought at the current city. Returns (has_success, user)."""
+    from routers.booze_run import _booze_sell_impl
+
+    carrying = dict(user.get("booze_carrying") or {})
+    buy_locations = dict((user.get("booze_buy_location") or {}).items())
+    current = (user.get("current_state") or "").strip()
+    has_success = False
+
+    for bid, amt in list(carrying.items()):
+        amt = int(amt or 0)
+        if amt <= 0:
+            continue
+        if buy_locations.get(bid) == current:
+            continue
+        try:
+            out = await _booze_sell_impl(user, bid, amt)
+            if out.get("caught"):
+                await _send_jail_notification(telegram_chat_id, username, "booze sell bust", 20, bot_token)
+                return False, None
+            profit = out.get("profit") or 0
+            if out.get("is_run") and profit:
+                lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
+                await _update_auto_rank_stats_booze(db, user_id, now, profit)
+                has_success = True
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if not user:
+                return has_success, None
+        except Exception as e:
+            logger.exception("Auto rank booze sell %s: %s", user_id, e)
+            break
+
+    return has_success, user
+
+
+async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list, buy_city: str, sell_city: str, buy_idx: int, sell_idx: int):
+    """Buy optimal booze at buy_city and travel to sell_city. Returns has_success."""
+    from routers.booze_run import BOOZE_TYPES, _booze_prices_for_rotation, _booze_user_capacity, _booze_buy_impl
     from routers.airport import _start_travel_impl
-    from security import send_telegram_to_chat
+
+    prices_map = _booze_prices_for_rotation()
+    capacity = _booze_user_capacity(user)
+    money = int(user.get("money") or 0)
+
+    best_profit = -1
+    best_booze_id = None
+    best_buy_price = 400
+    for i, bt in enumerate(BOOZE_TYPES):
+        p_buy = prices_map.get((buy_idx, i), 400)
+        p_sell = prices_map.get((sell_idx, i), 400)
+        if p_sell - p_buy > best_profit:
+            best_profit = p_sell - p_buy
+            best_booze_id = bt["id"]
+            best_buy_price = p_buy
+
+    if not best_booze_id or best_profit <= 0 or best_buy_price <= 0:
+        return False
+    amount = min(capacity, money // best_buy_price)
+    if amount <= 0:
+        return False
+
+    try:
+        out = await _booze_buy_impl(user, best_booze_id, amount)
+        if out.get("caught"):
+            await _send_jail_notification(telegram_chat_id, username, "booze buy bust", 20, bot_token)
+            return False
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user:
+            return True
+        travel_method = await _get_travel_method(db, user_id)
+        if travel_method:
+            await _start_travel_impl(user, sell_city, travel_method, airport_slot=None, booze_run=True)
+            lines.append(f"**Booze** — Bought {amount} at {buy_city}, traveling to {sell_city}.")
+            return True
+    except HTTPException:
+        pass
+    except Exception as e:
+        logger.exception("Auto rank booze buy/travel %s: %s", user_id, e)
+    return False
+
+
+async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str], now: datetime, lines: list) -> bool:
+    """Run one booze step: apply travel arrival, then sell if carrying else buy and start travel."""
+    from server import STATES
+    from routers.booze_run import _booze_round_trip_cities, _booze_user_carrying_total
+    from routers.airport import _start_travel_impl
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return False
-    # Always clear overdue travel first so we never get stuck (arrival applied even if a previous update failed)
-    arrives_at = user.get("travel_arrives_at")
-    traveling_to = user.get("traveling_to")
-    if arrives_at and traveling_to:
-        arrives_dt = _parse_iso(arrives_at)
-        if arrives_dt and now >= arrives_dt:
-            try:
-                await db.users.update_one(
-                    {"id": user_id},
-                    {"$set": {"current_state": traveling_to}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
-                )
-                user = await db.users.find_one({"id": user_id}, {"_id": 0})
-            except Exception as e:
-                logger.warning("Auto rank booze: arrival update failed for %s, will retry: %s", user_id, e)
-            if user and user.get("travel_arrives_at"):
-                # Fallback: first update may have failed, retry once and reload
-                try:
-                    dest = user.get("traveling_to")
-                    if dest:
-                        await db.users.update_one(
-                            {"id": user_id},
-                            {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
-                        )
-                    user = await db.users.find_one({"id": user_id}, {"_id": 0})
-                except Exception as e2:
-                    logger.exception("Auto rank booze: arrival retry failed for %s: %s", user_id, e2)
-    if not user:
-        return False
-    if user.get("in_jail"):
+    user = await _apply_overdue_travel(db, user_id, user, now)
+    if not user or user.get("in_jail"):
         return False
     if user.get("travel_arrives_at"):
-        try:
-            adt = _parse_iso(user["travel_arrives_at"])
-            if adt and now < adt:
-                return False
-        except Exception:
-            pass
+        adt = _parse_iso(user["travel_arrives_at"])
+        if adt and now < adt:
+            return False
 
     round_trip = _booze_round_trip_cities()
     if not round_trip or len(round_trip) < 2:
         return False
     city_a, city_b = round_trip[0], round_trip[1]
     current = (user.get("current_state") or "").strip()
+    idx_a = STATES.index(city_a) if city_a in STATES else 0
+    idx_b = STATES.index(city_b) if city_b in STATES else 1
 
-    # If not at a round-trip city, travel to the buy city (city_a) first so we can start the run
     if current not in (city_a, city_b):
-        travel_method = None
-        first_custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom"}, {"_id": 0, "id": 1})
-        if first_custom:
-            travel_method = "custom"
-        else:
-            first_car = await db.user_cars.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
-            if first_car:
-                travel_method = first_car.get("id") or str(first_car.get("_id", ""))
+        travel_method = await _get_travel_method(db, user_id)
         if travel_method:
             try:
                 await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
@@ -219,155 +269,22 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                 logger.exception("Auto rank booze travel to buy city %s: %s", user_id, e)
         return False
 
-    prices_map = _booze_prices_for_rotation()
-    capacity = _booze_user_capacity(user)
-    carrying = dict(user.get("booze_carrying") or {})
-    carrying_total = _booze_user_carrying_total(carrying)
-    money = int(user.get("money") or 0)
-    idx_a = STATES.index(city_a) if city_a in STATES else 0
-    idx_b = STATES.index(city_b) if city_b in STATES else 1
+    carrying_total = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
+    other_city = city_b if current == city_a else city_a
+    other_idx = idx_b if current == city_a else idx_a
+    current_idx = idx_a if current == city_a else idx_b
 
-    has_success = False
-
-    buy_location_by_booze = dict((user.get("booze_buy_location") or {}).items())
-
-    if current == city_a:
-        if carrying_total > 0:
-            for bid, amt in list(carrying.items()):
-                amt = int(amt or 0)
-                if amt <= 0:
-                    continue
-                if buy_location_by_booze.get(bid) == city_a:
-                    continue  # don't sell in same city we bought (must travel first)
-                try:
-                    out = await _booze_sell_impl(user, bid, amt)
-                    if out.get("caught"):
-                        await _send_jail_notification(telegram_chat_id, username, "booze sell bust", 20, bot_token)
-                        return False
-                    profit = out.get("profit") or 0
-                    if out.get("is_run") and profit:
-                        lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
-                        await _update_auto_rank_stats_booze(db, user_id, now, profit)
-                        has_success = True
-                    user = await db.users.find_one({"id": user_id}, {"_id": 0})
-                    if not user:
-                        return has_success
-                    carrying = dict(user.get("booze_carrying") or {})
-                    buy_location_by_booze = dict((user.get("booze_buy_location") or {}).items())
-                except Exception as e:
-                    logger.exception("Auto rank booze sell %s: %s", user_id, e)
-                    break
-        else:
-            best_profit = -1
-            best_booze_id = None
-            buy_price_a = 400
-            for i, bt in enumerate(BOOZE_TYPES):
-                pa = prices_map.get((idx_a, i), 400)
-                pb = prices_map.get((idx_b, i), 400)
-                if pb - pa > best_profit:
-                    best_profit = pb - pa
-                    best_booze_id = bt["id"]
-                    buy_price_a = pa
-            if best_booze_id and best_profit > 0 and buy_price_a > 0:
-                amount = min(capacity, money // buy_price_a)
-                if amount > 0:
-                    try:
-                        out = await _booze_buy_impl(user, best_booze_id, amount)
-                        if out.get("caught"):
-                            await _send_jail_notification(telegram_chat_id, username, "booze buy bust", 20, bot_token)
-                            return False
-                        user = await db.users.find_one({"id": user_id}, {"_id": 0})
-                        if not user:
-                            return True
-                        travel_method = None
-                        first_custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom"}, {"_id": 0, "id": 1})
-                        if first_custom:
-                            travel_method = "custom"
-                        else:
-                            first_car = await db.user_cars.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
-                            if first_car:
-                                travel_method = first_car.get("id") or str(first_car.get("_id", ""))
-                        if travel_method:
-                            await _start_travel_impl(user, city_b, travel_method, airport_slot=None, booze_run=True)
-                            lines.append(f"**Booze** — Bought {amount} at {city_a}, traveling to {city_b}.")
-                            has_success = True
-                    except HTTPException:
-                        pass
-                    except Exception as e:
-                        logger.exception("Auto rank booze buy/travel %s: %s", user_id, e)
-
-    elif current == city_b:
-        if carrying_total > 0:
-            for bid, amt in list(carrying.items()):
-                amt = int(amt or 0)
-                if amt <= 0:
-                    continue
-                if buy_location_by_booze.get(bid) == city_b:
-                    continue  # don't sell in same city we bought (must travel first)
-                try:
-                    out = await _booze_sell_impl(user, bid, amt)
-                    if out.get("caught"):
-                        await _send_jail_notification(telegram_chat_id, username, "booze sell bust", 20, bot_token)
-                        return False
-                    profit = out.get("profit") or 0
-                    if out.get("is_run") and profit:
-                        lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
-                        await _update_auto_rank_stats_booze(db, user_id, now, profit)
-                        has_success = True
-                    user = await db.users.find_one({"id": user_id}, {"_id": 0})
-                    if not user:
-                        return has_success
-                    carrying = dict(user.get("booze_carrying") or {})
-                    buy_location_by_booze = dict((user.get("booze_buy_location") or {}).items())
-                except Exception as e:
-                    logger.exception("Auto rank booze sell %s: %s", user_id, e)
-                    break
-        else:
-            best_profit = -1
-            best_booze_id = None
-            buy_price_b = 400
-            for i, bt in enumerate(BOOZE_TYPES):
-                pb = prices_map.get((idx_b, i), 400)
-                pa = prices_map.get((idx_a, i), 400)
-                if pa - pb > best_profit:
-                    best_profit = pa - pb
-                    best_booze_id = bt["id"]
-                    buy_price_b = pb
-            if best_booze_id and best_profit > 0 and buy_price_b > 0:
-                amount = min(capacity, money // buy_price_b)
-                if amount > 0:
-                    try:
-                        out = await _booze_buy_impl(user, best_booze_id, amount)
-                        if out.get("caught"):
-                            await _send_jail_notification(telegram_chat_id, username, "booze buy bust", 20, bot_token)
-                            return False
-                        user = await db.users.find_one({"id": user_id}, {"_id": 0})
-                        if not user:
-                            return True
-                        travel_method = None
-                        first_custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom"}, {"_id": 0, "id": 1})
-                        if first_custom:
-                            travel_method = "custom"
-                        else:
-                            first_car = await db.user_cars.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
-                            if first_car:
-                                travel_method = first_car.get("id") or str(first_car.get("_id", ""))
-                        if travel_method:
-                            await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
-                            lines.append(f"**Booze** — Bought {amount} at {city_b}, traveling to {city_a}.")
-                            has_success = True
-                    except HTTPException:
-                        pass
-                    except Exception as e:
-                        logger.exception("Auto rank booze buy/travel %s: %s", user_id, e)
-
-    return has_success
+    if carrying_total > 0:
+        success, user = await _booze_sell_at_city(db, user, user_id, username, telegram_chat_id, bot_token, now, lines)
+        return success
+    else:
+        return await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current, other_city, current_idx, other_idx)
 
 
-async def _run_bust_only_for_user(
-    user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, bust_target_username: Optional[str] = None
-):
-    """Try one jail bust (regardless of whether user is in jail), send result to Telegram. Used by the 5-sec bust loop. If bust_target_username is provided, skip jail lookup."""
+# ─── Bust-only (5-sec loop) ──────────────────────────────────────
+
+async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, bust_target_username: Optional[str] = None):
+    """Try one jail bust, send result to Telegram."""
     import server as srv
     from routers.jail import _attempt_bust_impl
     from security import send_telegram_to_chat
@@ -382,10 +299,7 @@ async def _run_bust_only_for_user(
         if npc:
             bust_target_username = npc.get("username")
         if not bust_target_username:
-            jailed = await db.users.find_one(
-                {"in_jail": True, "id": {"$ne": user_id}},
-                {"_id": 0, "username": 1},
-            )
+            jailed = await db.users.find_one({"in_jail": True, "id": {"$ne": user_id}}, {"_id": 0, "username": 1})
             if jailed:
                 bust_target_username = jailed.get("username")
     if not bust_target_username:
@@ -410,10 +324,10 @@ async def _run_bust_only_for_user(
         logger.exception("Auto rank bust-only for %s: %s", user_id, e)
 
 
-async def _run_auto_rank_for_user(
-    user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, crimes: Optional[list] = None
-):
-    """Commit all crimes that are off cooldown, then one GTA (if off cooldown); send summary to Telegram. When bust_every_5_sec, skip bust here and only run crimes+GTA every 5+ mins. If crimes list is provided, use it instead of fetching (one per cycle)."""
+# ─── Main per-user cycle (crimes + GTA + booze) ──────────────────
+
+async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, crimes: Optional[list] = None):
+    """Commit all crimes off cooldown, then one GTA, then booze if enabled. Send summary to Telegram."""
     import server as srv
     from routers.crimes import _commit_crime_impl
     from routers.gta import _attempt_gta_impl, GTA_OPTIONS
@@ -426,45 +340,36 @@ async def _run_auto_rank_for_user(
     if not user:
         return
     token = (bot_token or "").strip() or (user.get("telegram_bot_token") or "").strip()
-
     bust_every_5 = user.get("auto_rank_bust_every_5_sec", False)
+
     if bust_every_5:
         last_at = _parse_iso(user.get("auto_rank_last_crimes_gta_at"))
         if last_at and (now - last_at).total_seconds() < CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC:
             return
         if user.get("in_jail"):
             return
-
-    if not bust_every_5 and user.get("in_jail"):
+    elif user.get("in_jail"):
         return
 
     lines = [f"**Auto Rank** — {username}", ""]
     has_success = False
 
-    # Busts only run for users with "Jail bust every 5 seconds" on (via run_bust_5sec_loop). Main cycle does not do busts.
-    # Reuse user from above (no second fetch here)
     if user.get("in_jail"):
         if bust_every_5:
-            await db.users.update_one(
-                {"id": user_id},
-                {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
-            )
+            await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
         return
 
-    run_crimes = user.get("auto_rank_crimes", True)
-    run_gta = user.get("auto_rank_gta", True)
-    if bust_every_5:
-        run_crimes = True
-        run_gta = True
+    run_crimes = user.get("auto_rank_crimes", True) or bust_every_5
+    run_gta = user.get("auto_rank_gta", True) or bust_every_5
 
-    # --- Crimes: commit ALL that are off cooldown and rank-eligible (loop until none left) ---
+    # --- Crimes ---
     if run_crimes:
         if crimes is None:
             crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
         crime_success_count = 0
         crime_fail_count = 0
         crime_total_cash = 0
-        crime_total_rp = 0  # 3 RP per successful crime
+        crime_total_rp = 0
         while True:
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user or user.get("in_jail"):
@@ -479,9 +384,8 @@ async def _run_auto_rank_for_user(
             ]
             if not available:
                 break
-            c = available[0]
             try:
-                out = await _commit_crime_impl(c["id"], user)
+                out = await _commit_crime_impl(available[0]["id"], user)
                 if out.success:
                     crime_success_count += 1
                     crime_total_cash += out.reward if out.reward is not None else 0
@@ -495,18 +399,15 @@ async def _run_auto_rank_for_user(
         if crime_success_count > 0:
             has_success = True
             await _update_auto_rank_stats_crimes(db, user_id, crime_success_count, crime_total_cash, now)
-            parts = [f"Committed {crime_success_count} crime(s)", f"earned ${crime_total_cash:,} and {crime_total_rp} RP"]
-            lines.append("**Crimes** — " + ". ".join(parts) + ".")
+            lines.append(f"**Crimes** — Committed {crime_success_count} crime(s). earned ${crime_total_cash:,} and {crime_total_rp} RP.")
 
+    # --- GTA ---
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return
     if user.get("in_jail"):
         if bust_every_5:
-            await db.users.update_one(
-                {"id": user_id},
-                {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
-            )
+            await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
         return
 
     if run_gta:
@@ -530,17 +431,12 @@ async def _run_auto_rank_for_user(
                     break
 
     if bust_every_5:
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}},
-        )
+        await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
 
-    # --- Booze running: buy at one round-trip city, travel, sell at the other (when enabled) ---
-    run_booze = user.get("auto_rank_booze", False)
-    if run_booze:
+    # --- Booze ---
+    if user.get("auto_rank_booze", False):
         try:
-            booze_success = await _run_booze_for_user(db, user_id, username, telegram_chat_id, bot_token, now, lines)
-            if booze_success:
+            if await _run_booze_for_user(db, user_id, username, telegram_chat_id, bot_token, now, lines):
                 has_success = True
         except Exception as e:
             logger.exception("Auto rank booze for %s: %s", user_id, e)
@@ -550,15 +446,17 @@ async def _run_auto_rank_for_user(
         await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
 
 
+# ─── Background loops ─────────────────────────────────────────────
+
 async def run_booze_arrivals():
-    """Run booze for users who have just arrived (travel_arrives_at <= now) so they sell immediately after travel instead of waiting for the next full tick. Also clears overdue travel for booze users who are in jail so when they get out they're not stuck."""
+    """Process booze users who have just arrived from travel so they sell immediately."""
     import server as srv
     from security import send_telegram_to_chat
 
     db = srv.db
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
-    # Clear overdue travel for booze users who are in jail (so when they get out they're in the right city, not stuck)
+
     stuck_jailed = db.users.find(
         {"auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}},
         {"_id": 0, "id": 1, "traveling_to": 1},
@@ -567,20 +465,12 @@ async def run_booze_arrivals():
         dest = (u.get("traveling_to") or "").strip()
         if dest:
             try:
-                await db.users.update_one(
-                    {"id": u["id"]},
-                    {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
-                )
+                await db.users.update_one({"id": u["id"]}, {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}})
             except Exception as e:
                 logger.warning("Auto rank booze cleanup: arrival update for jailed %s failed: %s", u.get("id"), e)
-    # Process arrivals for sell step
+
     cursor = db.users.find(
-        {
-            "auto_rank_enabled": True,
-            "auto_rank_booze": True,
-            "travel_arrives_at": {"$lte": now_iso},
-            "in_jail": {"$ne": True},
-        },
+        {"auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}},
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(200)
@@ -589,19 +479,16 @@ async def run_booze_arrivals():
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
         lines = [f"**Auto Rank** — {u.get('username', '?')}", ""]
         try:
-            has_success = await _run_booze_for_user(
-                db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines
-            )
+            has_success = await _run_booze_for_user(db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines)
             if has_success and len(lines) > 2 and chat_id:
-                msg = "\n".join(lines)
-                await send_telegram_to_chat(chat_id, msg, bot_token)
+                await send_telegram_to_chat(chat_id, "\n".join(lines), bot_token)
         except Exception as e:
             logger.exception("Auto rank booze arrival for user %s: %s", u.get("id"), e)
         await asyncio.sleep(0.2)
 
 
 async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
-    """Find users whose auto_rank_next_run_at is due (or unset), run each once, set their next_run_at = now + interval. Per-user cycles so everyone gets the interval they expect. If interval_seconds provided (e.g. from main loop), skip game_config read."""
+    """Find users whose auto_rank_next_run_at is due, run each once, set next_run_at."""
     import server as srv
     db = srv.db
     now = datetime.now(timezone.utc)
@@ -618,10 +505,8 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(500)
-    # One crimes list per cycle (reused for all users)
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
-    next_run = (now.timestamp() + interval)
-    next_run_iso = datetime.fromtimestamp(next_run, tz=timezone.utc).isoformat()
+    next_run_iso = datetime.fromtimestamp(now.timestamp() + interval, tz=timezone.utc).isoformat()
     for u in users:
         chat_id = (u.get("telegram_chat_id") or "").strip()
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
@@ -630,7 +515,6 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
         except Exception as e:
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
         await asyncio.sleep(0.5)
-    # One bulk write to set next_run_at for all processed users (one round-trip instead of N)
     if users:
         from pymongo import UpdateOne
         await db.users.bulk_write(
@@ -640,33 +524,26 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
 
 
 async def run_bust_5sec_loop():
-    """Background loop: every 5 sec, for users with auto_rank_bust_every_5_sec, try one jail bust (regardless of jail). Respects global enabled."""
+    """Background loop: every 5 sec, for bust-every-5-sec users, try one jail bust."""
     import server as srv
     db = srv.db
-    await asyncio.sleep(15)  # Start shortly after main loop
+    await asyncio.sleep(15)
     while True:
         if not await get_auto_rank_enabled(db):
             await asyncio.sleep(10)
             continue
         try:
             cursor = db.users.find(
-                {
-                    "auto_rank_enabled": True,
-                    "auto_rank_bust_every_5_sec": True,
-                },
+                {"auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True},
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
             )
             users = await cursor.to_list(500)
-            # One jail lookup per cycle: NPC or any jailed player (reused for all users)
             bust_target_username = None
             npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
             if npc:
                 bust_target_username = npc.get("username")
             if not bust_target_username:
-                jailed = await db.users.find_one(
-                    {"in_jail": True},
-                    {"_id": 0, "username": 1},
-                )
+                jailed = await db.users.find_one({"in_jail": True}, {"_id": 0, "username": 1})
                 if jailed:
                     bust_target_username = jailed.get("username")
             for u in users:
@@ -685,19 +562,14 @@ async def run_bust_5sec_loop():
         await asyncio.sleep(BUST_EVERY_5SEC_INTERVAL)
 
 
-LOOP_WAKE_SECONDS = 15  # How often we check who's due for a run
-OC_LOOP_INTERVAL_SECONDS = 60  # How often we check OC timer for auto-rank OC users
-OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60  # 10 minutes if user can't afford an OC
-
-
 async def run_auto_rank_oc_loop():
-    """Background loop: every OC_LOOP_INTERVAL_SECONDS, for users with auto_rank_oc, run OC with NPC only when timer is ready. Skip if can't afford and retry in 10 min."""
+    """Background loop: for OC users, run OC with NPC only when timer is ready."""
     import server as srv
     from routers.oc import run_oc_heist_npc_only
     from security import send_telegram_to_chat
 
     db = srv.db
-    await asyncio.sleep(90)  # Start after main loops
+    await asyncio.sleep(90)
     while True:
         if not await get_auto_rank_enabled(db):
             await asyncio.sleep(10)
@@ -705,19 +577,14 @@ async def run_auto_rank_oc_loop():
         now = datetime.now(timezone.utc)
         try:
             cursor = db.users.find(
-                {
-                    "auto_rank_enabled": True,
-                    "auto_rank_oc": True,
-                },
+                {"auto_rank_enabled": True, "auto_rank_oc": True},
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
             )
             users = await cursor.to_list(500)
-            # One user_organised_crime fetch per OC cycle (reused for all users)
-            user_oc_cursor = db.user_organised_crime.find(
+            user_oc_list = await db.user_organised_crime.find(
                 {"user_id": {"$in": [u["id"] for u in users]}},
                 {"_id": 0, "user_id": 1, "selected_equipment": 1},
-            )
-            user_oc_list = await user_oc_cursor.to_list(500)
+            ).to_list(500)
             user_oc_by_id = {doc["user_id"]: doc.get("selected_equipment", "basic") for doc in user_oc_list}
             for u in users:
                 retry_at = _parse_iso(u.get("auto_rank_oc_retry_at"))
@@ -730,20 +597,13 @@ async def run_auto_rank_oc_loop():
                     result = await run_oc_heist_npc_only(u["id"], selected_equipment_override=selected_equipment)
                     if result.get("skipped_afford"):
                         retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
-                        await db.users.update_one(
-                            {"id": u["id"]},
-                            {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}},
-                        )
+                        await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}})
                         continue
-                    # Only send Telegram on success when user has chat_id
                     if chat_id and result.get("ran") is True and result.get("success") is True:
                         msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
                         await send_telegram_to_chat(chat_id, msg, bot_token)
                     if result.get("ran"):
-                        await db.users.update_one(
-                            {"id": u["id"]},
-                            {"$unset": {"auto_rank_oc_retry_at": ""}},
-                        )
+                        await db.users.update_one({"id": u["id"]}, {"$unset": {"auto_rank_oc_retry_at": ""}})
                 except Exception as e:
                     logger.exception("Auto rank OC for user %s: %s", u.get("id"), e)
                 await asyncio.sleep(0.5)
@@ -753,17 +613,17 @@ async def run_auto_rank_oc_loop():
 
 
 async def run_auto_rank_loop():
-    """Background loop: wake every LOOP_WAKE_SECONDS, process any user whose next_run_at is due. Each user has their own cycle (next run = now + interval)."""
+    """Main background loop: process due users and booze arrivals."""
     import server as srv
     db = srv.db
-    await asyncio.sleep(60)  # Delay first run 1 min after startup
+    await asyncio.sleep(60)
     while True:
-        config = await get_auto_rank_config(db)  # one game_config read per iteration
+        config = await get_auto_rank_config(db)
         if not config["enabled"]:
             await asyncio.sleep(10)
             continue
         try:
-            await run_booze_arrivals()  # sell right after travel completes (no wait for next tick)
+            await run_booze_arrivals()
         except Exception as e:
             logger.exception("Auto rank booze arrivals failed: %s", e)
         try:
@@ -773,8 +633,17 @@ async def run_auto_rank_loop():
         await asyncio.sleep(LOOP_WAKE_SECONDS)
 
 
+# ─── API routes ───────────────────────────────────────────────────
+
+_PREFERENCE_FIELDS = ["auto_rank_enabled", "auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]
+_PREFERENCE_DEFAULTS = {"auto_rank_enabled": False, "auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": False}
+
+
+def _extract_preferences(user: dict) -> dict:
+    return {k: user.get(k, _PREFERENCE_DEFAULTS[k]) for k in _PREFERENCE_FIELDS}
+
+
 def register(router):
-    """Register auto-rank routes: /me for any user (preferences), interval/start/stop for admin."""
     import server as srv
     from fastapi import Depends, HTTPException
     from pydantic import BaseModel
@@ -796,49 +665,23 @@ def register(router):
 
     @router.get("/auto-rank/me")
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
-        """Get current user's Auto Rank preferences. Any authenticated user."""
         chat_id = (current_user.get("telegram_chat_id") or "").strip()
-        return {
-            "auto_rank_enabled": current_user.get("auto_rank_enabled", False),
-            "auto_rank_crimes": current_user.get("auto_rank_crimes", True),
-            "auto_rank_gta": current_user.get("auto_rank_gta", True),
-            "auto_rank_bust_every_5_sec": current_user.get("auto_rank_bust_every_5_sec", False),
-            "auto_rank_oc": current_user.get("auto_rank_oc", False),
-            "auto_rank_booze": current_user.get("auto_rank_booze", False),
-            "auto_rank_purchased": current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False),
-            "telegram_chat_id_set": bool(chat_id),
-        }
+        prefs = _extract_preferences(current_user)
+        prefs["auto_rank_purchased"] = current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False)
+        prefs["telegram_chat_id_set"] = bool(chat_id)
+        return prefs
 
     @router.get("/auto-rank/stats")
     async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
-        """Get current user's Auto Rank lifetime stats: busts, crimes, GTAs, cash, running time, best cars, booze runs, next OC at."""
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {
-                "_id": 0,
-                "auto_rank_stats_since": 1,
-                "auto_rank_total_busts": 1,
-                "auto_rank_total_crimes": 1,
-                "auto_rank_total_gtas": 1,
-                "auto_rank_total_cash": 1,
-                "auto_rank_best_cars": 1,
-                "auto_rank_total_booze_runs": 1,
-                "auto_rank_total_booze_profit": 1,
-                "oc_cooldown_until": 1,
-            },
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
-        # One-time backfill: users with stats but no since (e.g. legacy) get since=now so "Running" shows and ticks
-        has_activity = bool(
-            (u or {}).get("auto_rank_total_busts")
-            or (u or {}).get("auto_rank_total_crimes")
-            or (u or {}).get("auto_rank_total_gtas")
-            or (u or {}).get("auto_rank_total_booze_runs")
-        )
+        has_activity = bool((u or {}).get("auto_rank_total_busts") or (u or {}).get("auto_rank_total_crimes") or (u or {}).get("auto_rank_total_gtas") or (u or {}).get("auto_rank_total_booze_runs"))
         if not since and has_activity:
-            now_iso = now.isoformat()
-            await db.users.update_one({"id": current_user["id"]}, {"$set": {"auto_rank_stats_since": now_iso}})
+            await db.users.update_one({"id": current_user["id"]}, {"$set": {"auto_rank_stats_since": now.isoformat()}})
             since = now
         running_seconds = int((now - since).total_seconds()) if since and since <= now else 0
         best_cars = (u or {}).get("auto_rank_best_cars") or []
@@ -862,11 +705,7 @@ def register(router):
         }
 
     @router.patch("/auto-rank/me")
-    async def patch_my_preferences(
-        body: MePreferencesBody,
-        current_user: dict = Depends(get_current_user),
-    ):
-        """Update current user's Auto Rank preferences. Enable only if purchased (or already had it)."""
+    async def patch_my_preferences(body: MePreferencesBody, current_user: dict = Depends(get_current_user)):
         user_id = current_user["id"]
         updates = {}
         if body.auto_rank_enabled is not None:
@@ -874,29 +713,15 @@ def register(router):
             if body.auto_rank_enabled and not can_enable:
                 raise HTTPException(status_code=400, detail="Buy Auto Rank from the Store first (and set Telegram in Profile).")
             updates["auto_rank_enabled"] = body.auto_rank_enabled
-        if body.auto_rank_crimes is not None:
-            updates["auto_rank_crimes"] = body.auto_rank_crimes
-        if body.auto_rank_gta is not None:
-            updates["auto_rank_gta"] = body.auto_rank_gta
-        if body.auto_rank_bust_every_5_sec is not None:
-            updates["auto_rank_bust_every_5_sec"] = body.auto_rank_bust_every_5_sec
-        if body.auto_rank_oc is not None:
-            updates["auto_rank_oc"] = body.auto_rank_oc
-        if body.auto_rank_booze is not None:
-            updates["auto_rank_booze"] = body.auto_rank_booze
+        for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
+            val = getattr(body, field, None)
+            if val is not None:
+                updates[field] = val
         if not updates:
-            return {"message": "No changes", "auto_rank_enabled": current_user.get("auto_rank_enabled"), "auto_rank_crimes": current_user.get("auto_rank_crimes"), "auto_rank_gta": current_user.get("auto_rank_gta"), "auto_rank_bust_every_5_sec": current_user.get("auto_rank_bust_every_5_sec", False), "auto_rank_oc": current_user.get("auto_rank_oc", False), "auto_rank_booze": current_user.get("auto_rank_booze", False)}
+            return {"message": "No changes", **_extract_preferences(current_user)}
         await db.users.update_one({"id": user_id}, {"$set": updates})
-        updated = await db.users.find_one({"id": user_id}, {"_id": 0, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "auto_rank_oc": 1, "auto_rank_booze": 1})
-        return {
-            "message": "Preferences saved",
-            "auto_rank_enabled": updated.get("auto_rank_enabled", False),
-            "auto_rank_crimes": updated.get("auto_rank_crimes", True),
-            "auto_rank_gta": updated.get("auto_rank_gta", True),
-            "auto_rank_bust_every_5_sec": updated.get("auto_rank_bust_every_5_sec", False),
-            "auto_rank_oc": updated.get("auto_rank_oc", False),
-            "auto_rank_booze": updated.get("auto_rank_booze", False),
-        }
+        updated = await db.users.find_one({"id": user_id}, {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}})
+        return {"message": "Preferences saved", **_extract_preferences(updated)}
 
     @router.get("/auto-rank/interval")
     async def get_interval(current_user: dict = Depends(get_current_user)):
@@ -909,11 +734,7 @@ def register(router):
     async def start_auto_rank(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
-        await db.game_config.update_one(
-            {"id": GAME_CONFIG_ID},
-            {"$set": {"enabled": True}},
-            upsert=True,
-        )
+        await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": {"enabled": True}}, upsert=True)
         _invalidate_auto_rank_config_cache()
         return {"enabled": True, "message": "Auto Rank started."}
 
@@ -921,32 +742,20 @@ def register(router):
     async def stop_auto_rank(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
-        await db.game_config.update_one(
-            {"id": GAME_CONFIG_ID},
-            {"$set": {"enabled": False}},
-            upsert=True,
-        )
+        await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": {"enabled": False}}, upsert=True)
         _invalidate_auto_rank_config_cache()
         return {"enabled": False, "message": "Auto Rank stopped. Current cycle will finish, then no new cycles until started."}
 
     @router.patch("/auto-rank/interval")
-    async def set_interval(
-        body: IntervalBody,
-        current_user: dict = Depends(get_current_user),
-    ):
+    async def set_interval(body: IntervalBody, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
-        raw = body.interval_seconds
         try:
-            val = int(raw) if raw is not None else DEFAULT_INTERVAL_SECONDS
+            val = int(body.interval_seconds) if body.interval_seconds is not None else DEFAULT_INTERVAL_SECONDS
         except (TypeError, ValueError):
             val = DEFAULT_INTERVAL_SECONDS
         interval = max(MIN_INTERVAL_SECONDS, val)
-        await db.game_config.update_one(
-            {"id": GAME_CONFIG_ID},
-            {"$set": {"interval_seconds": interval}},
-            upsert=True,
-        )
+        await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": {"interval_seconds": interval}}, upsert=True)
         _invalidate_auto_rank_config_cache()
         return {"interval_seconds": interval, "message": f"Auto Rank will run every {interval} seconds after each cycle."}
 
@@ -957,18 +766,11 @@ def register(router):
 
     @router.get("/admin/auto-rank/users")
     async def admin_list_auto_rank_users(current_user: dict = Depends(get_current_user)):
-        """List alive users who have Auto Rank purchased. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         cursor = db.users.find(
-            {
-                "is_dead": {"$ne": True},
-                "$or": [
-                    {"auto_rank_purchased": True},
-                    {"auto_rank_enabled": True},
-                ],
-            },
-            {"_id": 0, "id": 1, "username": 1, "auto_rank_enabled": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_bust_every_5_sec": 1, "auto_rank_oc": 1, "auto_rank_booze": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
+            {"is_dead": {"$ne": True}, "$or": [{"auto_rank_purchased": True}, {"auto_rank_enabled": True}]},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
         )
         users = await cursor.to_list(500)
         return {
@@ -976,12 +778,7 @@ def register(router):
                 {
                     "id": u.get("id"),
                     "username": u.get("username"),
-                    "auto_rank_enabled": u.get("auto_rank_enabled", False),
-                    "auto_rank_crimes": u.get("auto_rank_crimes", True),
-                    "auto_rank_gta": u.get("auto_rank_gta", True),
-                    "auto_rank_bust_every_5_sec": u.get("auto_rank_bust_every_5_sec", False),
-                    "auto_rank_oc": u.get("auto_rank_oc", False),
-                    "auto_rank_booze": u.get("auto_rank_booze", False),
+                    **_extract_preferences(u),
                     "telegram_chat_id": u.get("telegram_chat_id") or "",
                     "telegram_bot_token": u.get("telegram_bot_token") or "",
                 }
@@ -990,12 +787,7 @@ def register(router):
         }
 
     @router.patch("/admin/auto-rank/users/{username}")
-    async def admin_update_auto_rank_user(
-        username: str,
-        body: AdminUserUpdateBody,
-        current_user: dict = Depends(get_current_user),
-    ):
-        """Update a user's Auto Rank: set telegram_chat_id, telegram_bot_token, or enable/disable. Admin only."""
+    async def admin_update_auto_rank_user(username: str, body: AdminUserUpdateBody, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         import re
