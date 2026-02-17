@@ -10,7 +10,13 @@ const CG_STYLES = `
 `;
 
 const RACE_DURATION_MS = 5000;
+const GATE_DELAY_MS = 900;
 const HORSE_COLORS = ['#1a5c2a','#dc2626','#2563eb','#16a34a','#6b7280','#ec4899','#18181b'];
+const COMMENTARY_LINES = [
+  'They\'re off!', 'And they\'re racing!', 'Thundering down the track!',
+  'Coming into the stretch!', 'It\'s neck and neck!', 'Digging deep!',
+  'Closing fast!', 'At the wire!', 'What a finish!',
+];
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -40,33 +46,80 @@ function apiErrorDetail(e, fallback) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   Race Track with lanes, fences, finish line
+   Race Track with lanes, fences, finish line, sky, crowd, boards
    ═══════════════════════════════════════════════════════ */
-function RaceTrack({ lanes, racing, raceStarted, winnerId, selectedHorseId }) {
+function RaceTrack({
+  lanes,
+  racing,
+  raceStarted,
+  gatesOpen,
+  winnerId,
+  selectedHorseId,
+  liveCommentary,
+  livePositions,
+  showGates,
+}) {
+  const skyGradient = 'linear-gradient(180deg, #87ceeb 0%, #b0d4e8 25%, #c9e0ed 60%, #2d5a12 85%, #1a3a0a 100%)';
   return (
     <div className="relative rounded-lg overflow-hidden" style={{ background: '#1a3a0a' }}>
-      {/* Top grass + rail */}
+      {/* Sky strip + crowd silhouettes */}
+      <div className="relative" style={{ height: 28, background: skyGradient }}>
+        <div className="absolute inset-0 flex items-end justify-around px-2 pt-1 opacity-40">
+          {Array.from({ length: 12 }, (_, i) => (
+            <div
+              key={i}
+              className="w-4 h-3 rounded-t"
+              style={{
+                background: `linear-gradient(180deg, #1a1a1a 0%, #2a2a2a 100%)`,
+                transform: `scale(${0.7 + (i % 3) * 0.15})`,
+                marginBottom: 2,
+              }}
+            />
+          ))}
+        </div>
+        {/* Sponsor boards */}
+        <div className="absolute bottom-0 left-0 right-0 flex justify-between px-2 gap-1">
+          <div className="px-2 py-0.5 rounded-sm text-[8px] font-heading font-bold uppercase tracking-wider opacity-70" style={{ background: 'rgba(0,0,0,0.4)', color: '#d4af37' }}>Official Partner</div>
+          <div className="px-2 py-0.5 rounded-sm text-[8px] font-heading font-bold uppercase tracking-wider opacity-70" style={{ background: 'rgba(0,0,0,0.4)', color: '#d4af37' }}>Live Odds</div>
+        </div>
+      </div>
+
+      {/* Top grass + rail / fence */}
       <div style={{ height: 10, background: 'linear-gradient(180deg, #2d5a12, #1a3a0a)' }}>
         <div className="flex items-end h-full px-1">
           {Array.from({ length: 30 }, (_, i) => (
             <div key={i} className="flex-1 flex flex-col items-center">
-              <div className="w-px h-1.5 bg-white/30" />
-              {i % 3 === 0 && <div className="w-1.5 h-px bg-white/20" />}
+              <div className="w-px h-2 bg-white/40" style={{ boxShadow: '0 0 0 1px rgba(0,0,0,0.2)' }} />
+              {i % 3 === 0 && <div className="w-2 h-px bg-white/30" />}
             </div>
           ))}
         </div>
       </div>
 
-      {/* Dirt track */}
+      {/* Dirt track with patch variation */}
       <div
         className="relative"
         style={{
-          background: 'linear-gradient(180deg, #5a3e1b, #7a5a2e 20%, #6b4e24 50%, #7a5a2e 80%, #5a3e1b)',
+          background: `
+            linear-gradient(180deg, #5a3e1b, #7a5a2e 20%, #6b4e24 50%, #7a5a2e 80%, #5a3e1b),
+            radial-gradient(ellipse 80% 50% at 20% 30%, rgba(90,60,25,0.4), transparent),
+            radial-gradient(ellipse 60% 40% at 70% 70%, rgba(100,70,30,0.3), transparent)
+          `,
           boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.3), inset 0 -2px 6px rgba(0,0,0,0.3)',
         }}
       >
-        {/* Starting gate line */}
-        <div className="absolute left-8 sm:left-12 top-0 bottom-0 w-px" style={{ background: 'repeating-linear-gradient(180deg, #fff 0, #fff 4px, transparent 4px, transparent 8px)', opacity: 0.3 }} />
+        {/* Starting gates (closed until "They're off!") */}
+        {showGates && !gatesOpen && (
+          <div className="absolute left-0 top-0 bottom-0 w-14 sm:w-16 z-20 flex" style={{ background: 'linear-gradient(90deg, rgba(40,30,20,0.95), rgba(50,35,22,0.9))' }}>
+            {[0,1,2,3,4,5,6].map((i) => (
+              <div key={i} className="flex-1 border-r border-amber-900/80 flex items-center justify-center">
+                <div className="w-1 h-full bg-amber-800/60 rounded-sm" />
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Starting gate line (when gates open) */}
+        <div className="absolute left-8 sm:left-12 top-0 bottom-0 w-px z-10" style={{ background: 'repeating-linear-gradient(180deg, #fff 0, #fff 4px, transparent 4px, transparent 8px)', opacity: 0.35 }} />
 
         {/* Finish line (checkered) */}
         <div className="absolute right-3 sm:right-4 top-0 bottom-0 w-3 sm:w-4 z-10 opacity-60"
@@ -110,42 +163,48 @@ function RaceTrack({ lanes, racing, raceStarted, winnerId, selectedHorseId }) {
                   {/* Lane divider (bottom) */}
                   <div className="absolute bottom-0 left-0 right-0 h-px" style={{ background: 'repeating-linear-gradient(90deg, rgba(255,255,255,0.15) 0, rgba(255,255,255,0.15) 8px, transparent 8px, transparent 16px)' }} />
 
-                  {/* Horse runner */}
+                  {/* Horse runner — only advance when gates open + race started */}
                   <div
-                    className="absolute top-0 h-full flex items-center"
+                    className={`absolute top-0 h-full flex items-center ${racing && raceStarted && gatesOpen ? 'horse-lean' : ''}`}
                     style={{
-                      left: raceStarted ? `calc(${lane.finishPct}% - 28px)` : '2px',
-                      transition: raceStarted
-                        ? `left ${RACE_DURATION_MS}ms cubic-bezier(0.12, 0.6, 0.25, 1)` : 'none',
-                      transitionDelay: raceStarted ? `${lane.animationDelayMs ?? 0}ms` : '0ms',
+                      left: (raceStarted && gatesOpen) ? `calc(${lane.finishPct}% - 28px)` : '2px',
+                      transition: (raceStarted && gatesOpen)
+                        ? `left ${RACE_DURATION_MS}ms cubic-bezier(0.08, 0.55, 0.2, 1)` : 'none',
+                      transitionDelay: (raceStarted && gatesOpen) ? `${lane.animationDelayMs ?? 0}ms` : '0ms',
                     }}
                   >
                     {/* Dust trail when racing */}
-                    {racing && raceStarted && (
-                      <div className="absolute -left-3 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-40">
-                        {[0, 1, 2].map((d) => (
+                    {racing && raceStarted && gatesOpen && (
+                      <div className="absolute -left-3 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-50">
+                        {[0, 1, 2, 3].map((d) => (
                           <div
                             key={d}
                             className="w-1.5 h-1.5 rounded-full animate-dust"
                             style={{
                               background: '#a08060',
-                              animationDelay: `${d * 0.15}s`,
+                              animationDelay: `${d * 0.12}s`,
                             }}
                           />
                         ))}
                       </div>
                     )}
-                    {/* Jockey circle */}
+                    {/* Jockey circle with silks (stripes) */}
                     <div
-                      className={`relative w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-lg ${racing && raceStarted ? 'animate-horse-bounce' : ''} ${isWinner && !racing ? 'ring-2 ring-yellow-400' : ''}`}
+                      className={`relative w-7 h-7 rounded-full flex items-center justify-center text-sm shadow-lg overflow-hidden ${racing && raceStarted && gatesOpen ? 'animate-horse-bounce' : ''} ${isWinner && !racing ? 'ring-2 ring-yellow-400' : ''}`}
                       style={{
-                        background: `radial-gradient(circle at 40% 35%, ${color}, ${color}cc)`,
-                        border: '2px solid rgba(255,255,255,0.25)',
-                        boxShadow: `0 2px 8px rgba(0,0,0,0.4), 0 0 0 ${isWinner && !racing ? '2px #eab308' : '0 transparent'}`,
+                        background: `repeating-linear-gradient(45deg, ${color}, ${color} 3px, rgba(255,255,255,0.15) 3px, rgba(255,255,255,0.15) 5px)`,
+                        border: '2px solid rgba(255,255,255,0.3)',
+                        boxShadow: `0 2px 8px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.2), 0 0 0 ${isWinner && !racing ? '2px #eab308' : '0 transparent'}`,
                       }}
                     >
-                      <span style={{ fontSize: 14 }}>🏇</span>
+                      <span className="relative z-10 drop-shadow-sm" style={{ fontSize: 14 }}>🏇</span>
                     </div>
+                    {/* Live position badge during race */}
+                    {livePositions && racing && gatesOpen && (livePositions[lane.horse.id] != null) && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black bg-primary text-black shadow" style={{ border: '1px solid rgba(0,0,0,0.3)' }}>
+                        {livePositions[lane.horse.id]}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -171,14 +230,23 @@ function RaceTrack({ lanes, racing, raceStarted, winnerId, selectedHorseId }) {
         </div>
       </div>
 
-      {/* Race status overlay */}
+      {/* Race status / commentary overlay */}
       {racing && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-20">
-          <span className="px-3 py-1 rounded-full text-[10px] font-heading font-bold uppercase tracking-wider animate-pulse"
-            style={{ background: 'rgba(0,0,0,0.6)', color: '#d4af37', border: '1px solid rgba(212,175,55,0.3)' }}
-          >
-            Race in progress
-          </span>
+        <div className="absolute top-1 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-0.5">
+          {!gatesOpen && showGates && (
+            <span className="px-3 py-1.5 rounded-full text-[11px] font-heading font-black uppercase tracking-wider animate-pulse"
+              style={{ background: 'rgba(0,0,0,0.7)', color: '#fbbf24', border: '2px solid rgba(251,191,36,0.5)' }}
+            >
+              They're off!
+            </span>
+          )}
+          {gatesOpen && (
+            <span className="px-3 py-1 rounded-full text-[10px] font-heading font-bold uppercase tracking-wider animate-pulse"
+              style={{ background: 'rgba(0,0,0,0.6)', color: '#d4af37', border: '1px solid rgba(212,175,55,0.3)' }}
+            >
+              {liveCommentary || 'Race in progress'}
+            </span>
+          )}
         </div>
       )}
     </div>
@@ -250,7 +318,16 @@ export default function HorseRacingPage() {
   const [transferUsername, setTransferUsername] = useState('');
   const [sellPoints, setSellPoints] = useState('');
   const [skipAnimation, setSkipAnimation] = useState(false);
+  const [gatesOpen, setGatesOpen] = useState(false);
+  const [liveCommentary, setLiveCommentary] = useState('');
+  const [livePositions, setLivePositions] = useState(null);
+  const [photoFinishRevealed, setPhotoFinishRevealed] = useState(false);
   const raceEndRef = useRef(null);
+  const gateTimeoutRef = useRef(null);
+  const raceStartTimeRef = useRef(null);
+  const liveIntervalRef = useRef(null);
+  const commentaryIntervalRef = useRef(null);
+  const lastRaceForReplayRef = useRef(null);
 
   const fetchHistory = useCallback(() => {
     api.get('/casino/horseracing/history').then((r) => setHistory(r.data?.history || [])).catch(() => {});
@@ -275,7 +352,12 @@ export default function HorseRacingPage() {
   }, []);
 
   useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); }, [fetchConfigAndOwnership, fetchHistory]);
-  useEffect(() => () => { if (raceEndRef.current) clearTimeout(raceEndRef.current); }, []);
+  useEffect(() => () => {
+    if (raceEndRef.current) clearTimeout(raceEndRef.current);
+    if (gateTimeoutRef.current) clearTimeout(gateTimeoutRef.current);
+    if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    if (commentaryIntervalRef.current) clearInterval(commentaryIntervalRef.current);
+  }, []);
 
   const handleClaim = async () => {
     const city = ownership?.current_city;
@@ -376,18 +458,81 @@ export default function HorseRacingPage() {
         ? data.finish_pcts
         : horsesList.map((h) => (h.id === winnerId ? 100 : 55 + Math.random() * 40));
       const animationDelays = horsesList.map(() => Math.floor(Math.random() * 120));
+      const finishOrder = Array.isArray(data.finish_order) ? data.finish_order : null;
+      const photoFinish = !!data.photo_finish;
+
+      setGatesOpen(false);
+      setPhotoFinishRevealed(false);
+      setLivePositions(null);
+      setLiveCommentary(COMMENTARY_LINES[0]);
 
       const durationMs = skipAnimation ? 0 : RACE_DURATION_MS;
-      setRaceProgress({ winnerId, finishPcts, horses: horsesList, won: data.won, payout: data.payout || 0, animationDelays });
+      const gateDelay = skipAnimation ? 0 : GATE_DELAY_MS;
+      const totalDuration = gateDelay + durationMs;
+
+      setRaceProgress({
+        winnerId,
+        finishPcts,
+        horses: horsesList,
+        finishOrder,
+        photoFinish,
+        won: data.won,
+        payout: data.payout || 0,
+        animationDelays,
+      });
 
       if (!skipAnimation) {
         requestAnimationFrame(() => { requestAnimationFrame(() => setRaceStarted(true)); });
+        gateTimeoutRef.current = setTimeout(() => {
+          setGatesOpen(true);
+          raceStartTimeRef.current = Date.now();
+          let commentaryIdx = 0;
+          commentaryIntervalRef.current = setInterval(() => {
+            commentaryIdx = (commentaryIdx + 1) % COMMENTARY_LINES.length;
+            setLiveCommentary(COMMENTARY_LINES[commentaryIdx]);
+          }, 1300);
+          liveIntervalRef.current = setInterval(() => {
+            const elapsed = Date.now() - raceStartTimeRef.current;
+            const pct = Math.min(1, elapsed / RACE_DURATION_MS);
+            const currentPcts = horsesList.map((h, idx) => pct * finishPcts[idx]);
+            const order = horsesList.map((h, idx) => ({ id: h.id, pct: currentPcts[idx] })).sort((a, b) => b.pct - a.pct);
+            const positions = {};
+            order.forEach((o, rank) => { positions[o.id] = rank + 1; });
+            setLivePositions(positions);
+          }, 180);
+        }, gateDelay);
+      } else {
+        setGatesOpen(true);
+        setRaceStarted(true);
       }
 
       raceEndRef.current = setTimeout(() => {
-        setResult({ won: data.won, payout: data.payout || 0, winner_name: data.winner_name, new_balance: data.new_balance });
+        if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+        if (commentaryIntervalRef.current) { clearInterval(commentaryIntervalRef.current); commentaryIntervalRef.current = null; }
+        setLivePositions(null);
         setRacing(false);
         setRaceStarted(false);
+        const resultPayload = {
+          won: data.won,
+          payout: data.payout || 0,
+          winner_name: data.winner_name,
+          new_balance: data.new_balance,
+          finishOrder: finishOrder || (horsesList.map((h, i) => ({ id: h.id, name: h.name, pct: finishPcts[i] })).sort((a, b) => b.pct - a.pct).map((o) => o.id)),
+          finishPcts,
+          horses: horsesList,
+          photoFinish,
+        };
+        lastRaceForReplayRef.current = { winnerId, finishPcts, horses: horsesList, animationDelays, finishOrder, photoFinish };
+        if (photoFinish) {
+          setResult({ ...resultPayload, photoFinishPending: true });
+          setPhotoFinishRevealed(false);
+          setTimeout(() => {
+            setPhotoFinishRevealed(true);
+            setResult((prev) => prev ? { ...prev, photoFinishPending: false } : prev);
+          }, 1400);
+        } else {
+          setResult(resultPayload);
+        }
         setRaceProgress(null);
         if (data.won) {
           toast.success(`${data.winner_name} wins! +${formatMoney(data.payout - betNum)}`);
@@ -398,14 +543,66 @@ export default function HorseRacingPage() {
         }
         if (data.new_balance != null) refreshUser(data.new_balance);
         fetchHistory();
-      }, durationMs);
+      }, totalDuration);
     } catch (e) {
       setLoading(false);
       toast.error(apiErrorDetail(e, 'Failed'));
     }
   };
 
-  const playAgain = () => { setResult(null); setRaceProgress(null); setRaceStarted(false); };
+  const playAgain = () => { setResult(null); setRaceProgress(null); setRaceStarted(false); setGatesOpen(false); };
+
+  const replayRace = () => {
+    const last = lastRaceForReplayRef.current;
+    if (!last) return;
+    if (gateTimeoutRef.current) clearTimeout(gateTimeoutRef.current);
+    if (raceEndRef.current) clearTimeout(raceEndRef.current);
+    if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    if (commentaryIntervalRef.current) clearInterval(commentaryIntervalRef.current);
+    setResult(null);
+    setPhotoFinishRevealed(false);
+    setLiveCommentary(COMMENTARY_LINES[0]);
+    setLivePositions(null);
+    setGatesOpen(false);
+    setRaceProgress({
+      winnerId: last.winnerId,
+      finishPcts: last.finishPcts,
+      horses: last.horses,
+      finishOrder: last.finishOrder,
+      photoFinish: last.photoFinish,
+      animationDelays: last.animationDelays,
+    });
+    setRacing(true);
+    setRaceStarted(true);
+    gateTimeoutRef.current = setTimeout(() => {
+      setGatesOpen(true);
+      raceStartTimeRef.current = Date.now();
+      let commentaryIdx = 0;
+      commentaryIntervalRef.current = setInterval(() => {
+        commentaryIdx = (commentaryIdx + 1) % COMMENTARY_LINES.length;
+        setLiveCommentary(COMMENTARY_LINES[commentaryIdx]);
+      }, 1300);
+      const horsesList = last.horses;
+      const finishPcts = last.finishPcts;
+      liveIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - raceStartTimeRef.current;
+        const pct = Math.min(1, elapsed / RACE_DURATION_MS);
+        const currentPcts = horsesList.map((h, idx) => pct * finishPcts[idx]);
+        const order = horsesList.map((h, idx) => ({ id: h.id, pct: currentPcts[idx] })).sort((a, b) => b.pct - a.pct);
+        const positions = {};
+        order.forEach((o, rank) => { positions[o.id] = rank + 1; });
+        setLivePositions(positions);
+      }, 180);
+    }, GATE_DELAY_MS);
+    raceEndRef.current = setTimeout(() => {
+      if (liveIntervalRef.current) { clearInterval(liveIntervalRef.current); liveIntervalRef.current = null; }
+      if (commentaryIntervalRef.current) { clearInterval(commentaryIntervalRef.current); commentaryIntervalRef.current = null; }
+      setLivePositions(null);
+      setRacing(false);
+      setRaceStarted(false);
+      setRaceProgress(null);
+    }, GATE_DELAY_MS + RACE_DURATION_MS);
+  };
 
   const raceLanes = raceProgress
     ? raceProgress.horses.map((h, idx) => ({
@@ -420,11 +617,11 @@ export default function HorseRacingPage() {
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes horse-bounce {
-          0%, 100% { transform: translateY(0); }
-          18% { transform: translateY(-2px); }
-          36% { transform: translateY(0); }
-          54% { transform: translateY(-3px); }
-          72% { transform: translateY(-1px); }
+          0%, 100% { transform: translateY(0) rotate(-0.5deg); }
+          18% { transform: translateY(-2px) rotate(0.5deg); }
+          36% { transform: translateY(0) rotate(-0.3deg); }
+          54% { transform: translateY(-3px) rotate(0.8deg); }
+          72% { transform: translateY(-1px) rotate(0deg); }
         }
         @keyframes dust {
           0% { opacity: 0.6; transform: translateX(0) scale(1); }
@@ -444,6 +641,11 @@ export default function HorseRacingPage() {
           0%, 100% { text-shadow: 0 0 10px rgba(234,179,8,0.3); }
           50% { text-shadow: 0 0 25px rgba(234,179,8,0.7), 0 0 50px rgba(234,179,8,0.3); }
         }
+        @keyframes horse-lean {
+          0%, 85% { transform: translateX(0); }
+          100% { transform: translateX(3px); }
+        }
+        .horse-lean { animation: horse-lean 5s ease-out forwards; }
         .animate-horse-bounce { animation: horse-bounce 0.25s ease-in-out infinite; }
         .animate-dust { animation: dust 0.6s ease-out infinite; }
         .animate-race-particle { animation: race-particle ease-in forwards; }
@@ -542,8 +744,12 @@ export default function HorseRacingPage() {
               lanes={raceLanes}
               racing={racing}
               raceStarted={raceStarted}
+              gatesOpen={gatesOpen}
               winnerId={raceProgress?.winnerId}
               selectedHorseId={selectedHorseId}
+              liveCommentary={liveCommentary}
+              livePositions={livePositions}
+              showGates={!skipAnimation && !!raceProgress}
             />
 
             {/* Bottom scoreboard */}
@@ -555,21 +761,61 @@ export default function HorseRacingPage() {
               }}
             >
               {result ? (
-                <div className="flex items-center justify-center gap-3 animate-result-pop">
-                  <span className={`text-2xl ${result.won ? 'animate-trophy-glow' : ''}`}>
-                    {result.won ? '🏆' : '💀'}
-                  </span>
-                  <div className="text-center">
-                    <span className={`text-sm font-heading font-bold ${result.won ? 'text-emerald-400' : 'text-red-400'}`}>
-                      {result.won ? 'Winner!' : 'Better luck next time'}
-                    </span>
-                    <span className="text-[10px] text-mutedForeground ml-2">
-                      {result.winner_name}
-                    </span>
-                  </div>
-                  <span className={`text-sm font-heading font-bold ${result.won ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {result.won ? `+${formatMoney(result.payout - betNum)}` : `-${formatMoney(betNum)}`}
-                  </span>
+                <div className="space-y-2">
+                  {result.photoFinishPending && !photoFinishRevealed && (
+                    <div className="flex items-center justify-center gap-2 py-2 animate-pulse">
+                      <span className="text-lg">📷</span>
+                      <span className="text-sm font-heading font-bold text-primary">Photo finish! Reviewing...</span>
+                    </div>
+                  )}
+                  {(photoFinishRevealed || !result.photoFinishPending) && (
+                    <>
+                      <div className="flex items-center justify-center gap-3 animate-result-pop">
+                        <span className={`text-2xl ${result.won ? 'animate-trophy-glow' : ''}`}>
+                          {result.won ? '🏆' : '💀'}
+                        </span>
+                        <div className="text-center">
+                          <span className={`text-sm font-heading font-bold ${result.won ? 'text-emerald-400' : 'text-red-400'}`}>
+                            {result.won ? 'Winner!' : 'Better luck next time'}
+                          </span>
+                          <span className="text-[10px] text-mutedForeground ml-2">
+                            {result.winner_name}
+                          </span>
+                        </div>
+                        <span className={`text-sm font-heading font-bold ${result.won ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {result.won ? `+${formatMoney(result.payout - betNum)}` : `-${formatMoney(betNum)}`}
+                        </span>
+                      </div>
+                      {/* Full finishing order */}
+                      {result.finishOrder && result.horses && result.finishPcts && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                          <p className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Finishing order</p>
+                          <div className="flex flex-wrap justify-center gap-x-4 gap-y-0.5 text-[10px] font-heading">
+                            {(result.finishOrder || []).map((horseId, idx) => {
+                              const horse = (result.horses || []).find((h) => h.id === horseId);
+                              const pctIdx = (result.horses || []).findIndex((h) => h.id === horseId);
+                              const pct = (result.finishPcts || [])[pctIdx];
+                              const lengthsBehind = idx === 0 ? '' : ` (${(100 - pct).toFixed(1)}L)`;
+                              return (
+                                <span key={horseId} className={idx === 0 ? 'text-primary font-bold' : 'text-mutedForeground'}>
+                                  {idx + 1}. {horse?.name || horseId}{lengthsBehind}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      {lastRaceForReplayRef.current && (
+                        <button
+                          type="button"
+                          onClick={replayRace}
+                          className="mt-2 w-full py-1.5 rounded text-[10px] font-heading font-bold uppercase border border-primary/40 text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          Watch again
+                        </button>
+                      )}
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2 text-[10px] text-mutedForeground font-heading">

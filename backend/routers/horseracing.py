@@ -125,7 +125,9 @@ def _horseracing_finish_order(winner_id: int):
         positions = [100.0 - i * step for i in range(7)]
 
     id_to_pct = dict(zip(finish_order_ids, positions))
-    return [id_to_pct.get(h["id"], 50.0) for h in horses]
+    finish_pcts = [id_to_pct.get(h["id"], 50.0) for h in horses]
+    photo_finish = len(positions) >= 2 and (positions[0] - positions[1]) < 1.0
+    return finish_pcts, finish_order_ids, photo_finish
 
 
 def register(router):
@@ -354,11 +356,13 @@ def register(router):
             {"id": current_user["id"]},
             {"$push": {"horseracing_history": {"$each": [history_entry], "$slice": -HORSERACING_HISTORY_MAX}}}
         )
-        finish_pcts = _horseracing_finish_order(winner["id"])
+        finish_pcts, finish_order_ids, photo_finish = _horseracing_finish_order(winner["id"])
         return {
             "winner_id": winner["id"],
             "horses": list(HORSERACING_HORSES),
             "finish_pcts": finish_pcts,
+            "finish_order": finish_order_ids,
+            "photo_finish": photo_finish,
             "won": won,
             "payout": payout,
             "winner_name": winner["name"],
