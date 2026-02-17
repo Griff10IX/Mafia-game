@@ -43,7 +43,25 @@ db = client[os.environ['DB_NAME']]
 
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+
+def _get_jwt_secret():
+    """Require JWT_SECRET_KEY to be set and not a placeholder. Fail startup otherwise."""
+    secret = os.environ.get('JWT_SECRET_KEY', '').strip()
+    placeholders = (
+        '',
+        'your-secret-key-change-in-production',
+        'your-secret-key-here',
+        'GENERATE_NEW_SECRET_HERE',
+    )
+    if not secret or secret in placeholders:
+        logging.getLogger(__name__).error(
+            'JWT_SECRET_KEY must be set in .env to a secure random value. '
+            'Do not use the placeholder. Refusing to start.'
+        )
+        raise SystemExit(1)
+    return secret
+
+SECRET_KEY = _get_jwt_secret()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 

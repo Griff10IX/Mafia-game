@@ -50,7 +50,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             auth_header = request.headers.get("Authorization")
             if auth_header and auth_header.startswith("Bearer "):
                 token = auth_header.split(" ")[1]
-                SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
+                SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+                if not SECRET_KEY or SECRET_KEY in ("your-secret-key-here", "your-secret-key-change-in-production", "GENERATE_NEW_SECRET_HERE"):
+                    raise ValueError("Invalid JWT secret")
                 payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
                 user_id = payload.get("sub")
                 username = payload.get("username", "Unknown")
