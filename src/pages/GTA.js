@@ -5,6 +5,13 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const GTA_STYLES = `
+  @keyframes gta-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .gta-fade-in { animation: gta-fade-in 0.4s ease-out both; }
+  .gta-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .gta-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 // Constants
 const TICK_INTERVAL = 1000;
 const RECENT_STOLEN_COLLAPSED_KEY = 'gta_recent_stolen_collapsed';
@@ -55,8 +62,10 @@ const useCooldownTicker = (options, onCooldownExpired) => {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <Car size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
   </div>
 );
 
@@ -66,7 +75,7 @@ const EventBanner = ({ event, eventsEnabled }) => {
   }
 
   return (
-    <div className="px-3 py-2 bg-primary/10 border border-primary/30 rounded-md">
+    <div className="px-3 py-2 bg-primary/8 border border-primary/20 rounded-lg gta-fade-in">
       <p className="text-xs font-heading">
         <span className="text-primary font-bold">✨ {event.name}</span>
         <span className="text-mutedForeground ml-2">{event.message}</span>
@@ -76,7 +85,8 @@ const EventBanner = ({ event, eventsEnabled }) => {
 };
 
 const AutoRankGtaNotice = () => (
-  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg gta-fade-in overflow-hidden`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
     <div className="flex items-center gap-2">
       <Bot size={14} className="text-amber-400 shrink-0" />
       <span className="text-amber-200/80">
@@ -98,9 +108,9 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md transition-all ${
+      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-all gta-row ${
         unlocked && !onCooldown
-          ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20 hover:bg-zinc-800/50' 
+          ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20' 
           : 'bg-zinc-800/20 border border-transparent opacity-60'
       }`}
       data-testid={`gta-option-${option.id}`}
@@ -203,13 +213,14 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
   if (recentStolen.length === 0) return null;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <button
         type="button"
         onClick={onToggle}
-        className="w-full px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between hover:bg-primary/15 transition-colors"
+        className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
       >
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
           🚗 Last 10 cars stolen
         </span>
         <div className="flex items-center gap-2">
@@ -254,6 +265,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
           </p>
         </div>
       )}
+      <div className="gta-art-line text-primary mx-3" />
     </div>
   );
 };
@@ -297,9 +309,10 @@ const GTAProgressBar = ({ progress }) => {
 };
 
 const InfoSection = () => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.08s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         ℹ️ GTA System
       </h3>
     </div>
@@ -323,6 +336,7 @@ const InfoSection = () => (
         </li>
       </ul>
     </div>
+    <div className="gta-art-line text-primary mx-3" />
   </div>
 );
 
@@ -465,28 +479,46 @@ export default function GTA() {
   };
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{GTA_STYLES}</style>
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="gta-page">
+      <style>{GTA_STYLES}</style>
+
+      <div className="relative gta-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Grand Theft Auto</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Car size={24} /> GTA
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
+      </div>
+
       {autoRankGtaDisabled && <AutoRankGtaNotice />}
       <EventBanner event={event} eventsEnabled={eventsEnabled} />
 
       {/* GTA stats */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">GTA stats</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">GTA stats</span>
         </div>
         <div className="p-3 text-sm font-heading text-foreground">
           GTAs today: {gtaStats.count_today ?? 0}  successful today {gtaStats.success_today ?? 0}  past week {gtaStats.count_week ?? 0} ({gtaStats.success_week ?? 0} successful)
         </div>
+        <div className="gta-art-line text-primary mx-3" />
       </div>
 
       {/* GTA options list */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             Available Vehicles
           </span>
         </div>
@@ -504,6 +536,7 @@ export default function GTA() {
             />
           ))}
         </div>
+        <div className="gta-art-line text-primary mx-3" />
       </div>
 
       <RecentStolenSection 

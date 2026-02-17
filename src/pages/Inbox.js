@@ -6,6 +6,13 @@ import { toast } from 'sonner';
 import GifPicker from '../components/GifPicker';
 import styles from '../styles/noir.module.css';
 
+const INBOX_STYLES = `
+  @keyframes ib-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .ib-fade-in { animation: ib-fade-in 0.4s ease-out both; }
+  .ib-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .ib-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const NOTIFICATION_ICONS = {
   rank_up: Trophy,
   reward: Gift,
@@ -37,8 +44,10 @@ function getTimeAgo(dateString) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <Mail size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
   </div>
 );
 
@@ -65,8 +74,9 @@ const ComposeModal = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className={`${styles.panel} rounded-lg border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}>
         {/* Header */}
-        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <h2 className="text-lg font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 md:px-6 py-4 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
             <Send size={20} />
             New Message
           </h2>
@@ -187,7 +197,7 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
       onClick={onClick}
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
-      className={`group relative flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ${
+      className={`group relative flex items-center gap-3 px-4 py-3 border-b border-border cursor-pointer transition-all ib-row ${
         isSelected 
           ? 'bg-primary/10 border-l-4 border-l-primary' 
           : isSent
@@ -323,10 +333,10 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
   return (
     <div className={`flex-1 flex flex-col ${styles.panel}`}>
       {/* Message Header */}
-      <div className="px-4 md:px-6 py-4 border-b border-border bg-secondary/30">
+      <div className="px-4 md:px-6 py-4 border-b border-primary/20 bg-primary/8">
         <div className="flex items-start justify-between gap-4 mb-3">
           <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-md bg-primary/20 border border-primary/30">
+            <div className="p-2.5 rounded-lg bg-primary/10 border border-primary/20">
               <Icon size={24} className="text-primary" />
             </div>
             <div>
@@ -580,7 +590,12 @@ export default function Inbox() {
       : notifications.filter(n => n.notification_type === filter);
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{INBOX_STYLES}</style>
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   const filterButtons = [
@@ -595,6 +610,16 @@ export default function Inbox() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="inbox-page">
+      <style>{INBOX_STYLES}</style>
+
+      <div className="relative ib-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Messages</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Mail size={24} /> Inbox
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Notifications, DMs, rank-ups & more.</p>
+      </div>
+
       <ComposeModal
         isOpen={showCompose}
         onClose={() => setShowCompose(false)}
@@ -614,9 +639,10 @@ export default function Inbox() {
       />
 
       {/* Inbox Layout */}
-      <div className={`${styles.panel} border border-primary/20 rounded-lg overflow-hidden`}>
+      <div className={`relative ${styles.panel} border border-primary/20 rounded-lg overflow-hidden ib-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Toolbar */}
-        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30">
+        <div className="px-4 py-3 bg-primary/8 border-b border-primary/20">
           {/* Top row: Filters + Compose */}
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 overflow-x-auto pb-1 flex-1">
@@ -673,9 +699,10 @@ export default function Inbox() {
         {/* Inbox Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-5">
           {/* Message List */}
-          <div className="lg:col-span-2 border-r border-border bg-secondary/20 max-h-[600px] overflow-y-auto">
+          <div className="lg:col-span-2 border-r border-primary/20 bg-secondary/20 max-h-[600px] overflow-y-auto">
             {filteredNotifications.length === 0 ? (
               <div className="p-8 text-center">
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
                 <MailOpen size={48} className="mx-auto text-primary/30 mb-3" />
                 <p className="text-sm text-mutedForeground font-heading">
                   No messages
@@ -717,7 +744,7 @@ export default function Inbox() {
       {selectedNotification && (
         <div className="lg:hidden fixed inset-0 z-40 bg-background">
           <div className="flex flex-col h-full">
-            <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center gap-3">
+            <div className="px-4 py-3 bg-primary/8 border-b border-primary/20 flex items-center gap-3">
               <button
                 onClick={() => setSelectedNotification(null)}
                 className="p-2 hover:bg-secondary rounded transition-colors"

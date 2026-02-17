@@ -5,6 +5,20 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const FORUM_STYLES = `
+  @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .f-fade-in { animation: f-fade-in 0.4s ease-out both; }
+  .f-corner::before, .f-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .f-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .f-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .f-card { transition: all 0.3s ease; }
+  .f-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .f-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .f-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💵', '💎', '🎩', '🔫', '⚔️', '🎲', '👑', '🏆', '✨'];
 
 function getTimeAgo(iso) {
@@ -72,9 +86,10 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} w-full max-w-md rounded-md overflow-hidden border border-primary/30 shadow-2xl`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <div className={`${styles.panel} w-full max-w-md rounded-lg overflow-hidden border border-primary/20 shadow-2xl`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             {category === 'entertainer' ? '🎭 Entertainer: New Topic' : '📝 Create New Topic'}
           </h2>
         </div>
@@ -157,9 +172,10 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} w-full max-w-sm rounded-md overflow-hidden border border-primary/30 shadow-2xl`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Create Game</h2>
+      <div className={`${styles.panel} w-full max-w-sm rounded-lg overflow-hidden border border-primary/20 shadow-2xl`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Create Game</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-3 space-y-3">
           <div>
@@ -211,7 +227,7 @@ const TopicRowDesktop = ({ topic, isAdmin, onUpdate, updating }) => {
       onMouseEnter={() => setShowPreview(true)}
       onMouseLeave={() => setShowPreview(false)}
     >
-      <div className="grid grid-cols-12 gap-2 px-3 py-2 hover:bg-zinc-800/30 transition-colors items-center text-xs">
+      <div className="grid grid-cols-12 gap-2 px-3 py-2 f-row transition-colors items-center text-xs">
         <Link to={`/forum/topic/${topic.id}`} className={`flex items-center gap-1.5 min-w-0 ${isAdmin ? 'col-span-6' : 'col-span-7'}`}>
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
@@ -255,7 +271,7 @@ const TopicRowDesktop = ({ topic, isAdmin, onUpdate, updating }) => {
 
 // Topic card for mobile
 const TopicRowMobile = ({ topic, isAdmin, onUpdate, updating }) => (
-  <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 hover:bg-zinc-800/30 transition-colors active:bg-zinc-800/50">
+  <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">
     <div className="flex items-start justify-between gap-2">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
@@ -480,13 +496,16 @@ export default function Forum() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-page">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <style>{FORUM_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative f-fade-in flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Board</p>
+          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2 tracking-wider uppercase">
             💬 Forum
           </h1>
-          <p className="text-xs text-mutedForeground">
+          <p className="text-[10px] text-zinc-500 font-heading italic">
             {activeTab === 'general' && 'Discuss OC, crews, trades & more'}
             {activeTab === 'entertainer' && 'Dice games, gbox — auto payout when full'}
             {activeTab === 'crew_oc' && 'Family Crew OC ads — apply from topic or family profile'}
@@ -530,9 +549,10 @@ export default function Forum() {
         <>
           {/* Admin tools */}
           {isAdmin && (
-            <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
-              <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/30">
-                <span className="text-xs font-heading font-bold text-amber-400 uppercase tracking-widest">🛠️ E-Games Admin</span>
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 f-fade-in`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+              <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20">
+                <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">🛠️ E-Games Admin</span>
               </div>
               <div className="p-3 flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -568,9 +588,10 @@ export default function Forum() {
           )}
 
           {/* What you can win */}
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎁 What you can win</span>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-card f-fade-in`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎁 What you can win</span>
             </div>
             <div className="p-3 text-[11px]">
               {entertainerPrizes ? (
@@ -613,11 +634,13 @@ export default function Forum() {
                 <div className="text-mutedForeground">Loading prizes…</div>
               )}
             </div>
+            <div className="f-art-line text-primary mx-3" />
           </div>
 
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between flex-wrap gap-1">
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Auto games</span>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-1">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Auto games</span>
               <span className="text-[10px] text-mutedForeground">Free to join · Win random: points, cash, bullets, cars · Rolls when full or 20 mins before next batch</span>
             </div>
             {gamesLoading ? (
@@ -678,12 +701,14 @@ export default function Forum() {
                 })}
               </div>
             )}
+            <div className="f-art-line text-primary mx-3" />
           </div>
 
           {/* Last 10 Games */}
-          <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-            <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📜 Last 10 games</span>
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">📜 Last 10 games</span>
             </div>
             {entertainerHistory.length === 0 ? (
               <div className="p-3 text-center text-[11px] text-mutedForeground">No completed games yet.</div>
@@ -700,7 +725,7 @@ export default function Forum() {
                   </thead>
                   <tbody>
                     {entertainerHistory.map((h) => (
-                      <tr key={h.id} className="border-b border-zinc-700/20 hover:bg-zinc-800/20">
+                      <tr key={h.id} className="border-b border-zinc-700/20 f-row">
                         <td className="px-3 py-1.5 font-heading capitalize">{h.game_type}</td>
                         <td className="px-3 py-1.5 text-mutedForeground">
                           {h.winner != null ? h.winner : (h.winners && h.winners.length ? h.winners.join(', ') : '—')}
@@ -715,6 +740,7 @@ export default function Forum() {
                 </table>
               </div>
             )}
+            <div className="f-art-line text-primary mx-3" />
           </div>
         </>
       )}
@@ -726,9 +752,10 @@ export default function Forum() {
       </div>
 
       {/* Topics List */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Desktop Header */}
-        <div className={`hidden sm:grid grid-cols-12 gap-2 px-3 py-2 bg-primary/10 border-b border-primary/30 text-[10px] font-heading font-bold text-primary uppercase tracking-widest`}>
+        <div className={`hidden sm:grid grid-cols-12 gap-2 px-3 py-2.5 bg-primary/8 border-b border-primary/20 text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]`}>
           <div className={isAdmin ? 'col-span-6' : 'col-span-7'}>Topic</div>
           <div className="col-span-2 text-right">Author</div>
           <div className="col-span-1 text-right">Posts</div>
@@ -737,12 +764,16 @@ export default function Forum() {
         </div>
         
         {/* Mobile Header */}
-        <div className="sm:hidden px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📋 Topics</span>
+        <div className="sm:hidden px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">📋 Topics</span>
         </div>
 
         {loading ? (
-          <div className="p-6 text-center text-xs text-mutedForeground">Loading...</div>
+          <div className="p-6 flex flex-col items-center justify-center gap-3">
+            <MessageSquare size={28} className="text-primary/40 animate-pulse" />
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+          </div>
         ) : topics.length === 0 ? (
           <div className="p-6 text-center text-xs text-mutedForeground">No topics yet. Create one!</div>
         ) : (
@@ -771,12 +802,14 @@ export default function Forum() {
             ))}
           </div>
         )}
+        <div className="f-art-line text-primary mx-3" />
       </div>
 
       {/* Rules */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">ℹ️ Rules</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">ℹ️ Rules</span>
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
@@ -786,6 +819,7 @@ export default function Forum() {
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>No spam or excessive posting</li>
           </ul>
         </div>
+        <div className="f-art-line text-primary mx-3" />
       </div>
 
       <CreateTopicModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onCreated={fetchTopics} category={currentCategory} />

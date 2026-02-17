@@ -5,6 +5,13 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const JAIL_STYLES = `
+  @keyframes j-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .j-fade-in { animation: j-fade-in 0.4s ease-out both; }
+  .j-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .j-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 // Card background (jail cell). Override: REACT_APP_JAIL_BACKGROUND_IMAGE in .env
 const JAIL_BACKGROUND_IMAGE =
   process.env.REACT_APP_JAIL_BACKGROUND_IMAGE ||
@@ -12,8 +19,10 @@ const JAIL_BACKGROUND_IMAGE =
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <Lock size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
   </div>
 );
 
@@ -146,7 +155,8 @@ const JailStatusCard = ({
 };
 
 const AutoRankJailNotice = () => (
-  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg j-fade-in overflow-hidden`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
     <div className="flex items-center gap-2">
       <Bot size={14} className="text-amber-400 shrink-0" />
       <span className="text-amber-200/80">
@@ -161,10 +171,10 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md transition-all ${
+      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-all j-row ${
         player.is_self 
           ? 'bg-red-500/10 border border-red-500/20 opacity-60' 
-          : 'bg-zinc-800/30 border border-transparent hover:border-primary/20 hover:bg-zinc-800/50'
+          : 'bg-zinc-800/30 border border-transparent hover:border-primary/20'
       }`}
       data-testid={`jailed-player-${index}`}
     >
@@ -230,9 +240,10 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
 };
 
 const InfoSection = () => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.08s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         ℹ️ Jail System
       </h3>
     </div>
@@ -256,6 +267,7 @@ const InfoSection = () => (
         </li>
       </ul>
     </div>
+    <div className="j-art-line text-primary mx-3" />
   </div>
 );
 
@@ -378,11 +390,26 @@ export default function Jail() {
   };
 
   if (initialLoading) {
-    return <LoadingSpinner />;
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{JAIL_STYLES}</style>
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="jail-page">
+      <style>{JAIL_STYLES}</style>
+
+      <div className="relative j-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Slammer</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Lock size={24} /> Jail
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Bust out jailed players for RP. Set a reward if you get locked up.</p>
+      </div>
+
       {autoRankJailDisabled && <AutoRankJailNotice />}
       <JailStatusCard
         inJail={jailStatus.in_jail}
@@ -397,9 +424,10 @@ export default function Jail() {
       />
 
       {/* Bust stats */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Bust stats</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Bust stats</span>
         </div>
         <div className="p-3 text-sm font-heading text-foreground">
           Busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}  total successful busts {jailStatus.jail_busts ?? 0}
@@ -407,12 +435,14 @@ export default function Jail() {
             Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts, {jailStats.success_week ?? 0} successful  ·  Profit today ${(jailStats.profit_today ?? 0).toLocaleString()}  ·  Past week ${(jailStats.profit_week ?? 0).toLocaleString()}
           </div>
         </div>
+        <div className="j-art-line text-primary mx-3" />
       </div>
 
       {/* Jailed Players */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-1.5">
             <Users size={14} />
             Jailed Players
           </span>
@@ -440,6 +470,7 @@ export default function Jail() {
             ))}
           </div>
         )}
+        <div className="j-art-line text-primary mx-3" />
       </div>
 
       <InfoSection />

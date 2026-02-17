@@ -1,8 +1,15 @@
 import { useMemo, useState, useEffect } from 'react';
-import { HelpCircle, Clock, AlertCircle, Bot } from 'lucide-react';
+import { HelpCircle, Clock, AlertCircle, Bot, Skull } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
+
+const CRIMES_STYLES = `
+  @keyframes cr-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .cr-fade-in { animation: cr-fade-in 0.4s ease-out both; }
+  .cr-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .cr-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
 
 // Constants
 const CRIME_SUCCESS_RATES = {
@@ -56,13 +63,16 @@ const useCooldownTicker = (crimes, onCooldownExpired) => {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <Skull size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
   </div>
 );
 
 const JailNotice = () => (
-  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg cr-fade-in overflow-hidden`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
     <div className="flex items-center gap-2">
       <AlertCircle size={14} className="text-amber-400 shrink-0" />
       <span className="text-amber-200/80">
@@ -73,7 +83,8 @@ const JailNotice = () => (
 );
 
 const AutoRankCrimesNotice = () => (
-  <div className={`p-2.5 ${styles.panel} border border-amber-500/40 rounded-md text-xs`}>
+  <div className={`relative p-2.5 ${styles.panel} border border-amber-500/40 rounded-lg cr-fade-in overflow-hidden`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
     <div className="flex items-center gap-2">
       <Bot size={14} className="text-amber-400 shrink-0" />
       <span className="text-amber-200/80">
@@ -89,7 +100,7 @@ const EventBanner = ({ event }) => {
   }
 
   return (
-    <div className="px-3 py-2 bg-primary/10 border border-primary/30 rounded-md">
+    <div className="px-3 py-2 bg-primary/8 border border-primary/20 rounded-lg cr-fade-in">
       <p className="text-xs font-heading">
         <span className="text-primary font-bold">✨ {event.name}</span>
         <span className="text-mutedForeground ml-2">{event.message}</span>
@@ -144,9 +155,9 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 
   return (
     <div
-      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-md transition-all ${
+      className={`flex items-center justify-between gap-3 px-3 py-2 rounded-lg transition-all cr-row ${
         crime.can_commit 
-          ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20 hover:bg-zinc-800/50' 
+          ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20' 
           : 'bg-zinc-800/20 border border-transparent opacity-60'
       }`}
       data-testid={`crime-row-${crime.id}`}
@@ -405,20 +416,36 @@ export default function Crimes() {
   const commitAllCount = crimeRows.filter((c) => c.can_commit).length;
 
   if (loading) {
-    return <LoadingSpinner />;
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{CRIMES_STYLES}</style>
+        <LoadingSpinner />
+      </div>
+    );
   }
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="crimes-page">
+      <style>{CRIMES_STYLES}</style>
+
+      <div className="relative cr-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Grind</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Skull size={24} /> Crimes
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Commit crimes for cash and rank. Fail and you risk jail.</p>
+      </div>
+
       {user?.in_jail && <JailNotice />}
       {autoRankCrimesDisabled && <AutoRankCrimesNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
 
       {/* Stats */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Crimes stats</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.03s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Crimes stats</span>
         </div>
         <div className="p-3 text-sm font-heading text-foreground">
           Crimes today: {crimeStats.count_today ?? 0}  successful today {crimeStats.success_today ?? 0}  past week {crimeStats.count_week ?? 0} ({crimeStats.success_week ?? 0} successful)
@@ -426,12 +453,14 @@ export default function Crimes() {
             Profit today ${(crimeStats.profit_today ?? 0).toLocaleString()}  ·  Past 24h ${(crimeStats.profit_24h ?? 0).toLocaleString()}  ·  Past week ${(crimeStats.profit_week ?? 0).toLocaleString()}
           </div>
         </div>
+        <div className="cr-art-line text-primary mx-3" />
       </div>
 
       {/* Crimes list */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             Available Crimes
           </span>
           {!user?.in_jail && !autoRankCrimesDisabled && commitAllCount > 0 && (
@@ -451,6 +480,7 @@ export default function Crimes() {
             <CrimeRow key={crime.id} crime={crime} onCommit={commitCrime} manualPlayDisabled={autoRankCrimesDisabled} />
           ))}
         </div>
+        <div className="cr-art-line text-primary mx-3" />
       </div>
     </div>
   );
