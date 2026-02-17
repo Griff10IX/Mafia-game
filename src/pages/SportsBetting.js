@@ -330,8 +330,6 @@ export default function SportsBetting() {
 
       {/* Page header */}
       <div className="relative sb-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Sports</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">The Book</h1>
         <p className="text-[10px] text-zinc-500 font-heading italic">Underground — closes 10 min before start</p>
       </div>
 

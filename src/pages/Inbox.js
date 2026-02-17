@@ -613,11 +613,7 @@ export default function Inbox() {
       <style>{INBOX_STYLES}</style>
 
       <div className="relative ib-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Messages</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
-          <Mail size={18} /> Inbox
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Notifications, DMs, rank-ups & more.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Notifications, DMs, rank-ups & more.</p>
       </div>
 
       <ComposeModal

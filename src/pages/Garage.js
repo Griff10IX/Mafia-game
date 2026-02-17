@@ -662,10 +662,7 @@ export default function Garage() {
 
       <div className="relative gar-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Fleet</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Car size={24} /> Garage
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">View, melt, scrap, and list your cars.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">View, melt, scrap, and list your cars.</p>
       </div>
 
       {cars.length === 0 ? (

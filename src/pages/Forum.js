@@ -501,10 +501,6 @@ export default function Forum() {
       {/* Page header */}
       <div className="relative f-fade-in flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Board</p>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2 tracking-wider uppercase">
-            💬 Forum
-          </h1>
           <p className="text-[10px] text-zinc-500 font-heading italic">
             {activeTab === 'general' && 'Discuss OC, crews, trades & more'}
             {activeTab === 'entertainer' && 'Dice games, gbox — auto payout when full'}

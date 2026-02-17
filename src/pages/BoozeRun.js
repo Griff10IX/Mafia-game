@@ -791,11 +791,7 @@ export default function BoozeRun() {
 
       {/* ── Page Header ── */}
       <div className="relative bz-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Prohibition Era</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase">
-          The Rum Run
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Buy low, smuggle fast, sell high — and pray the Feds don't catch you.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Buy low, smuggle fast, sell high — and pray the Feds don't catch you.</p>
       </div>
 
       {autoRankBoozeDisabled && <AutoRankBoozeNotice />}

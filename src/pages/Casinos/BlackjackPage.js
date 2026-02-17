@@ -393,8 +393,6 @@ export default function Blackjack() {
       {/* Page header */}
       <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Casino</p>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 tracking-wider uppercase">Blackjack</h1>
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
             {ownership?.owner_name && !isOwner && <span> · Owned by <span className="text-foreground">{ownership.owner_name}</span></span>}

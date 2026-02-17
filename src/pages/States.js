@@ -397,8 +397,7 @@ export default function States() {
       <div className={`space-y-2 ${styles.pageContent}`} data-testid="states-page">
         <style>{STATES_STYLES}</style>
         <div className="relative st-fade-in">
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Map</p>
-          <h1 className="text-base font-heading font-bold text-primary uppercase">States & Cities</h1>
+          <p className="text-[9px] text-zinc-500 font-heading italic">Travel · Casinos · Properties. Who owns what where.</p>
         </div>
         <div className="relative p-3 rounded-md border border-primary/20 bg-zinc-800/30 text-center st-fade-in" style={{ animationDelay: '0.05s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -417,11 +416,7 @@ export default function States() {
 
       {/* Page header */}
       <div className="relative st-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Map</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
-          🗺️ States & Cities
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Travel · Casinos · Properties. Who owns what where.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Travel · Casinos · Properties. Who owns what where.</p>
       </div>
       
       <div className="flex items-center justify-end gap-1 st-fade-in" style={{ animationDelay: '0.03s' }}>

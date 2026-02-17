@@ -330,11 +330,7 @@ export default function UsersOnline() {
       <style>{UO_STYLES}</style>
 
       <div className="relative uo-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Activity</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
-          <Users size={18} /> Users Online
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Who&apos;s active now. Hover for quick stats.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Who&apos;s active now. Hover for quick stats.</p>
       </div>
 
       <OnlineCountCard totalOnline={totalOnline} />

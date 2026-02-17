@@ -15,6 +15,8 @@ from server import db, get_current_user, STATES, _is_admin, _username_pattern, A
 
 BULLET_FACTORY_PRODUCTION_PER_HOUR = 3000
 BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production
+BULLET_FACTORY_BUY_MAX_PER_PURCHASE = 3000  # max bullets per single purchase
+BULLET_FACTORY_BUY_COOLDOWN_MINUTES = 15  # must wait this long between purchases
 BULLET_FACTORY_CLAIM_COST = 5_000_000  # $5M to claim (like claiming a casino)
 BULLET_FACTORY_PRICE_MIN = 1
 BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
@@ -197,6 +199,20 @@ async def get_bullet_factory(
     else:
         can_buy = accumulated > 0
         effective_price = unowned_price
+    # Cooldown: when can this user buy again?
+    next_buy_available_at = None
+    buyer_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1})
+    last_bought = (buyer_doc or {}).get("last_bullet_factory_bought_at")
+    if last_bought:
+        try:
+            last_dt = datetime.fromisoformat(last_bought.replace("Z", "+00:00"))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            next_ok = last_dt + timedelta(minutes=BULLET_FACTORY_BUY_COOLDOWN_MINUTES)
+            if datetime.now(timezone.utc) < next_ok:
+                next_buy_available_at = next_ok.isoformat()
+        except Exception:
+            pass
     out = {
         "state": state,
         "production_per_hour": BULLET_FACTORY_PRODUCTION_PER_HOUR,
@@ -213,6 +229,9 @@ async def get_bullet_factory(
         "is_unowned": owner_id is None,
         "last_collected_at": factory.get("last_collected_at"),
         "is_owner": is_owner,
+        "buy_max_per_purchase": BULLET_FACTORY_BUY_MAX_PER_PURCHASE,
+        "buy_cooldown_minutes": BULLET_FACTORY_BUY_COOLDOWN_MINUTES,
+        "next_buy_available_at": next_buy_available_at,
     }
     # Armoury (owner only)
     if owner_id:
@@ -427,13 +446,35 @@ async def buy_bullets(
     request: BuyBulletsRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Buy bullets from the factory in this state. When unowned, pay system price ($2,500–$4,000). When owned, pay owner's price."""
+    """Buy bullets from the factory in this state. When unowned, pay system price ($2,500–$4,000). When owned, pay owner's price. Max 3000 per purchase, once every 15 minutes."""
     state = _normalize_state(request.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     owner_id = factory.get("owner_id")
     amount = request.amount
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    if amount > BULLET_FACTORY_BUY_MAX_PER_PURCHASE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can only buy up to {BULLET_FACTORY_BUY_MAX_PER_PURCHASE:,} bullets at once from the factory",
+        )
+    # 15-minute cooldown between purchases
+    user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1})
+    last_bought = user_doc.get("last_bullet_factory_bought_at")
+    if last_bought:
+        try:
+            last_dt = datetime.fromisoformat(last_bought.replace("Z", "+00:00"))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
+            if elapsed < BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60:
+                wait_mins = max(0, int((BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60 - elapsed) / 60) + 1)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"You can only buy bullets from the factory once every {BULLET_FACTORY_BUY_COOLDOWN_MINUTES} minutes. Try again in {wait_mins} min.",
+                )
+        except Exception:
+            pass
     accumulated = _accumulated_bullets(factory)
     if amount > accumulated:
         raise HTTPException(
@@ -468,9 +509,10 @@ async def buy_bullets(
         {"state": state},
         {"$set": {"last_collected_at": new_last.isoformat()}},
     )
+    now_iso = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"money": -total_cost, "bullets": amount}},
+        {"$inc": {"money": -total_cost, "bullets": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
     )
     if owner_id:
         await db.users.update_one(

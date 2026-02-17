@@ -429,11 +429,7 @@ export default function Crimes() {
       <style>{CRIMES_STYLES}</style>
 
       <div className="relative cr-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Grind</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
-          <Skull size={18} /> Crimes
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Commit crimes for cash and rank. Fail and you risk jail.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Commit crimes for cash and rank. Fail and you risk jail.</p>
       </div>
 
       {user?.in_jail && <JailNotice />}

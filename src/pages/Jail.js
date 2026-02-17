@@ -403,11 +403,7 @@ export default function Jail() {
       <style>{JAIL_STYLES}</style>
 
       <div className="relative j-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Slammer</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
-          <Lock size={18} /> Jail
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Bust out jailed players for RP. Set a reward if you get locked up.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>
       </div>
 
       {autoRankJailDisabled && <AutoRankJailNotice />}

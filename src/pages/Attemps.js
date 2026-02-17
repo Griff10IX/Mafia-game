@@ -217,11 +217,7 @@ export default function Attempts() {
 
       {/* Page header */}
       <div className="relative atmp-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Ledger</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase">
-          Attempts
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Outgoing hits and incoming strikes — who lived, who didn&apos;t.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Outgoing hits and incoming strikes — who lived, who didn&apos;t.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-3">

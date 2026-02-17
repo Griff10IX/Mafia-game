@@ -127,11 +127,6 @@ export default function Leaderboard() {
     <div className={`space-y-5 ${styles.pageContent}`} data-testid="leaderboard-page">
       <style>{LB_STYLES}</style>
       <header className="relative lb-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Rankings</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2 mb-1">
-          <Trophy size={22} className="text-primary/80" />
-          Leaderboard
-        </h1>
         <p className="text-[10px] text-zinc-500 font-heading italic mb-4">
           {viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats'}
         </p>

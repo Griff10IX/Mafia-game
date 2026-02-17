@@ -110,10 +110,7 @@ export default function Properties() {
 
       <div className="relative prop-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Investments</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Building size={24} /> Properties
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Invest in businesses to generate passive income.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">Invest in businesses to generate passive income.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

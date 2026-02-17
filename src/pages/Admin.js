@@ -638,11 +638,6 @@ export default function Admin() {
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="admin-page">
       <style>{ADMIN_STYLES}</style>
       <div className="relative admin-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Back office</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Settings className="w-6 h-6 text-primary/80" />
-          Admin Tools
-        </h1>
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
       </div>
 

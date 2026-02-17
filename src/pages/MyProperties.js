@@ -264,10 +264,7 @@ export default function MyProperties() {
 
       <div className="relative mp-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Holdings</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2 tracking-wider uppercase">
-          <Building2 size={24} /> My Properties
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">One casino and one property. Dice + Airport, Blackjack + Bullet Factory, or Roulette + Armory.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">One casino and one property. Dice + Airport, Blackjack + Bullet Factory, or Roulette + Armory.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

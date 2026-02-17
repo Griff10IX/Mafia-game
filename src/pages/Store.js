@@ -177,8 +177,6 @@ export default function Store() {
       <style>{STORE_STYLES}</style>
       <div className="relative store-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Shop</p>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Store</h1>
           <p className="text-[10px] text-zinc-500 font-heading italic">Points, upgrades, bullets & bodyguards</p>
         </div>
         {user != null && (

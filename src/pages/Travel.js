@@ -395,11 +395,7 @@ export default function Travel() {
 
       {/* Page header */}
       <div className="relative trv-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">On the Road</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase">
-          Travel
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Fly or drive — airports and cars. Move between cities.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Fly or drive — airports and cars. Move between cities.</p>
       </div>
 
       {autoRankBoozeOn && (

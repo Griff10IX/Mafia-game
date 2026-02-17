@@ -103,12 +103,7 @@ export default function Bodyguards() {
 
       {/* Page header */}
       <div className="relative bg-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Protection</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Shield className="w-6 h-6 sm:w-7 sm:h-7" />
-          Bodyguards
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Hire robot bodyguards (up to 4). Armour and who&apos;s watching your back.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">Hire robot bodyguards (up to 4). Armour and who&apos;s watching your back.</p>
       </div>
       
       {/* Stats row */}

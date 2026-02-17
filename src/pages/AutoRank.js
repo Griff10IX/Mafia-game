@@ -292,11 +292,6 @@ export default function AutoRank() {
       <style>{AR_STYLES}</style>
       <div className="max-w-xl mx-auto space-y-4">
         <div className="relative ar-fade-in">
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Automation</p>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-            <Bot size={22} className="text-primary/80" />
-            Auto Rank
-          </h1>
           <p className="text-[10px] text-zinc-500 font-heading italic">Automate crimes, GTA, busts, OC. Set Telegram in Profile for notifications.</p>
         </div>
 

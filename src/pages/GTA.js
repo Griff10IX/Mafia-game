@@ -492,11 +492,7 @@ export default function GTA() {
       <style>{GTA_STYLES}</style>
 
       <div className="relative gta-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Grand Theft Auto</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
-          <Car size={18} /> GTA
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
       </div>
 
       {autoRankGtaDisabled && <AutoRankGtaNotice />}

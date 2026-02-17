@@ -710,11 +710,7 @@ export default function OrganisedCrime() {
       <style>{OC_STYLES}</style>
 
       <div className="relative oc-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">The Heist</p>
-        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
-          <UserCheck size={18} /> Organised Crime
-        </h1>
-        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Pick a job, fill your crew, set cuts. Run the heist.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">Pick a job, fill your crew, set cuts. Run the heist.</p>
       </div>
 
       {autoRankOcDisabled && <AutoRankOCNotice />}

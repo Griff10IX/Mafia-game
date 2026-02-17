@@ -492,8 +492,6 @@ export default function Dice() {
       {/* Page header */}
       <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Casino</p>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 tracking-wider uppercase">Dice</h1>
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
             {ownership?.owner?.username && !isOwner && <span> · Owned by <Link to={`/profile/${encodeURIComponent(ownership.owner.username)}`} className="text-primary hover:underline font-heading">{ownership.owner.username}</Link></span>}

@@ -7,7 +7,7 @@ import styles from '../styles/noir.module.css';
 
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
-const QUICK_BUYS = [100, 500, 1000, 5000, 10000];
+const QUICK_BUYS = [100, 500, 1000, 2000, 3000];
 
 /* ═══════════════════════════════════════════════════════
    Conveyor Belt — bullets, weapons, armour (armoury)
@@ -414,11 +414,24 @@ export default function BulletFactory({ me }) {
   const pricePerBullet = data?.price_per_bullet ?? null;
   const priceMin = data?.price_min ?? 1;
   const priceMax = data?.price_max ?? 100000;
+  const buyMaxPerPurchase = data?.buy_max_per_purchase ?? 3000;
+  const buyCooldownMinutes = data?.buy_cooldown_minutes ?? 15;
+  const nextBuyAvailableAt = data?.next_buy_available_at ?? null;
+  const effectiveBuyMax = Math.min(accumulated, buyMaxPerPurchase);
   const userMoney = Number(me?.money ?? 0);
   const canAffordClaim = userMoney >= claimCost;
   const buyAmountNum = parseInt(buyAmount, 10) || 0;
   const buyTotal = buyAmountNum > 0 && pricePerBullet != null ? buyAmountNum * pricePerBullet : 0;
   const canAffordBuy = buyTotal > 0 && userMoney >= buyTotal;
+  const inBuyCooldown = !!nextBuyAvailableAt;
+  const minutesUntilCanBuy = (() => {
+    if (!nextBuyAvailableAt) return 0;
+    try {
+      const next = new Date(nextBuyAvailableAt).getTime();
+      const diff = Math.max(0, Math.ceil((next - Date.now()) / 60000));
+      return diff;
+    } catch { return 0; }
+  })();
 
   return (
     <div className="space-y-4 relative" data-testid="bullet-factory-tab">
@@ -535,15 +548,17 @@ export default function BulletFactory({ me }) {
                 Buy Bullets
               </div>
               <div className="flex flex-wrap gap-1.5 mb-2">
-                {QUICK_BUYS.map((amt) => (
+                <p className="text-[10px] text-zinc-500 mb-1">Max {buyMaxPerPurchase.toLocaleString()} per purchase, once every {buyCooldownMinutes} min</p>
+                {QUICK_BUYS.filter((amt) => amt <= buyMaxPerPurchase).map((amt) => (
                   <button
                     key={amt}
                     type="button"
-                    onClick={() => setBuyAmount(String(amt))}
+                    onClick={() => setBuyAmount(String(Math.min(amt, effectiveBuyMax)))}
+                    disabled={inBuyCooldown || amt > effectiveBuyMax}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-heading font-bold border transition-all ${
                       buyAmountNum === amt
                         ? 'bg-primary/25 border-primary/60 text-primary shadow-sm shadow-primary/10'
-                        : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
+                        : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300 disabled:opacity-50'
                     }`}
                   >
                     {amt.toLocaleString()}
@@ -555,8 +570,8 @@ export default function BulletFactory({ me }) {
                   <input
                     type="number"
                     min={1}
-                    max={accumulated}
-                    placeholder="Custom amount"
+                    max={effectiveBuyMax}
+                    placeholder={`Up to ${effectiveBuyMax.toLocaleString()}`}
                     value={buyAmount}
                     onChange={(e) => setBuyAmount(e.target.value)}
                     className="flex-1 min-w-[100px] px-3 py-2 bg-zinc-900/80 border border-zinc-600/40 rounded-lg text-foreground font-heading text-sm focus:border-primary/50 focus:outline-none transition-colors"
@@ -568,11 +583,14 @@ export default function BulletFactory({ me }) {
                     <span className="text-primary font-bold">= {formatMoney(buyTotal)}</span>
                   </div>
                 )}
+                {inBuyCooldown && (
+                  <p className="text-[11px] text-amber-500/90 font-heading">Next purchase in {minutesUntilCanBuy} min</p>
+                )}
                 <button
                   type="submit"
-                  disabled={buying || buyAmountNum <= 0 || !canAffordBuy || buyAmountNum > accumulated}
+                  disabled={buying || buyAmountNum <= 0 || !canAffordBuy || buyAmountNum > effectiveBuyMax || inBuyCooldown}
                   className={`w-full px-4 py-2.5 font-heading font-bold text-xs uppercase rounded-lg border-2 transition-all ${
-                    canAffordBuy && buyAmountNum > 0 && buyAmountNum <= accumulated
+                    canAffordBuy && buyAmountNum > 0 && buyAmountNum <= effectiveBuyMax && !inBuyCooldown
                       ? 'bg-gradient-to-b from-emerald-900/40 to-emerald-900/20 border-emerald-600/50 text-emerald-400 hover:from-emerald-900/50 hover:border-emerald-500/60'
                       : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
                   } disabled:opacity-50`}
@@ -580,7 +598,7 @@ export default function BulletFactory({ me }) {
                   {buying ? 'Buying...' : `Buy ${buyAmountNum > 0 ? buyAmountNum.toLocaleString() : ''} Bullets`}
                 </button>
               </form>
-              <p className="text-[10px] text-zinc-500 mt-1.5">{accumulated.toLocaleString()} in stock</p>
+              <p className="text-[10px] text-zinc-500 mt-1.5">{accumulated.toLocaleString()} in stock (max {buyMaxPerPurchase.toLocaleString()} per purchase)</p>
             </div>
           )}
 

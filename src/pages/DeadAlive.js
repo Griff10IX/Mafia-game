@@ -41,11 +41,6 @@ export default function DeadAlive() {
     <div className={`space-y-6 ${styles.pageContent}`} data-testid="dead-alive-page">
       <style>{DA_STYLES}</style>
       <div className="relative da-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Recovery</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Skull size={22} className="text-primary/80" />
-          Dead → Alive
-        </h1>
         <p className="text-[10px] text-zinc-500 font-heading italic max-w-xl">
           Recover a portion of points from a dead account into this account (one-time per dead account).
         </p>
