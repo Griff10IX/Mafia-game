@@ -34,37 +34,37 @@ function formatDateTime(iso) {
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <Users size={28} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
+  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+    <Users size={22} className="text-primary/40 animate-pulse" />
+    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
   </div>
 );
 
 const OnlineCountCard = ({ totalOnline }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 uo-card uo-corner uo-fade-in`}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-corner uo-fade-in`}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         👥 Activity Status
       </h2>
     </div>
-    <div className="p-4">
-      <div className="flex items-center gap-4">
-        <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-          <Users className="text-primary" size={32} />
+    <div className="p-2">
+      <div className="flex items-center gap-2">
+        <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20">
+          <Users className="text-primary" size={20} />
         </div>
         <div>
-          <div className="text-3xl md:text-4xl font-heading font-bold text-primary tabular-nums">
+          <div className="text-xl md:text-2xl font-heading font-bold text-primary tabular-nums">
             {totalOnline}
           </div>
-          <p className="text-sm text-mutedForeground font-heading">
+          <p className="text-[10px] text-mutedForeground font-heading">
             {totalOnline === 1 ? 'user' : 'users'} online now
           </p>
         </div>
       </div>
     </div>
-    <div className="uo-art-line text-primary mx-4" />
+    <div className="uo-art-line text-primary mx-2.5" />
   </div>
 );
 
@@ -74,15 +74,15 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 
   return (
     <div
-      className={`${styles.panel} rounded-lg border border-primary/20 uo-row uo-card uo-fade-in px-3 py-2`}
+      className={`${styles.panel} rounded-md border border-primary/20 uo-row uo-card uo-fade-in px-2 py-1`}
       data-testid="user-card"
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
         <HoverCard onOpenChange={(open) => open && ensureProfilePreview(user.username)}>
           <HoverCardTrigger asChild>
             <Link
               to={`/profile/${encodeURIComponent(user.username)}`}
-              className="text-sm font-heading font-bold text-foreground hover:text-primary transition-colors"
+              className="text-[11px] font-heading font-bold text-foreground hover:text-primary transition-colors"
               data-testid={`user-profile-link-${user.username}`}
             >
               {user.username}
@@ -91,37 +91,37 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
           <HoverCardContent 
             align="start" 
             sideOffset={8} 
-            className={`w-80 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl p-0 overflow-hidden`}
+            className={`w-72 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl p-0 overflow-hidden`}
           >
             {preview?.error ? (
-              <div className="p-4 text-sm text-mutedForeground font-heading">
+              <div className="p-2 text-[10px] text-mutedForeground font-heading">
                 Failed to load preview
               </div>
             ) : isLoading && !preview ? (
-              <div className="p-4 text-sm text-mutedForeground font-heading">
+              <div className="p-2 text-[10px] text-mutedForeground font-heading">
                 Loading preview...
               </div>
             ) : preview ? (
               <>
-                <div className="px-4 py-3 bg-primary/8 border-b border-primary/20">
-                  <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+                <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                  <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
                     Profile Preview
                   </h3>
                 </div>
-                <div className="p-4 space-y-3">
-                  <div className="flex gap-3">
-                    <div className="w-12 h-12 rounded-md overflow-hidden border border-primary/20 bg-secondary flex items-center justify-center shrink-0">
+                <div className="p-2 space-y-2">
+                  <div className="flex gap-2">
+                    <div className="w-10 h-10 rounded overflow-hidden border border-primary/20 bg-secondary flex items-center justify-center shrink-0">
                       {preview.avatar_url ? (
                         <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
                       ) : (
-                        <User size={24} className="text-mutedForeground" />
+                        <User size={18} className="text-mutedForeground" />
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="font-heading font-bold text-foreground text-base truncate mb-2">
+                      <div className="font-heading font-bold text-foreground text-[12px] truncate mb-1">
                         {preview.username}
                       </div>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs font-heading">
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] font-heading">
                         <div className="flex justify-between">
                           <span className="text-mutedForeground">Kills</span>
                           <span className="text-foreground font-bold">{preview.kills}</span>
@@ -134,14 +134,14 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
                     </div>
                   </div>
                   
-                  <div className="text-xs text-mutedForeground font-heading flex items-center gap-1.5">
-                    <Clock size={12} />
+                  <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
+                    <Clock size={9} />
                     Joined {formatDateTime(preview.created_at)}
                   </div>
                   
                   {preview.admin_stats && (
-                    <div className="pt-3 border-t border-border space-y-2">
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs font-heading">
+                    <div className="pt-2 border-t border-border space-y-1">
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] font-heading">
                         <div className="flex justify-between">
                           <span className="text-mutedForeground">Cash</span>
                           <span className="text-primary font-bold">
@@ -175,28 +175,28 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
                       </div>
                       
                       {preview.admin_stats.current_state && (
-                        <div className="flex items-center gap-1.5 text-xs font-heading">
-                          <MapPin size={12} className="text-primary" />
+                        <div className="flex items-center gap-1 text-[10px] font-heading">
+                          <MapPin size={9} className="text-primary" />
                           <span className="text-mutedForeground">Location:</span>
                           <span className="text-foreground font-bold">{preview.admin_stats.current_state}</span>
                         </div>
                       )}
                       
                       {preview.admin_stats.in_jail && (
-                        <div className="px-2 py-1.5 rounded-md bg-red-500/20 text-red-400 text-xs font-heading font-bold text-center border border-red-500/30">
+                        <div className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[9px] font-heading font-bold text-center border border-red-500/30">
                           🔒 In Jail
                         </div>
                       )}
                     </div>
                   )}
                   
-                  <div className="pt-3 border-t border-border text-xs text-mutedForeground font-heading italic text-center">
+                  <div className="pt-2 border-t border-border text-[9px] text-mutedForeground font-heading italic text-center">
                     Click username to view full profile
                   </div>
                 </div>
               </>
             ) : (
-              <div className="p-4 text-sm text-mutedForeground font-heading">
+              <div className="p-2 text-[10px] text-mutedForeground font-heading">
                 Hover to preview profile
               </div>
             )}
@@ -204,7 +204,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
         </HoverCard>
         
         {user.in_jail && (
-          <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
+          <span className="shrink-0 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
             Jail
           </span>
         )}
@@ -214,40 +214,40 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
 };
 
 const InfoCard = () => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.08s' }}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.08s' }}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         ℹ️ How It Works
       </h3>
     </div>
-    <div className="p-4">
-      <div className="space-y-2 text-sm text-mutedForeground font-heading leading-relaxed">
-        <p className="flex items-start gap-2">
+    <div className="p-2">
+      <div className="space-y-0.5 text-[10px] text-mutedForeground font-heading leading-snug">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             Status updates automatically every <strong className="text-foreground">30 seconds</strong>
           </span>
         </p>
-        <p className="flex items-start gap-2">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             Users inactive for <strong className="text-foreground">5+ minutes</strong> appear offline
           </span>
         </p>
-        <p className="flex items-start gap-2">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             <strong className="text-foreground">Hover</strong> over usernames to see quick stats
           </span>
         </p>
-        <p className="flex items-start gap-2">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             Plan <strong className="text-foreground">attacks</strong> and <strong className="text-foreground">rackets</strong> based on who's active
           </span>
         </p>
-        <p className="flex items-start gap-2">
+        <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
             Bust <strong className="text-red-400">jailed players</strong> for rank points
@@ -255,7 +255,7 @@ const InfoCard = () => (
         </p>
       </div>
     </div>
-    <div className="uo-art-line text-primary mx-4" />
+    <div className="uo-art-line text-primary mx-2.5" />
   </div>
 );
 
@@ -303,7 +303,7 @@ export default function UsersOnline() {
 
   if (loading) {
     return (
-      <div className={`space-y-4 ${styles.pageContent}`}>
+      <div className={`space-y-2 ${styles.pageContent}`}>
         <style>{UO_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -311,41 +311,41 @@ export default function UsersOnline() {
   }
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="users-online-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="users-online-page">
       <style>{UO_STYLES}</style>
 
       <div className="relative uo-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Activity</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
-          <Users size={24} /> Users Online
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.2em] mb-0.5">Activity</p>
+        <h1 className="text-base sm:text-lg font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-1">
+          <Users size={18} /> Users Online
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Who&apos;s active now. Hover for quick stats.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5">Who&apos;s active now. Hover for quick stats.</p>
       </div>
 
       <OnlineCountCard totalOnline={totalOnline} />
 
       {users.length === 0 ? (
-        <div className={`relative ${styles.panel} rounded-lg border border-primary/20 py-16 text-center uo-fade-in`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <Users size={64} className="mx-auto text-primary/30 mb-4" />
-          <p className="text-base text-foreground font-heading font-bold mb-1">
+        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <Users size={36} className="mx-auto text-primary/30 mb-2" />
+          <p className="text-[12px] text-foreground font-heading font-bold mb-0.5">
             No other users online
           </p>
-          <p className="text-sm text-mutedForeground font-heading">
+          <p className="text-[10px] text-mutedForeground font-heading">
             Check back soon to see who&apos;s active
           </p>
         </div>
       ) : (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.03s' }}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`} style={{ animationDelay: '0.03s' }}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
               👤 Active Users ({users.length})
             </h2>
           </div>
-          <div className="p-3 md:p-4">
+          <div className="p-2">
             {/* Flexbox wrap layout - cards flow naturally */}
-            <div className="flex flex-wrap gap-2" data-testid="users-grid">
+            <div className="flex flex-wrap gap-1" data-testid="users-grid">
               {users.map((user, idx) => (
                 <UserCard
                   key={idx}
@@ -357,7 +357,7 @@ export default function UsersOnline() {
               ))}
             </div>
           </div>
-          <div className="uo-art-line text-primary mx-4" />
+          <div className="uo-art-line text-primary mx-2.5" />
         </div>
       )}
 
