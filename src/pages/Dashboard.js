@@ -16,16 +16,37 @@ import {
   Car,
   Trophy,
   Zap,
+  LayoutDashboard,
 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import styles from '../styles/noir.module.css';
 
-// Subcomponents
+const DASH_STYLES = `
+  @keyframes dash-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .dash-fade-in { animation: dash-fade-in 0.4s ease-out both; }
+  @keyframes dash-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+  .dash-scale-in { animation: dash-scale-in 0.35s ease-out both; }
+  @keyframes dash-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .dash-glow { animation: dash-glow 4s ease-in-out infinite; }
+  .dash-corner::before, .dash-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .dash-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .dash-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .dash-card { transition: all 0.3s ease; }
+  .dash-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .dash-stat-card { transition: all 0.3s ease; }
+  .dash-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .dash-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[40vh]">
-    <div className="text-primary text-sm font-heading font-bold">Loading...</div>
+  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+    <LayoutDashboard size={28} className="text-primary/40 animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading command center...</span>
   </div>
 );
 
@@ -39,9 +60,11 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
     : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-        <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 dash-corner dash-scale-in`}>
+      <div className="absolute top-0 left-0 w-28 h-28 bg-primary/5 rounded-full blur-3xl pointer-events-none dash-glow" />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
           Rank Progress
         </h2>
         {!hasPremiumBar && (
@@ -91,63 +114,62 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
           )}
         </div>
       </div>
+      <div className="dash-art-line text-primary mx-4" />
     </div>
   );
 };
 
-const StatCard = ({ stat }) => {
+const StatCard = ({ stat, delay = 0 }) => {
   const Icon = stat.icon;
-  
-  return (
-    <div
-      className={`${styles.panel} border border-border rounded-md p-2.5 flex items-start gap-2 hover:border-primary/30 transition-all`}
-      data-testid={stat.testId}
-    >
-      <div className="p-1.5 rounded bg-primary/20 border border-primary/30 shrink-0">
-        <Icon className="text-primary" size={16} />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] text-mutedForeground uppercase tracking-wider mb-0.5">
-          {stat.label}
-        </p>
-        {stat.tooltip ? (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <p className="text-sm font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2">
-                  {stat.value}
-                </p>
-              </TooltipTrigger>
-              <TooltipContent 
-                side="top" 
-                className={`${styles.panel} text-foreground border-primary/30 rounded-md px-3 py-2 text-xs font-heading`}
-              >
-                {stat.tooltip}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        ) : (
-          <p className="text-sm font-heading font-bold text-foreground truncate">
+  const valueEl = stat.tooltip ? (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <p className="text-lg font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2">
             {stat.value}
           </p>
-        )}
-        {stat.sub && (
-          <p className="text-[10px] text-mutedForeground mt-0.5">{stat.sub}</p>
-        )}
+        </TooltipTrigger>
+        <TooltipContent 
+          side="top" 
+          className={`${styles.panel} text-foreground border-primary/30 rounded-md px-3 py-2 text-xs font-heading`}
+        >
+          {stat.tooltip}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  ) : (
+    <p className="text-lg font-heading font-bold text-foreground truncate">{stat.value}</p>
+  );
+
+  return (
+    <div
+      className={`relative ${styles.surface} rounded-lg overflow-hidden p-3 border border-primary/20 dash-stat-card dash-corner dash-scale-in`}
+      style={{ animationDelay: `${delay}s` }}
+      data-testid={stat.testId}
+    >
+      <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.15em] mb-1.5 font-heading">
+        <Icon size={10} className="text-primary" />
+        {stat.label}
       </div>
+      {valueEl}
+      {stat.sub && (
+        <p className="text-[10px] text-mutedForeground mt-0.5">{stat.sub}</p>
+      )}
     </div>
   );
 };
 
-const QuickActionCard = ({ action }) => {
+const QuickActionCard = ({ action, delay = 0 }) => {
   const Icon = action.icon;
-  
+
   return (
     <Link
       to={action.to}
       data-testid={`quick-action-${action.id}`}
-      className={`group ${styles.panel} border border-border rounded-md p-2.5 flex items-center gap-2 hover:border-primary/50 hover:shadow-md hover:shadow-primary/10 transition-all touch-manipulation`}
+      className={`group relative ${styles.panel} border border-primary/20 rounded-lg p-3 flex items-center gap-2.5 dash-card dash-fade-in touch-manipulation overflow-hidden`}
+      style={{ animationDelay: `${delay}s` }}
     >
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent pointer-events-none" />
       <div className="p-1.5 rounded bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0 transition-colors">
         <Icon className="text-primary" size={16} />
       </div>
@@ -168,10 +190,11 @@ const QuickActionCard = ({ action }) => {
 };
 
 const GameSystemsCard = () => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center gap-2">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 dash-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
       <Zap size={14} className="text-primary" />
-      <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         Game Systems
       </span>
     </div>
@@ -193,6 +216,7 @@ const GameSystemsCard = () => (
         </p>
       </div>
     </div>
+    <div className="dash-art-line text-primary mx-4" />
   </div>
 );
 
@@ -288,7 +312,18 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className={`space-y-3 md:space-y-4 ${styles.pageContent}`} data-testid="dashboard-page">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="dashboard-page">
+      <style>{DASH_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative dash-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Command</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+          The Dashboard
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">At a glance and quick actions — your empire starts here.</p>
+      </div>
+
       {rankProgress && (
         <RankProgressCard 
           rankProgress={rankProgress} 
@@ -299,14 +334,14 @@ export default function Dashboard() {
       {/* Stats grid */}
       <section>
         <div className="flex items-center gap-2 mb-2">
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             At a Glance
           </h2>
-          <div className="flex-1 h-px opacity-30" style={{ backgroundColor: 'var(--noir-accent-line)' }} />
+          <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
-          {stats.map((stat) => (
-            <StatCard key={stat.id} stat={stat} />
+          {stats.map((stat, i) => (
+            <StatCard key={stat.id} stat={stat} delay={i * 0.04} />
           ))}
         </div>
       </section>
@@ -314,14 +349,14 @@ export default function Dashboard() {
       {/* Quick actions */}
       <section>
         <div className="flex items-center gap-2 mb-2">
-          <h2 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             Quick Actions
           </h2>
-          <div className="flex-1 h-px opacity-30" style={{ backgroundColor: 'var(--noir-accent-line)' }} />
+          <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
-          {quickActions.map((action) => (
-            <QuickActionCard key={action.id} action={action} />
+          {quickActions.map((action, i) => (
+            <QuickActionCard key={action.id} action={action} delay={i * 0.03} />
           ))}
         </div>
       </section>

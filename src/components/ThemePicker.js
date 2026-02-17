@@ -31,6 +31,7 @@ export default function ThemePicker({ open, onClose }) {
     if (preset.fontId != null) setFont(preset.fontId);
     if (preset.textStyleId != null) setTextStyle(preset.textStyleId);
     if (preset.toastTextColourId !== undefined) setToastTextColour(preset.toastTextColourId ?? null);
+    if (preset.mobileNavStyle != null) setMobileNavStyle(preset.mobileNavStyle);
   };
 
   const allColours = [...customThemes.map(customToColourEntry), ...THEME_COLOURS];
@@ -55,7 +56,8 @@ export default function ThemePicker({ open, onClose }) {
     (preset.buttonStyleId == null ? true : buttonStyleId === preset.buttonStyleId) &&
     (preset.fontId == null ? true : fontId === preset.fontId) &&
     (preset.textStyleId == null ? true : textStyleId === preset.textStyleId) &&
-    (preset.toastTextColourId === undefined ? true : (preset.toastTextColourId == null ? toastTextColourId == null : toastTextColourId === preset.toastTextColourId));
+    (preset.toastTextColourId === undefined ? true : (preset.toastTextColourId == null ? toastTextColourId == null : toastTextColourId === preset.toastTextColourId)) &&
+    (preset.mobileNavStyle == null ? true : mobileNavStyle === preset.mobileNavStyle);
 
   const renderPresetCard = (preset) => {
     const colour = getThemeColour(preset.colourId);
