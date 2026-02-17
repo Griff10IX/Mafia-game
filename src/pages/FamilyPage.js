@@ -11,10 +11,10 @@ import styles from '../styles/noir.module.css';
 // ============================================================================
 
 const ROLE_CONFIG = {
-  boss: { label: 'Boss', icon: '👑', color: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500/40', rank: 0 },
+  boss: { label: 'Don', icon: '👑', color: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500/40', rank: 0 },
   underboss: { label: 'Underboss', icon: '⭐', color: 'text-purple-400', bg: 'bg-purple-500/20', border: 'border-purple-500/40', rank: 1 },
   consigliere: { label: 'Consigliere', icon: '🎭', color: 'text-blue-400', bg: 'bg-blue-500/20', border: 'border-blue-500/40', rank: 2 },
-  capo: { label: 'Capo', icon: '🎖️', color: 'text-emerald-400', bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', rank: 3 },
+  capo: { label: 'Caporegime', icon: '🎖️', color: 'text-emerald-400', bg: 'bg-emerald-500/20', border: 'border-emerald-500/40', rank: 3 },
   soldier: { label: 'Soldier', icon: '🔫', color: 'text-zinc-300', bg: 'bg-zinc-500/20', border: 'border-zinc-500/40', rank: 4 },
   associate: { label: 'Associate', icon: '👤', color: 'text-zinc-400', bg: 'bg-zinc-500/20', border: 'border-zinc-500/40', rank: 5 },
 };
@@ -228,7 +228,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
       <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
       <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-40 h-20 rounded-full bg-primary/10 blur-2xl pointer-events-none" />
       <DollarSign size={20} className="mx-auto text-primary/60 mb-1" />
-      <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-heading mb-1">Family Treasury</p>
+      <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-heading mb-1">The Family Vault</p>
       <p className="text-3xl sm:text-4xl font-heading font-bold text-primary relative">
         <AnimatedCounter target={Number(treasury ?? 0)} prefix="$" />
       </p>
@@ -318,7 +318,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnloc
 const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
   <div className="space-y-3">
     <div className="flex items-center justify-between">
-      <span className="text-[10px] text-zinc-500 font-heading">Take 25% treasury · 2 raids per enemy family every 3h</span>
+      <span className="text-[10px] text-zinc-500 font-heading italic">Hit their rackets, take 25% of the earnings. Two hits per rival family every 3 hours.</span>
       <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:opacity-80 p-1.5 rounded-md hover:bg-primary/10 transition-all">
         <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
       </button>
@@ -483,7 +483,7 @@ const WarHistoryTab = ({ wars }) => (
     {wars.length === 0 ? (
       <div className="text-center py-10 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
         <Swords size={28} className="mx-auto text-zinc-600 mb-2" />
-        <p className="text-xs text-zinc-500 font-heading italic">No war history</p>
+        <p className="text-xs text-zinc-500 font-heading italic">No vendettas on record</p>
       </div>
     ) : wars.map((w) => {
       const isActive = w.status === 'active' || w.status === 'truce_offered';
@@ -520,8 +520,8 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
       <div className={`relative w-full max-w-md ${styles.panel} rounded-xl overflow-hidden border-2 border-red-500/30 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
         {/* War header */}
         <div className="px-4 py-3 flex items-center justify-between bg-red-500/10 border-b border-red-500/20">
-          <span className="text-sm font-heading font-bold text-red-400 uppercase flex items-center gap-2">
-            <Swords size={16} /> War: {war.other_family_name}
+          <span className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+            <Swords size={16} /> Vendetta: {war.other_family_name}
           </span>
           <button onClick={onClose} className="text-zinc-500 hover:text-foreground transition-colors"><X size={16} /></button>
         </div>
@@ -630,8 +630,8 @@ const CrewOCTab = ({
 
   return (
     <div className="space-y-3">
-      <p className="text-[10px] text-zinc-500 font-heading leading-relaxed">
-        When Boss, Underboss, or Capo commits, every living family member and accepted applicants get: XP, cash, bullets, points, booze. Treasury gets a lump sum. Once every {cooldownHours}h{committerHasTimer ? ' (you have the timer)' : ''}.
+      <p className="text-[10px] text-zinc-500 font-heading leading-relaxed italic">
+        When the Don, Underboss, or Caporegime calls the crew together, every living member and accepted outsiders earn their cut — cash, XP, bullets, points, booze. The family vault takes its share. Once every {cooldownHours}h{committerHasTimer ? ' (you hold the timer)' : ''}.
       </p>
 
       {/* Set join fee & Advertise */}
@@ -719,13 +719,21 @@ const CrewOCTab = ({
 
 const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin }) => (
   <div className="space-y-4">
-    {/* Create Family — signing a charter */}
-    <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25`}>
+    {/* Flavor text */}
+    <div className="text-center py-2 fam-fade-in">
+      <p className="text-[10px] text-zinc-500 font-heading italic leading-relaxed max-w-md mx-auto">
+        "In this world, a man without a family is nothing. You need people you can trust — people who bleed for you."
+      </p>
+    </div>
+
+    {/* Establish a Crime Family */}
+    <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25 fam-fade-in`} style={{ animationDelay: '0.1s' }}>
       <div className="px-4 py-3 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
         <Building2 size={16} className="text-primary" />
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Establish a Family</span>
+        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Establish a Crime Family</span>
       </div>
       <form onSubmit={onCreate} className="p-4 space-y-3">
+        <p className="text-[10px] text-zinc-500 font-heading">Become the Don. Build your empire from nothing, recruit soldiers, run rackets, and make your name feared across every borough.</p>
         <div className="flex gap-2">
           <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Family name" maxLength={30}
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors" />
@@ -733,34 +741,37 @@ const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreat
             className="w-20 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-sm text-foreground font-heading uppercase text-center focus:border-primary/50 focus:outline-none transition-colors" />
         </div>
         <button type="submit" className="w-full py-3 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all">
-          Found Family
+          Found the Family
         </button>
       </form>
     </div>
 
-    {/* Join Family */}
-    <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+    {/* Swear Allegiance */}
+    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.2s' }}>
       <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
         <Users size={16} className="text-primary" />
-        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Join a Family</span>
+        <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Swear Allegiance</span>
       </div>
-      <form onSubmit={onJoin} className="p-4 flex gap-2">
-        <select value={joinId} onChange={(e) => setJoinId(e.target.value)}
-          className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors">
-          <option value="">Select family...</option>
-          {families.map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]</option>)}
-        </select>
-        <button type="submit" className="px-5 py-2.5 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all">
-          Join
-        </button>
+      <form onSubmit={onJoin} className="p-4 space-y-2">
+        <p className="text-[10px] text-zinc-500 font-heading">Pledge yourself to a family. Work your way up from associate to caporegime — or maybe one day, the Don himself.</p>
+        <div className="flex gap-2">
+          <select value={joinId} onChange={(e) => setJoinId(e.target.value)}
+            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors">
+            <option value="">Select family...</option>
+            {families.map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]</option>)}
+          </select>
+          <button type="submit" className="px-5 py-2.5 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all">
+            Join
+          </button>
+        </div>
       </form>
     </div>
 
-    {/* All Families */}
-    <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+    {/* Known Families */}
+    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.3s' }}>
       <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
         <Building2 size={16} className="text-zinc-400" />
-        <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">All Families</span>
+        <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">Known Families</span>
       </div>
       <div className="p-3">
         <FamiliesTab families={families} myFamilyId={null} />
@@ -894,11 +905,9 @@ export default function FamilyPage() {
   useEffect(() => { if (showWarModal && myFamily?.family) api.get('/families/war/stats').then((res) => setWarStats(res.data)).catch(() => {}); }, [showWarModal, myFamily?.family]);
 
   if (loading) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="flex items-center gap-3">
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-primary text-sm font-heading uppercase tracking-widest">Loading...</span>
-      </div>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Gathering intel...</span>
     </div>
   );
 
@@ -910,23 +919,40 @@ export default function FamilyPage() {
           50% { box-shadow: 0 0 12px 2px rgba(var(--noir-primary-rgb), 0.15); }
         }
         .animate-ready-pulse { animation: ready-pulse 2s ease-in-out infinite; }
+        @keyframes fam-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .fam-fade-in { animation: fam-fade-in 0.4s ease-out both; }
+        @keyframes fam-glow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+        .fam-glow { animation: fam-glow 3s ease-in-out infinite; }
+        .art-deco-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
       `}</style>
 
       {/* ── Family HQ Header ── */}
-      <div className={`relative rounded-xl overflow-hidden ${family ? `${styles.panel} border-2 border-primary/20` : ''}`}>
+      <div className={`relative rounded-xl overflow-hidden fam-fade-in ${family ? `${styles.panel} border-2 border-primary/20` : ''}`}>
         {family && <>
-          {/* Decorative top bar */}
-          <div className="h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+          <div className="h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+          <div className="absolute top-0 left-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none fam-glow" />
+          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/3 rounded-full blur-2xl pointer-events-none" />
         </>}
 
-        <div className={`${family ? 'px-4 py-4' : ''}`}>
+        <div className={`${family ? 'px-4 py-5 sm:px-6' : ''}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2">
-                🏛️ {family ? family.name : 'Families'}
-                {family && <span className="text-sm text-primary/50 font-mono">[{family.tag}]</span>}
-              </h1>
+              {family ? (
+                <>
+                  <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">La Cosa Nostra</p>
+                  <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2 tracking-wider uppercase">
+                    {family.name}
+                    <span className="text-sm text-primary/40 font-mono font-normal">[{family.tag}]</span>
+                  </h1>
+                </>
+              ) : (
+                <>
+                  <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Five Families & Beyond</p>
+                  <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+                    Crime Families
+                  </h1>
+                </>
+              )}
               {family && (
                 <div className="flex items-center gap-2 mt-2">
                   <RoleBadge role={myRole} size="lg" />
@@ -947,7 +973,7 @@ export default function FamilyPage() {
           </div>
         </div>
 
-        {family && <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />}
+        {family && <div className="art-deco-line text-primary mx-4" />}
       </div>
 
       {family ? (
@@ -965,7 +991,7 @@ export default function FamilyPage() {
             <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
               <div className="flex items-center gap-2 flex-wrap">
                 <Swords size={15} className="text-red-400 animate-pulse shrink-0" />
-                <span className="text-xs text-red-400 font-heading font-bold">At War:</span>
+                <span className="text-xs text-red-400 font-heading font-bold tracking-wider uppercase">Blood Feud:</span>
                 {activeWars.map((entry, i) => (
                   <button key={entry.war?.id} onClick={() => { setSelectedWarIndex(i); setShowWarModal(true); }}
                     className="text-xs text-foreground hover:text-primary font-heading transition-colors">
@@ -984,12 +1010,12 @@ export default function FamilyPage() {
             {/* Tab bar */}
             <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-700/40 bg-zinc-900/60">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
-              <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Raid</Tab>
+              <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
               <Tab active={activeTab === 'crewoc'} onClick={() => setActiveTab('crewoc')} icon={<Crosshair size={10} />}>Crew OC</Tab>
-              <Tab active={activeTab === 'treasury'} onClick={() => setActiveTab('treasury')} icon={<DollarSign size={10} />}>Treasury</Tab>
-              <Tab active={activeTab === 'roster'} onClick={() => setActiveTab('roster')} icon={<Users size={10} />}>Roster</Tab>
-              <Tab active={activeTab === 'families'} onClick={() => setActiveTab('families')} icon={<Building2 size={10} />}>All</Tab>
-              <Tab active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<Trophy size={10} />}>Wars</Tab>
+              <Tab active={activeTab === 'treasury'} onClick={() => setActiveTab('treasury')} icon={<DollarSign size={10} />}>Vault</Tab>
+              <Tab active={activeTab === 'roster'} onClick={() => setActiveTab('roster')} icon={<Users size={10} />}>Made Men</Tab>
+              <Tab active={activeTab === 'families'} onClick={() => setActiveTab('families')} icon={<Building2 size={10} />}>Families</Tab>
+              <Tab active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<Trophy size={10} />}>Vendettas</Tab>
             </div>
 
             {/* Tab content */}

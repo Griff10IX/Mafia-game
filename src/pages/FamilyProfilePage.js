@@ -12,10 +12,10 @@ function formatMoney(n) {
 }
 
 const ROLE_CONFIG = {
-  boss: { label: 'Boss', icon: '👑', color: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500/40' },
+  boss: { label: 'Don', icon: '👑', color: 'text-yellow-400', bg: 'bg-yellow-500/20', border: 'border-yellow-500/40' },
   underboss: { label: 'Underboss', icon: '⭐', color: 'text-purple-400', bg: 'bg-purple-500/20', border: 'border-purple-500/40' },
   consigliere: { label: 'Consigliere', icon: '🎭', color: 'text-blue-400', bg: 'bg-blue-500/20', border: 'border-blue-500/40' },
-  capo: { label: 'Capo', icon: '🎖️', color: 'text-emerald-400', bg: 'bg-emerald-500/20', border: 'border-emerald-500/40' },
+  capo: { label: 'Caporegime', icon: '🎖️', color: 'text-emerald-400', bg: 'bg-emerald-500/20', border: 'border-emerald-500/40' },
   soldier: { label: 'Soldier', icon: '🔫', color: 'text-zinc-300', bg: 'bg-zinc-500/20', border: 'border-zinc-500/40' },
   associate: { label: 'Associate', icon: '👤', color: 'text-zinc-400', bg: 'bg-zinc-500/20', border: 'border-zinc-500/40' },
 };
@@ -68,11 +68,9 @@ export default function FamilyProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="flex items-center gap-3">
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-sm font-heading uppercase tracking-widest">Loading...</span>
-        </div>
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Gathering intel...</span>
       </div>
     );
   }
@@ -124,16 +122,18 @@ export default function FamilyProfilePage() {
 
       {/* ── Family Banner ── */}
       <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25`}>
-        <div className="h-1 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl pointer-events-none" />
+        <div className="h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+        <div className="absolute top-0 left-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-20 h-20 bg-primary/3 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="px-4 py-4 sm:px-6">
+        <div className="px-4 py-5 sm:px-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
+              <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Crime Family Dossier</p>
               <div className="flex items-center gap-2 mb-1">
                 <Building2 size={20} className="text-primary" />
                 <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">{family.name}</h1>
-                <span className="text-sm text-primary/50 font-mono">[{family.tag}]</span>
+                <span className="text-sm text-primary/40 font-mono">[{family.tag}]</span>
               </div>
               {family.my_role && (
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-heading font-bold ${getRoleConfig(family.my_role).bg} ${getRoleConfig(family.my_role).color} ${getRoleConfig(family.my_role).border} border`}>
@@ -160,7 +160,7 @@ export default function FamilyProfilePage() {
           </div>
         </div>
 
-        <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+        <div className="h-px mx-4" style={{ background: 'repeating-linear-gradient(90deg, transparent, transparent 4px, rgba(var(--noir-primary-rgb), 0.15) 4px, rgba(var(--noir-primary-rgb), 0.15) 8px, transparent 8px, transparent 16px)' }} />
       </div>
 
       {/* ── Crew OC ── */}
@@ -225,7 +225,7 @@ export default function FamilyProfilePage() {
       <div className={`${styles.panel} rounded-xl overflow-hidden`}>
         <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/20">
           <TrendingUp size={13} className="text-primary" />
-          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Rackets</h3>
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.2em]">Rackets</h3>
           <span className="text-[10px] text-zinc-500 font-heading ml-auto">{rackets.filter(r => r.level > 0).length}/{rackets.length} active</span>
         </div>
         <div className="p-4">
@@ -265,14 +265,14 @@ export default function FamilyProfilePage() {
       <div className={`${styles.panel} rounded-xl overflow-hidden`}>
         <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/20">
           <Users size={13} className="text-primary" />
-          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Members</h3>
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.2em]">Made Men</h3>
           <span className="text-[10px] text-zinc-500 font-heading ml-auto">{members.length}</span>
         </div>
         <div className="p-3">
           {members.length === 0 ? (
             <div className="text-center py-6">
               <Users size={20} className="mx-auto text-zinc-600 mb-1" />
-              <p className="text-[10px] text-zinc-500 font-heading italic">No members.</p>
+              <p className="text-[10px] text-zinc-500 font-heading italic">No made men.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
