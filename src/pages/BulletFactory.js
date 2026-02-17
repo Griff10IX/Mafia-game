@@ -717,7 +717,7 @@ export default function BulletFactory({ me }) {
                       {data.weapon_producing && `Weapon (${(data.weapon_production_hours_remaining ?? 0).toFixed(1)}h left)`}
                     </>
                   ) : (
-                    'Click Produce to pay for 1 hour; items accumulate per hour. Sell at 35% margin.'
+                    `${data?.armour_rate_per_hour ?? 5}/hr armour, ${data?.weapon_rate_per_hour ?? 5}/hr weapon. Max 15 per item. Pay for 1 hr; sell at 35% margin.`
                   )}
                 </p>
                 <div className="grid grid-cols-2 gap-2 mb-2">

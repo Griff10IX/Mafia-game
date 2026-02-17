@@ -21,9 +21,10 @@ BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
 BULLET_FACTORY_UNOWNED_PRICE_MIN = 2500
 BULLET_FACTORY_UNOWNED_PRICE_MAX = 4000
 
-# Armoury production: rate per hour; owner pays production cost per unit × rate for each hour of production
-ARMOURY_ARMOUR_RATE_PER_HOUR = 2
-ARMOURY_WEAPON_RATE_PER_HOUR = 1
+# Armoury production: 5 per hour per armour/weapon; max 15 in stock per item (per level per weapon)
+ARMOURY_ARMOUR_RATE_PER_HOUR = 5
+ARMOURY_WEAPON_RATE_PER_HOUR = 5
+ARMOURY_MAX_STOCK_PER_ITEM = 15
 
 # Store: buy bullets with points (pack size -> points cost)
 BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
@@ -103,12 +104,17 @@ async def _tick_armoury_production(state: str, factory: dict) -> dict:
             use_hours = min(elapsed_hours, hours_remaining)
             if use_hours > 0:
                 level = int(factory.get("armour_production_level") or 1)
-                add_units = int(use_hours * ARMOURY_ARMOUR_RATE_PER_HOUR)
                 armour_stock = dict(factory.get("armour_stock") or {})
                 key = str(level)
-                armour_stock[key] = armour_stock.get(key, 0) + add_units
-                updates["armour_stock"] = armour_stock
-                hours_remaining -= use_hours
+                current = armour_stock.get(key, 0)
+                room = ARMOURY_MAX_STOCK_PER_ITEM - current
+                raw_units = int(use_hours * ARMOURY_ARMOUR_RATE_PER_HOUR)
+                add_units = min(raw_units, room) if room > 0 else 0
+                if add_units > 0:
+                    armour_stock[key] = current + add_units
+                    updates["armour_stock"] = armour_stock
+                hours_used = add_units / ARMOURY_ARMOUR_RATE_PER_HOUR
+                hours_remaining -= hours_used
                 updates["armour_production_hours_remaining"] = max(0, hours_remaining)
                 if hours_remaining <= 0:
                     updates["armour_producing"] = False
@@ -126,11 +132,16 @@ async def _tick_armoury_production(state: str, factory: dict) -> dict:
             use_hours = min(elapsed_hours, hours_remaining)
             if use_hours > 0:
                 wid = factory.get("weapon_production_id") or ""
-                add_units = int(use_hours * ARMOURY_WEAPON_RATE_PER_HOUR)
                 weapon_stock = dict(factory.get("weapon_stock") or {})
-                weapon_stock[wid] = weapon_stock.get(wid, 0) + add_units
-                updates["weapon_stock"] = weapon_stock
-                hours_remaining -= use_hours
+                current = weapon_stock.get(wid, 0)
+                room = ARMOURY_MAX_STOCK_PER_ITEM - current
+                raw_units = int(use_hours * ARMOURY_WEAPON_RATE_PER_HOUR)
+                add_units = min(raw_units, room) if room > 0 else 0
+                if add_units > 0:
+                    weapon_stock[wid] = current + add_units
+                    updates["weapon_stock"] = weapon_stock
+                hours_used = add_units / ARMOURY_WEAPON_RATE_PER_HOUR
+                hours_remaining -= hours_used
                 updates["weapon_production_hours_remaining"] = max(0, hours_remaining)
                 if hours_remaining <= 0:
                     updates["weapon_producing"] = False
@@ -211,11 +222,13 @@ async def get_bullet_factory(
         out["armour_production_hours_remaining"] = float(factory.get("armour_production_hours_remaining") or 0)
         out["armour_stock"] = factory.get("armour_stock") or {}
         out["armour_rate_per_hour"] = ARMOURY_ARMOUR_RATE_PER_HOUR
+        out["armour_max_stock"] = ARMOURY_MAX_STOCK_PER_ITEM
         out["weapon_producing"] = bool(factory.get("weapon_producing"))
         out["weapon_production_id"] = factory.get("weapon_production_id")
         out["weapon_production_hours_remaining"] = float(factory.get("weapon_production_hours_remaining") or 0)
         out["weapon_stock"] = factory.get("weapon_stock") or {}
         out["weapon_rate_per_hour"] = ARMOURY_WEAPON_RATE_PER_HOUR
+        out["weapon_max_stock"] = ARMOURY_MAX_STOCK_PER_ITEM
     return out
 
 
