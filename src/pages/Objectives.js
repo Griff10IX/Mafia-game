@@ -26,9 +26,9 @@ const OBJ_STYLES = `
 function formatReward(reward) {
   if (!reward) return '';
   const parts = [];
-  if (reward.rank_points) parts.push(`${reward.rank_points} RP`);
+  if (reward.rank_points) parts.push(`${Number(reward.rank_points).toLocaleString()} RP`);
   if (reward.money) parts.push(`$${Number(reward.money).toLocaleString()}`);
-  if (reward.points) parts.push(`${reward.points} pts`);
+  if (reward.points) parts.push(`${Number(reward.points).toLocaleString()} pts`);
   return parts.join(', ') || '—';
 }
 

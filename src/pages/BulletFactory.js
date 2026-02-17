@@ -636,7 +636,7 @@ export default function BulletFactory({ me }) {
                         onClick={() => buyArmour(opt.level)}
                         className="px-2.5 py-1.5 rounded text-[10px] font-heading font-bold border bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        {opt.owned ? `Lv.${opt.level} Owned` : `Lv.${opt.level} ${isPoints ? `${cost} pts` : formatMoney(cost)}`}
+                        {opt.owned ? `Lv.${opt.level} Owned` : `Lv.${opt.level} ${isPoints ? `${Number(cost).toLocaleString()} pts` : formatMoney(cost)}`}
                       </button>
                     );
                   })
@@ -671,7 +671,7 @@ export default function BulletFactory({ me }) {
                         className="px-2.5 py-1.5 rounded text-[10px] font-heading border bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 truncate max-w-[130px] disabled:opacity-50 disabled:cursor-not-allowed"
                         title={w.name}
                       >
-                        {w.owned ? `${w.name?.replace(/\s*\(.*\)/, '')} ✓` : (w.name?.replace(/\s*\(.*\)/, '') || w.id) + (pricePoints != null ? ` ${pricePoints} pts` : ` ${formatMoney(priceMoney)}`)}
+                        {w.owned ? `${w.name?.replace(/\s*\(.*\)/, '')} ✓` : (w.name?.replace(/\s*\(.*\)/, '') || w.id) + (pricePoints != null ? ` ${Number(pricePoints).toLocaleString()} pts` : ` ${formatMoney(priceMoney)}`)}
                       </button>
                     );
                   })
@@ -907,7 +907,7 @@ export default function BulletFactory({ me }) {
                                 onClick={() => startArmourProduction(opt.level)}
                                 className="px-2 py-1 rounded text-[10px] font-heading font-bold border bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
                               >
-                                Lv.{opt.level} {isPoints ? `${costPerHr} pts` : formatMoney(costPerHr)}
+                                Lv.{opt.level} {isPoints ? `${Number(costPerHr).toLocaleString()} pts` : formatMoney(costPerHr)}
                               </button>
                             );
                           })
@@ -930,7 +930,7 @@ export default function BulletFactory({ me }) {
                             className="px-2 py-1 rounded text-[10px] font-heading border bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 truncate max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
                             title={w.name}
                           >
-                            {w.name?.replace(/\s*\(.*\)/, '') || w.id} {isPoints ? `${costPerHr} pts` : formatMoney(costPerHr)}
+                            {w.name?.replace(/\s*\(.*\)/, '') || w.id} {isPoints ? `${Number(costPerHr).toLocaleString()} pts` : formatMoney(costPerHr)}
                           </button>
                         );
                       })}

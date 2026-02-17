@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap } from 'lucide-react';
 import api from '../utils/api';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -1049,8 +1049,8 @@ export default function Layout({ children }) {
             if (statId === 'points') {
               return (
                 <div className={chipClass} title={`Premium Points: ${formatInt(user.points)}`}>
-                  <div className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
-                  <span className="font-heading text-xs text-foreground md:hidden" data-testid="topbar-points">{formatCompact(user.points)}</span>
+                  <Zap size={12} className="text-primary shrink-0" />
+                  <span className="font-heading text-xs text-foreground md:hidden" data-testid="topbar-points">{formatInt(user.points)}</span>
                   <span className="font-heading text-xs text-foreground hidden md:inline" data-testid="topbar-points-full">{formatInt(user.points)}</span>
                 </div>
               );

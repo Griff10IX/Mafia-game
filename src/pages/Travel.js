@@ -82,7 +82,7 @@ const CurrentLocationCard = ({ location, travelsUsed, maxTravels, userPoints }) 
         <div className="flex items-center gap-1">
           <Zap size={10} className="text-primary" />
           <span className="text-mutedForeground">
-            Points: <span className="font-bold text-primary">{userPoints}</span>
+            Points: <span className="font-bold text-primary">{Number(userPoints ?? 0).toLocaleString()}</span>
           </span>
         </div>
       </div>

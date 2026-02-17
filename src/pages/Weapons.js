@@ -78,7 +78,7 @@ export default function Weapons() {
     return (weapons || []).map((w) => {
       const canBuyMoney = w.price_money != null;
       const canBuyPoints = w.price_points != null;
-      const costLabel = canBuyPoints ? `${w.price_points} points` : canBuyMoney ? `$${Number(w.price_money).toLocaleString()}` : '—';
+      const costLabel = canBuyPoints ? `${Number(w.price_points).toLocaleString()} points` : canBuyMoney ? `$${Number(w.price_money).toLocaleString()}` : '—';
       const status = w.owned ? 'Owned' : (canBuyMoney || canBuyPoints) ? 'Available' : 'Locked';
       return { ...w, costLabel, status, canBuyMoney, canBuyPoints };
     });
@@ -158,7 +158,7 @@ export default function Weapons() {
             const usingPoints = w.canBuyPoints;
             const CostIcon = usingPoints ? Zap : DollarSign;
             const costText = w.canBuyPoints
-              ? `${w.price_points} Points`
+              ? `${Number(w.price_points).toLocaleString()} Points`
               : w.canBuyMoney
                 ? `$${Number(w.price_money).toLocaleString()}`
                 : '—';

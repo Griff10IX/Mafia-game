@@ -180,7 +180,7 @@ export default function Store() {
           <p className="text-[10px] text-zinc-500 font-heading italic">Points, upgrades, bullets & bodyguards</p>
         </div>
         {user != null && (
-          <span className="text-sm font-heading font-bold text-primary">{user.points} pts</span>
+          <span className="text-sm font-heading font-bold text-primary">{Number(user.points ?? 0).toLocaleString()} pts</span>
         )}
       </div>
 
@@ -220,7 +220,7 @@ export default function Store() {
                 )}
                 <div className="p-3 text-center">
                   <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{pkg.name}</p>
-                  <p className="text-lg font-heading font-bold text-primary mt-1">{pkg.points}</p>
+                  <p className="text-lg font-heading font-bold text-primary mt-1">{Number(pkg.points ?? 0).toLocaleString()}</p>
                   <p className="text-[10px] text-zinc-500 font-heading italic">pts · ${pkg.price}</p>
                 </div>
                 <div className="px-3 pb-3">
