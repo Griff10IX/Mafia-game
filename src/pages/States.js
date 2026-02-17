@@ -5,6 +5,21 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const STATES_STYLES = `
+  @keyframes st-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .st-fade-in { animation: st-fade-in 0.4s ease-out both; }
+  @keyframes st-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .st-glow { animation: st-glow 4s ease-in-out infinite; }
+  .st-corner::before, .st-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .st-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .st-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .st-card { transition: all 0.3s ease; }
+  .st-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .st-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 function formatMaxBet(n) {
   if (n == null) return '—';
   const num = Number(n);
@@ -58,15 +73,16 @@ const CityCard = ({
   const highestBet = games.length ? Math.max(...games.map(g => getEffectiveMaxBet(g, city))) : 0;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 st-card st-corner st-fade-in`}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       {/* Header - Always visible */}
       <button
         onClick={onToggle}
-        className="w-full px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between hover:bg-primary/15 transition-colors"
+        className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
       >
         <div className="flex items-center gap-2">
           <MapPin size={14} className="text-primary" />
-          <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wide">{city}</h2>
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{city}</h2>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-[10px]">
@@ -178,6 +194,7 @@ const CityCard = ({
               <span className="text-[10px] text-amber-400">Coming soon</span>
             </div>
           </div>
+          <div className="st-art-line text-primary mx-4" />
         </>
       )}
     </div>
@@ -198,20 +215,20 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
 
   return (
     <div className="grid grid-cols-4 gap-2">
-      <div className="p-2.5 rounded-md bg-zinc-800/30 border border-zinc-700/30 text-center">
-        <div className="text-[9px] text-mutedForeground uppercase">Cities</div>
+      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in">
+        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Cities</div>
         <div className="text-lg font-heading font-bold text-foreground">{cities.length}</div>
       </div>
-      <div className="p-2.5 rounded-md bg-zinc-800/30 border border-zinc-700/30 text-center">
-        <div className="text-[9px] text-mutedForeground uppercase">Casinos</div>
+      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.03s' }}>
+        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Casinos</div>
         <div className="text-lg font-heading font-bold text-foreground">{ownedCasinos}/{totalCasinos}</div>
       </div>
-      <div className="p-2.5 rounded-md bg-zinc-800/30 border border-zinc-700/30 text-center">
-        <div className="text-[9px] text-mutedForeground uppercase">Factories</div>
+      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.06s' }}>
+        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Factories</div>
         <div className="text-lg font-heading font-bold text-foreground">{ownedFactories}/{cities.length}</div>
       </div>
-      <div className="p-2.5 rounded-md bg-zinc-800/30 border border-zinc-700/30 text-center">
-        <div className="text-[9px] text-mutedForeground uppercase">Airports</div>
+      <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.09s' }}>
+        <div className="text-[9px] text-mutedForeground uppercase tracking-[0.12em] font-heading">Airports</div>
         <div className="text-lg font-heading font-bold text-foreground">{ownedAirports}/{cities.length}</div>
       </div>
     </div>
@@ -353,19 +370,29 @@ export default function States() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-sm font-heading">Loading...</div>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{STATES_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <MapPin size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading states...</span>
+        </div>
       </div>
     );
   }
 
   if (cities.length === 0) {
     return (
-      <div className={`space-y-3 ${styles.pageContent}`} data-testid="states-page">
-        <h1 className="text-xl font-heading font-bold text-primary">🗺️ States & Cities</h1>
-        <div className="p-6 rounded-md border border-primary/20 bg-zinc-800/30 text-center">
+      <div className={`space-y-4 ${styles.pageContent}`} data-testid="states-page">
+        <style>{STATES_STYLES}</style>
+        <div className="relative st-fade-in">
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Map</p>
+          <h1 className="text-xl font-heading font-bold text-primary uppercase">States & Cities</h1>
+        </div>
+        <div className="relative p-6 rounded-lg border border-primary/20 bg-zinc-800/30 text-center st-fade-in" style={{ animationDelay: '0.05s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <p className="text-sm text-mutedForeground mb-3">Couldn&apos;t load states. Make sure you&apos;re logged in.</p>
-          <button type="button" onClick={fetchStates} className="px-4 py-2 rounded bg-primary/20 border border-primary/50 text-primary text-sm font-heading uppercase hover:bg-primary/30">
+          <button type="button" onClick={fetchStates} className="px-4 py-2 rounded-lg bg-primary/20 border border-primary/50 text-primary text-sm font-heading uppercase hover:bg-primary/30">
             Retry
           </button>
         </div>
@@ -374,20 +401,22 @@ export default function States() {
   }
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="states-page">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2">
-            🗺️ States & Cities
-          </h1>
-          <p className="text-xs text-mutedForeground">Travel · Casino · Properties</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={expandAll} className="text-[10px] text-mutedForeground hover:text-foreground">Expand all</button>
-          <span className="text-zinc-600">|</span>
-          <button onClick={collapseAll} className="text-[10px] text-mutedForeground hover:text-foreground">Collapse all</button>
-        </div>
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="states-page">
+      <style>{STATES_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative st-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Map</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          🗺️ States & Cities
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Travel · Casinos · Properties. Who owns what where.</p>
+      </div>
+      
+      <div className="flex items-center justify-end gap-2 st-fade-in" style={{ animationDelay: '0.03s' }}>
+        <button onClick={expandAll} className="text-[10px] text-mutedForeground hover:text-foreground font-heading">Expand all</button>
+        <span className="text-zinc-600">|</span>
+        <button onClick={collapseAll} className="text-[10px] text-mutedForeground hover:text-foreground font-heading">Collapse all</button>
       </div>
 
       {/* Stats Overview */}
@@ -399,8 +428,14 @@ export default function States() {
         airports={airports}
       />
 
+      {/* Destinations section */}
+      <div className="st-fade-in" style={{ animationDelay: '0.06s' }}>
+        <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] mb-2">Destinations</p>
+        <div className="h-0.5 bg-gradient-to-r from-primary/40 via-primary/20 to-transparent mb-3" />
+      </div>
+
       {/* City Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 st-fade-in" style={{ animationDelay: '0.08s' }}>
         {cities.map((city) => (
           <CityCard
             key={city}
@@ -421,9 +456,10 @@ export default function States() {
       </div>
 
       {/* Info */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">ℹ️ Info</span>
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 st-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">ℹ️ Info</span>
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
@@ -433,6 +469,7 @@ export default function States() {
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>HOT/COLD city events coming soon</li>
           </ul>
         </div>
+        <div className="st-art-line text-primary mx-4" />
       </div>
     </div>
   );
