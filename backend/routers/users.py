@@ -49,7 +49,12 @@ def register(router):
                 "is_admin": is_admin,
             })
 
-        return OnlineUsersResponse(total_online=len(users_data), users=users_data)
+        admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+        admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
+        if not isinstance(admin_online_color, str) or not admin_online_color.strip():
+            admin_online_color = "#a78bfa"
+
+        return OnlineUsersResponse(total_online=len(users_data), users=users_data, admin_online_color=admin_online_color.strip())
 
     @router.get("/users/search")
     async def search_users(

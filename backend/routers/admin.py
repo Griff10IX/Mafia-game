@@ -24,6 +24,10 @@ class AllEventsForTestingRequest(BaseModel):
     enabled: bool
 
 
+class AdminSettingsUpdate(BaseModel):
+    admin_online_color: Optional[str] = None
+
+
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
     {"name": "Baranco", "tag": "BARN", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
@@ -483,6 +487,36 @@ def register(router):
         is_admin = _is_admin(current_user)
         has_admin_email = (current_user.get("email") or "") in ADMIN_EMAILS
         return {"is_admin": is_admin, "has_admin_email": has_admin_email}
+
+    @router.get("/admin/settings")
+    async def admin_get_settings(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+        admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
+        if not isinstance(admin_online_color, str) or not admin_online_color.strip():
+            admin_online_color = "#a78bfa"
+        return {"admin_online_color": admin_online_color.strip()}
+
+    @router.patch("/admin/settings")
+    async def admin_patch_settings(body: AdminSettingsUpdate, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        updates = {}
+        if body.admin_online_color is not None:
+            val = (body.admin_online_color or "").strip() or "#a78bfa"
+            if not val.startswith("#"):
+                val = "#" + val
+            updates["value"] = val
+        if updates:
+            await db.game_settings.update_one(
+                {"key": "admin_online_color"},
+                {"$set": updates},
+                upsert=True,
+            )
+        doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+        admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
+        return {"admin_online_color": admin_online_color}
 
     @router.get("/admin/activity-log")
     async def admin_activity_log(

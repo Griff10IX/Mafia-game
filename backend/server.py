@@ -398,6 +398,7 @@ class CustomCarImageUpdate(BaseModel):
 class OnlineUsersResponse(BaseModel):
     total_online: int
     users: List[Dict]
+    admin_online_color: Optional[str] = None
 
 # Helper functions
 def get_password_hash(password: str) -> str:

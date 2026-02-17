@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -84,6 +84,9 @@ export default function Admin() {
   const [cheatLoading, setCheatLoading] = useState(false);
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
 
+  const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
+  const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
+
   const toggleSection = (key) => {
     setCollapsed(prev => {
       const next = { ...prev, [key]: !prev[key] };
@@ -101,6 +104,7 @@ export default function Admin() {
         fetchMeta();
         fetchEventsStatus();
         fetchBoozeRotation();
+        fetchAdminSettings();
       }
     } catch { setIsAdmin(false); }
     finally { setLoading(false); }
@@ -128,6 +132,29 @@ export default function Admin() {
       setBoozeRotationSeconds(res.data?.rotation_seconds ?? null);
     } catch {
       setBoozeRotationSeconds(null);
+    }
+  };
+
+  const fetchAdminSettings = async () => {
+    try {
+      const res = await api.get('/admin/settings');
+      const hex = res.data?.admin_online_color || '#a78bfa';
+      setAdminOnlineColor(hex.startsWith('#') ? hex : '#' + hex);
+    } catch {
+      setAdminOnlineColor('#a78bfa');
+    }
+  };
+
+  const handleSaveAdminOnlineColor = async () => {
+    setAdminSettingsSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { admin_online_color: adminOnlineColor });
+      setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
+      toast.success('Admin colour saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save');
+    } finally {
+      setAdminSettingsSaving(false);
     }
   };
 
@@ -748,6 +775,47 @@ export default function Admin() {
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleBoozeRotation15s}>Set rotation to 15s</BtnPrimary>
               <BtnSecondary onClick={handleBoozeRotationReset}>Reset to 3h</BtnSecondary>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Admin display – colour for admins on Users Online */}
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Palette}
+          title="Admin display"
+          badge={
+            <span className="text-[10px] font-heading flex items-center gap-1">
+              <span className="w-2.5 h-2.5 rounded-full border border-primary/30 shrink-0" style={{ backgroundColor: adminOnlineColor }} />
+              <span className="text-mutedForeground">Users Online colour</span>
+            </span>
+          }
+          isCollapsed={collapsed.adminDisplay}
+          onToggle={() => toggleSection('adminDisplay')}
+        />
+        {!collapsed.adminDisplay && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">Colour used for admin usernames and badge on the Users Online page.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="color"
+                value={adminOnlineColor}
+                onChange={(e) => setAdminOnlineColor(e.target.value)}
+                className="h-9 w-12 rounded border border-input bg-transparent cursor-pointer"
+                aria-label="Admin colour"
+              />
+              <Input
+                type="text"
+                value={adminOnlineColor}
+                onChange={(e) => setAdminOnlineColor(e.target.value)}
+                placeholder="#a78bfa"
+                className="w-24 font-mono text-[11px]"
+              />
+              <BtnPrimary onClick={handleSaveAdminOnlineColor} disabled={adminSettingsSaving}>
+                {adminSettingsSaving ? 'Saving...' : 'Save colour'}
+              </BtnPrimary>
             </div>
           </div>
         )}

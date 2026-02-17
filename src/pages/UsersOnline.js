@@ -68,9 +68,10 @@ const OnlineCountCard = ({ totalOnline }) => (
   </div>
 );
 
-const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) => {
+const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor }) => {
   const preview = profileCache[user.username];
   const isLoading = !!profileLoading[user.username];
+  const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
 
   return (
     <div
@@ -82,11 +83,14 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview }) 
           <HoverCardTrigger asChild>
             <Link
               to={`/profile/${encodeURIComponent(user.username)}`}
-              className={`relative z-10 text-[11px] font-heading font-bold transition-colors ${user.is_admin ? 'text-violet-400 hover:text-violet-300' : 'text-foreground hover:text-primary'}`}
+              className={`relative z-10 text-[11px] font-heading font-bold transition-colors ${user.is_admin ? '' : 'text-foreground hover:text-primary'}`}
+              style={user.is_admin ? { color: adminColor } : undefined}
               data-testid={`user-profile-link-${user.username}`}
             >
               {user.username}
-              {user.is_admin && <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold bg-violet-500/20 text-violet-400">Admin</span>}
+              {user.is_admin && (
+                <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: `${adminColor}20`, color: adminColor }}>Admin</span>
+              )}
             </Link>
           </HoverCardTrigger>
           <HoverCardPortal>
@@ -272,6 +276,7 @@ const InfoCard = () => (
 export default function UsersOnline() {
   const [totalOnline, setTotalOnline] = useState(0);
   const [users, setUsers] = useState([]);
+  const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
   const [loading, setLoading] = useState(true);
   const [profileCache, setProfileCache] = useState({});
   const [profileLoading, setProfileLoading] = useState({});
@@ -280,7 +285,8 @@ export default function UsersOnline() {
     try {
       const response = await api.get('/users/online');
       setTotalOnline(response.data.total_online);
-      setUsers(response.data.users);
+      setUsers(response.data.users || []);
+      if (response.data.admin_online_color) setAdminOnlineColor(response.data.admin_online_color);
     } catch (error) {
       toast.error('Failed to load online users');
       console.error('Error fetching online users:', error);
@@ -357,6 +363,7 @@ export default function UsersOnline() {
                     profileCache={profileCache}
                     profileLoading={profileLoading}
                     ensureProfilePreview={ensureProfilePreview}
+                    adminOnlineColor={adminOnlineColor}
                   />
                 ))}
               </div>
