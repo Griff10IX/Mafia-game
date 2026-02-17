@@ -43,8 +43,8 @@ const DASH_STYLES = `
 `;
 
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <LayoutDashboard size={28} className="text-primary/40 animate-pulse" />
+  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+    <LayoutDashboard size={22} className="text-primary/40 animate-pulse" />
     <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
     <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading command center...</span>
   </div>
@@ -60,32 +60,32 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
     : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 dash-corner dash-scale-in`}>
-      <div className="absolute top-0 left-0 w-28 h-28 bg-primary/5 rounded-full blur-3xl pointer-events-none dash-glow" />
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-corner dash-scale-in`}>
+      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none dash-glow" />
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
           Rank Progress
         </h2>
         {!hasPremiumBar && (
           <Link 
             to="/store" 
-            className="text-[10px] font-heading font-bold text-primary hover:text-primary/80 transition-colors"
+            className="text-[9px] font-heading font-bold text-primary hover:text-primary/80 transition-colors"
           >
             Premium bar →
           </Link>
         )}
       </div>
-      <div className="p-3 space-y-2">
+      <div className="px-2.5 py-2 space-y-1.5">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-heading text-foreground">
+          <p className="text-[11px] font-heading text-foreground">
             {rankProgress.current_rank_name}
             {rankProgress.next_rank && (
               <span className="text-mutedForeground"> → {rankProgress.next_rank_name}</span>
             )}
           </p>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           <div className="flex justify-between text-[10px] font-heading">
             <span className="text-mutedForeground">Rank Points</span>
             <span className="font-bold text-primary tabular-nums">
@@ -97,10 +97,10 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
               )}
             </span>
           </div>
-          <div className="relative w-full h-2.5 bg-secondary rounded-full overflow-hidden border border-primary/20">
+          <div className="relative w-full h-2 bg-secondary rounded-full overflow-hidden border border-primary/20">
             <div
               className="absolute top-0 left-0 h-full rounded-full transition-all duration-500"
-              style={{ width: `${progressPct}%`, minWidth: progressPct > 0 ? '6px' : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }}
+              style={{ width: `${progressPct}%`, minWidth: progressPct > 0 ? '4px' : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }}
               role="progressbar"
               aria-valuenow={progressPct}
               aria-valuemin={0}
@@ -108,13 +108,13 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
             />
           </div>
           {hasPremiumBar && rankProgress.rank_points_needed > 0 && (
-            <p className="text-[10px] font-heading text-mutedForeground text-right">
+            <p className="text-[9px] font-heading text-mutedForeground text-right">
               {rankProgress.rank_points_needed.toLocaleString()} RP to next rank
             </p>
           )}
         </div>
       </div>
-      <div className="dash-art-line text-primary mx-4" />
+      <div className="dash-art-line text-primary mx-3" />
     </div>
   );
 };
@@ -125,7 +125,7 @@ const StatCard = ({ stat, delay = 0 }) => {
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <p className="text-lg font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2">
+          <p className="text-sm font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2">
             {stat.value}
           </p>
         </TooltipTrigger>
@@ -138,22 +138,22 @@ const StatCard = ({ stat, delay = 0 }) => {
       </Tooltip>
     </TooltipProvider>
   ) : (
-    <p className="text-lg font-heading font-bold text-foreground truncate">{stat.value}</p>
+    <p className="text-sm font-heading font-bold text-foreground truncate">{stat.value}</p>
   );
 
   return (
     <div
-      className={`relative ${styles.surface} rounded-lg overflow-hidden p-3 border border-primary/20 dash-stat-card dash-corner dash-scale-in`}
+      className={`relative ${styles.surface} rounded-md overflow-hidden p-2 border border-primary/20 dash-stat-card dash-corner dash-scale-in`}
       style={{ animationDelay: `${delay}s` }}
       data-testid={stat.testId}
     >
-      <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.15em] mb-1.5 font-heading">
-        <Icon size={10} className="text-primary" />
+      <div className="flex items-center gap-1 text-[9px] text-zinc-500 uppercase tracking-[0.12em] mb-1 font-heading">
+        <Icon size={9} className="text-primary" />
         {stat.label}
       </div>
       {valueEl}
       {stat.sub && (
-        <p className="text-[10px] text-mutedForeground mt-0.5">{stat.sub}</p>
+        <p className="text-[9px] text-mutedForeground mt-0.5">{stat.sub}</p>
       )}
     </div>
   );
@@ -166,57 +166,57 @@ const QuickActionCard = ({ action, delay = 0 }) => {
     <Link
       to={action.to}
       data-testid={`quick-action-${action.id}`}
-      className={`group relative ${styles.panel} border border-primary/20 rounded-lg p-3 flex items-center gap-2.5 dash-card dash-fade-in touch-manipulation overflow-hidden`}
+      className={`group relative ${styles.panel} border border-primary/20 rounded-md p-2 flex items-center gap-2 dash-card dash-fade-in touch-manipulation overflow-hidden`}
       style={{ animationDelay: `${delay}s` }}
     >
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent pointer-events-none" />
-      <div className="p-1.5 rounded bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0 transition-colors">
-        <Icon className="text-primary" size={16} />
+      <div className="p-1 rounded bg-primary/20 border border-primary/30 group-hover:bg-primary/30 shrink-0 transition-colors">
+        <Icon className="text-primary" size={14} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-heading font-bold text-foreground group-hover:text-primary transition-colors">
+        <p className="text-[11px] font-heading font-bold text-foreground group-hover:text-primary transition-colors">
           {action.title}
         </p>
-        <p className="text-[10px] text-mutedForeground truncate mt-0.5">
+        <p className="text-[9px] text-mutedForeground truncate mt-0.5">
           {action.desc}
         </p>
       </div>
       <ChevronRight 
         className="text-mutedForeground group-hover:text-primary shrink-0 transition-colors" 
-        size={14} 
+        size={12} 
       />
     </Link>
   );
 };
 
 const GameSystemsCard = () => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 dash-fade-in`} style={{ animationDelay: '0.1s' }}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
-      <Zap size={14} className="text-primary" />
-      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
+      <Zap size={12} className="text-primary" />
+      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         Game Systems
       </span>
     </div>
-    <div className="p-3 grid sm:grid-cols-2 gap-3">
+    <div className="px-2.5 py-2 grid sm:grid-cols-2 gap-2">
       <div>
-        <p className="font-bold text-primary text-xs mb-1 flex items-center gap-1.5">
+        <p className="font-bold text-primary text-[11px] mb-0.5 flex items-center gap-1">
           <span className="text-primary">▸</span> Ranks
         </p>
-        <p className="text-mutedForeground text-[10px] leading-snug">
+        <p className="text-mutedForeground text-[9px] leading-snug">
           Rise from Rat to Godfather. Each rank unlocks crimes, weapons, and opportunities.
         </p>
       </div>
       <div>
-        <p className="font-bold text-primary text-xs mb-1 flex items-center gap-1.5">
+        <p className="font-bold text-primary text-[11px] mb-0.5 flex items-center gap-1">
           <span className="text-primary">▸</span> Bodyguards
         </p>
-        <p className="text-mutedForeground text-[10px] leading-snug">
+        <p className="text-mutedForeground text-[9px] leading-snug">
           Hire up to 4 bodyguards (points). Human or robot guards protect you from attacks.
         </p>
       </div>
     </div>
-    <div className="dash-art-line text-primary mx-4" />
+    <div className="dash-art-line text-primary mx-3" />
   </div>
 );
 
@@ -312,17 +312,10 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="dashboard-page">
+    <div className={`space-y-3 ${styles.pageContent}`} data-testid="dashboard-page">
       <style>{DASH_STYLES}</style>
 
-      {/* Page header */}
-      <div className="relative dash-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Command</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
-          The Dashboard
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">At a glance and quick actions — your empire starts here.</p>
-      </div>
+      <p className="text-[9px] text-zinc-500 font-heading italic">At a glance and quick actions — your empire starts here.</p>
 
       {rankProgress && (
         <RankProgressCard 
@@ -333,13 +326,13 @@ export default function Dashboard() {
 
       {/* Stats grid */}
       <section>
-        <div className="flex items-center gap-2 mb-2">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             At a Glance
           </h2>
           <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 md:gap-2">
           {stats.map((stat, i) => (
             <StatCard key={stat.id} stat={stat} delay={i * 0.04} />
           ))}
@@ -348,13 +341,13 @@ export default function Dashboard() {
 
       {/* Quick actions */}
       <section>
-        <div className="flex items-center gap-2 mb-2">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Quick Actions
           </h2>
           <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-1.5 md:gap-2">
           {quickActions.map((action, i) => (
             <QuickActionCard key={action.id} action={action} delay={i * 0.03} />
           ))}
