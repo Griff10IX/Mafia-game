@@ -254,7 +254,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
     is_robot = request.is_robot
     if not is_robot:
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
-    if slot < 1 or slot > current_user["bodyguard_slots"]:
+    if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
     existing = await db.bodyguards.find_one(
         {"user_id": current_user["id"], "slot_number": slot},
@@ -307,7 +307,7 @@ async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict =
         raise HTTPException(status_code=400, detail="Cannot invite yourself")
     bodyguards = await db.bodyguards.find({"user_id": current_user["id"]}).to_list(10)
     filled_slots = len([b for b in bodyguards if b.get("bodyguard_user_id") or b.get("is_robot")])
-    if filled_slots >= current_user["bodyguard_slots"]:
+    if filled_slots >= 4:
         raise HTTPException(status_code=400, detail="No available bodyguard slots")
     existing = await db.bodyguard_invites.find_one({
         "inviter_id": current_user["id"],
@@ -359,7 +359,7 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Inviter no longer exists")
     bodyguards = await db.bodyguards.find({"user_id": inviter["id"]}).to_list(10)
     empty_slot = None
-    for i in range(1, inviter["bodyguard_slots"] + 1):
+    for i in range(1, 5):
         slot_bg = next((b for b in bodyguards if b["slot_number"] == i), None)
         if not slot_bg or (not slot_bg.get("bodyguard_user_id") and not slot_bg.get("is_robot")):
             empty_slot = i

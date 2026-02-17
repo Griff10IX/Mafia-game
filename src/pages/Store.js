@@ -160,7 +160,6 @@ export default function Store() {
     }
   };
 
-  const getSlotCost = (n) => Math.round((BODYGUARD_SLOT_COSTS[n - 1] || 0) * (event?.bodyguard_cost ?? 1));
   const getHireCost = (n, robot) => Math.round((BODYGUARD_SLOT_COSTS[n - 1] || 0) * (robot ? 1.5 : 1) * (event?.bodyguard_cost ?? 1));
 
   if (checkingPayment) {
@@ -339,19 +338,6 @@ export default function Store() {
 
       {activeTab === 'bodyguards' && user && (
         <div className="space-y-3">
-          {user.bodyguard_slots < 4 && (
-            <div className="relative flex items-center justify-between p-2.5 rounded-lg border border-primary/20 bg-zinc-900/50">
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <span className="text-xs font-heading text-foreground">Slots: {user.bodyguard_slots}/4</span>
-              <button
-                type="button"
-                onClick={() => apiBuy('/bodyguards/slot/buy', {}, 'Slot purchased')}
-                className="py-1.5 px-3 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30"
-              >
-                Buy slot ({getSlotCost(user.bodyguard_slots + 1)} pts)
-              </button>
-            </div>
-          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {bodyguards.map((bg) => (
               <div key={bg.slot_number} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
@@ -365,25 +351,16 @@ export default function Store() {
                     <div className="text-xs font-heading text-mutedForeground">
                       {bg.is_robot ? 'Robot' : 'Human'} · {new Date(bg.hired_at).toLocaleDateString()}
                     </div>
-                  ) : bg.slot_number <= user.bodyguard_slots ? (
+                  ) : (
                     <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => apiBuy('/bodyguards/hire', { slot: bg.slot_number, is_robot: false }, 'Hired')}
-                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-zinc-800/50 border border-zinc-700/50 text-foreground hover:bg-zinc-700/50"
-                      >
-                        Human ({getHireCost(bg.slot_number, false)})
-                      </button>
                       <button
                         type="button"
                         onClick={() => apiBuy('/bodyguards/hire', { slot: bg.slot_number, is_robot: true }, 'Hired')}
                         className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30"
                       >
-                        Robot ({getHireCost(bg.slot_number, true)})
+                        Robot ({getHireCost(bg.slot_number, true)} pts)
                       </button>
                     </div>
-                  ) : (
-                    <p className="text-[10px] text-mutedForeground font-heading">Buy slot first</p>
                   )}
                 </div>
                 <div className="store-art-line text-primary mx-3" />

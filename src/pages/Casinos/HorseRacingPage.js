@@ -199,12 +199,15 @@ function RaceTrack({
                     >
                       <span className="relative z-10 drop-shadow-sm" style={{ fontSize: 14 }}>🏇</span>
                     </div>
-                    {/* Live position badge during race */}
-                    {livePositions && racing && gatesOpen && (livePositions[lane.horse.id] != null) && (
-                      <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black bg-primary text-black shadow" style={{ border: '1px solid rgba(0,0,0,0.3)' }}>
-                        {livePositions[lane.horse.id]}
-                      </div>
-                    )}
+                    {/* Position badge only after race (during race would spoil winner from predetermined order) */}
+                    {!racing && result?.finishOrder && (() => {
+                      const pos = result.finishOrder.indexOf(lane.horse.id) + 1;
+                      return pos ? (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-black bg-primary text-black shadow" style={{ border: '1px solid rgba(0,0,0,0.3)' }}>
+                          {pos}
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
 

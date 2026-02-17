@@ -1,6 +1,17 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Factory, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
+
+/** Slot machine icon: three reel windows, same outline style as Spade/CircleDot/Dice5 */
+function SlotsIcon({ size = 10, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <rect x="2" y="4" width="5" height="14" rx="1" />
+      <rect x="9.5" y="4" width="5" height="14" rx="1" />
+      <rect x="17" y="4" width="5" height="14" rx="1" />
+    </svg>
+  );
+}
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -23,10 +34,8 @@ const STATES_STYLES = `
 function formatMaxBet(n) {
   if (n == null) return '—';
   const num = Number(n);
-  if (num >= 1_000_000_000) return `$${(num / 1_000_000_000).toFixed(1)}B`;
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(0)}M`;
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(0)}K`;
-  return `$${num.toLocaleString()}`;
+  if (Number.isNaN(num)) return '—';
+  return `$${Math.trunc(num).toLocaleString()}`;
 }
 
 const GAME_ICONS = {
@@ -34,6 +43,7 @@ const GAME_ICONS = {
   horseracing: Trophy,
   roulette: CircleDot,
   dice: Dice5,
+  slots: SlotsIcon,
 };
 
 const GAME_COLORS = {
@@ -41,6 +51,7 @@ const GAME_COLORS = {
   horseracing: 'text-emerald-400',
   roulette: 'text-blue-400',
   dice: 'text-purple-400',
+  slots: 'text-amber-400',
 };
 
 // ============================================================================

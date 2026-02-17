@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Shield, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -54,17 +54,6 @@ export default function Bodyguards() {
     }
   };
 
-  const buySlot = async () => {
-    try {
-      const response = await api.post('/bodyguards/slot/buy');
-      toast.success(response.data.message);
-      refreshUser();
-      fetchData();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to buy slot');
-    }
-  };
-
   const hireBodyguard = async (slot, isRobot) => {
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
@@ -85,12 +74,6 @@ export default function Bodyguards() {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to upgrade armour');
     }
-  };
-
-  const getSlotCost = (slotNumber) => {
-    const base = BODYGUARD_SLOT_COSTS[slotNumber - 1];
-    const mult = event?.bodyguard_cost ?? 1;
-    return Math.round(base * mult);
   };
 
   const getHireCost = (slotNumber, isRobot) => {
@@ -125,31 +108,16 @@ export default function Bodyguards() {
           <Shield className="w-6 h-6 sm:w-7 sm:h-7" />
           Bodyguards
         </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Hire human or robot guards. Slots, armour, and who&apos;s watching your back.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Hire robot bodyguards (up to 4). Armour and who&apos;s watching your back.</p>
       </div>
       
       {/* Stats row */}
       <div className="flex flex-wrap items-center justify-end gap-4 bg-fade-in" style={{ animationDelay: '0.05s' }}>
-        
         <div className="flex items-center gap-3 text-xs font-heading">
           <div className="flex items-center gap-1.5">
-            <span className="text-mutedForeground">Slots:</span>
-            <span className="text-primary font-bold" data-testid="bodyguard-slots">{user?.bodyguard_slots}/4</span>
-          </div>
-          <div className="flex items-center gap-1.5">
             <span className="text-mutedForeground">Active:</span>
-            <span className="text-emerald-400 font-bold">{activeCount}</span>
+            <span className="text-emerald-400 font-bold" data-testid="bodyguard-active">{activeCount}/4</span>
           </div>
-          {user?.bodyguard_slots < 4 && (
-            <button
-              onClick={buySlot}
-              data-testid="buy-slot-button"
-              className="bg-primary/20 text-primary rounded px-2.5 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 transition-all inline-flex items-center gap-1 font-heading"
-            >
-              <Plus size={12} />
-              Buy Slot ({getSlotCost(user.bodyguard_slots + 1)} pts)
-            </button>
-          )}
         </div>
       </div>
 
@@ -175,7 +143,7 @@ export default function Bodyguards() {
         
         <div className="p-2 space-y-1">
           {bodyguards.map((bg) => {
-            const isUnlocked = bg.slot_number <= (user?.bodyguard_slots || 0);
+            const isUnlocked = true;
             const hasGuard = !!bg.bodyguard_username;
             const isExpanded = expandedSlot === bg.slot_number;
             
@@ -235,10 +203,8 @@ export default function Bodyguards() {
                             {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
                           </>
                         ) : isUnlocked ? (
-                          'Empty — hire a bodyguard'
-                        ) : (
-                          'Locked — buy this slot'
-                        )}
+                          'Empty — hire a robot bodyguard'
+                        ) : null}
                       </div>
                       {/* Mobile: show tap hint */}
                       {hasGuard && (
@@ -277,7 +243,7 @@ export default function Bodyguards() {
                       >
                         🛡️ Upgrade
                       </button>
-                    ) : isUnlocked ? (
+                    ) : (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -287,14 +253,6 @@ export default function Bodyguards() {
                         className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading"
                       >
                         🤖 Hire ({getHireCost(bg.slot_number, true)} pts)
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled
-                        className="bg-zinc-800/50 text-mutedForeground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-700/50 cursor-not-allowed"
-                      >
-                        🔒 Locked
                       </button>
                     )}
                   </div>
@@ -366,11 +324,11 @@ export default function Bodyguards() {
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
-              <span>Slot costs: 100, 200, 300, 400 pts</span>
+              <span>Each robot costs points (1st: 150, 2nd: 300, 3rd: 450, 4th: 600 pts)</span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
-              <span>Robots cost 50% more but are always loyal</span>
+              <span>Robots are always loyal</span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
