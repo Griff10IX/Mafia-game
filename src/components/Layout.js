@@ -519,10 +519,10 @@ export default function Layout({ children }) {
     { path: '/admin', icon: Settings, label: 'Admin Tools' }
   ] : [];
 
-  /* Inline theme styles so sidebar/active state always match (no CSS override) */
-  const sidebarBgStyle = { backgroundColor: 'var(--gm-bg-top)' };
-  const sidebarActiveStyle = { background: 'var(--gm-card-hover)', backgroundImage: 'none', borderLeft: '3px solid var(--gm-gold)', color: 'var(--gm-gold)' };
-  const sidebarActiveGroupStyle = { background: 'var(--gm-card)', backgroundImage: 'none', borderLeft: '3px solid var(--gm-gold)', color: 'var(--gm-gold)' };
+  /* Inline theme styles – same noir variables as other pages */
+  const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };
+  const sidebarActiveStyle = { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
+  const sidebarActiveGroupStyle = { background: 'var(--noir-surface)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
 
   return (
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
@@ -543,7 +543,7 @@ export default function Layout({ children }) {
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="shrink-0 flex items-center justify-center" style={{ color: 'var(--gm-gold)' }} aria-label="Auto Rank on">
+                      <span className="shrink-0 flex items-center justify-center" style={{ color: 'var(--noir-primary)' }} aria-label="Auto Rank on">
                         <Bot size={16} />
                       </span>
                     </TooltipTrigger>
@@ -585,9 +585,9 @@ export default function Layout({ children }) {
                         }`}
                         style={isAnyRankingActive ? sidebarActiveGroupStyle : undefined}
                       >
-                        <Icon size={14} style={{ color: 'var(--gm-gold)' }} className="shrink-0" />
+                        <Icon size={14} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
                         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
-                        {rankingOpen ? <ChevronDown size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" />}
+                        {rankingOpen ? <ChevronDown size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
                       </button>
 
                       {rankingOpen && (
@@ -691,9 +691,9 @@ export default function Layout({ children }) {
                         }`}
                         style={isAnyCasinoActive ? sidebarActiveGroupStyle : undefined}
                       >
-                        <Icon size={14} style={{ color: 'var(--gm-gold)' }} className="shrink-0" />
+                        <Icon size={14} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
                         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
-                        {casinoOpen ? <ChevronDown size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--gm-gold)', opacity: 0.7 }} className="shrink-0" />}
+                        {casinoOpen ? <ChevronDown size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
                       </button>
 
                       {casinoOpen && (
@@ -800,7 +800,7 @@ export default function Layout({ children }) {
                     style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={14} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--gm-gold)' }} />
+                    <Icon size={14} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
                     <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
@@ -887,7 +887,7 @@ export default function Layout({ children }) {
             onClick={() => setSidebarOpen(!sidebarOpen)}
             data-testid="mobile-menu-toggle"
             className="md:hidden shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center -m-2"
-            style={{ color: 'var(--gm-gold)' }}
+            style={{ color: 'var(--noir-primary)' }}
             aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
           >
             {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
@@ -1124,7 +1124,7 @@ export default function Layout({ children }) {
             return (
               <div
                 className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-lg max-h-[60vh] overflow-y-auto"
-                style={{ backgroundColor: 'var(--gm-card)', borderBottom: '1px solid var(--noir-border-mid)' }}
+                style={{ backgroundColor: 'var(--noir-surface)', borderBottom: '1px solid var(--noir-border-mid)' }}
                 role="menu"
               >
                 <div className="py-2">
@@ -1184,7 +1184,7 @@ export default function Layout({ children }) {
                         className={`block w-full px-4 py-2.5 text-left text-sm font-heading uppercase tracking-wider transition-colors ${
                           isActive ? 'bg-primary/20' : ''
                         }`}
-                        style={isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                        style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
                       >
                         {sub.label}
                       </Link>
@@ -1196,7 +1196,7 @@ export default function Layout({ children }) {
           })()}
           <nav
             className="flex items-center gap-1 overflow-x-auto overflow-y-hidden py-2 px-2 safe-area-pb scrollbar-thin"
-            style={{ backgroundColor: 'var(--gm-bg-top)', borderTop: '1px solid var(--noir-border-mid)' }}
+            style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}
             aria-label="Mobile navigation"
           >
             {mobileBottomNavItems.map((item) => {
@@ -1212,7 +1212,7 @@ export default function Layout({ children }) {
                     className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
                       isActive ? 'bg-primary/25 border border-primary/50' : ''
                     }`}
-                    style={isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                    style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
                     aria-current={isActive ? 'page' : undefined}
                     title={item.label}
                   >
@@ -1243,7 +1243,7 @@ export default function Layout({ children }) {
                     className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
                       isOpen || isActive ? 'bg-primary/25 border border-primary/50' : ''
                     }`}
-                    style={isOpen || isActive ? { color: 'var(--gm-gold)' } : { color: 'var(--noir-foreground)' }}
+                    style={isOpen || isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
                     aria-expanded={isOpen}
                     aria-haspopup="true"
                     title={item.label}

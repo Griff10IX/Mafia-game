@@ -357,11 +357,11 @@
   letter-spacing: 0.02em;
 }
 
-/* Sidebar: same gray as content; text = writing colour */
+/* Sidebar: same as content area (noir theme) */
 .themeGangsterModern .sidebar {
-  background-color: var(--gm-bg-top) !important;
-  border-right: 1px solid var(--gm-border);
-  color: var(--gm-text);
+  background-color: var(--noir-content) !important;
+  border-right: 1px solid var(--noir-border-mid);
+  color: var(--noir-foreground);
 }
 
 /* Sidebar scrollbar – dark grey thumb #303030 to match main scrollbar */
@@ -388,28 +388,28 @@
 }
 
 .themeGangsterModern .sidebarNavLink {
-  color: var(--gm-text) !important;
+  color: var(--noir-foreground) !important;
 }
 
 .themeGangsterModern .sidebarNavLink:hover {
-  background-color: var(--gm-card-hover) !important;
-  color: var(--gm-text) !important;
+  background-color: var(--noir-raised) !important;
+  color: var(--noir-foreground) !important;
 }
 
 .themeGangsterModern .sidebarHeaderTitle {
-  color: var(--gm-text);
+  color: var(--noir-foreground);
 }
 
 .themeGangsterModern .sidebarHeaderSub {
-  color: var(--gm-muted);
+  color: var(--noir-muted);
 }
 
 .themeGangsterModern .sidebar .borderGoldLight {
-  border-color: var(--gm-border);
+  border-color: var(--noir-border-mid);
 }
 
 .themeGangsterModern .sidebarSubmenuBorder {
-  border-left-color: var(--gm-border);
+  border-left-color: var(--noir-border-mid);
 }
 
 .themeGangsterModern .userBox {
@@ -417,40 +417,40 @@
   border-color: var(--gm-border);
 }
 
-/* Sidebar: active = dark panel + gold accent (no bright gold block; override base gradient) */
+/* Sidebar: active = same surface as other pages + theme accent */
 .themeGangsterModern .sidebar .navItemActive,
 .themeGangsterModern .navItemActive {
-  background: var(--gm-card) !important;
+  background: var(--noir-surface) !important;
   background-image: none !important;
-  color: var(--gm-gold) !important;
-  border-left: 3px solid var(--gm-gold) !important;
+  color: var(--noir-primary) !important;
+  border-left: 3px solid var(--noir-primary) !important;
   border-radius: 2px;
 }
 
 .themeGangsterModern .sidebar .navItemActivePage,
 .themeGangsterModern .navItemActivePage {
-  background: var(--gm-card-hover) !important;
+  background: var(--noir-raised) !important;
   background-image: none !important;
-  color: var(--gm-gold) !important;
-  border-left: 3px solid var(--gm-gold) !important;
+  color: var(--noir-primary) !important;
+  border-left: 3px solid var(--noir-primary) !important;
   border-radius: 2px;
 }
 
 .themeGangsterModern .sidebar .navItemActivePage:hover,
 .themeGangsterModern .navItemActivePage:hover {
-  background: var(--gm-card-hover) !important;
+  background: var(--noir-raised) !important;
   background-image: none !important;
-  color: var(--gm-gold) !important;
+  color: var(--noir-primary) !important;
 }
 
 .themeGangsterModern .topBar {
-  background-color: var(--gm-bg-top);
-  border-bottom-color: var(--gm-border);
+  background-color: var(--noir-content);
+  border-bottom-color: var(--noir-border-mid);
 }
 
-/* Main content area background */
+/* Main content area background – same as sidebar */
 .themeGangsterModern main {
-  background: linear-gradient(180deg, var(--gm-bg-top) 0%, var(--gm-bg) 100%);
+  background: var(--noir-content);
 }
 
 .themeGangsterModern .panel {

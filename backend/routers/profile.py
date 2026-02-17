@@ -27,8 +27,8 @@ async def ensure_profile_indexes(db):
             ])
         # families: lookup by id
         await db.families.create_index("id", unique=True)
-        # casino ownership: list by owner_id
-        for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership"):
+        # casino ownership: list by owner_id (dice, roulette, blackjack, horseracing, videopoker)
+        for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership"):
             await db[coll_name].create_index("owner_id")
         # notifications: count by user_id
         await db.notifications.create_index("user_id")

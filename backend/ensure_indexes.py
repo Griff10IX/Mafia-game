@@ -71,16 +71,19 @@ async def ensure_all_indexes(db):
         await db.bullet_factory.create_index("owner_id")
         await db.bullet_factory.create_index("state")
 
-        # --- Casino ownership: city lookup (profile has owner_id) ---
+        # --- Casino ownership: city + owner_id (roulette, dice, horseracing, video poker, blackjack) ---
         for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership"):
             await db[coll_name].create_index("city")
+            await db[coll_name].create_index("owner_id")
 
-        # --- Casino buy-back offers ---
+        # --- Casino buy-back offers (dice, blackjack) ---
         await db.dice_buy_back_offers.create_index("id")
         await db.dice_buy_back_offers.create_index("to_user_id")
+        await db.dice_buy_back_offers.create_index("from_owner_id")
         await db.dice_buy_back_offers.create_index([("to_user_id", 1), ("expires_at", 1)])
         await db.blackjack_buy_back_offers.create_index("id")
         await db.blackjack_buy_back_offers.create_index("to_user_id")
+        await db.blackjack_buy_back_offers.create_index("from_owner_id")
         await db.blackjack_buy_back_offers.create_index([("to_user_id", 1), ("expires_at", 1)])
         await db.blackjack_games.create_index("user_id")
         await db.videopoker_games.create_index("user_id")
@@ -88,6 +91,7 @@ async def ensure_all_indexes(db):
         # --- Organised crime ---
         await db.user_organised_crime.create_index("user_id", unique=True)
         await db.oc_pending_heists.create_index("creator_id")
+        await db.oc_pending_heists.create_index([("creator_id", 1), ("id", 1)])
         await db.oc_pending_heists.create_index("id", unique=True)
         await db.oc_invites.create_index("id", unique=True)
         await db.oc_invites.create_index("creator_id")
@@ -158,6 +162,7 @@ async def ensure_all_indexes(db):
         # --- Security / admin ---
         await db.bans.create_index([("active", 1), ("created_at", -1)])
         await db.security_flags.create_index([("user_id", 1), ("created_at", -1)])
+        await db.security_flags.create_index([("created_at", 1)])
         await db.security_logs.create_index([("created_at", -1)])
         await db.activity_log.create_index([("created_at", -1)])
         await db.activity_log.create_index([("username", 1), ("created_at", -1)])

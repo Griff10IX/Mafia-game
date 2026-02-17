@@ -50,43 +50,32 @@ export default function Landing({ setIsAuthenticated }) {
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden" data-testid="landing-page">
-      {/* Background */}
-      <div
-        className="absolute inset-0 vintage-filter"
-        style={{
-          backgroundImage: 'url(https://images.unsplash.com/photo-1576456344355-eaa41dda10ad?w=1920&q=80)',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }}
-      >
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black"></div>
-      </div>
-
-      {/* Content */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center px-4">
+    <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`} data-testid="landing-page">
+      {/* Same content-area background as other pages */}
+      <div className="min-h-screen flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">
-          {/* Logo */}
+          {/* Logo – same style as sidebar header */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-2">
-              <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-r from-transparent to-primary/70" />
-              <h1 className="text-4xl md:text-5xl font-heading font-bold text-primary uppercase tracking-[0.2em] md:tracking-[0.25em]" data-testid="landing-title">
+              <div className="h-px flex-1 max-w-[60px] md:max-w-[100px]" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
+              <h1 className="text-4xl md:text-5xl font-heading font-bold uppercase tracking-[0.2em] md:tracking-[0.25em]" style={{ color: 'var(--noir-foreground)' }} data-testid="landing-title">
                 MAFIA WARS
               </h1>
-              <div className="h-px flex-1 max-w-[60px] md:max-w-[100px] bg-gradient-to-l from-transparent to-primary/70" />
+              <div className="h-px flex-1 max-w-[60px] md:max-w-[100px]" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
             </div>
-            <p className="text-primary/90 text-xs font-heading tracking-[0.35em] uppercase">Chicago, 1927</p>
+            <p className="text-xs font-heading tracking-[0.35em] uppercase" style={{ color: 'var(--noir-muted)' }}>Chicago, 1927</p>
           </div>
 
-          {/* Auth Form */}
-          <div className={`${styles.panel} rounded-sm overflow-hidden shadow-2xl shadow-primary/10`}>
-            <div className="px-4 py-2 bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20 border-b border-primary/30 flex gap-1">
+          {/* Auth Form – same panel/inputs as other pages */}
+          <div className={`${styles.panel} rounded-sm overflow-hidden`}>
+            <div className={`px-4 py-2 ${styles.panelHeader} flex gap-1`}>
               <button
                 onClick={() => setIsLogin(true)}
                 data-testid="login-tab"
                 className={`flex-1 py-2.5 rounded-sm uppercase tracking-wider text-xs font-heading font-bold transition-smooth border ${
-                  isLogin ? `${styles.tabActive}` : 'bg-transparent text-mutedForeground border-transparent hover:text-foreground hover:border-primary/20'
+                  isLogin ? `${styles.tabActive}` : 'bg-transparent border-transparent hover:opacity-90'
                 }`}
+                style={!isLogin ? { color: 'var(--noir-muted)' } : undefined}
               >
                 Login
               </button>
@@ -94,8 +83,9 @@ export default function Landing({ setIsAuthenticated }) {
                 onClick={() => setIsLogin(false)}
                 data-testid="register-tab"
                 className={`flex-1 py-2.5 rounded-sm uppercase tracking-wider text-xs font-heading font-bold transition-smooth border ${
-                  !isLogin ? `${styles.tabActive}` : 'bg-transparent text-mutedForeground border-transparent hover:text-foreground hover:border-primary/20'
+                  !isLogin ? `${styles.tabActive}` : 'bg-transparent border-transparent hover:opacity-90'
                 }`}
+                style={isLogin ? { color: 'var(--noir-muted)' } : undefined}
               >
                 Register
               </button>
@@ -103,7 +93,7 @@ export default function Landing({ setIsAuthenticated }) {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider mb-1.5">Email</label>
+                <label className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Email</label>
                 <input
                   type="email"
                   data-testid="email-input"
@@ -117,7 +107,7 @@ export default function Landing({ setIsAuthenticated }) {
 
               {!isLogin && (
                 <div>
-                  <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider mb-1.5">Username</label>
+                  <label className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Username</label>
                   <input
                     type="text"
                     data-testid="username-input"
@@ -132,12 +122,13 @@ export default function Landing({ setIsAuthenticated }) {
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider">Password</label>
+                  <label className="block text-xs font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Password</label>
                   {isLogin && (
                     <button
                       type="button"
                       onClick={() => navigate('/forgot-password')}
-                      className="text-[10px] text-primary/70 hover:text-primary font-heading uppercase tracking-wider"
+                      className="text-[10px] font-heading uppercase tracking-wider opacity-80 hover:opacity-100 transition-opacity"
+                      style={{ color: 'var(--noir-primary)' }}
                     >
                       Forgot?
                     </button>
@@ -165,15 +156,15 @@ export default function Landing({ setIsAuthenticated }) {
             </form>
           </div>
 
-          {/* Features */}
+          {/* Features – same panel style as other pages */}
           <div className="mt-8 grid grid-cols-2 gap-4 text-center">
             <div className={`${styles.panel} rounded-sm p-4`}>
-              <div className="text-primary text-2xl font-heading font-bold">11</div>
-              <div className="text-xs font-heading text-mutedForeground uppercase tracking-widest mt-0.5">Ranks</div>
+              <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>11</div>
+              <div className={`text-xs font-heading uppercase tracking-widest mt-0.5 ${styles.textMuted}`}>Ranks</div>
             </div>
             <div className={`${styles.panel} rounded-sm p-4`}>
-              <div className="text-primary text-2xl font-heading font-bold">∞</div>
-              <div className="text-xs font-heading text-mutedForeground uppercase tracking-widest mt-0.5">Opportunities</div>
+              <div className="text-2xl font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>∞</div>
+              <div className={`text-xs font-heading uppercase tracking-widest mt-0.5 ${styles.textMuted}`}>Opportunities</div>
             </div>
           </div>
         </div>
