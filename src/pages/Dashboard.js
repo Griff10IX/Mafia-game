@@ -192,31 +192,31 @@ const QuickActionCard = ({ action, delay = 0 }) => {
 const GameSystemsCard = () => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-fade-in`} style={{ animationDelay: '0.1s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
-      <Zap size={12} className="text-primary" />
-      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center gap-1">
+      <Zap size={9} className="text-primary" />
+      <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         Game Systems
       </span>
     </div>
-    <div className="px-2.5 py-2 grid sm:grid-cols-2 gap-2">
+    <div className="p-2 grid sm:grid-cols-2 gap-1.5">
       <div>
-        <p className="font-bold text-primary text-[11px] mb-0.5 flex items-center gap-1">
+        <p className="font-bold text-primary text-[10px] mb-0.5 flex items-center gap-0.5">
           <span className="text-primary">▸</span> Ranks
         </p>
-        <p className="text-mutedForeground text-[9px] leading-snug">
+        <p className="text-mutedForeground text-[9px] leading-tight">
           Rise from Rat to Godfather. Each rank unlocks crimes, weapons, and opportunities.
         </p>
       </div>
       <div>
-        <p className="font-bold text-primary text-[11px] mb-0.5 flex items-center gap-1">
+        <p className="font-bold text-primary text-[10px] mb-0.5 flex items-center gap-0.5">
           <span className="text-primary">▸</span> Bodyguards
         </p>
-        <p className="text-mutedForeground text-[9px] leading-snug">
+        <p className="text-mutedForeground text-[9px] leading-tight">
           Hire up to 4 bodyguards (points). Human or robot guards protect you from attacks.
         </p>
       </div>
     </div>
-    <div className="dash-art-line text-primary mx-3" />
+    <div className="dash-art-line text-primary mx-2" />
   </div>
 );
 
