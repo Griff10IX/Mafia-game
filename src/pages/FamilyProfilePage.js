@@ -32,6 +32,32 @@ function formatTimeLeft(isoUntil) {
   } catch { return null; }
 }
 
+const profileStyles = `
+  @keyframes fp-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .fp-fade-in { animation: fp-fade-in 0.4s ease-out both; }
+  @keyframes fp-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+  .fp-scale-in { animation: fp-scale-in 0.35s ease-out both; }
+  @keyframes fp-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .fp-glow { animation: fp-glow 4s ease-in-out infinite; }
+  .fp-corner::before, .fp-corner::after { content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none; }
+  .fp-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .fp-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .fp-member-row { transition: all 0.2s ease; }
+  .fp-member-row:hover { transform: translateX(3px); background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .fp-stat-card { transition: all 0.3s ease; }
+  .fp-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+  @keyframes fp-shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  .fp-shimmer {
+    background: linear-gradient(90deg, rgba(var(--noir-primary-rgb),0.6) 0%, rgba(var(--noir-primary-rgb),1) 50%, rgba(var(--noir-primary-rgb),0.6) 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    animation: fp-shimmer 3s linear infinite;
+  }
+`;
+
 export default function FamilyProfilePage() {
   const { familyId } = useParams();
   const navigate = useNavigate();
@@ -81,9 +107,10 @@ export default function FamilyProfilePage() {
         <button type="button" onClick={() => navigate('/families')} className="flex items-center gap-2 text-zinc-500 hover:text-primary text-xs font-heading uppercase tracking-wider transition-colors">
           <ArrowLeft size={14} /> Back to families
         </button>
-        <div className="text-center py-16 bg-zinc-800/30 rounded-xl border border-zinc-700/30">
-          <Building2 size={32} className="mx-auto text-zinc-600 mb-2" />
-          <p className="text-zinc-500 font-heading">Family not found.</p>
+        <div className="text-center py-16 bg-zinc-800/20 rounded-xl border border-dashed border-zinc-700/40">
+          <Building2 size={36} className="mx-auto text-zinc-700 mb-3" />
+          <p className="text-zinc-500 font-heading tracking-wider uppercase text-sm">Family not found</p>
+          <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">This outfit doesn't exist... or someone made them disappear</p>
         </div>
       </div>
     );
@@ -115,25 +142,27 @@ export default function FamilyProfilePage() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`}>
+      <style>{profileStyles}</style>
       {/* Back button */}
-      <button type="button" onClick={() => navigate('/families')} className="flex items-center gap-1.5 text-zinc-500 hover:text-primary text-[10px] font-heading uppercase tracking-wider transition-colors">
-        <ArrowLeft size={12} /> Back to families
+      <button type="button" onClick={() => navigate('/families')} className="flex items-center gap-1.5 text-zinc-500 hover:text-primary text-[10px] font-heading uppercase tracking-[0.15em] transition-colors group">
+        <ArrowLeft size={12} className="group-hover:-translate-x-0.5 transition-transform" /> Back to families
       </button>
 
       {/* ── Family Banner ── */}
-      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25`}>
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25 fp-scale-in fp-corner`}>
         <div className="h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-        <div className="absolute top-0 left-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute top-0 right-0 w-20 h-20 bg-primary/3 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute top-0 left-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none fp-glow" />
+        <div className="absolute top-0 right-0 w-24 h-24 bg-primary/3 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/15 to-transparent" />
 
         <div className="px-4 py-5 sm:px-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Crime Family Dossier</p>
-              <div className="flex items-center gap-2 mb-1">
+              <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1.5">Crime Family Dossier</p>
+              <div className="flex items-center gap-2 mb-1.5">
                 <Building2 size={20} className="text-primary" />
                 <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">{family.name}</h1>
-                <span className="text-sm text-primary/40 font-mono">[{family.tag}]</span>
+                <span className="text-sm text-primary/30 font-mono">[{family.tag}]</span>
               </div>
               {family.my_role && (
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-heading font-bold ${getRoleConfig(family.my_role).bg} ${getRoleConfig(family.my_role).color} ${getRoleConfig(family.my_role).border} border`}>
@@ -143,17 +172,17 @@ export default function FamilyProfilePage() {
             </div>
 
             {/* Stats badges */}
-            <div className="flex items-center gap-4">
-              <div className="text-center">
-                <div className="text-[9px] text-zinc-500 font-heading uppercase">Treasury</div>
-                <div className="text-sm font-heading font-bold text-primary">{formatMoney(family.treasury)}</div>
+            <div className="flex items-center gap-5">
+              <div className="text-center fp-stat-card rounded-lg px-2 py-1">
+                <div className="text-[8px] text-zinc-500 font-heading uppercase tracking-[0.15em]">Vault</div>
+                <div className="text-sm font-heading font-bold fp-shimmer">{formatMoney(family.treasury)}</div>
               </div>
-              <div className="text-center">
-                <div className="text-[9px] text-zinc-500 font-heading uppercase">Members</div>
+              <div className="text-center fp-stat-card rounded-lg px-2 py-1">
+                <div className="text-[8px] text-zinc-500 font-heading uppercase tracking-[0.15em]">Made Men</div>
                 <div className="text-sm font-heading font-bold text-foreground">{family.member_count}</div>
               </div>
-              <div className="text-center">
-                <div className="text-[9px] text-zinc-500 font-heading uppercase">Rackets</div>
+              <div className="text-center fp-stat-card rounded-lg px-2 py-1">
+                <div className="text-[8px] text-zinc-500 font-heading uppercase tracking-[0.15em]">Rackets</div>
                 <div className="text-sm font-heading font-bold text-foreground">{rackets.length}</div>
               </div>
             </div>
@@ -164,7 +193,7 @@ export default function FamilyProfilePage() {
       </div>
 
       {/* ── Crew OC ── */}
-      <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+      <div className={`${styles.panel} rounded-xl overflow-hidden fp-fade-in`} style={{ animationDelay: '0.1s' }}>
         <div className="px-4 py-2.5 flex items-center justify-between border-b border-primary/20">
           <div className="flex items-center gap-2">
             <Crosshair size={13} className="text-primary" />
@@ -222,29 +251,31 @@ export default function FamilyProfilePage() {
       </div>
 
       {/* ── Rackets ── */}
-      <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+      <div className={`${styles.panel} rounded-xl overflow-hidden fp-fade-in`} style={{ animationDelay: '0.15s' }}>
         <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/20">
           <TrendingUp size={13} className="text-primary" />
           <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.2em]">Rackets</h3>
-          <span className="text-[10px] text-zinc-500 font-heading ml-auto">{rackets.filter(r => r.level > 0).length}/{rackets.length} active</span>
+          <span className="text-[10px] text-zinc-500 font-heading ml-auto">{rackets.filter(r => r.level > 0).length}/{rackets.length} running</span>
         </div>
         <div className="p-4">
           {rackets.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-              {rackets.map((r) => {
+              {rackets.map((r, idx) => {
                 const locked = r.locked || r.level <= 0;
+                const isMax = r.level >= 5;
                 return (
-                  <div key={r.id} className={`rounded-lg p-2.5 transition-all bg-zinc-800/30 border ${
-                    locked ? 'border-dashed border-zinc-700/30 opacity-50' : 'border-zinc-700/30'
-                  }`}>
-                    <p className={`font-heading font-bold text-[11px] truncate ${locked ? 'text-zinc-500' : 'text-foreground'}`}>{r.name}</p>
-                    <div className="flex items-center justify-between mt-1">
-                      <span className={`text-[10px] font-heading font-bold ${locked ? 'text-zinc-600' : 'text-primary'}`}>
-                        {locked ? 'Locked' : `Lv ${r.level}`}
+                  <div key={r.id} className={`relative rounded-lg p-2.5 transition-all bg-zinc-800/30 border fp-scale-in ${
+                    locked ? 'border-dashed border-zinc-700/30 opacity-40' : isMax ? 'border-primary/25' : 'border-zinc-700/30 hover:border-zinc-600/50'
+                  }`} style={{ animationDelay: `${idx * 0.03}s`, transition: 'all 0.2s ease' }}>
+                    {isMax && <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />}
+                    <p className={`font-heading font-bold text-[11px] truncate tracking-wide ${locked ? 'text-zinc-500' : 'text-foreground'}`}>{r.name}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <span className={`text-[10px] font-heading font-bold ${locked ? 'text-zinc-600' : isMax ? 'text-primary' : 'text-primary/80'}`}>
+                        {locked ? 'Locked' : isMax ? 'MAX' : `Lv ${r.level}`}
                       </span>
                       {!locked && (
                         <div className="w-8 h-1 bg-zinc-800 rounded-full overflow-hidden">
-                          <div className="h-full rounded-full bg-primary" style={{ width: `${(r.level / 5) * 100}%` }} />
+                          <div className={`h-full rounded-full transition-all duration-500 ${isMax ? 'bg-gradient-to-r from-primary to-amber-400' : 'bg-primary'}`} style={{ width: `${(r.level / 5) * 100}%` }} />
                         </div>
                       )}
                     </div>
@@ -253,38 +284,43 @@ export default function FamilyProfilePage() {
               })}
             </div>
           ) : (
-            <div className="text-center py-6">
-              <TrendingUp size={20} className="mx-auto text-zinc-600 mb-1" />
-              <p className="text-[10px] text-zinc-500 font-heading italic">No rackets yet.</p>
+            <div className="text-center py-8">
+              <TrendingUp size={24} className="mx-auto text-zinc-700 mb-2" />
+              <p className="text-[10px] text-zinc-500 font-heading italic">No rackets established yet</p>
             </div>
           )}
         </div>
       </div>
 
       {/* ── Members ── */}
-      <div className={`${styles.panel} rounded-xl overflow-hidden`}>
+      <div className={`${styles.panel} rounded-xl overflow-hidden fp-fade-in`} style={{ animationDelay: '0.2s' }}>
         <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/20">
           <Users size={13} className="text-primary" />
-          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.2em]">Made Men</h3>
-          <span className="text-[10px] text-zinc-500 font-heading ml-auto">{members.length}</span>
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.2em]">Made Men & Associates</h3>
+          <span className="text-[10px] text-zinc-500 font-heading ml-auto">{members.length} sworn</span>
         </div>
         <div className="p-3">
           {members.length === 0 ? (
-            <div className="text-center py-6">
-              <Users size={20} className="mx-auto text-zinc-600 mb-1" />
-              <p className="text-[10px] text-zinc-500 font-heading italic">No made men.</p>
+            <div className="text-center py-8">
+              <Users size={24} className="mx-auto text-zinc-700 mb-2" />
+              <p className="text-[10px] text-zinc-500 font-heading italic">No made men</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {sortedMembers.map((m) => {
+              {sortedMembers.map((m, idx) => {
                 const cfg = getRoleConfig(m.role);
                 const isBoss = m.role === 'boss';
+                const isHighRank = ['boss', 'underboss', 'consigliere'].includes(m.role);
                 return (
-                  <div key={m.user_id} className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all ${
-                    isBoss ? 'bg-primary/5 border border-primary/20' : 'bg-zinc-800/30 border border-zinc-700/30'
-                  }`}>
+                  <div key={m.user_id} className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg fp-member-row fp-fade-in overflow-hidden ${
+                    isBoss ? 'bg-gradient-to-r from-primary/8 to-primary/3 border-2 border-primary/25' : isHighRank ? 'bg-zinc-800/40 border border-zinc-700/40' : 'bg-zinc-800/30 border border-zinc-700/30'
+                  }`} style={{ animationDelay: `${idx * 0.03}s` }}>
+                    {isBoss && <>
+                      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+                      <div className="absolute -top-4 -left-4 w-14 h-14 bg-primary/5 rounded-full blur-xl pointer-events-none" />
+                    </>}
                     <div className="min-w-0">
-                      <Link to={`/profile/${encodeURIComponent(m.username)}`} className="font-heading font-bold text-foreground text-xs hover:text-primary transition-colors block truncate">
+                      <Link to={`/profile/${encodeURIComponent(m.username)}`} className={`font-heading font-bold text-xs hover:text-primary transition-colors block truncate ${isBoss ? 'text-primary' : 'text-foreground'}`}>
                         {m.username}
                       </Link>
                       <div className="flex items-center gap-2 mt-0.5">

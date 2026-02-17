@@ -83,10 +83,11 @@ function AnimatedCounter({ target, prefix = '', duration = 1000 }) {
 // STAT CARD — themed with icon glow
 // ============================================================================
 
-const StatCard = ({ label, value, highlight, icon, accent: accentColor }) => (
-  <div className={`relative overflow-hidden rounded-lg p-3 transition-all group ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`}>
+const StatCard = ({ label, value, highlight, icon, accent: accentColor, delay = 0 }) => (
+  <div className={`relative overflow-hidden rounded-lg p-3 fam-stat-card art-deco-corner fam-scale-in ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`} style={{ animationDelay: `${delay}s` }}>
     {highlight && <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-emerald-500/10 blur-xl" />}
-    <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-wider mb-1 font-heading">
+    {!highlight && <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-12 bg-primary/5 rounded-full blur-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />}
+    <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.15em] mb-1.5 font-heading">
       {icon}
       {label}
     </div>
@@ -142,18 +143,22 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
   const pct = maxLevel ? (racket.level / maxLevel) * 100 : 0;
 
   return (
-    <div className={`relative rounded-lg overflow-hidden transition-all ${isReady ? 'animate-ready-pulse bg-emerald-500/5 border border-emerald-500/35' : locked ? 'bg-zinc-900/50 border border-dashed border-zinc-700/50' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
-      {isReady && <div className="absolute -top-3 -right-3 w-12 h-12 rounded-full bg-emerald-500/15 blur-lg pointer-events-none" />}
+    <div className={`relative rounded-lg overflow-hidden fam-racket-card ${isReady ? 'animate-ready-pulse bg-emerald-500/5 border border-emerald-500/35' : locked ? 'bg-zinc-900/50 border border-dashed border-zinc-700/50' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
+      {isReady && <>
+        <div className="absolute -top-3 -right-3 w-14 h-14 rounded-full bg-emerald-500/15 blur-lg pointer-events-none" />
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
+      </>}
+      {isMax && <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/60 to-transparent" />}
 
       <div className="p-3">
         {/* Header row */}
         <div className="flex items-center justify-between mb-2">
-          <h3 className={`font-heading font-bold text-sm ${locked ? 'text-zinc-500' : 'text-foreground'}`}>
+          <h3 className={`font-heading font-bold text-sm tracking-wide ${locked ? 'text-zinc-500' : 'text-foreground'}`}>
             {locked && <Lock size={10} className="inline mr-1 opacity-60" />}
             {racket.name}
           </h3>
           <span className={`text-[10px] font-heading font-bold px-1.5 py-0.5 rounded ${
-            isMax ? 'bg-primary/20 text-primary' : locked ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-800 text-zinc-400'
+            isMax ? 'bg-primary/20 text-primary border border-primary/30' : locked ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-800 text-zinc-400'
           }`}>
             {isMax ? 'MAX' : locked ? 'LCK' : `L${racket.level}`}
           </span>
@@ -162,7 +167,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
         {/* Level progress bar */}
         <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-2">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${locked ? 'bg-zinc-600' : isMax ? 'bg-gradient-to-r from-primary to-amber-500' : 'bg-gradient-to-r from-primary to-yellow-700'}`}
+            className={`h-full rounded-full transition-all duration-700 ${locked ? 'bg-zinc-600' : isMax ? 'bg-gradient-to-r from-primary via-amber-400 to-primary' : 'bg-gradient-to-r from-primary to-yellow-700'}`}
             style={{ width: `${pct}%`, minWidth: racket.level > 0 ? 4 : 0 }}
           />
         </div>
@@ -173,9 +178,9 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
             isReady ? 'text-emerald-400' : locked ? 'text-zinc-600' : onCooldown ? 'text-amber-400' : 'text-zinc-500'
           }`}>
             {locked ? (racket.required_racket_name ? `Needs ${racket.required_racket_name}` : 'Locked')
-              : isReady ? '● READY' : onCooldown ? `⏱ ${timeLeft}` : ''}
+              : isReady ? '● COLLECT' : onCooldown ? `⏱ ${timeLeft}` : ''}
           </span>
-          <span className={`font-heading font-bold text-sm ${locked ? 'text-zinc-600' : 'text-primary'}`}>
+          <span className={`font-heading font-bold text-sm ${locked ? 'text-zinc-600' : isReady ? 'fam-shimmer-text' : 'text-primary'}`}>
             {locked ? '—' : formatMoney(income)}
           </span>
         </div>
@@ -188,7 +193,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
               disabled={onCooldown}
               className={`flex-1 px-3 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider border transition-all ${
                 isReady
-                  ? 'bg-gradient-to-b from-emerald-600/30 to-emerald-800/20 border-emerald-500/40 text-emerald-400 hover:from-emerald-600/40'
+                  ? 'bg-gradient-to-b from-emerald-600/30 to-emerald-800/20 border-emerald-500/40 text-emerald-400 hover:from-emerald-600/50 hover:shadow-md hover:shadow-emerald-900/30'
                   : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
               } disabled:opacity-40`}
             >
@@ -198,7 +203,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
           {canUpgrade && locked && racket.can_unlock && (
             <button
               onClick={() => onUnlock(racket.id)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 transition-all"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all"
             >
               <Unlock size={10} /> Unlock
             </button>
@@ -206,7 +211,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
           {canUpgrade && !locked && racket.level < maxLevel && (
             <button
               onClick={() => onUpgrade(racket.id)}
-              className="px-2.5 py-1.5 rounded-md text-[10px] font-heading font-bold border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all"
+              className="px-2.5 py-1.5 rounded-md text-[10px] font-heading font-bold border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
             >
               <ArrowUpCircle size={12} />
             </button>
@@ -224,31 +229,36 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
 const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
   <div className="space-y-4">
     {/* Vault display */}
-    <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-6 text-center border border-primary/20`}>
-      <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent pointer-events-none" />
-      <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-40 h-20 rounded-full bg-primary/10 blur-2xl pointer-events-none" />
-      <DollarSign size={20} className="mx-auto text-primary/60 mb-1" />
-      <p className="text-[10px] text-zinc-500 uppercase tracking-[0.2em] font-heading mb-1">The Family Vault</p>
-      <p className="text-3xl sm:text-4xl font-heading font-bold text-primary relative">
+    <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-8 text-center border border-primary/25 art-deco-corner`}>
+      <div className="absolute inset-0 fam-vault-bg pointer-events-none" />
+      <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-48 h-24 rounded-full bg-primary/8 blur-3xl pointer-events-none fam-glow" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
+      <DollarSign size={24} className="mx-auto text-primary/40 mb-2" />
+      <p className="text-[9px] text-zinc-500 uppercase tracking-[0.3em] font-heading mb-2">The Family Vault</p>
+      <p className="text-3xl sm:text-4xl font-heading font-bold text-primary relative fam-shimmer-text">
         <AnimatedCounter target={Number(treasury ?? 0)} prefix="$" />
       </p>
+      <p className="text-[9px] text-zinc-600 font-heading mt-2 italic">Every dollar earned in blood and sweat</p>
     </div>
 
     {/* Deposit */}
-    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3">
-      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2">Deposit</p>
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3 fam-fade-in" style={{ animationDelay: '0.1s' }}>
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
+        <DollarSign size={10} /> Deposit to Vault
+      </p>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {TREASURY_QUICK.map((q) => (
           <button key={q.value} type="button" onClick={() => setDepositAmount(String(q.value))}
-            className={`px-2 py-1 rounded-md text-[10px] font-heading font-bold border transition-all ${
-              depositAmount === String(q.value) ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-500'
+            className={`px-2.5 py-1 rounded-md text-[10px] font-heading font-bold border transition-all ${
+              depositAmount === String(q.value) ? 'bg-primary/20 border-primary/50 text-primary shadow-sm shadow-primary/10' : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'
             }`}>{q.label}</button>
         ))}
       </div>
       <form onSubmit={onDeposit} className="flex gap-2">
         <input type="text" inputMode="numeric" placeholder="Custom amount" value={depositAmount} onChange={(e) => setDepositAmount(e.target.value)}
           className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors" />
-        <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all shrink-0">
+        <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all shrink-0">
           Deposit
         </button>
       </form>
@@ -256,20 +266,22 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
 
     {/* Withdraw */}
     {canWithdraw && (
-      <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3">
-        <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2">Withdraw</p>
+      <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3 fam-fade-in" style={{ animationDelay: '0.15s' }}>
+        <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
+          <LogOut size={10} /> Withdraw from Vault
+        </p>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {TREASURY_QUICK.map((q) => (
             <button key={q.value} type="button" onClick={() => setWithdrawAmount(String(q.value))}
-              className={`px-2 py-1 rounded-md text-[10px] font-heading font-bold border transition-all ${
-                withdrawAmount === String(q.value) ? 'bg-zinc-700/60 border-zinc-500/50 text-zinc-200' : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-500'
+              className={`px-2.5 py-1 rounded-md text-[10px] font-heading font-bold border transition-all ${
+                withdrawAmount === String(q.value) ? 'bg-zinc-700/60 border-zinc-500/50 text-zinc-200' : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-500 hover:text-zinc-300'
               }`}>{q.label}</button>
           ))}
         </div>
         <form onSubmit={onWithdraw} className="flex gap-2">
           <input type="text" inputMode="numeric" placeholder="Custom amount" value={withdrawAmount} onChange={(e) => setWithdrawAmount(e.target.value)}
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors" />
-          <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0">
+          <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0">
             Withdraw
           </button>
         </form>
@@ -304,8 +316,8 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnloc
 
       {/* Footer Stats */}
       <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1 pt-2 border-t border-zinc-700/30">
-        {config?.racket_unlock_cost && <span>Unlock: {formatMoney(config.racket_unlock_cost)}</span>}
-        {config?.racket_upgrade_cost && <span>Upgrade: {formatMoney(config.racket_upgrade_cost)}</span>}
+        {config?.racket_unlock_cost && <span className="flex items-center gap-1"><Unlock size={9} /> Unlock: {formatMoney(config.racket_unlock_cost)}</span>}
+        {config?.racket_upgrade_cost && <span className="flex items-center gap-1"><ArrowUpCircle size={9} /> Expand: {formatMoney(config.racket_upgrade_cost)}</span>}
       </div>
     </div>
   );
@@ -318,33 +330,36 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnloc
 const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
   <div className="space-y-3">
     <div className="flex items-center justify-between">
-      <span className="text-[10px] text-zinc-500 font-heading italic">Hit their rackets, take 25% of the earnings. Two hits per rival family every 3 hours.</span>
-      <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:opacity-80 p-1.5 rounded-md hover:bg-primary/10 transition-all">
+      <div>
+        <p className="text-[10px] text-zinc-500 font-heading italic leading-relaxed">Hit their rackets, take 25% of the take. Two hits per rival family every 3 hours.</p>
+      </div>
+      <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:opacity-80 p-2 rounded-md hover:bg-primary/10 transition-all shrink-0 ml-2">
         <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
       </button>
     </div>
     
     {targets.length === 0 ? (
-      <div className="text-center py-10 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
-        <Crosshair size={28} className="mx-auto text-zinc-600 mb-2" />
-        <p className="text-xs text-zinc-500 font-heading">No targets available</p>
+      <div className="text-center py-12 rounded-lg bg-zinc-800/20 border border-dashed border-zinc-700/40">
+        <Crosshair size={32} className="mx-auto text-zinc-700 mb-3" />
+        <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No targets on the map</p>
+        <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">The streets are quiet... for now</p>
       </div>
     ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
-        {targets.map((t) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+        {targets.map((t, idx) => {
           const raidsLeft = t.raids_remaining ?? 2;
           const canRaid = raidsLeft > 0;
           return (
-            <div key={t.family_id} className={`rounded-lg overflow-hidden ${canRaid ? 'bg-red-500/5 border border-red-500/25' : 'bg-zinc-800/30 border border-zinc-800/30 opacity-50'}`}>
-              <div className="px-3 py-2 flex items-center justify-between border-b border-zinc-700/30">
+            <div key={t.family_id} className={`rounded-lg overflow-hidden fam-target-card fam-fade-in ${canRaid ? 'bg-red-500/5 border fam-blood-pulse' : 'bg-zinc-800/30 border border-zinc-800/30 opacity-40'}`} style={{ animationDelay: `${idx * 0.05}s` }}>
+              <div className="px-3 py-2.5 flex items-center justify-between border-b border-zinc-700/30 bg-zinc-900/30">
                 <div className="flex items-center gap-2 min-w-0">
                   <Crosshair size={12} className={canRaid ? 'text-red-400' : 'text-zinc-600'} />
-                  <span className="font-heading font-bold text-foreground text-sm truncate">{t.family_name}</span>
-                  <span className="text-primary text-[10px]">[{t.family_tag}]</span>
+                  <span className="font-heading font-bold text-foreground text-sm truncate tracking-wide">{t.family_name}</span>
+                  <span className="text-primary/60 text-[10px]">[{t.family_tag}]</span>
                 </div>
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1" title={`${raidsLeft} hits remaining`}>
                   {[...Array(2)].map((_, i) => (
-                    <div key={i} className={`w-2 h-2 rounded-full ${i < raidsLeft ? 'bg-red-400' : 'bg-zinc-700'}`} />
+                    <div key={i} className={`w-2 h-2 rounded-full transition-colors ${i < raidsLeft ? 'bg-red-400 shadow-sm shadow-red-500/30' : 'bg-zinc-700'}`} />
                   ))}
                 </div>
               </div>
@@ -353,21 +368,21 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
                   const key = `${t.family_id}-${r.racket_id}`;
                   const isLoading = loading === key;
                   return (
-                    <div key={key} className="flex items-center justify-between text-[11px] px-2 py-1.5 bg-zinc-900/50 rounded-md">
+                    <div key={key} className="flex items-center justify-between text-[11px] px-2 py-1.5 bg-zinc-900/50 rounded-md hover:bg-zinc-900/70 transition-colors">
                       <div className="min-w-0">
                         <span className="text-foreground">{r.racket_name}</span>
-                        <span className="text-zinc-500 ml-1">L{r.level}</span>
+                        <span className="text-zinc-500 ml-1 text-[10px]">L{r.level}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-primary font-heading font-bold">{formatMoney(r.potential_take)}</span>
                         <button 
                           onClick={() => onRaid(t.family_id, r.racket_id)} 
                           disabled={isLoading || !canRaid}
-                          className={`px-2 py-0.5 rounded-md text-[9px] font-bold transition-all ${
-                            canRaid ? 'bg-red-600/80 text-white hover:bg-red-600' : 'bg-zinc-700 text-zinc-500'
+                          className={`px-2.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all ${
+                            canRaid ? 'bg-red-600/80 text-white hover:bg-red-500 hover:shadow-md hover:shadow-red-900/30' : 'bg-zinc-700 text-zinc-500'
                           } disabled:opacity-40`}
                         >
-                          {isLoading ? '...' : '⚔️ Raid'}
+                          {isLoading ? '...' : 'Hit'}
                         </button>
                       </div>
                     </div>
@@ -403,14 +418,22 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
-        {sorted.map((m) => {
+      {/* Hierarchy */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+        {sorted.map((m, idx) => {
           const cfg = getRoleConfig(m.role);
           const isBoss = m.role === 'boss';
+          const isHighRank = ['boss', 'underboss', 'consigliere'].includes(m.role);
           return (
-            <div key={m.user_id} className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-all ${isBoss ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
+            <div key={m.user_id} className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg fam-member-row fam-fade-in overflow-hidden ${
+              isBoss ? 'bg-gradient-to-r from-primary/8 to-primary/3 border-2 border-primary/30' : isHighRank ? 'bg-zinc-800/40 border border-zinc-700/40' : 'bg-zinc-800/30 border border-zinc-700/30'
+            }`} style={{ animationDelay: `${idx * 0.03}s` }}>
+              {isBoss && <>
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="absolute -top-4 -left-4 w-16 h-16 bg-primary/5 rounded-full blur-xl pointer-events-none" />
+              </>}
               <div className="min-w-0">
-                <Link to={`/profile/${encodeURIComponent(m.username)}`} className="font-heading font-bold text-foreground text-xs hover:text-primary transition-colors block truncate">
+                <Link to={`/profile/${encodeURIComponent(m.username)}`} className={`font-heading font-bold text-xs hover:text-primary transition-colors block truncate ${isBoss ? 'text-primary' : 'text-foreground'}`}>
                   {m.username}
                 </Link>
                 <RoleBadge role={m.role} />
@@ -425,21 +448,25 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
         })}
       </div>
       
+      {/* Assign Role */}
       {myRole === 'boss' && (
-        <form onSubmit={handleAssign} className="flex flex-wrap gap-2 pt-3 border-t border-zinc-700/30">
-          <select value={assignRole} onChange={(e) => setAssignRole(e.target.value)}
-            className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none">
-            {(config?.roles || []).filter((r) => r !== 'boss').map((role) => <option key={role} value={role}>{getRoleConfig(role).label}</option>)}
-          </select>
-          <select value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}
-            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-[80px]">
-            <option value="">Member...</option>
-            {members.filter((m) => m.role !== 'boss').map((m) => <option key={m.user_id} value={m.user_id}>{m.username}</option>)}
-          </select>
-          <button type="submit" className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all">
-            Assign
-          </button>
-        </form>
+        <div className="pt-3 border-t border-zinc-700/30">
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em] mb-2">Assign Rank</p>
+          <form onSubmit={handleAssign} className="flex flex-wrap gap-2">
+            <select value={assignRole} onChange={(e) => setAssignRole(e.target.value)}
+              className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none">
+              {(config?.roles || []).filter((r) => r !== 'boss').map((role) => <option key={role} value={role}>{getRoleConfig(role).label}</option>)}
+            </select>
+            <select value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}
+              className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-[80px]">
+              <option value="">Member...</option>
+              {members.filter((m) => m.role !== 'boss').map((m) => <option key={m.user_id} value={m.user_id}>{m.username}</option>)}
+            </select>
+            <button type="submit" className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all">
+              Assign
+            </button>
+          </form>
+        </div>
       )}
     </div>
   );
@@ -450,24 +477,30 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
 // ============================================================================
 
 const FamiliesTab = ({ families, myFamilyId }) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-72 overflow-y-auto pr-1">
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
     {families.length === 0 ? (
-      <p className="text-xs text-zinc-500 text-center py-6 col-span-2 font-heading">No families yet</p>
-    ) : families.map((f) => (
+      <div className="text-center py-10 col-span-2">
+        <Building2 size={28} className="mx-auto text-zinc-700 mb-2" />
+        <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No known families</p>
+        <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">The underworld awaits its first Don</p>
+      </div>
+    ) : families.map((f, idx) => (
       <Link 
         key={f.id} 
         to={`/families/${encodeURIComponent(f.tag || f.id)}`} 
-        className={`flex items-center justify-between px-3 py-2.5 rounded-lg transition-all group ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30'}`}
+        className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
+        style={{ animationDelay: `${idx * 0.03}s` }}
       >
+        {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
         <div className="min-w-0">
-          <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors">{f.name}</span>
-          <span className="text-primary text-[10px] ml-1">[{f.tag}]</span>
-          {myFamilyId === f.id && <span className="text-[9px] text-primary ml-1 font-heading">(You)</span>}
+          <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>
+          <span className="text-primary/50 text-[10px] ml-1">[{f.tag}]</span>
+          {myFamilyId === f.id && <span className="text-[9px] text-primary ml-1 font-heading font-bold">(Yours)</span>}
         </div>
         <div className="flex items-center gap-3 text-[10px] shrink-0">
           <span className="text-zinc-400 flex items-center gap-0.5"><Users size={10} /> {f.member_count}</span>
           <span className="text-primary font-heading font-bold">{formatMoney(f.treasury)}</span>
-          <ChevronRight size={12} className="text-zinc-600 group-hover:text-primary transition-colors" />
+          <ChevronRight size={12} className="text-zinc-600 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
         </div>
       </Link>
     ))}
@@ -479,28 +512,32 @@ const FamiliesTab = ({ families, myFamilyId }) => (
 // ============================================================================
 
 const WarHistoryTab = ({ wars }) => (
-  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+  <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
     {wars.length === 0 ? (
-      <div className="text-center py-10 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
-        <Swords size={28} className="mx-auto text-zinc-600 mb-2" />
-        <p className="text-xs text-zinc-500 font-heading italic">No vendettas on record</p>
+      <div className="text-center py-12 rounded-lg bg-zinc-800/20 border border-dashed border-zinc-700/40">
+        <Swords size={32} className="mx-auto text-zinc-700 mb-3" />
+        <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No vendettas on record</p>
+        <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">Peace... or just the calm before the storm</p>
       </div>
-    ) : wars.map((w) => {
+    ) : wars.map((w, idx) => {
       const isActive = w.status === 'active' || w.status === 'truce_offered';
       const hasWinner = w.status === 'family_a_wins' || w.status === 'family_b_wins';
       return (
-        <div key={w.id} className={`px-3 py-2.5 rounded-lg transition-all ${isActive ? 'bg-red-500/10 border border-red-500/30' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
+        <div key={w.id} className={`relative px-3 py-3 rounded-lg transition-all fam-fade-in overflow-hidden ${isActive ? 'bg-red-500/8 border fam-blood-pulse' : 'bg-zinc-800/30 border border-zinc-700/30 hover:bg-zinc-800/40'}`} style={{ animationDelay: `${idx * 0.04}s` }}>
+          {isActive && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-red-500/60" />}
+          {hasWinner && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-500/50" />}
           <div className="flex items-center justify-between">
-            <div className="text-xs font-heading">
+            <div className="text-xs font-heading tracking-wide">
               <span className="text-foreground font-bold">{w.family_a_name}</span>
-              <span className="text-zinc-500 mx-2">vs</span>
+              <span className="text-zinc-600 mx-2 text-[10px] italic">vs</span>
               <span className="text-foreground font-bold">{w.family_b_name}</span>
             </div>
             {isActive && <span className="text-red-400 text-[10px] font-bold animate-pulse flex items-center gap-1"><Flame size={10} /> ACTIVE</span>}
-            {hasWinner && <span className="text-emerald-400 text-[10px] flex items-center gap-1"><Trophy size={10} /> {w.winner_family_name}</span>}
+            {hasWinner && <span className="text-emerald-400 text-[10px] font-heading font-bold flex items-center gap-1"><Trophy size={10} /> {w.winner_family_name}</span>}
           </div>
-          <div className="text-[9px] text-zinc-500 mt-0.5 font-heading">
-            {w.ended_at ? new Date(w.ended_at).toLocaleDateString() : 'Ongoing'}
+          <div className="text-[9px] text-zinc-500 mt-1 font-heading flex items-center gap-1">
+            <Clock size={8} />
+            {w.ended_at ? new Date(w.ended_at).toLocaleDateString() : 'Ongoing vendetta'}
           </div>
         </div>
       );
@@ -516,11 +553,12 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
   if (!war) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm" onClick={onClose}>
-      <div className={`relative w-full max-w-md ${styles.panel} rounded-xl overflow-hidden border-2 border-red-500/30 shadow-2xl`} onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={onClose}>
+      <div className={`relative w-full max-w-md ${styles.panel} rounded-xl overflow-hidden border-2 border-red-500/30 shadow-2xl fam-scale-in`} onClick={(e) => e.stopPropagation()}>
+        <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-20 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
         {/* War header */}
-        <div className="px-4 py-3 flex items-center justify-between bg-red-500/10 border-b border-red-500/20">
-          <span className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+        <div className="px-4 py-3.5 flex items-center justify-between bg-gradient-to-r from-red-500/15 via-red-500/10 to-red-500/15 border-b border-red-500/20">
+          <span className="text-sm font-heading font-bold text-red-400 uppercase tracking-[0.15em] flex items-center gap-2">
             <Swords size={16} /> Vendetta: {war.other_family_name}
           </span>
           <button onClick={onClose} className="text-zinc-500 hover:text-foreground transition-colors"><X size={16} /></button>
@@ -538,14 +576,14 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
               {(stats.my_family_totals || stats.other_family_totals) && (
                 <div className="grid grid-cols-2 gap-3 pb-3 border-b border-zinc-700/30">
                   <div className="p-3 rounded-lg text-center bg-emerald-500/10 border border-emerald-500/25">
-                    <div className="text-[9px] text-zinc-400 uppercase font-heading mb-1">Our Family</div>
+                    <div className="text-[9px] text-zinc-400 uppercase tracking-wider font-heading mb-1">Our Famiglia</div>
                     <div className="text-base font-heading font-bold text-emerald-400">
                       {stats.my_family_totals?.kills ?? 0}K / {stats.my_family_totals?.deaths ?? 0}D
                     </div>
                     <div className="text-[9px] text-zinc-500 mt-0.5">BG kills: {stats.my_family_totals?.bodyguard_kills ?? 0} · Lost: {stats.my_family_totals?.bodyguards_lost ?? 0}</div>
                   </div>
                   <div className="p-3 rounded-lg text-center bg-red-500/10 border border-red-500/25">
-                    <div className="text-[9px] text-zinc-400 uppercase font-heading mb-1">Enemy</div>
+                    <div className="text-[9px] text-zinc-400 uppercase tracking-wider font-heading mb-1">The Enemy</div>
                     <div className="text-base font-heading font-bold text-red-400">
                       {stats.other_family_totals?.kills ?? 0}K / {stats.other_family_totals?.deaths ?? 0}D
                     </div>
@@ -919,11 +957,45 @@ export default function FamilyPage() {
           50% { box-shadow: 0 0 12px 2px rgba(var(--noir-primary-rgb), 0.15); }
         }
         .animate-ready-pulse { animation: ready-pulse 2s ease-in-out infinite; }
-        @keyframes fam-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-        .fam-fade-in { animation: fam-fade-in 0.4s ease-out both; }
-        @keyframes fam-glow { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
-        .fam-glow { animation: fam-glow 3s ease-in-out infinite; }
+        @keyframes fam-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .fam-fade-in { animation: fam-fade-in 0.5s ease-out both; }
+        @keyframes fam-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+        .fam-glow { animation: fam-glow 4s ease-in-out infinite; }
+        @keyframes fam-slide-right { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
+        .fam-slide-right { animation: fam-slide-right 0.4s ease-out both; }
+        @keyframes fam-scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        .fam-scale-in { animation: fam-scale-in 0.35s ease-out both; }
+        @keyframes fam-gold-shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        .fam-shimmer-text {
+          background: linear-gradient(90deg, rgba(var(--noir-primary-rgb),0.6) 0%, rgba(var(--noir-primary-rgb),1) 50%, rgba(var(--noir-primary-rgb),0.6) 100%);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: fam-gold-shimmer 3s linear infinite;
+        }
         .art-deco-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+        .art-deco-corner::before, .art-deco-corner::after {
+          content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+        }
+        .art-deco-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+        .art-deco-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+        .fam-stat-card { transition: all 0.3s ease; }
+        .fam-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+        .fam-racket-card { transition: all 0.3s ease; }
+        .fam-racket-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+        .fam-member-row { transition: all 0.2s ease; }
+        .fam-member-row:hover { transform: translateX(3px); background-color: rgba(var(--noir-primary-rgb), 0.05); }
+        .fam-target-card { transition: all 0.3s ease; }
+        .fam-target-card:hover { transform: scale(1.01); }
+        @keyframes fam-blood-pulse { 0%, 100% { border-color: rgba(239, 68, 68, 0.25); } 50% { border-color: rgba(239, 68, 68, 0.5); } }
+        .fam-blood-pulse { animation: fam-blood-pulse 2s ease-in-out infinite; }
+        .fam-vault-bg {
+          background: radial-gradient(ellipse at center, rgba(var(--noir-primary-rgb), 0.08) 0%, transparent 70%);
+        }
       `}</style>
 
       {/* ── Family HQ Header ── */}
@@ -980,15 +1052,16 @@ export default function FamilyPage() {
         <>
           {/* ── Stats Row ── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <StatCard label="Treasury" value={formatMoney(family.treasury)} icon={<DollarSign size={10} />} accent="text-primary" />
-            <StatCard label="Members" value={members.length} icon={<Users size={10} />} />
-            <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} />
-            <StatCard label="Ready" value={readyRackets} highlight={readyRackets > 0} icon={<Clock size={10} />} />
+            <StatCard label="The Vault" value={formatMoney(family.treasury)} icon={<DollarSign size={10} />} accent="text-primary" delay={0} />
+            <StatCard label="Made Men" value={members.length} icon={<Users size={10} />} delay={0.05} />
+            <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} delay={0.1} />
+            <StatCard label="Ready" value={readyRackets} highlight={readyRackets > 0} icon={<Clock size={10} />} delay={0.15} />
           </div>
 
           {/* ── War Banner ── */}
           {activeWars.length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-500/10 border border-red-500/30">
+            <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-500/8 border fam-blood-pulse fam-fade-in relative overflow-hidden">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500/40" />
               <div className="flex items-center gap-2 flex-wrap">
                 <Swords size={15} className="text-red-400 animate-pulse shrink-0" />
                 <span className="text-xs text-red-400 font-heading font-bold tracking-wider uppercase">Blood Feud:</span>
@@ -1008,7 +1081,7 @@ export default function FamilyPage() {
           {/* ── Tabbed Content ── */}
           <div className={`${styles.panel} rounded-xl overflow-hidden`}>
             {/* Tab bar */}
-            <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-700/40 bg-zinc-900/60">
+            <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-700/40 bg-zinc-900/70">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
               <Tab active={activeTab === 'crewoc'} onClick={() => setActiveTab('crewoc')} icon={<Crosshair size={10} />}>Crew OC</Tab>
