@@ -41,29 +41,29 @@ const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className={`space-y-4 ${styles.pageContent}`}>
+  <div className={`space-y-2 ${styles.pageContent}`}>
     <style>{ATTACK_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-      <Crosshair size={28} className="text-primary/40 animate-pulse" />
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading attack...</span>
+    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+      <Crosshair size={20} className="text-primary/40 animate-pulse" />
+      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading attack...</span>
     </div>
   </div>
 );
 
 const EventBanner = ({ event }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-fade-in`}>
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-fade-in`}>
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
         🎯 Today's Event
       </h2>
     </div>
-    <div className="p-4">
-      <p className="text-base font-heading font-bold text-primary mb-1">{event.name}</p>
-      <p className="text-sm text-mutedForeground font-heading">{event.message}</p>
+    <div className="p-2">
+      <p className="text-[11px] font-heading font-bold text-primary mb-0.5">{event.name}</p>
+      <p className="text-[10px] text-mutedForeground font-heading">{event.message}</p>
     </div>
-    <div className="atk-art-line text-primary mx-4" />
+    <div className="atk-art-line text-primary mx-2" />
   </div>
 );
 
@@ -83,33 +83,33 @@ const KillUserCard = ({
   onKill,
   onOpenCalc
 }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`}>
-    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none atk-glow" />
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-        <Skull size={16} />
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+        <Skull size={14} />
         Kill User
       </h2>
       <button
         type="button"
-        className="text-xs uppercase tracking-wider text-primary hover:text-primary/80 font-heading inline-flex items-center gap-1.5 transition-colors"
+        className="text-[9px] uppercase tracking-wider text-primary hover:text-primary/80 font-heading inline-flex items-center gap-1 transition-colors"
         onClick={onOpenCalc}
       >
-        <Calculator size={14} />
+        <Calculator size={12} />
         Calculator
       </button>
     </div>
-    <div className="p-4 space-y-3">
+    <div className="p-2 space-y-2">
       <div>
-        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+        <label className="block text-[9px] text-mutedForeground font-heading uppercase tracking-wider mb-0.5">
           Username
         </label>
         <input
           type="text"
           value={killUsername}
           onChange={(e) => setKillUsername(e.target.value)}
-          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
           placeholder="Enter username..."
           list="found-users-inline"
           data-testid="kill-username-inline"
@@ -122,14 +122,14 @@ const KillUserCard = ({
       </div>
       
       <div>
-        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+        <label className="block text-[9px] text-mutedForeground font-heading uppercase tracking-wider mb-0.5">
           Bullets <span className="text-primary">({Number(userBullets).toLocaleString()} available)</span>
         </label>
         <input
           type="number"
           value={bulletsToUse}
           onChange={(e) => setBulletsToUse(e.target.value)}
-          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
           placeholder="Enter amount (min 1)"
           min="1"
           data-testid="kill-bullets-inline"
@@ -137,29 +137,29 @@ const KillUserCard = ({
       </div>
       
       <div>
-        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+        <label className="block text-[9px] text-mutedForeground font-heading uppercase tracking-wider mb-0.5">
           Death Message (Optional)
         </label>
         <textarea
           value={deathMessage}
           onChange={(e) => setDeathMessage(e.target.value)}
-          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
+          className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
           placeholder="Leave a message..."
-          rows={3}
+          rows={2}
           data-testid="kill-death-message-inline"
         />
       </div>
       
-      <div className="flex items-center justify-between bg-secondary/50 border border-border rounded-md px-4 py-3">
-        <div className="text-sm text-mutedForeground font-heading">
+      <div className="flex items-center justify-between bg-secondary/50 border border-border rounded px-2 py-1.5">
+        <div className="text-[10px] text-mutedForeground font-heading">
           Inflation: <span className="text-foreground font-bold">{inflationPct}%</span>
         </div>
-        <label className="inline-flex items-center gap-2 text-sm text-foreground font-heading cursor-pointer">
+        <label className="inline-flex items-center gap-1.5 text-[10px] text-foreground font-heading cursor-pointer">
           <input 
             type="checkbox" 
             checked={makePublic} 
             onChange={(e) => setMakePublic(e.target.checked)} 
-            className="w-4 h-4 accent-primary cursor-pointer" 
+            className="w-3 h-3 accent-primary cursor-pointer" 
             data-testid="kill-make-public-inline" 
           />
           <span>Make Public</span>
@@ -170,17 +170,17 @@ const KillUserCard = ({
         type="button"
         disabled={loading || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
         onClick={onKill}
-        className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+        className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="kill-inline-button"
       >
         {loading ? '⏳ Executing...' : '💀 Kill User'}
       </button>
       
-      <p className="text-xs text-mutedForeground font-heading italic">
+      <p className="text-[9px] text-mutedForeground font-heading italic">
         💡 Tip: Starts a search if target not found. Travel to target location before killing.
       </p>
     </div>
-    <div className="atk-art-line text-primary mx-4" />
+    <div className="atk-art-line text-primary mx-2" />
   </div>
 );
 
@@ -192,25 +192,25 @@ const FindUserCard = ({
   loading,
   onSearch
 }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`} style={{ animationDelay: '0.05s' }}>
-    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none atk-glow" />
-    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-        <Search size={16} />
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
+    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+        <Search size={14} />
         Find User
       </h2>
     </div>
-    <form onSubmit={onSearch} className="p-4 space-y-3">
+    <form onSubmit={onSearch} className="p-2 space-y-2">
       <div>
-        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+        <label className="block text-[9px] text-mutedForeground font-heading uppercase tracking-wider mb-0.5">
           Username
         </label>
         <input
           type="text"
           value={targetUsername}
           onChange={(e) => setTargetUsername(e.target.value)}
-          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
           placeholder="Enter username..."
           required
           data-testid="target-username-input"
@@ -218,14 +218,14 @@ const FindUserCard = ({
       </div>
       
       <div>
-        <label className="block text-xs text-mutedForeground font-heading uppercase tracking-wider mb-1.5">
+        <label className="block text-[9px] text-mutedForeground font-heading uppercase tracking-wider mb-0.5">
           Note (Optional)
         </label>
         <input
           type="text"
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
           placeholder="E.g. rival, bounty, etc."
           data-testid="target-note-input"
         />
@@ -234,17 +234,17 @@ const FindUserCard = ({
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-primary/20 text-primary rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+        className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="search-target-button"
       >
         {loading ? '⏳ Searching...' : '🔍 Start Search'}
       </button>
       
-      <p className="text-xs text-mutedForeground font-heading italic">
+      <p className="text-[9px] text-mutedForeground font-heading italic">
         💡 Tip: Searches take time. Track progress in "My Searches" below.
       </p>
     </form>
-    <div className="atk-art-line text-primary mx-4" />
+    <div className="atk-art-line text-primary mx-2" />
   </div>
 );
 
@@ -265,20 +265,20 @@ const SearchesCard = ({
   onFillKillTarget
 }) => {
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`} style={{ animationDelay: '0.1s' }}>
-      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none atk-glow" />
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-          <Users size={16} />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`} style={{ animationDelay: '0.1s' }}>
+      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+          <Users size={14} />
           My Searches ({attacks.length})
         </h2>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-mutedForeground font-heading">Show:</span>
+        <div className="flex items-center gap-1">
+          <span className="text-[9px] text-mutedForeground font-heading">Show:</span>
           <select
             value={show}
             onChange={(e) => setShow(e.target.value)}
-            className="bg-secondary border border-border rounded-md px-2 py-1 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none"
+            className="bg-secondary border border-border rounded px-1.5 py-0.5 text-[9px] font-heading text-foreground focus:border-primary/50 focus:outline-none"
             data-testid="attack-show-filter"
           >
             <option value="all">All</option>
@@ -288,23 +288,23 @@ const SearchesCard = ({
         </div>
       </div>
       
-      <div className="p-4 space-y-3">
+      <div className="p-2 space-y-2">
         <input
           type="text"
           value={filterText}
           onChange={(e) => setFilterText(e.target.value)}
-          className="w-full bg-input border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+          className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
           placeholder="Filter by username or note..."
           data-testid="attack-filter-input"
         />
 
-        <div className="flex items-center justify-between gap-3">
-          <label className="inline-flex items-center gap-2 text-sm text-mutedForeground font-heading cursor-pointer">
+        <div className="flex items-center justify-between gap-2">
+          <label className="inline-flex items-center gap-1.5 text-[10px] text-mutedForeground font-heading cursor-pointer">
             <input
               type="checkbox"
               checked={allSelected}
               onChange={toggleSelectAll}
-              className="w-4 h-4 accent-primary cursor-pointer"
+              className="w-3 h-3 accent-primary cursor-pointer"
               data-testid="attack-select-all"
             />
             Select all
@@ -313,7 +313,7 @@ const SearchesCard = ({
             type="button"
             disabled={loading || selectedAttackIds.length === 0}
             onClick={onDelete}
-            className="px-3 py-1.5 rounded-md bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 text-xs font-heading font-bold uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+            className="px-2 py-1 rounded bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 text-[9px] font-heading font-bold uppercase transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
             data-testid="attack-delete-selected"
           >
             🗑️ Delete ({selectedAttackIds.length})
@@ -321,16 +321,15 @@ const SearchesCard = ({
         </div>
 
         {attacks.length === 0 ? (
-          <div className="py-12 text-center">
-            <Search size={48} className="mx-auto text-primary/30 mb-3" />
-            <p className="text-sm text-mutedForeground font-heading">No active searches</p>
-            <p className="text-xs text-mutedForeground font-heading mt-1">Start a search above to track targets</p>
+          <div className="py-6 text-center">
+            <Search size={32} className="mx-auto text-primary/30 mb-2" />
+            <p className="text-[10px] text-mutedForeground font-heading">No active searches</p>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Start a search above to track targets</p>
           </div>
         ) : (
           <>
-            {/* Desktop: Table */}
-            <div className="hidden md:block border border-zinc-700/40 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-12 bg-zinc-800/50 text-[9px] uppercase tracking-[0.12em] font-heading text-zinc-500 px-4 py-2 border-b border-zinc-700/40">
+            <div className="hidden md:block border border-zinc-700/40 rounded overflow-hidden">
+              <div className="grid grid-cols-12 bg-zinc-800/50 text-[8px] uppercase tracking-wider font-heading text-zinc-500 px-2 py-1 border-b border-zinc-700/40">
                 <div className="col-span-1"></div>
                 <div className="col-span-4">User / Note</div>
                 <div className="col-span-3">Location</div>
@@ -339,13 +338,13 @@ const SearchesCard = ({
               
               <div className="divide-y divide-zinc-700/30">
                 {attacks.map((a) => (
-                  <div key={a.attack_id} className="atk-row grid grid-cols-12 px-4 py-3 items-start gap-3">
-                    <div className="col-span-1 pt-1">
+                  <div key={a.attack_id} className="atk-row grid grid-cols-12 px-2 py-1.5 items-start gap-2">
+                    <div className="col-span-1 pt-0.5">
                       <input
                         type="checkbox"
                         checked={selectedAttackIds.includes(a.attack_id)}
                         onChange={() => toggleSelected(a.attack_id)}
-                        className="w-4 h-4 accent-primary cursor-pointer"
+                        className="w-3 h-3 accent-primary cursor-pointer"
                         data-testid={`attack-select-${a.attack_id}`}
                       />
                     </div>
@@ -353,18 +352,18 @@ const SearchesCard = ({
                     <div className="col-span-4 min-w-0">
                       <Link
                         to={`/profile/${encodeURIComponent(a.target_username)}`}
-                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-sm truncate"
+                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[10px] truncate"
                         data-testid={`attack-user-${a.attack_id}`}
                       >
                         {a.target_username}
                       </Link>
                       {a.note && (
-                        <div className="text-xs text-mutedForeground truncate font-heading mt-0.5">
+                        <div className="text-[9px] text-mutedForeground truncate font-heading mt-0.5">
                           {a.note}
                         </div>
                       )}
-                      <div className="mt-2 flex items-center gap-2 text-xs flex-wrap">
-                        <span className={`px-2 py-0.5 rounded-md font-heading font-bold uppercase ${
+                      <div className="mt-1 flex items-center gap-1.5 text-[9px] flex-wrap">
+                        <span className={`px-1.5 py-0.5 rounded font-heading font-bold uppercase ${
                           a.status === 'searching' 
                             ? 'bg-secondary text-mutedForeground border border-border' 
                             : 'bg-primary/20 text-primary border border-primary/30'
@@ -376,10 +375,10 @@ const SearchesCard = ({
                             type="button"
                             disabled={loading}
                             onClick={() => onTravel(a.location_state)}
-                            className="inline-flex items-center gap-1 text-primary hover:text-primary/80 font-heading font-bold transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-0.5 text-primary hover:text-primary/80 font-heading font-bold transition-colors disabled:opacity-50"
                             data-testid={`attack-travel-${a.attack_id}`}
                           >
-                            <Plane size={12} />
+                            <Plane size={10} />
                             Travel
                           </button>
                         )}
@@ -387,21 +386,21 @@ const SearchesCard = ({
                           <button
                             type="button"
                             onClick={() => onFillKillTarget(a.target_username)}
-                            className="inline-flex items-center gap-1 text-red-400 hover:text-red-300 font-heading font-bold transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-0.5 text-red-400 hover:text-red-300 font-heading font-bold transition-colors disabled:opacity-50"
                             data-testid={`attack-kill-${a.attack_id}`}
                             title="Fill username into Kill User form"
                           >
-                            <Crosshair size={12} />
+                            <Crosshair size={10} />
                             Kill
                           </button>
                         )}
                       </div>
                     </div>
 
-                    <div className="col-span-3 text-sm text-mutedForeground font-heading">
+                    <div className="col-span-3 text-[10px] text-mutedForeground font-heading">
                       {a.status === 'found' && a.location_state ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          <MapPin size={14} className="text-primary" />
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin size={12} className="text-primary" />
                           <span className="text-foreground">{a.location_state}</span>
                         </span>
                       ) : (
@@ -409,9 +408,9 @@ const SearchesCard = ({
                       )}
                     </div>
 
-                    <div className="col-span-4 text-right text-xs text-mutedForeground font-heading">
-                      <span className="inline-flex items-center gap-1.5 justify-end">
-                        <Clock size={14} />
+                    <div className="col-span-4 text-right text-[9px] text-mutedForeground font-heading">
+                      <span className="inline-flex items-center gap-1 justify-end">
+                        <Clock size={12} />
                         {formatDateTime(a.expires_at || a.search_started)}
                       </span>
                     </div>
@@ -420,35 +419,34 @@ const SearchesCard = ({
               </div>
             </div>
 
-            {/* Mobile: Cards */}
-            <div className="md:hidden space-y-3">
+            <div className="md:hidden space-y-2">
               {attacks.map((a) => (
-                <div key={a.attack_id} className="atk-row bg-zinc-800/30 rounded-lg p-4 border border-zinc-700/30 space-y-3">
-                  <div className="flex items-start gap-3">
+                <div key={a.attack_id} className="atk-row bg-zinc-800/30 rounded p-2 border border-zinc-700/30 space-y-2">
+                  <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
                       checked={selectedAttackIds.includes(a.attack_id)}
                       onChange={() => toggleSelected(a.attack_id)}
-                      className="w-4 h-4 accent-primary cursor-pointer mt-1"
+                      className="w-3 h-3 accent-primary cursor-pointer mt-0.5"
                       data-testid={`attack-select-${a.attack_id}`}
                     />
                     <div className="flex-1 min-w-0">
                       <Link
                         to={`/profile/${encodeURIComponent(a.target_username)}`}
-                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-base truncate"
+                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[11px] truncate"
                       >
                         {a.target_username}
                       </Link>
                       {a.note && (
-                        <div className="text-sm text-mutedForeground font-heading mt-0.5">
+                        <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
                           {a.note}
                         </div>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`px-2 py-1 rounded-md text-xs font-heading font-bold uppercase ${
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase ${
                       a.status === 'searching' 
                         ? 'bg-secondary text-mutedForeground border border-border' 
                         : 'bg-primary/20 text-primary border border-primary/30'
@@ -457,22 +455,22 @@ const SearchesCard = ({
                     </span>
                     
                     {a.status === 'found' && a.location_state && (
-                      <span className="inline-flex items-center gap-1 text-sm text-foreground font-heading">
-                        <MapPin size={14} className="text-primary" />
+                      <span className="inline-flex items-center gap-0.5 text-[10px] text-foreground font-heading">
+                        <MapPin size={12} className="text-primary" />
                         {a.location_state}
                       </span>
                     )}
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-1.5">
                     {a.can_travel && (
                       <button
                         type="button"
                         disabled={loading}
                         onClick={() => onTravel(a.location_state)}
-                        className="flex-1 bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded-md px-3 py-2 text-sm font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1.5"
+                        className="flex-1 bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1"
                       >
-                        <Plane size={14} />
+                        <Plane size={12} />
                         Travel
                       </button>
                     )}
@@ -480,17 +478,17 @@ const SearchesCard = ({
                       <button
                         type="button"
                         onClick={() => onFillKillTarget(a.target_username)}
-                        className="flex-1 bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded-md px-3 py-2 text-sm font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1.5"
+                        className="flex-1 bg-red-600/20 text-red-400 border border-red-500/30 hover:bg-red-600/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1"
                         title="Fill username into Kill User form"
                       >
-                        <Crosshair size={14} />
+                        <Crosshair size={12} />
                         Kill
                       </button>
                     )}
                   </div>
 
-                  <div className="text-xs text-mutedForeground font-heading flex items-center gap-1.5">
-                    <Clock size={12} />
+                  <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
+                    <Clock size={10} />
                     Expires: {formatDateTime(a.expires_at || a.search_started)}
                   </div>
                 </div>
@@ -500,12 +498,12 @@ const SearchesCard = ({
         )}
         
         {attacks.length > 0 && (
-          <p className="text-xs text-mutedForeground font-heading italic pt-2">
+          <p className="text-[9px] text-mutedForeground font-heading italic pt-1">
             💡 Searches complete automatically. Location revealed when target is found.
           </p>
         )}
       </div>
-      <div className="atk-art-line text-primary mx-4" />
+      <div className="atk-art-line text-primary mx-2" />
     </div>
   );
 };
@@ -519,59 +517,59 @@ const TravelModal = ({
   onTravel 
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-    <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden`}>
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-4 md:px-6 py-4 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-          <MapPin size={18} />
+    <div className={`${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+        <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+          <MapPin size={14} />
           Travel to {destination}
         </h2>
         <button
           type="button"
           onClick={onClose}
-          className="text-mutedForeground hover:text-primary transition-colors p-1"
+          className="text-mutedForeground hover:text-primary transition-colors p-0.5"
           aria-label="Close"
         >
-          <span className="text-xl">×</span>
+          <span className="text-lg">×</span>
         </button>
       </div>
       
-      <div className="p-4 md:p-6">
+      <div className="p-2">
         {countdown != null && countdown > 0 ? (
-          <div className="text-center py-8">
-            <div className="text-4xl mb-4">🚗</div>
-            <p className="text-base font-heading font-bold text-primary mb-2">
+          <div className="text-center py-4">
+            <div className="text-2xl mb-2">🚗</div>
+            <p className="text-[11px] font-heading font-bold text-primary mb-1">
               Traveling to {destination}...
             </p>
-            <p className="text-4xl font-heading font-bold text-foreground tabular-nums">
+            <p className="text-2xl font-heading font-bold text-foreground tabular-nums">
               {countdown}s
             </p>
           </div>
         ) : !travelInfo ? (
-          <div className="py-8 text-center text-sm text-mutedForeground font-heading">
+          <div className="py-4 text-center text-[10px] text-mutedForeground font-heading">
             Loading travel options...
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <button
               onClick={() => onTravel('airport')}
               disabled={loading || travelInfo.carrying_booze || (travelInfo.user_points ?? 0) < (travelInfo.airport_cost ?? 10)}
-              className="w-full flex items-center justify-between bg-gradient-to-r from-primary/20 to-yellow-600/20 hover:from-primary/30 hover:to-yellow-600/30 border-2 border-primary/50 px-4 py-3 rounded-md transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+              className="w-full flex items-center justify-between bg-gradient-to-r from-primary/20 to-yellow-600/20 hover:from-primary/30 hover:to-yellow-600/30 border-2 border-primary/50 px-2 py-2 rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
             >
-              <span className="flex items-center gap-2">
-                <Plane size={18} className="text-primary" />
-                <span className="text-sm font-heading font-bold text-primary">Airport</span>
+              <span className="flex items-center gap-1.5">
+                <Plane size={14} className="text-primary" />
+                <span className="text-[10px] font-heading font-bold text-primary">Airport</span>
               </span>
-              <span className="text-xs text-primary font-heading flex items-center gap-1.5">
+              <span className="text-[9px] text-primary font-heading flex items-center gap-1">
                 {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {travelInfo.airport_cost ?? 10} pts
                 {travelInfo.airports?.some((a) => a.you_own) && (
-                  <span className="text-[10px] text-amber-400/90 font-normal">(5% owner discount)</span>
+                  <span className="text-[8px] text-amber-400/90 font-normal">(5% discount)</span>
                 )}
               </span>
             </button>
             
             {travelInfo.carrying_booze && (
-              <p className="text-xs text-amber-400 font-heading">
+              <p className="text-[9px] text-amber-400 font-heading">
                 ⚠️ Car only while carrying booze
               </p>
             )}
@@ -580,13 +578,13 @@ const TravelModal = ({
               <button
                 onClick={() => onTravel('custom')}
                 disabled={loading}
-                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-4 py-3 rounded-md transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
+                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-2 py-2 rounded transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
               >
-                <span className="flex items-center gap-2">
-                  <Zap size={18} className="text-primary" />
-                  <span className="text-sm font-heading font-bold text-foreground">{travelInfo.custom_car.name}</span>
+                <span className="flex items-center gap-1.5">
+                  <Zap size={14} className="text-primary" />
+                  <span className="text-[10px] font-heading font-bold text-foreground">{travelInfo.custom_car.name}</span>
                 </span>
-                <span className="text-xs text-mutedForeground font-heading">
+                <span className="text-[9px] text-mutedForeground font-heading">
                   {travelInfo.custom_car.travel_time}s
                 </span>
               </button>
@@ -597,23 +595,23 @@ const TravelModal = ({
                 key={car.user_car_id}
                 onClick={() => onTravel(car.user_car_id)}
                 disabled={loading}
-                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-4 py-3 rounded-md transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
+                className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-2 py-2 rounded transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
               >
-                <span className="flex items-center gap-2 min-w-0 flex-1">
-                  <Car size={18} className="text-primary shrink-0" />
-                  <span className="text-sm font-heading truncate text-foreground">{car.name}</span>
+                <span className="flex items-center gap-1.5 min-w-0 flex-1">
+                  <Car size={14} className="text-primary shrink-0" />
+                  <span className="text-[10px] font-heading truncate text-foreground">{car.name}</span>
                 </span>
-                <span className="text-xs text-mutedForeground font-heading whitespace-nowrap ml-2">
+                <span className="text-[9px] text-mutedForeground font-heading whitespace-nowrap ml-1">
                   {car.travel_time}s
                 </span>
               </button>
             ))}
             
             {(!travelInfo?.cars || travelInfo.cars.length === 0) && !travelInfo?.custom_car && (
-              <div className="text-center py-4 text-sm text-mutedForeground font-heading">
-                <Car size={32} className="mx-auto text-primary/30 mb-2" />
+              <div className="text-center py-3 text-[10px] text-mutedForeground font-heading">
+                <Car size={24} className="mx-auto text-primary/30 mb-1" />
                 <p>No cars available</p>
-                <p className="text-xs mt-1">Steal some cars or use airport</p>
+                <p className="text-[9px] mt-0.5">Steal some cars or use airport</p>
               </div>
             )}
           </div>
@@ -637,42 +635,42 @@ const CalcModal = ({
   
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] overflow-auto`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-4 md:px-6 py-4 bg-primary/8 border-b border-primary/20 flex items-center justify-between sticky top-0">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
-            <Calculator size={18} />
+      <div className={`${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl w-full max-w-xl max-h-[90vh] overflow-auto`}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between sticky top-0">
+          <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+            <Calculator size={14} />
             Bullet Calculator
           </h2>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Link
               to="/inbox?filter=attack"
-              className="text-xs font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wide transition-colors inline-flex items-center gap-1.5"
+              className="text-[9px] font-heading font-bold text-primary hover:text-primary/80 uppercase tracking-wide transition-colors inline-flex items-center gap-1"
             >
-              <FileText size={14} />
+              <FileText size={12} />
               Witness Statements
             </Link>
             <button
               type="button"
               onClick={onClose}
-              className="text-mutedForeground hover:text-primary transition-colors p-1"
+              className="text-mutedForeground hover:text-primary transition-colors p-0.5"
               aria-label="Close"
             >
-              <span className="text-xl">×</span>
+              <span className="text-lg">×</span>
             </button>
           </div>
         </div>
         
-        <div className="p-4 md:p-6 space-y-4">
+        <div className="p-2 space-y-2">
           <div>
-            <label className="block text-sm text-mutedForeground font-heading mb-2">
+            <label className="block text-[9px] text-mutedForeground font-heading mb-0.5">
               Target Username
             </label>
             <input
               type="text"
               value={calcTarget}
               onChange={(e) => setCalcTarget(e.target.value)}
-              className="w-full bg-input border border-border rounded-md px-3 py-2.5 text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
+              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none transition-colors"
               placeholder="Enter username..."
               list="calc-users"
               data-testid="bullet-calc-target"
@@ -688,33 +686,33 @@ const CalcModal = ({
             type="button"
             onClick={onCalculate}
             disabled={calcLoading || !calcTarget.trim()}
-            className="w-full bg-primary/20 text-primary rounded-lg font-heading font-bold uppercase tracking-widest py-3 text-sm border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
+            className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
             data-testid="bullet-calc-run"
           >
             {calcLoading ? '⏳ Calculating...' : '🔢 Calculate Bullets'}
           </button>
 
           {calcResult && (
-            <div className="bg-secondary/50 border border-border rounded-md overflow-hidden">
-              <div className="px-4 py-2.5 bg-secondary/30 border-b border-border">
-                <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">
+            <div className="bg-secondary/50 border border-border rounded overflow-hidden">
+              <div className="px-2 py-1 bg-secondary/30 border-b border-border">
+                <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
                   Results
                 </h3>
               </div>
-              <div className="p-4 space-y-3">
+              <div className="p-2 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-mutedForeground font-heading">Bullets Required:</span>
-                  <span className="text-2xl font-heading font-bold text-primary tabular-nums">
+                  <span className="text-[10px] text-mutedForeground font-heading">Bullets Required:</span>
+                  <span className="text-lg font-heading font-bold text-primary tabular-nums">
                     {Number(calcResult.bullets_required || 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-mutedForeground font-heading">Inflation:</span>
-                  <span className="text-base font-heading font-bold text-foreground">
+                  <span className="text-[10px] text-mutedForeground font-heading">Inflation:</span>
+                  <span className="text-[11px] font-heading font-bold text-foreground">
                     {Number(calcResult.inflation_pct ?? 0)}%
                   </span>
                 </div>
-                <div className="pt-3 border-t border-border text-sm text-mutedForeground font-heading space-y-1">
+                <div className="pt-2 border-t border-border text-[10px] text-mutedForeground font-heading space-y-0.5">
                   <div>
                     Your Rank: <span className="text-foreground font-bold">{calcResult.attacker_rank_name}</span>
                   </div>
@@ -733,7 +731,7 @@ const CalcModal = ({
           )}
           
           {!calcResult && (
-            <p className="text-sm text-mutedForeground font-heading italic text-center py-4">
+            <p className="text-[10px] text-mutedForeground font-heading italic text-center py-3">
               💡 Enter a target username and calculate bullets needed
             </p>
           )}
@@ -1054,25 +1052,17 @@ export default function Attack() {
   );
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="attack-page">
+    <div className={`space-y-2 ${styles.pageContent}`} data-testid="attack-page">
       <style>{ATTACK_STYLES}</style>
 
-      {/* Page header */}
-      <div className="relative atk-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Hit</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
-          Attack
-        </h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Search, travel, and strike. No witnesses, no mercy.</p>
-      </div>
+      <p className="text-[9px] text-zinc-500 font-heading italic">Search, travel, and strike. No witnesses, no mercy.</p>
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
         <EventBanner event={event} />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-        {/* Left Column */}
-        <div className="space-y-4 md:space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <div className="space-y-2">
           <KillUserCard
             killUsername={killUsername}
             setKillUsername={setKillUsername}
