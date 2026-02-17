@@ -5,20 +5,44 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const HITLIST_STYLES = `
+  @keyframes hit-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .hit-fade-in { animation: hit-fade-in 0.4s ease-out both; }
+  @keyframes hit-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .hit-glow { animation: hit-glow 4s ease-in-out infinite; }
+  .hit-corner::before, .hit-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .hit-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .hit-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .hit-card { transition: all 0.3s ease; }
+  .hit-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .hit-row { transition: all 0.2s ease; }
+  .hit-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .hit-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className={`space-y-4 ${styles.pageContent}`}>
+    <style>{HITLIST_STYLES}</style>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+      <Target size={28} className="text-primary/40 animate-pulse" />
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading hitlist...</span>
+    </div>
   </div>
 );
 
 const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
   if (!npcStatus) return null;
-  
+
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-        <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`}>
+      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none hit-glow" />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
           <UserPlus size={16} />
           Add NPC Target
         </h2>
@@ -58,6 +82,7 @@ const AddNpcCard = ({ npcStatus, addingNpc, onAddNpc }) => {
           </div>
         )}
       </div>
+      <div className="hit-art-line text-primary mx-4" />
     </div>
   );
 };
@@ -66,13 +91,14 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
   const onHitlist = me?.on_hitlist ?? false;
   
   // Only show "You're on the Hitlist" when actually on the hitlist
-  if (!onHitlist) {
-    // Optional: show past "who placed" if they had revealed and are no longer on list
-    if (revealed && who?.length > 0) {
+    if (!onHitlist) {
+      // Optional: show past "who placed" if they had revealed and are no longer on list
+      if (revealed && who?.length > 0) {
       return (
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-border`}>
-          <div className="px-4 py-2 bg-secondary/50 border-b border-border">
-            <h2 className="text-sm font-heading font-bold text-mutedForeground uppercase tracking-widest">
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-fade-in`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-[0.15em]">
               Previously on hitlist (revealed)
             </h2>
           </div>
@@ -103,9 +129,10 @@ const YoureOnHitlistCard = ({ me, user, revealed, who, submitting, onBuyOff, onR
   const costLabel = [needCash > 0 && `$${Number(needCash).toLocaleString()}`, needPoints > 0 && `${Number(needPoints).toLocaleString()} pts`].filter(Boolean).join(' + ');
   
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border-2 border-red-500/30 shadow-lg shadow-red-500/10`}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 border-red-500/30 shadow-lg shadow-red-500/10 hit-fade-in`}>
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
       <div className="px-4 py-2.5 bg-red-500/10 border-b border-red-500/30">
-        <h2 className="text-sm font-heading font-bold text-red-400 uppercase tracking-widest flex items-center gap-2">
+        <h2 className="text-[10px] font-heading font-bold text-red-400 uppercase tracking-[0.15em] flex items-center gap-2">
           <Target size={16} />
           You're on the Hitlist
         </h2>
@@ -191,9 +218,11 @@ const PlaceBountyCard = ({
   onSubmit,
   hasReward,
 }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none hit-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         💰 Place a Bounty
       </h2>
     </div>
@@ -289,6 +318,7 @@ const PlaceBountyCard = ({
         </button>
       </form>
     </div>
+    <div className="hit-art-line text-primary mx-4" />
   </div>
 );
 
@@ -311,9 +341,11 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
     (cash === 0 || haveCash >= cash) && (points === 0 || havePoints >= points);
 
   return (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center justify-between">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-card hit-corner hit-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none hit-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center justify-between">
         <span>🎯 Active Bounties</span>
         <span className="px-2 py-1 rounded-md bg-primary/20 text-primary text-xs border border-primary/30">
           {list.length}
@@ -334,7 +366,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-sm font-heading">
             <thead>
-              <tr className="bg-secondary/30 text-xs uppercase tracking-wider text-primary/80 border-b border-border">
+              <tr className="bg-zinc-800/50 text-[9px] uppercase tracking-[0.12em] font-heading text-zinc-500 border-b border-zinc-700/40">
                 <th className="text-left py-2.5 px-4">Target</th>
                 <th className="text-left py-2.5 px-4">Type</th>
                 <th className="text-left py-2.5 px-4">Reward</th>
@@ -342,7 +374,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                 <th className="text-left py-2.5 px-4">Buy Off</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-zinc-700/30">
               {list.map((item, index) => {
                 const showBuyOff = isFirstForTarget(item, index);
                 const cost = showBuyOff ? getBuyOffCostForTarget(list, item.target_username) : null;
@@ -352,7 +384,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                 const buying = buyingOffTarget === item.target_username;
                 const afford = cost && canAffordBuyOff(cost.cash, cost.points);
                 return (
-                <tr key={item.id} className="hover:bg-secondary/30 transition-colors">
+                <tr key={item.id} className="hit-row">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
                       {item.target_type === 'npc' ? (
@@ -425,7 +457,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
         </div>
         
         {/* Mobile: Cards */}
-        <div className="md:hidden divide-y divide-border">
+        <div className="md:hidden divide-y divide-zinc-700/30">
           {list.map((item, index) => {
             const showBuyOff = isFirstForTarget(item, index);
             const cost = showBuyOff ? getBuyOffCostForTarget(list, item.target_username) : null;
@@ -435,7 +467,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
             const buying = buyingOffTarget === item.target_username;
             const afford = cost && canAffordBuyOff(cost.cash, cost.points);
             return (
-            <div key={item.id} className="p-4 space-y-3 hover:bg-secondary/30 transition-colors">
+            <div key={item.id} className="hit-row p-4 space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -506,14 +538,16 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
         </div>
       </>
     )}
+    <div className="hit-art-line text-primary mx-4" />
   </div>
   );
 };
 
 const InfoCard = () => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h3 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 hit-fade-in`} style={{ animationDelay: '0.15s' }}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         ℹ️ How It Works
       </h3>
     </div>
@@ -545,6 +579,7 @@ const InfoCard = () => (
         </p>
       </div>
     </div>
+    <div className="hit-art-line text-primary mx-4" />
   </div>
 );
 
@@ -695,7 +730,18 @@ export default function HitlistPage() {
   const who = me?.who ?? [];
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`}>
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="hitlist-page">
+      <style>{HITLIST_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative hit-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Bounties</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+          Hitlist
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Place bounties, buy yourself off, see who wants you dead.</p>
+      </div>
+
       <AddNpcCard
         npcStatus={npcStatus}
         addingNpc={addingNpc}

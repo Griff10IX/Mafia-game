@@ -5,6 +5,25 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const ATTACK_STYLES = `
+  @keyframes atk-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .atk-fade-in { animation: atk-fade-in 0.4s ease-out both; }
+  @keyframes atk-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+  .atk-scale-in { animation: atk-scale-in 0.35s ease-out both; }
+  @keyframes atk-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .atk-glow { animation: atk-glow 4s ease-in-out infinite; }
+  .atk-corner::before, .atk-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .atk-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .atk-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .atk-card { transition: all 0.3s ease; }
+  .atk-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .atk-row { transition: all 0.2s ease; }
+  .atk-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .atk-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -22,15 +41,21 @@ const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/
 
 // Subcomponents
 const LoadingSpinner = () => (
-  <div className="flex items-center justify-center min-h-[60vh]">
-    <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+  <div className={`space-y-4 ${styles.pageContent}`}>
+    <style>{ATTACK_STYLES}</style>
+    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+      <Crosshair size={28} className="text-primary/40 animate-pulse" />
+      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading attack...</span>
+    </div>
   </div>
 );
 
 const EventBanner = ({ event }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-fade-in`}>
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
         🎯 Today's Event
       </h2>
     </div>
@@ -38,6 +63,7 @@ const EventBanner = ({ event }) => (
       <p className="text-base font-heading font-bold text-primary mb-1">{event.name}</p>
       <p className="text-sm text-mutedForeground font-heading">{event.message}</p>
     </div>
+    <div className="atk-art-line text-primary mx-4" />
   </div>
 );
 
@@ -57,9 +83,11 @@ const KillUserCard = ({
   onKill,
   onOpenCalc
 }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`}>
+    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none atk-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
         <Skull size={16} />
         Kill User
       </h2>
@@ -152,6 +180,7 @@ const KillUserCard = ({
         💡 Tip: Starts a search if target not found. Travel to target location before killing.
       </p>
     </div>
+    <div className="atk-art-line text-primary mx-4" />
   </div>
 );
 
@@ -163,9 +192,11 @@ const FindUserCard = ({
   loading,
   onSearch
 }) => (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-    <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30">
-      <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none atk-glow" />
+    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+    <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+      <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
         <Search size={16} />
         Find User
       </h2>
@@ -213,6 +244,7 @@ const FindUserCard = ({
         💡 Tip: Searches take time. Track progress in "My Searches" below.
       </p>
     </form>
+    <div className="atk-art-line text-primary mx-4" />
   </div>
 );
 
@@ -233,9 +265,11 @@ const SearchesCard = ({
   onFillKillTarget
 }) => {
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-      <div className="px-4 py-2.5 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-2">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 atk-card atk-corner atk-fade-in`} style={{ animationDelay: '0.1s' }}>
+      <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none atk-glow" />
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
           <Users size={16} />
           My Searches ({attacks.length})
         </h2>
@@ -295,17 +329,17 @@ const SearchesCard = ({
         ) : (
           <>
             {/* Desktop: Table */}
-            <div className="hidden md:block border border-border rounded-md overflow-hidden">
-              <div className="grid grid-cols-12 bg-secondary/30 text-xs uppercase tracking-wider font-heading text-primary/80 px-4 py-2 border-b border-border">
+            <div className="hidden md:block border border-zinc-700/40 rounded-lg overflow-hidden">
+              <div className="grid grid-cols-12 bg-zinc-800/50 text-[9px] uppercase tracking-[0.12em] font-heading text-zinc-500 px-4 py-2 border-b border-zinc-700/40">
                 <div className="col-span-1"></div>
                 <div className="col-span-4">User / Note</div>
                 <div className="col-span-3">Location</div>
                 <div className="col-span-4 text-right">Expires</div>
               </div>
               
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-zinc-700/30">
                 {attacks.map((a) => (
-                  <div key={a.attack_id} className="grid grid-cols-12 px-4 py-3 items-start gap-3 hover:bg-secondary/30 transition-colors">
+                  <div key={a.attack_id} className="atk-row grid grid-cols-12 px-4 py-3 items-start gap-3">
                     <div className="col-span-1 pt-1">
                       <input
                         type="checkbox"
@@ -389,7 +423,7 @@ const SearchesCard = ({
             {/* Mobile: Cards */}
             <div className="md:hidden space-y-3">
               {attacks.map((a) => (
-                <div key={a.attack_id} className="bg-secondary/30 rounded-md p-4 border border-border space-y-3">
+                <div key={a.attack_id} className="atk-row bg-zinc-800/30 rounded-lg p-4 border border-zinc-700/30 space-y-3">
                   <div className="flex items-start gap-3">
                     <input
                       type="checkbox"
@@ -471,6 +505,7 @@ const SearchesCard = ({
           </p>
         )}
       </div>
+      <div className="atk-art-line text-primary mx-4" />
     </div>
   );
 };
@@ -485,8 +520,9 @@ const TravelModal = ({
 }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
     <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-md max-h-[90vh] overflow-hidden`}>
-      <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
-        <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-4 md:px-6 py-4 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
           <MapPin size={18} />
           Travel to {destination}
         </h2>
@@ -602,8 +638,9 @@ const CalcModal = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
       <div className={`${styles.panel} border-2 border-primary/30 rounded-lg shadow-2xl w-full max-w-xl max-h-[90vh] overflow-auto`}>
-        <div className="px-4 md:px-6 py-4 bg-primary/10 border-b border-primary/30 flex items-center justify-between sticky top-0">
-          <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 md:px-6 py-4 bg-primary/8 border-b border-primary/20 flex items-center justify-between sticky top-0">
+          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-2">
             <Calculator size={18} />
             Bullet Calculator
           </h2>
@@ -1014,7 +1051,18 @@ export default function Attack() {
   );
 
   return (
-    <div className={`space-y-4 md:space-y-6 ${styles.pageContent}`} data-testid="attack-page">
+    <div className={`space-y-4 ${styles.pageContent}`} data-testid="attack-page">
+      <style>{ATTACK_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative atk-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Hit</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">
+          Attack
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Search, travel, and strike. No witnesses, no mercy.</p>
+      </div>
+
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
         <EventBanner event={event} />
       )}

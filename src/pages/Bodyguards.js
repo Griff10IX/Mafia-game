@@ -5,6 +5,23 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+const BG_STYLES = `
+  @keyframes bg-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .bg-fade-in { animation: bg-fade-in 0.4s ease-out both; }
+  @keyframes bg-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
+  .bg-glow { animation: bg-glow 4s ease-in-out infinite; }
+  .bg-corner::before, .bg-corner::after {
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+  }
+  .bg-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
+  .bg-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
+  .bg-card { transition: all 0.3s ease; }
+  .bg-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  .bg-row { transition: all 0.2s ease; }
+  .bg-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .bg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
+
 const BODYGUARD_SLOT_COSTS = [100, 200, 300, 400];
 
 export default function Bodyguards() {
@@ -84,8 +101,13 @@ export default function Bodyguards() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading font-bold">Loading...</div>
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <style>{BG_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+          <Shield size={28} className="text-primary/40 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading bodyguards...</span>
+        </div>
       </div>
     );
   }
@@ -94,19 +116,21 @@ export default function Bodyguards() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="bodyguards-page">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-bold text-primary mb-1 flex items-center gap-2">
-            <Shield className="w-6 h-6 sm:w-7 sm:h-7" />
-            Bodyguards
-          </h1>
-          <p className="text-xs text-mutedForeground">
-            Protect yourself from rival attacks
-          </p>
-        </div>
+      <style>{BG_STYLES}</style>
+
+      {/* Page header */}
+      <div className="relative bg-fade-in">
+        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Protection</p>
+        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">
+          <Shield className="w-6 h-6 sm:w-7 sm:h-7" />
+          Bodyguards
+        </h1>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Hire human or robot guards. Slots, armour, and who&apos;s watching your back.</p>
+      </div>
+      
+      {/* Stats row */}
+      <div className="flex flex-wrap items-center justify-end gap-4 bg-fade-in" style={{ animationDelay: '0.05s' }}>
         
-        {/* Stats */}
         <div className="flex items-center gap-3 text-xs font-heading">
           <div className="flex items-center gap-1.5">
             <span className="text-mutedForeground">Slots:</span>
@@ -131,7 +155,7 @@ export default function Bodyguards() {
 
       {/* Event Banner */}
       {eventsEnabled && event?.name && event?.bodyguard_cost !== 1 && (
-        <div className="px-3 py-2 bg-primary/10 border border-primary/30 rounded-md">
+        <div className="px-3 py-2 bg-primary/8 border border-primary/20 rounded-lg bg-fade-in">
           <p className="text-xs font-heading">
             <span className="text-primary font-bold">✨ {event.name}</span>
             <span className="text-mutedForeground ml-2">{event.message}</span>
@@ -140,9 +164,11 @@ export default function Bodyguards() {
       )}
 
       {/* Bodyguard Slots */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-card bg-corner bg-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none bg-glow" />
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             Your Bodyguards
           </span>
         </div>
@@ -157,10 +183,10 @@ export default function Bodyguards() {
               <div
                 key={bg.slot_number}
                 data-testid={`bodyguard-slot-${bg.slot_number}`}
-                className={`rounded-md transition-all ${
-                  hasGuard 
+                className={`bg-row rounded-lg transition-all ${
+                  hasGuard
                     ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20'
-                    : isUnlocked 
+                    : isUnlocked
                     ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20'
                     : 'bg-zinc-800/20 border border-transparent opacity-60'
                 }`}
@@ -321,12 +347,14 @@ export default function Bodyguards() {
             );
           })}
         </div>
+        <div className="bg-art-line text-primary mx-4" />
       </div>
 
       {/* Info */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-          <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             ℹ️ How It Works
           </h3>
         </div>
@@ -350,6 +378,7 @@ export default function Bodyguards() {
             </li>
           </ul>
         </div>
+        <div className="bg-art-line text-primary mx-4" />
       </div>
     </div>
   );
