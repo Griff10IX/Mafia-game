@@ -161,7 +161,6 @@ function MemberCard({ member, accentColor, delay = 0 }) {
           </Link>
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className={`text-[9px] font-heading ${cfg.color} opacity-70`}>{cfg.label}</span>
-            {member.rank_name && <span className="text-[9px] text-zinc-600">· {member.rank_name}</span>}
           </div>
         </div>
       </div>
@@ -402,7 +401,6 @@ export default function FamilyProfilePage() {
                         </Link>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-[9px] font-heading font-bold text-yellow-500/70 uppercase tracking-widest">Don</span>
-                          {boss.rank_name && <span className="text-[9px] text-zinc-600">· {boss.rank_name}</span>}
                         </div>
                       </div>
                     </div>
@@ -496,7 +494,6 @@ export default function FamilyProfilePage() {
                           className={`font-heading font-bold text-[11px] ${m.role === 'soldier' ? 'text-zinc-300' : 'text-zinc-400'} hover:text-primary transition-colors truncate`}>
                           {m.username}
                         </Link>
-                        {m.rank_name && <span className="text-[9px] text-zinc-700 shrink-0">{m.rank_name}</span>}
                       </div>
                       <span className={`text-[8px] font-heading shrink-0 ${cfg.color} opacity-50`}>{cfg.label}</span>
                     </div>
@@ -548,7 +545,6 @@ export default function FamilyProfilePage() {
                         </Link>
                         <span className={`text-[8px] font-heading ${cfg.color} opacity-40`}>
                           {cfg.icon} {cfg.label}
-                          {m.rank_name && <span className="text-zinc-700 ml-1">· {m.rank_name}</span>}
                         </span>
                       </div>
                     </div>

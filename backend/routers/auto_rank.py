@@ -713,6 +713,10 @@ def register(router):
             if body.auto_rank_enabled and not can_enable:
                 raise HTTPException(status_code=400, detail="Buy Auto Rank from the Store first.")
             updates["auto_rank_enabled"] = body.auto_rank_enabled
+            if body.auto_rank_enabled is False:
+                # Disabling Auto Rank also turns off all activity toggles
+                for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
+                    updates[f] = False
         for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
             val = getattr(body, field, None)
             if val is not None:
@@ -807,6 +811,9 @@ def register(router):
             updates["telegram_bot_token"] = (body.telegram_bot_token or "").strip() or None
         if body.auto_rank_enabled is not None:
             updates["auto_rank_enabled"] = body.auto_rank_enabled
+            if body.auto_rank_enabled is False:
+                for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
+                    updates[f] = False
         if not updates:
             return {"message": "No changes", "username": target.get("username")}
         op = {"$set": updates}

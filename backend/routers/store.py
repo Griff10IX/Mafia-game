@@ -130,9 +130,9 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
 
 
 async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
-    """Purchase Auto Rank: crimes and GTAs committed automatically; results to Telegram."""
-    if current_user.get("auto_rank_enabled", False):
-        raise HTTPException(status_code=400, detail="You already have Auto Rank")
+    """Purchase Auto Rank; user enables it themselves on the Auto Rank page."""
+    if current_user.get("auto_rank_purchased", False):
+        raise HTTPException(status_code=400, detail="You already purchased Auto Rank")
     if (current_user.get("points") or 0) < AUTO_RANK_COST_POINTS:
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {AUTO_RANK_COST_POINTS})")
     chat_id = (current_user.get("telegram_chat_id") or "").strip()
@@ -143,10 +143,10 @@ async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
         )
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_crimes": True, "auto_rank_gta": True}}
+        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_purchased": True}}
     )
     return {
-        "message": "Auto Rank purchased! Crimes and GTAs will run automatically; results go to your Telegram.",
+        "message": "Auto Rank purchased! Go to Auto Rank to enable it and choose which activities to run.",
         "cost": AUTO_RANK_COST_POINTS,
     }
 
