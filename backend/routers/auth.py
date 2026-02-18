@@ -307,57 +307,91 @@ def register(router):
 
         return {"message": "Password has been reset successfully. You can now login with your new password."}
 
+    def _safe_int(val, default=0):
+        if val is None:
+            return default
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return default
+
+    def _safe_float(val, default=0.0):
+        if val is None:
+            return default
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return default
+
     @router.get("/auth/me")
     async def get_me(current_user: dict = Depends(get_current_user)):
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"last_seen": datetime.now(timezone.utc).isoformat()}}
-        )
+        user_id = current_user.get("id") or "unknown"
+        username = current_user.get("username") or user_id
+        try:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {"last_seen": datetime.now(timezone.utc).isoformat()}}
+            )
 
-        rank_id, rank_name = get_rank_info(current_user.get("rank_points", 0))
-        if current_user.get("email") in ADMIN_EMAILS:
-            rank_name = "Admin"
-        wealth_id, wealth_name = get_wealth_rank(current_user.get("money", 0))
-        wealth_range = get_wealth_rank_range(current_user.get("money", 0))
-        casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(current_user["id"])
-        return UserResponse(
-            id=current_user["id"],
-            email=current_user["email"],
-            username=current_user["username"],
-            rank=rank_id,
-            rank_name=rank_name,
-            wealth_rank=wealth_id,
-            wealth_rank_name=wealth_name,
-            wealth_rank_range=wealth_range,
-            money=current_user["money"],
-            points=current_user["points"],
-            rank_points=current_user.get("rank_points", 0),
-            bodyguard_slots=current_user["bodyguard_slots"],
-            bullets=current_user.get("bullets", 0),
-            health=current_user.get("health", DEFAULT_HEALTH),
-            armour_level=current_user.get("armour_level", 0),
-            current_state=current_user["current_state"],
-            total_kills=current_user["total_kills"],
-            total_deaths=current_user["total_deaths"],
-            in_jail=current_user.get("in_jail", False),
-            jail_until=current_user.get("jail_until"),
-            premium_rank_bar=current_user.get("premium_rank_bar", False),
-            has_silencer=current_user.get("has_silencer", False),
-            custom_car_name=current_user.get("custom_car_name"),
-            travels_this_hour=current_user.get("travels_this_hour", 0),
-            extra_airmiles=current_user.get("extra_airmiles", 0),
-            garage_batch_limit=current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT),
-            total_crimes=current_user.get("total_crimes", 0),
-            crime_profit=int(current_user.get("crime_profit", 0) or 0),
-            created_at=current_user["created_at"],
-            swiss_balance=int(current_user.get("swiss_balance", 0) or 0),
-            swiss_limit=int(current_user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START),
-            oc_timer_reduced=bool(current_user.get("oc_timer_reduced", False)),
-            crew_oc_timer_reduced=bool(current_user.get("crew_oc_timer_reduced", False)),
-            admin_ghost_mode=bool(current_user.get("admin_ghost_mode", False)),
-            admin_acting_as_normal=bool(current_user.get("admin_acting_as_normal", False)),
-            casino_profit=casino_cash,
-            property_profit=property_pts,
-            has_casino_or_property=has_casino or has_property,
-            theme_preferences=current_user.get("theme_preferences"),
-        )
+            rank_id, rank_name = get_rank_info(_safe_int(current_user.get("rank_points"), 0))
+            if current_user.get("email") in ADMIN_EMAILS:
+                rank_name = "Admin"
+            money_val = _safe_float(current_user.get("money"), 0.0)
+            wealth_id, wealth_name = get_wealth_rank(money_val)
+            wealth_range = get_wealth_rank_range(money_val)
+            casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(current_user["id"])
+            u = current_user
+            return UserResponse(
+                id=str(u["id"]),
+                email=str(u.get("email") or ""),
+                username=str(u.get("username") or ""),
+                rank=rank_id,
+                rank_name=rank_name,
+                wealth_rank=wealth_id,
+                wealth_rank_name=wealth_name,
+                wealth_rank_range=wealth_range,
+                money=money_val,
+                points=_safe_int(u.get("points"), 0),
+                rank_points=_safe_int(u.get("rank_points"), 0),
+                bodyguard_slots=_safe_int(u.get("bodyguard_slots"), 1),
+                bullets=_safe_int(u.get("bullets"), 0),
+                health=_safe_int(u.get("health"), DEFAULT_HEALTH),
+                armour_level=_safe_int(u.get("armour_level"), 0),
+                current_state=str(u.get("current_state") or ""),
+                total_kills=_safe_int(u.get("total_kills"), 0),
+                total_deaths=_safe_int(u.get("total_deaths"), 0),
+                in_jail=bool(u.get("in_jail", False)),
+                jail_until=u.get("jail_until"),
+                premium_rank_bar=bool(u.get("premium_rank_bar", False)),
+                has_silencer=bool(u.get("has_silencer", False)),
+                custom_car_name=u.get("custom_car_name"),
+                travels_this_hour=_safe_int(u.get("travels_this_hour"), 0),
+                extra_airmiles=_safe_int(u.get("extra_airmiles"), 0),
+                garage_batch_limit=_safe_int(u.get("garage_batch_limit"), DEFAULT_GARAGE_BATCH_LIMIT),
+                total_crimes=_safe_int(u.get("total_crimes"), 0),
+                crime_profit=_safe_int(u.get("crime_profit"), 0),
+                created_at=str(u.get("created_at") or datetime.now(timezone.utc).isoformat()),
+                swiss_balance=_safe_int(u.get("swiss_balance"), 0),
+                swiss_limit=_safe_int(u.get("swiss_limit"), SWISS_BANK_LIMIT_START),
+                oc_timer_reduced=bool(u.get("oc_timer_reduced", False)),
+                crew_oc_timer_reduced=bool(u.get("crew_oc_timer_reduced", False)),
+                admin_ghost_mode=bool(u.get("admin_ghost_mode", False)),
+                admin_acting_as_normal=bool(u.get("admin_acting_as_normal", False)),
+                casino_profit=int(casino_cash) if casino_cash is not None else 0,
+                property_profit=int(property_pts) if property_pts is not None else 0,
+                has_casino_or_property=has_casino or has_property,
+                theme_preferences=u.get("theme_preferences"),
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception(
+                "auth/me 500 for user_id=%s username=%s: %s",
+                user_id,
+                username,
+                e,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Profile could not be loaded for your account. The issue has been logged; please try again or contact support.",
+            )
