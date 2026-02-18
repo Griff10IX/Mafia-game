@@ -99,7 +99,7 @@ async def _run_slots_draw_if_needed(state: str):
     )
     # Get entries and filter by cooldown
     entries_doc = await db.slots_entries.find_one({"state": stored_state or state}, {"_id": 0, "user_ids": 1})
-    user_ids = list(entries_doc.get("user_ids") or [])
+    user_ids = list((entries_doc or {}).get("user_ids") or [])
     if not user_ids:
         return
     # Filter: user must not be in cooldown
@@ -268,8 +268,9 @@ def register(router):
             else:
                 can_enter = True
         entries_doc = await db.slots_entries.find_one({"state": stored_state or state}, {"_id": 0, "user_ids": 1})
-        entries_count = len(entries_doc.get("user_ids") or [])
-        has_entered = current_user["id"] in (entries_doc.get("user_ids") or []) if entries_doc else False
+        entry_user_ids = (entries_doc or {}).get("user_ids") or []
+        entries_count = len(entry_user_ids)
+        has_entered = current_user["id"] in entry_user_ids
         return {
             "state": stored_state or state,
             "owner_id": owner_id if is_valid_owner else None,
@@ -501,8 +502,8 @@ def register(router):
 
         # Player won: owner pays
         owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
-        owner_money = int((owner.get("money") or 0) or 0)
-        owner_username = owner.get("username") if owner else None
+        owner_money = int(((owner or {}).get("money") or 0) or 0)
+        owner_username = (owner or {}).get("username")
         actual_payout = min(payout_full, owner_money)
         shortfall = payout_full - actual_payout
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": actual_payout}})
