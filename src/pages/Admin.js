@@ -226,24 +226,6 @@ export default function Admin() {
     }
   };
 
-  const handleSlotsDraw1Min = async () => {
-    try {
-      await api.post('/admin/slots/set-draw-in-minutes', null, { params: { minutes: 1 } });
-      toast.success('Slots next draw set to 1 minute (all states)');
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to set draw time');
-    }
-  };
-
-  const handleSlotsDrawReset = async () => {
-    try {
-      await api.post('/admin/slots/reset-draw-default');
-      toast.success('Slots draw reset to default (3h)');
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to reset draw');
-    }
-  };
-
   const handleToggleEvents = async () => {
     try {
       const res = await api.post('/admin/events/toggle', { enabled: !eventsEnabled });
