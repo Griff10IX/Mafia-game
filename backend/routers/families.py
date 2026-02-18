@@ -285,63 +285,57 @@ async def record_vendetta_bodyguard_kill(
 ) -> bool:
     """
     Record a BG kill for vendetta. Killer and bodyguard owner must be in different families.
-    Strategy: resolve both family IDs, then find or create the war and record.
-    Falls back to checking active wars directly if IDs can't be resolved normally.
+    Uses the WAR document's own family IDs for recording so there is never a display mismatch.
     """
     try:
-        # --- Resolve killer family ---
+        # Step 1: resolve killer's family
         killer_family_id = _norm_fid(await resolve_family_id(killer_id) or killer_family_id_hint)
-
-        # --- Resolve owner family ---
-        owner_family_id = _norm_fid(owner_family_id_from_doc) or _norm_fid(await resolve_family_id(owner_id))
-
-        logger.info(
-            "Vendetta BG kill: killer=%s killer_fid=%s owner=%s owner_fid=%s",
-            killer_id, killer_family_id, owner_id, owner_family_id,
-        )
-
-        # If we couldn't resolve the owner's family but we know the killer's, look it up
-        # through whatever active war the killer is in — and confirm owner is in enemy family
-        if not owner_family_id and killer_family_id:
-            war = await _get_active_war_for_family(killer_family_id)
-            if war and war.get("id"):
-                enemy_fid = _norm_fid(
-                    war["family_b_id"] if _norm_fid(war["family_a_id"]) == killer_family_id else war["family_a_id"]
-                )
-                in_family = (
-                    bool(await db.family_members.find_one({"family_id": enemy_fid, "user_id": owner_id}, {"_id": 1}))
-                    or bool(await db.families.find_one({"id": enemy_fid, "boss_id": owner_id}, {"_id": 1}))
-                )
-                if in_family:
-                    owner_family_id = enemy_fid
-                    logger.info("Vendetta BG kill: resolved owner family via active war enemy=%s", enemy_fid)
-
         if not killer_family_id:
-            logger.info("Vendetta BG kill: skipped — killer has no family")
+            logger.info("Vendetta BG kill: skipped — killer has no family (killer=%s)", killer_id)
             return False
+
+        # Step 2: find an active war that the killer's family is in
+        war = await _get_active_war_for_family(killer_family_id)
+        if not war or not war.get("id"):
+            logger.info("Vendetta BG kill: skipped — killer family has no active war (killer_fid=%s)", killer_family_id)
+            return False
+
+        # Step 3: determine the two family IDs from the war doc itself (prevents mismatch in display)
+        war_fid_a = _norm_fid(war["family_a_id"])
+        war_fid_b = _norm_fid(war["family_b_id"])
+        killer_war_side = war_fid_a if war_fid_a == killer_family_id else war_fid_b
+        enemy_fid = war_fid_b if killer_war_side == war_fid_a else war_fid_a
+
+        # Step 4: confirm owner is in the enemy family
+        owner_family_id = _norm_fid(owner_family_id_from_doc) or _norm_fid(await resolve_family_id(owner_id))
         if not owner_family_id:
-            logger.info("Vendetta BG kill: skipped — owner family could not be resolved")
-            return False
-        if killer_family_id == owner_family_id:
-            logger.info("Vendetta BG kill: skipped — same family %s", killer_family_id)
+            # Last resort: check if owner is a member/boss of the enemy family directly
+            in_enemy = (
+                bool(await db.family_members.find_one({"family_id": enemy_fid, "user_id": owner_id}, {"_id": 1}))
+                or bool(await db.families.find_one({"id": enemy_fid, "boss_id": owner_id}, {"_id": 1}))
+            )
+            if in_enemy:
+                owner_family_id = enemy_fid
+            else:
+                logger.info("Vendetta BG kill: skipped — owner family not resolved and not in enemy family (owner=%s enemy_fid=%s)", owner_id, enemy_fid)
+                return False
+
+        if owner_family_id == killer_family_id:
+            logger.info("Vendetta BG kill: skipped — same family (fid=%s)", killer_family_id)
             return False
 
-        # Get or create the war between these two families
-        bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
-        if not bg_war or not bg_war.get("id"):
-            await _family_war_start(killer_family_id, owner_family_id)
-            bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
-
-        if not bg_war or not bg_war.get("id"):
-            logger.info("Vendetta BG kill: skipped — could not find or create war fids=%s/%s", killer_family_id, owner_family_id)
+        # Confirm the war covers these two families (owner could be in a totally different family)
+        if owner_family_id != enemy_fid:
+            logger.info("Vendetta BG kill: owner family %s is not in this war (%s vs %s)", owner_family_id, war_fid_a, war_fid_b)
             return False
 
+        # Step 5: record using the war doc's own family IDs so the display always matches
         await _record_war_stats_bodyguard_kill(
-            bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id
+            war["id"], killer_id, killer_war_side, owner_id, enemy_fid
         )
         logger.info(
-            "Vendetta: recorded BG kill war_id=%s killer=%s killer_fid=%s owner=%s owner_fid=%s",
-            bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id,
+            "Vendetta: recorded BG kill war_id=%s killer=%s fid=%s owner=%s fid=%s",
+            war["id"], killer_id, killer_war_side, owner_id, enemy_fid,
         )
         return True
 
