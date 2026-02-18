@@ -67,6 +67,11 @@ export default function Admin() {
   const [securityLoading, setSecurityLoading] = useState(false);
   const [rateLimits, setRateLimits] = useState(null);
   const [rateLimitEdits, setRateLimitEdits] = useState({});
+  const [ipBans, setIpBans] = useState([]);
+  const [ipBansLoading, setIpBansLoading] = useState(false);
+  const [ipBanIp, setIpBanIp] = useState('');
+  const [ipBanReason, setIpBanReason] = useState('');
+  const [ipBanHours, setIpBanHours] = useState('');
 
   // Activity & Gambling logs
   const [activityLog, setActivityLog] = useState({ entries: [] });
@@ -277,6 +282,76 @@ export default function Admin() {
       const response = await api.post(`/admin/kill-player?target_username=${formData.targetUsername}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleRevivePlayer = async () => {
+    try {
+      const response = await api.post(`/admin/revive-player?target_username=${formData.targetUsername}`);
+      toast.success(response.data.message);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const fetchIpBans = async () => {
+    setIpBansLoading(true);
+    try {
+      const res = await api.get('/admin/security/ip-bans');
+      setIpBans(res.data?.ip_bans || []);
+      toast.success('IP bans loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load IP bans');
+      setIpBans([]);
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
+  const handleBanIp = async () => {
+    const ip = (ipBanIp || '').trim();
+    const reason = (ipBanReason || '').trim() || 'Banned by admin';
+    if (!ip) {
+      toast.error('Enter an IP address');
+      return;
+    }
+    setIpBansLoading(true);
+    try {
+      const body = { ip, reason };
+      const hours = ipBanHours.trim() ? parseInt(ipBanHours, 10) : null;
+      if (hours != null && !isNaN(hours) && hours > 0) body.duration_hours = hours;
+      await api.post('/admin/security/ban-ip', body);
+      toast.success(`IP ${ip} banned`);
+      setIpBanIp('');
+      setIpBanReason('');
+      setIpBanHours('');
+      fetchIpBans();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to ban IP');
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
+  const handleUnbanIp = async (ip) => {
+    try {
+      await api.post('/admin/security/unban-ip', { ip });
+      toast.success(`IP ${ip} unbanned`);
+      fetchIpBans();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to unban IP');
+    }
+  };
+
+  const handleTestIpBan = async () => {
+    if (!window.confirm('Ban your current IP for 30 seconds? You will get 403 on all requests until it auto-unbans.')) return;
+    setIpBansLoading(true);
+    try {
+      const res = await api.post('/admin/security/test-ip-ban');
+      toast.success(res.data?.message || 'Test ban active. Wait 30s or refresh.');
+      fetchIpBans();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setIpBansLoading(false);
+    }
   };
 
   const handleSetSearchTime = async () => {
@@ -915,8 +990,11 @@ export default function Admin() {
               <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
             </ActionRow>
 
-            <ActionRow icon={Skull} label="Kill Player" description="Takes 20% of their money" color="text-red-400">
+            <ActionRow icon={Skull} label="Kill Player (modkill)" description="Account is dead; cannot login until revived" color="text-red-400">
               <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
+            </ActionRow>
+            <ActionRow icon={Zap} label="Revive Player" description="Restore a dead or modkilled account so they can log in again">
+              <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
             </ActionRow>
           </div>
         )}
@@ -1249,6 +1327,55 @@ export default function Admin() {
                 {securityLoading ? '...' : 'Clear'}
               </BtnDanger>
             </ActionRow>
+
+            {/* IP Bans */}
+            <div className="mt-3 pt-3 border-t border-zinc-700/50">
+              <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">IP Bans</div>
+              <p className="text-[10px] text-mutedForeground mb-2">Banned IPs cannot access the server (login, API, etc.).</p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <BtnSecondary onClick={handleTestIpBan} disabled={ipBansLoading} title="Ban your IP for 30s then auto-unban">
+                  Test IP ban (30s)
+                </BtnSecondary>
+                <input
+                  type="text"
+                  value={ipBanIp}
+                  onChange={(e) => setIpBanIp(e.target.value)}
+                  placeholder="IP address"
+                  className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={ipBanReason}
+                  onChange={(e) => setIpBanReason(e.target.value)}
+                  placeholder="Reason"
+                  className="flex-1 min-w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="number"
+                  value={ipBanHours}
+                  onChange={(e) => setIpBanHours(e.target.value)}
+                  placeholder="Hours (empty=permanent)"
+                  min="1"
+                  className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <BtnPrimary onClick={handleBanIp} disabled={ipBansLoading}>Ban IP</BtnPrimary>
+                <BtnSecondary onClick={fetchIpBans} disabled={ipBansLoading}>{ipBansLoading ? '...' : 'Load list'}</BtnSecondary>
+              </div>
+              {ipBans.length > 0 && (
+                <div className="max-h-40 overflow-y-auto space-y-1 rounded bg-zinc-900/50 border border-zinc-700/50 p-2">
+                  {ipBans.map((b, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-[10px] py-1.5 px-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                      <div className="min-w-0">
+                        <span className="font-mono font-bold text-foreground">{b.ip}</span>
+                        {b.reason && <span className="ml-2 text-mutedForeground truncate">{b.reason}</span>}
+                        {b.expires_at && <span className="ml-2 text-amber-400/80">expires {b.expires_at.slice(0, 10)}</span>}
+                      </div>
+                      <button type="button" onClick={() => handleUnbanIp(b.ip)} className="shrink-0 bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-2 py-1 text-[9px] font-bold border border-zinc-600/50">Unban</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

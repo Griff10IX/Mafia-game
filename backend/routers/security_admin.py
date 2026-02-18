@@ -4,7 +4,7 @@ import uuid
 from pydantic import BaseModel
 from typing import Optional
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 
 class BanUserRequest(BaseModel):
@@ -133,6 +133,34 @@ def register(router):
             return {"message": f"IP {ip} unbanned (removed {result.modified_count} ban(s))"}
         raise HTTPException(status_code=404, detail="No active ban found for this IP")
 
+    def _client_ip(req: Request) -> str:
+        forwarded = req.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        if req.client:
+            return req.client.host or ""
+        return ""
+
+    async def test_ip_ban(request: Request, current_user: dict = Depends(get_current_user)):
+        """Ban the current request's IP for 30 seconds (for testing). Auto-unbans after 30s."""
+        if current_user.get("email") not in ADMIN_EMAILS:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        client_ip = _client_ip(request)
+        if not client_ip:
+            raise HTTPException(status_code=400, detail="Could not determine your IP")
+        now = datetime.now(timezone.utc)
+        expires_at = (now + timedelta(seconds=30)).isoformat()
+        doc = {
+            "ip": client_ip,
+            "reason": "Test ban (auto-unban in 30s)",
+            "banned_by": current_user.get("username", "Admin"),
+            "created_at": now.isoformat(),
+            "active": True,
+            "expires_at": expires_at,
+        }
+        await db.ip_bans.insert_one(doc)
+        return {"message": "Your IP is banned for 30 seconds. You will get 403 until then; refresh or wait 30s to be unbanned.", "ip": client_ip}
+
     async def clear_security_logs(current_user: dict = Depends(get_current_user)):
         if current_user.get("email") not in ADMIN_EMAILS:
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -153,5 +181,6 @@ def register(router):
     router.add_api_route("/admin/security/ip-bans", get_ip_bans, methods=["GET"])
     router.add_api_route("/admin/security/ban-ip", ban_ip_admin, methods=["POST"])
     router.add_api_route("/admin/security/unban-ip", unban_ip_admin, methods=["POST"])
+    router.add_api_route("/admin/security/test-ip-ban", test_ip_ban, methods=["POST"])
     router.add_api_route("/admin/security/clear-logs", clear_security_logs, methods=["POST"])
     router.add_api_route("/admin/security/test-telegram", test_telegram, methods=["POST"])

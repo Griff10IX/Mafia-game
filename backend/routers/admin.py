@@ -451,6 +451,27 @@ def register(router):
         )
         return {"message": f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."}
 
+    @router.post("/admin/revive-player")
+    async def admin_revive_player(target_username: str, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not target.get("is_dead"):
+            raise HTTPException(status_code=400, detail="That account is not dead")
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$set": {
+                "is_dead": False,
+                "dead_at": None,
+                "health": DEFAULT_HEALTH,
+                "money": 1000,
+            }}
+        )
+        return {"message": f"Revived {target_username}. They can log in again."}
+
     @router.post("/admin/set-search-time")
     async def admin_set_search_time(target_username: str, search_minutes: int, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
