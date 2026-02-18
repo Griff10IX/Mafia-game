@@ -97,7 +97,7 @@ export default function ThemePicker({ open, onClose }) {
     { id: 'presets', label: 'Presets', icon: Sparkles },
     { id: 'colours', label: 'Colours', icon: Palette },
     { id: 'text', label: 'Text', icon: Type },
-    { id: 'buttons', label: 'Buttons & more', icon: Box },
+    { id: 'buttons', label: 'Buttons', icon: Box },
   ];
   const [activeTab, setActiveTab] = useState('presets');
 
@@ -295,145 +295,57 @@ export default function ThemePicker({ open, onClose }) {
               </>
             )}
 
-            {/* Tab: Colours */}
+            {/* Tab: Colours — main accent only */}
             {activeTab === 'colours' && (
-              <>
-                <div className="space-y-4">
-                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Main colour</p>
-                  {customThemes.length > 0 && (
-                    <div>
-                      <p className="text-[10px] text-mutedForeground/80 mb-1.5">Custom</p>
-                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
-                        {customThemes.map((c) => {
-                          const entry = customToColourEntry(c);
-                          const stops = entry.stops && entry.stops.length >= 2 ? entry.stops : null;
-                          const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : { backgroundColor: entry.primary };
-                          return (
-                            <button
-                              key={entry.id}
-                              type="button"
-                              onClick={() => setColour(entry.id)}
-                              className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${colourId === entry.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
-                              style={swatchStyle}
-                              title={entry.name}
-                              aria-label={entry.name}
-                            />
-                          );
-                        })}
-                      </div>
+              <div className="space-y-4">
+                <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Main colour (accent, headers, highlights)</p>
+                {customThemes.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-mutedForeground/80 mb-1.5">Custom</p>
+                    <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+                      {customThemes.map((c) => {
+                        const entry = customToColourEntry(c);
+                        const stops = entry.stops && entry.stops.length >= 2 ? entry.stops : null;
+                        const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : { backgroundColor: entry.primary };
+                        return (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            onClick={() => setColour(entry.id)}
+                            className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${colourId === entry.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
+                            style={swatchStyle}
+                            title={entry.name}
+                            aria-label={entry.name}
+                          />
+                        );
+                      })}
                     </div>
-                  )}
-                  {sectionedColours.map(({ label, colours }) => (
-                    <div key={label}>
-                      <p className="text-[10px] text-mutedForeground/80 mb-1.5">{label}</p>
-                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
-                        {colours.map((c) => {
-                          const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
-                          const isGradient = c.id.startsWith('gradient-') || stops;
-                          const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : isGradient ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` } : { backgroundColor: c.primary };
-                          return (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => setColour(c.id)}
-                              className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${colourId === c.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
-                              style={swatchStyle}
-                              title={c.name}
-                              aria-label={c.name}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="space-y-4 mt-4">
-                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <MousePointer2 className="w-3.5 h-3.5" />
-                    Button colour
-                  </p>
-                  <div className="flex items-center gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={resetButtonToDefault}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                      data-testid="theme-reset-buttons"
-                      title="Use same as main theme"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Reset to default
-                    </button>
-                    {buttonColourId === null && <span className="text-[10px] text-mutedForeground">(using main theme)</span>}
                   </div>
-                  {sectionedColours.map(({ label, colours }) => (
-                    <div key={`btn-${label}`}>
-                      <p className="text-[10px] text-mutedForeground/80 mb-1.5">{label}</p>
-                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
-                        {colours.map((c) => {
-                          const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
-                          const isGradient = c.id.startsWith('gradient-') || stops;
-                          const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : isGradient ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` } : { backgroundColor: c.primary };
-                          const isSelected = buttonColourId === c.id;
-                          return (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => setButtonColour(c.id)}
-                              className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
-                              style={swatchStyle}
-                              title={c.name}
-                              aria-label={c.name}
-                            />
-                          );
-                        })}
-                      </div>
+                )}
+                {sectionedColours.map(({ label, colours }) => (
+                  <div key={label}>
+                    <p className="text-[10px] text-mutedForeground/80 mb-1.5">{label}</p>
+                    <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+                      {colours.map((c) => {
+                        const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
+                        const isGradient = c.id.startsWith('gradient-') || stops;
+                        const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : isGradient ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` } : { backgroundColor: c.primary };
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => setColour(c.id)}
+                            className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${colourId === c.id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
+                            style={swatchStyle}
+                            title={c.name}
+                            aria-label={c.name}
+                          />
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
-                <div className="space-y-4 mt-4">
-                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Minus className="w-3.5 h-3.5" />
-                    Lines & progress bars
-                  </p>
-                  <div className="flex items-center gap-2 mb-2">
-                    <button
-                      type="button"
-                      onClick={resetAccentLineToDefault}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-                      data-testid="theme-reset-lines"
-                      title="Use same as main theme"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      Reset to default
-                    </button>
-                    {accentLineColourId === null && <span className="text-[10px] text-mutedForeground">(using main theme)</span>}
                   </div>
-                  {sectionedColours.map(({ label, colours }) => (
-                    <div key={`line-${label}`}>
-                      <p className="text-[10px] text-mutedForeground/80 mb-1.5">{label}</p>
-                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
-                        {colours.map((c) => {
-                          const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
-                          const isGradient = c.id.startsWith('gradient-') || stops;
-                          const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : isGradient ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` } : { backgroundColor: c.primary };
-                          const isSelected = accentLineColourId === c.id;
-                          return (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => setAccentLineColour(c.id)}
-                              className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
-                              style={swatchStyle}
-                              title={c.name}
-                              aria-label={c.name}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
+                ))}
+              </div>
             )}
 
             {/* Tab: Text */}
@@ -586,10 +498,96 @@ export default function ThemePicker({ open, onClose }) {
               </>
             )}
 
-            {/* Tab: Buttons & more */}
+            {/* Tab: Buttons — button colour, lines, style, texture, layout */}
             {activeTab === 'buttons' && (
               <>
-                <div>
+                <div className="space-y-4">
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <MousePointer2 className="w-3.5 h-3.5" />
+                    Button colour
+                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={resetButtonToDefault}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      data-testid="theme-reset-buttons"
+                      title="Use same as main theme"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Reset to default
+                    </button>
+                    {buttonColourId === null && <span className="text-[10px] text-mutedForeground">(using main theme)</span>}
+                  </div>
+                  {sectionedColours.map(({ label, colours }) => (
+                    <div key={`btn-${label}`}>
+                      <p className="text-[10px] text-mutedForeground/80 mb-1.5">{label}</p>
+                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+                        {colours.map((c) => {
+                          const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
+                          const isGradient = c.id.startsWith('gradient-') || stops;
+                          const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : isGradient ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` } : { backgroundColor: c.primary };
+                          const isSelected = buttonColourId === c.id;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setButtonColour(c.id)}
+                              className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
+                              style={swatchStyle}
+                              title={c.name}
+                              aria-label={c.name}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-4 pt-4 border-t border-primary/20">
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Minus className="w-3.5 h-3.5" />
+                    Lines & progress bars
+                  </p>
+                  <div className="flex items-center gap-2 mb-2">
+                    <button
+                      type="button"
+                      onClick={resetAccentLineToDefault}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-heading uppercase tracking-wider border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+                      data-testid="theme-reset-lines"
+                      title="Use same as main theme"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Reset to default
+                    </button>
+                    {accentLineColourId === null && <span className="text-[10px] text-mutedForeground">(using main theme)</span>}
+                  </div>
+                  {sectionedColours.map(({ label, colours }) => (
+                    <div key={`line-${label}`}>
+                      <p className="text-[10px] text-mutedForeground/80 mb-1.5">{label}</p>
+                      <div className="grid grid-cols-6 sm:grid-cols-8 gap-1.5">
+                        {colours.map((c) => {
+                          const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
+                          const isGradient = c.id.startsWith('gradient-') || stops;
+                          const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : isGradient ? { background: `linear-gradient(135deg, ${c.primaryDark}, ${c.primaryBright})` } : { backgroundColor: c.primary };
+                          const isSelected = accentLineColourId === c.id;
+                          return (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => setAccentLineColour(c.id)}
+                              className={`w-full aspect-square rounded-md border-2 transition-all shrink-0 ${isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
+                              style={swatchStyle}
+                              title={c.name}
+                              aria-label={c.name}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="pt-4 border-t border-primary/20">
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Square className="w-3.5 h-3.5" />
                     Button style
@@ -609,7 +607,7 @@ export default function ThemePicker({ open, onClose }) {
                     ))}
                   </div>
                 </div>
-                <div>
+                <div className="pt-4 border-t border-primary/20">
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Background texture</p>
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                     {THEME_TEXTURES.map((t) => (
@@ -629,12 +627,12 @@ export default function ThemePicker({ open, onClose }) {
                     ))}
                   </div>
                 </div>
-                <div>
+                <div className="pt-4 border-t border-primary/20">
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <LayoutDashboard className="w-3.5 h-3.5" />
                     Mobile nav
                   </p>
-                  <p className="text-[9px] text-mutedForeground mb-1.5">On small screens: sidebar (slide-out menu) or bottom bar like the reference.</p>
+                  <p className="text-[9px] text-mutedForeground mb-1.5">On small screens: sidebar (slide-out menu) or bottom bar.</p>
                   <div className="flex flex-wrap gap-1.5">
                     <button
                       type="button"
