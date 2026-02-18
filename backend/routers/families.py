@@ -310,7 +310,20 @@ async def families_list(current_user: dict = Depends(get_current_user)):
             out.append({
                 "id": f["id"], "name": f["name"], "tag": f["tag"],
                 "member_count": living_count, "treasury": f.get("treasury", 0),
+                "at_war": False,
             })
+    # Tag families that are currently in an active war
+    active_wars = await db.family_wars.find(
+        {"status": {"$in": ["active", "truce_offered"]}},
+        {"_id": 0, "family_a_id": 1, "family_b_id": 1},
+    ).to_list(50)
+    at_war_fids = set()
+    for w in active_wars:
+        at_war_fids.add(w["family_a_id"])
+        at_war_fids.add(w["family_b_id"])
+    for f in out:
+        if f["id"] in at_war_fids:
+            f["at_war"] = True
     _list_cache = (out, now_ts + _list_cache_ttl_sec)
     return out
 
