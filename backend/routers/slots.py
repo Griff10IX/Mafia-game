@@ -20,6 +20,7 @@ from server import (
 SLOTS_MAX_BET = 5_000_000
 SLOTS_HOUSE_EDGE = 0.05  # 5% house edge on wins
 SLOTS_OWNERSHIP_HOURS = 3
+SLOTS_DRAW_INTERVAL_MINUTES = 1  # Draw every 1 min (for testing; was 3h on the hour)
 # 3-reel slot: symbols with weights (higher = more frequent)
 SLOTS_SYMBOLS = [
     {"id": "cherry", "name": "Cherry", "weight": 40, "mult_3": 3},
@@ -92,24 +93,18 @@ def _parse_iso_datetime(s: str):
         return None
 
 
-def _next_draw_on_the_hour_utc():
-    """Return the next 3-hour boundary (UTC): 00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00."""
-    now = datetime.now(timezone.utc)
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    for h in (0, 3, 6, 9, 12, 15, 18, 21):
-        t = today.replace(hour=h)
-        if t > now:
-            return t
-    return today + timedelta(days=1)
+def _next_draw_utc():
+    """Return next draw time (now + SLOTS_DRAW_INTERVAL_MINUTES)."""
+    return datetime.now(timezone.utc) + timedelta(minutes=SLOTS_DRAW_INTERVAL_MINUTES)
 
 
 def get_next_slots_draw_on_the_hour_utc() -> str:
-    """Return next draw time (3h on the hour) as ISO string. Used by admin reset-draw-default."""
-    return _next_draw_on_the_hour_utc().isoformat()
+    """Return next draw time as ISO string. Used by admin reset-draw-default."""
+    return _next_draw_utc().isoformat()
 
 
 async def _run_slots_draw_if_needed(state: str):
-    """Run draw when next_draw_at is due (every 3h on the hour). If no entries, advance next_draw_at to next 3h boundary and continue."""
+    """Run draw when next_draw_at is due (every SLOTS_DRAW_INTERVAL_MINUTES). If no entries, advance next_draw_at and continue."""
     stored_state, doc = await _get_slots_ownership_doc(state)
     now = datetime.now(timezone.utc)
     st = stored_state or state
@@ -118,7 +113,7 @@ async def _run_slots_draw_if_needed(state: str):
     # Ensure we have a doc with next_draw_at
     if not doc or not next_draw_at or next_draw_at <= now:
         # Run draw now (or first time: no next_draw_at or it's in the past)
-        next_draw_iso = _next_draw_on_the_hour_utc().isoformat()
+        next_draw_iso = _next_draw_utc().isoformat()
         previous_owner_id = doc.get("owner_id") if doc else None
         # Clear current owner and set cooldown for previous owner
         cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
@@ -268,7 +263,7 @@ def register(router):
             expires_at = doc.get("expires_at")
         next_draw_at = (doc.get("next_draw_at") or doc.get("expires_at")) if doc else None
         if not next_draw_at:
-            next_draw_at = _next_draw_on_the_hour_utc().isoformat()
+            next_draw_at = _next_draw_utc().isoformat()
         return {
             "max_bet": max_bet,
             "house_edge": SLOTS_HOUSE_EDGE,
@@ -280,6 +275,7 @@ def register(router):
             "expires_at": expires_at,
             "next_draw_at": next_draw_at,
             "ownership_hours": SLOTS_OWNERSHIP_HOURS,
+            "draw_interval_minutes": SLOTS_DRAW_INTERVAL_MINUTES,
         }
 
     @router.get("/casino/slots/ownership")
@@ -320,7 +316,7 @@ def register(router):
         has_entered = current_user["id"] in entry_user_ids
         next_draw_at = (doc.get("next_draw_at") or doc.get("expires_at")) if doc else None
         if not next_draw_at:
-            next_draw_at = _next_draw_on_the_hour_utc().isoformat()
+            next_draw_at = _next_draw_utc().isoformat()
         return {
             "state": stored_state or state,
             "owner_id": owner_id if is_valid_owner else None,
@@ -437,7 +433,7 @@ def register(router):
         await db.users.update_one({"id": from_owner_id}, {"$inc": {"points": -points_offered}})
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": points_offered}})
         stored_state, _ = await _get_slots_ownership_doc(state)
-        next_draw_iso = _next_draw_on_the_hour_utc().isoformat()
+        next_draw_iso = _next_draw_utc().isoformat()
         await db.slots_ownership.update_one(
             {"state": stored_state or state},
             {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},
@@ -570,7 +566,7 @@ def register(router):
                 # End owner's 3h: clear ownership and set cooldown
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
-                next_draw_iso = _next_draw_on_the_hour_utc().isoformat()
+                next_draw_iso = _next_draw_utc().isoformat()
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
                     {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},
@@ -578,7 +574,7 @@ def register(router):
                 ownership_transferred = True
             else:
                 ownership_transferred = True
-                next_draw_iso = _next_draw_on_the_hour_utc().isoformat()
+                next_draw_iso = _next_draw_utc().isoformat()
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
                     {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},

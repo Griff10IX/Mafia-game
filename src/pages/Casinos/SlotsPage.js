@@ -852,7 +852,8 @@ export default function SlotsPage() {
                     ? (() => {
                         const nextAt = ownership?.next_draw_at || config.next_draw_at;
                         const minsUntil = nextAt ? (new Date(nextAt) - Date.now()) / 60000 : null;
-                        const suffix = minsUntil != null && minsUntil < 120 ? ' (runs automatically when due)' : ` (every ${config.ownership_hours}h on the hour)`;
+                        const intervalLabel = config.draw_interval_minutes === 1 ? 'every 1 min' : `every ${config.ownership_hours}h on the hour`;
+                        const suffix = minsUntil != null && minsUntil < 120 ? ' (runs automatically when due)' : ` (${intervalLabel})`;
                         return `Next draw: ${formatHistoryDate(nextAt)}${suffix}`;
                       })()
                     : `Next draw: every ${config.ownership_hours} hours.`}
