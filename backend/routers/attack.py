@@ -617,9 +617,13 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
             try:
+                # If someone in a family shoots a bodyguard of someone else in another family → crew war (like shooting a family member).
                 owner_family_id = (owner_doc or {}).get("family_id")
-                if owner_family_id and killer_family_id:
+                if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
                     bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
+                    if not bg_war or not bg_war.get("id"):
+                        await _family_war_start(killer_family_id, owner_family_id)
+                        bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
                     if bg_war and bg_war.get("id"):
                         await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
             except Exception as e:
