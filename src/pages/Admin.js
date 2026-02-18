@@ -71,6 +71,8 @@ export default function Admin() {
   const [securityLoading, setSecurityLoading] = useState(false);
   const [loginIssues, setLoginIssues] = useState(null);
   const [loginIssuesLoading, setLoginIssuesLoading] = useState(false);
+  const [profileLoadErrors, setProfileLoadErrors] = useState(null);
+  const [profileLoadErrorsLoading, setProfileLoadErrorsLoading] = useState(false);
   const [rateLimits, setRateLimits] = useState(null);
   const [rateLimitEdits, setRateLimitEdits] = useState({});
   const [ipBans, setIpBans] = useState([]);
@@ -670,6 +672,21 @@ export default function Admin() {
       if (loginIssues) setLoginIssues(loginIssues.filter((r) => r.email !== email));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to clear');
+    }
+  };
+
+  const fetchProfileLoadErrors = async () => {
+    setProfileLoadErrorsLoading(true);
+    setProfileLoadErrors(null);
+    try {
+      const res = await api.get('/admin/profile-load-errors', { params: { limit: 50 } });
+      setProfileLoadErrors(res.data?.errors || []);
+      toast.success(res.data?.count === 0 ? 'No profile load errors recorded' : `Loaded ${res.data?.count} error(s)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load');
+      setProfileLoadErrors([]);
+    } finally {
+      setProfileLoadErrorsLoading(false);
     }
   };
 
@@ -1368,6 +1385,33 @@ export default function Admin() {
                 {loginIssuesLoading ? '...' : 'Load'}
               </BtnPrimary>
             </ActionRow>
+            <ActionRow icon={AlertTriangle} label="Profile load errors" description="Failed to load profile (auth/me 500) – see what went wrong for which user">
+              <BtnPrimary onClick={fetchProfileLoadErrors} disabled={profileLoadErrorsLoading}>
+                {profileLoadErrorsLoading ? '...' : 'Load'}
+              </BtnPrimary>
+            </ActionRow>
+            {profileLoadErrors && profileLoadErrors.length > 0 && (
+              <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50">
+                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Recent profile load errors ({profileLoadErrors.length})</div>
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {profileLoadErrors.map((row, i) => (
+                    <div key={row.id || i} className="text-[10px] p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                      <div className="flex justify-between gap-2 mb-1">
+                        <span className="font-bold text-foreground">@{row.username || row.user_id || '?'}</span>
+                        <span className="text-mutedForeground">{row.created_at ? new Date(row.created_at).toLocaleString() : ''}</span>
+                      </div>
+                      <div className="text-amber-400 font-mono break-all">{row.error}</div>
+                      {row.traceback && (
+                        <pre className="mt-1 p-1 rounded bg-black/40 text-[9px] overflow-x-auto whitespace-pre-wrap max-h-24 overflow-y-auto">{row.traceback}</pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {profileLoadErrors && profileLoadErrors.length === 0 && (
+              <div className="text-[10px] text-mutedForeground font-heading">No profile load errors recorded.</div>
+            )}
             {loginIssues && loginIssues.length > 0 && (
               <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50">
                 <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Locked-out emails ({loginIssues.length})</div>

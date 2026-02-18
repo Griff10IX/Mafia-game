@@ -610,6 +610,17 @@ def register(router):
         await db.users.update_one({"id": target["id"]}, {"$inc": {"token_version": 1}})
         return {"message": f"Password set for {target.get('username', target_username)}. They have been logged out and must log in with the new password."}
 
+    @router.get("/admin/profile-load-errors")
+    async def admin_profile_load_errors(limit: int = Query(50, ge=1, le=200), current_user: dict = Depends(get_current_user)):
+        """List recent profile load failures (auth/me 500) so admins can see what went wrong for which user."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        rows = await db.profile_load_errors.find(
+            {},
+            {"_id": 0, "id": 1, "user_id": 1, "username": 1, "error": 1, "traceback": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(limit).to_list(limit)
+        return {"errors": rows, "count": len(rows)}
+
     @router.get("/admin/login-issues")
     async def admin_login_issues(limit: int = Query(100, ge=1, le=500), current_user: dict = Depends(get_current_user)):
         """List current login lockouts (too many failed attempts). Shows email, failed count, locked until, and username if account exists."""

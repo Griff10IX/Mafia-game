@@ -1,6 +1,7 @@
 # Auth: register, login, password reset, /auth/me
 import logging
 import re
+import traceback
 import uuid
 from datetime import datetime, timezone, timedelta
 
@@ -391,6 +392,17 @@ def register(router):
                 username,
                 e,
             )
+            try:
+                await db.profile_load_errors.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "username": username,
+                    "error": str(e),
+                    "traceback": traceback.format_exc(),
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                })
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=500,
                 detail="Profile could not be loaded for your account. The issue has been logged; please try again or contact support.",
