@@ -965,7 +965,7 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
         for uid in by_user:
             u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1, "family_id": 1})
             usernames[uid] = (u or {}).get("username", "?")
-            fid = (u or {}).get("family_id")
+            fid = (u or {}).get("family_id") or (by_user[uid].get("family_id"))  # current family or stored at time of stat
             if fid:
                 f = await db.families.find_one({"id": fid}, {"_id": 0, "name": 1, "tag": 1})
             else:

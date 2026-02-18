@@ -45,6 +45,16 @@ from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
 from routers.weapons import _best_weapon_for_user
 
+
+async def _resolve_family_id(user_id: str):
+    """Resolve a user's family_id from users then family_members (fallback)."""
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "family_id": 1})
+    if u and u.get("family_id"):
+        return u["family_id"]
+    m = await db.family_members.find_one({"user_id": user_id}, {"_id": 0, "family_id": 1})
+    return (m or {}).get("family_id") if m else None
+
+
 # ---------------------------------------------------------------------------
 # Request/Response models
 # ---------------------------------------------------------------------------
@@ -554,7 +564,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
                 if target.get("is_bodyguard"):
                     victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
-                    killer_family_id = current_user.get("family_id")
+                    killer_family_id = current_user.get("family_id") or await _resolve_family_id(killer_id)
                     for bg in victim_as_bodyguard:
                         owner_id = bg["user_id"]
                         owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
@@ -562,7 +572,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
                         await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
                         try:
-                            owner_family_id = (owner_doc or {}).get("family_id")
+                            owner_family_id = (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
                             if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
                                 bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
                                 if not bg_war or not bg_war.get("id"):
@@ -632,7 +642,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         )
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
         bodyguard_owner_username = None
-        killer_family_id = current_user.get("family_id")
+        killer_family_id = current_user.get("family_id") or await _resolve_family_id(killer_id)
         for bg in victim_as_bodyguard:
             owner_id = bg["user_id"]
             owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
@@ -643,7 +653,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
             try:
                 # If someone in a family shoots a bodyguard of someone else in another family → crew war (like shooting a family member).
-                owner_family_id = (owner_doc or {}).get("family_id")
+                owner_family_id = (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
                 if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
                     bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
                     if not bg_war or not bg_war.get("id"):
