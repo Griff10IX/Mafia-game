@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { Star, TrendingUp, Shield, Car, Crosshair, ChevronRight, Lock, Check } from 'lucide-react';
-import api from '../utils/api';
+import api, { refreshUser } from '../utils/api';
 import PrestigeBadge from '../components/PrestigeBadge';
 import styles from '../styles/noir.module.css';
-import { useUser } from '../context/UserContext';
 
 const PRESTIGE_COLORS = {
   0: '#71717a',
@@ -37,7 +36,6 @@ const BENEFIT_ROWS = [
 ];
 
 export default function Prestige() {
-  const { refreshUser } = useUser();
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activating, setActivating] = useState(false);
