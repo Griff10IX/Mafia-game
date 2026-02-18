@@ -34,7 +34,7 @@ from server import (
     _get_active_war_between,
     _get_active_war_for_family,
     _family_war_start,
-    _record_war_stats_bodyguard_kill,
+    _record_war_stats_bodyguard_kill,  # kept for potential direct use
 )
 
 # ============ Constants ============
@@ -254,9 +254,9 @@ async def _get_family_raid_lock(attacker_family_id: str, target_family_id: str) 
         return _family_raid_locks[key]
 
 
-# ============ Vendetta / war stats (bodyguard kills) ============
+# ============ Vendetta / war stats helpers ============
 def _norm_fid(fid):
-    """Normalize family_id for consistent comparison and DB use."""
+    """Return a stripped non-empty string or None."""
     if fid is None:
         return None
     s = str(fid).strip()
@@ -264,84 +264,19 @@ def _norm_fid(fid):
 
 
 async def resolve_family_id(user_id: str):
-    """Resolve a user's family_id: users.family_id, then family_members, then families.boss_id."""
+    """Resolve a user's family_id: users.family_id → family_members → families.boss_id."""
     if not user_id:
         return None
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "family_id": 1})
-    if u and u.get("family_id"):
-        return _norm_fid(u["family_id"])
+    fid = _norm_fid((u or {}).get("family_id"))
+    if fid:
+        return fid
     m = await db.family_members.find_one({"user_id": user_id}, {"_id": 0, "family_id": 1})
-    if m and m.get("family_id"):
-        return _norm_fid(m["family_id"])
+    fid = _norm_fid((m or {}).get("family_id"))
+    if fid:
+        return fid
     fam = await db.families.find_one({"boss_id": user_id}, {"_id": 0, "id": 1})
     return _norm_fid((fam or {}).get("id"))
-
-
-async def record_vendetta_bodyguard_kill(
-    killer_id: str,
-    owner_id: str,
-    killer_family_id_hint: Optional[str] = None,
-    owner_family_id_from_doc: Optional[str] = None,
-) -> bool:
-    """
-    Record a BG kill for vendetta. Killer and bodyguard owner must be in different families.
-    Uses the WAR document's own family IDs for recording so there is never a display mismatch.
-    """
-    try:
-        # Step 1: resolve killer's family
-        killer_family_id = _norm_fid(await resolve_family_id(killer_id) or killer_family_id_hint)
-        if not killer_family_id:
-            logger.info("Vendetta BG kill: skipped — killer has no family (killer=%s)", killer_id)
-            return False
-
-        # Step 2: find an active war that the killer's family is in
-        war = await _get_active_war_for_family(killer_family_id)
-        if not war or not war.get("id"):
-            logger.info("Vendetta BG kill: skipped — killer family has no active war (killer_fid=%s)", killer_family_id)
-            return False
-
-        # Step 3: determine the two family IDs from the war doc itself (prevents mismatch in display)
-        war_fid_a = _norm_fid(war["family_a_id"])
-        war_fid_b = _norm_fid(war["family_b_id"])
-        killer_war_side = war_fid_a if war_fid_a == killer_family_id else war_fid_b
-        enemy_fid = war_fid_b if killer_war_side == war_fid_a else war_fid_a
-
-        # Step 4: confirm owner is in the enemy family
-        owner_family_id = _norm_fid(owner_family_id_from_doc) or _norm_fid(await resolve_family_id(owner_id))
-        if not owner_family_id:
-            # Last resort: check if owner is a member/boss of the enemy family directly
-            in_enemy = (
-                bool(await db.family_members.find_one({"family_id": enemy_fid, "user_id": owner_id}, {"_id": 1}))
-                or bool(await db.families.find_one({"id": enemy_fid, "boss_id": owner_id}, {"_id": 1}))
-            )
-            if in_enemy:
-                owner_family_id = enemy_fid
-            else:
-                logger.info("Vendetta BG kill: skipped — owner family not resolved and not in enemy family (owner=%s enemy_fid=%s)", owner_id, enemy_fid)
-                return False
-
-        if owner_family_id == killer_family_id:
-            logger.info("Vendetta BG kill: skipped — same family (fid=%s)", killer_family_id)
-            return False
-
-        # Confirm the war covers these two families (owner could be in a totally different family)
-        if owner_family_id != enemy_fid:
-            logger.info("Vendetta BG kill: owner family %s is not in this war (%s vs %s)", owner_family_id, war_fid_a, war_fid_b)
-            return False
-
-        # Step 5: record using the war doc's own family IDs so the display always matches
-        await _record_war_stats_bodyguard_kill(
-            war["id"], killer_id, killer_war_side, owner_id, enemy_fid
-        )
-        logger.info(
-            "Vendetta: recorded BG kill war_id=%s killer=%s fid=%s owner=%s fid=%s",
-            war["id"], killer_id, killer_war_side, owner_id, enemy_fid,
-        )
-        return True
-
-    except Exception as e:
-        logging.exception("Vendetta record bodyguard kill: %s", e)
-        return False
 
 
 # ============ Cache helpers ============
@@ -1045,56 +980,87 @@ async def families_war(current_user: dict = Depends(get_current_user)):
 
 
 async def families_war_stats(current_user: dict = Depends(get_current_user)):
-    my_family_id = current_user.get("family_id")
+    my_family_id = _norm_fid(current_user.get("family_id"))
     if not my_family_id:
         return {"wars": []}
-    wars = await db.family_wars.find({"$or": [{"family_a_id": my_family_id}, {"family_b_id": my_family_id}], "status": {"$in": ["active", "truce_offered"]}}, {"_id": 0}).to_list(10)
+
+    wars = await db.family_wars.find(
+        {"$or": [{"family_a_id": my_family_id}, {"family_b_id": my_family_id}], "status": {"$in": ["active", "truce_offered"]}},
+        {"_id": 0},
+    ).to_list(10)
     out = []
+
     for w in wars:
-        other_id = w["family_b_id"] if w["family_a_id"] == my_family_id else w["family_a_id"]
+        war_fid_a = _norm_fid(w["family_a_id"])
+        war_fid_b = _norm_fid(w["family_b_id"])
+        other_id = war_fid_b if war_fid_a == my_family_id else war_fid_a
+
         other_fam = await db.families.find_one({"id": other_id}, {"_id": 0, "name": 1, "tag": 1})
         other_name = (other_fam or {}).get("name", "?")
         other_tag = (other_fam or {}).get("tag", "?")
-        stats_docs = await db.family_war_stats.find({"war_id": w["id"]}, {"_id": 0}).to_list(200)
-        by_user = {s["user_id"]: s for s in stats_docs}
-        war_fid_a = _norm_fid(w["family_a_id"])
-        war_fid_b = _norm_fid(w["family_b_id"])
-        for uid in by_user:
-            u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1, "family_id": 1})
-            stored_fid = _norm_fid(by_user[uid].get("family_id"))
-            current_fid = _norm_fid((u or {}).get("family_id"))
-            # Use current family if it's one of the war families; otherwise fall back to stored
-            if current_fid and current_fid in (war_fid_a, war_fid_b):
-                fid = current_fid
-            elif stored_fid and stored_fid in (war_fid_a, war_fid_b):
-                fid = stored_fid
-            else:
-                # Last resort: use whichever we have
-                fid = current_fid or stored_fid
-            if fid:
-                f = await db.families.find_one({"id": fid}, {"_id": 0, "name": 1, "tag": 1})
-            else:
-                f = None
-            by_user[uid]["family_id"] = fid
-            by_user[uid]["family_name"] = (f or {}).get("name", "?")
-            by_user[uid]["family_tag"] = (f or {}).get("tag", "?")
-            by_user[uid]["username"] = (u or {}).get("username", "?")
-            by_user[uid]["impact"] = (by_user[uid].get("kills") or 0) + (by_user[uid].get("bodyguard_kills") or 0)
-        top_bg = sorted(by_user.values(), key=lambda x: (-(x.get("bodyguard_kills") or 0), x.get("username", "")))[:10]
-        top_lost = sorted(by_user.values(), key=lambda x: (-(x.get("bodyguards_lost") or 0), x.get("username", "")))[:10]
-        mvp = sorted(by_user.values(), key=lambda x: (-(x.get("impact") or 0), x.get("username", "")))[:10]
-        top_killers = sorted(by_user.values(), key=lambda x: (-(x.get("kills") or 0), x.get("username", "")))[:10]
-        family_totals = {}
-        for fid in (war_fid_a, war_fid_b):
-            if not fid:
+
+        stats_docs = await db.family_war_stats.find({"war_id": w["id"]}, {"_id": 0}).to_list(500)
+        by_user: dict = {}
+        for s in stats_docs:
+            uid = s.get("user_id")
+            if not uid:
                 continue
-            members = [e for e in by_user.values() if _norm_fid(e.get("family_id")) == fid]
-            family_totals[fid] = {"kills": sum(e.get("kills") or 0 for e in members), "deaths": sum(e.get("deaths") or 0 for e in members), "bodyguard_kills": sum(e.get("bodyguard_kills") or 0 for e in members), "bodyguards_lost": sum(e.get("bodyguards_lost") or 0 for e in members)}
-        my_fid_norm = _norm_fid(my_family_id)
-        other_id_norm = _norm_fid(other_id)
-        my_totals = family_totals.get(my_fid_norm) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
-        other_totals = family_totals.get(other_id_norm) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
-        out.append({"war": {"id": w["id"], "family_a_id": w["family_a_id"], "family_b_id": w["family_b_id"], "status": w["status"], "other_family_id": other_id, "other_family_name": other_name, "other_family_tag": other_tag, "truce_offered_by_family_id": w.get("truce_offered_by_family_id")}, "stats": {"my_family_totals": my_totals, "other_family_totals": other_totals, "top_bodyguard_killers": top_bg, "top_bodyguards_lost": top_lost, "top_killers": top_killers, "mvp": mvp}})
+            # Fetch username
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+            # Use the family_id stored in the stat doc — always kept current via $set on writes
+            fid = _norm_fid(s.get("family_id"))
+            # If fid doesn't match either war family, try to re-resolve it
+            if fid not in (war_fid_a, war_fid_b):
+                fid = await resolve_family_id(uid)
+            fam_doc = await db.families.find_one({"id": fid}, {"_id": 0, "name": 1, "tag": 1}) if fid else None
+            by_user[uid] = {
+                **s,
+                "family_id": fid,
+                "family_name": (fam_doc or {}).get("name", "?"),
+                "family_tag": (fam_doc or {}).get("tag", "?"),
+                "username": (u or {}).get("username", "?"),
+                "impact": (s.get("kills") or 0) + (s.get("bodyguard_kills") or 0),
+            }
+
+        all_entries = list(by_user.values())
+
+        def _totals(fid):
+            members = [e for e in all_entries if _norm_fid(e.get("family_id")) == fid]
+            return {
+                "kills": sum(e.get("kills") or 0 for e in members),
+                "deaths": sum(e.get("deaths") or 0 for e in members),
+                "bodyguard_kills": sum(e.get("bodyguard_kills") or 0 for e in members),
+                "bodyguards_lost": sum(e.get("bodyguards_lost") or 0 for e in members),
+            }
+
+        my_totals = _totals(my_family_id)
+        other_totals = _totals(other_id)
+
+        top_bg = sorted(all_entries, key=lambda x: (-(x.get("bodyguard_kills") or 0), x.get("username", "")))[:10]
+        top_lost = sorted(all_entries, key=lambda x: (-(x.get("bodyguards_lost") or 0), x.get("username", "")))[:10]
+        top_killers = sorted(all_entries, key=lambda x: (-(x.get("kills") or 0), x.get("username", "")))[:10]
+        mvp = sorted(all_entries, key=lambda x: (-(x.get("impact") or 0), x.get("username", "")))[:10]
+
+        out.append({
+            "war": {
+                "id": w["id"],
+                "family_a_id": w["family_a_id"],
+                "family_b_id": w["family_b_id"],
+                "status": w["status"],
+                "other_family_id": other_id,
+                "other_family_name": other_name,
+                "other_family_tag": other_tag,
+                "truce_offered_by_family_id": w.get("truce_offered_by_family_id"),
+            },
+            "stats": {
+                "my_family_totals": my_totals,
+                "other_family_totals": other_totals,
+                "top_bodyguard_killers": top_bg,
+                "top_bodyguards_lost": top_lost,
+                "top_killers": top_killers,
+                "mvp": mvp,
+            },
+        })
     return {"wars": out}
 
 

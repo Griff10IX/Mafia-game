@@ -43,7 +43,81 @@ from server import (
 from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
 from routers.weapons import _best_weapon_for_user
-from routers.families import record_vendetta_bodyguard_kill, resolve_family_id
+from routers.families import resolve_family_id
+
+
+# ---------------------------------------------------------------------------
+# Vendetta bodyguard-kill recording (inline — avoids cross-module ID mismatches)
+# ---------------------------------------------------------------------------
+async def _record_vendetta_bg_kill(killer_id: str, killer_fid: str, owner_id: str, owner_doc: dict):
+    """
+    Record a bodyguard kill into family_war_stats when the two players are in an active war.
+    killer_fid  : killer's family_id (from current_user, already in hand)
+    owner_doc   : the bodyguard owner's users doc (contains family_id)
+    """
+    try:
+        # Resolve killer family — use the hint, fall back to fresh DB look-up
+        k_fid = killer_fid
+        if not k_fid:
+            k_fid = await resolve_family_id(killer_id)
+
+        # Resolve owner family — doc first, then DB look-up, then families.boss_id
+        o_fid = (owner_doc or {}).get("family_id")
+        if not o_fid:
+            ou = await db.users.find_one({"id": owner_id}, {"_id": 0, "family_id": 1})
+            o_fid = (ou or {}).get("family_id")
+        if not o_fid:
+            om = await db.family_members.find_one({"user_id": owner_id}, {"_id": 0, "family_id": 1})
+            o_fid = (om or {}).get("family_id")
+        if not o_fid:
+            of_ = await db.families.find_one({"boss_id": owner_id}, {"_id": 0, "id": 1})
+            o_fid = (of_ or {}).get("id")
+
+        if not k_fid or not o_fid:
+            logger.info("Vendetta BG kill skipped: k_fid=%s o_fid=%s", k_fid, o_fid)
+            return
+        if k_fid == o_fid:
+            logger.info("Vendetta BG kill skipped: same family %s", k_fid)
+            return
+
+        # Find war directly between these two families (both orderings)
+        war = await db.family_wars.find_one(
+            {
+                "$or": [
+                    {"family_a_id": k_fid, "family_b_id": o_fid},
+                    {"family_a_id": o_fid, "family_b_id": k_fid},
+                ],
+                "status": {"$in": ["active", "truce_offered"]},
+            },
+            {"_id": 0, "id": 1},
+        )
+        if not war:
+            logger.info("Vendetta BG kill skipped: no war between %s and %s", k_fid, o_fid)
+            return
+
+        war_id = war["id"]
+        # $set always writes family_id so it is correct even if the doc already existed
+        await db.family_war_stats.update_one(
+            {"war_id": war_id, "user_id": killer_id},
+            {
+                "$inc": {"bodyguard_kills": 1},
+                "$set": {"family_id": k_fid},
+                "$setOnInsert": {"war_id": war_id, "user_id": killer_id, "kills": 0, "deaths": 0, "bodyguards_lost": 0},
+            },
+            upsert=True,
+        )
+        await db.family_war_stats.update_one(
+            {"war_id": war_id, "user_id": owner_id},
+            {
+                "$inc": {"bodyguards_lost": 1},
+                "$set": {"family_id": o_fid},
+                "$setOnInsert": {"war_id": war_id, "user_id": owner_id, "kills": 0, "deaths": 0, "bodyguard_kills": 0},
+            },
+            upsert=True,
+        )
+        logger.info("Vendetta BG kill recorded: war=%s killer=%s(%s) owner=%s(%s)", war_id, killer_id, k_fid, owner_id, o_fid)
+    except Exception as exc:
+        logger.exception("Vendetta BG kill error: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -568,11 +642,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                             await db.bodyguards.delete_one(delete_criteria)
                         await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
                         await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
-                        await record_vendetta_bodyguard_kill(
-                            killer_id, owner_id,
-                            killer_family_id_hint=current_user.get("family_id"),
-                            owner_family_id_from_doc=(owner_doc or {}).get("family_id"),
-                        )
+                        await _record_vendetta_bg_kill(killer_id, current_user.get("family_id"), owner_id, owner_doc)
                         remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
                         for i, b in enumerate(remaining, 1):
                             if b["slot_number"] != i:
@@ -648,11 +718,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 await db.bodyguards.delete_one(delete_criteria)
             await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
-            await record_vendetta_bodyguard_kill(
-                killer_id, owner_id,
-                killer_family_id_hint=current_user.get("family_id"),
-                owner_family_id_from_doc=(owner_doc or {}).get("family_id"),
-            )
+            await _record_vendetta_bg_kill(killer_id, current_user.get("family_id"), owner_id, owner_doc)
             remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
             for i, b in enumerate(remaining, 1):
                 if b["slot_number"] != i:

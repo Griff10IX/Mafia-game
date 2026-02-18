@@ -644,12 +644,12 @@ async def _record_war_stats_bodyguard_kill(war_id: str, attacker_id: str, attack
         return
     await db.family_war_stats.update_one(
         {"war_id": war_id, "user_id": attacker_id},
-        {"$setOnInsert": {"war_id": war_id, "user_id": attacker_id, "family_id": attacker_family_id or None, "bodyguard_kills": 0, "bodyguards_lost": 0, "kills": 0, "deaths": 0}, "$inc": {"bodyguard_kills": 1}},
+        {"$inc": {"bodyguard_kills": 1}, "$set": {"family_id": attacker_family_id or None}, "$setOnInsert": {"war_id": war_id, "user_id": attacker_id, "kills": 0, "deaths": 0, "bodyguards_lost": 0}},
         upsert=True,
     )
     await db.family_war_stats.update_one(
         {"war_id": war_id, "user_id": target_id},
-        {"$setOnInsert": {"war_id": war_id, "user_id": target_id, "family_id": target_family_id or None, "bodyguard_kills": 0, "bodyguards_lost": 0, "kills": 0, "deaths": 0}, "$inc": {"bodyguards_lost": 1}},
+        {"$inc": {"bodyguards_lost": 1}, "$set": {"family_id": target_family_id or None}, "$setOnInsert": {"war_id": war_id, "user_id": target_id, "kills": 0, "deaths": 0, "bodyguard_kills": 0}},
         upsert=True,
     )
 
@@ -660,12 +660,12 @@ async def _record_war_stats_player_kill(war_id: str, killer_id: str, killer_fami
         return
     await db.family_war_stats.update_one(
         {"war_id": war_id, "user_id": killer_id},
-        {"$setOnInsert": {"war_id": war_id, "user_id": killer_id, "family_id": killer_family_id or None, "bodyguard_kills": 0, "bodyguards_lost": 0, "kills": 0, "deaths": 0}, "$inc": {"kills": 1}},
+        {"$inc": {"kills": 1}, "$set": {"family_id": killer_family_id or None}, "$setOnInsert": {"war_id": war_id, "user_id": killer_id, "bodyguard_kills": 0, "deaths": 0, "bodyguards_lost": 0}},
         upsert=True,
     )
     await db.family_war_stats.update_one(
         {"war_id": war_id, "user_id": victim_id},
-        {"$setOnInsert": {"war_id": war_id, "user_id": victim_id, "family_id": victim_family_id or None, "bodyguard_kills": 0, "bodyguards_lost": 0, "kills": 0, "deaths": 0}, "$inc": {"deaths": 1}},
+        {"$inc": {"deaths": 1}, "$set": {"family_id": victim_family_id or None}, "$setOnInsert": {"war_id": war_id, "user_id": victim_id, "bodyguard_kills": 0, "kills": 0, "bodyguards_lost": 0}},
         upsert=True,
     )
 
