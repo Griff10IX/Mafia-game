@@ -836,30 +836,21 @@ export default function SlotsPage() {
             ))}
           </div>
           <p className="text-[10px] text-mutedForeground mt-2">5% house edge on wins. One machine per state.</p>
-          {/* Enter the draw — always show when not owner so users find it; server enforces cooldown */}
           <div className="mt-3 pt-3 border-t border-primary/20">
             {ownership?.is_owner ? (
               <p className="text-[10px] text-primary font-heading">You own this machine for {config.ownership_hours}h. Set max bet and buy-back above.</p>
             ) : (
-              <div className="flex flex-wrap items-center gap-2">
-                {ownership?.has_entered ? (
+              <div className="space-y-1">
+                {ownership?.has_entered && (
                   <p className="text-[10px] text-mutedForeground font-heading">
-                    You&apos;re in the draw ({ownership.entries_count ?? 0} entered). Winner chosen at random when current owner&apos;s {config.ownership_hours}h ends.
+                    You&apos;re in the draw ({ownership.entries_count ?? 0} entered).
                   </p>
-                ) : (
-                  <>
-                    <p className="text-[10px] text-mutedForeground font-heading">Enter the draw for a chance to own the slots here for {config.ownership_hours} hours (set max bet and buy-back like other casinos).</p>
-                    <button
-                      type="button"
-                      onClick={enterDraw}
-                      disabled={enterLoading}
-                      className="bg-primary text-primary-foreground rounded px-4 py-2 text-xs font-bold uppercase border border-primary hover:opacity-90 disabled:opacity-50"
-                    >
-                      {enterLoading ? '...' : 'Enter the draw'}
-                    </button>
-                    <p className="text-[10px] text-zinc-500 font-heading italic">If the button says you can&apos;t enter, you may be on cooldown from a previous run.</p>
-                  </>
                 )}
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  {ownership?.expires_at && new Date(ownership.expires_at) > new Date()
+                    ? `Next draw: ${formatHistoryDate(ownership.expires_at)}`
+                    : 'Next draw: enter above to be in the draw. Winner chosen at random when current owner\'s term ends.'}
+                </p>
               </div>
             )}
           </div>
