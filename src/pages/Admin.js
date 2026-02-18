@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -516,6 +516,21 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleCreateTestUsers = async () => {
+    if (!window.confirm('Create 30 real test users (random ranks, crews, casino/property owners)? Password: test1234')) return;
+    try {
+      const res = await api.post('/admin/create-test-users');
+      toast.success(res.data?.message || 'Created');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleTestUsersAutoRank = async (enabled) => {
+    try {
+      const res = await api.post('/admin/test-users-auto-rank', { enabled });
+      toast.success(res.data?.message || (enabled ? 'Enabled' : 'Disabled'));
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
   const handleGiveAllPoints = async () => {
     if (!window.confirm(`Give ${giveAllPoints} points to ALL?`)) return;
     try {
@@ -924,6 +939,13 @@ export default function Admin() {
           <div className="p-2 space-y-1">
             <ActionRow icon={Building2} label="Seed Families" description="Create 3 families with 5 users each">
               <BtnPrimary onClick={handleSeedFamilies}>Seed</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Users} label="Create 30 test users" description="Real users, random ranks, crews, own casinos/properties. Password: test1234">
+              <BtnPrimary onClick={handleCreateTestUsers}>Create</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Bot} label="Test users: auto-rank" description="Enable or disable auto-rank for all test users (test_* / @test.mafia)">
+              <button type="button" onClick={() => handleTestUsersAutoRank(true)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Enable</button>
+              <button type="button" onClick={() => handleTestUsersAutoRank(false)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Disable</button>
             </ActionRow>
             <ActionRow icon={UserCog} label="Force Online" description="Bring offline users online for 1h">
               <BtnPrimary onClick={handleForceOnline}>Force</BtnPrimary>

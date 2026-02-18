@@ -1,8 +1,9 @@
 # Admin: ghost mode, act-as-normal, change-rank, add-points, give-all, add-car,
 # security (summary, flags, rate-limits, telegram, clear), hitlist reset,
 # force-online, lock/kill player, search time, clear searches, check, activity/gambling log,
-# find-duplicates, cheat-detection, user-details, wipe, delete-user, events, seed-families.
+# find-duplicates, cheat-detection, user-details, wipe, delete-user, events, seed-families, create-test-users.
 import logging
+import random
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
@@ -26,6 +27,10 @@ class AllEventsForTestingRequest(BaseModel):
 
 class AdminSettingsUpdate(BaseModel):
     admin_online_color: Optional[str] = None
+
+
+class TestUsersAutoRankRequest(BaseModel):
+    enabled: bool
 
 
 SEED_FAMILIES_CONFIG = [
@@ -56,6 +61,7 @@ def register(router):
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     _username_pattern = srv._username_pattern
     RANKS = srv.RANKS
+    STATES = srv.STATES
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     CARS = srv.CARS
     maybe_process_rank_up = srv.maybe_process_rank_up
@@ -924,4 +930,268 @@ def register(router):
             "message": f"Seeded {len(created_families)} families with {len(created_users)} users (each with 2 robot bodyguards). Password for all: test1234",
             "families": created_families,
             "users": created_users,
+        }
+
+    @router.post("/admin/create-test-users")
+    async def admin_create_test_users(current_user: dict = Depends(get_current_user)):
+        """Create 30 real (non-NPC) test users with random ranks, in crews, owning available casinos and properties. Password: test1234."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.dice import DICE_MAX_BET
+        from routers.roulette import ROULETTE_MAX_BET
+        from routers.blackjack import BLACKJACK_DEFAULT_MAX_BET
+        from routers.horseracing import HORSERACING_MAX_BET
+        from routers.video_poker import VIDEO_POKER_DEFAULT_MAX_BET
+        from routers.airport import AIRPORT_SLOTS_PER_STATE, AIRPORT_COST
+
+        COUNT = 30
+        FAMILY_SIZE = 5
+        NUM_FAMILIES = (COUNT + FAMILY_SIZE - 1) // FAMILY_SIZE
+        ROLES = ["boss", "underboss", "consigliere", "capo", "soldier"]
+        TEST_PASSWORD = "test1234"
+        # Vary auto-rank sub-settings per user (all get auto_rank_enabled + auto_rank_purchased)
+        AUTO_RANK_PRESETS = [
+            {"auto_rank_crimes": True, "auto_rank_gta": False, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": False},
+            {"auto_rank_crimes": False, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": False},
+            {"auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": False},
+            {"auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": True, "auto_rank_booze": False},
+            {"auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": False, "auto_rank_oc": False, "auto_rank_booze": True},
+            {"auto_rank_crimes": True, "auto_rank_gta": True, "auto_rank_bust_every_5_sec": True, "auto_rank_oc": False, "auto_rank_booze": False},
+        ]
+        password_hash = get_password_hash(TEST_PASSWORD)
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        forced_online_until = (now_dt + timedelta(hours=1)).isoformat()
+        created_users = []
+        created_families = []
+        user_pool = []  # list of (user_id, username) for assigning ownership
+        user_index = [0]
+
+        for f in range(NUM_FAMILIES):
+            family_id = str(uuid.uuid4())
+            name = f"TestCrew{f+1}"
+            tag = f"T{f+1:02d}"
+            members = []
+            for i in range(FAMILY_SIZE):
+                if len(created_users) >= COUNT:
+                    break
+                user_id = str(uuid.uuid4())
+                role = ROLES[i % len(ROLES)]
+                username = f"test_{tag}_{role}_{i}"
+                email = f"test{tag}{i}@test.mafia"
+                if await db.users.find_one({"$or": [{"email": email}, {"username": username}]}):
+                    continue
+                rank_id = random.randint(1, len(RANKS))
+                rank_def = RANKS[rank_id - 1]
+                req = int(rank_def["required_points"])
+                if rank_id < len(RANKS):
+                    next_req = int(RANKS[rank_id]["required_points"])
+                    rank_points = random.randint(req, min(req + max(1, (next_req - req) // 2), next_req - 1))
+                else:
+                    rank_points = random.randint(req, req + 50000)
+                preset = AUTO_RANK_PRESETS[user_index[0] % len(AUTO_RANK_PRESETS)]
+                user_index[0] += 1
+                user_doc = {
+                    "id": user_id,
+                    "email": email,
+                    "username": username,
+                    "password_hash": password_hash,
+                    "rank": rank_id,
+                    "money": 500_000.0,
+                    "points": 100,
+                    "rank_points": rank_points,
+                    "bodyguard_slots": 0,
+                    "bullets": 0,
+                    "avatar_url": None,
+                    "jail_busts": 0,
+                    "jail_bust_attempts": 0,
+                    "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
+                    "total_crimes": 0,
+                    "crime_profit": 0,
+                    "total_gta": 0,
+                    "total_oc_heists": 0,
+                    "oc_timer_reduced": False,
+                    "current_state": random.choice(STATES) if STATES else "Chicago",
+                    "swiss_balance": 0,
+                    "swiss_limit": SWISS_BANK_LIMIT_START,
+                    "total_kills": 0,
+                    "total_deaths": 0,
+                    "in_jail": False,
+                    "jail_until": None,
+                    "premium_rank_bar": False,
+                    "has_silencer": False,
+                    "custom_car_name": None,
+                    "travels_this_hour": 0,
+                    "travel_reset_time": now,
+                    "extra_airmiles": 0,
+                    "health": DEFAULT_HEALTH,
+                    "armour_level": 0,
+                    "armour_owned_level_max": 0,
+                    "equipped_weapon_id": None,
+                    "kill_inflation": 0.0,
+                    "kill_inflation_updated_at": now,
+                    "is_dead": False,
+                    "dead_at": None,
+                    "points_at_death": None,
+                    "retrieval_used": False,
+                    "last_seen": now,
+                    "created_at": now,
+                    "forced_online_until": forced_online_until,
+                    "auto_rank_purchased": True,
+                    "auto_rank_enabled": True,
+                    **preset,
+                }
+                await db.users.insert_one(user_doc)
+                created_users.append({"username": username, "email": email, "rank": rank_id, "family": name})
+                user_pool.append((user_id, username))
+                members.append((user_id, role))
+            if not members:
+                continue
+            first_racket_id = FAMILY_RACKETS[0]["id"]
+            rackets = {first_racket_id: {"level": 1, "last_collected_at": None}}
+            await db.families.insert_one({
+                "id": family_id,
+                "name": name,
+                "tag": tag,
+                "boss_id": members[0][0],
+                "treasury": 50_000,
+                "created_at": now,
+                "rackets": rackets,
+            })
+            created_families.append({"name": name, "tag": tag})
+            for user_id, role in members:
+                await db.family_members.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "family_id": family_id,
+                    "user_id": user_id,
+                    "role": role,
+                    "joined_at": now,
+                })
+                await db.users.update_one({"id": user_id}, {"$set": {"family_id": family_id, "family_role": role}})
+
+        # Assign unowned casino tables (each user at most one)
+        casino_slots = []
+        for city in (STATES or []):
+            for game_type, coll, max_bet in [
+                ("dice", db.dice_ownership, DICE_MAX_BET),
+                ("roulette", db.roulette_ownership, ROULETTE_MAX_BET),
+                ("blackjack", db.blackjack_ownership, BLACKJACK_DEFAULT_MAX_BET),
+                ("horseracing", db.horseracing_ownership, HORSERACING_MAX_BET),
+                ("videopoker", db.videopoker_ownership, VIDEO_POKER_DEFAULT_MAX_BET),
+            ]:
+                doc = await coll.find_one({"city": city}, {"_id": 0, "owner_id": 1})
+                if not doc or not doc.get("owner_id"):
+                    casino_slots.append((city, game_type, coll, max_bet))
+        casino_assigned = set()
+        for idx, (city, game_type, coll, max_bet) in enumerate(casino_slots):
+            if idx >= len(user_pool):
+                break
+            user_id, username = user_pool[idx]
+            if user_id in casino_assigned:
+                continue
+            if game_type == "dice":
+                await coll.update_one(
+                    {"city": city},
+                    {"$set": {"owner_id": user_id, "owner_username": username, "max_bet": max_bet, "buy_back_reward": 0, "profit": 0}},
+                    upsert=True,
+                )
+            elif game_type == "roulette":
+                await coll.update_one(
+                    {"city": city},
+                    {"$set": {"owner_id": user_id, "owner_username": username, "max_bet": max_bet, "total_earnings": 0}},
+                    upsert=True,
+                )
+            elif game_type in ("blackjack", "horseracing", "videopoker"):
+                extra = {"buy_back_reward": 0} if game_type == "blackjack" else {}
+                await coll.update_one(
+                    {"city": city},
+                    {"$set": {"owner_id": user_id, "owner_username": username, "max_bet": max_bet, "total_earnings": 0, "profit": 0, **extra}},
+                    upsert=True,
+                )
+            casino_assigned.add(user_id)
+
+        # Assign unowned airport slots (each user at most one property)
+        property_assigned = set()
+        for state in (STATES or []):
+            for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):
+                doc = await db.airport_ownership.find_one({"state": state, "slot": slot}, {"_id": 0, "owner_id": 1})
+                if not doc:
+                    await db.airport_ownership.insert_one({
+                        "state": state, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST,
+                    })
+                    doc = {}
+                if doc.get("owner_id"):
+                    continue
+                for user_id, username in user_pool:
+                    if user_id in property_assigned:
+                        continue
+                    await db.airport_ownership.update_one(
+                        {"state": state, "slot": slot},
+                        {"$set": {"owner_id": user_id, "owner_username": username}},
+                    )
+                    property_assigned.add(user_id)
+                    break
+
+        # Assign unowned bullet factories
+        for state in (STATES or []):
+            doc = await db.bullet_factory.find_one({"state": state}, {"_id": 0, "owner_id": 1})
+            if not doc:
+                await db.bullet_factory.insert_one({
+                    "state": state,
+                    "owner_id": None,
+                    "owner_username": None,
+                    "last_collected_at": now,
+                    "price_per_bullet": None,
+                    "unowned_price": random.randint(2500, 4000),
+                })
+                doc = {}
+            if doc.get("owner_id"):
+                continue
+            for user_id, username in user_pool:
+                if user_id in property_assigned:
+                    continue
+                await db.bullet_factory.update_one(
+                    {"state": state},
+                    {"$set": {"owner_id": user_id, "owner_username": username}},
+                )
+                property_assigned.add(user_id)
+                break
+
+        return {
+            "message": f"Created {len(created_users)} test users in {len(created_families)} crews. Assigned available casinos and properties. Password: test1234",
+            "users": created_users,
+            "families": created_families,
+        }
+
+    def _test_users_filter():
+        """Users created by Create 30 test users: username test_* or email *@test.mafia."""
+        return {
+            "is_dead": {"$ne": True},
+            "$or": [
+                {"username": re.compile(r"^test_", re.IGNORECASE)},
+                {"email": re.compile(r"@test\.mafia$", re.IGNORECASE)},
+            ],
+        }
+
+    @router.post("/admin/test-users-auto-rank")
+    async def admin_test_users_auto_rank(request: TestUsersAutoRankRequest, current_user: dict = Depends(get_current_user)):
+        """Enable or disable auto-rank for all test users (username test_* or email *@test.mafia)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        enabled = request.enabled
+        updates = {"auto_rank_enabled": enabled}
+        if not enabled:
+            updates["auto_rank_crimes"] = False
+            updates["auto_rank_gta"] = False
+            updates["auto_rank_bust_every_5_sec"] = False
+            updates["auto_rank_oc"] = False
+            updates["auto_rank_booze"] = False
+            op = {"$set": updates, "$unset": {"auto_rank_stats_since": ""}}
+        else:
+            op = {"$set": updates}
+        res = await db.users.update_many(_test_users_filter(), op)
+        return {
+            "message": f"Auto-rank {'enabled' if enabled else 'disabled'} for all test users.",
+            "enabled": enabled,
+            "updated_count": res.modified_count,
         }

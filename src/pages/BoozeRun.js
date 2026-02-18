@@ -317,10 +317,10 @@ const CityPricesCard = ({ citySummary }) => (
 const SuppliesCard = ({ 
   location, 
   supplies, 
-  buyAmounts, 
-  sellAmounts, 
-  setBuyAmount, 
-  setSellAmount, 
+  tradeAmounts, 
+  setTradeAmount, 
+  tradeMode, 
+  setTradeMode, 
   handleBuy, 
   handleSell,
   capacity = 0,
@@ -350,7 +350,13 @@ const SuppliesCard = ({
           </tr>
         </thead>
         <tbody className="divide-y divide-zinc-700/30">
-          {supplies.map((row, idx) => (
+          {supplies.map((row, idx) => {
+            const amount = tradeAmounts[row.booze_id] ?? '';
+            const maxSell = row.carrying ?? 0;
+            const placeholder = tradeMode === 'buy' ? (maxBuy > 0 ? String(maxBuy) : '0') : (maxSell > 0 ? String(maxSell) : '0');
+            const isBuy = tradeMode === 'buy';
+            const tradeDisabled = disabled || (isBuy ? false : !(row.carrying > 0));
+            return (
             <tr key={row.booze_id} className="bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.03}s` }}>
               <td className="py-1.5 px-2 font-heading font-bold text-foreground tracking-wide">{row.name}</td>
               <td className="py-1.5 px-2 text-right text-zinc-400 font-heading tabular-nums">
@@ -360,54 +366,61 @@ const SuppliesCard = ({
                 {row.carrying ?? 0}
               </td>
               <td className="py-1.5 px-2 text-right">
-                <div className="flex items-center justify-end gap-0.5">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Buy"
-                    value={buyAmounts[row.booze_id] ?? ''}
-                    onChange={(e) => setBuyAmount(row.booze_id, e.target.value)}
-                    onFocus={() => setBuyAmount(row.booze_id, String(maxBuy))}
-                    className="w-12 text-right bg-zinc-900/80 border border-zinc-600/40 rounded px-1 py-0.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
-                  />
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Sell"
-                    value={sellAmounts[row.booze_id] ?? ''}
-                    onChange={(e) => setSellAmount(row.booze_id, e.target.value)}
-                    onFocus={() => setSellAmount(row.booze_id, String(row.carrying ?? 0))}
-                    className="w-12 text-right bg-zinc-900/80 border border-zinc-600/40 rounded px-1 py-0.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
-                  />
-                </div>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={placeholder}
+                  value={amount}
+                  onChange={(e) => setTradeAmount(row.booze_id, e.target.value)}
+                  onFocus={() => setTradeAmount(row.booze_id, isBuy ? String(maxBuy) : String(maxSell))}
+                  className="w-14 text-right bg-zinc-900/80 border border-zinc-600/40 rounded px-1 py-0.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
+                />
               </td>
               <td className="py-1.5 px-2 text-right">
                 <div className="flex items-center justify-end gap-0.5">
+                  <div className="flex rounded overflow-hidden border border-zinc-600/40">
+                    <button
+                      type="button"
+                      onClick={() => setTradeMode('buy')}
+                      className={`px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'buy' ? 'bg-primary/30 border-primary/40 text-primary' : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-300'}`}
+                    >
+                      Buy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTradeMode('sell')}
+                      className={`px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'sell' ? 'bg-primary/30 border-primary/40 text-primary' : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-300'}`}
+                    >
+                      Sell
+                    </button>
+                  </div>
                   <button
-                    onClick={() => handleBuy(row.booze_id)}
-                    disabled={disabled}
+                    onClick={() => {
+                      const qty = typeof amount === 'number' ? amount : parseInt(String(amount || ''), 10);
+                      const val = (!qty || qty <= 0) ? undefined : qty;
+                      isBuy ? handleBuy(row.booze_id, val) : handleSell(row.booze_id, val);
+                    }}
+                    disabled={tradeDisabled}
                     className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider border transition-all bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Buy
-                  </button>
-                  <button
-                    onClick={() => handleSell(row.booze_id)}
-                    disabled={disabled || !(row.carrying > 0)}
-                    className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider border transition-all bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Sell
+                    Trade
                   </button>
                 </div>
               </td>
             </tr>
-          ))}
+          );})}
         </tbody>
       </table>
     </div>
     
     {/* Mobile: Cards */}
     <div className="md:hidden divide-y divide-zinc-700/30">
-      {supplies.map((row, idx) => (
+      {supplies.map((row, idx) => {
+        const amount = tradeAmounts[row.booze_id] ?? '';
+        const maxSell = row.carrying ?? 0;
+        const isBuy = tradeMode === 'buy';
+        const tradeDisabled = disabled || (isBuy ? false : !(row.carrying > 0));
+        return (
         <div key={row.booze_id} className="p-2 space-y-1 bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.04}s` }}>
           <div className="flex items-start justify-between gap-1.5">
             <div>
@@ -421,45 +434,46 @@ const SuppliesCard = ({
             </div>
           </div>
           
-          <div className="flex gap-1">
+          <div className="flex gap-1 items-center">
             <input
               type="text"
               inputMode="numeric"
-              placeholder="Buy qty"
-              value={buyAmounts[row.booze_id] ?? ''}
-              onChange={(e) => setBuyAmount(row.booze_id, e.target.value)}
-              onFocus={() => setBuyAmount(row.booze_id, String(maxBuy))}
+              placeholder={isBuy ? 'Buy qty' : 'Sell qty'}
+              value={amount}
+              onChange={(e) => setTradeAmount(row.booze_id, e.target.value)}
+              onFocus={() => setTradeAmount(row.booze_id, isBuy ? String(maxBuy) : String(maxSell))}
               className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded px-2 py-1 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
             />
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="Sell qty"
-              value={sellAmounts[row.booze_id] ?? ''}
-              onChange={(e) => setSellAmount(row.booze_id, e.target.value)}
-              onFocus={() => setSellAmount(row.booze_id, String(row.carrying ?? 0))}
-              className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded px-2 py-1 text-[10px] font-heading focus:border-primary/50 focus:outline-none transition-colors"
-            />
-          </div>
-          
-          <div className="flex gap-1">
+            <div className="flex rounded overflow-hidden border border-zinc-600/40 shrink-0">
+              <button
+                type="button"
+                onClick={() => setTradeMode('buy')}
+                className={`px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'buy' ? 'bg-primary/30 text-primary' : 'bg-zinc-800/60 text-zinc-400'}`}
+              >
+                Buy
+              </button>
+              <button
+                type="button"
+                onClick={() => setTradeMode('sell')}
+                className={`px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'sell' ? 'bg-primary/30 text-primary' : 'bg-zinc-800/60 text-zinc-400'}`}
+              >
+                Sell
+              </button>
+            </div>
             <button
-              onClick={() => handleBuy(row.booze_id)}
-              disabled={disabled}
-              className="flex-1 py-1.5 rounded-md font-heading font-bold uppercase text-[9px] tracking-wider border transition-all touch-manipulation bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+              onClick={() => {
+                const qty = typeof amount === 'number' ? amount : parseInt(String(amount || ''), 10);
+                const val = (!qty || qty <= 0) ? undefined : qty;
+                isBuy ? handleBuy(row.booze_id, val) : handleSell(row.booze_id, val);
+              }}
+              disabled={tradeDisabled}
+              className="py-1 px-2 rounded font-heading font-bold uppercase text-[9px] tracking-wider border transition-all touch-manipulation bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
             >
-              Buy
-            </button>
-            <button
-              onClick={() => handleSell(row.booze_id)}
-              disabled={disabled || !(row.carrying > 0)}
-              className="flex-1 py-1.5 rounded-md font-heading font-bold uppercase text-[9px] tracking-wider border transition-all touch-manipulation bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              Sell
+              Trade
             </button>
           </div>
         </div>
-      ))}
+      );})}
     </div>
   </div>
   );
@@ -612,8 +626,8 @@ const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
 export default function BoozeRun() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [buyAmounts, setBuyAmounts] = useState({});
-  const [sellAmounts, setSellAmounts] = useState({});
+  const [tradeAmounts, setTradeAmounts] = useState({});
+  const [tradeMode, setTradeMode] = useState('buy');
   const [timer, setTimer] = useState('');
   const [autoRankBoozeDisabled, setAutoRankBoozeDisabled] = useState(false);
 
@@ -658,19 +672,14 @@ export default function BoozeRun() {
     return () => clearInterval(id);
   }, [config?.rotation_ends_at, fetchConfig]);
 
-  const setBuyAmount = (boozeId, value) => {
+  const setTradeAmount = (boozeId, value) => {
     const n = parseInt(String(value).replace(/\D/g, ''), 10);
-    setBuyAmounts((prev) => ({ ...prev, [boozeId]: isNaN(n) ? '' : n }));
-  };
-  
-  const setSellAmount = (boozeId, value) => {
-    const n = parseInt(String(value).replace(/\D/g, ''), 10);
-    setSellAmounts((prev) => ({ ...prev, [boozeId]: isNaN(n) ? '' : n }));
+    setTradeAmounts((prev) => ({ ...prev, [boozeId]: isNaN(n) ? '' : n }));
   };
 
-  const handleBuy = async (boozeId) => {
+  const handleBuy = async (boozeId, amountOverride) => {
     const maxBuy = Math.max(0, (config?.capacity ?? 0) - (config?.carrying_total ?? 0));
-    const amount = buyAmounts[boozeId] ?? maxBuy;
+    const amount = amountOverride ?? tradeAmounts[boozeId] ?? maxBuy;
     if (!amount || amount <= 0) {
       toast.error('Enter a valid amount');
       return;
@@ -693,17 +702,17 @@ export default function BoozeRun() {
         toast.success(`Purchased ${amount} units`);
       }
       refreshUser();
-      setBuyAmounts((prev) => ({ ...prev, [boozeId]: '' }));
+      setTradeAmounts((prev) => ({ ...prev, [boozeId]: '' }));
       fetchConfig();
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Purchase failed'));
     }
   };
 
-  const handleSell = async (boozeId) => {
+  const handleSell = async (boozeId, amountOverride) => {
     const row = config?.prices_at_location?.find((p) => p.booze_id === boozeId);
     const maxSell = row?.carrying ?? 0;
-    const amount = sellAmounts[boozeId] ?? maxSell;
+    const amount = amountOverride ?? tradeAmounts[boozeId] ?? maxSell;
     if (!amount || amount <= 0) {
       toast.error('Enter a valid amount');
       return;
@@ -726,7 +735,7 @@ export default function BoozeRun() {
         toast.success(`Sold ${amount} units`);
       }
       refreshUser();
-      setSellAmounts((prev) => ({ ...prev, [boozeId]: '' }));
+      setTradeAmounts((prev) => ({ ...prev, [boozeId]: '' }));
       fetchConfig();
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Sell failed'));
@@ -811,10 +820,10 @@ export default function BoozeRun() {
       <SuppliesCard
         location={config.current_location}
         supplies={pricesAtLocation}
-        buyAmounts={buyAmounts}
-        sellAmounts={sellAmounts}
-        setBuyAmount={setBuyAmount}
-        setSellAmount={setSellAmount}
+        tradeAmounts={tradeAmounts}
+        setTradeAmount={setTradeAmount}
+        tradeMode={tradeMode}
+        setTradeMode={setTradeMode}
         handleBuy={handleBuy}
         handleSell={handleSell}
         capacity={config.capacity ?? 0}
