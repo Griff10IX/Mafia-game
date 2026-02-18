@@ -94,6 +94,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/casino/slots', label: 'Slots' },
         { path: '/casino/videopoker', label: 'Video Poker' },
         { path: '/sports-betting', label: 'Sports Betting' },
+        { path: '/crack-safe', label: 'Crack the Safe' },
       ],
     },
     {
@@ -736,7 +737,8 @@ export default function Layout({ children }) {
                     location.pathname === '/casino/horseracing' ||
                     location.pathname === '/casino/slots' ||
                     location.pathname === '/casino/videopoker' ||
-                    location.pathname === '/sports-betting';
+                    location.pathname === '/sports-betting' ||
+                    location.pathname === '/crack-safe';
 
                   return (
                     <div key="nav-casino-group" className="space-y-0.5">

@@ -28,6 +28,7 @@ import Rlt from "./pages/Casinos/Rlt.js";
 import Blackjack from "./pages/Casinos/BlackjackPage";
 import HorseRacing from "./pages/Casinos/HorseRacingPage";
 import Slots from "./pages/Casinos/SlotsPage";
+import CrackSafe from "./pages/CrackSafe";
 import VideoPoker from "./pages/Casinos/VideoPokerPage";
 import SportsBetting from "./pages/SportsBetting";
 import Bank from "./pages/Bank";
@@ -480,6 +481,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <VideoPoker />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/crack-safe"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <CrackSafe />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
