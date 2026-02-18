@@ -530,7 +530,7 @@ export default function SlotsPage() {
               {ownership?.is_owner ? (
                 <>You own · <span className="text-primary font-bold">{config.current_state || '—'}</span> · {config.ownership_hours}h</>
               ) : config.state_owned ? (
-                <>State-owned · <span className="text-primary font-bold">{config.current_state || '—'}</span></>
+                <>State-owned · <span className="text-primary font-bold">{config.current_state || '—'}</span> · play anytime</>
               ) : (
                 <>Owned by <span className="text-primary font-bold">{ownership?.owner_username || '?'}</span> · <span className="text-primary font-bold">{config.current_state || '—'}</span></>
               )}

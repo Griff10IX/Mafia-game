@@ -417,7 +417,8 @@ def register(router):
         stored_state, doc = await _get_slots_ownership_doc(state)
         owner_id = doc.get("owner_id") if doc else None
         is_valid_owner = owner_id and not _is_slots_ownership_expired(doc)
-        max_bet = (doc.get("max_bet") if doc.get("max_bet") is not None else SLOTS_MAX_BET) if doc else SLOTS_MAX_BET
+        # No owner (or expired) = state-owned: always allow play, house pays
+        max_bet = (doc.get("max_bet") if doc and doc.get("max_bet") is not None else SLOTS_MAX_BET)
         if is_valid_owner and owner_id == current_user["id"]:
             raise HTTPException(status_code=400, detail="You cannot play at your own slots")
         bet = int(request.bet or 0)
