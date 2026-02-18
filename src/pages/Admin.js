@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -43,7 +43,9 @@ export default function Admin() {
     bullets: 5000,
     carId: 'car1',
     lockMinutes: 5,
-    searchMinutes: 1
+    searchMinutes: 1,
+    adminNewEmail: '',
+    adminNewPassword: ''
   });
 
   const [eventsEnabled, setEventsEnabled] = useState(true);
@@ -302,6 +304,42 @@ export default function Admin() {
     try {
       const response = await api.post(`/admin/remove-auto-rank?target_username=${encodeURIComponent(formData.targetUsername)}`);
       toast.success(response.data?.message || 'Auto rank removed');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleChangeEmail = async () => {
+    const email = (formData.adminNewEmail || '').trim();
+    if (!email) { toast.error('Enter new email'); return; }
+    try {
+      const response = await api.post('/admin/change-email', { new_email: email }, { params: { target_username: formData.targetUsername } });
+      toast.success(response.data?.message || 'Email updated');
+      setFormData(prev => ({ ...prev, adminNewEmail: '' }));
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleLogOutUser = async () => {
+    if (!window.confirm(`Log out ${formData.targetUsername || 'this user'}? All their sessions will be invalidated.`)) return;
+    try {
+      const response = await api.post(`/admin/log-out-user?target_username=${encodeURIComponent(formData.targetUsername)}`);
+      toast.success(response.data?.message || 'User logged out');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleSetPassword = async () => {
+    const pwd = (formData.adminNewPassword || '').trim();
+    if (pwd.length < 6) { toast.error('Password must be at least 6 characters'); return; }
+    if (!window.confirm(`Set password for ${formData.targetUsername || 'this user'}? They will be logged out and must sign in with the new password.`)) return;
+    try {
+      const response = await api.post('/admin/set-password', { new_password: pwd }, { params: { target_username: formData.targetUsername } });
+      toast.success(response.data?.message || 'Password set');
+      setFormData(prev => ({ ...prev, adminNewPassword: '' }));
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleClearLoginLockout = async () => {
+    try {
+      const response = await api.post(`/admin/clear-login-lockout?target_username=${encodeURIComponent(formData.targetUsername)}`);
+      toast.success(response.data?.message || 'Lockout cleared');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
@@ -1046,6 +1084,20 @@ export default function Admin() {
             <ActionRow icon={Bot} label="Auto Rank" description="Give or remove auto rank for the target user">
               <button type="button" onClick={handleGiveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Give</button>
               <button type="button" onClick={handleRemoveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Remove</button>
+            </ActionRow>
+            <ActionRow icon={Mail} label="Change Email" description="Set a new email for the target user">
+              <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData({ ...formData, adminNewEmail: e.target.value })} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
+              <BtnPrimary onClick={handleChangeEmail}>Set</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={LogOut} label="Log Out User" description="Invalidate all sessions; they must log in again">
+              <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={KeyRound} label="Set Password" description="Set a new password (min 6 chars); user is logged out">
+              <Input type="password" value={formData.adminNewPassword} onChange={(e) => setFormData({ ...formData, adminNewPassword: e.target.value })} placeholder="New password" className="flex-1 min-w-0 text-[11px]" autoComplete="off" />
+              <BtnPrimary onClick={handleSetPassword}>Set</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Lock} label="Clear Login Lockout" description="Remove lockout so they can try logging in again">
+              <BtnPrimary onClick={handleClearLoginLockout}>Clear</BtnPrimary>
             </ActionRow>
           </div>
         )}

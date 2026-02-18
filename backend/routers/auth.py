@@ -158,7 +158,7 @@ def register(router):
 
             result = await db.users.insert_one(user_doc.copy())
 
-            token = create_access_token({"sub": user_id})
+            token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0)})
 
             user_response = {
                 "id": user_doc["id"],
@@ -235,7 +235,7 @@ def register(router):
             ips = doc.get("login_ips") or []
             if len(ips) > 20:
                 await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": ips[-20:]}})
-        token = create_access_token({"sub": user["id"]})
+        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0)})
         return {"token": token, "user": {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}}
 
     @router.post("/auth/password-reset/request")

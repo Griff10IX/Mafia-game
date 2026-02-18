@@ -446,7 +446,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
-    
+    # Reject if token was invalidated (e.g. admin "log out user")
+    if payload.get("v", 0) != user.get("token_version", 0):
+        raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
     if user.get("is_dead"):
         raise HTTPException(
             status_code=403,

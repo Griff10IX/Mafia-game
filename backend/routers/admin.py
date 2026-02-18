@@ -12,6 +12,8 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from disposable_email import is_disposable_email
+
 
 class WipeConfirmation(BaseModel):
     confirmation_text: str  # Must be exactly "WIPE ALL DATA"
@@ -31,6 +33,14 @@ class AdminSettingsUpdate(BaseModel):
 
 class TestUsersAutoRankRequest(BaseModel):
     enabled: bool
+
+
+class AdminChangeEmailRequest(BaseModel):
+    new_email: str
+
+
+class AdminSetPasswordRequest(BaseModel):
+    new_password: str
 
 
 SEED_FAMILIES_CONFIG = [
@@ -539,6 +549,81 @@ def register(router):
             }}
         )
         return {"message": f"Revived {target_username}. They can log in again."}
+
+    @router.post("/admin/change-email")
+    async def admin_change_email(
+        target_username: str,
+        body: AdminChangeEmailRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Change a user's email. New email must not be disposable and must be unique."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        new_email = (body.new_email or "").strip().lower()
+        if not new_email or "@" not in new_email:
+            raise HTTPException(status_code=400, detail="Valid email required")
+        if is_disposable_email(new_email):
+            raise HTTPException(status_code=400, detail="Disposable email addresses are not allowed.")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "email": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        existing = await db.users.find_one(
+            {"email": re.compile("^" + re.escape(new_email) + "$", re.IGNORECASE), "id": {"$ne": target["id"]}},
+            {"_id": 0, "id": 1},
+        )
+        if existing:
+            raise HTTPException(status_code=400, detail="That email is already in use by another account.")
+        await db.users.update_one({"id": target["id"]}, {"$set": {"email": new_email}})
+        await db.login_lockouts.delete_many({"email": (target.get("email") or "").strip().lower()})
+        return {"message": f"Email updated for {target.get('username', target_username)}", "username": target.get("username")}
+
+    @router.post("/admin/log-out-user")
+    async def admin_log_out_user(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Invalidate all sessions for the user; they must log in again."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        await db.users.update_one({"id": target["id"]}, {"$inc": {"token_version": 1}})
+        return {"message": f"{target.get('username', target_username)} has been logged out. All their sessions are invalid."}
+
+    @router.post("/admin/set-password")
+    async def admin_set_password(
+        target_username: str,
+        body: AdminSetPasswordRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Set a user's password (e.g. temporary password). They can change it after logging in."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not (body.new_password or "").strip() or len((body.new_password or "").strip()) < 6:
+            raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        new_hash = get_password_hash((body.new_password or "").strip())
+        await db.users.update_one({"id": target["id"]}, {"$set": {"password_hash": new_hash}})
+        await db.users.update_one({"id": target["id"]}, {"$inc": {"token_version": 1}})
+        return {"message": f"Password set for {target.get('username', target_username)}. They have been logged out and must log in with the new password."}
+
+    @router.post("/admin/clear-login-lockout")
+    async def admin_clear_login_lockout(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Clear login lockout for a user (by their current email), so they can try logging in again."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "email": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        email = (target.get("email") or "").strip().lower()
+        if email:
+            result = await db.login_lockouts.delete_many({"email": email})
+            return {"message": f"Login lockout cleared for {target.get('username', target_username)}", "deleted_count": result.deleted_count}
+        return {"message": f"No email on account; nothing to clear.", "username": target.get("username")}
 
     @router.post("/admin/set-search-time")
     async def admin_set_search_time(target_username: str, search_minutes: int, current_user: dict = Depends(get_current_user)):
