@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 # GTA options and request/response models
 # ---------------------------------------------------------------------------
 
-# Cooldowns: min 30s (easiest), best option 3-4 min (legendary). Unlock by rank.
+# Cooldowns: shorter than before (similar to crimes). Unlock by rank.
 GTA_OPTIONS = [
-    {"id": "easy", "name": "Street Parking", "success_rate": 0.85, "jail_time": 10, "difficulty": 1, "cooldown": 30, "min_rank": 4},
-    {"id": "medium", "name": "Residential Area", "success_rate": 0.65, "jail_time": 20, "difficulty": 2, "cooldown": 90, "min_rank": 5},
-    {"id": "hard", "name": "Downtown District", "success_rate": 0.45, "jail_time": 35, "difficulty": 3, "cooldown": 150, "min_rank": 6},
-    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.30, "jail_time": 50, "difficulty": 4, "cooldown": 210, "min_rank": 7},
-    {"id": "legendary", "name": "Private Estate", "success_rate": 0.18, "jail_time": 60, "difficulty": 5, "cooldown": 240, "min_rank": 8},
+    {"id": "easy", "name": "Street Parking", "success_rate": 0.90, "jail_time": 8, "difficulty": 1, "cooldown": 20, "min_rank": 3},
+    {"id": "medium", "name": "Residential Area", "success_rate": 0.78, "jail_time": 15, "difficulty": 2, "cooldown": 45, "min_rank": 4},
+    {"id": "hard", "name": "Downtown District", "success_rate": 0.60, "jail_time": 25, "difficulty": 3, "cooldown": 90, "min_rank": 5},
+    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.45, "jail_time": 40, "difficulty": 4, "cooldown": 120, "min_rank": 6},
+    {"id": "legendary", "name": "Private Estate", "success_rate": 0.28, "jail_time": 50, "difficulty": 5, "cooldown": 180, "min_rank": 7},
 ]
 
 
@@ -83,17 +83,17 @@ from server import (
 from routers.objectives import update_objectives_progress
 
 
-# Progress bar: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor is 77% (same as crimes)
-GTA_PROGRESS_MIN = 10
+# Progress bar: 25-92%. Start higher, gain more on success, lose less on fail (similar to crimes)
+GTA_PROGRESS_MIN = 25
 GTA_PROGRESS_MAX = 92
-GTA_PROGRESS_GAIN_MIN = 3
-GTA_PROGRESS_GAIN_MAX = 5
+GTA_PROGRESS_GAIN_MIN = 4
+GTA_PROGRESS_GAIN_MAX = 6
 GTA_PROGRESS_DROP_PER_FAIL_MIN = 1
-GTA_PROGRESS_DROP_PER_FAIL_MAX = 3
-GTA_PROGRESS_MAX_DROP_FROM_PEAK = 15
+GTA_PROGRESS_DROP_PER_FAIL_MAX = 2
+GTA_PROGRESS_MAX_DROP_FROM_PEAK = 12
 
 # On GTA failure, this chance you get caught (jail); otherwise you get away with no car
-GTA_CAUGHT_CHANCE = 0.5
+GTA_CAUGHT_CHANCE = 0.4
 
 GTA_SUCCESS_MESSAGES = [
     "Success! You stole a {car_name}!",
@@ -136,21 +136,21 @@ GTA_FAIL_ESCAPED_MESSAGES = [
 
 
 def _gta_progress_from_attempts(gta_attempts: int) -> int:
-    """Migrate old attempts-based progress to bar value (10-92)."""
-    if gta_attempts < 100:
-        return 10
-    elif gta_attempts < 300:
-        return 25
-    elif gta_attempts < 600:
-        return 40
-    elif gta_attempts < 1200:
-        return 55
-    elif gta_attempts < 2500:
-        return 70
-    elif gta_attempts < 5000:
-        return 82
+    """Migrate old attempts-based progress to bar value (25-92). New users start at 25%."""
+    if gta_attempts < 50:
+        return GTA_PROGRESS_MIN
+    elif gta_attempts < 200:
+        return 35
+    elif gta_attempts < 400:
+        return 50
+    elif gta_attempts < 800:
+        return 62
+    elif gta_attempts < 1600:
+        return 74
+    elif gta_attempts < 3500:
+        return 85
     else:
-        return 92
+        return GTA_PROGRESS_MAX
 
 
 async def get_gta_options(current_user: dict = Depends(get_current_user)):
