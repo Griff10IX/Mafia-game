@@ -47,12 +47,15 @@ from routers.weapons import _best_weapon_for_user
 
 
 async def _resolve_family_id(user_id: str):
-    """Resolve a user's family_id from users then family_members (fallback)."""
+    """Resolve a user's family_id: users.family_id, then family_members, then families.boss_id."""
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "family_id": 1})
     if u and u.get("family_id"):
         return u["family_id"]
     m = await db.family_members.find_one({"user_id": user_id}, {"_id": 0, "family_id": 1})
-    return (m or {}).get("family_id") if m else None
+    if m and m.get("family_id"):
+        return m["family_id"]
+    fam = await db.families.find_one({"boss_id": user_id}, {"_id": 0, "id": 1})
+    return (fam or {}).get("id") if fam else None
 
 
 # ---------------------------------------------------------------------------
@@ -580,6 +583,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
                         await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
                         try:
+                            # Vendetta: same rule as player BG kill — different families → record.
                             owner_family_id = (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
                             if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
                                 bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
@@ -672,7 +676,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
             try:
-                # If someone in a family shoots a bodyguard of someone else in another family → crew war (like shooting a family member).
+                # Vendetta: record when (1) I'm in a family and kill another family's bodyguard, or (2) we're in a family war and I kill an enemy member's bodyguard. Both = different families.
                 owner_family_id = (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
                 if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
                     bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
