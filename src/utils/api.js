@@ -30,13 +30,24 @@ const isPublicPath = () => {
 const SERVER_UNAVAILABLE_MSG = 'Server temporarily unavailable. Please try again in a moment.';
 const NETWORK_ERROR_MSG = 'Connection problem. Please check your network and try again.';
 
+/** Key used to pass profile/auth error to login page after redirect (e.g. session invalidated). */
+export const AUTH_ERROR_KEY = 'auth_profile_error';
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !hasRedirectedOnAuthFailure && !isPublicPath()) {
-      hasRedirectedOnAuthFailure = true;
-      localStorage.removeItem('token');
-      window.location.replace('/');
+    if ((error.response?.status === 401 || error.response?.status === 403) && !hasRedirectedOnAuthFailure && !isPublicPath()) {
+      const isAuthMe = error.config?.url?.includes('/auth/me');
+      if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {
+        hasRedirectedOnAuthFailure = true;
+        const detail = error.response?.data?.detail;
+        const msg = typeof detail === 'string' ? detail : (error.response?.status === 403 ? 'Access denied.' : 'Session expired or invalid. Please log in again.');
+        try {
+          sessionStorage.setItem(AUTH_ERROR_KEY, msg);
+        } catch (_) {}
+        localStorage.removeItem('token');
+        window.location.replace('/');
+      }
     }
     // Normalize 502/503/504 and network errors so pages can show a friendly message instead of breaking
     if (error.response) {

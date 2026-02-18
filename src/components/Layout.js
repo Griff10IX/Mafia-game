@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap } from 'lucide-react';
-import api from '../utils/api';
+import api, { getApiErrorMessage } from '../utils/api';
+import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
@@ -383,12 +384,11 @@ export default function Layout({ children }) {
       // Trigger objectives endpoint so backend can auto-reset daily/weekly/monthly without user opening Objectives page
       api.get('/objectives').catch(() => {});
     } catch (error) {
-      // 401 is handled globally by api interceptor (clear token + full reload to login). Other errors just log.
-      if (error.response?.status !== 401) {
-        console.error('Failed to fetch user:', error);
-        localStorage.removeItem('token');
-        navigate('/');
-      }
+      const msg = getApiErrorMessage(error);
+      toast.error(msg || 'Failed to load profile. Please log in again.');
+      console.error('Failed to fetch user:', error);
+      localStorage.removeItem('token');
+      navigate('/');
     }
   };
 

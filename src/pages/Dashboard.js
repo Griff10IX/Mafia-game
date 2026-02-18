@@ -18,7 +18,7 @@ import {
   Zap,
   LayoutDashboard,
 } from 'lucide-react';
-import api from '../utils/api';
+import api, { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import styles from '../styles/noir.module.css';
@@ -240,7 +240,7 @@ export default function Dashboard() {
       setUser(userRes.data);
       setRankProgress(progressRes.data);
     } catch (error) {
-      toast.error('Failed to load profile');
+      toast.error(getApiErrorMessage(error) || 'Failed to load profile');
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);

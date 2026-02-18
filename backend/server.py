@@ -433,23 +433,39 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def _log_auth_failure(user_id: Optional[str], status: int, reason: str):
+    """Log auth failure for admin visibility (e.g. failed to load profile after login)."""
+    logging.getLogger(__name__).warning(
+        "Auth failure (profile/me): user_id=%s status=%s reason=%s",
+        user_id or "unknown",
+        status,
+        reason,
+    )
+
+
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    user_id: Optional[str] = None
     try:
         token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
+        user_id = payload.get("sub")
         if user_id is None:
+            _log_auth_failure(None, 401, "Invalid authentication credentials (no sub)")
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     except JWTError:
+        _log_auth_failure(user_id, 401, "Invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
     
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if user is None:
+        _log_auth_failure(user_id, 401, "User not found")
         raise HTTPException(status_code=401, detail="User not found")
     # Reject if token was invalidated (e.g. admin "log out user")
     if payload.get("v", 0) != user.get("token_version", 0):
+        _log_auth_failure(user_id, 401, "Session invalidated (token_version mismatch)")
         raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
     if user.get("is_dead"):
+        _log_auth_failure(user_id, 403, "Account is dead")
         raise HTTPException(
             status_code=403,
             detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to retrieve points."

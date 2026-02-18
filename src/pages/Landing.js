@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import api, { getBaseURL } from '../utils/api';
+import api, { getBaseURL, AUTH_ERROR_KEY } from '../utils/api';
 import styles from '../styles/noir.module.css';
 
 export default function Landing({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+
+  useEffect(() => {
+    const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
+    if (msg) {
+      sessionStorage.removeItem(AUTH_ERROR_KEY);
+      toast.error(msg);
+    }
+  }, []);
   const [formData, setFormData] = useState({
     email: '',
     username: '',
