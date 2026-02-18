@@ -52,17 +52,16 @@ def register(router):
             {"$group": {"_id": "$car_id", "count": {"$sum": 1}}}
         ]).to_list(100)
         car_by_id = {c.get("id"): c for c in CARS}
-        exclusive_vehicles = 0
-        rare_vehicles = 0
+        rarity_counts = {"common": 0, "uncommon": 0, "rare": 0, "ultra_rare": 0, "legendary": 0, "custom": 0, "exclusive": 0}
         for cc in car_counts:
             car_id = cc.get("_id")
             cnt = int(cc.get("count", 0) or 0)
             info = car_by_id.get(car_id) or {}
-            rarity = info.get("rarity")
-            if rarity == "exclusive":
-                exclusive_vehicles += cnt
-            if rarity in ("rare", "ultra_rare", "legendary", "exclusive"):
-                rare_vehicles += cnt
+            rarity = info.get("rarity") or "common"
+            if rarity in rarity_counts:
+                rarity_counts[rarity] += cnt
+            else:
+                rarity_counts["common"] += cnt
 
         rank_stats_map: dict = {}
         rank_meta = [(r["id"], r["name"]) for r in RANKS]
@@ -165,8 +164,13 @@ def register(router):
             },
             "vehicle_stats": {
                 "total_vehicles": int(total_vehicles),
-                "exclusive_vehicles": int(exclusive_vehicles),
-                "rare_vehicles": int(rare_vehicles),
+                "common_vehicles": int(rarity_counts.get("common", 0)),
+                "uncommon_vehicles": int(rarity_counts.get("uncommon", 0)),
+                "rare_vehicles": int(rarity_counts.get("rare", 0)),
+                "ultra_rare_vehicles": int(rarity_counts.get("ultra_rare", 0)),
+                "legendary_vehicles": int(rarity_counts.get("legendary", 0)),
+                "custom_vehicles": int(rarity_counts.get("custom", 0)),
+                "exclusive_vehicles": int(rarity_counts.get("exclusive", 0)),
             },
             "rank_stats": rank_stats,
             "recent_kills": recent_kills,

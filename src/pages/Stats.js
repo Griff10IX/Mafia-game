@@ -318,8 +318,13 @@ function buildVehicleRows(data) {
   const vs = data?.vehicle_stats;
   return [
     { label: 'Total vehicles', value: formatNumber(vs?.total_vehicles) },
+    { label: 'Common', value: formatNumber(vs?.common_vehicles) },
+    { label: 'Uncommon', value: formatNumber(vs?.uncommon_vehicles) },
+    { label: 'Rare', value: formatNumber(vs?.rare_vehicles) },
+    { label: 'Ultra rare', value: formatNumber(vs?.ultra_rare_vehicles) },
+    { label: 'Legendary', value: formatNumber(vs?.legendary_vehicles) },
+    { label: 'Custom', value: formatNumber(vs?.custom_vehicles) },
     { label: 'Exclusives', value: formatNumber(vs?.exclusive_vehicles) },
-    { label: 'Rares', value: formatNumber(vs?.rare_vehicles) },
   ];
 }
 

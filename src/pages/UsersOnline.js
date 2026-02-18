@@ -89,9 +89,6 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
               data-testid={`user-profile-link-${user.username}`}
             >
               {user.username}
-              {user.is_admin && (
-                <span className="ml-1 px-1 py-0.5 rounded text-[9px] font-bold" style={{ backgroundColor: `${adminColor}20`, color: adminColor }}>Admin</span>
-              )}
             </Link>
           </HoverCardTrigger>
           {user.prestige_level > 0 && (
@@ -264,12 +261,6 @@ const InfoCard = () => (
           <span className="text-primary shrink-0">•</span>
           <span>
             Plan <strong className="text-foreground">attacks</strong> and <strong className="text-foreground">rackets</strong> based on who's active
-          </span>
-        </p>
-        <p className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>
-            Bust <strong className="text-red-400">jailed players</strong> for rank points
           </span>
         </p>
       </div>
