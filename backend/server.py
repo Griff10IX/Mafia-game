@@ -63,8 +63,9 @@ def _get_jwt_secret():
 
 SECRET_KEY = _get_jwt_secret()
 ALGORITHM = "HS256"
-# Session length: 1 hour so mobile users stay logged in when returning to the app
-ACCESS_TOKEN_EXPIRE_MINUTES = 60
+# Session length: default 24h so stepping away doesn't log you out. Override with JWT_EXPIRE_MINUTES in .env (e.g. 10080 = 7 days).
+_access_expire = os.environ.get("JWT_EXPIRE_MINUTES", "").strip()
+ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_expire) if _access_expire.isdigit() else 60 * 24
 
 security = HTTPBearer()
 
