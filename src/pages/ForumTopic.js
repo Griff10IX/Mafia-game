@@ -8,6 +8,24 @@ import styles from '../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
 
+/** FAQ / HTML topic content: dark gray dropdowns (details/summary). Only used when content contains FAQ markup. */
+const FORUM_FAQ_STYLES = `
+  .forum-faq-content { background: #2d2d2d; color: #d8d8d8; padding: 1.2em; border-radius: 8px; max-width: 100%; }
+  .forum-faq-content details { margin: 0.6em 0; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
+  .forum-faq-content summary { background: #3a3a3a; color: #e8e8e8; padding: 0.6em 1em; cursor: pointer; font-weight: bold; list-style: none; }
+  .forum-faq-content summary::-webkit-details-marker { display: none; }
+  .forum-faq-content summary:hover { background: #454545; }
+  .forum-faq-content details[open] summary { border-bottom: 1px solid #444; }
+  .forum-faq-content details > div { padding: 1em 1.2em; background: #252525; color: #d0d0d0; line-height: 1.5; }
+  .forum-faq-content strong { color: #eee; }
+  .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.5em; }
+  .forum-faq-content th, .forum-faq-content td { border: 1px solid #444; padding: 0.5em 0.75em; text-align: left; }
+  .forum-faq-content th { background: #353535; color: #e0e0e0; }
+  .forum-faq-content tr:nth-child(even) { background: #2a2a2a; }
+  .forum-faq-content p { margin: 0.5em 0; }
+  .forum-faq-content ul, .forum-faq-content ol { margin: 0.5em 0; padding-left: 1.5em; }
+`;
+
 function getTimeAgo(iso) {
   if (!iso) return '';
   const d = new Date(iso);
@@ -186,6 +204,8 @@ export default function ForumTopic() {
   if (!topic) return null;
 
   const commentCount = comments.length;
+  const isFaqHtml = topic.content && (topic.content.includes('<details') || topic.content.includes('class="faq-box"') || topic.content.includes('class=\'faq-box\''));
+  const topicContent = topic.content || '—';
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-topic-page">
@@ -261,9 +281,19 @@ export default function ForumTopic() {
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
         </div>
         <div className="p-3">
-          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-            {topic.content || '—'}
-          </p>
+          {isFaqHtml ? (
+            <>
+              <style>{FORUM_FAQ_STYLES}</style>
+              <div
+                className="forum-faq-content text-sm leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: topicContent }}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
+              {topicContent}
+            </p>
+          )}
         </div>
       </div>
 
