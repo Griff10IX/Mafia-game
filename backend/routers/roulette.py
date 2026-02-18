@@ -13,6 +13,7 @@ from server import (
     db,
     get_current_user,
     STATES,
+    log_gambling,
     _user_owns_any_casino,
     _username_pattern,
 )
@@ -342,6 +343,19 @@ def register(router):
                     {"$inc": {"total_earnings": owner_cut}}
                 )
         win = total_payout > 0
+        await log_gambling(
+            current_user["id"],
+            current_user.get("username") or "?",
+            "roulette",
+            {
+                "city": stored_city or city,
+                "total_stake": total_stake,
+                "result": result,
+                "total_payout": total_payout,
+                "win": win,
+                "bets": [{"type": b["type"], "selection": b["selection"], "amount": b["amount"]} for b in validated_bets],
+            },
+        )
         return {
             "result": result,
             "win": win,

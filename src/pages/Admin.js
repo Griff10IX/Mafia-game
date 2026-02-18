@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -9,7 +9,23 @@ const ADMIN_STYLES = `
   .admin-fade-in { animation: admin-fade-in 0.4s ease-out both; }
   @keyframes admin-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .admin-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  .admin-category-nav { scroll-margin-top: 5rem; }
 `;
+
+const ADMIN_CATEGORIES = [
+  { id: 'admin-gameworld', label: 'Game World', icon: Zap },
+  { id: 'admin-quick', label: 'Quick & Bulk', icon: Gift },
+  { id: 'admin-players', label: 'Players', icon: UserCog },
+  { id: 'admin-combat', label: 'Combat & Tools', icon: Crosshair },
+  { id: 'admin-moderation', label: 'Moderation', icon: AlertTriangle },
+  { id: 'admin-logs', label: 'Logs', icon: ScrollText },
+  { id: 'admin-database', label: 'Database', icon: Skull },
+];
+
+function scrollToCategory(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
 
 const SECTIONS_KEY = 'admin_sections_collapsed';
 
@@ -894,6 +910,23 @@ export default function Admin() {
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
       </div>
 
+      {/* Sticky category navigation */}
+      <nav className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/95 border-b border-primary/20 rounded-b-md admin-category-nav backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {ADMIN_CATEGORIES.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => scrollToCategory(id)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+            >
+              <Icon size={12} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
       {/* Target Username */}
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -912,12 +945,17 @@ export default function Admin() {
         <div className="admin-art-line text-primary mx-3" />
       </div>
 
-      {/* NPC Management */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Bot}
-          title="NPC Management"
+      {/* ─── Game World ─── */}
+      <section id="admin-gameworld" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <LayoutGrid size={12} />
+          Game World
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Bot}
+            title="NPC Management"
           badge={
             <span className="text-[10px] font-heading">
               <span className={npcData.npcs_enabled ? 'text-emerald-400' : 'text-red-400'}>{npcData.npcs_enabled ? 'On' : 'Off'}</span>
@@ -946,10 +984,9 @@ export default function Admin() {
             )}
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Game Events */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Zap}
@@ -974,10 +1011,9 @@ export default function Admin() {
             <p className="text-[10px] text-mutedForeground">All events (testing): applies every multiplier at once.</p>
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Booze Run rotation (admin test) */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Clock}
@@ -1003,10 +1039,9 @@ export default function Admin() {
             </div>
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Admin display – colour for admins on Users Online */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Palette}
@@ -1044,10 +1079,16 @@ export default function Admin() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
-      {/* Quick Actions */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      {/* ─── Quick & Bulk ─── */}
+      <section id="admin-quick" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Gift size={12} />
+          Quick & Bulk
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Zap}
@@ -1084,10 +1125,16 @@ export default function Admin() {
             </ActionRow>
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
-      {/* Player Actions */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      {/* ─── Players ─── */}
+      <section id="admin-players" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <UserCog size={12} />
+          Players
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={UserCog}
@@ -1177,10 +1224,16 @@ export default function Admin() {
             </ActionRow>
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
-      {/* Search & Attack Tools */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+      {/* ─── Combat & Tools ─── */}
+      <section id="admin-combat" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Crosshair size={12} />
+          Combat & Tools
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Clock}
@@ -1221,10 +1274,9 @@ export default function Admin() {
             </ActionRow>
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Bodyguard Tools */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Shield}
@@ -1250,10 +1302,16 @@ export default function Admin() {
             </ActionRow>
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
-      {/* Cheat Detection */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
+      {/* ─── Moderation ─── */}
+      <section id="admin-moderation" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <AlertTriangle size={12} />
+          Moderation
+        </h2>
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
         <SectionHeader
           icon={AlertTriangle}
           title="Cheat Detection"
@@ -1348,10 +1406,9 @@ export default function Admin() {
             </div>
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Security & Anti-Cheat */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Shield}
@@ -1620,14 +1677,20 @@ export default function Admin() {
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
-      {/* Activity Log */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={ScrollText}
-          title="Activity Log"
+      {/* ─── Logs ─── */}
+      <section id="admin-logs" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <ScrollText size={12} />
+          Logs
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={ScrollText}
+            title="Activity Log"
           badge={activityLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{activityLog.entries.length} entries</span>}
           isCollapsed={collapsed.activityLog}
           onToggle={() => toggleSection('activityLog')}
@@ -1671,14 +1734,14 @@ export default function Admin() {
             {(activityLog.entries || []).length === 0 && !activityLogLoading && <p className="text-xs text-mutedForeground">Load to see crimes, forum topics/comments.</p>}
           </div>
         )}
-      </div>
+        </div>
 
-      {/* Gambling Log */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        {/* Betting Log — all casino and sports bets */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Dice5}
-          title="Gambling Log"
+          title="Betting Log"
           badge={gamblingLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{gamblingLog.entries.length} entries</span>}
           isCollapsed={collapsed.gamblingLog}
           onToggle={() => toggleSection('gamblingLog')}
@@ -1700,7 +1763,11 @@ export default function Admin() {
               >
                 <option value="">All games</option>
                 <option value="dice">Dice</option>
+                <option value="roulette">Roulette</option>
                 <option value="blackjack">Blackjack</option>
+                <option value="slots">Slots</option>
+                <option value="videopoker">Video Poker</option>
+                <option value="horseracing">Horse Racing</option>
                 <option value="sports_bet">Sports</option>
               </select>
               <BtnPrimary onClick={fetchGamblingLog} disabled={gamblingLogLoading}>
@@ -1743,21 +1810,27 @@ export default function Admin() {
                 {clearGamblingLoading ? '...' : 'Clear old'}
               </BtnDanger>
             </div>
-            {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see dice, blackjack, sports bets.</p>}
+            {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all betting (dice, roulette, blackjack, slots, video poker, horseracing, sports).</p>}
           </div>
         )}
-      </div>
+        </div>
+      </section>
 
-      {/* Database Management */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-red-500/30`}>
-        <SectionHeader
-          icon={Skull}
-          title="Database Management"
-          color="text-red-400"
-          isCollapsed={collapsed.database}
-          onToggle={() => toggleSection('database')}
-        />
-        {!collapsed.database && (
+      {/* ─── Database ─── */}
+      <section id="admin-database" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Skull size={12} />
+          Database
+        </h2>
+        <div className={`${styles.panel} rounded-md overflow-hidden border border-red-500/30`}>
+          <SectionHeader
+            icon={Skull}
+            title="Database Management"
+            color="text-red-400"
+            isCollapsed={collapsed.database}
+            onToggle={() => toggleSection('database')}
+          />
+          {!collapsed.database && (
           <div className="p-3 space-y-3">
             {/* Find Duplicates */}
             <div className="space-y-2">
@@ -1816,8 +1889,9 @@ export default function Admin() {
               </div>
             </div>
           </div>
-        )}
-      </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }

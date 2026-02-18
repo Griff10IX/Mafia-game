@@ -12,6 +12,7 @@ from server import (
     db,
     get_current_user,
     STATES,
+    log_gambling,
     _user_owns_any_casino,
     _username_pattern,
 )
@@ -355,6 +356,21 @@ def register(router):
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$push": {"horseracing_history": {"$each": [history_entry], "$slice": -HORSERACING_HISTORY_MAX}}}
+        )
+        await log_gambling(
+            current_user["id"],
+            current_user.get("username") or "?",
+            "horseracing",
+            {
+                "city": city,
+                "bet": bet,
+                "horse_id": horse_id,
+                "horse_name": horse["name"],
+                "odds": horse.get("odds"),
+                "won": won,
+                "payout": payout if won else 0,
+                "winner_name": winner["name"],
+            },
         )
         finish_pcts, finish_order_ids, photo_finish = _horseracing_finish_order(winner["id"])
         return {
