@@ -15,13 +15,25 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
     current_rank_id, current_rank_name = get_rank_info(raw_points, prestige_mult)
 
     if current_rank_id >= 11:
-        # At Godfather — show progress based on next prestige requirement if applicable
+        # At Godfather — show progress toward next prestige requirement so bar matches prestige %
         next_prestige_cfg = PRESTIGE_CONFIGS.get(prestige_level + 1) if prestige_level < 5 else None
         if next_prestige_cfg:
             godfather_req = next_prestige_cfg["godfather_req"]
-            progress = min(100, (effective_points / 400_000) * 100) if 400_000 > 0 else 100
-        else:
-            progress = 100
+            progress = min(100, (effective_points / godfather_req) * 100) if godfather_req > 0 else 100
+            needed = max(0, godfather_req - effective_points)
+            return {
+                "current_rank": current_rank_id,
+                "current_rank_name": current_rank_name,
+                "next_rank": None,
+                "next_rank_name": "Max Rank",
+                "money_progress": 100,
+                "rank_points_progress": progress,
+                "money_needed": 0,
+                "rank_points_needed": needed,
+                "money_current": current_user["money"],
+                "rank_points_current": effective_points,
+            }
+        progress = 100
         return {
             "current_rank": current_rank_id,
             "current_rank_name": current_rank_name,

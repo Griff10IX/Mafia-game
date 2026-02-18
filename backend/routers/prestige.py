@@ -25,7 +25,13 @@ def register(router):
         godfather_req = next_cfg["godfather_req"] if next_cfg else None
 
         effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
-        can_prestige = (not at_max) and (effective_rp >= 400_000)
+        # Require Godfather rank and effective RP >= next level's requirement
+        can_prestige = (
+            not at_max
+            and rank_id >= 11
+            and godfather_req is not None
+            and effective_rp >= godfather_req
+        )
 
         current_benefits = get_prestige_bonus(current_user)
 
@@ -65,9 +71,14 @@ def register(router):
         mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
         rank_points = int(current_user.get("rank_points") or 0)
         effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
+        next_cfg = PRESTIGE_CONFIGS.get(level + 1)
+        godfather_req = next_cfg["godfather_req"] if next_cfg else None
 
-        if effective_rp < 400_000:
+        rank_id, _ = get_rank_info(rank_points, mult)
+        if rank_id < 11:
             raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
+        if godfather_req is None or effective_rp < godfather_req:
+            raise HTTPException(status_code=400, detail=f"You need {godfather_req:,} effective rank points to prestige (you have {effective_rp:,})")
 
         new_level = level + 1
         new_cfg = PRESTIGE_CONFIGS[new_level]
