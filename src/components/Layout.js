@@ -723,18 +723,6 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
                           </Link>
-                          <Link
-                            to="/prestige"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-prestige"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Prestige</span>
-                            <Star size={10} style={{ color: 'var(--noir-primary)', opacity: 0.6 }} className="shrink-0" />
-                          </Link>
                         </div>
                       )}
                     </div>
@@ -896,6 +884,23 @@ export default function Layout({ children }) {
                   </Link>
                 );
               })}
+
+              {/* Prestige — always visible */}
+              <Link
+                to="/prestige"
+                data-testid="nav-prestige"
+                className={`flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth mt-0.5 ${
+                  location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink
+                }`}
+                style={location.pathname === '/prestige' ? sidebarActiveStyle : { borderTop: '1px solid rgba(var(--noir-primary-rgb),0.12)', marginTop: 4, paddingTop: 8 }}
+                onClick={() => setSidebarOpen(false)}
+              >
+                <Trophy size={14} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
+                {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />
+                )}
+              </Link>
 
               {/* Admin Section */}
               {adminNavItems.map((item) => {
