@@ -457,12 +457,18 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
         raise HTTPException(status_code=404, detail="Family not found")
     members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(100)
     members = []
+    fallen = []
     for m in members_docs:
-        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "username": 1, "rank": 1})
+        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1})
         rank_name = "—"
         if u and RANKS:
             rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
-        members.append({"user_id": m["user_id"], "username": (u or {}).get("username", "?"), "role": m["role"], "rank_name": rank_name})
+        entry = {"user_id": m["user_id"], "username": (u or {}).get("username", "?"), "role": m["role"], "rank_name": rank_name}
+        if (u or {}).get("is_dead"):
+            entry["dead_at"] = (u or {}).get("dead_at")
+            fallen.append(entry)
+        else:
+            members.append(entry)
     rackets_raw = fam.get("rackets") or {}
     rackets = []
     for r in FAMILY_RACKETS:
@@ -491,7 +497,7 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
     crew_oc_crew += [{"username": a.get("username") or "?", "is_family_member": False} for a in accepted_apps]
     return {
         "id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0),
-        "member_count": len(members), "members": members, "rackets": rackets, "my_role": my_role,
+        "member_count": len(members), "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "crew_oc_join_fee": crew_oc_join_fee, "crew_oc_cooldown_until": crew_oc_cooldown_until,
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
         "crew_oc_application": crew_oc_application, "crew_oc_crew": crew_oc_crew,

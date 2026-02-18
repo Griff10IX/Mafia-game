@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../utils/api';
-import { Building2, Users, TrendingUp, ArrowLeft, Crosshair, Clock, DollarSign, Shield } from 'lucide-react';
+import { Building2, Users, TrendingUp, ArrowLeft, Crosshair, Clock, Skull } from 'lucide-react';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -117,6 +117,7 @@ export default function FamilyProfilePage() {
   }
 
   const members = family.members || [];
+  const fallen = family.fallen || [];
   const rackets = family.rackets || [];
   const isMyFamily = !!family.my_role;
   const crewOCFee = family.crew_oc_join_fee ?? 0;
@@ -179,7 +180,10 @@ export default function FamilyProfilePage() {
               </div>
               <div className="text-center fp-stat-card rounded-lg px-2 py-1">
                 <div className="text-[8px] text-zinc-500 font-heading uppercase tracking-[0.15em]">Made Men</div>
-                <div className="text-sm font-heading font-bold text-foreground">{family.member_count}</div>
+                <div className="text-sm font-heading font-bold text-foreground">
+                  {family.member_count}
+                  {fallen.length > 0 && <span className="text-[10px] text-zinc-600 ml-1">+{fallen.length}†</span>}
+                </div>
               </div>
               <div className="text-center fp-stat-card rounded-lg px-2 py-1">
                 <div className="text-[8px] text-zinc-500 font-heading uppercase tracking-[0.15em]">Rackets</div>
@@ -298,6 +302,11 @@ export default function FamilyProfilePage() {
           <Users size={13} className="text-primary" />
           <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.2em]">Made Men & Associates</h3>
           <span className="text-[10px] text-zinc-500 font-heading ml-auto">{members.length} sworn</span>
+          {fallen.length > 0 && (
+            <span className="text-[10px] text-zinc-600 font-heading flex items-center gap-1">
+              <Skull size={9} /> {fallen.length} fallen
+            </span>
+          )}
         </div>
         <div className="p-3">
           {members.length === 0 ? (
@@ -336,6 +345,51 @@ export default function FamilyProfilePage() {
             </div>
           )}
         </div>
+
+        {/* ── Graveyard ── */}
+        {fallen.length > 0 && (
+          <div className="px-3 pb-3 pt-0 border-t border-zinc-700/30 mt-0">
+            <div className="flex items-center gap-2 py-2.5">
+              <Skull size={11} className="text-zinc-600" />
+              <p className="text-[9px] text-zinc-600 font-heading uppercase tracking-[0.2em]">Graveyard — {fallen.length} fallen</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {fallen.map((m, idx) => {
+                const cfg = getRoleConfig(m.role);
+                const deadDate = m.dead_at
+                  ? new Date(m.dead_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' })
+                  : null;
+                return (
+                  <div
+                    key={m.user_id}
+                    className="relative flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/50 opacity-55 fp-fade-in"
+                    style={{ animationDelay: `${idx * 0.04}s` }}
+                  >
+                    <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-zinc-700/40 rounded-l-lg" />
+                    <div className="min-w-0 flex items-center gap-2">
+                      <Skull size={10} className="text-zinc-600 shrink-0" />
+                      <div className="min-w-0">
+                        <Link
+                          to={`/profile/${encodeURIComponent(m.username)}`}
+                          className="font-heading font-bold text-xs text-zinc-500 hover:text-zinc-300 transition-colors block truncate line-through decoration-zinc-700"
+                        >
+                          {m.username}
+                        </Link>
+                        <span className={`inline-flex items-center gap-0.5 text-[9px] font-heading ${cfg.color} opacity-60`}>
+                          {cfg.icon} {cfg.label}
+                          {m.rank_name && <span className="text-zinc-600 ml-1">· {m.rank_name}</span>}
+                        </span>
+                      </div>
+                    </div>
+                    {deadDate && (
+                      <span className="text-[8px] text-zinc-700 font-heading shrink-0 ml-2">†&nbsp;{deadDate}</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
