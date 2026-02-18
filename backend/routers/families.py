@@ -9,6 +9,8 @@ import os
 import sys
 from typing import Optional, Dict
 
+logger = logging.getLogger(__name__)
+
 # Caching: config is static; list and my have short TTL, invalidated on mutations
 _config_cache: Optional[dict] = None
 _list_cache: Optional[tuple] = None  # (payload, expires_at)
@@ -29,6 +31,10 @@ from server import (
     send_notification,
     send_notification_to_family,
     maybe_process_rank_up,
+    _get_active_war_between,
+    _get_active_war_for_family,
+    _family_war_start,
+    _record_war_stats_bodyguard_kill,
 )
 
 # ============ Constants ============
@@ -246,6 +252,84 @@ async def _get_family_raid_lock(attacker_family_id: str, target_family_id: str) 
         if key not in _family_raid_locks:
             _family_raid_locks[key] = asyncio.Lock()
         return _family_raid_locks[key]
+
+
+# ============ Vendetta / war stats (bodyguard kills) ============
+def _norm_fid(fid):
+    """Normalize family_id for consistent comparison and DB use."""
+    if fid is None:
+        return None
+    s = str(fid).strip()
+    return s if s else None
+
+
+async def resolve_family_id(user_id: str):
+    """Resolve a user's family_id: users.family_id, then family_members, then families.boss_id."""
+    if not user_id:
+        return None
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "family_id": 1})
+    if u and u.get("family_id"):
+        return _norm_fid(u["family_id"])
+    m = await db.family_members.find_one({"user_id": user_id}, {"_id": 0, "family_id": 1})
+    if m and m.get("family_id"):
+        return _norm_fid(m["family_id"])
+    fam = await db.families.find_one({"boss_id": user_id}, {"_id": 0, "id": 1})
+    return _norm_fid((fam or {}).get("id"))
+
+
+async def _resolve_owner_family_via_war(killer_family_id: str, owner_id: str):
+    """If killer is in an active war, check if owner is in the enemy family; return that family_id or None."""
+    if not killer_family_id or not owner_id:
+        return None
+    war = await _get_active_war_for_family(killer_family_id)
+    if not war or not war.get("id"):
+        return None
+    other_id = _norm_fid(
+        war["family_b_id"] if _norm_fid(war["family_a_id"]) == killer_family_id else war["family_a_id"]
+    )
+    if not other_id:
+        return None
+    if await db.family_members.find_one({"family_id": other_id, "user_id": owner_id}, {"_id": 1}):
+        return other_id
+    fam = await db.families.find_one({"id": other_id, "boss_id": owner_id}, {"_id": 0, "id": 1})
+    return _norm_fid((fam or {}).get("id"))
+
+
+async def record_vendetta_bodyguard_kill(
+    killer_id: str,
+    owner_id: str,
+    killer_family_id_hint: Optional[str] = None,
+    owner_family_id_from_doc: Optional[str] = None,
+) -> bool:
+    """
+    Record a bodyguard kill for vendetta when killer and bodyguard owner are in different families.
+    Called from attack router when a bodyguard is killed. Returns True if recorded.
+    """
+    try:
+        killer_family_id = _norm_fid(await resolve_family_id(killer_id) or killer_family_id_hint)
+        owner_family_id = _norm_fid(owner_family_id_from_doc) or await resolve_family_id(owner_id)
+        if not owner_family_id and killer_family_id:
+            owner_family_id = await _resolve_owner_family_via_war(killer_family_id, owner_id)
+        if not killer_family_id or not owner_family_id or killer_family_id == owner_family_id:
+            logger.debug(
+                "Vendetta BG kill not recorded killer_fid=%s owner_fid=%s",
+                killer_family_id, owner_family_id,
+            )
+            return False
+        bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
+        if not bg_war or not bg_war.get("id"):
+            await _family_war_start(killer_family_id, owner_family_id)
+            bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
+        if bg_war and bg_war.get("id"):
+            await _record_war_stats_bodyguard_kill(
+                bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id
+            )
+            logger.info("Vendetta: recorded BG kill war_id=%s killer=%s owner=%s", bg_war["id"], killer_id, owner_id)
+            return True
+        return False
+    except Exception as e:
+        logging.exception("Vendetta record bodyguard kill: %s", e)
+        return False
 
 
 # ============ Cache helpers ============
@@ -962,12 +1046,6 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
         stats_docs = await db.family_war_stats.find({"war_id": w["id"]}, {"_id": 0}).to_list(200)
         by_user = {s["user_id"]: s for s in stats_docs}
         usernames = {}
-        def _norm_fid(x):
-            if x is None:
-                return None
-            s = str(x).strip()
-            return s if s else None
-
         for uid in by_user:
             u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1, "family_id": 1})
             usernames[uid] = (u or {}).get("username", "?")
