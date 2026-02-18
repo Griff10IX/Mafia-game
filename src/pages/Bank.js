@@ -85,23 +85,27 @@ const InterestBankCard = ({
   durationHours,
   onDurationChange,
   preview,
-  onDeposit
+  onDeposit,
+  hideHeader = false
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`}>
-    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
-    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-      <div className="flex items-center gap-1">
-        <Landmark size={14} className="text-primary" />
-        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
-          Interest Bank
-        </span>
-      </div>
-      <span className="text-[9px] text-mutedForeground">
-        Cash: <span className="font-bold text-foreground">{formatMoney(overview?.cash_on_hand)}</span>
-      </span>
-    </div>
-
+    {!hideHeader && (
+      <>
+        <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <Landmark size={14} className="text-primary" />
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
+              Interest Bank
+            </span>
+          </div>
+          <span className="text-[9px] text-mutedForeground">
+            Cash: <span className="font-bold text-foreground">{formatMoney(overview?.cash_on_hand)}</span>
+          </span>
+        </div>
+      </>
+    )}
     <div className="p-2 space-y-2">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
@@ -171,23 +175,27 @@ const SwissBankCard = ({
   swissAmount,
   onSwissAmountChange,
   onDeposit,
-  onWithdraw
+  onWithdraw,
+  hideHeader = false
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`} style={{ animationDelay: '0.05s' }}>
-    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
-    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-      <div className="flex items-center gap-1">
-        <ShieldCheck size={14} className="text-primary" />
-        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
-          Swiss Bank
-        </span>
-      </div>
-      <span className="text-[9px] text-mutedForeground">
-        Limit: <span className="font-bold text-foreground">{formatMoney(overview?.swiss_limit)}</span>
-      </span>
-    </div>
-
+    {!hideHeader && (
+      <>
+        <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+          <div className="flex items-center gap-1">
+            <ShieldCheck size={14} className="text-primary" />
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
+              Swiss Bank
+            </span>
+          </div>
+          <span className="text-[9px] text-mutedForeground">
+            Limit: <span className="font-bold text-foreground">{formatMoney(overview?.swiss_limit)}</span>
+          </span>
+        </div>
+      </>
+    )}
     <div className="p-2 space-y-2">
       <div className="bg-secondary border border-primary/20 rounded p-2">
         <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-0.5">
@@ -287,19 +295,23 @@ const SendMoneyCard = ({
   transferAmount,
   onTransferAmountChange,
   transferNum,
-  onSend
+  onSend,
+  hideHeader = false
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`}>
-    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
-      <div className="flex items-center gap-1">
-        <ArrowRightLeft size={14} className="text-primary" />
-        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
-          Send Money
-        </span>
-      </div>
-    </div>
-
+    {!hideHeader && (
+      <>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+          <div className="flex items-center gap-1">
+            <ArrowRightLeft size={14} className="text-primary" />
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
+              Send Money
+            </span>
+          </div>
+        </div>
+      </>
+    )}
     <div className="p-2 space-y-2">
       <div>
         <label className="block text-[9px] font-heading text-mutedForeground mb-0.5 uppercase tracking-wider">
@@ -531,16 +543,19 @@ export default function Bank() {
 
       <p className="text-[9px] text-zinc-500 font-heading italic">Interest deposits, Swiss account, and transfers.</p>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+      <div className="space-y-2">
         <div className="relative rounded-md overflow-hidden border border-primary/20 bank-corner bank-fade-in">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
             onClick={() => toggleSection('interestBank')}
-            className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center gap-1 text-left hover:bg-primary/12 transition-colors"
+            className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1 text-left hover:bg-primary/12 transition-colors"
           >
-            <span className="shrink-0 text-primary/80">{isCollapsed('interestBank') ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</span>
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Interest Bank</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="shrink-0 text-primary/80">{isCollapsed('interestBank') ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</span>
+              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Interest Bank</span>
+            </div>
+            <span className="text-[9px] text-mutedForeground shrink-0">Cash: <span className="font-bold text-foreground">{formatMoney(overview?.cash_on_hand)}</span></span>
           </button>
           {!isCollapsed('interestBank') && (
             <div>
@@ -553,6 +568,7 @@ export default function Bank() {
                 onDurationChange={setDurationHours}
                 preview={preview}
                 onDeposit={doDeposit}
+                hideHeader
               />
             </div>
           )}
@@ -563,10 +579,13 @@ export default function Bank() {
           <button
             type="button"
             onClick={() => toggleSection('swissBank')}
-            className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center gap-1 text-left hover:bg-primary/12 transition-colors"
+            className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1 text-left hover:bg-primary/12 transition-colors"
           >
-            <span className="shrink-0 text-primary/80">{isCollapsed('swissBank') ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</span>
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Swiss Bank</span>
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="shrink-0 text-primary/80">{isCollapsed('swissBank') ? <ChevronRight size={14} /> : <ChevronDown size={14} />}</span>
+              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Swiss Bank</span>
+            </div>
+            <span className="text-[9px] text-mutedForeground shrink-0">Limit: <span className="font-bold text-foreground">{formatMoney(overview?.swiss_limit)}</span></span>
           </button>
           {!isCollapsed('swissBank') && (
             <div>
@@ -576,6 +595,7 @@ export default function Bank() {
                 onSwissAmountChange={setSwissAmount}
                 onDeposit={swissDeposit}
                 onWithdraw={swissWithdraw}
+                hideHeader
               />
             </div>
           )}
@@ -614,7 +634,7 @@ export default function Bank() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+      <div className="space-y-2">
         <div className={`relative ${styles.panel} border border-primary/20 rounded-md overflow-hidden bank-fade-in`} style={{ animationDelay: '0.1s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
@@ -634,6 +654,7 @@ export default function Bank() {
                 onTransferAmountChange={setTransferAmount}
                 transferNum={transferNum}
                 onSend={sendMoney}
+                hideHeader
               />
             </div>
           )}
