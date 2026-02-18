@@ -1,29 +1,37 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus } from 'lucide-react';
+import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette } from 'lucide-react';
 import api from '../utils/api';
 import GifPicker from '../components/GifPicker';
 import { toast } from 'sonner';
+import { parseForumContent, insertAtCursor } from '../utils/forumContent';
 import styles from '../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
 
-/** FAQ / HTML topic content: dark gray dropdowns (details/summary). Only used when content contains FAQ markup. */
+/** FAQ / HTML topic content: dark gray dropdowns with coloured text. */
 const FORUM_FAQ_STYLES = `
-  .forum-faq-content { background: #2d2d2d; color: #d8d8d8; padding: 1.2em; border-radius: 8px; max-width: 100%; }
+  .forum-faq-content { background: #2d2d2d; color: #b8c4d0; padding: 1.2em; border-radius: 8px; max-width: 100%; }
   .forum-faq-content details { margin: 0.6em 0; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
-  .forum-faq-content summary { background: #3a3a3a; color: #e8e8e8; padding: 0.6em 1em; cursor: pointer; font-weight: bold; list-style: none; }
+  .forum-faq-content summary { background: #3a3a3a; color: #e8d4a8; padding: 0.6em 1em; cursor: pointer; font-weight: bold; list-style: none; }
   .forum-faq-content summary::-webkit-details-marker { display: none; }
-  .forum-faq-content summary:hover { background: #454545; }
+  .forum-faq-content summary:hover { background: #454545; color: #f0e0b0; }
   .forum-faq-content details[open] summary { border-bottom: 1px solid #444; }
-  .forum-faq-content details > div { padding: 1em 1.2em; background: #252525; color: #d0d0d0; line-height: 1.5; }
-  .forum-faq-content strong { color: #eee; }
+  .forum-faq-content details > div { padding: 1em 1.2em; background: #252525; color: #b8c4d0; line-height: 1.5; }
+  .forum-faq-content strong { color: #d4a574; }
+  .forum-faq-content p { margin: 0.5em 0; color: #b8c4d0; }
+  .forum-faq-content ul, .forum-faq-content ol { margin: 0.5em 0; padding-left: 1.5em; color: #b8c4d0; }
+  .forum-faq-content li { color: #c0ccd8; }
   .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.5em; }
-  .forum-faq-content th, .forum-faq-content td { border: 1px solid #444; padding: 0.5em 0.75em; text-align: left; }
-  .forum-faq-content th { background: #353535; color: #e0e0e0; }
+  .forum-faq-content th, .forum-faq-content td { border: 1px solid #444; padding: 0.5em 0.75em; text-align: left; color: #b8c4d0; }
+  .forum-faq-content th { background: #353535; color: #e8d4a8; }
   .forum-faq-content tr:nth-child(even) { background: #2a2a2a; }
-  .forum-faq-content p { margin: 0.5em 0; }
-  .forum-faq-content ul, .forum-faq-content ol { margin: 0.5em 0; padding-left: 1.5em; }
+`;
+const FORUM_CONTENT_STYLES = `
+  .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
+  .forum-content-gif { max-height: 280px; object-fit: contain; }
+  .forum-content strong { font-weight: 700; }
+  .forum-content em { font-style: italic; }
 `;
 
 function getTimeAgo(iso) {
@@ -57,6 +65,7 @@ export default function ForumTopic() {
   const [createGameJoinFee, setCreateGameJoinFee] = useState(0);
   const [createGameSubmitting, setCreateGameSubmitting] = useState(false);
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
+  const commentTextareaRef = useRef(null);
 
   const fetchTopic = useCallback(async () => {
     if (!topicId) return;
@@ -176,6 +185,22 @@ export default function ForumTopic() {
     }
   };
 
+  const insertCommentMarkup = (before, after = '') => {
+    const ta = commentTextareaRef.current;
+    if (!ta) {
+      setCommentText((c) => c + before + after);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const { value, cursor } = insertAtCursor(commentText, before, after, start, end);
+    setCommentText(value);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(cursor, cursor);
+    }, 0);
+  };
+
   const likeComment = async (commentId) => {
     setLikingId(commentId);
     try {
@@ -209,6 +234,7 @@ export default function ForumTopic() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-topic-page">
+      <style>{FORUM_CONTENT_STYLES}</style>
       {/* Header */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -290,9 +316,10 @@ export default function ForumTopic() {
               />
             </>
           ) : (
-            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
-              {topicContent}
-            </p>
+            <div
+              className="forum-content text-sm text-foreground leading-relaxed break-words"
+              dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent) }}
+            />
           )}
         </div>
       </div>
@@ -402,16 +429,19 @@ export default function ForumTopic() {
                   )}
                 </div>
                 
-                {/* GIF */}
+                {/* GIF (legacy gif_url) */}
                 {c.gif_url && (
                   <div className="mt-2">
-                    <img src={c.gif_url} alt="GIF" className="rounded max-h-40 object-contain" loading="lazy" />
+                    <img src={c.gif_url} alt="GIF" className="rounded max-h-40 object-contain forum-content-gif" loading="lazy" />
                   </div>
                 )}
                 
-                {/* Text content */}
+                {/* Text content (supports [b], [i], [color], [img], [gif], smileys) */}
                 {c.content && c.content !== '(GIF)' && (
-                  <p className="mt-2 text-xs text-foreground whitespace-pre-wrap">{c.content}</p>
+                  <div
+                    className="mt-2 text-xs text-foreground forum-content break-words"
+                    dangerouslySetInnerHTML={{ __html: parseForumContent(c.content) }}
+                  />
                 )}
                 
                 {/* Like button */}
@@ -455,8 +485,9 @@ export default function ForumTopic() {
             
             <form onSubmit={postComment} className="space-y-2">
               <textarea
+                ref={commentTextareaRef}
                 id="forum-add-comment"
-                placeholder="Write a comment..."
+                placeholder="Write a comment... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 rows={3}
@@ -465,6 +496,20 @@ export default function ForumTopic() {
               
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => insertCommentMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const url = window.prompt('Image URL (must start with http:// or https://):');
+                    if (url && url.trim()) insertCommentMarkup('[img]' + url.trim() + '[/img]');
+                  }}
+                  className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10"
+                  title="Image"
+                >
+                  <Image size={14} />
+                </button>
                 <button
                   type="button"
                   onClick={() => setShowGifPicker((v) => !v)}

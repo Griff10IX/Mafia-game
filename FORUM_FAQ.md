@@ -1,9 +1,3 @@
-# Game FAQ — Forum Version
-
-Copy the content below into your forum. Each title is clickable and drops down to show the info. Uses HTML `<details>` and `<summary>`. Dark gray theme — if your forum doesn’t support the styling, the dropdowns may still work.
-
----
-
 <div style="background:#2d2d2d;color:#d8d8d8;padding:1.2em;border-radius:8px;max-width:800px;">
 <style>
 .faq-box details { margin:0.6em 0; border:1px solid #444; border-radius:6px; overflow:hidden; }
@@ -453,7 +447,7 @@ You can list **casino tables** (dice, roulette, blackjack, horseracing) or other
 <div>
 
 **What it is:**  
-An optional feature (bought in the **Store**) that lets the game run **crimes**, **GTA**, **jail busts**, **Organised Crime**, and **booze runs** for you on a timer. You must have **Telegram** linked in your Profile to use it.
+An optional feature (bought in the **Store**) that lets the game run **crimes**, **GTA**, **jail busts**, **Organised Crime**, and **booze runs** for you on a timer. **Telegram** is optional — link it in Profile if you want notifications when runs succeed.
 
 **Preferences:**  
 You can turn **on/off** each activity (crimes, GTA, bust every 5 sec, OC, booze). Enable or disable Auto Rank anytime from the Auto Rank page.
@@ -514,32 +508,7 @@ Your **Stats** page shows your totals: kills, deaths, crimes, GTA, vehicles, jai
 </div>
 </details>
 
-<details>
-<summary><strong>Quick Reference Table</strong></summary>
-<div>
-
-| Feature  | Key detail |
-|----------|------------|
-| Online   | Last 5 min; no dead/BG |
-| Rank     | By rank points; Godfather at 400k |
-| Crimes   | Progress 10–92%; success +6–8%, fail -1–3%; floor 77% at max |
-| GTA      | Progress 25–92%; fail = 40% jail chance; melt 45s cooldown per car |
-| Casinos  | Per city; dice/roulette/blackjack ownable; house edge to owner |
-| Families | Boss/Underboss/Consigliere/Capo/Soldier/Associate; rackets, treasury, Crew OC, wars |
-| Attack   | Search → found in city → travel → execute; 25% victim cash on kill |
-| Hitlist  | Bounty on user or bodyguards; cash/points; hidden +50%; buy off 150% |
-| Jail     | Bust players (15 RP) or NPCs (25 RP); fail = 30s jail; 3 points to leave |
-| Bank     | Interest 3h–72h; Swiss cap; transfer to username |
-| OC       | 4 roles; 6h or 4h cooldown; equipment boosts success |
-| Prestige | After Godfather; 5 levels; resets rank, keeps bonuses |
-| Bullet factory | 3k/hr, 24h cap; claim $5M; buy 3k/15min cooldown |
-| Booze run | 6 types; capacity by rank + Store; prices rotate 3h; 2–6% jail 20s |
-| Crack Safe | 5-digit combo; 50 free/day, +50 for $50M; clues unlock |
-| Objectives | Daily/weekly/monthly; completion bonuses |
-
 <p style="margin-top:1em;font-size:0.9em;color:#999;">This FAQ is based on the current game code. Exact numbers (e.g. cooldowns, costs, limits) may be tuned in future updates; refer to in-game screens for live values.</p>
-</div>
-</details>
 
 </div>
 </div>

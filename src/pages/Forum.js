@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users } from 'lucide-react';
+import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
+import GifPicker from '../components/GifPicker';
+import { insertAtCursor } from '../utils/forumContent';
 import styles from '../styles/noir.module.css';
 
 const FORUM_STYLES = `
@@ -62,8 +64,26 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const contentTextareaRef = useRef(null);
 
   const insertEmoji = (emoji) => setContent((c) => c + emoji);
+
+  const insertTopicMarkup = (before, after = '') => {
+    const ta = contentTextareaRef.current;
+    if (!ta) {
+      setContent((c) => c + before + after);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const { value, cursor } = insertAtCursor(content, before, after, start, end);
+    setContent(value);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(cursor, cursor);
+    }, 0);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -101,29 +121,38 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
             onChange={(e) => setTitle(e.target.value)}
             className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
           />
+          {showGifPicker && (
+            <div className="rounded border border-zinc-700/50 overflow-hidden">
+              <GifPicker onSelect={(url) => { insertTopicMarkup('[gif]' + url + '[/gif]'); setShowGifPicker(false); }} onClose={() => setShowGifPicker(false)} />
+            </div>
+          )}
           <textarea
-            placeholder="Content..."
+            ref={contentTextareaRef}
+            placeholder="Content... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={4}
             className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
           />
           
-          {/* Emoji toggle */}
-          <div>
-            <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="text-[10px] text-mutedForeground hover:text-foreground">
-              {showEmojis ? 'Hide emojis' : 'Add emoji'}
-            </button>
-            {showEmojis && (
-              <div className="flex flex-wrap gap-1 mt-2">
-                {EMOJI_STRIP.map((em) => (
-                  <button key={em} type="button" onClick={() => insertEmoji(em)} className="text-base hover:scale-110 transition-transform p-0.5">
-                    {em}
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Rich toolbar */}
+          <div className="flex flex-wrap items-center gap-1">
+            <button type="button" onClick={() => insertTopicMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+            <button type="button" onClick={() => insertTopicMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+            <button type="button" onClick={() => insertTopicMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
+            <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertTopicMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+            <button type="button" onClick={() => setShowGifPicker((v) => !v)} className="px-2 py-1 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10">GIF</button>
+            <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground">{showEmojis ? 'Hide emoji' : '😀 Emoji'}</button>
           </div>
+          {showEmojis && (
+            <div className="flex flex-wrap gap-1">
+              {EMOJI_STRIP.map((em) => (
+                <button key={em} type="button" onClick={() => insertEmoji(em)} className="text-base hover:scale-110 transition-transform p-0.5">
+                  {em}
+                </button>
+              ))}
+            </div>
+          )}
           
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading font-bold uppercase rounded border border-zinc-600/50 hover:bg-zinc-600/50 transition-all">

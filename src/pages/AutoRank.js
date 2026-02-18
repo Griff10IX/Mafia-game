@@ -311,7 +311,7 @@ export default function AutoRank() {
       <style>{AR_STYLES}</style>
       <div className="max-w-xl mx-auto space-y-4">
         <div className="relative ar-fade-in">
-          <p className="text-[10px] text-zinc-500 font-heading italic">Automate crimes, GTA, busts, OC. Set Telegram in Profile for notifications.</p>
+          <p className="text-[10px] text-zinc-500 font-heading italic">Automate crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.</p>
         </div>
 
         {/* Hero / intro */}
@@ -321,14 +321,14 @@ export default function AutoRank() {
             <Bot className="w-5 h-5 text-primary shrink-0" />
             <div>
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Setup &amp; status</h2>
-              <p className="text-[11px] text-zinc-500 font-heading mt-0.5">Add Telegram in <Link to="/profile" className="text-primary hover:underline">Profile → Settings</Link> to get notifications when runs succeed.</p>
+              <p className="text-[11px] text-zinc-500 font-heading mt-0.5">Optional: add Telegram in <Link to="/profile" className="text-primary hover:underline">Profile → Settings</Link> to get notifications when runs succeed.</p>
             </div>
           </div>
           <div className="p-3 md:p-4 space-y-3">
             {!prefs.telegram_chat_id_set && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
                 <p className="text-xs font-heading text-mutedForeground">
-                  No Telegram set — Auto Rank still runs; you won&apos;t get notifications. Set <strong>Telegram chat ID</strong> in <Link to="/profile" className="underline font-bold">Profile → Settings</Link> (get ID from <span className="font-mono">@userinfobot</span>) to receive success messages.
+                  Auto Rank runs without Telegram. To get success messages, set <strong>Telegram chat ID</strong> in <Link to="/profile" className="underline font-bold">Profile → Settings</Link> (get ID from <span className="font-mono">@userinfobot</span>).
                 </p>
               </div>
             )}

@@ -711,7 +711,7 @@ def register(router):
         if body.auto_rank_enabled is not None:
             can_enable = current_user.get("auto_rank_purchased") or current_user.get("auto_rank_enabled")
             if body.auto_rank_enabled and not can_enable:
-                raise HTTPException(status_code=400, detail="Buy Auto Rank from the Store first (and set Telegram in Profile).")
+                raise HTTPException(status_code=400, detail="Buy Auto Rank from the Store first.")
             updates["auto_rank_enabled"] = body.auto_rank_enabled
         for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
             val = getattr(body, field, None)
