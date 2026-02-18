@@ -30,18 +30,31 @@ export default function Landing({ setIsAuthenticated }) {
       toast.success(isLogin ? 'Welcome back!' : 'Account created successfully!');
     } catch (error) {
       let msg;
+      const prefix = isLogin ? 'Cannot log in: ' : 'Registration failed: ';
       if (error.code === 'ERR_NETWORK' || !error.response) {
         const base = error.config?.baseURL || getBaseURL();
         msg = `Cannot reach server. Backend URL: ${base} — Set REACT_APP_BACKEND_URL in Vercel (production) or leave unset for same-origin /api.`;
-      } else if (error.response?.data?.detail) {
+      } else if (error.response?.data?.detail != null) {
         const d = error.response.data.detail;
-        msg = Array.isArray(d) ? d.map((x) => x.msg || x).join(', ') : d;
+        if (typeof d === 'string') {
+          msg = d;
+        } else if (Array.isArray(d)) {
+          msg = d.map((x) => (x && typeof x === 'object' && 'msg' in x ? x.msg : String(x))).filter(Boolean).join('. ') || 'Invalid request';
+        } else if (typeof d === 'object' && d !== null && typeof d.message === 'string') {
+          msg = d.message;
+        } else {
+          msg = String(d);
+        }
+        // State the reason clearly for login/register
+        msg = msg.startsWith('Cannot log in') || msg.startsWith('Login failed') || msg.startsWith('Registration failed') ? msg : `${prefix}${msg}`;
       } else if (error.response?.status === 404) {
         msg = `Login endpoint not found (404). Backend may be wrong or not running. URL: ${error.config?.baseURL || '?'}`;
       } else if (error.response?.status) {
-        msg = `Login failed (${error.response.status}). ${error.response?.data?.detail || error.response?.statusText || ''}`.trim();
+        const statusDetail = error.response?.data?.detail;
+        const reason = typeof statusDetail === 'string' ? statusDetail : error.response?.statusText || `Error ${error.response.status}`;
+        msg = `${prefix}${reason}`.trim();
       } else {
-        msg = 'Authentication failed';
+        msg = isLogin ? 'Cannot log in. Please try again.' : 'Registration failed. Please try again.';
       }
       toast.error(msg);
     } finally {
