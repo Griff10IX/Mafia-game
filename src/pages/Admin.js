@@ -287,6 +287,14 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleSetAllSearchTime1 = async () => {
+    if (!window.confirm('Set every user\'s search timer to 1 minute?')) return;
+    try {
+      const res = await api.post('/admin/set-all-search-time?search_minutes=1');
+      toast.success(res.data?.message || 'Done');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
   const handleClearAllSearches = async () => {
     if (!window.confirm('Delete ALL attack searches?')) return;
     setClearSearchesLoading(true);
@@ -912,13 +920,16 @@ export default function Admin() {
         />
         {!collapsed.search && (
           <div className="p-2 space-y-1">
-            <ActionRow icon={Settings} label="Set Search Time" description="Set to 0 to clear override">
-              <Input type="number" value={formData.searchMinutes} onChange={(e) => setFormData({ ...formData, searchMinutes: parseInt(e.target.value) })} placeholder="Mins" />
+            <ActionRow icon={Settings} label="Set Search Time" description="Per user: 1–999 mins, or 0 to clear override">
+              <Input type="number" min={0} max={999} value={formData.searchMinutes} onChange={(e) => setFormData({ ...formData, searchMinutes: parseInt(e.target.value) || 0 })} placeholder="Mins" />
               <BtnPrimary onClick={handleSetSearchTime}>Set</BtnPrimary>
             </ActionRow>
 
+            <ActionRow icon={Settings} label="Set All to 1 min" description="Affects all users">
+              <BtnPrimary onClick={handleSetAllSearchTime1}>Set All 1 min</BtnPrimary>
+            </ActionRow>
             <ActionRow icon={Settings} label="Set All to 5 mins" description="Affects all users">
-              <BtnPrimary onClick={handleSetAllSearchTime5}>Set All</BtnPrimary>
+              <BtnPrimary onClick={handleSetAllSearchTime5}>Set All 5 min</BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Trash2} label="Clear All Searches" description="Delete all attack searches" color="text-red-400">
