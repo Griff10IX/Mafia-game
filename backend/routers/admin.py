@@ -838,6 +838,20 @@ def register(router):
             "by_similar_username": name_groups[:50],
         }
 
+    @router.get("/admin/user-registration")
+    async def admin_user_registration(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Get a user's registration info (email, username, created_at, IPs) by username. Safe for admin view."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        user = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "created_at": 1, "registration_ip": 1, "last_login_ip": 1, "login_ips": 1, "is_dead": 1},
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {"user": user}
+
     @router.get("/admin/user-details/{user_id}")
     async def admin_user_details(user_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

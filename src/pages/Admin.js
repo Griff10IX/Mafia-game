@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -63,7 +63,9 @@ export default function Admin() {
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
-  
+  const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
+  const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
+
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
   const [securityLoading, setSecurityLoading] = useState(false);
@@ -341,6 +343,21 @@ export default function Admin() {
       const response = await api.post(`/admin/clear-login-lockout?target_username=${encodeURIComponent(formData.targetUsername)}`);
       toast.success(response.data?.message || 'Lockout cleared');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleViewRegistration = async () => {
+    if (!(formData.targetUsername || '').trim()) { toast.error('Enter target username'); return; }
+    setViewRegistrationLoading(true);
+    setViewRegistrationInfo(null);
+    try {
+      const response = await api.get('/admin/user-registration', { params: { target_username: formData.targetUsername } });
+      setViewRegistrationInfo(response.data?.user || null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load');
+      setViewRegistrationInfo(null);
+    } finally {
+      setViewRegistrationLoading(false);
+    }
   };
 
   const fetchIpBans = async () => {
@@ -1036,6 +1053,21 @@ export default function Admin() {
         />
         {!collapsed.player && (
           <div className="p-2 space-y-1">
+            <ActionRow icon={User} label="View registration info" description="Email, username, created at, IPs for target user">
+              <BtnPrimary onClick={handleViewRegistration} disabled={viewRegistrationLoading}>{viewRegistrationLoading ? '...' : 'View'}</BtnPrimary>
+            </ActionRow>
+            {viewRegistrationInfo && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
+                <div className="font-bold text-primary mb-1">Registration info</div>
+                <div><span className="text-mutedForeground">Username:</span> {viewRegistrationInfo.username ?? '—'}</div>
+                <div><span className="text-mutedForeground">Email:</span> {viewRegistrationInfo.email ?? '—'}</div>
+                <div><span className="text-mutedForeground">User ID:</span> {viewRegistrationInfo.id ?? '—'}</div>
+                <div><span className="text-mutedForeground">Created:</span> {viewRegistrationInfo.created_at ? new Date(viewRegistrationInfo.created_at).toLocaleString() : '—'}</div>
+                <div><span className="text-mutedForeground">Registration IP:</span> {viewRegistrationInfo.registration_ip || '—'}</div>
+                <div><span className="text-mutedForeground">Last login IP:</span> {viewRegistrationInfo.last_login_ip || '—'}</div>
+                {viewRegistrationInfo.is_dead && <div className="text-red-400 font-bold">Account is dead</div>}
+              </div>
+            )}
             <ActionRow icon={UserCog} label="Change Rank">
               {ranks.length > 0 ? (
                 <Select value={String(formData.newRank)} onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })}>
