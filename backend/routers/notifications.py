@@ -1,5 +1,5 @@
 # Notifications/inbox: list, mark read, delete, send message, thread. Profile notification preferences.
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import uuid
 import time
 from typing import Optional
@@ -15,6 +15,7 @@ from server import (
 )
 
 # ----- Constants -----
+INBOX_RETENTION_DAYS = 7  # Notifications older than this are deleted when inbox is loaded
 DEFAULT_NOTIFICATION_PREFS = {"ent_games": True, "oc_invites": True, "attacks": True, "system": True, "messages": True}
 
 # ----- Models -----
@@ -68,6 +69,10 @@ def register(router):
     @router.get("/notifications")
     async def get_notifications(current_user: dict = Depends(get_current_user)):
         user_id = current_user["id"]
+        # Delete notifications older than 7 days (inbox retention)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=INBOX_RETENTION_DAYS)).isoformat()
+        await db.notifications.delete_many({"user_id": user_id, "created_at": {"$lt": cutoff}})
+        _list_cache.pop(user_id, None)
         now_ts = time.time()
         entry = _list_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _LIST_TTL_SEC:

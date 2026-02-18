@@ -843,13 +843,13 @@ export default function SlotsPage() {
             ))}
           </div>
           <p className="text-[10px] text-mutedForeground mt-2">5% house edge on wins. One machine per state.</p>
-          {/* Enter the draw — visible in paytable so users find it */}
+          {/* Enter the draw — always show when not owner so users find it; server enforces cooldown */}
           <div className="mt-3 pt-3 border-t border-primary/20">
             {ownership?.is_owner ? (
               <p className="text-[10px] text-primary font-heading">You own this machine for {config.ownership_hours}h. Set max bet and buy-back above.</p>
-            ) : ownership?.can_enter ? (
+            ) : (
               <div className="flex flex-wrap items-center gap-2">
-                {ownership.has_entered ? (
+                {ownership?.has_entered ? (
                   <p className="text-[10px] text-mutedForeground font-heading">
                     You&apos;re in the draw ({ownership.entries_count ?? 0} entered). Winner chosen at random when current owner&apos;s {config.ownership_hours}h ends.
                   </p>
@@ -864,13 +864,10 @@ export default function SlotsPage() {
                     >
                       {enterLoading ? '...' : 'Enter the draw'}
                     </button>
+                    <p className="text-[10px] text-zinc-500 font-heading italic">If the button says you can&apos;t enter, you may be on cooldown from a previous run.</p>
                   </>
                 )}
               </div>
-            ) : (
-              <p className="text-[10px] text-mutedForeground font-heading">
-                Enter the draw to own for 3 hours; set max bet and buy-back like other casinos. (If you don’t see the button, you may be on cooldown from a previous run.)
-              </p>
             )}
           </div>
         </div>
