@@ -291,6 +291,20 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleGiveAutoRank = async () => {
+    try {
+      const response = await api.post(`/admin/give-auto-rank?target_username=${encodeURIComponent(formData.targetUsername)}`);
+      toast.success(response.data?.message || 'Auto rank given');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleRemoveAutoRank = async () => {
+    try {
+      const response = await api.post(`/admin/remove-auto-rank?target_username=${encodeURIComponent(formData.targetUsername)}`);
+      toast.success(response.data?.message || 'Auto rank removed');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
   const fetchIpBans = async () => {
     setIpBansLoading(true);
     try {
@@ -1028,6 +1042,10 @@ export default function Admin() {
             </ActionRow>
             <ActionRow icon={Zap} label="Revive Player" description="Restore a dead or modkilled account so they can log in again">
               <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Bot} label="Auto Rank" description="Give or remove auto rank for the target user">
+              <button type="button" onClick={handleGiveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Give</button>
+              <button type="button" onClick={handleRemoveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Remove</button>
             </ActionRow>
           </div>
         )}

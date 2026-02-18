@@ -130,17 +130,11 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
 
 
 async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
-    """Purchase Auto Rank; user enables it themselves on the Auto Rank page."""
+    """Purchase Auto Rank; user enables it themselves on the Auto Rank page. Telegram is optional (for notifications)."""
     if current_user.get("auto_rank_purchased", False):
         raise HTTPException(status_code=400, detail="You already purchased Auto Rank")
     if (current_user.get("points") or 0) < AUTO_RANK_COST_POINTS:
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {AUTO_RANK_COST_POINTS})")
-    chat_id = (current_user.get("telegram_chat_id") or "").strip()
-    if not chat_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Set your Telegram Chat ID first (Profile / Telegram). Get it from @userinfobot on Telegram.",
-        )
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_purchased": True}}

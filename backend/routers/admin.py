@@ -462,6 +462,63 @@ def register(router):
             logging.exception("Promote after boss death: %s", e)
         return {"message": f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."}
 
+    @router.post("/admin/give-auto-rank")
+    async def admin_give_auto_rank(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Give a user auto rank: set auto_rank_purchased and auto_rank_enabled with default sub-options."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        updates = {
+            "auto_rank_purchased": True,
+            "auto_rank_enabled": True,
+            "auto_rank_crimes": True,
+            "auto_rank_gta": True,
+            "auto_rank_bust_every_5_sec": False,
+            "auto_rank_oc": False,
+            "auto_rank_booze": False,
+        }
+        await db.users.update_one({"id": target["id"]}, {"$set": updates})
+        return {"message": f"Auto rank given to {target.get('username', target_username)}", "username": target.get("username")}
+
+    @router.post("/admin/remove-auto-rank")
+    async def admin_remove_auto_rank(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Remove auto rank from a user: clear purchased, enabled, and related fields/stats."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        unset = {
+            "auto_rank_stats_since": "",
+            "auto_rank_total_busts": "",
+            "auto_rank_total_crimes": "",
+            "auto_rank_total_gtas": "",
+            "auto_rank_total_cash": "",
+            "auto_rank_best_cars": "",
+            "auto_rank_total_booze_runs": "",
+            "auto_rank_total_booze_profit": "",
+        }
+        await db.users.update_one(
+            {"id": target["id"]},
+            {
+                "$set": {
+                    "auto_rank_purchased": False,
+                    "auto_rank_enabled": False,
+                    "auto_rank_crimes": False,
+                    "auto_rank_gta": False,
+                    "auto_rank_bust_every_5_sec": False,
+                    "auto_rank_oc": False,
+                    "auto_rank_booze": False,
+                },
+                "$unset": unset,
+            },
+        )
+        return {"message": f"Auto rank removed from {target.get('username', target_username)}", "username": target.get("username")}
+
     @router.post("/admin/revive-player")
     async def admin_revive_player(target_username: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

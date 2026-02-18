@@ -39,6 +39,8 @@ from server import (
     _record_war_stats_player_kill,
     _family_war_start,
     _family_war_check_wipe_and_award,
+    _user_owns_any_casino,
+    _user_owns_any_property,
 )
 from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
@@ -751,6 +753,59 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await maybe_promote_after_boss_death(victim_id)
         except Exception as e:
             logging.exception("Promote after boss death: %s", e)
+        # Transfer victim's casino ownership to killer (or release if killer already has one)
+        killer_owns_casino = await _user_owns_any_casino(killer_id)
+        casino_colls = [
+            ("dice", db.dice_ownership),
+            ("roulette", db.roulette_ownership),
+            ("blackjack", db.blackjack_ownership),
+            ("horseracing", db.horseracing_ownership),
+            ("videopoker", db.videopoker_ownership),
+        ]
+        killer_username = (current_user.get("username") or "").strip()
+        transferred_one = False
+        transferred_casino_type = None
+        for _game_type, coll in casino_colls:
+            if killer_owns_casino:
+                await coll.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
+            elif not transferred_one:
+                res = await coll.update_one(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": killer_id, "owner_username": killer_username}},
+                )
+                if res.modified_count:
+                    transferred_one = True
+                    transferred_casino_type = _game_type
+        if not killer_owns_casino and transferred_one:
+            for _game_type, coll in casino_colls:
+                await coll.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
+        # Transfer victim's airport to killer (or release if killer already has a property)
+        killer_owns_property = await _user_owns_any_property(killer_id)
+        victim_airport = await db.airport_ownership.find_one({"owner_id": victim_id}, {"_id": 0, "state": 1, "slot": 1})
+        transferred_airport = False
+        if victim_airport:
+            if killer_owns_property:
+                await db.airport_ownership.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
+            else:
+                res = await db.airport_ownership.update_one(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": killer_id, "owner_username": killer_username}},
+                )
+                if res.modified_count:
+                    transferred_airport = True
+                await db.airport_ownership.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
         if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):
             victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
@@ -793,6 +848,11 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             if exclusive_car_count:
                 c += f" (including {'an' if exclusive_car_count == 1 else exclusive_car_count} exclusive car{'s' if exclusive_car_count != 1 else ''})"
             extras.append(c)
+        if transferred_casino_type:
+            names = {"dice": "Dice", "roulette": "Roulette", "blackjack": "Blackjack", "horseracing": "Horse Racing", "videopoker": "Video Poker"}
+            extras.append(f"their casino table ({names.get(transferred_casino_type, transferred_casino_type)})")
+        if transferred_airport:
+            extras.append("their airport")
         if extras:
             success_message += ", " + ", ".join(extras) + "."
         else:
