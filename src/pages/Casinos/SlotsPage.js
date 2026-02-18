@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { MapPin, User, Clock, Coins, LogIn } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
@@ -37,19 +37,6 @@ function formatHistoryDate(iso) {
     if (Number.isNaN(d.getTime())) return iso;
     return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
   } catch { return iso; }
-}
-
-function apiErrorDetail(e, fallback) {
-  const data = e.response?.data;
-  const d = data?.detail;
-  if (typeof d === 'string') return d;
-  if (Array.isArray(d) && d.length) return d.map((x) => x.msg || x.loc?.join('.')).join('; ') || fallback;
-  if (d && typeof d === 'object' && typeof d.msg === 'string') return d.msg;
-  if (typeof data?.message === 'string') return data.message;
-  if (e.response?.status === 401) return 'Please log in again';
-  if (e.response?.status === 403) return 'Not allowed';
-  if (!e.response && e.message) return e.message;
-  return fallback;
 }
 
 /* ─── Reel with 3 visible rows, blur while spinning, deceleration stop ─── */
@@ -381,7 +368,7 @@ export default function SlotsPage() {
       setLoading(false);
       setSpinning(false);
       setReelRevealed([false, false, false]);
-      toast.error(apiErrorDetail(e, 'Spin failed'));
+      toast.error(getApiErrorMessage(e) || 'Spin failed');
     }
   };
 
@@ -393,7 +380,7 @@ export default function SlotsPage() {
       fetchOwnership();
       fetchConfig();
     } catch (e) {
-      toast.error(apiErrorDetail(e, 'Could not enter'));
+      toast.error(getApiErrorMessage(e) || 'Could not enter');
     } finally {
       setEnterLoading(false);
     }
@@ -412,7 +399,7 @@ export default function SlotsPage() {
       fetchConfig();
       fetchOwnership();
     } catch (e) {
-      toast.error(apiErrorDetail(e, 'Failed'));
+      toast.error(getApiErrorMessage(e) || 'Failed');
     } finally {
       setOwnerActionLoading(false);
     }
@@ -430,7 +417,7 @@ export default function SlotsPage() {
       toast.success('Buy-back reward updated');
       fetchOwnership();
     } catch (e) {
-      toast.error(apiErrorDetail(e, 'Failed'));
+      toast.error(getApiErrorMessage(e) || 'Failed');
     } finally {
       setOwnerActionLoading(false);
     }
@@ -445,7 +432,7 @@ export default function SlotsPage() {
       fetchConfig();
       fetchOwnership();
     } catch (e) {
-      toast.error(apiErrorDetail(e, 'Failed'));
+      toast.error(getApiErrorMessage(e) || 'Failed');
     } finally {
       setOwnerActionLoading(false);
     }
@@ -461,7 +448,7 @@ export default function SlotsPage() {
       fetchOwnership();
       fetchConfig();
     } catch (e) {
-      toast.error(apiErrorDetail(e, 'Failed'));
+      toast.error(getApiErrorMessage(e) || 'Failed');
     } finally {
       setOwnerActionLoading(false);
     }

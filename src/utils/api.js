@@ -66,10 +66,16 @@ api.interceptors.response.use(
 /** Get a user-friendly error message from an API error (use in catch blocks and toasts). */
 export function getApiErrorMessage(error) {
   if (!error) return 'Something went wrong.';
-  const detail = error.response?.data?.detail;
+  const data = error.response?.data;
+  const detail = data?.detail;
   if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail.length) return detail.map((x) => x.msg || x.loc?.join('.')).join('; ') || 'Validation error';
+  if (detail && typeof detail === 'object' && typeof detail.msg === 'string') return detail.msg;
+  if (typeof data?.message === 'string') return data.message;
   if (error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 504) return SERVER_UNAVAILABLE_MSG;
-  if (!error.response) return NETWORK_ERROR_MSG;
+  if (error.response?.status === 401) return 'Please log in again.';
+  if (error.response?.status === 403) return 'Not allowed.';
+  if (!error.response) return error.message || NETWORK_ERROR_MSG;
   return error.response.status ? `Error (${error.response.status}). Please try again.` : 'Something went wrong. Please try again.';
 }
 
