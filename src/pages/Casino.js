@@ -1,4 +1,4 @@
-import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Lock } from 'lucide-react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../styles/noir.module.css';
 
@@ -18,7 +18,6 @@ const GAMES = [
   { to: '/casino/slots', label: 'Slots', desc: 'State-owned · 1 per state', Icon: Coins, testId: 'play-slots' },
   { to: '/casino/videopoker', label: 'Video Poker', desc: 'Jacks or Better', Icon: Spade, testId: 'play-video-poker' },
   { to: '/sports-betting', label: 'Sports Betting', desc: 'Live games & results', Icon: Target, testId: 'sports-betting' },
-  { to: '/crack-safe', label: 'Crack the Safe', desc: 'Daily jackpot · 5 numbers', Icon: Lock, testId: 'crack-safe' },
 ];
 
 export default function Casino() {

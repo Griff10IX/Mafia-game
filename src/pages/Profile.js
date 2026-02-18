@@ -154,7 +154,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
             </span>
           </div>
           {profile.prestige_level > 0 && (
-            <PrestigeBadge level={profile.prestige_level} size="sm" showLabel={false} />
+            <PrestigeBadge level={profile.prestige_level} size="icon" showLabel={false} />
           )}
           {isMe && onOpenSettings && (
             <button

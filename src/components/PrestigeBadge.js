@@ -14,15 +14,19 @@ export default function PrestigeBadge({ level, size = 'sm', showLabel = false })
   const meta = PRESTIGE_META[level];
   const isLg = size === 'lg';
   const isMd = size === 'md';
+  const isIcon = size === 'icon'; // same height as profile settings button (h-7 md:h-8)
 
-  const px = isLg ? 8 : isMd ? 6 : 4;
-  const py = isLg ? 4 : isMd ? 3 : 2;
-  const fontSize = isLg ? 11 : isMd ? 9 : 7;
-  const gap = isLg ? 4 : 2;
+  const px = isIcon ? 6 : isLg ? 8 : isMd ? 6 : 4;
+  const py = isIcon ? 4 : isLg ? 4 : isMd ? 3 : 2;
+  const fontSize = isIcon ? 9 : isLg ? 11 : isMd ? 9 : 7;
+  const gap = isIcon ? 3 : isLg ? 4 : isMd ? 2 : 2;
+  const svgW = isIcon ? 10 : isLg ? 10 : isMd ? 8 : 7;
+  const svgH = isIcon ? 12 : isLg ? 12 : isMd ? 10 : 8;
 
   return (
     <span
       title={`Prestige ${level} — ${meta.label}`}
+      className={isIcon ? 'h-7 w-7 md:h-8 md:w-8 inline-flex items-center justify-center shrink-0 rounded-md' : ''}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -42,8 +46,8 @@ export default function PrestigeBadge({ level, size = 'sm', showLabel = false })
     >
       {/* Shield icon (inline SVG) */}
       <svg
-        width={isLg ? 10 : isMd ? 8 : 7}
-        height={isLg ? 12 : isMd ? 10 : 8}
+        width={svgW}
+        height={svgH}
         viewBox="0 0 10 12"
         fill={meta.color}
         style={{ flexShrink: 0 }}
