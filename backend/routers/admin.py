@@ -455,6 +455,11 @@ def register(router):
                 "health": 0,
             }, "$inc": {"total_deaths": 1}}
         )
+        try:
+            from routers.families import maybe_promote_after_boss_death
+            await maybe_promote_after_boss_death(target["id"])
+        except Exception as e:
+            logging.exception("Promote after boss death: %s", e)
         return {"message": f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."}
 
     @router.post("/admin/revive-player")
@@ -1192,6 +1197,40 @@ def register(router):
         res = await db.users.update_many(_test_users_filter(), op)
         return {
             "message": f"Auto-rank {'enabled' if enabled else 'disabled'} for all test users.",
+            "enabled": enabled,
+            "updated_count": res.modified_count,
+        }
+
+    def _seeded_users_filter():
+        """Users from Seed Families (Corleone, Baranco, Stracci): username corl_*, barn_*, strc_*."""
+        return {
+            "is_dead": {"$ne": True},
+            "$or": [
+                {"username": re.compile(r"^corl_", re.IGNORECASE)},
+                {"username": re.compile(r"^barn_", re.IGNORECASE)},
+                {"username": re.compile(r"^strc_", re.IGNORECASE)},
+            ],
+        }
+
+    @router.post("/admin/seeded-users-auto-rank")
+    async def admin_seeded_users_auto_rank(request: TestUsersAutoRankRequest, current_user: dict = Depends(get_current_user)):
+        """Enable or disable auto-rank for all seeded family users (Corleone, Baranco, Stracci)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        enabled = request.enabled
+        updates = {"auto_rank_enabled": enabled}
+        if not enabled:
+            updates["auto_rank_crimes"] = False
+            updates["auto_rank_gta"] = False
+            updates["auto_rank_bust_every_5_sec"] = False
+            updates["auto_rank_oc"] = False
+            updates["auto_rank_booze"] = False
+            op = {"$set": updates, "$unset": {"auto_rank_stats_since": ""}}
+        else:
+            op = {"$set": updates}
+        res = await db.users.update_many(_seeded_users_filter(), op)
+        return {
+            "message": f"Auto-rank {'enabled' if enabled else 'disabled'} for all seeded users.",
             "enabled": enabled,
             "updated_count": res.modified_count,
         }

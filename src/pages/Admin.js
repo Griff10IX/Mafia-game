@@ -531,6 +531,13 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleSeededUsersAutoRank = async (enabled) => {
+    try {
+      const res = await api.post('/admin/seeded-users-auto-rank', { enabled });
+      toast.success(res.data?.message || (enabled ? 'Enabled' : 'Disabled'));
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
   const handleGiveAllPoints = async () => {
     if (!window.confirm(`Give ${giveAllPoints} points to ALL?`)) return;
     try {
@@ -946,6 +953,10 @@ export default function Admin() {
             <ActionRow icon={Bot} label="Test users: auto-rank" description="Enable or disable auto-rank for all test users (test_* / @test.mafia)">
               <button type="button" onClick={() => handleTestUsersAutoRank(true)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Enable</button>
               <button type="button" onClick={() => handleTestUsersAutoRank(false)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Disable</button>
+            </ActionRow>
+            <ActionRow icon={Bot} label="Seeded users: auto-rank" description="Enable or disable auto-rank for Seed Families (Corleone, Baranco, Stracci)">
+              <button type="button" onClick={() => handleSeededUsersAutoRank(true)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Enable</button>
+              <button type="button" onClick={() => handleSeededUsersAutoRank(false)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Disable</button>
             </ActionRow>
             <ActionRow icon={UserCog} label="Force Online" description="Bring offline users online for 1h">
               <BtnPrimary onClick={handleForceOnline}>Force</BtnPrimary>

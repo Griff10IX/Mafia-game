@@ -279,6 +279,61 @@ async def resolve_family_id(user_id: str):
     return _norm_fid((fam or {}).get("id"))
 
 
+# Promotion order when boss dies: next in line becomes boss, others shift up
+PROMOTION_ORDER = ["underboss", "consigliere", "capo", "soldier", "associate"]
+ASSIGNMENT_SEQUENCE = ["boss", "underboss", "consigliere"] + ["capo"] * 4 + ["soldier"] * 15 + ["associate"] * 30
+
+
+async def maybe_promote_after_boss_death(dead_user_id: str) -> None:
+    """If dead_user_id was the boss of a family, promote the next in line (underboss -> boss, etc.)."""
+    fam = await db.families.find_one({"boss_id": dead_user_id}, {"_id": 0, "id": 1, "name": 1})
+    if not fam:
+        return
+    family_id = fam["id"]
+    members = await db.family_members.find(
+        {"family_id": family_id},
+        {"_id": 0, "user_id": 1, "role": 1},
+    ).to_list(100)
+    if not members:
+        return
+    member_by_uid = {m["user_id"]: m for m in members}
+    alive_user_ids = [
+        m["user_id"]
+        for m in members
+        if m["user_id"] != dead_user_id
+    ]
+    if not alive_user_ids:
+        return
+    alive_users = await db.users.find(
+        {"id": {"$in": alive_user_ids}, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    ).to_list(len(alive_user_ids))
+    alive_ids = {u["id"] for u in alive_users}
+    alive_members = [m for m in members if m["user_id"] in alive_ids]
+    if not alive_members:
+        return
+    # Sort by role seniority (underboss first, then consigliere, capo, soldier, associate)
+    def sort_key(m):
+        role = (m.get("role") or "").strip().lower()
+        return (PROMOTION_ORDER.index(role) if role in PROMOTION_ORDER else 99, m["user_id"])
+    alive_members.sort(key=sort_key)
+    # Assign roles in order: first -> boss, second -> underboss, third -> consigliere, then capos, soldiers, associates
+    role_assignments = []
+    for i, m in enumerate(alive_members):
+        role_assignments.append((m["user_id"], ASSIGNMENT_SEQUENCE[i] if i < len(ASSIGNMENT_SEQUENCE) else "associate"))
+    new_boss_id = role_assignments[0][0]
+    await db.families.update_one({"id": family_id}, {"$set": {"boss_id": new_boss_id}})
+    for user_id, new_role in role_assignments:
+        await db.family_members.update_one(
+            {"family_id": family_id, "user_id": user_id},
+            {"$set": {"role": new_role}},
+        )
+        await db.users.update_one({"id": user_id}, {"$set": {"family_role": new_role}})
+        _invalidate_my_cache(user_id)
+    _list_cache = None
+    logger.info("Family %s: promoted %s to boss after previous boss died.", family_id, new_boss_id)
+
+
 # ============ Cache helpers ============
 def _invalidate_list_cache():
     global _list_cache

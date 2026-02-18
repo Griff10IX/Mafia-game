@@ -746,6 +746,11 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             {"id": victim_id},
             {"$set": {"is_dead": True, "dead_at": now_iso, "points_at_death": target.get("points", 0), "money": 0, "health": 0}, "$inc": {"total_deaths": 1}}
         )
+        try:
+            from routers.families import maybe_promote_after_boss_death
+            await maybe_promote_after_boss_death(victim_id)
+        except Exception as e:
+            logging.exception("Promote after boss death: %s", e)
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
         if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):
             victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
