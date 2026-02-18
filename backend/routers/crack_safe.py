@@ -6,7 +6,7 @@ from typing import List
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user
+from server import db, get_current_user, _is_admin
 
 SAFE_ENTRY_COST = 5_000_000
 SAFE_JACKPOT_SEED = 100_000_000
@@ -96,7 +96,7 @@ def register(router):
         next_guess_at = (midnight + timedelta(days=1)).isoformat() if last_guess else None
         clues = _generate_clues(combo, total_attempts)
 
-        return {
+        response = {
             "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
             "total_attempts": total_attempts,
             "last_winner_username": safe.get("last_winner_username"),
@@ -106,6 +106,9 @@ def register(router):
             "entry_cost": SAFE_ENTRY_COST,
             "clues": clues,
         }
+        if _is_admin(user):
+            response["admin_combination"] = combo
+        return response
 
     @router.post("/crack-safe/guess")
     async def crack_safe_guess(req: SafeGuessRequest, user: dict = Depends(get_current_user)):

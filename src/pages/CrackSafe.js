@@ -682,6 +682,35 @@ export default function CrackSafe() {
           </div>
 
           {/* Last winner card */}
+          {/* Admin: current combination reveal */}
+          {info?.admin_combination && (
+            <div
+              className={`relative ${styles.panel} rounded-lg overflow-hidden border border-red-700/40 cs-fade-in`}
+              style={{ animationDelay: '0.22s' }}
+            >
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-red-500/50 to-transparent" />
+              <div className="px-3 py-2.5 bg-red-950/20 border-b border-red-700/30 flex items-center gap-2">
+                <Lock size={11} className="text-red-400" />
+                <h2 className="text-[10px] font-heading font-bold text-red-400 uppercase tracking-[0.15em]">Admin — Current Combination</h2>
+              </div>
+              <div className="px-3 py-3 flex items-center justify-center gap-2">
+                {info.admin_combination.map((n, i) => (
+                  <div key={i} style={{
+                    width: 36, height: 44, borderRadius: 4,
+                    background: 'linear-gradient(180deg, #1a0505, #200a0a)',
+                    border: '1px solid rgba(239,68,68,0.4)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: 22, fontWeight: 900, fontFamily: 'monospace', color: '#ef4444', textShadow: '0 0 10px rgba(239,68,68,0.8)' }}>
+                      {n}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-center text-[9px] text-red-700 font-heading pb-2">Visible to admins only</p>
+            </div>
+          )}
+
           {info?.last_winner_username && (
             <div
               className={`relative ${styles.panel} rounded-lg overflow-hidden border border-yellow-600/20 cs-fade-in`}
