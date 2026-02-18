@@ -163,6 +163,15 @@ async def _run_slots_draw_if_needed(state: str):
     # now < next_draw_at: draw not due yet, do nothing
 
 
+async def run_slots_draws_due():
+    """Run the lottery draw for every state where next_draw_at is due. Call from a background task so draws run on time even if no one is on the page."""
+    for state in (STATES or []):
+        try:
+            await _run_slots_draw_if_needed(state)
+        except Exception:
+            pass  # log in caller if needed
+
+
 # ----- Models -----
 class SlotsSpinRequest(BaseModel):
     bet: int
