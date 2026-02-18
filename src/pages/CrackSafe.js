@@ -414,6 +414,7 @@ export default function CrackSafe() {
   const [shaking, setShaking] = useState(false);
   const [countdown, setCountdown] = useState('');
   const [buying, setBuying] = useState(false);
+  const [skipAnim, setSkipAnim] = useState(false);
   const spinRef = useRef(null);
 
   const fetchInfo = useCallback(async () => {
@@ -449,23 +450,27 @@ export default function CrackSafe() {
     setGuessing(true);
     setResult(null);
 
-    const startTime = Date.now();
-    const MIN_SPIN_MS = 2200;
+    const MIN_SPIN_MS = skipAnim ? 0 : 2200;
 
-    spinRef.current = setInterval(() => {
-      setDialAngle(prev => prev - 18);
-    }, 28);
+    if (!skipAnim) {
+      spinRef.current = setInterval(() => {
+        setDialAngle(prev => prev - 18);
+      }, 28);
+    }
+
+    const startTime = Date.now();
 
     try {
       const res = await api.post('/crack-safe/guess', { numbers });
 
-      const elapsed = Date.now() - startTime;
-      if (elapsed < MIN_SPIN_MS) {
-        await new Promise(r => setTimeout(r, MIN_SPIN_MS - elapsed));
+      if (!skipAnim) {
+        const elapsed = Date.now() - startTime;
+        if (elapsed < MIN_SPIN_MS) {
+          await new Promise(r => setTimeout(r, MIN_SPIN_MS - elapsed));
+        }
+        clearInterval(spinRef.current);
+        spinRef.current = null;
       }
-
-      clearInterval(spinRef.current);
-      spinRef.current = null;
       setResult(res.data);
 
       if (res.data.cracked) {
@@ -637,6 +642,17 @@ export default function CrackSafe() {
                 <span>Admin — unlimited attempts</span>
               </div>
             )}
+
+            {/* Skip animation toggle */}
+            <label className="flex items-center gap-2 cursor-pointer select-none self-end">
+              <input
+                type="checkbox"
+                checked={skipAnim}
+                onChange={e => setSkipAnim(e.target.checked)}
+                className="w-3.5 h-3.5 rounded accent-primary cursor-pointer"
+              />
+              <span className="text-[10px] text-zinc-500 font-heading">Skip animation</span>
+            </label>
 
             {/* Guess button */}
             {info?.can_guess && (
