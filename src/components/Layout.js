@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -8,7 +8,7 @@ import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
 import styles from '../styles/noir.module.css';
 
-/** Bottom bar: direct links or expandable groups (tap icon → sub-menu above bar). No "More" – all links live in bar groups. */
+/** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
 function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
   const goItems = [
     { path: '/travel', label: 'Travel' },
@@ -32,6 +32,10 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/stats', label: 'Stats' },
         { path: '/dead-alive', label: 'Dead > Alive' },
         { path: '/bank', label: 'Bank' },
+        { action: 'theme', label: 'Theme' },
+        { action: 'logout', label: 'Logout' },
+        { path: '/auto-rank', label: 'Auto Rank' },
+        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }] : []),
       ],
     },
     {
@@ -49,44 +53,9 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
     },
     {
       type: 'group',
-      id: 'ranking',
-      icon: Target,
-      label: 'Ranking',
-      items: [
-        { path: '/crimes', label: 'Crimes' },
-        { path: '/gta', label: 'GTA' },
-        { path: '/jail', label: 'Jail' },
-        { path: '/organised-crime', label: 'Organised Crime' },
-        { path: '/prestige', label: 'Prestige' },
-      ],
-    },
-    {
-      type: 'group',
-      id: 'go',
-      icon: Plane,
-      label: 'Go',
-      items: goItems,
-    },
-    {
-      type: 'group',
-      id: 'social',
-      icon: Users,
-      label: 'Social',
-      items: [
-        { path: '/forum', label: 'Forum' },
-        { path: '/forum', label: 'Entertainer Forum', state: { category: 'entertainer' } },
-        { path: '/inbox', label: 'Inbox' },
-        { path: '/booze-run', label: 'Booze Run' },
-        { path: '/users-online', label: 'Users Online' },
-        { path: '/families', label: 'Families' },
-        { path: '/leaderboard', label: 'Leaderboard' },
-      ],
-    },
-    {
-      type: 'group',
-      id: 'casino',
+      id: 'casinos',
       icon: Dice5,
-      label: 'Casino',
+      label: 'Casinos',
       items: [
         { path: '/casino', label: 'Casino' },
         { path: '/casino/dice', label: 'Dice' },
@@ -100,24 +69,39 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
     },
     {
       type: 'group',
-      id: 'shop',
-      icon: ShoppingBag,
-      label: 'Shop',
+      id: 'go',
+      icon: Plane,
+      label: 'Go',
+      items: goItems,
+    },
+    {
+      type: 'group',
+      id: 'rank',
+      icon: Target,
+      label: 'Rank',
       items: [
-        { path: '/store', label: 'Store' },
-        { path: '/quick-trade', label: 'Quick Trade' },
+        { path: '/crimes', label: 'Crimes' },
+        { path: '/gta', label: 'GTA' },
+        { path: '/jail', label: 'Jail' },
+        { path: '/organised-crime', label: 'Organised Crime' },
+        { path: '/prestige', label: 'Prestige' },
       ],
     },
     {
       type: 'group',
-      id: 'account',
-      icon: Settings,
-      label: 'Account',
+      id: 'misc',
+      icon: LayoutGrid,
+      label: 'Misc',
       items: [
-        { action: 'theme', label: 'Theme' },
-        { action: 'logout', label: 'Logout' },
-        { path: '/auto-rank', label: 'Auto Rank' },
-        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }] : []),
+        { path: '/forum', label: 'Forum' },
+        { path: '/forum', label: 'Entertainer Forum', state: { category: 'entertainer' } },
+        { path: '/inbox', label: 'Inbox' },
+        { path: '/booze-run', label: 'Booze Run' },
+        { path: '/users-online', label: 'Users Online' },
+        { path: '/families', label: 'Families' },
+        { path: '/leaderboard', label: 'Leaderboard' },
+        { path: '/store', label: 'Store' },
+        { path: '/quick-trade', label: 'Quick Trade' },
       ],
     },
   ];
@@ -1398,7 +1382,7 @@ export default function Layout({ children }) {
                   if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
                   return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
                 });
-                const showInboxBadge = item.id === 'social' && unreadCount > 0;
+                const showInboxBadge = item.items.some((sub) => sub.path === '/inbox') && unreadCount > 0;
                 return (
                   <button
                     key={item.id}
