@@ -25,6 +25,11 @@ const isPublicPath = () => {
   const p = (typeof window !== 'undefined' && window.location?.pathname) || '';
   return p === '/' || p === '/forgot-password' || p === '/reset-password';
 };
+
+// Friendly messages for 502/503/504 and network errors so pages don't show raw "Bad Gateway" or break
+const SERVER_UNAVAILABLE_MSG = 'Server temporarily unavailable. Please try again in a moment.';
+const NETWORK_ERROR_MSG = 'Connection problem. Please check your network and try again.';
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -33,9 +38,29 @@ api.interceptors.response.use(
       localStorage.removeItem('token');
       window.location.replace('/');
     }
+    // Normalize 502/503/504 and network errors so pages can show a friendly message instead of breaking
+    if (error.response) {
+      const status = error.response.status;
+      if (status === 502 || status === 503 || status === 504) {
+        error.response.data = { ...error.response.data, detail: SERVER_UNAVAILABLE_MSG };
+      }
+    } else {
+      // No response: network error, timeout, or server unreachable
+      error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
+    }
     return Promise.reject(error);
   }
 );
+
+/** Get a user-friendly error message from an API error (use in catch blocks and toasts). */
+export function getApiErrorMessage(error) {
+  if (!error) return 'Something went wrong.';
+  const detail = error.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 504) return SERVER_UNAVAILABLE_MSG;
+  if (!error.response) return NETWORK_ERROR_MSG;
+  return error.response.status ? `Error (${error.response.status}). Please try again.` : 'Something went wrong. Please try again.';
+}
 
 /** For error messages: display the actual backend base URL (same-origin shows as /api). */
 export function getBaseURL() {

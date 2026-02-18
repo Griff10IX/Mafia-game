@@ -37,6 +37,21 @@ function formatDateTime(iso) {
   });
 }
 
+/** Countdown from expiry time to 00:00 (e.g. "23h 45m" → "00:00" when expired). Updates with parent tick. */
+function formatCountdown(expiresAtIso) {
+  if (!expiresAtIso) return '—';
+  const end = new Date(expiresAtIso).getTime();
+  if (Number.isNaN(end)) return '—';
+  const now = Date.now();
+  const secs = Math.max(0, Math.floor((end - now) / 1000));
+  if (secs === 0) return '00:00';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 
@@ -410,7 +425,7 @@ const SearchesCard = ({
                     <div className="col-span-4 text-right text-[9px] text-mutedForeground font-heading">
                       <span className="inline-flex items-center gap-1 justify-end">
                         <Clock size={12} />
-                        {formatDateTime(a.expires_at || a.search_started)}
+                        {formatCountdown(a.expires_at || a.search_started)}
                       </span>
                     </div>
                   </div>
@@ -488,7 +503,7 @@ const SearchesCard = ({
 
                   <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
                     <Clock size={10} />
-                    Expires: {formatDateTime(a.expires_at || a.search_started)}
+                    Expires: {formatCountdown(a.expires_at || a.search_started)}
                   </div>
                 </div>
               ))}
@@ -778,6 +793,13 @@ export default function Attack() {
   const [travelInfo, setTravelInfo] = useState(null);
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
+  const [, setCountdownTick] = useState(0);
+
+  // Tick every second so expiry countdowns update (24h → 00:00)
+  useEffect(() => {
+    const id = setInterval(() => setCountdownTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Pre-fill search and kill form from hitlist link
   useEffect(() => {
