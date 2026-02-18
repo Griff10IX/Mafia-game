@@ -610,6 +610,35 @@ def register(router):
         await db.users.update_one({"id": target["id"]}, {"$inc": {"token_version": 1}})
         return {"message": f"Password set for {target.get('username', target_username)}. They have been logged out and must log in with the new password."}
 
+    @router.get("/admin/login-issues")
+    async def admin_login_issues(limit: int = Query(100, ge=1, le=500), current_user: dict = Depends(get_current_user)):
+        """List current login lockouts (too many failed attempts). Shows email, failed count, locked until, and username if account exists."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        cursor = db.login_lockouts.find({}, {"_id": 0, "email": 1, "failed_count": 1, "locked_until": 1, "updated_at": 1}).sort("updated_at", -1).limit(limit)
+        rows = await cursor.to_list(limit)
+        out = []
+        for r in rows:
+            email = (r.get("email") or "").strip().lower()
+            locked_until = r.get("locked_until")
+            if isinstance(locked_until, str):
+                try:
+                    locked_until = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
+                except ValueError:
+                    locked_until = None
+            still_locked = locked_until and locked_until > now
+            user = await db.users.find_one({"email": re.compile("^" + re.escape(email) + "$", re.IGNORECASE)}, {"_id": 0, "username": 1}) if email else None
+            out.append({
+                "email": email,
+                "username": user.get("username") if user else None,
+                "failed_count": r.get("failed_count", 0),
+                "locked_until": r.get("locked_until"),
+                "updated_at": r.get("updated_at"),
+                "still_locked": still_locked,
+            })
+        return {"lockouts": out, "count": len(out)}
+
     @router.post("/admin/clear-login-lockout")
     async def admin_clear_login_lockout(target_username: str, current_user: dict = Depends(get_current_user)):
         """Clear login lockout for a user (by their current email), so they can try logging in again."""
@@ -624,6 +653,17 @@ def register(router):
             result = await db.login_lockouts.delete_many({"email": email})
             return {"message": f"Login lockout cleared for {target.get('username', target_username)}", "deleted_count": result.deleted_count}
         return {"message": f"No email on account; nothing to clear.", "username": target.get("username")}
+
+    @router.post("/admin/clear-login-lockout-by-email")
+    async def admin_clear_login_lockout_by_email(email: str, current_user: dict = Depends(get_current_user)):
+        """Clear login lockout for an email (e.g. from the login-issues list). Use when you don't know the username."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        email_clean = (email or "").strip().lower()
+        if not email_clean or "@" not in email_clean:
+            raise HTTPException(status_code=400, detail="Valid email required")
+        result = await db.login_lockouts.delete_many({"email": email_clean})
+        return {"message": f"Login lockout cleared for {email_clean}", "deleted_count": result.deleted_count}
 
     @router.post("/admin/set-search-time")
     async def admin_set_search_time(target_username: str, search_minutes: int, current_user: dict = Depends(get_current_user)):

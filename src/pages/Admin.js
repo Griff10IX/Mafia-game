@@ -69,6 +69,8 @@ export default function Admin() {
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
   const [securityLoading, setSecurityLoading] = useState(false);
+  const [loginIssues, setLoginIssues] = useState(null);
+  const [loginIssuesLoading, setLoginIssuesLoading] = useState(false);
   const [rateLimits, setRateLimits] = useState(null);
   const [rateLimitEdits, setRateLimitEdits] = useState({});
   const [ipBans, setIpBans] = useState([]);
@@ -644,6 +646,31 @@ export default function Admin() {
       setSecuritySummary(null);
     }
     finally { setSecurityLoading(false); }
+  };
+
+  const fetchLoginIssues = async () => {
+    setLoginIssuesLoading(true);
+    setLoginIssues(null);
+    try {
+      const response = await api.get('/admin/login-issues', { params: { limit: 100 } });
+      setLoginIssues(response.data?.lockouts || []);
+      toast.success(response.data?.count === 0 ? 'No login lockouts' : `${response.data?.count} lockout(s) loaded`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load login issues');
+      setLoginIssues([]);
+    } finally {
+      setLoginIssuesLoading(false);
+    }
+  };
+
+  const clearLoginLockoutByEmail = async (email) => {
+    try {
+      await api.post('/admin/clear-login-lockout-by-email', null, { params: { email } });
+      toast.success('Lockout cleared');
+      if (loginIssues) setLoginIssues(loginIssues.filter((r) => r.email !== email));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear');
+    }
   };
 
   const fetchActivityLog = async () => {
@@ -1335,6 +1362,42 @@ export default function Admin() {
                 {securityLoading ? '...' : 'Load'}
               </BtnPrimary>
             </ActionRow>
+
+            <ActionRow icon={Lock} label="Login issues (lockouts)" description="Users locked out after too many failed login attempts">
+              <BtnPrimary onClick={fetchLoginIssues} disabled={loginIssuesLoading}>
+                {loginIssuesLoading ? '...' : 'Load'}
+              </BtnPrimary>
+            </ActionRow>
+            {loginIssues && loginIssues.length > 0 && (
+              <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50">
+                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Locked-out emails ({loginIssues.length})</div>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {loginIssues.map((row, i) => (
+                    <div key={i} className="flex flex-wrap items-center justify-between gap-2 text-[10px] p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                      <div className="min-w-0">
+                        <div className="font-mono text-foreground truncate">{row.email}</div>
+                        <div className="flex items-center gap-2 mt-0.5 text-mutedForeground">
+                          {row.username && <span>@{row.username}</span>}
+                          <span>Failed: {row.failed_count}</span>
+                          {row.still_locked && <span className="text-amber-400 font-bold">Locked</span>}
+                          {row.locked_until && <span>Until: {new Date(row.locked_until).toLocaleString()}</span>}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => clearLoginLockoutByEmail(row.email)}
+                        className="shrink-0 px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {loginIssues && loginIssues.length === 0 && (
+              <div className="text-[10px] text-mutedForeground font-heading">No login lockouts.</div>
+            )}
 
             {securitySummary && (
               <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50 space-y-2">
