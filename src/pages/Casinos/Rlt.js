@@ -632,12 +632,10 @@ export default function Rlt() {
                 {/* Custom chip */}
                 <div className="flex items-center gap-1.5 justify-center">
                   <span className="text-[10px] text-emerald-200/50 font-heading">$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="Custom"
+                  <FormattedNumberInput
                     value={customChip}
-                    onChange={(e) => setCustomChip(e.target.value)}
+                    onChange={(raw) => setCustomChip(raw)}
+                    placeholder="Custom"
                     className="w-20 bg-black/30 border border-emerald-700/40 rounded px-2 py-1 text-[10px] text-white text-center focus:border-primary/60 focus:outline-none font-heading"
                   />
                 </div>

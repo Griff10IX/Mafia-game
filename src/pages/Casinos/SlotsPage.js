@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { MapPin } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
 const CG_STYLES = `
@@ -559,12 +560,10 @@ export default function SlotsPage() {
             <div className="flex flex-wrap items-center justify-center gap-2 px-4 pb-3 pt-1">
               <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-primary/20">
                 <label className="text-[10px] font-heading text-mutedForeground uppercase tracking-wider">Bet</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
+                <FormattedNumberInput
                   value={bet}
-                  onChange={(e) => setBet(e.target.value)}
-                  placeholder="1000"
+                  onChange={(raw) => setBet(raw)}
+                  placeholder="1,000"
                   className="w-20 sm:w-24 bg-black/40 border border-primary/30 rounded px-2 py-1 text-sm font-heading text-foreground focus:border-primary focus:outline-none text-center"
                 />
               </div>

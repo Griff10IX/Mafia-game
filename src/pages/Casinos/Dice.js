@@ -621,13 +621,11 @@ export default function Dice() {
                 <div>
                   <label className="block text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1.5">Stake</label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary font-bold text-sm">$</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="5000000"
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary font-bold text-sm z-10">$</span>
+                    <FormattedNumberInput
                       value={stake}
-                      onChange={(e) => setStake(e.target.value)}
+                      onChange={(raw) => setStake(raw)}
+                      placeholder="5,000,000"
                       className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 pl-7 pr-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
                     />
                   </div>

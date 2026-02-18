@@ -439,12 +439,10 @@ export default function VideoPoker() {
 
                 <div className="flex items-center gap-2">
                   <span className="text-primary font-bold text-lg">$</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="1000000"
+                  <FormattedNumberInput
                     value={bet}
-                    onChange={(e) => setBet(e.target.value)}
+                    onChange={(raw) => setBet(raw)}
+                    placeholder="1,000,000"
                     className="w-32 sm:w-36 bg-black/30 border border-emerald-700/30 rounded-lg h-11 px-4 text-white text-base font-heading font-bold text-center focus:border-primary/60 focus:outline-none"
                   />
                 </div>
