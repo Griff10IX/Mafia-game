@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Lock, Trophy, Info, ChevronUp, ChevronDown, Clock, KeyRound } from 'lucide-react';
+import { Lock, Trophy, Info, ChevronUp, ChevronDown, Clock, KeyRound, ShoppingCart, Infinity } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import styles from '../styles/noir.module.css';
 
@@ -413,6 +413,7 @@ export default function CrackSafe() {
   const [dialAngle, setDialAngle] = useState(0);
   const [shaking, setShaking] = useState(false);
   const [countdown, setCountdown] = useState('');
+  const [buying, setBuying] = useState(false);
   const spinRef = useRef(null);
 
   const fetchInfo = useCallback(async () => {
@@ -489,8 +490,30 @@ export default function CrackSafe() {
 
   useEffect(() => () => { if (spinRef.current) clearInterval(spinRef.current); }, []);
 
+  const handleBuyAttempts = async () => {
+    if (buying) return;
+    setBuying(true);
+    try {
+      const res = await api.post('/crack-safe/buy-attempts');
+      toast.success(res.data.message);
+      await refreshUser();
+      await fetchInfo();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to purchase attempts');
+    } finally {
+      setBuying(false);
+    }
+  };
+
   const clues = result?.clues ?? info?.clues ?? [];
   const won = result?.cracked === true;
+  const attemptsUsed = info?.attempts_used ?? 0;
+  const attemptsLimit = info?.attempts_limit ?? 50;
+  const bonusPurchased = info?.bonus_purchased ?? false;
+  const isAdmin = info?.is_admin ?? false;
+  const baseLimit = 50;
+  const baseFull = attemptsUsed >= baseLimit && !isAdmin;
+  const allFull = !isAdmin && !info?.can_guess;
 
   if (loading) {
     return (
@@ -514,7 +537,7 @@ export default function CrackSafe() {
           Crack the Safe
         </h1>
         <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
-          Enter 5 numbers between 1 and 9 to crack the safe. One attempt per day.
+          Enter 5 numbers between 1 and 9 to crack the safe. 50 attempts per day — purchase 50 more for {formatMoney(info?.bonus_cost ?? 50_000_000)}.
         </p>
       </div>
 
@@ -582,16 +605,47 @@ export default function CrackSafe() {
               </div>
             )}
 
-            {/* Action button / cooldown */}
-            {info?.can_guess ? (
+            {/* Attempts counter */}
+            {!isAdmin && (
+              <div className="w-full space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] font-heading">
+                  <span className="text-zinc-500">Attempts today</span>
+                  <span className={attemptsUsed >= attemptsLimit ? 'text-red-400 font-bold' : 'text-zinc-400'}>
+                    {attemptsUsed} / {attemptsLimit}
+                    {bonusPurchased && <span className="text-zinc-600 ml-1">(+50 bonus)</span>}
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                  <div style={{
+                    width: `${Math.min(100, (attemptsUsed / attemptsLimit) * 100)}%`,
+                    height: '100%',
+                    borderRadius: '9999px',
+                    background: attemptsUsed >= attemptsLimit
+                      ? 'rgba(239,68,68,0.7)'
+                      : attemptsUsed >= baseLimit
+                        ? 'rgba(234,179,8,0.6)'
+                        : 'rgba(var(--noir-primary-rgb),0.6)',
+                    transition: 'width 0.3s ease',
+                  }} />
+                </div>
+              </div>
+            )}
+            {isAdmin && (
+              <div className="w-full flex items-center justify-center gap-2 text-[10px] font-heading text-red-400/70">
+                <Infinity size={12} />
+                <span>Admin — unlimited attempts</span>
+              </div>
+            )}
+
+            {/* Guess button */}
+            {info?.can_guess && (
               <button
                 onClick={handleGuess}
                 disabled={guessing}
                 className="w-full py-3 rounded-lg font-heading font-bold text-sm uppercase tracking-widest transition-all"
                 style={{
-                  background: guessing
-                    ? 'rgba(50,50,50,0.8)'
-                    : 'linear-gradient(135deg, rgba(234,179,8,0.14), rgba(180,130,0,0.08))',
+                  background: guessing ? 'rgba(50,50,50,0.8)' : 'linear-gradient(135deg, rgba(234,179,8,0.14), rgba(180,130,0,0.08))',
                   border: `1px solid ${guessing ? 'rgba(80,80,80,0.5)' : 'rgba(234,179,8,0.45)'}`,
                   color: guessing ? '#666' : '#eab308',
                   boxShadow: guessing ? 'none' : '0 0 20px rgba(234,179,8,0.08)',
@@ -600,13 +654,32 @@ export default function CrackSafe() {
               >
                 {guessing ? '🔐 Cracking...' : `Guess (${formatMoney(info?.entry_cost ?? 5_000_000)})`}
               </button>
-            ) : (
-              <div
-                className="w-full py-3 rounded-lg text-center border border-zinc-700/30 bg-zinc-900/30"
+            )}
+
+            {/* Buy extra attempts (shown when base 50 used, bonus not yet bought) */}
+            {baseFull && !bonusPurchased && !allFull && (
+              <button
+                onClick={handleBuyAttempts}
+                disabled={buying}
+                className="w-full py-2.5 rounded-lg font-heading font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                style={{
+                  background: buying ? 'rgba(30,30,30,0.8)' : 'rgba(234,179,8,0.06)',
+                  border: '1px solid rgba(234,179,8,0.25)',
+                  color: buying ? '#555' : '#a16207',
+                  cursor: buying ? 'not-allowed' : 'pointer',
+                }}
               >
+                <ShoppingCart size={12} />
+                {buying ? 'Purchasing...' : `Buy 50 more attempts (${formatMoney(info?.bonus_cost ?? 50_000_000)})`}
+              </button>
+            )}
+
+            {/* All attempts exhausted */}
+            {allFull && (
+              <div className="w-full py-3 rounded-lg text-center border border-zinc-700/30 bg-zinc-900/30">
                 <div className="flex items-center justify-center gap-2 text-zinc-400 text-xs font-heading">
                   <Clock size={12} />
-                  <span>Next attempt in <span className="text-yellow-400 font-bold tabular-nums">{countdown}</span></span>
+                  <span>Resets in <span className="text-yellow-400 font-bold tabular-nums">{countdown}</span></span>
                 </div>
               </div>
             )}
@@ -626,24 +699,14 @@ export default function CrackSafe() {
               <Info size={11} className="text-primary" />
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Information & How to Play</h2>
             </div>
-            <div className="p-3 space-y-1.5">
-              {[
-                `Enter 5 numbers between 1 and 9 to crack the safe!`,
-                `You can only crack the safe 1 time per day`,
-                `Current Jackpot: ${formatMoney(info?.jackpot ?? 0)}`,
-                `Number of attempts: ${(info?.total_attempts ?? 0).toLocaleString()}`,
-                `Previous Winner: ${info?.last_winner_username ?? 'None yet'}`,
-              ].map((line, i) => (
-                <p key={i} className="text-xs text-zinc-400 font-heading" style={{ lineHeight: 1.6 }}>
-                  {line.startsWith('Current Jackpot') ? (
-                    <>Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></>
-                  ) : line.startsWith('Previous Winner') ? (
-                    <>Previous Winner: <span className="text-primary font-semibold">{info?.last_winner_username ?? 'None yet'}</span></>
-                  ) : line.startsWith('Number of attempts') ? (
-                    <>Number of attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></>
-                  ) : line}
-                </p>
-              ))}
+            <div className="p-3 space-y-1.5 text-xs font-heading" style={{ lineHeight: 1.7 }}>
+              <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
+              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 5_000_000)}</span></p>
+              <p className="text-zinc-400">You get <span className="text-primary font-semibold">50 free attempts</span> per day</p>
+              <p className="text-zinc-400">Purchase <span className="text-yellow-500 font-semibold">50 extra attempts</span> for <span className="text-yellow-500 font-semibold">{formatMoney(info?.bonus_cost ?? 50_000_000)}</span></p>
+              <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
+              <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
+              <p className="text-zinc-400">Previous Winner: <span className="text-primary font-semibold">{info?.last_winner_username ?? 'None yet'}</span></p>
             </div>
           </div>
 
