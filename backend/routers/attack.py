@@ -564,11 +564,17 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
                 if target.get("is_bodyguard"):
                     victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
+                    # Fallback: robot user doc has bodyguard_owner_id if bodyguard collection doc missing
+                    if not victim_as_bodyguard and target.get("bodyguard_owner_id"):
+                        victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
                     killer_family_id = current_user.get("family_id") or await _resolve_family_id(killer_id)
                     for bg in victim_as_bodyguard:
                         owner_id = bg["user_id"]
                         owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
-                        await db.bodyguards.delete_one({"id": bg["id"]})
+                        if bg.get("id"):
+                            await db.bodyguards.delete_one({"id": bg["id"]})
+                        else:
+                            await db.bodyguards.delete_one(delete_criteria)
                         await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
                         await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
                         try:
@@ -580,12 +586,16 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                                     bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
                                 if bg_war and bg_war.get("id"):
                                     await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
+                                    logger.info("Vendetta: recorded robot BG kill war_id=%s killer=%s owner=%s", bg_war["id"], killer_id, owner_id)
+                            else:
+                                logger.info("Vendetta: robot BG kill not recorded killer_family=%s owner_family=%s (need both set and different)", killer_family_id, owner_family_id)
                         except Exception as e:
                             logging.exception("War stats bodyguard kill (NPC): %s", e)
                         remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
                         for i, b in enumerate(remaining, 1):
                             if b["slot_number"] != i:
-                                await db.bodyguards.update_one({"id": b["id"]}, {"$set": {"slot_number": i}})
+                                update_criteria = {"id": b["id"]} if b.get("id") else {"user_id": owner_id, "slot_number": b["slot_number"]}
+                                await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
                 return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
         victim_money = int(target.get("money", 0))
         cash_loot = int(victim_money * KILL_CASH_PERCENT)
@@ -641,6 +651,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             {"$set": {"is_dead": True, "dead_at": now_iso, "points_at_death": target.get("points", 0), "money": 0, "health": 0}, "$inc": {"total_deaths": 1}}
         )
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
+        if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):
+            victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
         bodyguard_owner_username = None
         killer_family_id = current_user.get("family_id") or await _resolve_family_id(killer_id)
         for bg in victim_as_bodyguard:
@@ -648,7 +660,11 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
             if owner_doc:
                 bodyguard_owner_username = owner_doc.get("username")
-            await db.bodyguards.delete_one({"id": bg["id"]})
+            delete_criteria = {"user_id": owner_id, "bodyguard_user_id": victim_id}
+            if bg.get("id"):
+                await db.bodyguards.delete_one({"id": bg["id"]})
+            else:
+                await db.bodyguards.delete_one(delete_criteria)
             await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
             try:
@@ -661,12 +677,16 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
                     if bg_war and bg_war.get("id"):
                         await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
+                        logger.info("Vendetta: recorded BG kill war_id=%s killer=%s owner=%s", bg_war["id"], killer_id, owner_id)
+                else:
+                    logger.info("Vendetta: BG kill not recorded killer_family=%s owner_family=%s (need both set and different)", killer_family_id, owner_family_id)
             except Exception as e:
                 logging.exception("War stats bodyguard kill: %s", e)
             remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
             for i, b in enumerate(remaining, 1):
                 if b["slot_number"] != i:
-                    await db.bodyguards.update_one({"id": b["id"]}, {"$set": {"slot_number": i}})
+                    update_criteria = {"id": b["id"]} if b.get("id") else {"user_id": owner_id, "slot_number": b["slot_number"]}
+                    await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
         is_victim_bodyguard = bool(target.get("is_bodyguard"))
         attempt_base["is_bodyguard_kill"] = is_victim_bodyguard
         if is_victim_bodyguard and bodyguard_owner_username:
