@@ -381,9 +381,12 @@ export default function Layout({ children }) {
       // Trigger objectives endpoint so backend can auto-reset daily/weekly/monthly without user opening Objectives page
       api.get('/objectives').catch(() => {});
     } catch (error) {
-      console.error('Failed to fetch user:', error);
-      localStorage.removeItem('token');
-      navigate('/');
+      // 401 is handled globally by api interceptor (clear token + full reload to login). Other errors just log.
+      if (error.response?.status !== 401) {
+        console.error('Failed to fetch user:', error);
+        localStorage.removeItem('token');
+        navigate('/');
+      }
     }
   };
 

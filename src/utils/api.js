@@ -19,6 +19,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// On 401 (e.g. backend restarted, token expired), clear token and auto-redirect to login. Stops "loading profile" spam.
+let hasRedirectedOnAuthFailure = false;
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && !hasRedirectedOnAuthFailure) {
+      hasRedirectedOnAuthFailure = true;
+      localStorage.removeItem('token');
+      window.location.replace('/');
+    }
+    return Promise.reject(error);
+  }
+);
+
 /** For error messages: display the actual backend base URL (same-origin shows as /api). */
 export function getBaseURL() {
   return API || '/api';

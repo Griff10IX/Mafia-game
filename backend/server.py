@@ -63,7 +63,8 @@ def _get_jwt_secret():
 
 SECRET_KEY = _get_jwt_secret()
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
+# Session length: 1 hour so mobile users stay logged in when returning to the app
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 security = HTTPBearer()
 
