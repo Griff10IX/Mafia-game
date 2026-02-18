@@ -634,6 +634,7 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                   Most kills: <Link to={`/profile/${encodeURIComponent(stats.top_killers[0].username)}`} className="text-primary font-bold hover:underline">{stats.top_killers[0].username}</Link> ({stats.top_killers[0].kills ?? 0})
                 </div>
               )}
+              <p className="text-[9px] text-zinc-600 text-center font-heading italic pt-1">BG kills only count when you kill a bodyguard protecting someone in the other family.</p>
             </>
           )}
           

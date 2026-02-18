@@ -567,7 +567,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     # Fallback: robot user doc has bodyguard_owner_id if bodyguard collection doc missing
                     if not victim_as_bodyguard and target.get("bodyguard_owner_id"):
                         victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
-                    killer_family_id = current_user.get("family_id") or await _resolve_family_id(killer_id)
+                    # Resolve killer's family from DB/family_members first so boss/founder is never missed
+                    killer_family_id = await _resolve_family_id(killer_id) or current_user.get("family_id")
                     for bg in victim_as_bodyguard:
                         owner_id = bg["user_id"]
                         owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
@@ -587,8 +588,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                                 if bg_war and bg_war.get("id"):
                                     await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
                                     logger.info("Vendetta: recorded robot BG kill war_id=%s killer=%s owner=%s", bg_war["id"], killer_id, owner_id)
-                            else:
-                                logger.info("Vendetta: robot BG kill not recorded killer_family=%s owner_family=%s (need both set and different)", killer_family_id, owner_family_id)
+                else:
+                    reason = "same_family" if (owner_family_id and killer_family_id and owner_family_id == killer_family_id) else "missing_or_same_family"
+                    logger.info("Vendetta: robot BG kill not recorded killer_family=%s owner_family=%s reason=%s", killer_family_id, owner_family_id, reason)
                         except Exception as e:
                             logging.exception("War stats bodyguard kill (NPC): %s", e)
                         remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
@@ -654,7 +656,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):
             victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
         bodyguard_owner_username = None
-        killer_family_id = current_user.get("family_id") or await _resolve_family_id(killer_id)
+        # Resolve killer's family from DB/family_members first so boss/founder is never missed
+        killer_family_id = await _resolve_family_id(killer_id) or current_user.get("family_id")
         for bg in victim_as_bodyguard:
             owner_id = bg["user_id"]
             owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
@@ -679,7 +682,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
                         logger.info("Vendetta: recorded BG kill war_id=%s killer=%s owner=%s", bg_war["id"], killer_id, owner_id)
                 else:
-                    logger.info("Vendetta: BG kill not recorded killer_family=%s owner_family=%s (need both set and different)", killer_family_id, owner_family_id)
+                    reason = "same_family" if (owner_family_id and killer_family_id and owner_family_id == killer_family_id) else "missing_or_same_family"
+                    logger.info("Vendetta: BG kill not recorded killer_family=%s owner_family=%s reason=%s", killer_family_id, owner_family_id, reason)
             except Exception as e:
                 logging.exception("War stats bodyguard kill: %s", e)
             remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
