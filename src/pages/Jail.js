@@ -40,7 +40,7 @@ const JailStatusCard = ({
 }) => {
   if (inJail) {
     return (
-      <div className="relative border-2 border-red-500/60 rounded-md overflow-hidden">
+      <div className="relative border-2 border-red-500/60 rounded-md overflow-hidden w-full max-w-sm mx-auto">
         <img 
           src={JAIL_BACKGROUND_IMAGE} 
           alt="" 
@@ -49,19 +49,19 @@ const JailStatusCard = ({
         <div className="absolute inset-0 bg-black/70" aria-hidden />
         <div className="absolute inset-0 bg-red-950/30" aria-hidden />
         <div 
-          className="relative z-10 p-3 text-center flex flex-col items-center justify-center" 
+          className="relative z-10 p-2 text-center flex flex-col items-center justify-center" 
           style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
         >
-          <Lock className="text-red-400 mb-1 drop-shadow-lg" size={24} />
-          <h2 className="text-base font-heading font-bold text-red-400 uppercase tracking-wider mb-0.5">
+          <Lock className="text-red-400 mb-0.5 drop-shadow-lg" size={18} />
+          <h2 className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider mb-0.5">
             You Are In Jail
           </h2>
-          <div className="text-2xl font-heading font-bold text-red-400 mb-2 tabular-nums">
+          <div className="text-xl font-heading font-bold text-red-400 mb-1.5 tabular-nums">
             {secondsRemaining}s
           </div>
           
           {/* Bust reward input */}
-          <div className="mb-2 w-full max-w-xs">
+          <div className="mb-1.5 w-full max-w-[200px]">
             <label className="block text-[9px] font-heading text-zinc-300 mb-0.5">
               💰 Reward for busting you out
             </label>
@@ -72,14 +72,14 @@ const JailStatusCard = ({
                   value={bustRewardInput}
                   onChange={onBustRewardChange}
                   placeholder="0"
-                  className="w-full h-7 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+                  className="w-full h-6 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
                 />
               </div>
               <button
                 type="button"
                 onClick={onSetReward}
                 disabled={setRewardLoading}
-                className="h-7 px-2 rounded bg-primary/20 text-primary font-heading text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
+                className="h-6 px-2 rounded bg-primary/20 text-primary font-heading text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
               >
                 {setRewardLoading ? '...' : 'Set'}
               </button>
@@ -90,7 +90,7 @@ const JailStatusCard = ({
             type="button"
             onClick={onLeaveJail}
             disabled={leavingJail}
-            className="bg-primary/20 text-primary rounded px-2 py-1 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
+            className="bg-primary/20 text-primary rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
           >
             <DoorOpen size={10} />
             {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
@@ -101,7 +101,7 @@ const JailStatusCard = ({
   }
 
   return (
-    <div className="relative border border-primary/30 rounded-md overflow-hidden shadow-lg">
+    <div className="relative border border-primary/30 rounded-md overflow-hidden shadow-lg w-full max-w-sm mx-auto">
       <img 
         src={JAIL_BACKGROUND_IMAGE} 
         alt="" 
@@ -109,19 +109,19 @@ const JailStatusCard = ({
       />
       <div className="absolute inset-0 bg-black/60" aria-hidden />
       <div 
-        className="relative z-10 p-3 text-center flex flex-col items-center justify-center" 
+        className="relative z-10 p-2 text-center flex flex-col items-center justify-center" 
         style={{ textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}
       >
-        <AlertCircle className="text-primary/80 mb-1 drop-shadow-lg" size={24} />
-        <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider mb-0.5">
+        <AlertCircle className="text-primary/80 mb-0.5 drop-shadow-lg" size={18} />
+        <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-0.5">
           You Are Free
         </h2>
-        <p className="text-[10px] text-zinc-300 font-heading mb-2">
+        <p className="text-[9px] text-zinc-300 font-heading mb-1.5">
           Bust out jailed players for rank points
         </p>
         
         {/* Reward setting when free */}
-        <div className="w-full max-w-xs">
+        <div className="w-full max-w-[200px]">
           <label className="block text-[9px] font-heading text-zinc-400 mb-0.5">
             💰 Set reward if you get jailed
             {currentReward > 0 && <span className="text-primary ml-1">(Current: ${Number(currentReward).toLocaleString()})</span>}
@@ -133,14 +133,14 @@ const JailStatusCard = ({
                 value={bustRewardInput}
                 onChange={onBustRewardChange}
                 placeholder="0"
-                className="w-full h-7 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
+                className="w-full h-6 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
               />
             </div>
             <button
               type="button"
               onClick={onSetReward}
               disabled={setRewardLoading}
-              className="h-7 px-2 rounded bg-primary/20 text-primary font-heading text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
+              className="h-6 px-2 rounded bg-primary/20 text-primary font-heading text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
             >
               {setRewardLoading ? '...' : 'Set'}
             </button>
