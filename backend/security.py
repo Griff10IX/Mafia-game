@@ -41,29 +41,38 @@ user_failed_attacks = defaultdict(list)  # user_id -> [timestamp1, timestamp2, .
 # }
 
 # Proxy/VPN check (optional): set GETIPINTEL_CONTACT_EMAIL in .env to enable. GetIPIntel free API.
+# flags=m = dynamic ban list only: only block IPs on known proxy/VPN lists (0 or 1). Reduces false positives
+# so mobile/carrier IPs are not blocked; only explicit proxy/VPN IPs get result 1.
 PROXY_CHECK_CONTACT_EMAIL = os.environ.get("GETIPINTEL_CONTACT_EMAIL", "").strip()
-PROXY_CHECK_THRESHOLD = 0.99  # Only block if probability >= 0.99 (recommended by GetIPIntel)
+PROXY_CHECK_THRESHOLD = 0.99  # When not using flags=m; with flags=m we block only when result == 1
 
 # Telegram notification queue (async batch sending)
 pending_alerts = []
 
 
 async def is_proxy_or_vpn(ip: str) -> bool:
-    """Return True if IP appears to be proxy/VPN (block registration). Requires GETIPINTEL_CONTACT_EMAIL in env."""
+    """Return True if IP appears to be proxy/VPN (block registration). Requires GETIPINTEL_CONTACT_EMAIL in env.
+    Uses flags=m so only IPs on known proxy/VPN ban lists are blocked; mobile/carrier IPs are allowed."""
     if not ip or not PROXY_CHECK_CONTACT_EMAIL:
         return False
     if not HTTPX_AVAILABLE:
         return False
     try:
-        # API: https://getipintel.net/free-proxy-vpn-tor-detection-api/ (contact required, no URL encoding)
-        url = f"http://check.getipintel.net/check.php?ip={ip}&contact={PROXY_CHECK_CONTACT_EMAIL}&format=json"
+        # flags=m = dynamic ban list only: returns 0 or 1. Only known proxy/VPN IPs return 1.
+        # Avoids false positives for mobile/carrier IPs that can score high in full dynamic checks.
+        url = f"http://check.getipintel.net/check.php?ip={ip}&contact={PROXY_CHECK_CONTACT_EMAIL}&format=json&flags=m"
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(url)
         if r.status_code != 200:
             return False
         data = r.json()
         if isinstance(data, dict) and "result" in data:
-            prob = float(data.get("result", 0))
+            raw = data.get("result")
+            try:
+                prob = float(raw)
+            except (TypeError, ValueError):
+                return False
+            # With flags=m, result is 0 or 1. Block only when 1 (on proxy/VPN list). Threshold still applies.
             return prob >= PROXY_CHECK_THRESHOLD
         return False
     except Exception as e:
