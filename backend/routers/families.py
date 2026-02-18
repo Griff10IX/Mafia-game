@@ -367,19 +367,25 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         my_role = str(my_role).strip().lower()
     ev = await get_effective_event()
     members = []
+    fallen = []
     for m in members_docs:
-        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "username": 1, "rank": 1})
+        u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1})
         rank_name = "—"
         if u:
             rid = u.get("rank", 1)
             rn = next((x["name"] for x in RANKS if x.get("id") == rid), str(rid))
             rank_name = rn
-        members.append({
+        entry = {
             "user_id": m["user_id"],
             "username": (u or {}).get("username", "?"),
             "role": str(m.get("role", "")).strip().lower() or "associate",
             "rank_name": rank_name,
-        })
+        }
+        if (u or {}).get("is_dead"):
+            entry["dead_at"] = (u or {}).get("dead_at")
+            fallen.append(entry)
+        else:
+            members.append(entry)
     rackets_raw = fam.get("rackets") or {}
     rackets = []
     now = datetime.now(timezone.utc)
@@ -432,7 +438,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
         },
-        "members": members, "rackets": rackets, "my_role": my_role,
+        "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
         "crew_oc_applications": crew_oc_applications,
     }

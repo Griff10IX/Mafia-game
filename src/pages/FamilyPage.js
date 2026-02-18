@@ -410,7 +410,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
 // ROSTER TAB — hierarchy layout with role badges
 // ============================================================================
 
-const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole }) => {
+const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssignRole }) => {
   const [assignUserId, setAssignUserId] = useState('');
   const [assignRole, setAssignRole] = useState('associate');
 
@@ -475,6 +475,50 @@ const RosterTab = ({ members, canManage, myRole, config, onKick, onAssignRole })
               Assign
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ── Graveyard ── */}
+      {fallen.length > 0 && (
+        <div className="pt-3 border-t border-zinc-700/20">
+          <div className="flex items-center gap-2 mb-2">
+            <Skull size={11} className="text-zinc-600" />
+            <p className="text-[9px] text-zinc-600 font-heading uppercase tracking-[0.2em]">Graveyard — {fallen.length} fallen</p>
+          </div>
+          <div className="space-y-1">
+            {fallen.map((m, idx) => {
+              const cfg = getRoleConfig(m.role);
+              const deadDate = m.dead_at
+                ? new Date(m.dead_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' })
+                : null;
+              return (
+                <div
+                  key={m.user_id}
+                  className="relative flex items-center justify-between px-3 py-2 rounded-lg bg-zinc-900/50 border border-zinc-800/50 opacity-60 fam-fade-in"
+                  style={{ animationDelay: `${idx * 0.04}s` }}
+                >
+                  <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-zinc-700/40 rounded-l-lg" />
+                  <div className="min-w-0 flex items-center gap-2">
+                    <Skull size={10} className="text-zinc-600 shrink-0" />
+                    <div className="min-w-0">
+                      <Link
+                        to={`/profile/${encodeURIComponent(m.username)}`}
+                        className="font-heading font-bold text-xs text-zinc-500 hover:text-zinc-300 transition-colors block truncate line-through decoration-zinc-700"
+                      >
+                        {m.username}
+                      </Link>
+                      <span className={`inline-flex items-center gap-0.5 text-[9px] font-heading ${cfg.color} opacity-60`}>
+                        {cfg.icon} {cfg.label}
+                      </span>
+                    </div>
+                  </div>
+                  {deadDate && (
+                    <span className="text-[8px] text-zinc-700 font-heading shrink-0 ml-2">†&nbsp;{deadDate}</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
@@ -1098,6 +1142,7 @@ export default function FamilyPage() {
 
   const family = myFamily?.family;
   const members = myFamily?.members || [];
+  const fallen = myFamily?.fallen || [];
   const rackets = myFamily?.rackets || [];
   const myRole = myFamily?.my_role?.toLowerCase() || null;
   const canManage = ['boss', 'underboss'].includes(myRole);
@@ -1300,7 +1345,7 @@ export default function FamilyPage() {
           {/* ── Stats Row ── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <StatCard label="The Vault" value={formatMoney(family.treasury)} icon={<DollarSign size={10} />} accent="text-primary" delay={0} />
-            <StatCard label="Made Men" value={members.length} icon={<Users size={10} />} delay={0.05} />
+            <StatCard label="Made Men" value={`${members.length}${fallen.length > 0 ? ` (+${fallen.length}†)` : ''}`} icon={<Users size={10} />} delay={0.05} />
             <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} delay={0.1} />
             <StatCard label="Ready" value={readyRackets} highlight={readyRackets > 0} icon={<Clock size={10} />} delay={0.15} />
           </div>
@@ -1358,7 +1403,7 @@ export default function FamilyPage() {
                   onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />
               )}
               {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
-              {activeTab === 'roster' && <RosterTab members={members} canManage={canManage} myRole={myRole} config={config} onKick={handleKick} onAssignRole={handleAssignRole} />}
+              {activeTab === 'roster' && <RosterTab members={members} fallen={fallen} canManage={canManage} myRole={myRole} config={config} onKick={handleKick} onAssignRole={handleAssignRole} />}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
               {activeTab === 'history' && <WarHistoryTab wars={warHistory} />}
             </div>
