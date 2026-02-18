@@ -14,7 +14,6 @@ from server import (
     get_current_user,
     STATES,
     log_gambling,
-    _user_owns_any_casino,
 )
 
 # ----- Constants -----
@@ -80,70 +79,88 @@ def _is_slots_ownership_expired(doc: dict) -> bool:
         return True
 
 
+def _parse_iso_datetime(s: str):
+    """Parse ISO datetime; return None on error."""
+    if not s:
+        return None
+    try:
+        t = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return t
+    except Exception:
+        return None
+
+
 async def _run_slots_draw_if_needed(state: str):
-    """If no valid owner (none or expired), run draw: pick random from entries (not in cooldown), set owner 3h, clear entries, set previous owner cooldown."""
+    """Run draw when next_draw_at is due (every 3h from DB). If no entries, just set next_draw_at to now+3h and continue."""
     stored_state, doc = await _get_slots_ownership_doc(state)
     now = datetime.now(timezone.utc)
-    has_valid_owner = doc and doc.get("owner_id") and not _is_slots_ownership_expired(doc)
-    if has_valid_owner:
-        return
-    previous_owner_id = doc.get("owner_id") if doc else None
-    # Clear expired owner and set cooldown for previous owner
-    cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
-    if previous_owner_id:
-        await db.users.update_one({"id": previous_owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
-    await db.slots_ownership.update_one(
-        {"state": stored_state or state},
-        {"$set": {"owner_id": None, "owner_username": None}},
-        upsert=True,
-    )
-    # Get entries and filter by cooldown
-    entries_doc = await db.slots_entries.find_one({"state": stored_state or state}, {"_id": 0, "user_ids": 1})
-    user_ids = list((entries_doc or {}).get("user_ids") or [])
-    if not user_ids:
-        return
-    # Filter: user must not be in cooldown
-    eligible = []
-    for uid in user_ids:
-        u = await db.users.find_one({"id": uid}, {"_id": 0, "slots_cooldown_until": 1})
-        if not u:
-            continue
-        until = u.get("slots_cooldown_until")
-        if until:
-            try:
-                t = datetime.fromisoformat(until.replace("Z", "+00:00"))
-                if t.tzinfo is None:
-                    t = t.replace(tzinfo=timezone.utc)
-                if now < t:
-                    continue
-            except Exception:
-                pass
-        eligible.append(uid)
-    if not eligible:
-        await db.slots_entries.update_one({"state": stored_state or state}, {"$set": {"user_ids": []}}, upsert=True)
-        return
-    winner_id = random.choice(eligible)
-    winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
-    expires_at = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
     st = stored_state or state
-    await db.slots_ownership.update_one(
-        {"state": st},
-        {
-            "$set": {
-                "state": st,
-                "owner_id": winner_id,
-                "owner_username": (winner.get("username") or "?"),
-                "max_bet": SLOTS_MAX_BET,
-                "buy_back_reward": 0,
-                "expires_at": expires_at,
-                "profit": 0,
-            }
-        },
-        upsert=True,
-    )
-    await db.slots_entries.update_one({"state": st}, {"$set": {"user_ids": []}}, upsert=True)
-    for uid in set(user_ids):
-        _invalidate_slots_ownership_cache(uid)
+    next_draw_at = _parse_iso_datetime(doc.get("next_draw_at") if doc else None) if doc else None
+
+    # Ensure we have a doc with next_draw_at
+    if not doc or not next_draw_at or next_draw_at <= now:
+        # Run draw now (or first time: no next_draw_at or it's in the past)
+        next_draw_iso = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
+        previous_owner_id = doc.get("owner_id") if doc else None
+        # Clear current owner and set cooldown for previous owner
+        cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
+        if previous_owner_id:
+            await db.users.update_one({"id": previous_owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
+        # Get entries and filter by cooldown only. Slots lottery allows winners who own other casinos (unlike claim-based games).
+        entries_doc = await db.slots_entries.find_one({"state": st}, {"_id": 0, "user_ids": 1})
+        user_ids = list((entries_doc or {}).get("user_ids") or [])
+        eligible = []
+        for uid in user_ids:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "slots_cooldown_until": 1})
+            if not u:
+                continue
+            until = u.get("slots_cooldown_until")
+            if until:
+                t = _parse_iso_datetime(until)
+                if t and now < t:
+                    continue
+            eligible.append(uid)
+        if eligible:
+            winner_id = random.choice(eligible)
+            winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
+            expires_at = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
+            await db.slots_ownership.update_one(
+                {"state": st},
+                {
+                    "$set": {
+                        "state": st,
+                        "owner_id": winner_id,
+                        "owner_username": (winner.get("username") or "?") if winner else "?",
+                        "max_bet": SLOTS_MAX_BET,
+                        "buy_back_reward": 0,
+                        "expires_at": expires_at,
+                        "profit": 0,
+                        "next_draw_at": next_draw_iso,
+                    }
+                },
+                upsert=True,
+            )
+            await db.slots_entries.update_one({"state": st}, {"$set": {"user_ids": []}}, upsert=True)
+            for uid in set(user_ids):
+                _invalidate_slots_ownership_cache(uid)
+        else:
+            # No eligible entries: stay state-owned, just advance next draw
+            await db.slots_ownership.update_one(
+                {"state": st},
+                {
+                    "$set": {
+                        "state": st,
+                        "owner_id": None,
+                        "owner_username": None,
+                        "next_draw_at": next_draw_iso,
+                    }
+                },
+                upsert=True,
+            )
+        return
+    # now < next_draw_at: draw not due yet, do nothing
 
 
 # ----- Models -----
@@ -223,6 +240,9 @@ def register(router):
             state_owned = False
             owner_id = doc.get("owner_id")
             expires_at = doc.get("expires_at")
+        next_draw_at = (doc.get("next_draw_at") or doc.get("expires_at")) if doc else None
+        if not next_draw_at:
+            next_draw_at = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
         return {
             "max_bet": max_bet,
             "house_edge": SLOTS_HOUSE_EDGE,
@@ -232,6 +252,7 @@ def register(router):
             "state_owned": state_owned,
             "owner_id": owner_id,
             "expires_at": expires_at,
+            "next_draw_at": next_draw_at,
             "ownership_hours": SLOTS_OWNERSHIP_HOURS,
         }
 
@@ -271,6 +292,9 @@ def register(router):
         entry_user_ids = (entries_doc or {}).get("user_ids") or []
         entries_count = len(entry_user_ids)
         has_entered = current_user["id"] in entry_user_ids
+        next_draw_at = (doc.get("next_draw_at") or doc.get("expires_at")) if doc else None
+        if not next_draw_at:
+            next_draw_at = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
         return {
             "state": stored_state or state,
             "owner_id": owner_id if is_valid_owner else None,
@@ -279,6 +303,7 @@ def register(router):
             "max_bet": max_bet,
             "buy_back_reward": buy_back_reward,
             "expires_at": expires_at,
+            "next_draw_at": next_draw_at,
             "can_enter": can_enter,
             "has_entered": has_entered,
             "entries_count": entries_count,
@@ -519,16 +544,18 @@ def register(router):
                 # End owner's 3h: clear ownership and set cooldown
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
+                next_draw_iso = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
-                    {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()}},
+                    {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},
                 )
                 ownership_transferred = True
             else:
                 ownership_transferred = True
+                next_draw_iso = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
-                    {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()}},
+                    {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},
                 )
                 offer_id = str(uuid.uuid4())
                 expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()

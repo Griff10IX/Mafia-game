@@ -275,7 +275,7 @@ function formatTimeLeft(expiresAtIso) {
 }
 
 export default function SlotsPage() {
-  const [config, setConfig] = useState({ max_bet: 5_000_000, current_state: '', states: [], symbols: [], state_owned: true, ownership_hours: 3 });
+  const [config, setConfig] = useState({ max_bet: 5_000_000, current_state: '', states: [], symbols: [], state_owned: true, ownership_hours: 3, next_draw_at: null });
   const [ownership, setOwnership] = useState(null);
   const [bet, setBet] = useState('1000');
   const [loading, setLoading] = useState(false);
@@ -301,6 +301,7 @@ export default function SlotsPage() {
         symbols: d.symbols || [],
         state_owned: d.state_owned !== false,
         ownership_hours: d.ownership_hours ?? 3,
+        next_draw_at: d.next_draw_at || null,
       });
     }).catch(() => {});
   }, []);
@@ -847,9 +848,9 @@ export default function SlotsPage() {
                   </p>
                 )}
                 <p className="text-[10px] text-mutedForeground font-heading">
-                  {ownership?.expires_at && new Date(ownership.expires_at) > new Date()
-                    ? `Next draw: ${formatHistoryDate(ownership.expires_at)}`
-                    : 'Next draw: enter above to be in the draw. Winner chosen at random when current owner\'s term ends.'}
+                  {(ownership?.next_draw_at || config.next_draw_at)
+                    ? `Next draw: ${formatHistoryDate(ownership?.next_draw_at || config.next_draw_at)} (every ${config.ownership_hours}h)`
+                    : `Next draw: every ${config.ownership_hours} hours.`}
                 </p>
               </div>
             )}
