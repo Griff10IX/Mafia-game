@@ -248,6 +248,25 @@ export default function AutoRank() {
     }
   };
 
+  const [wipingStats, setWipingStats] = useState(false);
+  const handleWipeAllStats = async () => {
+    if (!window.confirm('Wipe all Auto Rank stats for every user? Running time and all counters will reset. This cannot be undone.')) return;
+    setWipingStats(true);
+    try {
+      const res = await api.post('/admin/auto-rank/wipe-stats');
+      toast.success(res.data?.message ?? 'All auto rank stats wiped');
+      const [statsRes] = await Promise.all([
+        api.get('/auto-rank/stats').catch(() => ({ data: null })),
+      ]);
+      if (statsRes?.data) setStats(statsRes.data);
+      fetchAdminUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to wipe stats');
+    } finally {
+      setWipingStats(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className={styles.pageContent}>
@@ -527,20 +546,31 @@ export default function AutoRank() {
         {isAdmin && (
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+            <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-primary" />
                 <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Auto Rank users (alive)</span>
               </div>
-              <button
-                type="button"
-                onClick={fetchAdminUsers}
-                disabled={adminUsersLoading}
-                className="p-1.5 rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50"
-                title="Refresh list"
-              >
-                <RefreshCw className={`w-4 h-4 ${adminUsersLoading ? 'animate-spin' : ''}`} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleWipeAllStats}
+                  disabled={wipingStats}
+                  className="px-2 py-1.5 rounded bg-destructive/20 border border-destructive/50 text-destructive font-heading text-xs font-bold hover:bg-destructive/30 disabled:opacity-50"
+                  title="Wipe all auto rank stats for every user"
+                >
+                  {wipingStats ? 'Wiping…' : 'Wipe all stats'}
+                </button>
+                <button
+                  type="button"
+                  onClick={fetchAdminUsers}
+                  disabled={adminUsersLoading}
+                  className="p-1.5 rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50"
+                  title="Refresh list"
+                >
+                  <RefreshCw className={`w-4 h-4 ${adminUsersLoading ? 'animate-spin' : ''}`} />
+                </button>
+              </div>
             </div>
             <div className="p-4 md:p-5 overflow-x-auto">
               <p className="text-xs text-mutedForeground font-heading mb-3">

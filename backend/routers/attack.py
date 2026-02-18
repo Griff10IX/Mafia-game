@@ -551,6 +551,31 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 except Exception:
                     pass
                 await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
+                # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
+                if target.get("is_bodyguard"):
+                    victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
+                    killer_family_id = current_user.get("family_id")
+                    for bg in victim_as_bodyguard:
+                        owner_id = bg["user_id"]
+                        owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
+                        await db.bodyguards.delete_one({"id": bg["id"]})
+                        await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
+                        await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
+                        try:
+                            owner_family_id = (owner_doc or {}).get("family_id")
+                            if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
+                                bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
+                                if not bg_war or not bg_war.get("id"):
+                                    await _family_war_start(killer_family_id, owner_family_id)
+                                    bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
+                                if bg_war and bg_war.get("id"):
+                                    await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
+                        except Exception as e:
+                            logging.exception("War stats bodyguard kill (NPC): %s", e)
+                        remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
+                        for i, b in enumerate(remaining, 1):
+                            if b["slot_number"] != i:
+                                await db.bodyguards.update_one({"id": b["id"]}, {"$set": {"slot_number": i}})
                 return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
         victim_money = int(target.get("money", 0))
         cash_loot = int(victim_money * KILL_CASH_PERCENT)

@@ -719,7 +719,10 @@ def register(router):
                 updates[field] = val
         if not updates:
             return {"message": "No changes", **_extract_preferences(current_user)}
-        await db.users.update_one({"id": user_id}, {"$set": updates})
+        op = {"$set": updates}
+        if updates.get("auto_rank_enabled") is False:
+            op["$unset"] = {"auto_rank_stats_since": ""}
+        await db.users.update_one({"id": user_id}, op)
         updated = await db.users.find_one({"id": user_id}, {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}})
         return {"message": "Preferences saved", **_extract_preferences(updated)}
 
@@ -806,7 +809,10 @@ def register(router):
             updates["auto_rank_enabled"] = body.auto_rank_enabled
         if not updates:
             return {"message": "No changes", "username": target.get("username")}
-        await db.users.update_one({"id": target["id"]}, {"$set": updates})
+        op = {"$set": updates}
+        if updates.get("auto_rank_enabled") is False:
+            op["$unset"] = {"auto_rank_stats_since": ""}
+        await db.users.update_one({"id": target["id"]}, op)
         updated = await db.users.find_one({"id": target["id"]}, {"_id": 0, "auto_rank_enabled": 1, "telegram_chat_id": 1, "telegram_bot_token": 1})
         return {
             "message": "Updated",
@@ -815,3 +821,17 @@ def register(router):
             "telegram_chat_id": updated.get("telegram_chat_id") or "",
             "telegram_bot_token": updated.get("telegram_bot_token") or "",
         }
+
+    _WIPE_STATS_FIELDS = [
+        "auto_rank_stats_since", "auto_rank_total_busts", "auto_rank_total_crimes",
+        "auto_rank_total_gtas", "auto_rank_total_cash", "auto_rank_best_cars",
+        "auto_rank_total_booze_runs", "auto_rank_total_booze_profit",
+    ]
+
+    @router.post("/admin/auto-rank/wipe-stats")
+    async def admin_wipe_auto_rank_stats(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        unset = {f: "" for f in _WIPE_STATS_FIELDS}
+        result = await db.users.update_many({}, {"$unset": unset})
+        return {"message": "All auto rank stats wiped", "modified_count": result.modified_count}

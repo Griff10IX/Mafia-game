@@ -86,7 +86,7 @@ export default function Store() {
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [customCarName, setCustomCarName] = useState('');
-  const [activeTab, setActiveTab] = useState('points');
+  const [activeTab, setActiveTab] = useState('upgrades');
 
   const fetchData = useCallback(async () => {
     try {
