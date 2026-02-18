@@ -936,6 +936,18 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         return {"success": False, "message": fail_msg, "amount": 0}
 
 
+async def families_war(current_user: dict = Depends(get_current_user)):
+    """Lightweight: list active wars for current user's family (e.g. for sidebar badge)."""
+    my_family_id = current_user.get("family_id")
+    if not my_family_id:
+        return {"wars": []}
+    wars = await db.family_wars.find(
+        {"$or": [{"family_a_id": my_family_id}, {"family_b_id": my_family_id}], "status": {"$in": ["active", "truce_offered"]}},
+        {"_id": 0, "id": 1, "status": 1}
+    ).to_list(10)
+    return {"wars": [{"id": w["id"], "status": w.get("status", "active")} for w in wars]}
+
+
 async def families_war_stats(current_user: dict = Depends(get_current_user)):
     my_family_id = current_user.get("family_id")
     if not my_family_id:
@@ -1061,6 +1073,7 @@ def register(router):
     router.add_api_route("/families/rackets/{racket_id}/upgrade", families_racket_upgrade, methods=["POST"])
     router.add_api_route("/families/racket-attack-targets", families_racket_attack_targets, methods=["GET"])
     router.add_api_route("/families/attack-racket", families_attack_racket, methods=["POST"])
+    router.add_api_route("/families/war", families_war, methods=["GET"])
     router.add_api_route("/families/war/stats", families_war_stats, methods=["GET"])
     router.add_api_route("/families/war/truce/offer", families_war_truce_offer, methods=["POST"])
     router.add_api_route("/families/war/truce/accept", families_war_truce_accept, methods=["POST"])
