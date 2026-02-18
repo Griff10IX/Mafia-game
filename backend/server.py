@@ -1157,15 +1157,15 @@ async def startup_db():
     asyncio.create_task(auto_rank.run_auto_rank_oc_loop())
     from routers import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
-    # Slots: run lottery draw on schedule (every 30s check) so draws happen at next_draw_at even if no one is on the page
+    # Slots: run lottery draw on schedule (every 15s check) so draws happen at next_draw_at even if no one is on the page
     from routers import slots as slots_router
     async def slots_draw_ticker():
         while True:
-            await asyncio.sleep(30)
             try:
                 await slots_router.run_slots_draws_due()
             except Exception as e:
                 logging.exception("Slots draw ticker: %s", e)
+            await asyncio.sleep(15)
     asyncio.create_task(slots_draw_ticker())
 
 @app.on_event("shutdown")

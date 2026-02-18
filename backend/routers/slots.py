@@ -181,11 +181,12 @@ async def _run_slots_draw_if_needed(state: str):
 
 async def run_slots_draws_due():
     """Run the lottery draw for every state where next_draw_at is due. Call from a background task so draws run on time even if no one is on the page."""
+    import logging
     for state in (STATES or []):
         try:
             await _run_slots_draw_if_needed(state)
-        except Exception:
-            pass  # log in caller if needed
+        except Exception as e:
+            logging.exception("Slots draw failed for state %s: %s", state, e)
 
 
 # ----- Models -----
