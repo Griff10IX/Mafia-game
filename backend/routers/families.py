@@ -1146,6 +1146,36 @@ async def admin_debug_war_stats(current_user: dict = Depends(get_current_user)):
     return {"wars": result}
 
 
+async def families_war_feed(war_id: str, current_user: dict = Depends(get_current_user)):
+    """Return the kill-event feed for a specific war (BG kills + player kills)."""
+    my_family_id = current_user.get("family_id")
+    if not my_family_id:
+        raise HTTPException(status_code=403, detail="Not in a family")
+    war = await db.family_wars.find_one({"id": war_id}, {"_id": 0, "family_a_id": 1, "family_b_id": 1})
+    if not war or my_family_id not in (war["family_a_id"], war["family_b_id"]):
+        raise HTTPException(status_code=403, detail="Not your war")
+
+    docs = await db.war_kill_feed.find({"war_id": war_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+
+    # Resolve any missing usernames from DB
+    uid_set = set()
+    for d in docs:
+        if not d.get("killer_username") or d.get("killer_username") == "?":
+            uid_set.add(d.get("killer_id"))
+        if not d.get("victim_username") or d.get("victim_username") == "?":
+            uid_set.add(d.get("victim_id"))
+    if uid_set:
+        users = await db.users.find({"id": {"$in": list(uid_set)}}, {"_id": 0, "id": 1, "username": 1}).to_list(200)
+        umap = {u["id"]: u.get("username", "?") for u in users}
+        for d in docs:
+            if not d.get("killer_username") or d.get("killer_username") == "?":
+                d["killer_username"] = umap.get(d.get("killer_id"), "?")
+            if not d.get("victim_username") or d.get("victim_username") == "?":
+                d["victim_username"] = umap.get(d.get("victim_id"), "?")
+
+    return {"feed": docs}
+
+
 def register(router):
     router.add_api_route("/admin/debug/war-stats", admin_debug_war_stats, methods=["GET"])
     router.add_api_route("/families", families_list, methods=["GET"])
@@ -1173,6 +1203,7 @@ def register(router):
     router.add_api_route("/families/attack-racket", families_attack_racket, methods=["POST"])
     router.add_api_route("/families/war", families_war, methods=["GET"])
     router.add_api_route("/families/war/stats", families_war_stats, methods=["GET"])
+    router.add_api_route("/families/war/{war_id}/feed", families_war_feed, methods=["GET"])
     router.add_api_route("/families/war/truce/offer", families_war_truce_offer, methods=["POST"])
     router.add_api_route("/families/war/truce/accept", families_war_truce_accept, methods=["POST"])
     router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"])

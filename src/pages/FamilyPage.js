@@ -555,17 +555,42 @@ const WarHistoryTab = ({ wars }) => (
 );
 
 // ============================================================================
-// WAR MODAL — dramatic battle stats
+// WAR MODAL — Stats + War Info tabs
 // ============================================================================
 
 const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcceptTruce }) => {
+  const [modalTab, setModalTab] = useState('stats');
+  const [feed, setFeed] = useState(null);
+  const [feedLoading, setFeedLoading] = useState(false);
+
+  useEffect(() => {
+    if (modalTab === 'info' && war?.id && feed === null) {
+      setFeedLoading(true);
+      api.get(`/families/war/${war.id}/feed`)
+        .then((res) => setFeed(res.data?.feed ?? []))
+        .catch(() => setFeed([]))
+        .finally(() => setFeedLoading(false));
+    }
+  }, [modalTab, war?.id, feed]);
+
+  // Reset feed when war changes
+  useEffect(() => { setFeed(null); setModalTab('stats'); }, [war?.id]);
+
   if (!war) return null;
+
+  const formatTs = (iso) => {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch { return ''; }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm" onClick={onClose}>
       <div className={`relative w-full max-w-md ${styles.panel} rounded-xl overflow-hidden border-2 border-red-500/30 shadow-2xl fam-scale-in`} onClick={(e) => e.stopPropagation()}>
         <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-40 h-20 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
-        {/* War header */}
+
+        {/* Header */}
         <div className="px-4 py-3.5 flex items-center justify-between bg-gradient-to-r from-red-500/15 via-red-500/10 to-red-500/15 border-b border-red-500/20">
           <span className="text-sm font-heading font-bold text-red-400 uppercase tracking-[0.15em] flex items-center gap-2">
             <Swords size={16} /> Vendetta: {war.other_family_name}
@@ -573,14 +598,31 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
           <button onClick={onClose} className="text-zinc-500 hover:text-foreground transition-colors"><X size={16} /></button>
         </div>
 
-        <div className="p-4 space-y-3">
+        {/* Sub-tabs */}
+        <div className="flex border-b border-zinc-700/40 bg-zinc-900/60">
+          <button
+            onClick={() => setModalTab('stats')}
+            className={`flex-1 py-2 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 ${modalTab === 'stats' ? 'text-primary border-primary bg-primary/5' : 'text-zinc-500 border-transparent hover:text-zinc-300'}`}
+          >
+            Stats
+          </button>
+          <button
+            onClick={() => setModalTab('info')}
+            className={`flex-1 py-2 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 ${modalTab === 'info' ? 'text-primary border-primary bg-primary/5' : 'text-zinc-500 border-transparent hover:text-zinc-300'}`}
+          >
+            War Info
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
           {war.status === 'truce_offered' && (
             <div className="text-[11px] rounded-lg px-3 py-2 bg-primary/10 text-primary border border-primary/30 font-heading font-bold text-center">
               ✋ Truce Offered
             </div>
           )}
-          
-          {stats && (
+
+          {/* ── STATS TAB ── */}
+          {modalTab === 'stats' && stats && (
             <>
               {(stats.my_family_totals || stats.other_family_totals) && (
                 <div className="grid grid-cols-2 gap-3 pb-3 border-b border-zinc-700/30">
@@ -604,32 +646,32 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                 <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
                   <Shield size={14} className="mx-auto mb-1 text-primary" />
                   <div className="text-[9px] text-zinc-500 font-heading">Top BG Kills</div>
-                  {stats.top_bodyguard_killers?.[0] && (
+                  {stats.top_bodyguard_killers?.[0] ? (
                     <div className="text-[10px] text-foreground font-bold truncate mt-0.5">
                       <Link to={`/profile/${encodeURIComponent(stats.top_bodyguard_killers[0].username)}`} className="text-primary hover:underline">{stats.top_bodyguard_killers[0].username}</Link>: {stats.top_bodyguard_killers[0].bodyguard_kills}
                     </div>
-                  )}
+                  ) : <div className="text-[10px] text-zinc-600 mt-0.5">—</div>}
                 </div>
                 <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
                   <Skull size={14} className="mx-auto text-red-400 mb-1" />
                   <div className="text-[9px] text-zinc-500 font-heading">Most BGs Lost</div>
-                  {stats.top_bodyguards_lost?.[0] && (
+                  {stats.top_bodyguards_lost?.[0] ? (
                     <div className="text-[10px] text-foreground font-bold truncate mt-0.5">
                       <Link to={`/profile/${encodeURIComponent(stats.top_bodyguards_lost[0].username)}`} className="text-primary hover:underline">{stats.top_bodyguards_lost[0].username}</Link>: {stats.top_bodyguards_lost[0].bodyguards_lost}
                     </div>
-                  )}
+                  ) : <div className="text-[10px] text-zinc-600 mt-0.5">—</div>}
                 </div>
                 <div className="p-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
                   <Trophy size={14} className="mx-auto text-yellow-400 mb-1" />
                   <div className="text-[9px] text-zinc-500 font-heading">MVP</div>
-                  {stats.mvp?.[0] && (
+                  {stats.mvp?.[0] ? (
                     <div className="text-[10px] text-foreground font-bold truncate mt-0.5">
                       <Link to={`/profile/${encodeURIComponent(stats.mvp[0].username)}`} className="text-primary hover:underline">{stats.mvp[0].username}</Link>: {(stats.mvp[0].impact ?? (stats.mvp[0].kills ?? 0) + (stats.mvp[0].bodyguard_kills ?? 0))}
                     </div>
-                  )}
+                  ) : <div className="text-[10px] text-zinc-600 mt-0.5">—</div>}
                 </div>
               </div>
-              {stats.top_killers?.[0] && (
+              {stats.top_killers?.[0] && (stats.top_killers[0].kills ?? 0) > 0 && (
                 <div className="text-[9px] text-zinc-500 text-center pt-1 font-heading">
                   Most kills: <Link to={`/profile/${encodeURIComponent(stats.top_killers[0].username)}`} className="text-primary font-bold hover:underline">{stats.top_killers[0].username}</Link> ({stats.top_killers[0].kills ?? 0})
                 </div>
@@ -637,7 +679,71 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
               <p className="text-[9px] text-zinc-600 text-center font-heading italic pt-1">BG kills only count when you kill a bodyguard protecting someone in the other family.</p>
             </>
           )}
-          
+
+          {/* ── WAR INFO TAB ── */}
+          {modalTab === 'info' && (
+            <div className="space-y-2">
+              {feedLoading ? (
+                <div className="flex items-center justify-center py-10 gap-2 text-zinc-500 text-[11px] font-heading">
+                  <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  Loading intel...
+                </div>
+              ) : !feed || feed.length === 0 ? (
+                <div className="text-center py-10 rounded-lg bg-zinc-800/20 border border-dashed border-zinc-700/40">
+                  <Swords size={28} className="mx-auto text-zinc-700 mb-2" />
+                  <p className="text-xs text-zinc-500 font-heading uppercase tracking-wider">No kills recorded yet</p>
+                  <p className="text-[9px] text-zinc-600 font-heading italic mt-1">Every death will be logged here</p>
+                </div>
+              ) : (
+                feed.map((event, idx) => {
+                  const isBG = event.kill_type === 'bodyguard';
+                  return (
+                    <div key={event.id || idx} className={`relative rounded-lg px-3 py-2.5 overflow-hidden fam-fade-in ${isBG ? 'bg-primary/5 border border-primary/20' : 'bg-red-500/5 border border-red-500/20'}`} style={{ animationDelay: `${idx * 0.03}s` }}>
+                      <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${isBG ? 'bg-primary/50' : 'bg-red-500/50'}`} />
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          {isBG ? (
+                            <p className="text-[11px] font-heading leading-relaxed">
+                              <Link to={`/profile/${encodeURIComponent(event.killer_username)}`} className="text-primary font-bold hover:underline">{event.killer_username}</Link>
+                              <span className="text-zinc-400"> killed </span>
+                              <span className="text-zinc-300 font-bold">{event.bg_owner_username || event.victim_username}'s bodyguard</span>
+                            </p>
+                          ) : (
+                            <p className="text-[11px] font-heading leading-relaxed">
+                              <Link to={`/profile/${encodeURIComponent(event.killer_username)}`} className="text-red-400 font-bold hover:underline">{event.killer_username}</Link>
+                              <span className="text-zinc-400"> killed </span>
+                              <Link to={`/profile/${encodeURIComponent(event.victim_username)}`} className="text-zinc-200 font-bold hover:underline">{event.victim_username}</Link>
+                            </p>
+                          )}
+                          {!isBG && (
+                            <div className="flex flex-wrap gap-2 mt-1">
+                              {(event.cash_taken ?? 0) > 0 && (
+                                <span className="text-[9px] text-primary font-heading font-bold">${Number(event.cash_taken).toLocaleString()}</span>
+                              )}
+                              {(event.props_taken ?? 0) > 0 && (
+                                <span className="text-[9px] text-zinc-400 font-heading">{event.props_taken} propert{event.props_taken === 1 ? 'y' : 'ies'} taken</span>
+                              )}
+                              {(event.cars_taken ?? 0) > 0 && (
+                                <span className="text-[9px] text-zinc-400 font-heading">{event.cars_taken} car{event.cars_taken === 1 ? '' : 's'} taken</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <span className={`text-[9px] font-heading font-bold px-1.5 py-0.5 rounded ${isBG ? 'bg-primary/10 text-primary' : 'bg-red-500/10 text-red-400'}`}>
+                            {isBG ? 'BG Kill' : 'Kill'}
+                          </span>
+                          <p className="text-[8px] text-zinc-600 font-heading mt-1">{formatTs(event.created_at)}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* Truce buttons */}
           {canManage && (
             <div className="flex gap-2 pt-3 border-t border-zinc-700/30">
               {war.status === 'active' && (

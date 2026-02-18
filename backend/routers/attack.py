@@ -116,6 +116,26 @@ async def _record_vendetta_bg_kill(killer_id: str, killer_fid: str, owner_id: st
             upsert=True,
         )
         logger.info("Vendetta BG kill recorded: war=%s killer=%s(%s) owner=%s(%s)", war_id, killer_id, k_fid, owner_id, o_fid)
+        # Write to the war kill feed so the War Info tab can display individual events
+        try:
+            ku = await db.users.find_one({"id": killer_id}, {"_id": 0, "username": 1})
+            await db.war_kill_feed.insert_one({
+                "id": str(uuid.uuid4()),
+                "war_id": war_id,
+                "kill_type": "bodyguard",
+                "killer_id": killer_id,
+                "killer_username": (ku or {}).get("username", "?"),
+                "killer_family_id": k_fid,
+                "victim_id": owner_id,
+                "victim_family_id": o_fid,
+                "bg_owner_username": (owner_doc or {}).get("username"),
+                "cash_taken": 0,
+                "props_taken": 0,
+                "cars_taken": 0,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+        except Exception as feed_exc:
+            logger.exception("War kill feed (BG): %s", feed_exc)
     except Exception as exc:
         logger.exception("Vendetta BG kill error: %s", exc)
 
@@ -793,6 +813,25 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     war = await _get_active_war_for_family(victim_family_id)
                 if war and war.get("id"):
                     await _record_war_stats_player_kill(war["id"], killer_id, killer_family_id, victim_id, victim_family_id)
+                    try:
+                        await db.war_kill_feed.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "war_id": war["id"],
+                            "kill_type": "player",
+                            "killer_id": killer_id,
+                            "killer_username": current_user.get("username", "?"),
+                            "killer_family_id": killer_family_id,
+                            "victim_id": victim_id,
+                            "victim_username": target_name,
+                            "victim_family_id": victim_family_id,
+                            "bg_owner_username": None,
+                            "cash_taken": cash_loot,
+                            "props_taken": victim_props_count,
+                            "cars_taken": victim_cars_count,
+                            "created_at": datetime.now(timezone.utc).isoformat(),
+                        })
+                    except Exception as feed_exc:
+                        logging.exception("War kill feed (player): %s", feed_exc)
             except Exception as e:
                 logging.exception("War stats record on kill: %s", e)
         if victim_family_id:
