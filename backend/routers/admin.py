@@ -942,6 +942,9 @@ def register(router):
         deleted["blackjack_games"] = (await db.blackjack_games.delete_many({})).deleted_count
         deleted["dice_ownership"] = (await db.dice_ownership.delete_many({})).deleted_count
         deleted["dice_buy_back_offers"] = (await db.dice_buy_back_offers.delete_many({})).deleted_count
+        deleted["slots_ownership"] = (await db.slots_ownership.delete_many({})).deleted_count
+        deleted["slots_entries"] = (await db.slots_entries.delete_many({})).deleted_count
+        deleted["slots_buy_back_offers"] = (await db.slots_buy_back_offers.delete_many({})).deleted_count
         deleted["interest_deposits"] = (await db.interest_deposits.delete_many({})).deleted_count
         deleted["password_resets"] = (await db.password_resets.delete_many({})).deleted_count
         deleted["money_transfers"] = (await db.money_transfers.delete_many({})).deleted_count
@@ -973,6 +976,9 @@ def register(router):
         deleted["blackjack_games"] = (await db.blackjack_games.delete_many({"user_id": user_id})).deleted_count
         deleted["dice_ownership"] = (await db.dice_ownership.update_many({"owner_id": user_id}, {"$set": {"owner_id": None, "owner_username": None}})).modified_count
         deleted["dice_buy_back_offers"] = (await db.dice_buy_back_offers.delete_many({"$or": [{"from_owner_id": user_id}, {"to_user_id": user_id}]})).deleted_count
+        deleted["slots_ownership"] = (await db.slots_ownership.update_many({"owner_id": user_id}, {"$set": {"owner_id": None, "owner_username": None}})).modified_count
+        await db.slots_entries.update_many({}, {"$pull": {"user_ids": user_id}})
+        deleted["slots_buy_back_offers"] = (await db.slots_buy_back_offers.delete_many({"$or": [{"from_owner_id": user_id}, {"to_user_id": user_id}]})).deleted_count
         deleted["interest_deposits"] = (await db.interest_deposits.delete_many({"user_id": user_id})).deleted_count
         deleted["family_war_stats"] = (await db.family_war_stats.delete_many({"user_id": user_id})).deleted_count
         total = sum(deleted.values())

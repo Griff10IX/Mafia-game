@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
-import { MapPin } from 'lucide-react';
+import { MapPin, User, Clock, Coins, LogIn } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -267,8 +267,23 @@ function Lever({ onPull, disabled }) {
   );
 }
 
+function formatTimeLeft(expiresAtIso) {
+  if (!expiresAtIso) return null;
+  try {
+    const end = new Date(expiresAtIso);
+    const now = new Date();
+    const ms = end - now;
+    if (ms <= 0) return 'Ended';
+    const m = Math.floor(ms / 60000);
+    const h = Math.floor(m / 60);
+    const mins = m % 60;
+    return h ? `${h}h ${mins}m` : `${m}m`;
+  } catch { return null; }
+}
+
 export default function SlotsPage() {
-  const [config, setConfig] = useState({ max_bet: 5_000_000, current_state: '', states: [], symbols: [] });
+  const [config, setConfig] = useState({ max_bet: 5_000_000, current_state: '', states: [], symbols: [], state_owned: true, ownership_hours: 3 });
+  const [ownership, setOwnership] = useState(null);
   const [bet, setBet] = useState('1000');
   const [loading, setLoading] = useState(false);
   const [spinning, setSpinning] = useState(false);
@@ -277,6 +292,11 @@ export default function SlotsPage() {
   const [displayReels, setDisplayReels] = useState(null);
   const [history, setHistory] = useState([]);
   const [showCoins, setShowCoins] = useState(false);
+  const [buyBackOffer, setBuyBackOffer] = useState(null);
+  const [ownerMaxBet, setOwnerMaxBet] = useState('');
+  const [ownerBuyBack, setOwnerBuyBack] = useState('');
+  const [ownerActionLoading, setOwnerActionLoading] = useState(false);
+  const [enterLoading, setEnterLoading] = useState(false);
 
   const fetchConfig = useCallback(() => {
     api.get('/casino/slots/config').then((r) => {
@@ -286,8 +306,19 @@ export default function SlotsPage() {
         current_state: d.current_state || '',
         states: d.states || [],
         symbols: d.symbols || [],
+        state_owned: d.state_owned !== false,
+        ownership_hours: d.ownership_hours ?? 3,
       });
     }).catch(() => {});
+  }, []);
+
+  const fetchOwnership = useCallback(() => {
+    api.get('/casino/slots/ownership').then((r) => {
+      const o = r.data || {};
+      setOwnership(o);
+      if (o.is_owner && o.max_bet != null) setOwnerMaxBet(String(o.max_bet));
+      if (o.is_owner && o.buy_back_reward != null) setOwnerBuyBack(String(o.buy_back_reward ?? 0));
+    }).catch(() => setOwnership(null));
   }, []);
 
   const fetchHistory = useCallback(() => {
@@ -296,8 +327,9 @@ export default function SlotsPage() {
 
   useEffect(() => {
     fetchConfig();
+    fetchOwnership();
     fetchHistory();
-  }, [fetchConfig, fetchHistory]);
+  }, [fetchConfig, fetchOwnership, fetchHistory]);
 
   const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const canSpin = betNum >= 1 && betNum <= (config.max_bet || 5_000_000) && !loading && !spinning;
@@ -333,6 +365,9 @@ export default function SlotsPage() {
           toast.info('No match. Try again!');
         }
         if (data.new_balance != null) refreshUser(data.new_balance);
+        if (data.buy_back_offer) setBuyBackOffer(data.buy_back_offer);
+        if (data.ownership_transferred) fetchOwnership();
+        fetchConfig();
         fetchHistory();
       }, SPIN_DURATION_MS + REEL_STOP_STAGGER_MS * 2 + 500);
       return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
@@ -341,6 +376,101 @@ export default function SlotsPage() {
       setSpinning(false);
       setReelRevealed([false, false, false]);
       toast.error(apiErrorDetail(e, 'Spin failed'));
+    }
+  };
+
+  const enterDraw = async () => {
+    setEnterLoading(true);
+    try {
+      await api.post('/casino/slots/enter', { state: config.current_state });
+      toast.success('You have entered the draw. A random winner is chosen when the current owner\'s 3 hours end.');
+      fetchOwnership();
+      fetchConfig();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Could not enter'));
+    } finally {
+      setEnterLoading(false);
+    }
+  };
+
+  const setMaxBet = async () => {
+    const val = parseInt(String(ownerMaxBet || '').replace(/\D/g, ''), 10);
+    if (Number.isNaN(val) || val < 1) {
+      toast.error('Enter a valid max bet');
+      return;
+    }
+    setOwnerActionLoading(true);
+    try {
+      await api.post('/casino/slots/set-max-bet', { state: config.current_state, max_bet: val });
+      toast.success('Max bet updated');
+      fetchConfig();
+      fetchOwnership();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setOwnerActionLoading(false);
+    }
+  };
+
+  const setBuyBackReward = async () => {
+    const val = parseInt(String(ownerBuyBack || '').replace(/\D/g, ''), 10) || 0;
+    if (val < 0) {
+      toast.error('Enter a non-negative amount');
+      return;
+    }
+    setOwnerActionLoading(true);
+    try {
+      await api.post('/casino/slots/set-buy-back-reward', { state: config.current_state, amount: val });
+      toast.success('Buy-back reward updated');
+      fetchOwnership();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setOwnerActionLoading(false);
+    }
+  };
+
+  const relinquish = async () => {
+    if (!window.confirm('Give up the slots here? You will not be able to enter the next draw for 3 hours.')) return;
+    setOwnerActionLoading(true);
+    try {
+      await api.post('/casino/slots/relinquish', { state: config.current_state });
+      toast.success('You have relinquished the slots.');
+      fetchConfig();
+      fetchOwnership();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setOwnerActionLoading(false);
+    }
+  };
+
+  const acceptBuyBack = async () => {
+    if (!buyBackOffer?.offer_id) return;
+    setOwnerActionLoading(true);
+    try {
+      await api.post('/casino/slots/buy-back/accept', { offer_id: buyBackOffer.offer_id });
+      toast.success('Accepted. You received the points and the slots were returned to the previous owner.');
+      setBuyBackOffer(null);
+      fetchOwnership();
+      fetchConfig();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setOwnerActionLoading(false);
+    }
+  };
+
+  const rejectBuyBack = async () => {
+    if (!buyBackOffer?.offer_id) return;
+    setOwnerActionLoading(true);
+    try {
+      await api.post('/casino/slots/buy-back/reject', { offer_id: buyBackOffer.offer_id });
+      toast.success('Rejected. You keep the slots.');
+      setBuyBackOffer(null);
+      fetchOwnership();
+    } finally {
+      setOwnerActionLoading(false);
     }
   };
 
@@ -392,16 +522,98 @@ export default function SlotsPage() {
         .animate-payline-flash { animation: payline-flash 0.6s ease-in-out infinite; }
         .animate-win-pulse { animation: win-pulse 1s ease-in-out infinite; }
       `}</style>
-      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] text-zinc-500 font-heading italic flex items-center gap-1">
-            <MapPin size={12} className="text-primary" />
-            State-owned · <span className="text-primary font-bold">{config.current_state || '—'}</span>
-          </p>
+      <div className="relative cg-fade-in space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-[10px] text-zinc-500 font-heading italic flex items-center gap-1">
+              <MapPin size={12} className="text-primary" />
+              {ownership?.is_owner ? (
+                <>You own · <span className="text-primary font-bold">{config.current_state || '—'}</span> · {config.ownership_hours}h</>
+              ) : config.state_owned ? (
+                <>State-owned · <span className="text-primary font-bold">{config.current_state || '—'}</span></>
+              ) : (
+                <>Owned by <span className="text-primary font-bold">{ownership?.owner_username || '?'}</span> · <span className="text-primary font-bold">{config.current_state || '—'}</span></>
+              )}
+            </p>
+          </div>
+          <div className="text-xs font-heading text-mutedForeground">
+            Max bet: <span className="text-primary font-bold">{formatMoney(config.max_bet)}</span>
+          </div>
         </div>
-        <div className="text-xs font-heading text-mutedForeground">
-          Max bet: <span className="text-primary font-bold">{formatMoney(config.max_bet)}</span>
-        </div>
+
+        {/* Enter draw */}
+        {ownership?.can_enter && !ownership?.is_owner && (
+          <div className={`${styles.panel} rounded-lg border border-primary/20 p-2 flex flex-wrap items-center gap-2`}>
+            <LogIn size={14} className="text-primary" />
+            <span className="text-xs font-heading text-mutedForeground">
+              {ownership.has_entered ? `You're in the draw (${ownership.entries_count ?? 0} entered). Winner chosen at random when current owner's ${config.ownership_hours}h ends.` : 'Enter the draw for a chance to own the slots here for 3 hours.'}
+            </span>
+            {!ownership.has_entered && (
+              <button
+                type="button"
+                onClick={enterDraw}
+                disabled={enterLoading}
+                className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+              >
+                {enterLoading ? '...' : 'Enter'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Owner panel */}
+        {ownership?.is_owner && (
+          <div className={`${styles.panel} rounded-lg border border-primary/30 overflow-hidden`}>
+            <div className="px-3 py-2 bg-primary/10 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase flex items-center gap-1.5">
+                <User size={12} /> Owner · {config.ownership_hours}h only
+              </span>
+              {ownership.expires_at && (
+                <span className="text-[10px] text-mutedForeground flex items-center gap-1">
+                  <Clock size={10} /> {formatTimeLeft(ownership.expires_at) ?? '—'} left
+                </span>
+              )}
+            </div>
+            <div className="p-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-[10px] text-mutedForeground font-heading">Max bet</label>
+                <input
+                  type="text"
+                  value={ownerMaxBet}
+                  onChange={(e) => setOwnerMaxBet(e.target.value)}
+                  placeholder={String(config.max_bet)}
+                  className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-heading"
+                />
+                <button type="button" onClick={setMaxBet} disabled={ownerActionLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">Set</button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-[10px] text-mutedForeground font-heading">Buy-back (points)</label>
+                <input
+                  type="text"
+                  value={ownerBuyBack}
+                  onChange={(e) => setOwnerBuyBack(e.target.value)}
+                  placeholder="0"
+                  className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-heading"
+                />
+                <button type="button" onClick={setBuyBackReward} disabled={ownerActionLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">Set</button>
+              </div>
+              <button type="button" onClick={relinquish} disabled={ownerActionLoading} className="text-[10px] font-heading text-amber-400 hover:text-amber-300 border border-amber-500/40 rounded px-2 py-1">Relinquish</button>
+            </div>
+          </div>
+        )}
+
+        {/* Buy-back offer (you won the table but previous owner offers points to get it back) */}
+        {buyBackOffer?.offer_id && (
+          <div className={`${styles.panel} rounded-lg border border-amber-500/40 overflow-hidden`}>
+            <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 text-[10px] font-heading font-bold text-amber-400 uppercase">
+              Buy-back offer: {buyBackOffer.points_offered ?? 0} points for the shortfall
+            </div>
+            <div className="p-2 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={acceptBuyBack} disabled={ownerActionLoading} className="bg-emerald-500/20 text-emerald-400 rounded px-3 py-1.5 text-[10px] font-bold uppercase border border-emerald-500/40 hover:bg-emerald-500/30">Accept</button>
+              <button type="button" onClick={rejectBuyBack} disabled={ownerActionLoading} className="bg-zinc-700/50 text-foreground rounded px-3 py-1.5 text-[10px] font-bold uppercase border border-zinc-600/50">Reject</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ══════════ SLOT MACHINE ══════════ */}
@@ -630,7 +842,7 @@ export default function SlotsPage() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-mutedForeground mt-2">5% house edge on wins. One machine per state — state-owned.</p>
+          <p className="text-[10px] text-mutedForeground mt-2">5% house edge on wins. One machine per state. Enter the draw to own for 3 hours; set max bet and buy-back like other casinos.</p>
         </div>
       </div>
 

@@ -15,7 +15,7 @@ const GAMES = [
   { to: '/casino/blackjack', label: 'Blackjack', desc: 'Beat the dealer to 21', Icon: Spade, testId: 'play-blackjack' },
   { to: '/casino/dice', label: 'Dice', desc: 'Roll for riches', Icon: Hash, testId: 'play-dice' },
   { to: '/casino/horseracing', label: 'Horse Racing', desc: 'Bet on the fastest', Icon: TrendingUp, testId: 'play-horse-racing' },
-  { to: '/casino/slots', label: 'Slots', desc: 'State-owned · 1 per state', Icon: Coins, testId: 'play-slots' },
+  { to: '/casino/slots', label: 'Slots', desc: 'Enter draw · own 3h · max bet & buy-back', Icon: Coins, testId: 'play-slots' },
   { to: '/casino/videopoker', label: 'Video Poker', desc: 'Jacks or Better', Icon: Spade, testId: 'play-video-poker' },
   { to: '/sports-betting', label: 'Sports Betting', desc: 'Live games & results', Icon: Target, testId: 'sports-betting' },
 ];

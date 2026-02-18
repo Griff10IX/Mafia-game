@@ -914,9 +914,19 @@ async def _get_casino_property_profit(user_id: str):
         ("blackjack", db.blackjack_ownership),
         ("horseracing", db.horseracing_ownership),
         ("videopoker", db.videopoker_ownership),
+        ("slots", db.slots_ownership),
     ]:
-        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1})
+        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1, "expires_at": 1})
         if doc:
+            if _game_type == "slots" and doc.get("expires_at"):
+                try:
+                    t = datetime.fromisoformat(doc["expires_at"].replace("Z", "+00:00"))
+                    if t.tzinfo is None:
+                        t = t.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) >= t:
+                        continue
+                except Exception:
+                    continue
             casino_cash = int(doc.get("total_earnings") or doc.get("profit") or 0)
             has_casino = True
             break
@@ -934,10 +944,20 @@ async def _user_owns_any_casino(user_id: str):
         ("blackjack", db.blackjack_ownership),
         ("horseracing", db.horseracing_ownership),
         ("videopoker", db.videopoker_ownership),
+        ("slots", db.slots_ownership),
     ]:
-        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1, "total_earnings": 1, "profit": 1})
+        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "state": 1, "max_bet": 1, "buy_back_reward": 1, "total_earnings": 1, "profit": 1, "expires_at": 1})
         if doc:
-            out = {"type": game_type, "city": doc.get("city"), "max_bet": doc.get("max_bet")}
+            if game_type == "slots" and doc.get("expires_at"):
+                try:
+                    t = datetime.fromisoformat(doc["expires_at"].replace("Z", "+00:00"))
+                    if t.tzinfo is None:
+                        t = t.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) >= t:
+                        continue
+                except Exception:
+                    continue
+            out = {"type": game_type, "city": doc.get("city") or doc.get("state"), "max_bet": doc.get("max_bet")}
             if doc.get("buy_back_reward") is not None:
                 out["buy_back_reward"] = doc.get("buy_back_reward")
             profit_val = doc.get("total_earnings") if doc.get("total_earnings") is not None else doc.get("profit")

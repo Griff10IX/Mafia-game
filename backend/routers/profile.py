@@ -28,7 +28,7 @@ async def ensure_profile_indexes(db):
         # families: lookup by id
         await db.families.create_index("id", unique=True)
         # casino ownership: list by owner_id (dice, roulette, blackjack, horseracing, videopoker)
-        for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership"):
+        for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership", "slots_ownership"):
             await db[coll_name].create_index("owner_id")
         # notifications: count by user_id
         await db.notifications.create_index("user_id")
@@ -110,14 +110,24 @@ def register(router):
             })
             return n_better + 1
 
-        async def _casinos_for_type(game_type: str, coll):
+        async def _casinos_for_type(game_type: str, coll, location_key: str = "city"):
             out = []
             cursor = coll.find(
                 {"owner_id": user_id},
-                {"_id": 0, "city": 1, "max_bet": 1, "buy_back_reward": 1},
+                {"_id": 0, "city": 1, "state": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1},
             )
             async for d in cursor:
-                item = {"type": game_type, "city": d.get("city", "?"), "max_bet": int(d.get("max_bet") or 0)}
+                if game_type == "slots" and d.get("expires_at"):
+                    try:
+                        t = datetime.fromisoformat(d["expires_at"].replace("Z", "+00:00"))
+                        if t.tzinfo is None:
+                            t = t.replace(tzinfo=timezone.utc)
+                        if datetime.now(timezone.utc) >= t:
+                            continue
+                    except Exception:
+                        continue
+                loc = d.get(location_key) or d.get("city") or "?"
+                item = {"type": game_type, "city": loc, "max_bet": int(d.get("max_bet") or 0)}
                 if d.get("buy_back_reward") is not None:
                     item["buy_back_reward"] = int(d.get("buy_back_reward") or 0)
                 out.append(item)
@@ -142,6 +152,7 @@ def register(router):
             roulette_casinos,
             blackjack_casinos,
             horseracing_casinos,
+            slots_casinos,
             property_,
             messages_received,
         ) = await asyncio.gather(
@@ -155,6 +166,7 @@ def register(router):
             _casinos_for_type("roulette", db.roulette_ownership),
             _casinos_for_type("blackjack", db.blackjack_ownership),
             _casinos_for_type("horseracing", db.horseracing_ownership),
+            _casinos_for_type("slots", db.slots_ownership, "state"),
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id}),
         )
@@ -168,7 +180,7 @@ def register(router):
             {"rank": gta_rank, "label": "Most GTAs Committed"},
             {"rank": jail_rank, "label": "Most Jail Busts"},
         ]
-        owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos
+        owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}

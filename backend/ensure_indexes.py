@@ -71,10 +71,15 @@ async def ensure_all_indexes(db):
         await db.bullet_factory.create_index("owner_id")
         await db.bullet_factory.create_index("state")
 
-        # --- Casino ownership: city + owner_id (roulette, dice, horseracing, video poker, blackjack) ---
+        # --- Casino ownership: city/state + owner_id (roulette, dice, horseracing, video poker, blackjack, slots) ---
         for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership"):
             await db[coll_name].create_index("city")
             await db[coll_name].create_index("owner_id")
+        await db.slots_ownership.create_index("state")
+        await db.slots_ownership.create_index("owner_id")
+        await db.slots_entries.create_index("state", unique=True)
+        await db.slots_buy_back_offers.create_index("id")
+        await db.slots_buy_back_offers.create_index("to_user_id")
 
         # --- Casino buy-back offers (dice, blackjack) ---
         await db.dice_buy_back_offers.create_index("id")
