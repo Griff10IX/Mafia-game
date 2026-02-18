@@ -386,14 +386,9 @@ export default function SlotsPage() {
   };
 
   const enterDraw = async () => {
-    const state = (config.current_state || '').trim();
-    if (!state) {
-      toast.error('Select your location first (use the Go menu to set your state).');
-      return;
-    }
     setEnterLoading(true);
     try {
-      await api.post('/casino/slots/enter', { state });
+      await api.post('/casino/slots/enter', { state: config.current_state });
       toast.success('You have entered the draw. A random winner is chosen when the current owner\'s 3 hours end.');
       fetchOwnership();
       fetchConfig();
