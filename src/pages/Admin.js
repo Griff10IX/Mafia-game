@@ -418,8 +418,8 @@ export default function Admin() {
   const handleClearBodyguards = async () => {
     try {
       const res = await api.post(`/admin/bodyguards/clear?target_username=${encodeURIComponent(formData.targetUsername)}`);
-      toast.success(res.data?.message || 'Cleared');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+      toast.success(res.data?.message || 'Cleared', { duration: 10000 });
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed', { duration: 10000 }); }
   };
 
   const handleDropAllHumanBodyguards = async () => {
@@ -427,8 +427,8 @@ export default function Admin() {
     setDropHumanBgLoading(true);
     try {
       const res = await api.post('/admin/bodyguards/drop-all');
-      toast.success(res.data?.message || 'Dropped');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+      toast.success(res.data?.message || 'Dropped', { duration: 10000 });
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed', { duration: 10000 }); }
     finally { setDropHumanBgLoading(false); }
   };
 
@@ -439,8 +439,8 @@ export default function Admin() {
         count: bgTestCount,
         replace_existing: true,
       });
-      toast.success(res.data?.message || 'Generated');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+      toast.success(res.data?.message || 'Generated', { duration: 10000 });
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed', { duration: 10000 }); }
   };
 
   const handleFindDuplicates = async () => {

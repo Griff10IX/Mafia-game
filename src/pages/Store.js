@@ -139,13 +139,15 @@ export default function Store() {
   };
 
   const apiBuy = async (path, body, successMsg) => {
+    const isBodyguard = typeof path === 'string' && path.includes('bodyguards');
+    const duration = isBodyguard ? 10000 : undefined;
     try {
       await api.post(path, body || {});
-      toast.success(successMsg || 'Done');
+      toast.success(successMsg || 'Done', duration != null ? { duration } : undefined);
       refreshUser();
       fetchData();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      toast.error(e.response?.data?.detail || 'Failed', duration != null ? { duration } : undefined);
     }
   };
 

@@ -182,12 +182,12 @@ const KillUserCard = ({
       
       <button
         type="button"
-        disabled={loading || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
+        disabled={!killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
         onClick={onKill}
         className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="kill-inline-button"
       >
-        {loading ? '⏳ Executing...' : '💀 Kill User'}
+        💀 Kill User
       </button>
       
       <p className="text-[9px] text-mutedForeground font-heading italic">
@@ -966,16 +966,17 @@ export default function Attack() {
       } else if (response.data.first_bodyguard) {
         const bg = response.data.first_bodyguard;
         toast.warning(response.data.message, {
+          duration: 10000,
           action: {
             label: 'Search',
             onClick: async () => {
               setLoading(true);
               try {
                 const res = await api.post('/attack/search', { target_username: bg.search_username, note: '' });
-                toast.success(res.data?.message || 'Search started');
+                toast.success(res.data?.message || 'Search started', { duration: 10000 });
                 await refreshAttacks();
               } catch (err) {
-                toast.error(err.response?.data?.detail || 'Failed to search');
+                toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
               } finally {
                 setLoading(false);
               }

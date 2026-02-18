@@ -48,7 +48,7 @@ export default function Bodyguards() {
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
     } catch (error) {
-      toast.error('Failed to load bodyguards');
+      toast.error('Failed to load bodyguards', { duration: 10000 });
     } finally {
       setLoading(false);
     }
@@ -57,22 +57,22 @@ export default function Bodyguards() {
   const hireBodyguard = async (slot, isRobot) => {
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
-      toast.success(response.data.message);
+      toast.success(response.data.message, { duration: 10000 });
       refreshUser();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to hire bodyguard');
+      toast.error(error.response?.data?.detail || 'Failed to hire bodyguard', { duration: 10000 });
     }
   };
 
   const upgradeArmour = async (slot) => {
     try {
       const res = await api.post(`/bodyguards/armour/upgrade?slot=${slot}`);
-      toast.success(res.data?.message || 'Armour upgraded');
+      toast.success(res.data?.message || 'Armour upgraded', { duration: 10000 });
       refreshUser();
       fetchData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to upgrade armour');
+      toast.error(error.response?.data?.detail || 'Failed to upgrade armour', { duration: 10000 });
     }
   };
 
