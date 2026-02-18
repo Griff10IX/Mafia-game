@@ -18,6 +18,16 @@ class UnbanUserRequest(BaseModel):
     user_id: str
 
 
+class BanIPRequest(BaseModel):
+    ip: str
+    reason: str
+    duration_hours: Optional[int] = None  # None = permanent
+
+
+class UnbanIPRequest(BaseModel):
+    ip: str
+
+
 class TestTelegramRequest(BaseModel):
     message: str
 
@@ -83,6 +93,46 @@ def register(router):
             return {"message": f"Unbanned user (removed {result.modified_count} ban(s))"}
         raise HTTPException(status_code=404, detail="No active ban found for this user")
 
+    async def get_ip_bans(current_user: dict = Depends(get_current_user)):
+        if current_user.get("email") not in ADMIN_EMAILS:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        bans = await db.ip_bans.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        return {"ip_bans": bans}
+
+    async def ban_ip_admin(request: BanIPRequest, current_user: dict = Depends(get_current_user)):
+        if current_user.get("email") not in ADMIN_EMAILS:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        ip = (request.ip or "").strip()
+        if not ip:
+            raise HTTPException(status_code=400, detail="IP is required")
+        now = datetime.now(timezone.utc)
+        doc = {
+            "ip": ip,
+            "reason": request.reason or "Banned by admin",
+            "banned_by": current_user.get("username", "Admin"),
+            "created_at": now.isoformat(),
+            "active": True,
+        }
+        if request.duration_hours is not None:
+            doc["expires_at"] = (now + timedelta(hours=request.duration_hours)).isoformat()
+        await db.ip_bans.insert_one(doc)
+        duration_str = f"{request.duration_hours}h" if request.duration_hours else "permanent"
+        return {"message": f"IP {ip} banned ({duration_str})"}
+
+    async def unban_ip_admin(request: UnbanIPRequest, current_user: dict = Depends(get_current_user)):
+        if current_user.get("email") not in ADMIN_EMAILS:
+            raise HTTPException(status_code=403, detail="Admin access required")
+        ip = (request.ip or "").strip()
+        if not ip:
+            raise HTTPException(status_code=400, detail="IP is required")
+        result = await db.ip_bans.update_many(
+            {"ip": ip, "active": True},
+            {"$set": {"active": False, "unbanned_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        if result.modified_count > 0:
+            return {"message": f"IP {ip} unbanned (removed {result.modified_count} ban(s))"}
+        raise HTTPException(status_code=404, detail="No active ban found for this IP")
+
     async def clear_security_logs(current_user: dict = Depends(get_current_user)):
         if current_user.get("email") not in ADMIN_EMAILS:
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -100,5 +150,8 @@ def register(router):
     router.add_api_route("/admin/security/bans", get_active_bans, methods=["GET"])
     router.add_api_route("/admin/security/ban", ban_user_admin, methods=["POST"])
     router.add_api_route("/admin/security/unban", unban_user_admin, methods=["POST"])
+    router.add_api_route("/admin/security/ip-bans", get_ip_bans, methods=["GET"])
+    router.add_api_route("/admin/security/ban-ip", ban_ip_admin, methods=["POST"])
+    router.add_api_route("/admin/security/unban-ip", unban_ip_admin, methods=["POST"])
     router.add_api_route("/admin/security/clear-logs", clear_security_logs, methods=["POST"])
     router.add_api_route("/admin/security/test-telegram", test_telegram, methods=["POST"])

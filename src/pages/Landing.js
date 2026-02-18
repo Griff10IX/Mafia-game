@@ -102,11 +102,14 @@ export default function Landing({ setIsAuthenticated }) {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">
               <div>
-                <label className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Email</label>
+                <label htmlFor="landing-email" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Email</label>
                 <input
+                  id="landing-email"
+                  name="email"
                   type="email"
+                  autoComplete="email"
                   data-testid="email-input"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
@@ -118,9 +121,12 @@ export default function Landing({ setIsAuthenticated }) {
 
               {!isLogin && (
                 <div>
-                  <label className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Username</label>
+                  <label htmlFor="landing-username" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Username</label>
                   <input
+                    id="landing-username"
+                    name="username"
                     type="text"
+                    autoComplete="username"
                     data-testid="username-input"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
@@ -133,7 +139,7 @@ export default function Landing({ setIsAuthenticated }) {
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Password</label>
+                  <label htmlFor="landing-password" className="block text-xs font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Password</label>
                   {isLogin && (
                     <button
                       type="button"
@@ -146,12 +152,15 @@ export default function Landing({ setIsAuthenticated }) {
                   )}
                 </div>
                 <input
+                  id="landing-password"
+                  name="password"
                   type="password"
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
                   data-testid="password-input"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                  placeholder="Enter your password"
+                  placeholder={isLogin ? 'Enter your password' : 'Choose a password'}
                   required
                 />
               </div>

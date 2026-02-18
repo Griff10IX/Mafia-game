@@ -40,8 +40,35 @@ user_failed_attacks = defaultdict(list)  # user_id -> [timestamp1, timestamp2, .
 #   user_id, username, flag_type, reason, details (dict), created_at, resolved (bool)
 # }
 
+# Proxy/VPN check (optional): set GETIPINTEL_CONTACT_EMAIL in .env to enable. GetIPIntel free API.
+PROXY_CHECK_CONTACT_EMAIL = os.environ.get("GETIPINTEL_CONTACT_EMAIL", "").strip()
+PROXY_CHECK_THRESHOLD = 0.99  # Only block if probability >= 0.99 (recommended by GetIPIntel)
+
 # Telegram notification queue (async batch sending)
 pending_alerts = []
+
+
+async def is_proxy_or_vpn(ip: str) -> bool:
+    """Return True if IP appears to be proxy/VPN (block registration). Requires GETIPINTEL_CONTACT_EMAIL in env."""
+    if not ip or not PROXY_CHECK_CONTACT_EMAIL:
+        return False
+    if not HTTPX_AVAILABLE:
+        return False
+    try:
+        # API: https://getipintel.net/free-proxy-vpn-tor-detection-api/ (contact required, no URL encoding)
+        url = f"http://check.getipintel.net/check.php?ip={ip}&contact={PROXY_CHECK_CONTACT_EMAIL}&format=json"
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url)
+        if r.status_code != 200:
+            return False
+        data = r.json()
+        if isinstance(data, dict) and "result" in data:
+            prob = float(data.get("result", 0))
+            return prob >= PROXY_CHECK_THRESHOLD
+        return False
+    except Exception as e:
+        logger.warning("Proxy check failed for %s: %s", ip, e)
+        return False  # Fail open: don't block if API errors
 
 
 async def send_telegram_alert(message: str, alert_type: str = "warning"):

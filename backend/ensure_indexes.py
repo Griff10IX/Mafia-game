@@ -125,6 +125,7 @@ async def ensure_all_indexes(db):
         # --- Auth / payments ---
         await db.users.create_index("email")
         await db.password_resets.create_index("token", unique=True)
+        await db.login_lockouts.create_index("email", unique=True)
         await db.payment_transactions.create_index("session_id", unique=True)
 
         # --- Notifications: unread count (profile has user_id) ---
@@ -161,6 +162,8 @@ async def ensure_all_indexes(db):
 
         # --- Security / admin ---
         await db.bans.create_index([("active", 1), ("created_at", -1)])
+        await db.ip_bans.create_index([("ip", 1), ("active", 1)])
+        await db.ip_bans.create_index([("active", 1), ("created_at", -1)])
         await db.security_flags.create_index([("user_id", 1), ("created_at", -1)])
         await db.security_flags.create_index([("created_at", 1)])
         await db.security_logs.create_index([("created_at", -1)])

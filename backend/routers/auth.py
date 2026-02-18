@@ -7,6 +7,9 @@ from datetime import datetime, timezone, timedelta
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr
 
+from disposable_email import is_disposable_email
+from security import is_proxy_or_vpn
+
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -58,6 +61,36 @@ def register(router):
     @router.post("/auth/register")
     async def register_user(user_data: UserRegister, request: Request):
         try:
+            email_clean = (user_data.email or "").strip().lower()
+            if is_disposable_email(email_clean):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Disposable or temporary email addresses are not allowed.",
+                )
+            client_ip = _client_ip(request)
+            if client_ip and await is_proxy_or_vpn(client_ip):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Registration from proxy or VPN is not allowed.",
+                )
+            # Block if an alive account already exists on this IP
+            if client_ip:
+                alive_same_ip = await db.users.find_one(
+                    {
+                        "is_dead": {"$ne": True},
+                        "$or": [
+                            {"registration_ip": client_ip},
+                            {"login_ips": client_ip},
+                        ],
+                    },
+                    {"_id": 0, "username": 1},
+                )
+                if alive_same_ip:
+                    raise HTTPException(
+                        status_code=400,
+                        detail="An account from this device or network is already registered. Log in to that account.",
+                    )
+
             email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
             username_pattern = re.compile("^" + re.escape(user_data.username.strip()) + "$", re.IGNORECASE)
             existing = await db.users.find_one({"$or": [{"email": email_pattern}, {"username": username_pattern}]}, {"_id": 0})
@@ -148,12 +181,45 @@ def register(router):
             logging.error(f"Registration error: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
+    LOGIN_MAX_ATTEMPTS = 3
+    LOGIN_LOCKOUT_MINUTES = 5
+
     @router.post("/auth/login")
     async def login(user_data: UserLogin, request: Request):
+        email_clean = user_data.email.strip().lower()
+        now = datetime.now(timezone.utc)
+
+        # Check lockout (too many failed attempts)
+        lockout = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "locked_until": 1, "failed_count": 1})
+        if lockout:
+            locked_until = lockout.get("locked_until")
+            if isinstance(locked_until, str):
+                locked_until = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
+            if locked_until and locked_until > now:
+                wait_sec = int((locked_until - now).total_seconds())
+                wait_min = (wait_sec + 59) // 60
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Too many failed login attempts. Try again in {wait_min} minute(s).",
+                )
+
         email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
         user = await db.users.find_one({"email": email_pattern}, {"_id": 0})
         if not user or not verify_password(user_data.password, user["password_hash"]):
+            # Record failed attempt and optionally lock out
+            locked_until = None
+            doc = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "failed_count": 1})
+            count = (doc.get("failed_count") or 0) + 1
+            if count >= LOGIN_MAX_ATTEMPTS:
+                locked_until = now + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
+            await db.login_lockouts.update_one(
+                {"email": email_clean},
+                {"$set": {"email": email_clean, "failed_count": count, "locked_until": locked_until.isoformat() if locked_until else None, "updated_at": now.isoformat()}},
+                upsert=True,
+            )
             raise HTTPException(status_code=401, detail="Invalid email or password")
+        # Success: clear lockout for this email
+        await db.login_lockouts.delete_one({"email": email_clean})
         if user.get("is_dead"):
             raise HTTPException(
                 status_code=403,

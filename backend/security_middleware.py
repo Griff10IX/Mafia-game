@@ -1,4 +1,5 @@
 # Security middleware for FastAPI
+from datetime import datetime, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 from fastapi import Request
@@ -25,11 +26,55 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         self.check_request_spam = check_request_spam
         self.check_duplicate_request = check_duplicate_request
     
+    def _client_ip(self, request: Request) -> str:
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+        if request.client:
+            return request.client.host or ""
+        return ""
+
     async def dispatch(self, request: Request, call_next):
-        # Skip security checks for certain paths
         path = request.url.path
-        
-        # Always allow these without checks (request.url.path includes /api when using api_router prefix)
+        # IP ban: blocked from accessing the server at all (checked first, no path skip)
+        client_ip = self._client_ip(request)
+        if client_ip:
+            try:
+                ban = await self.db.ip_bans.find_one(
+                    {"ip": client_ip, "active": True},
+                    {"_id": 0, "expires_at": 1},
+                )
+                if ban:
+                    expires_at = ban.get("expires_at")
+                    if expires_at:
+                        try:
+                            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                            if exp.tzinfo is None:
+                                exp = exp.replace(tzinfo=timezone.utc)
+                            if datetime.now(timezone.utc) >= exp:
+                                await self.db.ip_bans.update_many(
+                                    {"ip": client_ip, "active": True},
+                                    {"$set": {"active": False}},
+                                )
+                            else:
+                                return JSONResponse(
+                                    status_code=403,
+                                    content={"detail": "Your IP has been banned from this server."},
+                                )
+                        except Exception:
+                            return JSONResponse(
+                                status_code=403,
+                                content={"detail": "Your IP has been banned from this server."},
+                            )
+                    else:
+                        return JSONResponse(
+                            status_code=403,
+                            content={"detail": "Your IP has been banned from this server."},
+                        )
+            except Exception as e:
+                logger.warning("IP ban check failed: %s", e)
+
+        # Skip security checks for certain paths
         skip_paths = [
             "/",
             "/docs",
