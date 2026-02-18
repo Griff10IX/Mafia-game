@@ -40,9 +40,15 @@ function formatHistoryDate(iso) {
 }
 
 function apiErrorDetail(e, fallback) {
-  const d = e.response?.data?.detail;
+  const data = e.response?.data;
+  const d = data?.detail;
   if (typeof d === 'string') return d;
   if (Array.isArray(d) && d.length) return d.map((x) => x.msg || x.loc?.join('.')).join('; ') || fallback;
+  if (d && typeof d === 'object' && typeof d.msg === 'string') return d.msg;
+  if (typeof data?.message === 'string') return data.message;
+  if (e.response?.status === 401) return 'Please log in again';
+  if (e.response?.status === 403) return 'Not allowed';
+  if (!e.response && e.message) return e.message;
   return fallback;
 }
 
@@ -380,9 +386,14 @@ export default function SlotsPage() {
   };
 
   const enterDraw = async () => {
+    const state = (config.current_state || '').trim();
+    if (!state) {
+      toast.error('Select your location first (use the Go menu to set your state).');
+      return;
+    }
     setEnterLoading(true);
     try {
-      await api.post('/casino/slots/enter', { state: config.current_state });
+      await api.post('/casino/slots/enter', { state });
       toast.success('You have entered the draw. A random winner is chosen when the current owner\'s 3 hours end.');
       fetchOwnership();
       fetchConfig();
