@@ -570,17 +570,26 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
   const [feed, setFeed] = useState(null);
   const [feedLoading, setFeedLoading] = useState(false);
 
+  const [feedMeta, setFeedMeta] = useState(null); // { war_over, my_totals, other_totals }
+
   useEffect(() => {
     if (modalTab === 'feed' && war?.id && feed === null) {
       setFeedLoading(true);
       api.get(`/families/war/${war.id}/feed`)
-        .then((res) => setFeed(res.data?.feed ?? []))
-        .catch(() => setFeed([]))
+        .then((res) => {
+          setFeed(res.data?.feed ?? []);
+          setFeedMeta({
+            war_over: res.data?.war_over ?? false,
+            my_totals: res.data?.my_totals ?? { bullets_used: 0, bg_points_spent: 0 },
+            other_totals: res.data?.other_totals ?? { bullets_used: 0, bg_points_spent: 0 },
+          });
+        })
+        .catch(() => { setFeed([]); setFeedMeta(null); })
         .finally(() => setFeedLoading(false));
     }
   }, [modalTab, war?.id, feed]);
 
-  useEffect(() => { setFeed(null); setModalTab('fighters'); }, [war?.id]);
+  useEffect(() => { setFeed(null); setFeedMeta(null); setModalTab('fighters'); }, [war?.id]);
 
   if (!war) return null;
 
@@ -801,15 +810,22 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                           {event.killer_username}
                         </span>
                         {isBG ? (
-                          <span className="text-zinc-500"> eliminated <span className="text-zinc-300">{event.bg_owner_username || event.victim_username}</span>'s BG</span>
+                          <>
+                            <span className="text-zinc-500"> killed </span>
+                            <span className="text-zinc-300 font-bold">{event.bg_username || 'bodyguard'}</span>
+                            {event.bg_owner_username && (
+                              <span className="text-zinc-600"> (protecting <span className="text-zinc-400">{event.bg_owner_username}</span>)</span>
+                            )}
+                          </>
                         ) : (
-                          <span className="text-zinc-500"> killed <span className="text-zinc-300">{event.victim_username}</span></span>
+                          <span className="text-zinc-500"> killed <span className="text-zinc-300 font-bold">{event.victim_username}</span></span>
                         )}
-                        {!isBG && (event.cash_taken > 0 || event.props_taken > 0 || event.cars_taken > 0) && (
+                        {(event.bullets_used > 0 || (!isBG && (event.cash_taken > 0 || event.props_taken > 0 || event.cars_taken > 0))) && (
                           <div className="text-[8px] text-zinc-600 mt-0.5 flex flex-wrap gap-1.5">
-                            {event.cash_taken > 0 && <span className="text-primary font-bold">${Number(event.cash_taken).toLocaleString()}</span>}
-                            {event.props_taken > 0 && <span>{event.props_taken} prop{event.props_taken > 1 ? 's' : ''}</span>}
-                            {event.cars_taken > 0 && <span>{event.cars_taken} car{event.cars_taken > 1 ? 's' : ''}</span>}
+                            {event.bullets_used > 0 && <span className="text-zinc-500">{Number(event.bullets_used).toLocaleString()} bullets</span>}
+                            {!isBG && event.cash_taken > 0 && <span className="text-primary font-bold">${Number(event.cash_taken).toLocaleString()}</span>}
+                            {!isBG && event.props_taken > 0 && <span>{event.props_taken} prop{event.props_taken > 1 ? 's' : ''}</span>}
+                            {!isBG && event.cars_taken > 0 && <span>{event.cars_taken} car{event.cars_taken > 1 ? 's' : ''}</span>}
                           </div>
                         )}
                       </div>
@@ -823,6 +839,32 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                   </div>
                 );
               })}
+
+              {/* War totals row */}
+              {feedMeta && (
+                <div className="mt-3 pt-2.5 border-t border-zinc-800/60 grid grid-cols-2 gap-2 text-[8px] font-heading">
+                  {[
+                    { label: family?.name || 'Us', totals: feedMeta.my_totals, color: 'emerald' },
+                    { label: war.other_family_name, totals: feedMeta.other_totals, color: 'red' },
+                  ].map(({ label, totals, color }) => (
+                    <div key={label} className={`rounded-md p-2 bg-${color}-500/5 border border-${color}-500/15 space-y-1`}>
+                      <div className={`text-[8px] font-bold text-${color}-500/70 uppercase tracking-wider truncate`}>{label}</div>
+                      <div className="flex items-center justify-between text-zinc-500">
+                        <span>Bullets used</span>
+                        <span className="text-zinc-300 font-bold">{Number(totals.bullets_used).toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-zinc-500">
+                        <span>Points on BGs</span>
+                        {feedMeta.war_over ? (
+                          <span className="text-zinc-300 font-bold">{Number(totals.bg_points_spent).toLocaleString()}</span>
+                        ) : (
+                          <span className="text-zinc-600 italic">revealed at war end</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>

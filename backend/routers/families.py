@@ -1160,15 +1160,15 @@ async def admin_debug_war_stats(current_user: dict = Depends(get_current_user)):
 
 
 async def families_war_feed(war_id: str, current_user: dict = Depends(get_current_user)):
-    """Return the kill-event feed for a specific war (BG kills + player kills)."""
+    """Return the kill-event feed for a specific war plus aggregated totals."""
     my_family_id = current_user.get("family_id")
     if not my_family_id:
         raise HTTPException(status_code=403, detail="Not in a family")
-    war = await db.family_wars.find_one({"id": war_id}, {"_id": 0, "family_a_id": 1, "family_b_id": 1})
+    war = await db.family_wars.find_one({"id": war_id}, {"_id": 0, "family_a_id": 1, "family_b_id": 1, "status": 1})
     if not war or my_family_id not in (war["family_a_id"], war["family_b_id"]):
         raise HTTPException(status_code=403, detail="Not your war")
 
-    docs = await db.war_kill_feed.find({"war_id": war_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    docs = await db.war_kill_feed.find({"war_id": war_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
 
     # Resolve any missing usernames from DB
     uid_set = set()
@@ -1177,6 +1177,7 @@ async def families_war_feed(war_id: str, current_user: dict = Depends(get_curren
             uid_set.add(d.get("killer_id"))
         if not d.get("victim_username") or d.get("victim_username") == "?":
             uid_set.add(d.get("victim_id"))
+    uid_set.discard(None)
     if uid_set:
         users = await db.users.find({"id": {"$in": list(uid_set)}}, {"_id": 0, "id": 1, "username": 1}).to_list(200)
         umap = {u["id"]: u.get("username", "?") for u in users}
@@ -1186,7 +1187,32 @@ async def families_war_feed(war_id: str, current_user: dict = Depends(get_curren
             if not d.get("victim_username") or d.get("victim_username") == "?":
                 d["victim_username"] = umap.get(d.get("victim_id"), "?")
 
-    return {"feed": docs}
+    # Aggregate bullets used and bodyguard points spent per family
+    war_over = war.get("status") not in ("active", "truce_offered")
+    fid_a = _norm_fid(war["family_a_id"])
+    fid_b = _norm_fid(war["family_b_id"])
+    totals: dict = {
+        fid_a: {"bullets_used": 0, "bg_points_spent": 0},
+        fid_b: {"bullets_used": 0, "bg_points_spent": 0},
+    }
+    for d in docs:
+        fid = _norm_fid(d.get("killer_family_id"))
+        if fid in totals:
+            totals[fid]["bullets_used"] += int(d.get("bullets_used") or 0)
+        # bg_hire_cost is charged to the VICTIM family (they paid for the BG)
+        victim_fid = _norm_fid(d.get("victim_family_id"))
+        if victim_fid in totals:
+            totals[victim_fid]["bg_points_spent"] += int(d.get("bg_hire_cost") or 0)
+
+    my_fid = _norm_fid(my_family_id)
+    other_fid = fid_b if fid_a == my_fid else fid_a
+
+    return {
+        "feed": docs,
+        "war_over": war_over,
+        "my_totals": totals.get(my_fid, {"bullets_used": 0, "bg_points_spent": 0}),
+        "other_totals": totals.get(other_fid, {"bullets_used": 0, "bg_points_spent": 0}),
+    }
 
 
 def register(router):

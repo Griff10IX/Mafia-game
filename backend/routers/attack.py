@@ -49,11 +49,17 @@ from routers.families import resolve_family_id
 # ---------------------------------------------------------------------------
 # Vendetta bodyguard-kill recording (inline — avoids cross-module ID mismatches)
 # ---------------------------------------------------------------------------
-async def _record_vendetta_bg_kill(killer_id: str, killer_fid: str, owner_id: str, owner_doc: dict):
+async def _record_vendetta_bg_kill(
+    killer_id: str, killer_fid: str, owner_id: str, owner_doc: dict,
+    bg_username: str = None, bullets_used: int = 0, bg_hire_cost: int = 0,
+):
     """
     Record a bodyguard kill into family_war_stats when the two players are in an active war.
-    killer_fid  : killer's family_id (from current_user, already in hand)
-    owner_doc   : the bodyguard owner's users doc (contains family_id)
+    killer_fid   : killer's family_id (from current_user, already in hand)
+    owner_doc    : the bodyguard owner's users doc (contains family_id)
+    bg_username  : the bodyguard NPC/player's own username
+    bullets_used : bullets fired in this attack
+    bg_hire_cost : points paid when the BG was hired (stored in bodyguard doc)
     """
     try:
         # Resolve killer family — use the hint, fall back to fresh DB look-up
@@ -128,7 +134,10 @@ async def _record_vendetta_bg_kill(killer_id: str, killer_fid: str, owner_id: st
                 "killer_family_id": k_fid,
                 "victim_id": owner_id,
                 "victim_family_id": o_fid,
-                "bg_owner_username": (owner_doc or {}).get("username"),
+                "bg_username": bg_username,            # the bodyguard NPC's own name
+                "bg_owner_username": (owner_doc or {}).get("username"),  # who hired/owns the BG
+                "bullets_used": int(bullets_used or 0),
+                "bg_hire_cost": int(bg_hire_cost or 0),
                 "cash_taken": 0,
                 "props_taken": 0,
                 "cars_taken": 0,
@@ -648,13 +657,14 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
                 # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
                 if target.get("is_bodyguard"):
-                    victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
+                    victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
                     # Fallback: robot user doc has bodyguard_owner_id if bodyguard collection doc missing
                     if not victim_as_bodyguard and target.get("bodyguard_owner_id"):
-                        victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
+                        victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
                     for bg in victim_as_bodyguard:
                         owner_id = bg["user_id"]
                         owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
+                        bg_hire_cost = int(bg.get("hire_cost") or 0)
                         delete_criteria = {"user_id": owner_id, "bodyguard_user_id": victim_id}
                         if bg.get("id"):
                             await db.bodyguards.delete_one({"id": bg["id"]})
@@ -662,7 +672,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                             await db.bodyguards.delete_one(delete_criteria)
                         await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
                         await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
-                        await _record_vendetta_bg_kill(killer_id, current_user.get("family_id"), owner_id, owner_doc)
+                        await _record_vendetta_bg_kill(
+                            killer_id, current_user.get("family_id"), owner_id, owner_doc,
+                            bg_username=target_name, bullets_used=bullets_used, bg_hire_cost=bg_hire_cost,
+                        )
                         remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
                         for i, b in enumerate(remaining, 1):
                             if b["slot_number"] != i:
@@ -722,15 +735,16 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             {"id": victim_id},
             {"$set": {"is_dead": True, "dead_at": now_iso, "points_at_death": target.get("points", 0), "money": 0, "health": 0}, "$inc": {"total_deaths": 1}}
         )
-        victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
+        victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
         if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):
-            victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
+            victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
         bodyguard_owner_username = None
         for bg in victim_as_bodyguard:
             owner_id = bg["user_id"]
             owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
             if owner_doc:
                 bodyguard_owner_username = owner_doc.get("username")
+            bg_hire_cost = int(bg.get("hire_cost") or 0)
             delete_criteria = {"user_id": owner_id, "bodyguard_user_id": victim_id}
             if bg.get("id"):
                 await db.bodyguards.delete_one({"id": bg["id"]})
@@ -738,7 +752,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 await db.bodyguards.delete_one(delete_criteria)
             await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
-            await _record_vendetta_bg_kill(killer_id, current_user.get("family_id"), owner_id, owner_doc)
+            await _record_vendetta_bg_kill(
+                killer_id, current_user.get("family_id"), owner_id, owner_doc,
+                bg_username=target_name, bullets_used=bullets_used, bg_hire_cost=bg_hire_cost,
+            )
             remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
             for i, b in enumerate(remaining, 1):
                 if b["slot_number"] != i:
@@ -824,7 +841,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                             "victim_id": victim_id,
                             "victim_username": target_name,
                             "victim_family_id": victim_family_id,
+                            "bg_username": None,
                             "bg_owner_username": None,
+                            "bullets_used": int(bullets_used or 0),
+                            "bg_hire_cost": 0,
                             "cash_taken": cash_loot,
                             "props_taken": victim_props_count,
                             "cars_taken": victim_cars_count,

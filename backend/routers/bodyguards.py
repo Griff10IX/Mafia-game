@@ -283,7 +283,8 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         "bodyguard_user_id": robot_user_id if is_robot else None,
         "health": 100,
         "armour_level": 0,
-        "hired_at": datetime.now(timezone.utc).isoformat()
+        "hired_at": datetime.now(timezone.utc).isoformat(),
+        "hire_cost": cost,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
     await send_notification(
