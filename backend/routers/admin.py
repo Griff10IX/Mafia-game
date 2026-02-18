@@ -56,6 +56,7 @@ def register(router):
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     _username_pattern = srv._username_pattern
     RANKS = srv.RANKS
+    PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     CARS = srv.CARS
     maybe_process_rank_up = srv.maybe_process_rank_up
     get_rank_info = srv.get_rank_info
@@ -90,7 +91,12 @@ def register(router):
         return {"admin_acting_as_normal": bool(acting), "message": "Act as normal user " + ("on" if acting else "off")}
 
     @router.post("/admin/change-rank")
-    async def admin_change_rank(target_username: str, new_rank: int, current_user: dict = Depends(get_current_user)):
+    async def admin_change_rank(
+        target_username: str,
+        new_rank: int,
+        prestige_level: Optional[int] = Query(None, ge=0, le=5, description="Prestige level 0–5; if omitted, keeps target's current prestige"),
+        current_user: dict = Depends(get_current_user),
+    ):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         if not (1 <= new_rank <= len(RANKS)):
@@ -99,20 +105,33 @@ def register(router):
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
+
+        # Resolve prestige: use provided level or keep target's current
+        if prestige_level is not None:
+            new_prestige_level = prestige_level
+            new_prestige_mult = PRESTIGE_CONFIGS[new_prestige_level]["threshold_mult"] if new_prestige_level > 0 else 1.0
+        else:
+            new_prestige_level = int(target.get("prestige_level") or 0)
+            new_prestige_mult = float(target.get("prestige_rank_multiplier") or 1.0)
+
         rank_def = RANKS[new_rank - 1]
-        required_pts = int(rank_def["required_points"])
+        required_pts_base = int(rank_def["required_points"])
+        # Set rank_points so effective rank (rank_points / prestige_mult) equals the requested rank
+        required_pts = int(required_pts_base * new_prestige_mult)
+
         old_rp = int(target.get("rank_points") or 0)
-        await db.users.update_one(
-            {"id": target["id"]},
-            {"$set": {"rank": new_rank, "rank_points": required_pts}}
-        )
+        updates = {"rank": new_rank, "rank_points": required_pts, "prestige_level": new_prestige_level, "prestige_rank_multiplier": new_prestige_mult}
+        await db.users.update_one({"id": target["id"]}, {"$set": updates})
+
         rp_added = required_pts - old_rp
         if rp_added > 0:
             try:
-                await maybe_process_rank_up(target["id"], old_rp, rp_added, target.get("username", ""))
+                await maybe_process_rank_up(target["id"], old_rp, rp_added, target.get("username", ""), new_prestige_mult)
             except Exception as e:
                 logging.exception("Rank-up notification (admin set rank): %s", e)
-        return {"message": f"Changed {target['username']}'s rank to {rank_def['name']} (rank_points set to {required_pts:,})"}
+
+        prestige_msg = f", prestige {new_prestige_level}" if new_prestige_level > 0 else ""
+        return {"message": f"Changed {target['username']}'s rank to {rank_def['name']} (rank_points set to {required_pts:,}{prestige_msg})"}
 
     @router.post("/admin/add-points")
     async def admin_add_points(target_username: str, points: int, current_user: dict = Depends(get_current_user)):

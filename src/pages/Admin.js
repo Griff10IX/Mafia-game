@@ -38,6 +38,7 @@ export default function Admin() {
   const [formData, setFormData] = useState({
     targetUsername: '',
     newRank: 1,
+    prestigeLevel: 0,
     points: 100,
     bullets: 5000,
     carId: 'car1',
@@ -222,6 +223,7 @@ export default function Admin() {
   const handleChangeRank = async () => {
     const username = (formData.targetUsername || '').trim();
     const rank = formData.newRank != null ? parseInt(formData.newRank, 10) : NaN;
+    const prestigeLevel = formData.prestigeLevel != null ? parseInt(formData.prestigeLevel, 10) : 0;
     if (!username) {
       toast.error('Enter a target username');
       return;
@@ -231,8 +233,13 @@ export default function Admin() {
       toast.error(`Select a valid rank (1–${maxRank})`);
       return;
     }
+    if (prestigeLevel < 0 || prestigeLevel > 5) {
+      toast.error('Prestige must be 0–5');
+      return;
+    }
     try {
-      const response = await api.post(`/admin/change-rank?target_username=${encodeURIComponent(username)}&new_rank=${rank}`);
+      const params = new URLSearchParams({ target_username: username, new_rank: String(rank), prestige_level: String(prestigeLevel) });
+      const response = await api.post(`/admin/change-rank?${params.toString()}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
@@ -877,6 +884,12 @@ export default function Admin() {
               ) : (
                 <Input type="number" min="1" max="11" value={formData.newRank} onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })} />
               )}
+              <span className="text-[10px] text-zinc-500 font-heading shrink-0">Prestige</span>
+              <Select value={String(formData.prestigeLevel ?? 0)} onChange={(e) => setFormData({ ...formData, prestigeLevel: parseInt(e.target.value) })} className="w-16">
+                {[0, 1, 2, 3, 4, 5].map((p) => (
+                  <option key={p} value={String(p)}>{p === 0 ? 'None' : `P${p}`}</option>
+                ))}
+              </Select>
               <BtnPrimary onClick={handleChangeRank}>Set</BtnPrimary>
             </ActionRow>
 
