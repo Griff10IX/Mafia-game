@@ -31,6 +31,16 @@ export default function Landing({ setIsAuthenticated }) {
     } catch (error) {
       let msg;
       const prefix = isLogin ? 'Cannot log in: ' : 'Registration failed: ';
+      // Fallback reasons by status when backend doesn't return detail
+      const loginReasonByStatus = {
+        400: 'Invalid request. Check email and password.',
+        401: 'Invalid email or password. Use Forgot password to reset.',
+        403: 'Access denied. Your account may be dead or your IP may be banned.',
+        404: 'Login endpoint not found. Backend may be down or misconfigured.',
+        422: 'Invalid email or password format. Check your input.',
+        429: 'Too many attempts. Wait a few minutes or use Forgot password.',
+        500: 'Server error. Please try again in a moment.',
+      };
       if (error.code === 'ERR_NETWORK' || !error.response) {
         const base = error.config?.baseURL || getBaseURL();
         msg = `Cannot reach server. Backend URL: ${base} — Set REACT_APP_BACKEND_URL in Vercel (production) or leave unset for same-origin /api.`;
@@ -45,14 +55,18 @@ export default function Landing({ setIsAuthenticated }) {
         } else {
           msg = String(d);
         }
-        // State the reason clearly for login/register
-        msg = msg.startsWith('Cannot log in') || msg.startsWith('Login failed') || msg.startsWith('Registration failed') ? msg : `${prefix}${msg}`;
+        if (!msg.startsWith('Cannot log in') && !msg.startsWith('Login failed') && !msg.startsWith('Registration failed')) {
+          msg = `${prefix}${msg}`;
+        }
       } else if (error.response?.status === 404) {
         msg = `Login endpoint not found (404). Backend may be wrong or not running. URL: ${error.config?.baseURL || '?'}`;
       } else if (error.response?.status) {
+        const status = error.response.status;
         const statusDetail = error.response?.data?.detail;
-        const reason = typeof statusDetail === 'string' ? statusDetail : error.response?.statusText || `Error ${error.response.status}`;
-        msg = `${prefix}${reason}`.trim();
+        const reason = typeof statusDetail === 'string'
+          ? statusDetail
+          : (isLogin ? loginReasonByStatus[status] : null) || error.response?.statusText || `Error ${status}`;
+        msg = reason.startsWith('Cannot log in') || reason.startsWith('Registration failed') ? reason : `${prefix}${reason}`.trim();
       } else {
         msg = isLogin ? 'Cannot log in. Please try again.' : 'Registration failed. Please try again.';
       }

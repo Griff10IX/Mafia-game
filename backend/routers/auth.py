@@ -189,6 +189,12 @@ def register(router):
         email_clean = user_data.email.strip().lower()
         now = datetime.now(timezone.utc)
 
+        # Require non-empty email and password
+        if not email_clean:
+            raise HTTPException(status_code=422, detail="Email is required.")
+        if not (user_data.password or "").strip():
+            raise HTTPException(status_code=422, detail="Password is required.")
+
         # Check lockout (too many failed attempts)
         lockout = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "locked_until": 1, "failed_count": 1})
         if lockout:
@@ -200,7 +206,7 @@ def register(router):
                 wait_min = (wait_sec + 59) // 60
                 raise HTTPException(
                     status_code=429,
-                    detail=f"Too many failed login attempts. Try again in {wait_min} minute(s).",
+                    detail=f"Too many failed login attempts. This email is temporarily locked. Try again in {wait_min} minute(s), or use Forgot password.",
                 )
 
         email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
@@ -217,13 +223,16 @@ def register(router):
                 {"$set": {"email": email_clean, "failed_count": count, "locked_until": locked_until.isoformat() if locked_until else None, "updated_at": now.isoformat()}},
                 upsert=True,
             )
-            raise HTTPException(status_code=401, detail="Invalid email or password")
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid email or password. Use Forgot password if you need to reset. After 3 failed attempts this email is locked for 5 minutes.",
+            )
         # Success: clear lockout for this email
         await db.login_lockouts.delete_one({"email": email_clean})
         if user.get("is_dead"):
             raise HTTPException(
                 status_code=403,
-                detail="This account is dead and cannot be used. Create a new account. You may retrieve a portion of your points via Dead > Alive."
+                detail="This account is dead and cannot log in. Create a new account; you may retrieve a portion of your points via Dead to Alive.",
             )
         ip = _client_ip(request)
         if ip:
