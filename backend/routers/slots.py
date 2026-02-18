@@ -110,6 +110,19 @@ async def _run_slots_draw_if_needed(state: str):
     st = stored_state or state
     next_draw_at = _parse_iso_datetime(doc.get("next_draw_at") if doc else None) if doc else None
 
+    # If stored time is in the future but from old "3h on the hour" schedule, reset to 1-min schedule
+    if doc and next_draw_at and next_draw_at > now:
+        on_the_hour = next_draw_at.minute == 0 and next_draw_at.second == 0
+        too_far = (next_draw_at - now) > timedelta(minutes=2)
+        if on_the_hour or too_far:
+            next_draw_iso = _next_draw_utc().isoformat()
+            await db.slots_ownership.update_one(
+                {"state": st},
+                {"$set": {"state": st, "next_draw_at": next_draw_iso}},
+                upsert=True,
+            )
+        return
+
     # Ensure we have a doc with next_draw_at
     if not doc or not next_draw_at or next_draw_at <= now:
         # Run draw now (or first time: no next_draw_at or it's in the past)
