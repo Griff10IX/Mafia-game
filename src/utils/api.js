@@ -19,12 +19,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// On 401 (e.g. backend restarted, token expired), clear token and auto-redirect to login. Stops "loading profile" spam.
+// On 401 (e.g. backend restarted, token expired), clear token and auto-redirect to login once. Don't redirect if already on login (stops refresh loop).
 let hasRedirectedOnAuthFailure = false;
+const isPublicPath = () => {
+  const p = (typeof window !== 'undefined' && window.location?.pathname) || '';
+  return p === '/' || p === '/forgot-password' || p === '/reset-password';
+};
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && !hasRedirectedOnAuthFailure) {
+    if (error.response?.status === 401 && !hasRedirectedOnAuthFailure && !isPublicPath()) {
       hasRedirectedOnAuthFailure = true;
       localStorage.removeItem('token');
       window.location.replace('/');
