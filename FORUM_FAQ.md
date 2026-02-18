@@ -1,16 +1,19 @@
-<div style="background:#2d2d2d;color:#d8d8d8;padding:1.2em;border-radius:8px;max-width:800px;">
+<div style="background:#2a2b2e;color:#b8c4d0;padding:1.4em;border-radius:10px;max-width:800px;border:1px solid #3d3d42;">
 <style>
-.faq-box details { margin:0.6em 0; border:1px solid #444; border-radius:6px; overflow:hidden; }
-.faq-box summary { background:#3a3a3a; color:#e8e8e8; padding:0.6em 1em; cursor:pointer; font-weight:bold; list-style:none; }
+.faq-box details { margin:0.75em 0; border:1px solid #3d3d42; border-radius:8px; overflow:hidden; }
+.faq-box summary { background:#35363a; color:#e8d4a8; padding:0.75em 1.1em; cursor:pointer; font-weight:bold; list-style:none; font-size:1em; }
 .faq-box summary::-webkit-details-marker { display:none; }
-.faq-box summary:hover { background:#454545; }
-.faq-box details[open] summary { border-bottom:1px solid #444; }
-.faq-box details > div { padding:1em 1.2em; background:#252525; color:#d0d0d0; line-height:1.5; }
-.faq-box strong { color:#eee; }
-.faq-box table { border-collapse:collapse; width:100%; margin-top:0.5em; }
-.faq-box th, .faq-box td { border:1px solid #444; padding:0.5em 0.75em; text-align:left; }
-.faq-box th { background:#353535; color:#e0e0e0; }
-.faq-box tr:nth-child(even) { background:#2a2a2a; }
+.faq-box summary:hover { background:#404145; color:#f0e0b8; }
+.faq-box details[open] summary { border-bottom:1px solid #3d3d42; }
+.faq-box details > div { padding:1.1em 1.3em; background:#252628; color:#b8c4d0; line-height:1.6; }
+.faq-box strong { color:#d4a574; }
+.faq-box p { margin:0.5em 0; color:#b8c4d0; }
+.faq-box ul, .faq-box ol { margin:0.5em 0; padding-left:1.5em; color:#b8c4d0; }
+.faq-box li { color:#c0ccd8; margin:0.25em 0; }
+.faq-box table { border-collapse:collapse; width:100%; margin-top:0.6em; border-radius:6px; overflow:hidden; }
+.faq-box th, .faq-box td { border:1px solid #3d3d42; padding:0.55em 0.8em; text-align:left; color:#b8c4d0; }
+.faq-box th { background:#35363a; color:#e8d4a8; }
+.faq-box tr:nth-child(even) { background:#2a2b2e; }
 </style>
 <div class="faq-box">
 
@@ -508,7 +511,7 @@ Your **Stats** page shows your totals: kills, deaths, crimes, GTA, vehicles, jai
 </div>
 </details>
 
-<p style="margin-top:1em;font-size:0.9em;color:#999;">This FAQ is based on the current game code. Exact numbers (e.g. cooldowns, costs, limits) may be tuned in future updates; refer to in-game screens for live values.</p>
+<p style="margin-top:1.2em;font-size:0.85em;color:#6b7280;">This FAQ is based on the current game code. Exact numbers may be tuned in updates; refer to in-game screens for live values.</p>
 
 </div>
 </div>

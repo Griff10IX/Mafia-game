@@ -18,7 +18,7 @@ def register(router):
 
     @router.get("/users/online", response_model=OnlineUsersResponse)
     async def get_online_users(current_user: dict = Depends(get_current_user)):
-        """Users online in last 5 minutes OR forced-online window (exclude dead accounts)."""
+        """Online = last 5 min, forced-online, or Auto Rank enabled. When Auto Rank is disabled, normal rules only."""
         now = datetime.now(timezone.utc)
         five_min_ago = now - timedelta(minutes=5)
         users = await db.users.find(
@@ -28,6 +28,7 @@ def register(router):
                 "$or": [
                     {"last_seen": {"$gte": five_min_ago.isoformat()}},
                     {"forced_online_until": {"$gt": now.isoformat()}},
+                    {"auto_rank_enabled": True},  # when disabled, only the two above apply
                 ],
             },
             {"_id": 0, "password_hash": 0}

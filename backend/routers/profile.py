@@ -92,6 +92,9 @@ def register(router):
                     online = datetime.now(timezone.utc) < fu
                 except Exception:
                     pass
+        # When Auto Rank is enabled, count as online; when disabled, normal rules (last 5 min / forced) already applied above
+        if (not is_dead) and (not online) and user.get("auto_rank_enabled"):
+            online = True
         if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
             online = False
         wealth_range = get_wealth_rank_range(user.get("money", 0))
