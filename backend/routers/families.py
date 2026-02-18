@@ -962,10 +962,16 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
         stats_docs = await db.family_war_stats.find({"war_id": w["id"]}, {"_id": 0}).to_list(200)
         by_user = {s["user_id"]: s for s in stats_docs}
         usernames = {}
+        def _norm_fid(x):
+            if x is None:
+                return None
+            s = str(x).strip()
+            return s if s else None
+
         for uid in by_user:
             u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1, "family_id": 1})
             usernames[uid] = (u or {}).get("username", "?")
-            fid = (u or {}).get("family_id") or (by_user[uid].get("family_id"))  # current family or stored at time of stat
+            fid = _norm_fid((u or {}).get("family_id") or by_user[uid].get("family_id"))  # current family or stored at time of stat
             if fid:
                 f = await db.families.find_one({"id": fid}, {"_id": 0, "name": 1, "tag": 1})
             else:
@@ -980,11 +986,16 @@ async def families_war_stats(current_user: dict = Depends(get_current_user)):
         mvp = sorted(by_user.values(), key=lambda x: (-(x.get("impact") or 0), x.get("username", "")))[:10]
         top_killers = sorted(by_user.values(), key=lambda x: (-(x.get("kills") or 0), x.get("username", "")))[:10]
         family_totals = {}
-        for fid in (w["family_a_id"], w["family_b_id"]):
-            members = [e for e in by_user.values() if e.get("family_id") == fid]
+        war_fids = [_norm_fid(w["family_a_id"]), _norm_fid(w["family_b_id"])]
+        for fid in war_fids:
+            if not fid:
+                continue
+            members = [e for e in by_user.values() if _norm_fid(e.get("family_id")) == fid]
             family_totals[fid] = {"kills": sum(e.get("kills") or 0 for e in members), "deaths": sum(e.get("deaths") or 0 for e in members), "bodyguard_kills": sum(e.get("bodyguard_kills") or 0 for e in members), "bodyguards_lost": sum(e.get("bodyguards_lost") or 0 for e in members)}
-        my_totals = family_totals.get(my_family_id) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
-        other_totals = family_totals.get(other_id) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
+        my_fid_norm = _norm_fid(my_family_id)
+        other_id_norm = _norm_fid(other_id)
+        my_totals = family_totals.get(my_fid_norm) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
+        other_totals = family_totals.get(other_id_norm) or {"kills": 0, "deaths": 0, "bodyguard_kills": 0, "bodyguards_lost": 0}
         out.append({"war": {"id": w["id"], "family_a_id": w["family_a_id"], "family_b_id": w["family_b_id"], "status": w["status"], "other_family_id": other_id, "other_family_name": other_name, "other_family_tag": other_tag, "truce_offered_by_family_id": w.get("truce_offered_by_family_id")}, "stats": {"my_family_totals": my_totals, "other_family_totals": other_totals, "top_bodyguard_killers": top_bg, "top_bodyguards_lost": top_lost, "top_killers": top_killers, "mvp": mvp}})
     return {"wars": out}
 

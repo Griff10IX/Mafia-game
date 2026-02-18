@@ -46,16 +46,26 @@ from routers.objectives import update_objectives_progress
 from routers.weapons import _best_weapon_for_user
 
 
+def _normalize_family_id(fid):
+    """Return non-empty string or None for consistent comparison and DB use."""
+    if fid is None:
+        return None
+    s = str(fid).strip()
+    return s if s else None
+
+
 async def _resolve_family_id(user_id: str):
     """Resolve a user's family_id: users.family_id, then family_members, then families.boss_id."""
+    if not user_id:
+        return None
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "family_id": 1})
     if u and u.get("family_id"):
-        return u["family_id"]
+        return _normalize_family_id(u["family_id"])
     m = await db.family_members.find_one({"user_id": user_id}, {"_id": 0, "family_id": 1})
     if m and m.get("family_id"):
-        return m["family_id"]
+        return _normalize_family_id(m["family_id"])
     fam = await db.families.find_one({"boss_id": user_id}, {"_id": 0, "id": 1})
-    return (fam or {}).get("id") if fam else None
+    return _normalize_family_id((fam or {}).get("id"))
 
 
 # ---------------------------------------------------------------------------
@@ -571,7 +581,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     if not victim_as_bodyguard and target.get("bodyguard_owner_id"):
                         victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
                     # Resolve killer's family from DB/family_members first so boss/founder is never missed
-                    killer_family_id = await _resolve_family_id(killer_id) or current_user.get("family_id")
+                    killer_family_id = _normalize_family_id(
+                        await _resolve_family_id(killer_id) or current_user.get("family_id")
+                    )
                     for bg in victim_as_bodyguard:
                         owner_id = bg["user_id"]
                         owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
@@ -584,7 +596,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
                         try:
                             # Vendetta: same rule as player BG kill — different families → record.
-                            owner_family_id = (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
+                            owner_family_id = _normalize_family_id(
+                                (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
+                            )
                             if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
                                 bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
                                 if not bg_war or not bg_war.get("id"):
@@ -662,7 +676,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"]}]
         bodyguard_owner_username = None
         # Resolve killer's family from DB/family_members first so boss/founder is never missed
-        killer_family_id = await _resolve_family_id(killer_id) or current_user.get("family_id")
+        killer_family_id = _normalize_family_id(
+            await _resolve_family_id(killer_id) or current_user.get("family_id")
+        )
         for bg in victim_as_bodyguard:
             owner_id = bg["user_id"]
             owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
@@ -677,7 +693,15 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
             try:
                 # Vendetta: record when (1) I'm in a family and kill another family's bodyguard, or (2) we're in a family war and I kill an enemy member's bodyguard. Both = different families.
-                owner_family_id = (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
+                owner_family_id = _normalize_family_id(
+                    (owner_doc or {}).get("family_id") or await _resolve_family_id(owner_id)
+                )
+                owner_name = (owner_doc or {}).get("username") or owner_id
+                logger.info(
+                    "Vendetta: BG kill check killer_fid=%s owner_fid=%s owner=%s (different=%s)",
+                    killer_family_id, owner_family_id, owner_name,
+                    bool(killer_family_id and owner_family_id and killer_family_id != owner_family_id),
+                )
                 if owner_family_id and killer_family_id and owner_family_id != killer_family_id:
                     bg_war = await _get_active_war_between(killer_family_id, owner_family_id)
                     if not bg_war or not bg_war.get("id"):
