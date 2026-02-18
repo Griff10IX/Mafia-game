@@ -485,6 +485,11 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
     cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
     rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
+    # Prestige bonus: boost OC cash payout for the initiating user
+    from server import get_prestige_bonus
+    _prestige_user = await db.users.find_one({"id": uid}, {"_id": 0, "prestige_level": 1})
+    _oc_mult = get_prestige_bonus(_prestige_user or {})["oc_mult"]
+    cash_pool = int(cash_pool * _oc_mult)
     user_map = {}
     if user_ids:
         users_raw = await db.users.find(

@@ -4,6 +4,7 @@ import { Users, User, Clock, MapPin } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
+import PrestigeBadge from '../components/PrestigeBadge';
 import styles from '../styles/noir.module.css';
 
 const UO_STYLES = `
@@ -93,6 +94,11 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
               )}
             </Link>
           </HoverCardTrigger>
+          {user.prestige_level > 0 && (
+            <span className="relative z-10">
+              <PrestigeBadge level={user.prestige_level} size="sm" />
+            </span>
+          )}
           <HoverCardPortal>
             <HoverCardContent
               align="start"

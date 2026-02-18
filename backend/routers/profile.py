@@ -51,6 +51,7 @@ def register(router):
     verify_password = srv.verify_password
     get_password_hash = srv.get_password_hash
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     AvatarUpdateRequest = srv.AvatarUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
     ChangePasswordRequest = srv.ChangePasswordRequest
@@ -63,9 +64,12 @@ def register(router):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        rank_id, rank_name = get_rank_info(user.get("rank_points", 0))
+        _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
+        rank_id, rank_name = get_rank_info(user.get("rank_points", 0), _prestige_mult)
         if user.get("email") in ADMIN_EMAILS:
             rank_name = "Admin"
+        _prestige_level = int(user.get("prestige_level") or 0)
+        _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
         wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))
         is_dead = bool(user.get("is_dead"))
         online = False
@@ -172,6 +176,8 @@ def register(router):
             "username": user["username"],
             "rank": rank_id,
             "rank_name": rank_name,
+            "prestige_level": _prestige_level,
+            "prestige_name": _prestige_name,
             "wealth_rank": wealth_id,
             "wealth_rank_name": wealth_name,
             "wealth_rank_range": wealth_range,

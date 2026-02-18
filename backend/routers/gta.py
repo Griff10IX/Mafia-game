@@ -283,7 +283,16 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         ]
         if not available_cars:
             available_cars = [c for c in CARS if c["min_difficulty"] == 1]
-        car = random.choice(available_cars)
+        # Prestige bonus: weight rarer cars more heavily
+        from server import get_prestige_bonus
+        _gta_prestige_user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "prestige_level": 1})
+        _rare_boost = get_prestige_bonus(_gta_prestige_user or {})["gta_rare_boost"]
+        if _rare_boost > 0:
+            _rarity_weights = {"common": 1.0, "uncommon": 1.0 + _rare_boost * 0.5, "rare": 1.0 + _rare_boost, "ultra_rare": 1.0 + _rare_boost * 1.5, "legendary": 1.0 + _rare_boost * 2.0}
+            _weights = [_rarity_weights.get(c.get("rarity", "common"), 1.0) for c in available_cars]
+            car = random.choices(available_cars, weights=_weights, k=1)[0]
+        else:
+            car = random.choice(available_cars)
         # Stolen car damage: 15–77% common; 0–14% uncommon but possible
         if random.random() < 0.08:
             damage_percent = random.randint(0, 14)

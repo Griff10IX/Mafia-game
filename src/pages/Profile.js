@@ -6,6 +6,7 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import PrestigeBadge from '../components/PrestigeBadge';
 import styles from '../styles/noir.module.css';
 
 const PROFILE_STYLES = `
@@ -152,6 +153,9 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
               {profile.rank_name || '—'}
             </span>
           </div>
+          {profile.prestige_level > 0 && (
+            <PrestigeBadge level={profile.prestige_level} size="sm" showLabel={false} />
+          )}
           {isMe && onOpenSettings && (
             <button
               type="button"

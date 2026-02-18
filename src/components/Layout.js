@@ -56,6 +56,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/gta', label: 'GTA' },
         { path: '/jail', label: 'Jail' },
         { path: '/organised-crime', label: 'Organised Crime' },
+        { path: '/prestige', label: 'Prestige' },
       ],
     },
     {
@@ -630,7 +631,8 @@ export default function Layout({ children }) {
                     location.pathname === '/crimes' ||
                     location.pathname === '/gta' ||
                     location.pathname === '/jail' ||
-                    location.pathname === '/organised-crime';
+                    location.pathname === '/organised-crime' ||
+                    location.pathname === '/prestige';
 
                   return (
                     <div key="nav-ranking-group" className="space-y-0.5">
@@ -720,6 +722,18 @@ export default function Layout({ children }) {
                             data-testid="nav-organised-crime"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
+                          </Link>
+                          <Link
+                            to="/prestige"
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                              location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink
+                            }`}
+                            style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
+                            data-testid="nav-prestige"
+                          >
+                            <span className="uppercase tracking-widest font-heading flex-1">Prestige</span>
+                            <Star size={10} style={{ color: 'var(--noir-primary)', opacity: 0.6 }} className="shrink-0" />
                           </Link>
                         </div>
                       )}

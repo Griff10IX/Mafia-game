@@ -13,6 +13,7 @@ def register(router):
     get_current_user = srv.get_current_user
     get_rank_info = srv.get_rank_info
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     OnlineUsersResponse = srv.OnlineUsersResponse
 
     @router.get("/users/online", response_model=OnlineUsersResponse)
@@ -36,10 +37,12 @@ def register(router):
         for user in users:
             if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
                 continue
-            rank_id, rank_name = get_rank_info(user.get("rank_points", 0))
+            _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
+            rank_id, rank_name = get_rank_info(user.get("rank_points", 0), _prestige_mult)
             is_admin = user.get("email") in ADMIN_EMAILS
             if is_admin:
                 rank_name = "Admin"
+            _prestige_level = int(user.get("prestige_level") or 0)
             users_data.append({
                 "username": user["username"],
                 "rank": rank_id,
@@ -47,6 +50,7 @@ def register(router):
                 "location": user["current_state"],
                 "in_jail": user.get("in_jail", False),
                 "is_admin": is_admin,
+                "prestige_level": _prestige_level,
             })
 
         admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})

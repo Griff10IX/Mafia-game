@@ -614,6 +614,11 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                         if bid in booze_ids and amt and int(amt) > 0:
                             inc[f"booze_carrying.{bid}"] = int(amt)
                             inc[f"booze_carrying_cost.{bid}"] = 0
+                # Prestige bonus: boost NPC hitlist kill cash and points rewards
+                from server import get_prestige_bonus as _get_prestige_bonus
+                _npc_mult = _get_prestige_bonus(current_user)["npc_mult"]
+                inc["money"] = int(inc.get("money", 0) * _npc_mult)
+                inc["points"] = int(inc.get("points", 0) * _npc_mult)
                 if inc:
                     rp_before = int(current_user.get("rank_points") or 0)
                     await db.users.update_one({"id": killer_id}, {"$inc": inc})

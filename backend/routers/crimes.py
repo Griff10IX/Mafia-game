@@ -296,6 +296,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         ev = await get_effective_event()
         reward = int(reward * ev.get("kill_cash", 1.0))
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
+        # Prestige bonus: boost crime cash payout
+        from server import get_prestige_bonus
+        reward = int(reward * get_prestige_bonus(current_user)["crime_mult"])
         rp_before = int(current_user.get("rank_points") or 0)
         await db.users.update_one(
             {"id": current_user["id"]},

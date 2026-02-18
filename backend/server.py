@@ -113,6 +113,23 @@ RANKS = [
     {"id": 11, "name": "Godfather", "required_points": 400000},
 ]
 
+# Prestige: 5 levels unlocked after reaching Godfather. Each level harder to rank through.
+PRESTIGE_CONFIGS = {
+    1: {"threshold_mult": 1.0,  "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 400_000},
+    2: {"threshold_mult": 1.5,  "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "godfather_req": 600_000},
+    3: {"threshold_mult": 2.25, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "godfather_req": 900_000},
+    4: {"threshold_mult": 3.5,  "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "godfather_req": 1_400_000},
+    5: {"threshold_mult": 5.0,  "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "godfather_req": 2_000_000},
+}
+
+def get_prestige_bonus(user: dict) -> dict:
+    """Return stacking benefit multipliers for a user based on their prestige_level."""
+    level = min(int(user.get("prestige_level") or 0), 5)
+    if level == 0:
+        return {"crime_mult": 1.0, "oc_mult": 1.0, "gta_rare_boost": 0.0, "npc_mult": 1.0}
+    cfg = PRESTIGE_CONFIGS[level]
+    return {k: cfg[k] for k in ("crime_mult", "oc_mult", "gta_rare_boost", "npc_mult")}
+
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)
 WEALTH_RANKS = [
     {"id": 1, "name": "Broke", "min_money": 0},
@@ -669,10 +686,11 @@ async def _record_war_stats_player_kill(war_id: str, killer_id: str, killer_fami
         upsert=True,
     )
 
-def get_rank_info(rank_points: int):
-    """Get rank based on rank_points only"""
+def get_rank_info(rank_points: int, prestige_mult: float = 1.0):
+    """Get rank based on rank_points, optionally scaled by prestige multiplier."""
+    effective = int(rank_points / prestige_mult) if prestige_mult > 1.0 else rank_points
     for i in range(len(RANKS) - 1, -1, -1):
-        if rank_points >= RANKS[i]["required_points"]:
+        if effective >= RANKS[i]["required_points"]:
             return RANKS[i]["id"], RANKS[i]["name"]
     return 1, RANKS[0]["name"]
 
@@ -730,13 +748,13 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
     return 0
 
 
-async def maybe_process_rank_up(user_id: str, rank_points_before: int, rank_points_added: int, username: str = ""):
+async def maybe_process_rank_up(user_id: str, rank_points_before: int, rank_points_added: int, username: str = "", prestige_mult: float = 1.0):
     """If rank increased after adding rank_points_added to rank_points_before, grant rewards and send notification."""
     if rank_points_added <= 0:
         return
     new_total = rank_points_before + rank_points_added
-    old_rank_id, _ = get_rank_info(rank_points_before)
-    new_rank_id, _ = get_rank_info(new_total)
+    old_rank_id, _ = get_rank_info(rank_points_before, prestige_mult)
+    new_rank_id, _ = get_rank_info(new_total, prestige_mult)
     if new_rank_id > old_rank_id:
         await check_and_process_rank_up(user_id, old_rank_id, new_rank_id, username)
 
@@ -931,7 +949,7 @@ async def _user_owns_any_property(user_id: str):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, slots, video_poker, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, slots, video_poker, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe, prestige
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -989,6 +1007,7 @@ dead_alive.register(api_router)
 users.register(api_router)
 giphy.register(api_router)
 crack_safe.register(api_router)
+prestige.register(api_router)
 from routers import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 

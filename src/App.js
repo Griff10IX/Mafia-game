@@ -29,6 +29,7 @@ import Blackjack from "./pages/Casinos/BlackjackPage";
 import HorseRacing from "./pages/Casinos/HorseRacingPage";
 import Slots from "./pages/Casinos/SlotsPage";
 import CrackSafe from "./pages/CrackSafe";
+import Prestige from "./pages/Prestige";
 import VideoPoker from "./pages/Casinos/VideoPokerPage";
 import SportsBetting from "./pages/SportsBetting";
 import Bank from "./pages/Bank";
@@ -481,6 +482,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <VideoPoker />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/prestige"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Prestige />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
