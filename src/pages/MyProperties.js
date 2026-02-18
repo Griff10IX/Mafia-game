@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Building2, Dice5, CircleDot, Spade, Trophy, Plane, Factory, Shield, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -294,11 +295,10 @@ export default function MyProperties() {
                 </p>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Max bet</span>
-                  <input
-                    type="text"
+                  <FormattedNumberInput
                     value={casinoMaxBet}
-                    onChange={(e) => setCasinoMaxBet(e.target.value)}
-                    placeholder="e.g. 500000000"
+                    onChange={setCasinoMaxBet}
+                    placeholder="e.g. 500,000,000"
                     className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                   />
                   <button type="button" onClick={handleCasinoSetMaxBet} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">

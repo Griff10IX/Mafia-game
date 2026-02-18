@@ -526,8 +526,14 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     )
     if not attack:
         raise HTTPException(status_code=404, detail="No active attack to execute")
-    if current_user["current_state"] != attack["location_state"]:
-        raise HTTPException(status_code=400, detail="You must travel to the target's location first")
+    target_location = attack.get("location_state")
+    if not target_location:
+        raise HTTPException(status_code=400, detail="Target location unknown; cannot attack.")
+    # Re-fetch attacker location from DB so we never use stale state (e.g. after instant travel)
+    attacker_row = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "current_state": 1})
+    attacker_location = (attacker_row or {}).get("current_state") or ""
+    if attacker_location != target_location:
+        raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
     target = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Target not found")

@@ -1004,9 +1004,13 @@ export default function Attack() {
     }
 
     const found = attacks.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
-    const best = found.find((a) => a.can_attack) || found[0];
+    const best = found.find((a) => a.can_attack);
 
     if (!best) {
+      if (found.length > 0) {
+        toast.error('You must be in the target\'s location to attack or bodyguard-check. Travel there first.');
+        return;
+      }
       setLoading(true);
       try {
         const res = await api.post('/attack/search', { target_username: username, note: 'kill' });
@@ -1017,11 +1021,6 @@ export default function Attack() {
       } finally {
         setLoading(false);
       }
-      return;
-    }
-
-    if (!best.can_attack) {
-      toast.error('Travel first (target found in another city).');
       return;
     }
 

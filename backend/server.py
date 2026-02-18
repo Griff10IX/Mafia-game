@@ -960,8 +960,8 @@ CASINO_GAMES = [
     {"id": "horseracing", "name": "Horse Racing", "max_bet": HORSERACING_MAX_BET},
     {"id": "roulette", "name": "Roulette", "max_bet": ROULETTE_MAX_BET},
     {"id": "dice", "name": "Dice", "max_bet": DICE_MAX_BET},
-    {"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET},
     {"id": "videopoker", "name": "Video Poker", "max_bet": VIDEO_POKER_MAX_BET},
+    {"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET},
 ]
 crimes.register(api_router)
 gta.register(api_router)

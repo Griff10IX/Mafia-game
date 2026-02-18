@@ -43,6 +43,7 @@ const GAME_ICONS = {
   horseracing: Trophy,
   roulette: CircleDot,
   dice: Dice5,
+  videopoker: Spade,
   slots: SlotsIcon,
 };
 
@@ -51,6 +52,7 @@ const GAME_COLORS = {
   horseracing: 'text-emerald-400',
   roulette: 'text-blue-400',
   dice: 'text-purple-400',
+  videopoker: 'text-cyan-400',
   slots: 'text-amber-400',
 };
 
@@ -280,6 +282,7 @@ export default function States() {
           roulette_owners: res.data?.roulette_owners ?? {},
           blackjack_owners: res.data?.blackjack_owners ?? {},
           horseracing_owners: res.data?.horseracing_owners ?? {},
+          videopoker_owners: res.data?.videopoker_owners ?? {},
         });
         // Expand all cities by default
         const citiesList = res.data?.cities ?? [];
@@ -307,7 +310,8 @@ export default function States() {
     roulette: data.roulette_owners || {},
     blackjack: data.blackjack_owners || {},
     horseracing: data.horseracing_owners || {},
-  }), [data.dice_owners, data.roulette_owners, data.blackjack_owners, data.horseracing_owners]);
+    videopoker: data.videopoker_owners || {},
+  }), [data.dice_owners, data.roulette_owners, data.blackjack_owners, data.horseracing_owners, data.videopoker_owners]);
 
   const highestBets = useMemo(() => {
     const map = {};
