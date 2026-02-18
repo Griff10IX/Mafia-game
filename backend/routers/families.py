@@ -1172,13 +1172,10 @@ async def admin_debug_war_stats(current_user: dict = Depends(get_current_user)):
 
 
 async def families_war_feed(war_id: str, current_user: dict = Depends(get_current_user)):
-    """Return the kill-event feed for a specific war plus aggregated totals."""
-    my_family_id = current_user.get("family_id")
-    if not my_family_id:
-        raise HTTPException(status_code=403, detail="Not in a family")
+    """Return the kill-event feed for a specific war plus aggregated totals. Public to all authenticated users."""
     war = await db.family_wars.find_one({"id": war_id}, {"_id": 0, "family_a_id": 1, "family_b_id": 1, "status": 1})
-    if not war or my_family_id not in (war["family_a_id"], war["family_b_id"]):
-        raise HTTPException(status_code=403, detail="Not your war")
+    if not war:
+        raise HTTPException(status_code=404, detail="War not found")
 
     docs = await db.war_kill_feed.find({"war_id": war_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
 
@@ -1216,14 +1213,78 @@ async def families_war_feed(war_id: str, current_user: dict = Depends(get_curren
         if victim_fid in totals:
             totals[victim_fid]["bg_points_spent"] += int(d.get("bg_hire_cost") or 0)
 
-    my_fid = _norm_fid(my_family_id)
-    other_fid = fid_b if fid_a == my_fid else fid_a
+    my_family_id = current_user.get("family_id")
+    my_fid = _norm_fid(my_family_id) if my_family_id else fid_a
+    other_fid = fid_b if my_fid == fid_a else fid_a
 
     return {
         "feed": docs,
         "war_over": war_over,
         "my_totals": totals.get(my_fid, {"bullets_used": 0, "bg_points_spent": 0}),
         "other_totals": totals.get(other_fid, {"bullets_used": 0, "bg_points_spent": 0}),
+        "family_a_id": fid_a,
+        "family_b_id": fid_b,
+    }
+
+
+async def families_war_public_stats(war_id: str, current_user: dict = Depends(get_current_user)):
+    """Public per-player stats for any war, readable by all authenticated users."""
+    war = await db.family_wars.find_one({"id": war_id}, {"_id": 0})
+    if not war:
+        raise HTTPException(status_code=404, detail="War not found")
+
+    fid_a = _norm_fid(war["family_a_id"])
+    fid_b = _norm_fid(war["family_b_id"])
+    fam_a = await db.families.find_one({"id": fid_a}, {"_id": 0, "name": 1, "tag": 1}) or {}
+    fam_b = await db.families.find_one({"id": fid_b}, {"_id": 0, "name": 1, "tag": 1}) or {}
+
+    stats_docs = await db.family_war_stats.find({"war_id": war_id}, {"_id": 0}).to_list(500)
+    by_user: dict = {}
+    for s in stats_docs:
+        uid = s.get("user_id")
+        if not uid:
+            continue
+        u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+        fid = _norm_fid(s.get("family_id"))
+        if fid not in (fid_a, fid_b):
+            fid = await resolve_family_id(uid)
+        fam_doc = await db.families.find_one({"id": fid}, {"_id": 0, "name": 1, "tag": 1}) if fid else None
+        by_user[uid] = {
+            **s,
+            "family_id": fid,
+            "family_name": (fam_doc or {}).get("name", "?"),
+            "family_tag": (fam_doc or {}).get("tag", "?"),
+            "username": (u or {}).get("username", "?"),
+            "impact": (s.get("kills") or 0) + (s.get("bodyguard_kills") or 0),
+        }
+
+    all_entries = list(by_user.values())
+
+    def _totals(fid):
+        members = [e for e in all_entries if _norm_fid(e.get("family_id")) == fid]
+        return {
+            "kills": sum(e.get("kills") or 0 for e in members),
+            "deaths": sum(e.get("deaths") or 0 for e in members),
+            "bodyguard_kills": sum(e.get("bodyguard_kills") or 0 for e in members),
+            "bodyguards_lost": sum(e.get("bodyguards_lost") or 0 for e in members),
+        }
+
+    return {
+        "war": {
+            "id": war["id"],
+            "family_a_id": fid_a,
+            "family_a_name": fam_a.get("name", "?"),
+            "family_a_tag": fam_a.get("tag", "?"),
+            "family_b_id": fid_b,
+            "family_b_name": fam_b.get("name", "?"),
+            "family_b_tag": fam_b.get("tag", "?"),
+            "status": war.get("status"),
+            "ended_at": war.get("ended_at"),
+            "winner_family_id": war.get("winner_family_id"),
+        },
+        "family_a_totals": _totals(fid_a),
+        "family_b_totals": _totals(fid_b),
+        "all_players": all_entries,
     }
 
 
@@ -1255,6 +1316,7 @@ def register(router):
     router.add_api_route("/families/war", families_war, methods=["GET"])
     router.add_api_route("/families/war/stats", families_war_stats, methods=["GET"])
     router.add_api_route("/families/war/{war_id}/feed", families_war_feed, methods=["GET"])
+    router.add_api_route("/families/war/{war_id}/stats", families_war_public_stats, methods=["GET"])
     router.add_api_route("/families/war/truce/offer", families_war_truce_offer, methods=["POST"])
     router.add_api_route("/families/war/truce/accept", families_war_truce_accept, methods=["POST"])
     router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"])

@@ -571,7 +571,7 @@ const FamiliesTab = ({ families, myFamilyId }) => (
 // WAR HISTORY TAB
 // ============================================================================
 
-const WarHistoryTab = ({ wars }) => (
+const WarHistoryTab = ({ wars, onDetails }) => (
   <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
     {wars.length === 0 ? (
       <div className="text-center py-12 rounded-lg bg-zinc-800/20 border border-dashed border-zinc-700/40">
@@ -586,24 +586,226 @@ const WarHistoryTab = ({ wars }) => (
         <div key={w.id} className={`relative px-3 py-3 rounded-lg transition-all fam-fade-in overflow-hidden ${isActive ? 'bg-red-500/8 border fam-blood-pulse' : 'bg-zinc-800/30 border border-zinc-700/30 hover:bg-zinc-800/40'}`} style={{ animationDelay: `${idx * 0.04}s` }}>
           {isActive && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-red-500/60" />}
           {hasWinner && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-500/50" />}
-          <div className="flex items-center justify-between">
-            <div className="text-xs font-heading tracking-wide">
-              <span className="text-foreground font-bold">{w.family_a_name}</span>
-              <span className="text-zinc-600 mx-2 text-[10px] italic">vs</span>
-              <span className="text-foreground font-bold">{w.family_b_name}</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-xs font-heading tracking-wide">
+                <span className="text-foreground font-bold">{w.family_a_name}</span>
+                <span className="text-zinc-600 mx-2 text-[10px] italic">vs</span>
+                <span className="text-foreground font-bold">{w.family_b_name}</span>
+              </div>
+              <div className="text-[9px] text-zinc-500 mt-1 font-heading flex items-center gap-1">
+                <Clock size={8} />
+                {w.ended_at ? new Date(w.ended_at).toLocaleDateString() : 'Ongoing vendetta'}
+              </div>
             </div>
-            {isActive && <span className="text-red-400 text-[10px] font-bold animate-pulse flex items-center gap-1"><Flame size={10} /> ACTIVE</span>}
-            {hasWinner && <span className="text-emerald-400 text-[10px] font-heading font-bold flex items-center gap-1"><Trophy size={10} /> {w.winner_family_name}</span>}
-          </div>
-          <div className="text-[9px] text-zinc-500 mt-1 font-heading flex items-center gap-1">
-            <Clock size={8} />
-            {w.ended_at ? new Date(w.ended_at).toLocaleDateString() : 'Ongoing vendetta'}
+            <div className="flex items-center gap-2 shrink-0">
+              {isActive && <span className="text-red-400 text-[10px] font-bold animate-pulse flex items-center gap-1"><Flame size={10} /> ACTIVE</span>}
+              {hasWinner && <span className="text-emerald-400 text-[10px] font-heading font-bold flex items-center gap-1"><Trophy size={10} /> {w.winner_family_name}</span>}
+              {onDetails && w.id && (
+                <button
+                  onClick={() => onDetails(w.id)}
+                  className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase tracking-widest border border-primary/25 text-primary/60 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all"
+                >
+                  Details
+                </button>
+              )}
+            </div>
           </div>
         </div>
       );
     })}
   </div>
 );
+
+// ============================================================================
+// WAR DETAILS MODAL — public read-only view of any war
+// ============================================================================
+
+const WarDetailsModal = ({ warId, onClose }) => {
+  const [tab, setTab] = useState('fighters');
+  const [data, setData] = useState(null);
+  const [feed, setFeed] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [feedLoading, setFeedLoading] = useState(false);
+
+  useEffect(() => {
+    if (!warId) return;
+    setLoading(true);
+    setData(null);
+    setFeed(null);
+    setTab('fighters');
+    api.get(`/families/war/${warId}/stats`)
+      .then(res => setData(res.data))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false));
+  }, [warId]);
+
+  useEffect(() => {
+    if (tab !== 'feed' || feed !== null || !warId) return;
+    setFeedLoading(true);
+    api.get(`/families/war/${warId}/feed`)
+      .then(res => setFeed(res.data?.feed ?? []))
+      .catch(() => setFeed([]))
+      .finally(() => setFeedLoading(false));
+  }, [tab, warId, feed]);
+
+  if (!warId) return null;
+
+  const war = data?.war;
+  const faTotals = data?.family_a_totals ?? {};
+  const fbTotals = data?.family_b_totals ?? {};
+  const allPlayers = data?.all_players ?? [];
+  const faFighters = allPlayers.filter(p => p.family_id === war?.family_a_id).sort((a, b) => (b.impact || 0) - (a.impact || 0));
+  const fbFighters = allPlayers.filter(p => p.family_id === war?.family_b_id).sort((a, b) => (b.impact || 0) - (a.impact || 0));
+  const isActive = war?.status === 'active' || war?.status === 'truce_offered';
+
+  const StatRow = ({ label, val, accent }) => (
+    <div className="flex items-center justify-between px-1 text-[9px] font-heading text-zinc-600">
+      <span>{label}</span>
+      <span className={val > 0 ? `text-${accent}-500 font-bold` : ''}>{val}</span>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/95 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className={`relative w-full max-w-lg ${styles.panel} rounded-xl overflow-hidden shadow-2xl fam-scale-in`}
+        style={{ border: '1px solid rgba(239,68,68,0.2)', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Top bar */}
+        <div className="relative flex items-center justify-between px-4 py-2.5 bg-zinc-900/80 border-b border-zinc-800/60 shrink-0">
+          <div className="flex items-center gap-2">
+            {isActive && <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />}
+            <span className="text-[9px] font-heading font-bold text-red-400/70 uppercase tracking-[0.25em]">
+              {isActive ? 'Blood Feud · Active' : 'Vendetta · Concluded'}
+            </span>
+          </div>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-300 transition-colors p-1 rounded hover:bg-zinc-800">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-zinc-600 text-xs font-heading">Loading intel...</div>
+          ) : !war ? (
+            <div className="flex items-center justify-center py-16 text-zinc-600 text-xs font-heading">No data available</div>
+          ) : <>
+            {/* Fight card */}
+            <div className="px-4 pt-4 pb-2">
+              <div className="grid grid-cols-[1fr_52px_1fr] items-start gap-1">
+                {/* Family A */}
+                <div className="text-center">
+                  <div className="text-[8px] font-heading font-bold text-emerald-400/50 uppercase tracking-[0.18em] mb-1">Corner A</div>
+                  <div className="text-sm font-heading font-bold text-foreground leading-tight truncate">{war.family_a_name}</div>
+                  <div className="text-[10px] text-emerald-500/40 font-heading mb-2">[{war.family_a_tag}]</div>
+                  <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl py-3 px-2">
+                    <div className="text-3xl font-heading font-bold text-emerald-400 tabular-nums">{faTotals.kills ?? 0}</div>
+                    <div className="text-[9px] text-emerald-600 font-heading font-bold uppercase tracking-wider mt-0.5">kills</div>
+                    <div className="text-[9px] text-zinc-500 font-heading mt-1">{faTotals.deaths ?? 0} deaths</div>
+                  </div>
+                  <div className="mt-1.5 space-y-0.5">
+                    <StatRow label="BG Kills" val={faTotals.bodyguard_kills ?? 0} accent="emerald" />
+                    <StatRow label="BG Lost" val={faTotals.bodyguards_lost ?? 0} accent="zinc" />
+                  </div>
+                </div>
+                {/* VS */}
+                <div className="flex flex-col items-center justify-start gap-1.5 pt-6">
+                  <div className="w-px h-5 bg-gradient-to-b from-transparent via-zinc-700 to-transparent" />
+                  <div className="relative p-1.5 rounded-full bg-zinc-900 border border-zinc-700/50">
+                    <Swords size={16} className="text-red-400" />
+                  </div>
+                  <div className="text-[8px] font-heading font-bold text-zinc-600 uppercase tracking-widest">VS</div>
+                  <div className="w-px h-5 bg-gradient-to-b from-transparent via-zinc-700 to-transparent" />
+                </div>
+                {/* Family B */}
+                <div className="text-center">
+                  <div className="text-[8px] font-heading font-bold text-red-400/50 uppercase tracking-[0.18em] mb-1">Corner B</div>
+                  <div className="text-sm font-heading font-bold text-foreground leading-tight truncate">{war.family_b_name}</div>
+                  <div className="text-[10px] text-red-500/40 font-heading mb-2">[{war.family_b_tag}]</div>
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl py-3 px-2">
+                    <div className="text-3xl font-heading font-bold text-red-400 tabular-nums">{fbTotals.kills ?? 0}</div>
+                    <div className="text-[9px] text-red-700 font-heading font-bold uppercase tracking-wider mt-0.5">kills</div>
+                    <div className="text-[9px] text-zinc-500 font-heading mt-1">{fbTotals.deaths ?? 0} deaths</div>
+                  </div>
+                  <div className="mt-1.5 space-y-0.5">
+                    <StatRow label="BG Kills" val={fbTotals.bodyguard_kills ?? 0} accent="red" />
+                    <StatRow label="BG Lost" val={fbTotals.bodyguards_lost ?? 0} accent="zinc" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex border-b border-zinc-800/60 mx-4 mb-3">
+              {[['fighters', 'Fighters'], ['feed', 'Kill Feed']].map(([id, label]) => (
+                <button key={id} onClick={() => setTab(id)}
+                  className={`px-3 py-2 text-[10px] font-heading font-bold uppercase tracking-widest transition-colors ${tab === id ? 'text-primary border-b-2 border-primary -mb-px' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Fighters */}
+            {tab === 'fighters' && (
+              <div className="px-4 pb-4 grid grid-cols-2 gap-3">
+                {[
+                  { fighters: faFighters, color: 'emerald', name: war.family_a_name },
+                  { fighters: fbFighters, color: 'red', name: war.family_b_name },
+                ].map(({ fighters, color, name }) => (
+                  <div key={name}>
+                    <div className={`text-[9px] font-heading font-bold text-${color}-400/60 uppercase tracking-widest mb-1.5 truncate`}>{name}</div>
+                    {fighters.length === 0
+                      ? <div className="text-[9px] text-zinc-700 font-heading italic px-1">No activity recorded</div>
+                      : fighters.slice(0, 8).map((f, i) => (
+                        <div key={f.user_id || i} className={`flex items-center justify-between px-2 py-1.5 rounded mb-1 bg-${color}-500/5 border border-${color}-500/10`}>
+                          <span className="text-[10px] font-heading text-foreground truncate flex-1">{f.username}</span>
+                          <div className="flex items-center gap-1.5 text-[9px] shrink-0 ml-1">
+                            <span className={`text-${color}-400 font-bold`}>{f.kills ?? 0}K</span>
+                            <span className="text-zinc-600">{f.bodyguard_kills ?? 0}BG</span>
+                          </div>
+                        </div>
+                      ))
+                    }
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Kill Feed */}
+            {tab === 'feed' && (
+              <div className="px-4 pb-4">
+                {feedLoading
+                  ? <div className="text-center py-6 text-zinc-600 text-xs font-heading">Loading feed...</div>
+                  : (feed ?? []).length === 0
+                    ? <div className="text-center py-6 text-zinc-700 text-xs font-heading italic">No kill events recorded</div>
+                    : <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                        {(feed ?? []).map((ev, i) => (
+                          <div key={i} className="px-3 py-2 rounded-lg bg-zinc-800/20 border border-zinc-700/20">
+                            <div className="text-[10px] font-heading">
+                              <span className="text-emerald-400 font-bold">{ev.killer_username}</span>
+                              {ev.event_type === 'player_kill'
+                                ? <><span className="text-zinc-600"> killed </span><span className="text-red-400 font-bold">{ev.victim_username}</span></>
+                                : <><span className="text-zinc-600"> eliminated BG of </span><span className="text-red-400 font-bold">{ev.victim_username ?? ev.bg_username}</span></>
+                              }
+                            </div>
+                            <div className="flex flex-wrap gap-2 mt-0.5 text-[9px] text-zinc-600 font-heading">
+                              {(ev.bullets_used || 0) > 0 && <span>🔫 {Number(ev.bullets_used).toLocaleString()}</span>}
+                              {(ev.cash_loot || 0) > 0 && <span>💰 ${Number(ev.cash_loot).toLocaleString()}</span>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                }
+              </div>
+            )}
+          </>}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ============================================================================
 // WAR MODAL — Boxing Match Card
@@ -1046,7 +1248,7 @@ const CrewOCTab = ({
 // NO FAMILY VIEW — recruitment board
 // ============================================================================
 
-const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin }) => (
+const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, warHistory, onDetails }) => (
   <div className="space-y-4">
     {/* Flavor text */}
     <div className="text-center py-2 fam-fade-in">
@@ -1106,6 +1308,17 @@ const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreat
         <FamiliesTab families={families} myFamilyId={null} />
       </div>
     </div>
+
+    {/* Vendettas */}
+    <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.4s' }}>
+      <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
+        <Swords size={14} className="text-red-400/70" />
+        <span className="text-xs font-heading font-bold text-red-400/70 uppercase tracking-widest">Vendettas</span>
+      </div>
+      <div className="p-3">
+        <WarHistoryTab wars={warHistory ?? []} onDetails={onDetails} />
+      </div>
+    </div>
   </div>
 );
 
@@ -1139,6 +1352,7 @@ export default function FamilyPage() {
   const [crewOCFeeInput, setCrewOCFeeInput] = useState('');
   const [crewOCSetFeeLoading, setCrewOCSetFeeLoading] = useState(false);
   const [crewOCAdvertiseLoading, setCrewOCAdvertiseLoading] = useState(false);
+  const [detailsWarId, setDetailsWarId] = useState(null);
 
   const family = myFamily?.family;
   const members = myFamily?.members || [];
@@ -1405,12 +1619,17 @@ export default function FamilyPage() {
               {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
               {activeTab === 'roster' && <RosterTab members={members} fallen={fallen} canManage={canManage} myRole={myRole} config={config} onKick={handleKick} onAssignRole={handleAssignRole} />}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
-              {activeTab === 'history' && <WarHistoryTab wars={warHistory} />}
+              {activeTab === 'history' && <WarHistoryTab wars={warHistory} onDetails={setDetailsWarId} />}
             </div>
           </div>
         </>
       ) : (
-        <NoFamilyView families={families} createName={createName} setCreateName={setCreateName} createTag={createTag} setCreateTag={setCreateTag} onCreate={handleCreate} joinId={joinId} setJoinId={setJoinId} onJoin={handleJoin} />
+        <NoFamilyView families={families} createName={createName} setCreateName={setCreateName} createTag={createTag} setCreateTag={setCreateTag} onCreate={handleCreate} joinId={joinId} setJoinId={setJoinId} onJoin={handleJoin} warHistory={warHistory} onDetails={setDetailsWarId} />
+      )}
+
+      {/* War Details Modal — public, opened from history */}
+      {detailsWarId && (
+        <WarDetailsModal warId={detailsWarId} onClose={() => setDetailsWarId(null)} />
       )}
 
       {/* War Modal */}
