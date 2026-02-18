@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -140,9 +140,15 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
           {profile.username}
         </h2>
         <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
-          <div className="flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 border-primary/50 bg-primary/20">
-            <Shield className="text-primary" size={12} />
-            <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase">
+          <div
+            className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${profile.rank_name === 'Admin' && profile.admin_online_color ? '' : 'border-primary/50'}`}
+            style={profile.rank_name === 'Admin' && profile.admin_online_color ? { borderColor: `${profile.admin_online_color}80`, backgroundColor: `${profile.admin_online_color}20` } : undefined}
+          >
+            <Shield size={12} className={profile.rank_name !== 'Admin' || !profile.admin_online_color ? 'text-primary' : ''} style={profile.rank_name === 'Admin' && profile.admin_online_color ? { color: profile.admin_online_color } : undefined} />
+            <span
+              className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${profile.rank_name === 'Admin' && profile.admin_online_color ? '' : 'text-primary'}`}
+              style={profile.rank_name === 'Admin' && profile.admin_online_color ? { color: profile.admin_online_color } : undefined}
+            >
               {profile.rank_name || '—'}
             </span>
           </div>
@@ -226,8 +232,20 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
                       <span className="text-foreground">Alive (Offline)</span>
                     )}
                   </span>
+                ) : row.label === 'Crew' && profile.family_tag && profile.family_name ? (
+                  <Link
+                    to={`/families/${encodeURIComponent(profile.family_tag)}`}
+                    className={`${row.valueClass} hover:underline hover:text-primary transition-colors`}
+                  >
+                    {row.value}
+                  </Link>
                 ) : (
-                  <span className={row.valueClass}>{row.value}</span>
+                  <span
+                    className={row.valueClass}
+                    style={row.label === 'Rank' && profile.rank_name === 'Admin' && profile.admin_online_color ? { color: profile.admin_online_color } : undefined}
+                  >
+                    {row.value}
+                  </span>
                 )}
               </div>
             </div>

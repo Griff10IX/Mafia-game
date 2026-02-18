@@ -116,14 +116,16 @@ def register(router):
                 out.append(item)
             return out
 
-        async def _family_name():
+        async def _family_name_and_tag():
             if not user.get("family_id"):
-                return None
-            fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1})
-            return fam.get("name") if fam else None
+                return (None, None)
+            fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1, "tag": 1})
+            if not fam:
+                return (None, None)
+            return (fam.get("name"), fam.get("tag"))
 
         (
-            family_name,
+            family_name_tag,
             kills_rank,
             crimes_rank,
             gta_rank,
@@ -136,7 +138,7 @@ def register(router):
             property_,
             messages_received,
         ) = await asyncio.gather(
-            _family_name(),
+            _family_name_and_tag(),
             _rank_for_field("total_kills", int(user.get("total_kills") or 0)),
             _rank_for_field("total_crimes", int(user.get("total_crimes") or 0)),
             _rank_for_field("total_gta", int(user.get("total_gta") or 0)),
@@ -149,6 +151,8 @@ def register(router):
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id}),
         )
+
+        family_name, family_tag = family_name_tag or (None, None)
 
         honours = [
             {"rank": rank_points_rank, "label": "Most Rank Points Earned"},
@@ -181,6 +185,7 @@ def register(router):
             "online": online,
             "last_seen": last_seen,
             "family_name": family_name,
+            "family_tag": family_tag,
             "honours": honours,
             "owned_casinos": owned_casinos,
             "property": property_,
@@ -200,6 +205,12 @@ def register(router):
                 "current_state": user.get("current_state") or "—",
                 "in_jail": bool(user.get("in_jail")),
             }
+        # Admin display colour for styling "Admin" rank (profile and Users Online)
+        admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+        admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
+        if not isinstance(admin_online_color, str) or not admin_online_color.strip():
+            admin_online_color = "#a78bfa"
+        out["admin_online_color"] = admin_online_color.strip()
         return out
 
     @router.post("/profile/avatar")

@@ -91,6 +91,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/casino/rlt', label: 'Roulette' },
         { path: '/casino/blackjack', label: 'Blackjack' },
         { path: '/casino/horseracing', label: 'Horse Racing' },
+        { path: '/casino/slots', label: 'Slots' },
         { path: '/casino/videopoker', label: 'Video Poker' },
         { path: '/sports-betting', label: 'Sports Betting' },
       ],
@@ -733,6 +734,7 @@ export default function Layout({ children }) {
                     location.pathname === '/casino/rlt' ||
                     location.pathname === '/casino/blackjack' ||
                     location.pathname === '/casino/horseracing' ||
+                    location.pathname === '/casino/slots' ||
                     location.pathname === '/casino/videopoker' ||
                     location.pathname === '/sports-betting';
 
@@ -808,6 +810,17 @@ export default function Layout({ children }) {
                             data-testid="nav-horseracing"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span>
+                          </Link>
+                          <Link
+                            to="/casino/slots"
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                              location.pathname === '/casino/slots' ? styles.navItemActivePage : styles.sidebarNavLink
+                            }`}
+                            style={location.pathname === '/casino/slots' ? sidebarActiveStyle : undefined}
+                            data-testid="nav-slots"
+                          >
+                            <span className="uppercase tracking-widest font-heading flex-1">Slots</span>
                           </Link>
                           <Link
                             to="/casino/videopoker"
