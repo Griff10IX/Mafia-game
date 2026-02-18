@@ -38,6 +38,17 @@ function formatMaxBet(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatNextDraw(iso) {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return null;
+  }
+}
+
 const GAME_ICONS = {
   blackjack: Spade,
   horseracing: Trophy,
@@ -125,7 +136,18 @@ const CityCard = ({
                   <div className="flex items-center gap-1 flex-wrap min-w-0">
                     <Icon size={10} className={color} />
                     <span className="text-[10px] font-heading font-bold text-foreground">{game.name}</span>
-                    {owner ? (
+                    {game.id === 'slots' ? (
+                      <>
+                        {owner?.username ? (
+                          <span className="text-[9px] text-mutedForeground">· <Link to={`/profile/${encodeURIComponent(owner.username)}`} className="text-primary hover:underline font-heading">{owner.username}</Link></span>
+                        ) : (
+                          <span className="text-[9px] text-zinc-500">State owned</span>
+                        )}
+                        {owner?.next_draw_at && (
+                          <span className="text-[8px] text-mutedForeground">· Next draw: {formatNextDraw(owner.next_draw_at) || '—'}</span>
+                        )}
+                      </>
+                    ) : owner ? (
                       <span className="text-[9px] text-mutedForeground">· <Link to={`/profile/${encodeURIComponent(owner.username)}`} className="text-primary hover:underline font-heading">{owner.username}</Link></span>
                     ) : (
                       <span className="text-[9px] text-zinc-500">Unclaimed</span>
@@ -311,7 +333,8 @@ export default function States() {
     blackjack: data.blackjack_owners || {},
     horseracing: data.horseracing_owners || {},
     videopoker: data.videopoker_owners || {},
-  }), [data.dice_owners, data.roulette_owners, data.blackjack_owners, data.horseracing_owners, data.videopoker_owners]);
+    slots: data.slots_owners || {},
+  }), [data.dice_owners, data.roulette_owners, data.blackjack_owners, data.horseracing_owners, data.videopoker_owners, data.slots_owners]);
 
   const highestBets = useMemo(() => {
     const map = {};

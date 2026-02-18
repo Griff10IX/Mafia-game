@@ -27,7 +27,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
     blackjack_docs = await db.blackjack_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
     horseracing_docs = await db.horseracing_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
     videopoker_docs = await db.videopoker_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1}).to_list(20)
-    slots_docs = await db.slots_ownership.find({}, {"_id": 0, "state": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1}).to_list(20)
+    slots_docs = await db.slots_ownership.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1, "next_draw_at": 1}).to_list(20)
 
     all_docs = dice_docs + rlt_docs + blackjack_docs + horseracing_docs + videopoker_docs + slots_docs
     owner_ids = list({d["owner_id"] for d in all_docs if d.get("owner_id")})
@@ -98,17 +98,19 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         vp_max = d.get("max_bet") if d.get("max_bet") is not None else VIDEO_POKER_MAX_BET
         videopoker_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": vp_max}
 
-    for d in slots_docs:
-        if not d.get("owner_id") or _slots_expired(d):
-            continue
-        st = d.get("state")
-        if not st:
-            continue
-        u = user_map.get(d["owner_id"], {})
-        money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        slots_max = d.get("max_bet") if d.get("max_bet") is not None else SLOTS_MAX_BET
-        slots_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": slots_max, "buy_back_reward": d.get("buy_back_reward")}
+    # Slots: one per state; include state-owned (no owner) with next_draw_at
+    for st in STATES or []:
+        doc = next((d for d in slots_docs if (d.get("state") or "").strip() == st), None)
+        next_draw_at = doc.get("next_draw_at") if doc else None
+        if doc and doc.get("owner_id") and not _slots_expired(doc):
+            u = user_map.get(doc["owner_id"], {})
+            money = int((u.get("money") or 0) or 0)
+            _, wealth_rank_name = get_wealth_rank(money)
+            slots_max = doc.get("max_bet") if doc.get("max_bet") is not None else SLOTS_MAX_BET
+            slots_owners[st] = {"user_id": doc["owner_id"], "username": doc.get("owner_username") or u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": slots_max, "buy_back_reward": doc.get("buy_back_reward"), "next_draw_at": next_draw_at}
+        else:
+            # State-owned or no doc: still include so frontend can show "State owned" and next_draw_at
+            slots_owners[st] = {"username": None, "max_bet": SLOTS_MAX_BET, "next_draw_at": next_draw_at}
 
     return {
         "cities": list(STATES),

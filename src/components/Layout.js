@@ -57,7 +57,6 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
       icon: Dice5,
       label: 'Casinos',
       items: [
-        { path: '/casino', label: 'Casino' },
         { path: '/casino/dice', label: 'Dice' },
         { path: '/casino/rlt', label: 'Roulette' },
         { path: '/casino/blackjack', label: 'Blackjack' },
@@ -743,17 +742,6 @@ export default function Layout({ children }) {
 
                       {casinoOpen && (
                         <div className={`ml-4 pl-2 space-y-0.5 ${styles.sidebarSubmenuBorder}`}>
-                          <Link
-                            to="/casino"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-casino"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Casino</span>
-                          </Link>
                           <Link
                             to="/casino/dice"
                             onClick={() => setSidebarOpen(false)}

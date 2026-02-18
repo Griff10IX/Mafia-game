@@ -207,6 +207,46 @@ def register(router):
         })
         return {"message": f"Added {car['name']} to {target_username}'s garage"}
 
+    SLOTS_OWNERSHIP_HOURS = 3  # default draw interval (hours)
+
+    @router.post("/admin/slots/set-draw-in-minutes")
+    async def admin_slots_set_draw_in_minutes(minutes: int = 1, current_user: dict = Depends(get_current_user)):
+        """Set next_draw_at to now + minutes for all states (testing)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        next_at = (now + timedelta(minutes=max(1, min(minutes, 60 * 24)))).isoformat()
+        for state in (STATES or []):
+            await db.slots_ownership.update_one(
+                {"state": state},
+                {"$set": {"state": state, "next_draw_at": next_at}},
+                upsert=True,
+            )
+        return {"message": f"Next slots draw set to {minutes} minute(s) from now (all states)"}
+
+    @router.post("/admin/slots/reset-draw-default")
+    async def admin_slots_reset_draw_default(current_user: dict = Depends(get_current_user)):
+        """Reset next_draw_at to now + 3 hours for all states."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        next_at = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
+        for state in (STATES or []):
+            await db.slots_ownership.update_one(
+                {"state": state},
+                {"$set": {"state": state, "next_draw_at": next_at}},
+                upsert=True,
+            )
+        return {"message": f"Slots draw reset to default ({SLOTS_OWNERSHIP_HOURS}h) for all states"}
+
+    @router.post("/admin/cars/delete-all")
+    async def admin_delete_all_cars(current_user: dict = Depends(get_current_user)):
+        """Delete every user's cars (all documents in user_cars). For testing."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        result = await db.user_cars.delete_many({})
+        return {"message": f"Deleted {result.deleted_count} cars (everyone's garages cleared)", "deleted_count": result.deleted_count}
+
     @router.get("/admin/security/summary")
     async def admin_security_summary(limit: int = 100, flag_type: str = None, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

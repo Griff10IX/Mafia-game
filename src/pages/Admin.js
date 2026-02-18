@@ -208,6 +208,42 @@ export default function Admin() {
     }
   };
 
+  const handleSlotsDraw1Min = async () => {
+    try {
+      await api.post('/admin/slots/set-draw-in-minutes', null, { params: { minutes: 1 } });
+      toast.success('Slots next draw set to 1 minute (all states)');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set draw time');
+    }
+  };
+
+  const handleSlotsDrawReset = async () => {
+    try {
+      await api.post('/admin/slots/reset-draw-default');
+      toast.success('Slots draw reset to default (3h)');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset draw');
+    }
+  };
+
+  const handleSlotsDraw1Min = async () => {
+    try {
+      await api.post('/admin/slots/set-draw-in-minutes', null, { params: { minutes: 1 } });
+      toast.success('Slots next draw set to 1 minute (all states)');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set draw time');
+    }
+  };
+
+  const handleSlotsDrawReset = async () => {
+    try {
+      await api.post('/admin/slots/reset-draw-default');
+      toast.success('Slots draw reset to default (3h)');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset draw');
+    }
+  };
+
   const handleToggleEvents = async () => {
     try {
       const res = await api.post('/admin/events/toggle', { enabled: !eventsEnabled });
@@ -593,6 +629,16 @@ export default function Admin() {
       const res = await api.post('/admin/wipe-all-users');
       toast.success(res.data?.message || 'Wiped');
       setWipeConfirmText('');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setDbLoading(false); }
+  };
+
+  const handleDropAllCars = async () => {
+    if (!window.confirm('Delete ALL cars for ALL users? Every garage will be empty. This cannot be undone.')) return;
+    setDbLoading(true);
+    try {
+      const res = await api.post('/admin/cars/delete-all');
+      toast.success(res.data?.message || 'All cars deleted');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setDbLoading(false); }
   };
@@ -1036,6 +1082,26 @@ export default function Admin() {
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleBoozeRotation15s}>Set rotation to 15s</BtnPrimary>
               <BtnSecondary onClick={handleBoozeRotationReset}>Reset to 3h</BtnSecondary>
+            </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Coins}
+          title="Slots draw (testing)"
+          badge={<span className="text-[10px] text-mutedForeground font-heading">Next draw time</span>}
+          isCollapsed={collapsed.slotsDraw}
+          onToggle={() => toggleSection('slotsDraw')}
+        />
+        {!collapsed.slotsDraw && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">Set the next lottery draw to 1 minute for all states, or reset to default 3 hours.</p>
+            <div className="flex flex-wrap gap-2">
+              <BtnPrimary onClick={handleSlotsDraw1Min}>Set next draw in 1 min</BtnPrimary>
+              <BtnSecondary onClick={handleSlotsDrawReset}>Reset to default (3h)</BtnSecondary>
             </div>
           </div>
         )}
@@ -1869,6 +1935,15 @@ export default function Admin() {
                   {dbLoading ? '...' : 'Delete'}
                 </BtnDanger>
               </div>
+            </div>
+
+            {/* Drop everyone's cars */}
+            <div className="space-y-2 p-2 rounded border border-amber-500/50 bg-amber-500/5">
+              <label className="text-[10px] text-amber-400 font-heading uppercase font-bold">Drop everyone&apos;s cars</label>
+              <p className="text-[10px] text-mutedForeground">Permanently delete all cars for all users (every garage emptied).</p>
+              <BtnDanger onClick={handleDropAllCars} disabled={dbLoading}>
+                {dbLoading ? '...' : 'Delete all cars'}
+              </BtnDanger>
             </div>
 
             {/* Wipe All */}
