@@ -572,6 +572,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     for bg in victim_as_bodyguard:
                         owner_id = bg["user_id"]
                         owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
+                        delete_criteria = {"user_id": owner_id, "bodyguard_user_id": victim_id}
                         if bg.get("id"):
                             await db.bodyguards.delete_one({"id": bg["id"]})
                         else:
@@ -588,9 +589,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                                 if bg_war and bg_war.get("id"):
                                     await _record_war_stats_bodyguard_kill(bg_war["id"], killer_id, killer_family_id, owner_id, owner_family_id)
                                     logger.info("Vendetta: recorded robot BG kill war_id=%s killer=%s owner=%s", bg_war["id"], killer_id, owner_id)
-                else:
-                    reason = "same_family" if (owner_family_id and killer_family_id and owner_family_id == killer_family_id) else "missing_or_same_family"
-                    logger.info("Vendetta: robot BG kill not recorded killer_family=%s owner_family=%s reason=%s", killer_family_id, owner_family_id, reason)
+                            else:
+                                reason = "same_family" if (owner_family_id and killer_family_id and owner_family_id == killer_family_id) else "missing_or_same_family"
+                                logger.info("Vendetta: robot BG kill not recorded killer_family=%s owner_family=%s reason=%s", killer_family_id, owner_family_id, reason)
                         except Exception as e:
                             logging.exception("War stats bodyguard kill (NPC): %s", e)
                         remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
