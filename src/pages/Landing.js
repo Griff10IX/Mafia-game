@@ -8,6 +8,7 @@ export default function Landing({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [verifySentForEmail, setVerifySentForEmail] = useState(null); // show "Resend verification" after register or login 403
+  const [verificationLink, setVerificationLink] = useState(null); // when email not sent, API returns link to show
 
   useEffect(() => {
     const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
@@ -28,9 +29,11 @@ export default function Landing({ setIsAuthenticated }) {
     const email = verifySentForEmail || formData.email;
     if (!email) return;
     setResendLoading(true);
+    setVerificationLink(null);
     try {
-      await api.post('/auth/resend-verification', { email });
-      toast.success('If an account exists with that email, a new verification link has been sent.');
+      const response = await api.post('/auth/resend-verification', { email });
+      toast.success(response.data.message || 'If an account exists with that email, a new verification link has been sent.');
+      if (response.data.verification_link) setVerificationLink(response.data.verification_link);
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to resend.');
     } finally {
@@ -53,6 +56,7 @@ export default function Landing({ setIsAuthenticated }) {
       if (response.data.verify_required) {
         toast.success(response.data.message || 'Check your email to verify your account.');
         setVerifySentForEmail(formData.email);
+        if (response.data.verification_link) setVerificationLink(response.data.verification_link);
         return;
       }
       localStorage.setItem('token', response.data.token);
@@ -236,17 +240,33 @@ export default function Landing({ setIsAuthenticated }) {
 
               {verifySentForEmail && (
                 <div className="pt-2 border-t mt-2" style={{ borderColor: 'var(--noir-muted)', opacity: 0.8 }}>
-                  <p className="text-xs mb-2" style={{ color: 'var(--noir-muted)' }}>
-                    Didn&apos;t get the email? Send another verification link.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={resendLoading}
-                    onClick={handleResendVerification}
-                    className={`w-full ${styles.btnPrimary} opacity-80 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth disabled:opacity-50`}
-                  >
-                    {resendLoading ? 'Sending...' : 'Resend verification email'}
-                  </button>
+                  {verificationLink ? (
+                    <>
+                      <p className="text-xs mb-2" style={{ color: 'var(--noir-muted)' }}>
+                        Use this link to verify (email was not sent):
+                      </p>
+                      <a
+                        href={verificationLink}
+                        className={`w-full ${styles.btnPrimary} block text-center opacity-90 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth no-underline`}
+                      >
+                        Verify my email now
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs mb-2" style={{ color: 'var(--noir-muted)' }}>
+                        Didn&apos;t get the email? Send another verification link.
+                      </p>
+                      <button
+                        type="button"
+                        disabled={resendLoading}
+                        onClick={handleResendVerification}
+                        className={`w-full ${styles.btnPrimary} opacity-80 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth disabled:opacity-50`}
+                      >
+                        {resendLoading ? 'Sending...' : 'Resend verification email'}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
             </form>

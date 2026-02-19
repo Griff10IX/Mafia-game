@@ -10,6 +10,16 @@ MAIL_FROM = os.environ.get("MAIL_FROM", "Mafia Wars <onboarding@resend.dev>").st
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
 
+def is_email_configured() -> bool:
+    """True if Resend API key is set (emails will be sent)."""
+    return bool(RESEND_API_KEY)
+
+
+def verification_link(token: str) -> str:
+    """Build the full verification URL for dev fallback or copy-paste."""
+    return f"{FRONTEND_URL}/verify-email?token={token}"
+
+
 def send_email(to: str, subject: str, html: str) -> bool:
     """Send one email. Returns True if sent, False if skipped (no API key). Logs and swallows errors."""
     if not RESEND_API_KEY:

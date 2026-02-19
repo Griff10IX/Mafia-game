@@ -207,16 +207,21 @@ def register(router):
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "expires_at": expires_at.isoformat(),
             })
+            email_sent = False
             try:
-                from email_sender import send_verification_email
-                send_verification_email(user_doc["email"], user_doc["username"], verification_token)
+                from email_sender import send_verification_email, verification_link
+                email_sent = send_verification_email(user_doc["email"], user_doc["username"], verification_token)
             except Exception as e:
                 logging.warning("Failed to send verification email: %s", e)
-
-            return {
-                "message": "Please check your email to verify your account. Then you can log in.",
+            out = {
+                "message": "Please check your email to verify your account. Then you can log in." if email_sent
+                else "Verification email could not be sent (RESEND_API_KEY not set or mail failed). Use the link below to verify.",
                 "verify_required": True,
             }
+            if not email_sent:
+                from email_sender import verification_link
+                out["verification_link"] = verification_link(verification_token)
+            return out
         except HTTPException:
             raise
         except Exception as e:
@@ -400,12 +405,18 @@ def register(router):
             "created_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": expires_at.isoformat(),
         })
+        email_sent = False
         try:
-            from email_sender import send_verification_email
-            send_verification_email(user["email"], user["username"], verification_token)
+            from email_sender import send_verification_email, verification_link
+            email_sent = send_verification_email(user["email"], user["username"], verification_token)
         except Exception as e:
             logging.warning("Failed to send verification email: %s", e)
-        return {"message": "If an account exists with that email, a new verification link has been sent."}
+        out = {"message": "If an account exists with that email, a new verification link has been sent." if email_sent
+            else "Verification email could not be sent. Use the link below to verify."}
+        if not email_sent:
+            from email_sender import verification_link
+            out["verification_link"] = verification_link(verification_token)
+        return out
 
     def _safe_int(val, default=0):
         if val is None:
