@@ -371,6 +371,11 @@ class UserResponse(BaseModel):
     property_profit: int = 0  # points from owned property (e.g. airport)
     has_casino_or_property: bool = False  # true if user owns a casino or property (airport, bullet factory, armory) — for menu visibility
     theme_preferences: Optional[Dict] = None  # saved theme (colour, font, etc.) for cross-device sync
+    account_locked: bool = False  # under investigation: only /locked page and one comment allowed
+    account_locked_at: Optional[str] = None
+    account_locked_until: Optional[str] = None  # when set, lock auto-expires at this time (e.g. test lock)
+    account_locked_comment: Optional[str] = None  # user's one-time comment
+    can_submit_comment: bool = False  # true when locked and no comment submitted yet
 
 class NotificationCreate(BaseModel):
     title: str
@@ -444,7 +449,13 @@ def _log_auth_failure(user_id: Optional[str], status: int, reason: str):
     )
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+ACCOUNT_LOCKED_WHITELIST = {"/api/auth/me", "/api/account-locked"}
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
+):
     user_id: Optional[str] = None
     try:
         token = credentials.credentials
@@ -470,6 +481,31 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(
             status_code=403,
             detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to retrieve points."
+        )
+    # Auto-expire lock when account_locked_until is in the past
+    locked_until = user.get("account_locked_until")
+    if user.get("account_locked") and locked_until:
+        try:
+            until_dt = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
+            if until_dt.tzinfo is None:
+                until_dt = until_dt.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) >= until_dt:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {
+                        "$set": {"account_locked": False},
+                        "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": ""},
+                    },
+                )
+                user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        except Exception:
+            pass
+    # Locked (under investigation): only whitelisted paths allowed
+    if user.get("account_locked") and request and request.url.path not in ACCOUNT_LOCKED_WHITELIST:
+        _log_auth_failure(user_id, 403, "Account locked (path not whitelisted)")
+        raise HTTPException(
+            status_code=403,
+            detail="Account is under investigation. You can only access the account status page.",
         )
     # If car travel has arrived, apply location and clear traveling state
     arrives_at = user.get("travel_arrives_at")

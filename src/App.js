@@ -58,6 +58,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Stats = lazy(() => import("./pages/Stats"));
 const Objectives = lazy(() => import("./pages/Objectives"));
 const QuickTrade = lazy(() => import("./pages/QuickTrade"));
+const LockedPage = lazy(() => import("./pages/LockedPage"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
@@ -106,6 +107,16 @@ function App() {
           <Route
             path="/reset-password"
             element={<ResetPassword />}
+          />
+          <Route
+            path="/locked"
+            element={
+              isAuthenticated ? (
+                <LockedPage />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
           />
           <Route
             path="/dashboard"

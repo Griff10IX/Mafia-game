@@ -480,19 +480,81 @@ def register(router):
         return {"message": f"Forced offline users online until {until_iso}", "until": until_iso, "updated": res.modified_count}
 
     @router.post("/admin/lock-player")
-    async def admin_lock_player(target_username: str, lock_minutes: int, current_user: dict = Depends(get_current_user)):
+    async def admin_lock_player(target_username: str, lock_minutes: int = 0, current_user: dict = Depends(get_current_user)):
+        """Lock account for investigation: user can only access /locked page and submit one comment until unlocked. lock_minutes ignored (kept for API compat)."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        jail_until = datetime.now(timezone.utc) + timedelta(minutes=lock_minutes)
+        now_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}}
+            {
+                "$set": {
+                    "account_locked": True,
+                    "account_locked_at": now_iso,
+                },
+                "$unset": {
+                    "account_locked_comment": "",
+                    "account_locked_comment_at": "",
+                },
+            },
         )
-        return {"message": f"Locked {target_username} for {lock_minutes} minutes"}
+        return {"message": f"Locked {target_username} for investigation. They can only access the locked page and submit one comment."}
+
+    @router.post("/admin/unlock-account")
+    async def admin_unlock_account(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Unlock an account that was locked for investigation."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        await db.users.update_one(
+            {"id": target["id"]},
+            {
+                "$set": {"account_locked": False},
+                "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": ""},
+            },
+        )
+        return {"message": f"Unlocked {target_username}. They can access the app again."}
+
+    @router.get("/admin/locked-accounts")
+    async def admin_locked_accounts(current_user: dict = Depends(get_current_user)):
+        """List users currently locked for investigation (username, comment, dates)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cursor = db.users.find(
+            {"account_locked": True},
+            {"_id": 0, "username": 1, "account_locked_at": 1, "account_locked_until": 1, "account_locked_comment": 1, "account_locked_comment_at": 1},
+        )
+        users = await cursor.to_list(100)
+        return {"locked": users}
+
+    @router.post("/admin/test-lock-self")
+    async def admin_test_lock_self(current_user: dict = Depends(get_current_user)):
+        """Lock the current admin for 60 seconds (test the locked page flow). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        until = now + timedelta(seconds=60)
+        now_iso = now.isoformat()
+        until_iso = until.isoformat()
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {
+                "$set": {
+                    "account_locked": True,
+                    "account_locked_at": now_iso,
+                    "account_locked_until": until_iso,
+                },
+                "$unset": {"account_locked_comment": "", "account_locked_comment_at": ""},
+            },
+        )
+        return {"message": "You are locked for 60 seconds. You will be redirected to the locked page.", "account_locked_until": until_iso}
 
     @router.post("/admin/kill-player")
     async def admin_kill_player(target_username: str, current_user: dict = Depends(get_current_user)):

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from fastapi import Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 
 from disposable_email import is_disposable_email
 from security import is_proxy_or_vpn
@@ -30,6 +30,20 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str
+
+
+class AccountLockedCommentBody(BaseModel):
+    comment: str
+
+    @field_validator("comment", mode="before")
+    @classmethod
+    def trim_and_limit(cls, v):
+        if v is None:
+            return ""
+        s = str(v).strip()
+        if len(s) > 2000:
+            raise ValueError("Comment must be at most 2000 characters")
+        return s
 
 
 def register(router):
@@ -382,6 +396,11 @@ def register(router):
                 property_profit=0,
                 has_casino_or_property=False,
                 theme_preferences=u.get("theme_preferences"),
+                account_locked=bool(u.get("account_locked", False)),
+                account_locked_at=u.get("account_locked_at"),
+                account_locked_until=u.get("account_locked_until"),
+                account_locked_comment=u.get("account_locked_comment"),
+                can_submit_comment=bool(u.get("account_locked", False)) and not u.get("account_locked_comment"),
             )
         except HTTPException:
             raise
@@ -407,6 +426,33 @@ def register(router):
                 status_code=500,
                 detail="Profile could not be loaded for your account. The issue has been logged; please try again or contact support.",
             )
+
+    @router.get("/account-locked")
+    async def get_account_locked(current_user: dict = Depends(get_current_user)):
+        """Locked page data: only for locked users; others get account_locked false."""
+        locked = bool(current_user.get("account_locked", False))
+        can_submit = locked and not current_user.get("account_locked_comment")
+        return {
+            "account_locked": locked,
+            "can_submit_comment": can_submit,
+            "comment": current_user.get("account_locked_comment"),
+            "comment_at": current_user.get("account_locked_comment_at"),
+            "account_locked_until": current_user.get("account_locked_until"),
+        }
+
+    @router.post("/account-locked")
+    async def post_account_locked(body: AccountLockedCommentBody, current_user: dict = Depends(get_current_user)):
+        """Submit the one allowed comment while account is locked. Only once per lock."""
+        if not current_user.get("account_locked"):
+            raise HTTPException(status_code=400, detail="Your account is not locked.")
+        if current_user.get("account_locked_comment"):
+            raise HTTPException(status_code=400, detail="You have already submitted your comment.")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"account_locked_comment": body.comment, "account_locked_comment_at": now_iso}},
+        )
+        return {"message": "Your comment has been recorded.", "comment_at": now_iso}
 
     @router.get("/user/casino-property")
     async def get_casino_property(current_user: dict = Depends(get_current_user)):

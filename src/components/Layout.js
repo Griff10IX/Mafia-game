@@ -383,6 +383,11 @@ export default function Layout({ children }) {
         api.get('/auth/me'),
         api.get('/user/rank-progress')
       ]);
+      // Locked (under investigation): only allow /locked page
+      if (userRes.data?.account_locked) {
+        navigate('/locked', { replace: true });
+        return;
+      }
       // Keep previous casino/property flags so "My Properties" doesn't flicker when auth/me (which returns placeholders) overwrites
       setUser((prev) => ({
         ...userRes.data,

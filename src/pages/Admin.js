@@ -81,6 +81,8 @@ export default function Admin() {
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
+  const [lockedAccounts, setLockedAccounts] = useState([]);
+  const [lockedAccountsLoading, setLockedAccountsLoading] = useState(false);
 
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
@@ -323,9 +325,42 @@ export default function Admin() {
 
   const handleLockPlayer = async () => {
     try {
-      const response = await api.post(`/admin/lock-player?target_username=${formData.targetUsername}&lock_minutes=${formData.lockMinutes}`);
+      const response = await api.post(`/admin/lock-player?target_username=${encodeURIComponent(formData.targetUsername)}`);
       toast.success(response.data.message);
+      fetchLockedAccounts();
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleUnlockAccount = async (username) => {
+    const target = username || formData.targetUsername;
+    if (!target) { toast.error('Enter target username'); return; }
+    try {
+      const response = await api.post(`/admin/unlock-account?target_username=${encodeURIComponent(target)}`);
+      toast.success(response.data.message);
+      fetchLockedAccounts();
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const fetchLockedAccounts = async () => {
+    setLockedAccountsLoading(true);
+    try {
+      const res = await api.get('/admin/locked-accounts');
+      setLockedAccounts(res.data?.locked || []);
+    } catch {
+      setLockedAccounts([]);
+    } finally {
+      setLockedAccountsLoading(false);
+    }
+  };
+
+  const handleTestLockSelf = async () => {
+    try {
+      const res = await api.post('/admin/test-lock-self');
+      toast.success(res.data?.message || 'Locked for 60s. Redirecting...');
+      window.location.href = '/locked';
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
   };
 
   const handleKillPlayer = async () => {
@@ -1251,10 +1286,37 @@ export default function Admin() {
               <BtnPrimary onClick={handleAddCar}>Add</BtnPrimary>
             </ActionRow>
 
-            <ActionRow icon={Lock} label="Lock Player" color="text-red-400">
-              <Input type="number" value={formData.lockMinutes} onChange={(e) => setFormData({ ...formData, lockMinutes: parseInt(e.target.value) })} placeholder="Mins" />
+            <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
               <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
             </ActionRow>
+            <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
+              <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
+              <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
+                Test lock
+              </button>
+            </ActionRow>
+            <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
+              <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
+                {lockedAccountsLoading ? '...' : 'Refresh'}
+              </button>
+            </ActionRow>
+            {lockedAccounts.length > 0 && (
+              <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
+                {lockedAccounts.map((u) => (
+                  <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <span className="font-bold text-amber-400">{u.username}</span>
+                      <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
+                    </div>
+                    {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
+                    {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
+                    {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <ActionRow icon={Skull} label="Kill Player (modkill)" description="Account is dead; cannot login until revived" color="text-red-400">
               <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
