@@ -48,7 +48,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/attempts', label: 'Attempts' },
         { path: '/hitlist', label: 'Hitlist' },
         { path: '/bodyguards', label: 'Bodyguards' },
-        { path: '/armour-weapons', label: 'Armour & Weapons' },
+        { path: '/armour-weapons', label: 'Armoury' },
       ],
     },
     {
@@ -590,7 +590,7 @@ export default function Layout({ children }) {
     { path: '/sell-cars', icon: DollarSign, label: 'Sell Cars' },
     { path: '/buy-cars', icon: ShoppingBag, label: 'Buy Cars' },
     { path: '/properties', icon: Building, label: 'Properties' },
-    { path: '/armour-weapons', icon: Sword, label: 'Armour & Weapons' },
+    { path: '/armour-weapons', icon: Sword, label: 'Armoury' },
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/crack-safe', icon: Lock, label: 'Crack the Safe' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },

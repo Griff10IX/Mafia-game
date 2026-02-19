@@ -175,7 +175,7 @@ const CityCard = ({
           <div className="border-t border-zinc-700/30 p-1.5 space-y-0.5">
             <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5">🏭 Properties</div>
             
-            {/* Armoury (bullets, armour, weapons — one per state; produce & buy at Armour & Weapons) */}
+            {/* Armoury (bullets, armour, weapons — one per state; produce & buy in Armoury) */}
             <div
               className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded"
               title="Bullets, armour & weapons. Produce stock and buy here. Owner earns from bullets sold and from armoury armour/weapon sales (35% margin)."

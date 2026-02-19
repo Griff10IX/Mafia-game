@@ -48,6 +48,7 @@ const Tab = ({ active, onClick, icon: Icon, children }) => (
 export default function ArmourWeapons() {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(null);
+  const [ownedArmouryState, setOwnedArmouryState] = useState(null);
   const [armourData, setArmourData] = useState({ current_level: 0, options: [] });
   const [weapons, setWeapons] = useState([]);
   const [event, setEvent] = useState(null);
@@ -60,17 +61,20 @@ export default function ArmourWeapons() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [meRes, optRes, weaponsRes, eventsRes] = await Promise.all([
+      const [meRes, optRes, weaponsRes, eventsRes, myPropsRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/armour/options'),
         api.get('/weapons'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        api.get('/my-properties').catch(() => ({ data: { property: null } })),
       ]);
       setMe(meRes.data);
       setArmourData(optRes.data);
       setWeapons(weaponsRes.data || []);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
+      const prop = myPropsRes?.data?.property;
+      setOwnedArmouryState(prop?.type === 'bullet_factory' ? prop?.state ?? null : null);
     } catch {
       toast.error('Failed to load armour & weapons');
     } finally {
@@ -312,12 +316,12 @@ export default function ArmourWeapons() {
             Armour
           </Tab>
           <Tab active={activeTab === 'bullet-factory'} onClick={() => setActiveTab('bullet-factory')} icon={Factory}>
-            Bullet Factory
+            Armoury
           </Tab>
         </div>
 
         <div className="p-3">
-          {activeTab === 'bullet-factory' && <BulletFactory me={me} />}
+          {activeTab === 'bullet-factory' && <BulletFactory me={me} ownedArmouryState={ownedArmouryState} />}
           {activeTab === 'weapons' && (
             <div className="space-y-1">
               {/* Table Header */}

@@ -223,7 +223,7 @@ const Tab = ({ active, onClick, icon: Icon, children }) => (
 /* ═══════════════════════════════════════════════════════
    Main BulletFactory Component
    ═══════════════════════════════════════════════════════ */
-export default function BulletFactory({ me }) {
+export default function BulletFactory({ me, ownedArmouryState }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('shop');
@@ -240,18 +240,19 @@ export default function BulletFactory({ me }) {
   const [buyingWeaponId, setBuyingWeaponId] = useState(null);
 
   const currentState = me?.current_state;
+  const effectiveState = ownedArmouryState || currentState;
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await api.get('/bullet-factory', { params: currentState ? { state: currentState } : {} });
+      const res = await api.get('/bullet-factory', { params: effectiveState ? { state: effectiveState } : {} });
       setData(res.data);
     } catch {
-      toast.error('Failed to load bullet factory');
+      toast.error('Failed to load armoury');
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [currentState]);
+  }, [effectiveState]);
 
   useEffect(() => {
     fetchData();

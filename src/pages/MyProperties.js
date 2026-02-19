@@ -460,7 +460,7 @@ export default function MyProperties() {
                   </button>
                 </div>
                 <Link to="/armour-weapons" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
-                  <LinkIcon size={12} /> Armour & Weapons (Bullet Factory)
+                  <LinkIcon size={12} /> Armoury
                 </Link>
                 <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
