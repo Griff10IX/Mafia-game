@@ -1044,6 +1044,51 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         return {"user": user}
 
+    @router.get("/admin/user-inspect")
+    async def admin_user_inspect(email: str = Query(..., description="User's email (to diagnose login 500)"), current_user: dict = Depends(get_current_user)):
+        """Inspect a user document by email: returns keys and value types (no secrets). Use to compare a user who gets login 500 with a working one."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        import re
+        email_clean = (email or "").strip().lower()
+        if not email_clean:
+            raise HTTPException(status_code=400, detail="email query param required")
+        pattern = re.compile("^" + re.escape(email_clean) + "$", re.IGNORECASE)
+        user = await db.users.find_one({"email": pattern}, {"_id": 0, "password_hash": 0})
+        if not user:
+            return {"found": False, "email": email_clean, "message": "No user with this email."}
+        keys = list(user.keys())
+        value_types = {}
+        for k, v in user.items():
+            if v is None:
+                value_types[k] = "null"
+            elif isinstance(v, datetime):
+                value_types[k] = "datetime"
+            elif isinstance(v, bool):
+                value_types[k] = "bool"
+            elif isinstance(v, (int, float)):
+                value_types[k] = "number"
+            elif isinstance(v, str):
+                value_types[k] = "str"
+            elif isinstance(v, list):
+                value_types[k] = f"list(len={len(v)})"
+            elif isinstance(v, dict):
+                value_types[k] = "dict"
+            else:
+                value_types[k] = type(v).__name__
+        has_id = "id" in user
+        id_type = value_types.get("id", "missing")
+        return {
+            "found": True,
+            "email": email_clean,
+            "username": user.get("username"),
+            "user_id": user.get("id"),
+            "has_id": has_id,
+            "id_type": id_type,
+            "keys": sorted(keys),
+            "value_types": value_types,
+        }
+
     @router.get("/admin/user-details/{user_id}")
     async def admin_user_details(user_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

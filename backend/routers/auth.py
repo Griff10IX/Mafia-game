@@ -253,11 +253,46 @@ def register(router):
     LOGIN_MAX_ATTEMPTS = 3
     LOGIN_LOCKOUT_MINUTES = 5
 
+    def _login_response_user(user: dict) -> dict:
+        """Build a JSON-safe user dict for login response. Skips sensitive keys and serializes datetimes so one bad field cannot 500."""
+        skip = {"password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used"}
+        out = {}
+        for k, v in user.items():
+            if k in skip:
+                continue
+            try:
+                if v is None or isinstance(v, (bool, int, float, str)):
+                    out[k] = v
+                elif isinstance(v, datetime):
+                    out[k] = v.isoformat() if v.tzinfo else v.replace(tzinfo=timezone.utc).isoformat()
+                elif isinstance(v, list):
+                    out[k] = v  # assume list of primitives or dicts; FastAPI can encode
+                elif isinstance(v, dict):
+                    out[k] = v
+                else:
+                    out[k] = str(v)
+            except Exception:
+                logging.warning("Login response: skipping non-serializable key=%s type=%s", k, type(v).__name__)
+        return out
+
     @router.post("/auth/login")
     async def login(user_data: UserLogin, request: Request):
-        email_clean = user_data.email.strip().lower()
+        email_clean = (user_data.email or "").strip().lower()
         now = datetime.now(timezone.utc)
+        try:
+            return await _do_login(user_data, request, email_clean, now)
+        except HTTPException:
+            raise
+        except Exception as e:
+            logging.exception(
+                "Login 500 for email=%s exception=%s: %s",
+                email_clean or "(empty)",
+                type(e).__name__,
+                e,
+            )
+            raise HTTPException(status_code=500, detail="Login failed. Please try again or contact support.")
 
+    async def _do_login(user_data: UserLogin, request: Request, email_clean: str, now: datetime):
         # Require non-empty email and password
         if not email_clean:
             raise HTTPException(status_code=422, detail="Email is required.")
@@ -320,7 +355,8 @@ def register(router):
             if len(ips) > 20:
                 await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": ips[-20:]}})
         token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0)})
-        return {"token": token, "user": {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}}
+        user_safe = _login_response_user(user)
+        return {"token": token, "user": user_safe}
 
     @router.post("/auth/password-reset/request")
     async def request_password_reset(data: PasswordResetRequest):

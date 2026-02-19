@@ -81,6 +81,9 @@ export default function Admin() {
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
+  const [userInspectEmail, setUserInspectEmail] = useState('');
+  const [userInspectResult, setUserInspectResult] = useState(null);
+  const [userInspectLoading, setUserInspectLoading] = useState(false);
   const [lockedAccounts, setLockedAccounts] = useState([]);
   const [lockedAccountsLoading, setLockedAccountsLoading] = useState(false);
   const [lockedMessageByUser, setLockedMessageByUser] = useState({});
@@ -464,6 +467,23 @@ export default function Admin() {
       setViewRegistrationInfo(null);
     } finally {
       setViewRegistrationLoading(false);
+    }
+  };
+
+  const handleUserInspect = async () => {
+    const email = (userInspectEmail || '').trim().toLowerCase();
+    if (!email) { toast.error('Enter user email'); return; }
+    setUserInspectLoading(true);
+    setUserInspectResult(null);
+    try {
+      const res = await api.get('/admin/user-inspect', { params: { email } });
+      setUserInspectResult(res.data);
+      toast.success(res.data?.found ? 'User document inspected' : 'No user with this email');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to inspect');
+      setUserInspectResult(null);
+    } finally {
+      setUserInspectLoading(false);
     }
   };
 
@@ -1286,6 +1306,38 @@ export default function Admin() {
                 <div><span className="text-mutedForeground">Registration IP:</span> {viewRegistrationInfo.registration_ip || '—'}</div>
                 <div><span className="text-mutedForeground">Last login IP:</span> {viewRegistrationInfo.last_login_ip || '—'}</div>
                 {viewRegistrationInfo.is_dead && <div className="text-red-400 font-bold">Account is dead</div>}
+              </div>
+            )}
+            <ActionRow icon={AlertTriangle} label="Login 500 diagnosis" description="Inspect user document by email (keys & types). Compare with a working user to find missing/wrong fields.">
+              <input
+                type="email"
+                value={userInspectEmail}
+                onChange={(e) => setUserInspectEmail(e.target.value)}
+                placeholder="user@example.com"
+                className="flex-1 min-w-0 max-w-[200px] px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+              />
+              <BtnPrimary onClick={handleUserInspect} disabled={userInspectLoading}>{userInspectLoading ? '...' : 'Inspect'}</BtnPrimary>
+            </ActionRow>
+            {userInspectResult && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
+                <div className="font-bold text-primary">User inspect: {userInspectResult.email}</div>
+                {userInspectResult.found ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                      <div><span className="text-mutedForeground">Username:</span> {userInspectResult.username ?? '—'}</div>
+                      <div><span className="text-mutedForeground">User ID:</span> {userInspectResult.user_id ?? '—'}</div>
+                      <div><span className="text-mutedForeground">has_id:</span> <span className={userInspectResult.has_id ? 'text-emerald-400' : 'text-red-400'}>{String(userInspectResult.has_id)}</span></div>
+                      <div><span className="text-mutedForeground">id_type:</span> {userInspectResult.id_type ?? '—'}</div>
+                    </div>
+                    <div><span className="text-mutedForeground">Keys ({userInspectResult.keys?.length ?? 0}):</span> <span className="text-foreground font-mono">{userInspectResult.keys?.join(', ') ?? '—'}</span></div>
+                    <div>
+                      <span className="text-mutedForeground">Value types:</span>
+                      <pre className="mt-1 p-1.5 rounded bg-zinc-900/60 text-[9px] overflow-x-auto max-h-40 overflow-y-auto">{JSON.stringify(userInspectResult.value_types || {}, null, 2)}</pre>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-mutedForeground">{userInspectResult.message ?? 'Not found.'}</div>
+                )}
               </div>
             )}
             <ActionRow icon={UserCog} label="Change Rank">
