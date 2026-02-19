@@ -11,11 +11,11 @@ const STORE_STYLES = `
 `;
 
 const PACKAGES = [
-  { id: 'starter', name: 'Starter', points: 100, price: 4.99, popular: false },
-  { id: 'bronze', name: 'Bronze', points: 250, price: 9.99, popular: false },
-  { id: 'silver', name: 'Silver', points: 600, price: 19.99, popular: true },
-  { id: 'gold', name: 'Gold', points: 1500, price: 49.99, popular: false },
-  { id: 'platinum', name: 'Platinum', points: 3500, price: 99.99, popular: false },
+  { id: 'starter', name: '2,500 pts', points: 2500, price: 3.99, popular: false },
+  { id: 'bronze', name: '5,000 pts', points: 5000, price: 6.99, popular: false },
+  { id: 'silver', name: '10,000 pts', points: 10000, price: 12.99, popular: true },
+  { id: 'gold', name: '25,000 pts', points: 25000, price: 29.99, popular: false },
+  { id: 'platinum', name: '50,000 pts', points: 50000, price: 55.99, popular: false },
 ];
 
 const BODYGUARD_SLOT_COSTS = [100, 200, 300, 400];
@@ -223,7 +223,7 @@ export default function Store() {
                 <div className="p-3 text-center">
                   <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{pkg.name}</p>
                   <p className="text-lg font-heading font-bold text-primary mt-1">{Number(pkg.points ?? 0).toLocaleString()}</p>
-                  <p className="text-[10px] text-zinc-500 font-heading italic">pts · ${pkg.price}</p>
+                  <p className="text-[10px] text-zinc-500 font-heading italic">£{pkg.price.toFixed(2)}</p>
                 </div>
                 <div className="px-3 pb-3">
                   <button

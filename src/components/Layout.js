@@ -108,6 +108,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
 
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
 const DEFAULT_STAT_ORDER = ['rank', 'bullets', 'kills', 'money', 'points', 'property', 'notifications'];
+const TOPBAR_GAP_KEY = 'topbar_gap';
+const TOPBAR_SIZE_KEY = 'topbar_size';
 
 function loadStatOrder() {
   try {
@@ -119,11 +121,29 @@ function loadStatOrder() {
   return DEFAULT_STAT_ORDER;
 }
 
+function loadTopBarGap() {
+  try {
+    const v = localStorage.getItem(TOPBAR_GAP_KEY);
+    if (v === 'compact' || v === 'normal' || v === 'spread') return v;
+  } catch (_) {}
+  return 'normal';
+}
+
+function loadTopBarSize() {
+  try {
+    const v = localStorage.getItem(TOPBAR_SIZE_KEY);
+    if (v === 'small' || v === 'medium' || v === 'large') return v;
+  } catch (_) {}
+  return 'medium';
+}
+
 export default function Layout({ children }) {
   const [user, setUser] = useState(null);
   const [rankProgress, setRankProgress] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [statOrder, setStatOrder] = useState(loadStatOrder);
+  const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
+  const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
   const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -170,6 +190,15 @@ export default function Layout({ children }) {
     }
     return items;
   }, [isAdmin, hasAdminEmail, hasCasinoOrProperty]);
+
+  useEffect(() => {
+    const onTopBarPrefs = () => {
+      setTopBarGap(loadTopBarGap());
+      setTopBarSize(loadTopBarSize());
+    };
+    window.addEventListener('topbar-prefs-changed', onTopBarPrefs);
+    return () => window.removeEventListener('topbar-prefs-changed', onTopBarPrefs);
+  }, []);
 
   useEffect(() => {
     setMobileBottomMenuOpen(null);
@@ -1068,8 +1097,12 @@ export default function Layout({ children }) {
           };
           const casinoProfit = user.casino_profit ?? 0;
           const propertyProfit = user.property_profit ?? 0;
+          const topBarGapClass = topBarGap === 'compact' ? 'gap-1' : topBarGap === 'spread' ? 'gap-4' : 'gap-2';
+          const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
+          const topBarChipPadding = topBarSize === 'small' ? 'px-1.5 py-0.5' : topBarSize === 'large' ? 'px-2.5 py-1.5' : 'px-2 py-1';
+          const topBarTextClass = topBarSize === 'small' ? 'text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
           const renderStat = (statId) => {
-            const chipClass = 'flex items-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm shrink-0 cursor-grab active:cursor-grabbing';
+            const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 ${topBarChipPadding} rounded-sm shrink-0 cursor-grab active:cursor-grabbing`;
             if (statId === 'rank') {
               if (!rankProgress) return null;
               const pct = Number(rankProgress.rank_points_progress);
@@ -1080,39 +1113,39 @@ export default function Layout({ children }) {
                 ? Math.min(100, Math.max(0, pct))
                 : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
               return (
-                <div className={`${chipClass} gap-1.5 sm:gap-2 px-1.5 py-1 sm:px-2 sm:py-1 min-w-0`} title={`${rankProgress.current_rank_name}: ${progress.toFixed(2)}%`}>
-                  <TrendingUp size={12} className="text-primary shrink-0" />
+                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={`${rankProgress.current_rank_name}: ${progress.toFixed(2)}%`}>
+                  <TrendingUp size={topBarIconSize} className="text-primary shrink-0" />
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
                     <div className="w-10 sm:w-16" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
-                  <span className="text-[10px] text-primary font-heading shrink-0">{progress.toFixed(0)}%</span>
+                  <span className={`${topBarTextClass} text-primary font-heading shrink-0`}>{progress.toFixed(0)}%</span>
                 </div>
               );
             }
             if (statId === 'bullets') {
               return (
                 <div className={`${chipClass} hidden md:flex`} title="Bullets">
-                  <Crosshair size={12} className="text-red-400" />
-                  <span className="font-heading text-xs text-foreground" data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
+                  <Crosshair size={topBarIconSize} className="text-red-400" />
+                  <span className={`font-heading ${topBarTextClass} text-foreground`} data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
                 </div>
               );
             }
             if (statId === 'kills') {
               return (
                 <div className={`${chipClass} hidden md:flex`} title="Kills">
-                  <Skull size={12} className="text-red-400" />
-                  <span className="font-heading text-xs text-foreground" data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
+                  <Skull size={topBarIconSize} className="text-red-400" />
+                  <span className={`font-heading ${topBarTextClass} text-foreground`} data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
                 </div>
               );
             }
             if (statId === 'money') {
               return (
                 <div className={chipClass} title={`Cash: ${formatMoney(user.money)}`}>
-                  <DollarSign size={12} className="text-primary shrink-0" />
-                  <span className="font-heading text-xs text-primary md:hidden" data-testid="topbar-money">{formatMoneyCompact(user.money)}</span>
+                  <DollarSign size={topBarIconSize} className="text-primary shrink-0" />
+                  <span className={`font-heading ${topBarTextClass} text-primary md:hidden`} data-testid="topbar-money">{formatMoneyCompact(user.money)}</span>
                   <span className="font-heading text-xs text-primary hidden md:inline" data-testid="topbar-money-full">{formatMoney(user.money)}</span>
                 </div>
               );
@@ -1120,8 +1153,8 @@ export default function Layout({ children }) {
             if (statId === 'points') {
               return (
                 <div className={chipClass} title={`Premium Points: ${formatInt(user.points)}`}>
-                  <Zap size={12} className="text-primary shrink-0" />
-                  <span className="font-heading text-xs text-foreground md:hidden" data-testid="topbar-points">{formatInt(user.points)}</span>
+                  <Zap size={topBarIconSize} className="text-primary shrink-0" />
+                  <span className={`font-heading ${topBarTextClass} text-foreground md:hidden`} data-testid="topbar-points">{formatInt(user.points)}</span>
                   <span className="font-heading text-xs text-foreground hidden md:inline" data-testid="topbar-points-full">{formatInt(user.points)}</span>
                 </div>
               );
@@ -1133,8 +1166,8 @@ export default function Layout({ children }) {
               const propertyShort = formatCompact(propertyProfit) + ' pts';
               return (
                 <div className={chipClass} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
-                  <Building2 size={12} className="text-emerald-400 shrink-0" />
-                  <span className="font-heading text-[11px] text-foreground whitespace-nowrap">
+                  <Building2 size={topBarIconSize} className="text-emerald-400 shrink-0" />
+                  <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap`}>
                     <span className="text-mutedForeground md:inline hidden">Casino </span>
                     <span className="text-mutedForeground md:hidden">C </span>
                     <span className={casinoProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{casinoStr}</span></span>
@@ -1152,8 +1185,8 @@ export default function Layout({ children }) {
             return null;
           };
           return (
-            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto md:overflow-visible overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]">
-              {/* Global user search: click icon to reveal search bar — mobile-friendly touch targets */}
+            <div className={`flex items-center ${topBarGapClass} flex-1 min-w-0 overflow-x-auto md:overflow-visible overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
+              {/* Global user search: click icon to reveal search bar — same size as other chips */}
               <div className="relative shrink-0 z-10 snap-start" ref={userSearchRef}>
                 {!userSearchExpanded ? (
                   <button
@@ -1169,11 +1202,11 @@ export default function Layout({ children }) {
                     onMouseDown={(e) => {
                       e.stopPropagation();
                     }}
-                    className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation min-w-[44px] min-h-[44px] px-3 py-2 md:min-w-[28px] md:min-h-[28px] md:px-2 md:py-1"
+                    className={`flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation ${topBarChipPadding}`}
                     aria-label="Search user"
                     title="Search user"
                   >
-                    <Search size={18} strokeWidth={2} className="md:w-3 md:h-3" />
+                    <Search size={topBarIconSize} strokeWidth={2} />
                   </button>
                 ) : (
                   <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5">
@@ -1235,10 +1268,10 @@ export default function Layout({ children }) {
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
-                        className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 px-2 py-1 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors"
+                        className={`flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors ${topBarChipPadding}`}
                         aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
                       >
-                        <Bell size={12} strokeWidth={2} />
+                        <Bell size={topBarIconSize} strokeWidth={2} />
                         {unreadCount > 0 && (
                           <span className="min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-noir-bg text-[10px] font-heading font-bold">
                             {unreadCount > 99 ? '99+' : unreadCount}

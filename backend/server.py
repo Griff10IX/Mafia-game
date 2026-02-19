@@ -279,12 +279,13 @@ GARAGE_BATCH_UPGRADE_INCREMENT = 10
 GARAGE_BATCH_UPGRADE_COST = 25
 GARAGE_BATCH_LIMIT_MAX = 100
 
+# Points store: GBP prices; larger packs slightly cheaper per point than 2× smaller
 POINT_PACKAGES = {
-    "starter": {"points": 100, "price": 4.99},
-    "bronze": {"points": 250, "price": 9.99},
-    "silver": {"points": 600, "price": 19.99},
-    "gold": {"points": 1500, "price": 49.99},
-    "platinum": {"points": 3500, "price": 99.99}
+    "starter": {"points": 2500, "price_gbp": 3.99},
+    "bronze": {"points": 5000, "price_gbp": 6.99},
+    "silver": {"points": 10000, "price_gbp": 12.99},
+    "gold": {"points": 25000, "price_gbp": 29.99},
+    "platinum": {"points": 50000, "price_gbp": 55.99},
 }
 
 # Travel times based on car rarity (in seconds)

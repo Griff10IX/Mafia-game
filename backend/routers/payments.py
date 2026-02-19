@@ -39,7 +39,7 @@ def register(router):
 
         package = POINT_PACKAGES[request.package_id]
         points = package["points"]
-        price_usd = package["price"]
+        price_gbp = package["price_gbp"]
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"
@@ -52,8 +52,8 @@ def register(router):
                 payment_method_types=["card"],
                 line_items=[{
                     "price_data": {
-                        "currency": "usd",
-                        "unit_amount": int(round(price_usd * 100)),
+                        "currency": "gbp",
+                        "unit_amount": int(round(price_gbp * 100)),
                         "product_data": {
                             "name": f"{points} points",
                             "metadata": {"package_id": request.package_id},

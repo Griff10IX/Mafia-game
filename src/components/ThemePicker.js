@@ -93,11 +93,26 @@ export default function ThemePicker({ open, onClose }) {
   const [customHexes, setCustomHexes] = useState(['#d4af37', '#b8860b']);
   const [customTextLight, setCustomTextLight] = useState(true);
 
+  const TOPBAR_GAP_KEY = 'topbar_gap';
+  const TOPBAR_SIZE_KEY = 'topbar_size';
+  const topBarGap = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_GAP_KEY)) || 'normal';
+  const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
+
+  const setTopBarGap = (v) => {
+    try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
+    window.dispatchEvent(new Event('topbar-prefs-changed'));
+  };
+  const setTopBarSize = (v) => {
+    try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {}
+    window.dispatchEvent(new Event('topbar-prefs-changed'));
+  };
+
   const tabs = [
     { id: 'presets', label: 'Presets', icon: Sparkles },
     { id: 'colours', label: 'Colours', icon: Palette },
     { id: 'text', label: 'Text', icon: Type },
     { id: 'buttons', label: 'Buttons', icon: Box },
+    { id: 'topbar', label: 'Top bar', icon: LayoutDashboard },
   ];
   const [activeTab, setActiveTab] = useState('presets');
 
@@ -654,6 +669,51 @@ export default function ThemePicker({ open, onClose }) {
                       <LayoutGrid className="w-3.5 h-3.5" />
                       Bottom bar
                     </button>
+                  </div>
+                </div>
+              </>
+            )}
+            {activeTab === 'topbar' && (
+              <>
+                <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <LayoutDashboard className="w-3.5 h-3.5" />
+                  Top bar (stats, search, notifications)
+                </p>
+                <p className="text-[9px] text-mutedForeground mb-3">Spacing and size of the chips in the top bar. Drag to reorder.</p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Spacing between chips</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['compact', 'normal', 'spread'].map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setTopBarGap(v)}
+                          className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                            topBarGap === v ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                          }`}
+                        >
+                          {v === 'compact' ? 'Close' : v === 'spread' ? 'Spread' : 'Normal'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Chip size</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['small', 'medium', 'large'].map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setTopBarSize(v)}
+                          className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                            topBarSize === v ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                          }`}
+                        >
+                          {v.charAt(0).toUpperCase() + v.slice(1)}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </>
