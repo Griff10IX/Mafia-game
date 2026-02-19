@@ -1,0 +1,12 @@
+[
+  {"id": "weapon1", "name": "Brass Knuckles", "description": "Street fighting tool", "damage": 5, "bullets_needed": 0, "rank_required": 1, "price_money": 100, "price_points": null},
+  {"id": "weapon2", "name": "Colt Detective Special", "description": "Compact revolver", "damage": 15, "bullets_needed": 6, "rank_required": 2, "price_money": 500, "price_points": null},
+  {"id": "weapon3", "name": "Smith & Wesson .38", "description": "Reliable revolver", "damage": 20, "bullets_needed": 6, "rank_required": 3, "price_money": 1000, "price_points": null},
+  {"id": "weapon4", "name": "Colt M1911", "description": "Powerful semi-automatic pistol", "damage": 30, "bullets_needed": 7, "rank_required": 4, "price_money": 2500, "price_points": null},
+  {"id": "weapon5", "name": "Sawed-off Shotgun", "description": "Devastating at close range", "damage": 50, "bullets_needed": 2, "rank_required": 5, "price_money": 5000, "price_points": null},
+  {"id": "weapon6", "name": "Winchester Model 1897", "description": "Pump-action shotgun", "damage": 60, "bullets_needed": 5, "rank_required": 6, "price_money": 8000, "price_points": null},
+  {"id": "weapon7", "name": "Thompson Submachine Gun", "description": "The iconic Tommy Gun", "damage": 80, "bullets_needed": 30, "rank_required": 7, "price_money": 15000, "price_points": null},
+  {"id": "weapon8", "name": "BAR (Browning Automatic Rifle)", "description": "Heavy automatic rifle", "damage": 100, "bullets_needed": 20, "rank_required": 9, "price_money": 30000, "price_points": null},
+  {"id": "weapon9", "name": "Luger P08", "description": "German precision pistol", "damage": 35, "bullets_needed": 8, "rank_required": 8, "price_money": 12000, "price_points": null},
+  {"id": "weapon10", "name": "Chicago Typewriter Premium", "description": "Gold-plated Tommy Gun", "damage": 120, "bullets_needed": 50, "rank_required": 11, "price_money": null, "price_points": 500}
+]

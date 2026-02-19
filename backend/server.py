@@ -8,6 +8,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from bson.objectid import ObjectId
 import os
 import re
+import json
 import logging
 import logging.handlers
 import asyncio
@@ -1172,10 +1173,26 @@ async def startup_db():
 async def shutdown_db_client():
     client.close()
 
+def _load_seed_json(filename: str) -> list:
+    """Load seed data from backend/data/<filename>. Returns [] if file missing."""
+    path = ROOT_DIR / "data" / filename
+    if not path.is_file():
+        logging.warning("Seed file not found: %s (game data will not be seeded from file)", path)
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        logging.warning("Failed to load seed file %s: %s", path, e)
+        return []
+
+
 async def init_game_data():
     """
-    Initialize game data on server startup.
-    NOTE: Be VERY careful with delete operations in this function as it runs on EVERY server restart!
+    Initialize game data on server startup from the database.
+    If collections are empty, seed from backend/data/*.json (weapons, properties, crimes).
+    NOTE: No user data is modified; only game config collections are seeded when empty.
     """
     from routers import crimes as crimes_router
     await crimes_router.init_crimes_data(db)
@@ -1183,30 +1200,18 @@ async def init_game_data():
     logging.info("🔄 Initializing game data (weapons, properties...)...")
     weapons_count = await db.weapons.count_documents({})
     if weapons_count == 0:
-        weapons = [
-            {"id": "weapon1", "name": "Brass Knuckles", "description": "Street fighting tool", "damage": 5, "bullets_needed": 0, "rank_required": 1, "price_money": 100, "price_points": None},
-            {"id": "weapon2", "name": "Colt Detective Special", "description": "Compact revolver", "damage": 15, "bullets_needed": 6, "rank_required": 2, "price_money": 500, "price_points": None},
-            {"id": "weapon3", "name": "Smith & Wesson .38", "description": "Reliable revolver", "damage": 20, "bullets_needed": 6, "rank_required": 3, "price_money": 1000, "price_points": None},
-            {"id": "weapon4", "name": "Colt M1911", "description": "Powerful semi-automatic pistol", "damage": 30, "bullets_needed": 7, "rank_required": 4, "price_money": 2500, "price_points": None},
-            {"id": "weapon5", "name": "Sawed-off Shotgun", "description": "Devastating at close range", "damage": 50, "bullets_needed": 2, "rank_required": 5, "price_money": 5000, "price_points": None},
-            {"id": "weapon6", "name": "Winchester Model 1897", "description": "Pump-action shotgun", "damage": 60, "bullets_needed": 5, "rank_required": 6, "price_money": 8000, "price_points": None},
-            {"id": "weapon7", "name": "Thompson Submachine Gun", "description": "The iconic Tommy Gun", "damage": 80, "bullets_needed": 30, "rank_required": 7, "price_money": 15000, "price_points": None},
-            {"id": "weapon8", "name": "BAR (Browning Automatic Rifle)", "description": "Heavy automatic rifle", "damage": 100, "bullets_needed": 20, "rank_required": 9, "price_money": 30000, "price_points": None},
-            {"id": "weapon9", "name": "Luger P08", "description": "German precision pistol", "damage": 35, "bullets_needed": 8, "rank_required": 8, "price_money": 12000, "price_points": None},
-            {"id": "weapon10", "name": "Chicago Typewriter Premium", "description": "Gold-plated Tommy Gun", "damage": 120, "bullets_needed": 50, "rank_required": 11, "price_money": None, "price_points": 500}
-        ]
-        await db.weapons.insert_many(weapons)
-    
+        weapons = _load_seed_json("weapons.json")
+        if weapons:
+            await db.weapons.insert_many(weapons)
+            logging.info("Seeded %d weapons from data/weapons.json", len(weapons))
+        else:
+            logging.warning("Weapons collection is empty and no seed file; add data/weapons.json or insert via DB.")
     properties_count = await db.properties.count_documents({})
     if properties_count == 0:
-        # ECONOMY REBALANCE: Reduced income_per_hour by ~60% for healthier economy
-        # PROGRESSION: Each property requires previous one to be maxed out (required_property_id)
-        properties = [
-            {"id": "prop1", "name": "Speakeasy", "property_type": "casino", "price": 5000, "income_per_hour": 50, "max_level": 10, "required_property_id": None},
-            {"id": "prop2", "name": "Bullet Factory", "property_type": "factory", "price": 25000, "income_per_hour": 150, "max_level": 10, "required_property_id": "prop1"},
-            {"id": "prop3", "name": "Underground Casino", "property_type": "casino", "price": 75000, "income_per_hour": 400, "max_level": 10, "required_property_id": "prop2"},
-            {"id": "prop4", "name": "Luxury Casino", "property_type": "casino", "price": 250000, "income_per_hour": 1200, "max_level": 10, "required_property_id": "prop3"}
-        ]
-        await db.properties.insert_many(properties)
-    
+        properties = _load_seed_json("properties.json")
+        if properties:
+            await db.properties.insert_many(properties)
+            logging.info("Seeded %d properties from data/properties.json", len(properties))
+        else:
+            logging.warning("Properties collection is empty and no seed file; add data/properties.json or insert via DB.")
     logging.info("✅ Game data initialization complete (NO user data was modified)")

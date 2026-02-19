@@ -1,0 +1,10 @@
+[
+  {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 20, "reward_max": 60, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
+  {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 40, "reward_max": 120, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
+  {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 3, "reward_min": 200, "reward_max": 500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
+  {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 4, "reward_min": 800, "reward_max": 1800, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
+  {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 5, "reward_min": 2000, "reward_max": 4500, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
+  {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 6, "reward_min": 4000, "reward_max": 9000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
+  {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 8, "reward_min": 18000, "reward_max": 50000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
+  {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 10, "reward_min": 70000, "reward_max": 180000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
+]

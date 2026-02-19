@@ -108,7 +108,8 @@ class CommitCrimeResponse(BaseModel):
 # Game data init (called from server on startup)
 # ---------------------------------------------------------------------------
 
-CRIMES_SEED = [
+# Fallback seed only when DB is empty and data/crimes.json is missing
+CRIMES_SEED_FALLBACK = [
     {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 20, "reward_max": 60, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
     {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 40, "reward_max": 120, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
     {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 3, "reward_min": 200, "reward_max": 500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
@@ -124,13 +125,34 @@ CRIMES_SEED = [
 _crimes_cache: Optional[List[dict]] = None
 
 
+def _load_crimes_seed():
+    """Load crimes seed from backend/data/crimes.json, or return CRIMES_SEED_FALLBACK."""
+    import json
+    _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(_backend, "data", "crimes.json")
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return data if isinstance(data, list) else CRIMES_SEED_FALLBACK
+        except Exception as e:
+            logger.warning("Failed to load data/crimes.json: %s; using fallback", e)
+    return CRIMES_SEED_FALLBACK
+
+
 async def init_crimes_data(db_instance):
-    """Initialize crimes collection on server startup. SAFETY: Only updates crimes collection (game config), not user data."""
+    """Initialize crimes from DB: if collection is empty, seed from data/crimes.json (or fallback). Does not overwrite existing DB data."""
     global _crimes_cache
     _crimes_cache = None  # invalidate cache so next request gets fresh data
     logger.info("🔄 Initializing crimes data...")
-    await db_instance.crimes.delete_many({})
-    await db_instance.crimes.insert_many(CRIMES_SEED)
+    crimes_count = await db_instance.crimes.count_documents({})
+    if crimes_count == 0:
+        seed = _load_crimes_seed()
+        if seed:
+            await db_instance.crimes.insert_many(seed)
+            logger.info("Seeded %d crimes from data/crimes.json (or fallback)", len(seed))
+    else:
+        logger.info("Crimes already in DB (%d docs); skipping seed", crimes_count)
 
 
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

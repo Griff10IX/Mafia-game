@@ -1,0 +1,6 @@
+[
+  {"id": "prop1", "name": "Speakeasy", "property_type": "casino", "price": 5000, "income_per_hour": 50, "max_level": 10, "required_property_id": null},
+  {"id": "prop2", "name": "Bullet Factory", "property_type": "factory", "price": 25000, "income_per_hour": 150, "max_level": 10, "required_property_id": "prop1"},
+  {"id": "prop3", "name": "Underground Casino", "property_type": "casino", "price": 75000, "income_per_hour": 400, "max_level": 10, "required_property_id": "prop2"},
+  {"id": "prop4", "name": "Luxury Casino", "property_type": "casino", "price": 250000, "income_per_hour": 1200, "max_level": 10, "required_property_id": "prop3"}
+]
