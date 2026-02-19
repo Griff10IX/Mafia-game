@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Factory, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
+import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
 
 /** Slot machine icon: three reel windows, same outline style as Spade/CircleDot/Dice5 */
 function SlotsIcon({ size = 10, className = '' }) {
@@ -175,25 +175,32 @@ const CityCard = ({
           <div className="border-t border-zinc-700/30 p-1.5 space-y-0.5">
             <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5">🏭 Properties</div>
             
-            {/* Bullet Factory */}
-            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded">
-              <div className="flex items-center gap-1">
-                <Factory size={10} className="text-orange-400" />
-                <span className="text-[10px] font-heading text-foreground">Bullet Factory</span>
+            {/* Armoury (bullets, armour, weapons — one per state; produce & buy at Armour & Weapons) */}
+            <div
+              className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded"
+              title="Bullets, armour & weapons. Produce stock and buy here. Owner earns from bullets sold and from armoury armour/weapon sales (35% margin)."
+            >
+              <div className="flex items-center gap-1 min-w-0">
+                <Shield size={10} className="text-orange-400 shrink-0" />
+                <div className="min-w-0">
+                  <span className="text-[10px] font-heading text-foreground">Armoury</span>
+                  <span className="text-[8px] text-mutedForeground block">Produce & buy · Owner earns from sales</span>
+                </div>
               </div>
-              <div className="flex items-center gap-1 text-[9px]">
+              <div className="flex items-center gap-1.5 text-[9px] shrink-0">
                 {bf?.owner_username ? (
                   <>
-                    <Link to={`/profile/${encodeURIComponent(bf.owner_username)}`} className="text-primary hover:underline font-heading text-mutedForeground hover:text-primary">{bf.owner_username}</Link>
-                    <span className="text-primary font-bold">${bf.price_per_bullet?.toLocaleString()}/ea</span>
-                    <span className="text-foreground">{bf.accumulated_bullets} 🔫</span>
+                    <Link to={`/profile/${encodeURIComponent(bf.owner_username)}`} className="text-primary hover:underline font-heading text-mutedForeground hover:text-primary truncate max-w-[80px]">{bf.owner_username}</Link>
+                    <span className="text-primary font-bold">${bf.price_per_bullet != null ? Number(bf.price_per_bullet).toLocaleString() : '—'}/ea</span>
+                    <span className="text-foreground">{bf.accumulated_bullets != null ? bf.accumulated_bullets : 0} 🔫</span>
                   </>
                 ) : (
                   <span className="text-zinc-500">Unclaimed</span>
                 )}
+                <Link to="/armour-weapons" className="text-primary hover:underline font-heading text-[9px] font-bold whitespace-nowrap">Manage</Link>
               </div>
             </div>
-            
+
             {/* Airport */}
             <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded">
               <div className="flex items-center gap-1">
@@ -226,15 +233,6 @@ const CityCard = ({
                 )}
               </div>
             </div>
-            
-            {/* Armoury */}
-            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/20 rounded opacity-60">
-              <div className="flex items-center gap-1">
-                <Shield size={10} className="text-zinc-400" />
-                <span className="text-[10px] font-heading text-zinc-400">Armoury</span>
-              </div>
-              <span className="text-[9px] text-amber-400">Coming soon</span>
-            </div>
           </div>
           <div className="st-art-line text-primary mx-2.5" />
         </>
@@ -266,7 +264,7 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
         <div className="text-sm font-heading font-bold text-foreground">{ownedCasinos}/{totalCasinos}</div>
       </div>
       <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.06s' }}>
-        <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Factories</div>
+        <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Armouries</div>
         <div className="text-sm font-heading font-bold text-foreground">{ownedFactories}/{cities.length}</div>
       </div>
       <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in" style={{ animationDelay: '0.09s' }}>

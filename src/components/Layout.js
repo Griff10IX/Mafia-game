@@ -383,7 +383,13 @@ export default function Layout({ children }) {
         api.get('/auth/me'),
         api.get('/user/rank-progress')
       ]);
-      setUser(userRes.data);
+      // Keep previous casino/property flags so "My Properties" doesn't flicker when auth/me (which returns placeholders) overwrites
+      setUser((prev) => ({
+        ...userRes.data,
+        casino_profit: prev?.casino_profit ?? userRes.data.casino_profit,
+        property_profit: prev?.property_profit ?? userRes.data.property_profit,
+        has_casino_or_property: prev?.has_casino_or_property ?? userRes.data.has_casino_or_property,
+      }));
       setRankProgress(progressRes.data);
       // Trigger objectives endpoint so backend can auto-reset daily/weekly/monthly without user opening Objectives page
       api.get('/objectives').catch(() => {});
