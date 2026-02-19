@@ -242,8 +242,9 @@ def register(router):
         """Clear slots_cooldown_until for all users so everyone can enter/win the draw again. For testing."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        # Unset for ALL users (no filter) so we clear the field regardless of how it was stored
         result = await db.users.update_many(
-            {"slots_cooldown_until": {"$exists": True}},
+            {},
             {"$unset": {"slots_cooldown_until": ""}},
         )
         return {"message": f"Slots cooldown cleared for {result.modified_count} user(s). They are eligible for the next draw."}
