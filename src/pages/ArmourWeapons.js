@@ -324,7 +324,7 @@ export default function ArmourWeapons() {
             </div>
             <div className="grid grid-cols-[1fr_5rem_5rem_7rem] gap-2 px-2 py-1 text-[10px] text-mutedForeground uppercase font-heading border-b border-zinc-700/50">
               <span>Weapon</span>
-              <span className="text-right">Damage</span>
+              <span className="text-right">Stock</span>
               <span className="text-right">Cost</span>
               <span className="text-right">Action</span>
             </div>
@@ -353,7 +353,7 @@ export default function ArmourWeapons() {
                           )}
                         </div>
                       </div>
-                      <span className="text-xs text-primary font-bold text-right">{w.damage}</span>
+                      <span className="text-xs text-primary font-bold text-right">{(w.quantity ?? 0) > 0 ? (w.quantity ?? 0) : '—'}</span>
                       <span className="text-xs text-mutedForeground text-right">{formatWeaponCost(w)}</span>
                       <div className="flex justify-end gap-1">
                         {isOwned ? (
