@@ -29,6 +29,7 @@ class AllEventsForTestingRequest(BaseModel):
 
 class AdminSettingsUpdate(BaseModel):
     admin_online_color: Optional[str] = None
+    require_email_verification: Optional[bool] = None
 
 
 class TestUsersAutoRankRequest(BaseModel):
@@ -873,27 +874,34 @@ def register(router):
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
         if not isinstance(admin_online_color, str) or not admin_online_color.strip():
             admin_online_color = "#a78bfa"
-        return {"admin_online_color": admin_online_color.strip()}
+        req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
+        require_email_verification = bool(req_doc.get("value") if req_doc else False)
+        return {"admin_online_color": admin_online_color.strip(), "require_email_verification": require_email_verification}
 
     @router.patch("/admin/settings")
     async def admin_patch_settings(body: AdminSettingsUpdate, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        updates = {}
         if body.admin_online_color is not None:
             val = (body.admin_online_color or "").strip() or "#a78bfa"
             if not val.startswith("#"):
                 val = "#" + val
-            updates["value"] = val
-        if updates:
             await db.game_settings.update_one(
                 {"key": "admin_online_color"},
-                {"$set": updates},
+                {"$set": {"value": val}},
+                upsert=True,
+            )
+        if body.require_email_verification is not None:
+            await db.game_settings.update_one(
+                {"key": "require_email_verification"},
+                {"$set": {"value": body.require_email_verification}},
                 upsert=True,
             )
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
-        return {"admin_online_color": admin_online_color}
+        req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
+        require_email_verification = bool(req_doc.get("value") if req_doc else False)
+        return {"admin_online_color": admin_online_color, "require_email_verification": require_email_verification}
 
     @router.get("/admin/activity-log")
     async def admin_activity_log(

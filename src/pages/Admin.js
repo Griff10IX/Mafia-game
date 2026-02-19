@@ -119,6 +119,7 @@ export default function Admin() {
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
+  const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
 
   const toggleSection = (key) => {
@@ -174,17 +175,23 @@ export default function Admin() {
       const res = await api.get('/admin/settings');
       const hex = res.data?.admin_online_color || '#a78bfa';
       setAdminOnlineColor(hex.startsWith('#') ? hex : '#' + hex);
+      setRequireEmailVerification(!!res.data?.require_email_verification);
     } catch {
       setAdminOnlineColor('#a78bfa');
+      setRequireEmailVerification(false);
     }
   };
 
-  const handleSaveAdminOnlineColor = async () => {
+  const handleSaveAdminSettings = async () => {
     setAdminSettingsSaving(true);
     try {
-      const res = await api.patch('/admin/settings', { admin_online_color: adminOnlineColor });
+      const res = await api.patch('/admin/settings', {
+        admin_online_color: adminOnlineColor,
+        require_email_verification: requireEmailVerification,
+      });
       setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
-      toast.success('Admin colour saved');
+      setRequireEmailVerification(!!res.data?.require_email_verification);
+      toast.success('Settings saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save');
     } finally {
@@ -1184,10 +1191,21 @@ export default function Admin() {
                 placeholder="#a78bfa"
                 className="w-24 font-mono text-[11px]"
               />
-              <BtnPrimary onClick={handleSaveAdminOnlineColor} disabled={adminSettingsSaving}>
-                {adminSettingsSaving ? 'Saving...' : 'Save colour'}
-              </BtnPrimary>
             </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={requireEmailVerification}
+                  onChange={(e) => setRequireEmailVerification(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Require email verification for new signups</span>
+              </label>
+            </div>
+            <BtnPrimary onClick={handleSaveAdminSettings} disabled={adminSettingsSaving}>
+              {adminSettingsSaving ? 'Saving...' : 'Save settings'}
+            </BtnPrimary>
           </div>
         )}
         </div>

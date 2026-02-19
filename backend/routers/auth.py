@@ -95,9 +95,14 @@ def register(router):
             return request.client.host or ""
         return ""
 
+    async def _require_email_verification():
+        doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
+        return bool(doc.get("value") if doc else False)
+
     @router.post("/auth/register")
     async def register_user(user_data: UserRegister, request: Request):
         try:
+            require_verification = await _require_email_verification()
             email_clean = (user_data.email or "").strip().lower()
             if is_disposable_email(email_clean):
                 raise HTTPException(
@@ -191,10 +196,27 @@ def register(router):
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "registration_ip": _client_ip(request),
                 "login_ips": [_client_ip(request)] if _client_ip(request) else [],
-                "email_verified": False,
+                "email_verified": not require_verification,
             }
 
             await db.users.insert_one(user_doc.copy())
+
+            if not require_verification:
+                token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0)})
+                user_response = {
+                    "id": user_doc["id"],
+                    "email": user_doc["email"],
+                    "username": user_doc["username"],
+                    "rank": user_doc["rank"],
+                    "money": user_doc["money"],
+                    "points": user_doc["points"],
+                    "bodyguard_slots": user_doc["bodyguard_slots"],
+                    "current_state": user_doc["current_state"],
+                    "total_kills": user_doc["total_kills"],
+                    "total_deaths": user_doc["total_deaths"],
+                    "created_at": user_doc["created_at"],
+                }
+                return {"token": token, "user": user_response}
 
             # Email verification: create token and send link
             verification_token = str(uuid.uuid4())
@@ -276,7 +298,8 @@ def register(router):
             )
         # Success: clear lockout for this email
         await db.login_lockouts.delete_one({"email": email_clean})
-        if user.get("email_verified") is False:
+        require_verification = await _require_email_verification()
+        if require_verification and user.get("email_verified") is False:
             raise HTTPException(
                 status_code=403,
                 detail="Please verify your email first. Check your inbox or request a new verification link.",
