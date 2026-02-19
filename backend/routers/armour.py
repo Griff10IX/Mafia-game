@@ -1,7 +1,7 @@
 # Armour endpoints: options, buy, equip, unequip, sell
 from pydantic import BaseModel
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from server import db, get_current_user, get_effective_event, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN
 
@@ -10,8 +10,8 @@ class ArmourBuyRequest(BaseModel):
     level: int  # 1-5
 
 
-async def get_armour_options(current_user: dict = Depends(get_current_user)):
-    """List available armour sets. cost_* = production cost; effective_* = sell price (production * 1.35 * event). armoury_stock = produced stock in state's armoury."""
+async def get_armour_options(request: Request, current_user: dict = Depends(get_current_user)):
+    """List available armour sets. cost_* = production cost; effective_* = sell price (production * 1.35 * event). armoury_stock = produced stock in state's armoury. Optional ?state= for armoury stock (e.g. match bullet factory state)."""
     from routers.bullet_factory import get_armoury_for_state
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
@@ -19,7 +19,8 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
     owned_max = int(current_user.get("armour_owned_level_max", equipped_level) or 0)
     money = float(current_user.get("money", 0) or 0)
     points = int(current_user.get("points", 0) or 0)
-    state = (current_user.get("current_state") or "").strip()
+    state_param = (request.query_params.get("state") or "").strip()
+    state = state_param or (current_user.get("current_state") or "").strip()
     factory = await get_armoury_for_state(state) if state else None
     armour_stock = (factory.get("armour_stock") or {}) if factory else {}
     rows = []

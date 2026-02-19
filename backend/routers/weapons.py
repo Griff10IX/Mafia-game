@@ -4,7 +4,7 @@ from typing import List, Optional
 import time
 from pydantic import BaseModel
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from server import db, get_current_user, get_effective_event, ARMOUR_WEAPON_MARGIN
 
@@ -46,10 +46,13 @@ class WeaponEquipRequest(BaseModel):
     weapon_id: str
 
 
-async def get_weapons(current_user: dict = Depends(get_current_user)):
+async def get_weapons(request: Request, current_user: dict = Depends(get_current_user)):
     uid = current_user["id"]
+    state_param = (request.query_params.get("state") or "").strip()
+    state = state_param or (current_user.get("current_state") or "").strip()
+    use_cache = not state_param
     now = time.time()
-    if uid in _get_weapons_cache:
+    if use_cache and uid in _get_weapons_cache:
         payload, expires = _get_weapons_cache[uid]
         if now <= expires:
             return payload
@@ -66,7 +69,6 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
     weapons_dict = {w["id"]: w for w in weapons}
-    state = (current_user.get("current_state") or "").strip()
     weapon_stock = {}
     if state:
         from routers.bullet_factory import get_armoury_for_state
@@ -109,10 +111,11 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
             required_weapon_name=required_weapon_name,
             armoury_stock=armoury_stock,
         ))
-    if len(_get_weapons_cache) >= _GET_WEAPONS_CACHE_MAX_ENTRIES:
-        oldest = next(iter(_get_weapons_cache))
-        _get_weapons_cache.pop(oldest, None)
-    _get_weapons_cache[uid] = (result, now + _GET_WEAPONS_CACHE_TTL_SEC)
+    if use_cache:
+        if len(_get_weapons_cache) >= _GET_WEAPONS_CACHE_MAX_ENTRIES:
+            oldest = next(iter(_get_weapons_cache))
+            _get_weapons_cache.pop(oldest, None)
+        _get_weapons_cache[uid] = (result, now + _GET_WEAPONS_CACHE_TTL_SEC)
     return result
 
 

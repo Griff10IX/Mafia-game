@@ -61,20 +61,26 @@ export default function ArmourWeapons() {
   const fetchAll = async () => {
     setLoading(true);
     try {
-      const [meRes, optRes, weaponsRes, eventsRes, myPropsRes] = await Promise.all([
+      const [meRes, eventsRes, myPropsRes] = await Promise.all([
         api.get('/auth/me'),
-        api.get('/armour/options'),
-        api.get('/weapons'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/my-properties').catch(() => ({ data: { property: null } })),
       ]);
-      setMe(meRes.data);
+      const me = meRes.data;
+      const prop = myPropsRes?.data?.property;
+      const ownedState = prop?.type === 'bullet_factory' ? prop?.state ?? null : null;
+      const effectiveState = ownedState || me?.current_state;
+      const stateParams = effectiveState ? { state: effectiveState } : {};
+      const [optRes, weaponsRes] = await Promise.all([
+        api.get('/armour/options', { params: stateParams }),
+        api.get('/weapons', { params: stateParams }),
+      ]);
+      setMe(me);
       setArmourData(optRes.data);
       setWeapons(weaponsRes.data || []);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
-      const prop = myPropsRes?.data?.property;
-      setOwnedArmouryState(prop?.type === 'bullet_factory' ? prop?.state ?? null : null);
+      setOwnedArmouryState(ownedState);
     } catch {
       toast.error('Failed to load armour & weapons');
     } finally {
