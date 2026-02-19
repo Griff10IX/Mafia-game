@@ -395,6 +395,34 @@ export default function BulletFactory({ me, ownedArmouryState }) {
     }
   };
 
+  const startArmourProductionAll = async () => {
+    setProducingArmour(true);
+    try {
+      const res = await api.post('/bullet-factory/start-armour-production-all', { state: data?.state || currentState });
+      toast.success(res.data?.message || 'Produce all armour started');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to produce all armour');
+    } finally {
+      setProducingArmour(false);
+    }
+  };
+
+  const startWeaponProductionAll = async () => {
+    setProducingWeapon(true);
+    try {
+      const res = await api.post('/bullet-factory/start-weapon-production-all', { state: data?.state || currentState });
+      toast.success(res.data?.message || 'Produce all weapons started');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to produce all weapons');
+    } finally {
+      setProducingWeapon(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -410,12 +438,14 @@ export default function BulletFactory({ me, ownedArmouryState }) {
   const isOwner = data?.is_owner ?? false;
   const canBuy = data?.can_buy ?? false;
   const accumulated = data?.accumulated_bullets ?? 0;
-  const production = data?.production_per_hour ?? 3000;
+  const productionPer24h = data?.production_per_24h ?? 5000;
+  const productionTickMins = data?.production_tick_minutes ?? 20;
+  const production = data?.production_per_hour ?? productionPer24h / 24;
   const claimCost = data?.claim_cost ?? 0;
   const pricePerBullet = data?.price_per_bullet ?? null;
   const priceMin = data?.price_min ?? 1;
   const priceMax = data?.price_max ?? 100000;
-  const buyMaxPerPurchase = data?.buy_max_per_purchase ?? 3000;
+  const buyMaxPerPurchase = data?.buy_max_per_purchase ?? 5000;
   const buyCooldownMinutes = data?.buy_cooldown_minutes ?? 15;
   const nextBuyAvailableAt = data?.next_buy_available_at ?? null;
   const effectiveBuyMax = Math.min(accumulated, buyMaxPerPurchase);
@@ -788,7 +818,7 @@ export default function BulletFactory({ me, ownedArmouryState }) {
 
               <div className="relative z-10 space-y-3">
                 <p className="text-xs text-zinc-400 font-heading leading-relaxed">
-                  Produces <strong className="text-primary">{production.toLocaleString()}</strong> bullets per hour (sold from stock in Shop).
+                  Produces <strong className="text-primary">{productionPer24h.toLocaleString()}</strong> bullets per 24 hours (every {productionTickMins} mins; sold from stock in Shop).
                   {!hasOwner && claimCost > 0 && (
                     <span> Pay <strong className="text-primary">{formatMoney(claimCost)}</strong> to claim ownership.</span>
                   )}
@@ -865,12 +895,12 @@ export default function BulletFactory({ me, ownedArmouryState }) {
                 </div>
                 <p className="text-[10px] text-zinc-400 font-heading mb-2">
                   {(data?.armour_producing || data?.weapon_producing) ? (
-                    <>Producing: {data.armour_producing && `Armour Lv.${data.armour_production_level} (${(data.armour_production_hours_remaining ?? 0).toFixed(1)}h left)`}
+                    <>Producing: {data.armour_producing && `${(data.armour_production_hours_remaining ?? 0).toFixed(1)}h armour (all levels)`}
                       {data.armour_producing && data.weapon_producing && ' · '}
-                      {data.weapon_producing && `Weapon (${(data.weapon_production_hours_remaining ?? 0).toFixed(1)}h left)`}
+                      {data.weapon_producing && `${(data.weapon_production_hours_remaining ?? 0).toFixed(1)}h weapons`}
                     </>
                   ) : (
-                    `${data?.armour_rate_per_hour ?? 5}/hr armour, ${data?.weapon_rate_per_hour ?? 5}/hr weapon. Max 15 per item. Pay for 1 hr; sell at 35% margin.`
+                    `${data?.armour_rate_per_hour ?? 5}/hr per armour level, ${data?.weapon_rate_per_hour ?? 5}/hr per weapon. Max 15 per item. Produce all = 1 hr each; sell at 35% margin.`
                   )}
                 </p>
                 <div className="grid grid-cols-2 gap-2 mb-2">
@@ -891,52 +921,48 @@ export default function BulletFactory({ me, ownedArmouryState }) {
                     </div>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
                   <div>
-                    <p className="text-[9px] text-zinc-500 font-heading mb-1">Produce armour (1 hr)</p>
-                    <div className="flex flex-wrap gap-1">
-                      {armourOptions.length
-                        ? armourOptions.map((opt) => {
-                            const costPerHr = (opt.cost_money != null ? opt.cost_money : opt.cost_points ?? 0) * (data?.armour_rate_per_hour ?? 2);
-                            const isPoints = opt.cost_points != null;
-                            const canAfford = isPoints ? (me?.points ?? 0) >= costPerHr : (me?.money ?? 0) >= costPerHr;
-                            return (
-                              <button
-                                key={opt.level}
-                                type="button"
-                                disabled={producingArmour || !canAfford}
-                                onClick={() => startArmourProduction(opt.level)}
-                                className="px-2 py-1 rounded text-[10px] font-heading font-bold border bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                Lv.{opt.level} {isPoints ? `${Number(costPerHr).toLocaleString()} pts` : formatMoney(costPerHr)}
-                              </button>
-                            );
-                          })
-                        : <span className="text-[10px] text-zinc-500">Loading...</span>}
-                    </div>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-1">Produce all armour (1 hr per level)</p>
+                    {(() => {
+                      const costMoney = data?.produce_all_armour_cost_money ?? 0;
+                      const costPoints = data?.produce_all_armour_cost_points ?? 0;
+                      const canAfford = (me?.money ?? 0) >= costMoney && (me?.points ?? 0) >= costPoints;
+                      const parts = [];
+                      if (costMoney > 0) parts.push(formatMoney(costMoney));
+                      if (costPoints > 0) parts.push(`${Number(costPoints).toLocaleString()} pts`);
+                      return (
+                        <button
+                          type="button"
+                          disabled={producingArmour || !canAfford}
+                          onClick={startArmourProductionAll}
+                          className="px-3 py-1.5 rounded text-[11px] font-heading font-bold border bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Produce all armour — {parts.length ? parts.join(' + ') : '—'}
+                        </button>
+                      );
+                    })()}
                   </div>
                   <div>
-                    <p className="text-[9px] text-zinc-500 font-heading mb-1">Produce weapon (1 hr)</p>
-                    <div className="flex flex-wrap gap-1">
-                      {weaponsList.slice(0, 6).map((w) => {
-                        const costPerHr = (w.price_money ?? w.price_points ?? 0) * (data?.weapon_rate_per_hour ?? 1);
-                        const isPoints = w.price_points != null;
-                        const canAfford = isPoints ? (me?.points ?? 0) >= costPerHr : (me?.money ?? 0) >= costPerHr;
-                        return (
-                          <button
-                            key={w.id}
-                            type="button"
-                            disabled={producingWeapon || !canAfford}
-                            onClick={() => startWeaponProduction(w.id)}
-                            className="px-2 py-1 rounded text-[10px] font-heading border bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 truncate max-w-[120px] disabled:opacity-50 disabled:cursor-not-allowed"
-                            title={w.name}
-                          >
-                            {w.name?.replace(/\s*\(.*\)/, '') || w.id} {isPoints ? `${Number(costPerHr).toLocaleString()} pts` : formatMoney(costPerHr)}
-                          </button>
-                        );
-                      })}
-                      {!weaponsList.length && <span className="text-[10px] text-zinc-500">Loading...</span>}
-                    </div>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-1">Produce all weapons (1 hr per weapon)</p>
+                    {(() => {
+                      const costMoney = data?.produce_all_weapons_cost_money ?? 0;
+                      const costPoints = data?.produce_all_weapons_cost_points ?? 0;
+                      const canAfford = (me?.money ?? 0) >= costMoney && (me?.points ?? 0) >= costPoints;
+                      const parts = [];
+                      if (costMoney > 0) parts.push(formatMoney(costMoney));
+                      if (costPoints > 0) parts.push(`${Number(costPoints).toLocaleString()} pts`);
+                      return (
+                        <button
+                          type="button"
+                          disabled={producingWeapon || !canAfford}
+                          onClick={startWeaponProductionAll}
+                          className="px-3 py-1.5 rounded text-[11px] font-heading border bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Produce all weapons — {parts.length ? parts.join(' + ') : '—'}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
