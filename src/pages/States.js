@@ -71,11 +71,14 @@ const GAME_COLORS = {
 // CITY CARD
 // ============================================================================
 
+const GAMES_WITH_BUYBACK = ['dice', 'blackjack', 'slots'];
+
 const CityCard = ({
   city,
   games,
   allOwners,
   getEffectiveMaxBet,
+  getEffectiveBuyBack,
   isHighestBet,
   bulletFactory,
   airportSlot1,
@@ -93,8 +96,10 @@ const CityCard = ({
   // Count owned casinos
   const ownedCount = games.filter(g => g && (allOwners[g.id] || {})[city]?.username).length;
   
-  // Find highest max bet in this city (guard empty games)
+  // Highest max bet and buy-back in this city
   const highestBet = games.length ? Math.max(...games.map(g => getEffectiveMaxBet(g, city))) : 0;
+  const buyBacks = games.filter(g => GAMES_WITH_BUYBACK.includes(g?.id)).map(g => getEffectiveBuyBack(g, city)).filter(n => n != null && Number(n) > 0);
+  const highestBuyBack = buyBacks.length ? Math.max(...buyBacks.map(Number)) : null;
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-corner st-fade-in`}>
@@ -111,6 +116,9 @@ const CityCard = ({
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 text-[9px]">
             <span className="text-mutedForeground">{ownedCount}/{games.length} owned</span>
+            {highestBuyBack != null && (
+              <span className="text-primary font-bold">{Number(highestBuyBack).toLocaleString()} pts</span>
+            )}
             <span className="text-primary font-bold">Max: {formatMaxBet(highestBet)}</span>
           </div>
           {expanded ? <ChevronDown size={10} className="text-primary" /> : <ChevronRight size={10} className="text-primary" />}
@@ -152,7 +160,7 @@ const CityCard = ({
                     ) : (
                       <span className="text-[9px] text-zinc-500">Unclaimed</span>
                     )}
-                    {(game.id === 'dice' || game.id === 'blackjack') && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
+                    {(game.id === 'dice' || game.id === 'blackjack' || game.id === 'slots') && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
                       <span className="text-[8px] text-amber-400/90">Buy-back: {Number(owner.buy_back_reward).toLocaleString()} pts</span>
                     )}
                   </div>
@@ -305,6 +313,7 @@ export default function States() {
           blackjack_owners: res.data?.blackjack_owners ?? {},
           horseracing_owners: res.data?.horseracing_owners ?? {},
           videopoker_owners: res.data?.videopoker_owners ?? {},
+          slots_owners: res.data?.slots_owners ?? {},
         });
         // Expand all cities by default
         const citiesList = res.data?.cities ?? [];
@@ -357,6 +366,13 @@ export default function States() {
     const ownerMap = allOwners[game.id] || {};
     if (ownerMap[city]?.max_bet != null) return ownerMap[city].max_bet;
     return game.max_bet ?? 0;
+  };
+
+  const getEffectiveBuyBack = (game, city) => {
+    if (!game || !GAMES_WITH_BUYBACK.includes(game.id)) return null;
+    const ownerMap = allOwners[game.id] || {};
+    const v = ownerMap[city]?.buy_back_reward;
+    return v != null && Number(v) > 0 ? Number(v) : null;
   };
 
   const isHighestBet = (game, city) => {
@@ -476,6 +492,7 @@ export default function States() {
             games={games}
             allOwners={allOwners}
             getEffectiveMaxBet={getEffectiveMaxBet}
+            getEffectiveBuyBack={getEffectiveBuyBack}
             isHighestBet={isHighestBet}
             bulletFactory={bulletFactoryByState[city]}
             airportSlot1={airportSlot1ByState[city]}
