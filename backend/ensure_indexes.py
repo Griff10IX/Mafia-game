@@ -18,7 +18,12 @@ async def ensure_all_indexes(db):
 
         # --- Game config / settings ---
         await db.game_config.create_index("id", unique=True)
-        await db.game_config.create_index("key", unique=True)
+        # Sparse: only index docs that have "key"; docs with only "id" (main, auto_rank) have no key so avoid duplicate null
+        try:
+            await db.game_config.drop_index("key_1")
+        except Exception:
+            pass
+        await db.game_config.create_index([("key", 1)], unique=True, sparse=True)
         await db.game_settings.create_index("key", unique=True)
 
         # --- Families ---
