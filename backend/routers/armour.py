@@ -11,13 +11,17 @@ class ArmourBuyRequest(BaseModel):
 
 
 async def get_armour_options(current_user: dict = Depends(get_current_user)):
-    """List available armour sets. cost_* = production cost; effective_* = sell price (production * 1.35 * event)."""
+    """List available armour sets. cost_* = production cost; effective_* = sell price (production * 1.35 * event). armoury_stock = produced stock in state's armoury."""
+    from routers.bullet_factory import get_armoury_for_state
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
     equipped_level = int(current_user.get("armour_level", 0) or 0)
     owned_max = int(current_user.get("armour_owned_level_max", equipped_level) or 0)
     money = float(current_user.get("money", 0) or 0)
     points = int(current_user.get("points", 0) or 0)
+    state = (current_user.get("current_state") or "").strip()
+    factory = await get_armoury_for_state(state) if state else None
+    armour_stock = (factory.get("armour_stock") or {}) if factory else {}
     rows = []
     for s in ARMOUR_SETS:
         cost_money = s.get("cost_money")
@@ -30,6 +34,7 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
             affordable = False
         if effective_points is not None and points < effective_points:
             affordable = False
+        level_key = str(s["level"])
         rows.append({
             "level": s["level"],
             "name": s["name"],
@@ -41,6 +46,7 @@ async def get_armour_options(current_user: dict = Depends(get_current_user)):
             "owned": owned_max >= s["level"],
             "equipped": equipped_level == s["level"],
             "affordable": affordable,
+            "armoury_stock": int(armour_stock.get(level_key, 0) or 0),
         })
     return {"current_level": equipped_level, "owned_max": owned_max, "options": rows}
 

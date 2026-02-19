@@ -35,6 +35,7 @@ class WeaponResponse(BaseModel):
     equipped: bool = False
     locked: bool = False
     required_weapon_name: Optional[str] = None
+    armoury_stock: int = 0  # produced stock in state's armoury (available to buy)
 
 
 class WeaponBuyRequest(BaseModel):
@@ -65,6 +66,13 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
     weapons_dict = {w["id"]: w for w in weapons}
+    state = (current_user.get("current_state") or "").strip()
+    weapon_stock = {}
+    if state:
+        from routers.bullet_factory import get_armoury_for_state
+        factory = await get_armoury_for_state(state)
+        if factory:
+            weapon_stock = factory.get("weapon_stock") or {}
     result = []
     for weapon in weapons:
         quantity = weapons_map.get(weapon["id"], 0)
@@ -82,6 +90,7 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
                 prev_quantity = weapons_map.get(prev_weapon_id, 0)
                 if prev_quantity < 1:
                     locked = True
+        armoury_stock = int(weapon_stock.get(weapon["id"], 0) or 0)
         result.append(WeaponResponse(
             id=weapon["id"],
             name=weapon["name"],
@@ -97,7 +106,8 @@ async def get_weapons(current_user: dict = Depends(get_current_user)):
             quantity=quantity,
             equipped=(quantity > 0 and equipped_weapon_id == weapon["id"]),
             locked=locked,
-            required_weapon_name=required_weapon_name
+            required_weapon_name=required_weapon_name,
+            armoury_stock=armoury_stock,
         ))
     if len(_get_weapons_cache) >= _GET_WEAPONS_CACHE_MAX_ENTRIES:
         oldest = next(iter(_get_weapons_cache))

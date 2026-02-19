@@ -335,6 +335,7 @@ export default function ArmourWeapons() {
                   const canBuy = !!w.canBuy;
                   const usingPoints = w.canBuyPoints && (canBuy ? w.canAffordPoints : w.price_points != null);
                   const buyDisabled = !canBuy || buyingId != null;
+                  const armouryStock = w.armoury_stock ?? 0;
 
                   return (
                     <div
@@ -353,7 +354,7 @@ export default function ArmourWeapons() {
                           )}
                         </div>
                       </div>
-                      <span className="text-xs text-primary font-bold text-right">{(w.quantity ?? 0) > 0 ? (w.quantity ?? 0) : '—'}</span>
+                      <span className="text-xs text-primary font-bold text-right">{armouryStock > 0 ? armouryStock : '—'}</span>
                       <span className="text-xs text-mutedForeground text-right">{formatWeaponCost(w)}</span>
                       <div className="flex justify-end gap-1">
                         {isOwned ? (
@@ -409,9 +410,10 @@ export default function ArmourWeapons() {
             <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-zinc-700/50">
               <Shield size={12} /> Armour
             </div>
-            <div className="grid grid-cols-[1fr_4rem_5rem_7rem] gap-2 px-2 py-1 text-[10px] text-mutedForeground uppercase font-heading border-b border-zinc-700/50">
+            <div className="grid grid-cols-[1fr_4rem_5rem_5rem_7rem] gap-2 px-2 py-1 text-[10px] text-mutedForeground uppercase font-heading border-b border-zinc-700/50">
               <span>Armour</span>
               <span className="text-center">Level</span>
+              <span className="text-right">Stock</span>
               <span className="text-right">Cost</span>
               <span className="text-right">Action</span>
             </div>
@@ -421,11 +423,12 @@ export default function ArmourWeapons() {
                   const isOwned = !!o.owned;
                   const canSell = isOwned && o.level === armourData.owned_max && armourData.owned_max >= 1;
                   const buyDisabled = !o.canBuy || buyingLevel != null;
+                  const armouryStock = o.armoury_stock ?? 0;
 
                   return (
                     <div
                       key={o.level}
-                      className={`grid grid-cols-[1fr_4rem_5rem_7rem] gap-2 px-2 py-2 rounded-lg items-center transition-all aw-row ${
+                      className={`grid grid-cols-[1fr_4rem_5rem_5rem_7rem] gap-2 px-2 py-2 rounded-lg items-center transition-all aw-row ${
                         isEquipped ? 'bg-primary/10 border border-primary/30' : ''
                       }`}
                     >
@@ -441,6 +444,7 @@ export default function ArmourWeapons() {
                         </div>
                       </div>
                       <span className="text-xs text-primary font-bold text-center">Lv.{o.level}</span>
+                      <span className="text-xs text-primary font-bold text-right">{armouryStock > 0 ? armouryStock : '—'}</span>
                       <span className="text-xs text-mutedForeground text-right">{formatCost(o)}</span>
                       <div className="flex justify-end gap-1">
                         {isEquipped ? (
