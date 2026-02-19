@@ -154,6 +154,11 @@ export default function Admin() {
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState(null);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [allUsersList, setAllUsersList] = useState(null);
+  const [allUsersTotal, setAllUsersTotal] = useState(null);
+  const [allUsersFilter, setAllUsersFilter] = useState('all');
+  const [allUsersSort, setAllUsersSort] = useState('username_asc');
+  const [allUsersLoading, setAllUsersLoading] = useState(false);
   const [lockedAccounts, setLockedAccounts] = useState([]);
   const [lockedAccountsLoading, setLockedAccountsLoading] = useState(false);
   const [lockedMessageByUser, setLockedMessageByUser] = useState({});
@@ -577,6 +582,23 @@ export default function Admin() {
   const setTargetFromSearch = (username) => {
     setFormData((prev) => ({ ...prev, targetUsername: username || '' }));
     toast.success(`Target set to ${username || ''}`);
+  };
+
+  const fetchAllUsers = async () => {
+    setAllUsersLoading(true);
+    setAllUsersList(null);
+    setAllUsersTotal(null);
+    try {
+      const res = await api.get('/admin/users/list', { params: { filter_type: allUsersFilter, sort: allUsersSort, limit: 1000 } });
+      setAllUsersList(res.data?.users || []);
+      setAllUsersTotal(res.data?.total ?? res.data?.users?.length ?? 0);
+      toast.success(`${res.data?.users?.length ?? 0} user(s) loaded`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load users');
+      setAllUsersList([]);
+    } finally {
+      setAllUsersLoading(false);
+    }
   };
 
   const fetchIpBans = async () => {
@@ -1136,6 +1158,86 @@ export default function Admin() {
                         <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
                         <td className="py-1.5">
                           <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="admin-art-line text-primary mx-3" />
+      </div>
+
+      {/* All registered users */}
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">All registered users</span>
+        </div>
+        <div className="p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-[10px] font-heading text-mutedForeground shrink-0">Filter:</label>
+            <select
+              value={allUsersFilter}
+              onChange={(e) => setAllUsersFilter(e.target.value)}
+              className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+            >
+              <option value="all">All</option>
+              <option value="alive">Alive only</option>
+              <option value="dead">Dead only</option>
+              <option value="npc">NPC only</option>
+              <option value="non_npc">Non-NPC only</option>
+            </select>
+            <label className="text-[10px] font-heading text-mutedForeground shrink-0 ml-2">Sort:</label>
+            <select
+              value={allUsersSort}
+              onChange={(e) => setAllUsersSort(e.target.value)}
+              className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+            >
+              <option value="username_asc">Username A–Z</option>
+              <option value="username_desc">Username Z–A</option>
+              <option value="alive_first">Alive first</option>
+              <option value="dead_first">Dead first</option>
+              <option value="npc_first">NPC first</option>
+              <option value="non_npc_first">Non-NPC first</option>
+              <option value="created_desc">Newest first</option>
+              <option value="created_asc">Oldest first</option>
+            </select>
+            <BtnPrimary onClick={fetchAllUsers} disabled={allUsersLoading} className="ml-2">{allUsersLoading ? '...' : 'Load'}</BtnPrimary>
+          </div>
+          {allUsersTotal != null && allUsersList && (
+            <p className="text-[10px] text-mutedForeground font-heading">Showing {allUsersList.length} of {allUsersTotal} user(s)</p>
+          )}
+          {allUsersList && (
+            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
+              {allUsersList.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading">No users match the filter.</p>
+              ) : (
+                <table className="w-full text-left border-collapse text-[10px] font-heading">
+                  <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                    <tr className="border-b border-zinc-700/50">
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Username</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Email</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Dead</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">NPC</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Created</th>
+                      <th className="py-1.5 font-bold text-mutedForeground uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allUsersList.map((u) => (
+                      <tr key={u.id || u.username} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
+                        <td className="py-1.5 pr-2 text-foreground font-medium">{u.username ?? '—'}</td>
+                        <td className="py-1.5 pr-2 text-mutedForeground truncate max-w-[180px]">{u.email ?? '—'}</td>
+                        <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
+                        <td className="py-1.5 pr-2">{u.is_bodyguard ? <span className="text-amber-400">Yes</span> : 'No'}</td>
+                        <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                        <td className="py-1.5">
+                          {!u.is_bodyguard && (
+                            <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
+                          )}
                         </td>
                       </tr>
                     ))}

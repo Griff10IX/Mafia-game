@@ -1054,6 +1054,67 @@ def register(router):
         ]
         return {"users": users}
 
+    @router.get("/admin/users/list")
+    async def admin_list_users(
+        filter_type: str = Query("all", description="all | alive | dead | npc | non_npc"),
+        sort: str = Query("username_asc", description="username_asc | username_desc | alive_first | dead_first | npc_first | non_npc_first | created_asc | created_desc"),
+        limit: int = Query(500, ge=1, le=2000),
+        skip: int = Query(0, ge=0),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List all registered users. Admin only. Filter by alive/dead/npc/non_npc and sort."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        query = {}
+        if filter_type == "alive":
+            query["is_dead"] = {"$ne": True}
+        elif filter_type == "dead":
+            query["is_dead"] = True
+        elif filter_type == "npc":
+            query["is_bodyguard"] = True
+        elif filter_type == "non_npc":
+            query["$or"] = [{"is_bodyguard": {"$ne": True}}, {"is_bodyguard": {"$exists": False}}]
+        # else "all" -> no filter
+
+        sort_spec = []
+        if sort == "username_asc":
+            sort_spec = [("username", 1)]
+        elif sort == "username_desc":
+            sort_spec = [("username", -1)]
+        elif sort == "alive_first":
+            sort_spec = [("is_dead", 1), ("username", 1)]  # false first, then true
+        elif sort == "dead_first":
+            sort_spec = [("is_dead", -1), ("username", 1)]
+        elif sort == "npc_first":
+            sort_spec = [("is_bodyguard", -1), ("username", 1)]  # true first
+        elif sort == "non_npc_first":
+            sort_spec = [("is_bodyguard", 1), ("username", 1)]  # false first (asc)
+        elif sort == "created_asc":
+            sort_spec = [("created_at", 1)]
+        elif sort == "created_desc":
+            sort_spec = [("created_at", -1)]
+        else:
+            sort_spec = [("username", 1)]
+
+        cursor = db.users.find(
+            query,
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "is_bodyguard": 1, "created_at": 1},
+        ).sort(sort_spec).skip(skip).limit(limit)
+        raw = await cursor.to_list(limit)
+        total = await db.users.count_documents(query)
+        users = [
+            {
+                "id": u.get("id"),
+                "username": u.get("username"),
+                "email": u.get("email"),
+                "is_dead": bool(u.get("is_dead")),
+                "is_bodyguard": bool(u.get("is_bodyguard")),
+                "created_at": u.get("created_at"),
+            }
+            for u in raw
+        ]
+        return {"users": users, "total": total, "count": len(users)}
+
     @router.get("/admin/user-registration")
     async def admin_user_registration(target_username: str, current_user: dict = Depends(get_current_user)):
         """Get a user's registration info (email, username, created_at, IPs) by username. Safe for admin view."""
