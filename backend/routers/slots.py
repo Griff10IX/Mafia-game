@@ -132,7 +132,13 @@ async def _run_slots_draw_if_needed(state: str):
         if previous_owner_id:
             await db.users.update_one({"id": previous_owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
         # Get entries and filter by cooldown only. Slots lottery allows winners who own other casinos (unlike claim-based games).
-        entries_doc = await db.slots_entries.find_one({"state": st}, {"_id": 0, "user_ids": 1})
+        # Match slots_entries by exact state first, then case-insensitive so we find entries regardless of casing
+        entries_doc = await db.slots_entries.find_one({"state": st}, {"_id": 0, "user_ids": 1, "state": 1})
+        if not entries_doc:
+            entries_pattern = re.compile(f"^{re.escape(st)}$", re.IGNORECASE)
+            entries_doc = await db.slots_entries.find_one({"state": entries_pattern}, {"_id": 0, "user_ids": 1, "state": 1})
+            if entries_doc:
+                logging.getLogger().info("Slots entries for state=%s found via case-insensitive match (doc.state=%r)", state, entries_doc.get("state"))
         user_ids = list((entries_doc or {}).get("user_ids") or [])
         eligible = []
         for uid in user_ids:
@@ -170,7 +176,8 @@ async def _run_slots_draw_if_needed(state: str):
                 "Slots draw winner state=%s winner=%s (%s) matched=%s modified=%s",
                 state, winner_id, winner_name, res.matched_count, res.modified_count,
             )
-            await db.slots_entries.update_one({"state": st}, {"$set": {"user_ids": []}}, upsert=True)
+            entries_state_key = (entries_doc or {}).get("state") or st
+            await db.slots_entries.update_one({"state": entries_state_key}, {"$set": {"user_ids": []}}, upsert=True)
             for uid in set(user_ids):
                 _invalidate_slots_ownership_cache(uid)
         else:
