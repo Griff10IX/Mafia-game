@@ -17,7 +17,7 @@ DEFAULT_INTERVAL_SECONDS = 2 * 60
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 5
 CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 30
-LOOP_WAKE_SECONDS = 15
+LOOP_WAKE_SECONDS = 30  # Main loop (and booze no-car retry) every 30s
 OC_LOOP_INTERVAL_SECONDS = 60
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
 
@@ -71,7 +71,7 @@ def _parse_iso(s):
 
 
 async def _get_travel_method(db, user_id: str) -> Optional[str]:
-    """Find the best travel method for a user: custom car first, then any car."""
+    """Find the best travel method for a user: custom car first, then any car. Used for booze (cars only, no airport)."""
     custom = await db.user_cars.find_one({"user_id": user_id, "car_id": "car_custom"}, {"_id": 0, "id": 1})
     if custom:
         return "custom"
@@ -188,9 +188,14 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
 
 
 async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list, buy_city: str, sell_city: str, buy_idx: int, sell_idx: int):
-    """Buy optimal booze at buy_city and travel to sell_city. Returns has_success."""
+    """Buy optimal booze at buy_city and travel to sell_city. Booze only uses cars (no airport). If no car, skip and retry next cycle (every 30s)."""
     from routers.booze_run import BOOZE_TYPES, _booze_prices_for_rotation, _booze_user_capacity, _booze_buy_impl
     from routers.airport import _start_travel_impl
+
+    # Only use cars for booze; if no car, don't buy — will retry next loop (every 30s)
+    travel_method = await _get_travel_method(db, user_id)
+    if not travel_method:
+        return False
 
     prices_map = _booze_prices_for_rotation()
     capacity = _booze_user_capacity(user)
@@ -221,11 +226,9 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if not user:
             return True
-        travel_method = await _get_travel_method(db, user_id)
-        if travel_method:
-            await _start_travel_impl(user, sell_city, travel_method, airport_slot=None, booze_run=True)
-            lines.append(f"**Booze** — Bought {amount} at {buy_city}, traveling to {sell_city}.")
-            return True
+        await _start_travel_impl(user, sell_city, travel_method, airport_slot=None, booze_run=True)
+        lines.append(f"**Booze** — Bought {amount} at {buy_city}, traveling to {sell_city}.")
+        return True
     except HTTPException:
         pass
     except Exception as e:
