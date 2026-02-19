@@ -1313,7 +1313,7 @@ export default function Layout({ children }) {
                 style={{ backgroundColor: 'var(--noir-surface)', borderBottom: '1px solid var(--noir-border-mid)' }}
                 role="menu"
               >
-                <div className="py-2">
+                <div className="py-2 grid grid-cols-2 gap-px">
                   {group.items.map((sub, idx) => {
                     if (sub.action === 'theme') {
                       return (
@@ -1322,7 +1322,7 @@ export default function Layout({ children }) {
                           type="button"
                           onClick={() => { setThemePickerOpen(true); setMobileBottomMenuOpen(null); }}
                           role="menuitem"
-                          className="block w-full px-4 py-2.5 text-left text-sm font-heading uppercase tracking-wider transition-colors hover:bg-primary/10"
+                          className="block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors hover:bg-primary/10"
                           style={{ color: 'var(--noir-foreground)' }}
                         >
                           {sub.label}
@@ -1336,7 +1336,7 @@ export default function Layout({ children }) {
                           type="button"
                           onClick={() => { handleLogout(); setMobileBottomMenuOpen(null); }}
                           role="menuitem"
-                          className="block w-full px-4 py-2.5 text-left text-sm font-heading uppercase tracking-wider transition-colors bg-red-900/30 text-red-300 hover:bg-red-900/50"
+                          className="block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors bg-red-900/30 text-red-300 hover:bg-red-900/50 col-span-2"
                         >
                           {sub.label}
                         </button>
@@ -1349,7 +1349,7 @@ export default function Layout({ children }) {
                           type="button"
                           onClick={() => { promoteToAdmin(); setMobileBottomMenuOpen(null); }}
                           role="menuitem"
-                          className="block w-full px-4 py-2.5 text-left text-sm font-heading uppercase tracking-wider transition-colors text-amber-400 hover:bg-amber-500/10"
+                          className="block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors text-amber-400 hover:bg-amber-500/10 col-span-2"
                         >
                           {sub.label}
                         </button>
@@ -1367,7 +1367,7 @@ export default function Layout({ children }) {
                         to={to}
                         onClick={() => setMobileBottomMenuOpen(null)}
                         role="menuitem"
-                        className={`block w-full px-4 py-2.5 text-left text-sm font-heading uppercase tracking-wider transition-colors ${
+                        className={`block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors ${
                           isActive ? 'bg-primary/20' : ''
                         }`}
                         style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
