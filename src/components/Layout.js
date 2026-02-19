@@ -991,8 +991,8 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-4 gap-2 md:gap-3 py-2 md:py-0`}>
-        <div className="flex items-center gap-3 flex-1 min-w-0 shrink-0">
+      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-3 md:px-4 gap-2 md:gap-3 py-2 md:py-0`}>
+        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 shrink-0 overflow-hidden">
         {mobileNavStyle !== 'bottom' && (
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1152,9 +1152,9 @@ export default function Layout({ children }) {
             return null;
           };
           return (
-            <div className="flex items-center gap-1.5 shrink-0 flex-nowrap md:flex-wrap overflow-x-auto md:overflow-visible gap-2 md:gap-1.5 -mx-4 px-4 md:mx-0 md:px-0 pb-1 md:pb-0">
+            <div className="flex items-center gap-2 flex-1 min-w-0 overflow-x-auto md:overflow-visible overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]">
               {/* Global user search: click icon to reveal search bar — mobile-friendly touch targets */}
-              <div className="relative shrink-0 z-10" ref={userSearchRef}>
+              <div className="relative shrink-0 z-10 snap-start" ref={userSearchRef}>
                 {!userSearchExpanded ? (
                   <button
                     type="button"
@@ -1231,7 +1231,7 @@ export default function Layout({ children }) {
               {statOrder.map((statId) => {
                 if (statId === 'notifications') {
                   return (
-                    <div key="notifications" className={`relative shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out ${draggingStatId === 'notifications' ? 'opacity-50 scale-95' : ''}`} ref={notificationPanelRef} draggable onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')} onDragEnd={handleDragEnd}>
+                    <div key="notifications" className={`relative shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out snap-start ${draggingStatId === 'notifications' ? 'opacity-50 scale-95' : ''}`} ref={notificationPanelRef} draggable onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')} onDragEnd={handleDragEnd}>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
@@ -1284,7 +1284,7 @@ export default function Layout({ children }) {
                 const content = renderStat(statId);
                 if (!content) return null;
                 return (
-                  <div key={statId} draggable onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
+                  <div key={statId} draggable onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out snap-start ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
                     {content}
                   </div>
                 );
@@ -1381,7 +1381,7 @@ export default function Layout({ children }) {
             );
           })()}
           <nav
-            className="flex items-center gap-1 overflow-x-auto overflow-y-hidden py-2 px-2 safe-area-pb scrollbar-thin"
+            className="flex items-center justify-between gap-0 overflow-x-auto overflow-y-hidden py-2 px-1 safe-area-pb scrollbar-thin"
             style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}
             aria-label="Mobile navigation"
           >
@@ -1395,7 +1395,7 @@ export default function Layout({ children }) {
                     key={item.path}
                     to={item.path}
                     onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
-                    className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[44px] rounded-lg transition-colors ${
                       isActive ? 'bg-primary/25 border border-primary/50' : ''
                     }`}
                     style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
@@ -1426,7 +1426,7 @@ export default function Layout({ children }) {
                     key={item.id}
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
-                    className={`flex flex-col items-center justify-center gap-0.5 min-w-[44px] min-h-[44px] rounded-lg transition-colors ${
+                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[44px] rounded-lg transition-colors ${
                       isOpen || isActive ? 'bg-primary/25 border border-primary/50' : ''
                     }`}
                     style={isOpen || isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}

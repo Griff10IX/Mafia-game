@@ -556,17 +556,19 @@ export default function Forum() {
         </div>
       </div>
 
-      {/* Tabs: General | Entertainer Forum */}
-      <div className="flex gap-1 p-1 bg-zinc-800/50 rounded border border-primary/20 w-fit">
-        {FORUM_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-3 py-1.5 text-xs font-heading font-bold uppercase rounded transition-all ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Tabs: General | Entertainer Forum — full width on mobile, scrollable */}
+      <div className="w-full sm:w-fit overflow-x-auto overflow-y-hidden -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-thin">
+        <div className="flex gap-1 p-1 bg-zinc-800/50 rounded border border-primary/20 w-max sm:w-full min-w-0">
+          {FORUM_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`shrink-0 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded transition-all ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Entertainer: Auto games (dice / gbox) */}
