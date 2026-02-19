@@ -40,6 +40,73 @@ function saveCollapsed(state) {
   try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(state)); } catch {}
 }
 
+const AdminInput = (props) => (
+  <input {...props} className="w-full sm:w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+);
+const AdminSelect = ({ children, ...props }) => (
+  <select {...props} className="w-full sm:w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none">
+    {children}
+  </select>
+);
+
+function SectionHeader({ icon: Icon, title, badge, isCollapsed, onToggle, color = 'text-primary' }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+    >
+      <div className="flex items-center gap-2">
+        <Icon size={14} className={color} />
+        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{title}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        {badge}
+        <span className="text-primary/80">
+          {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+        </span>
+      </div>
+    </button>
+  );
+}
+function ActionRow({ icon: Icon, label, description, children, color = 'text-primary' }) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-md bg-zinc-800/30 border border-transparent hover:border-primary/20">
+      <div className="flex items-center gap-2 min-w-0">
+        <Icon size={14} className={`shrink-0 ${color}`} />
+        <div className="min-w-0">
+          <div className={`text-sm font-heading font-bold ${color === 'text-red-400' ? 'text-red-400' : 'text-foreground'}`}>{label}</div>
+          {description && <div className="text-[10px] text-mutedForeground truncate">{description}</div>}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 ml-6 sm:ml-0 shrink-0">
+        {children}
+      </div>
+    </div>
+  );
+}
+function BtnPrimary({ children, ...props }) {
+  return (
+    <button {...props} className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 touch-manipulation font-heading">
+      {children}
+    </button>
+  );
+}
+function BtnDanger({ children, ...props }) {
+  return (
+    <button {...props} className="bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-red-500/50 transition-all disabled:opacity-50 touch-manipulation">
+      {children}
+    </button>
+  );
+}
+function BtnSecondary({ children, ...props }) {
+  return (
+    <button {...props} className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 transition-all disabled:opacity-50 touch-manipulation">
+      {children}
+    </button>
+  );
+}
+
 export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,6 +151,9 @@ export default function Admin() {
   const [userInspectEmail, setUserInspectEmail] = useState('');
   const [userInspectResult, setUserInspectResult] = useState(null);
   const [userInspectLoading, setUserInspectLoading] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState(null);
+  const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [lockedAccounts, setLockedAccounts] = useState([]);
   const [lockedAccountsLoading, setLockedAccountsLoading] = useState(false);
   const [lockedMessageByUser, setLockedMessageByUser] = useState({});
@@ -485,6 +555,28 @@ export default function Admin() {
     } finally {
       setUserInspectLoading(false);
     }
+  };
+
+  const handleUserSearch = async () => {
+    const q = (userSearchQuery || '').trim();
+    if (!q) { toast.error('Enter username or email to search'); return; }
+    setUserSearchLoading(true);
+    setUserSearchResults(null);
+    try {
+      const res = await api.get('/admin/users/search', { params: { q, limit: 50 } });
+      setUserSearchResults(res.data?.users || []);
+      toast.success(res.data?.users?.length ? `${res.data.users.length} user(s) found` : 'No users found');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Search failed');
+      setUserSearchResults([]);
+    } finally {
+      setUserSearchLoading(false);
+    }
+  };
+
+  const setTargetFromSearch = (username) => {
+    setFormData((prev) => ({ ...prev, targetUsername: username || '' }));
+    toast.success(`Target set to ${username || ''}`);
   };
 
   const fetchIpBans = async () => {
@@ -957,68 +1049,8 @@ export default function Admin() {
     );
   }
 
-  // Reusable components
-  const SectionHeader = ({ icon: Icon, title, badge, isCollapsed, onToggle, color = 'text-primary' }) => (
-    <button
-      type="button"
-      onClick={onToggle}
-      className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
-    >
-      <div className="flex items-center gap-2">
-        <Icon size={14} className={color} />
-        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{title}</span>
-      </div>
-      <div className="flex items-center gap-2">
-        {badge}
-        <span className="text-primary/80">
-          {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-        </span>
-      </div>
-    </button>
-  );
-
-  const ActionRow = ({ icon: Icon, label, description, children, color = 'text-primary' }) => (
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3 py-2 rounded-md bg-zinc-800/30 border border-transparent hover:border-primary/20">
-      <div className="flex items-center gap-2 min-w-0">
-        <Icon size={14} className={`shrink-0 ${color}`} />
-        <div className="min-w-0">
-          <div className={`text-sm font-heading font-bold ${color === 'text-red-400' ? 'text-red-400' : 'text-foreground'}`}>{label}</div>
-          {description && <div className="text-[10px] text-mutedForeground truncate">{description}</div>}
-        </div>
-      </div>
-      <div className="flex items-center gap-2 ml-6 sm:ml-0 shrink-0">
-        {children}
-      </div>
-    </div>
-  );
-
-  const Input = ({ ...props }) => (
-    <input {...props} className="w-full sm:w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
-  );
-
-  const Select = ({ children, ...props }) => (
-    <select {...props} className="w-full sm:w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none">
-      {children}
-    </select>
-  );
-
-  const BtnPrimary = ({ children, ...props }) => (
-    <button {...props} className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 touch-manipulation font-heading">
-      {children}
-    </button>
-  );
-
-  const BtnDanger = ({ children, ...props }) => (
-    <button {...props} className="bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-red-500/50 transition-all disabled:opacity-50 touch-manipulation">
-      {children}
-    </button>
-  );
-
-  const BtnSecondary = ({ children, ...props }) => (
-    <button {...props} className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 transition-all disabled:opacity-50 touch-manipulation">
-      {children}
-    </button>
-  );
+  const Input = AdminInput;
+  const Select = AdminSelect;
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="admin-page">
@@ -1054,10 +1086,64 @@ export default function Admin() {
           <input
             type="text"
             value={formData.targetUsername}
-            onChange={(e) => setFormData({ ...formData, targetUsername: e.target.value })}
+            onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
             className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
             placeholder="Enter username for actions below"
           />
+        </div>
+        <div className="admin-art-line text-primary mx-3" />
+      </div>
+
+      {/* Search users (username or email) */}
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Search users (username or email)</span>
+        </div>
+        <div className="p-3 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              value={userSearchQuery}
+              onChange={(e) => setUserSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleUserSearch()}
+              className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              placeholder="Type username or email (substring)"
+            />
+            <BtnPrimary onClick={handleUserSearch} disabled={userSearchLoading}>{userSearchLoading ? '...' : 'Search'}</BtnPrimary>
+          </div>
+          {userSearchResults && (
+            <div className="overflow-x-auto max-h-64 overflow-y-auto">
+              {userSearchResults.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading">No users found.</p>
+              ) : (
+                <table className="w-full text-left border-collapse text-[10px] font-heading">
+                  <thead>
+                    <tr className="border-b border-zinc-700/50">
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Username</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Email</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Dead</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Created</th>
+                      <th className="py-1.5 font-bold text-mutedForeground uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userSearchResults.map((u) => (
+                      <tr key={u.id || u.username} className="border-b border-zinc-700/30">
+                        <td className="py-1.5 pr-2 text-foreground font-medium">{u.username ?? '—'}</td>
+                        <td className="py-1.5 pr-2 text-mutedForeground truncate max-w-[180px]">{u.email ?? '—'}</td>
+                        <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
+                        <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                        <td className="py-1.5">
+                          <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
         <div className="admin-art-line text-primary mx-3" />
       </div>
@@ -1342,14 +1428,14 @@ export default function Admin() {
             )}
             <ActionRow icon={UserCog} label="Change Rank">
               {ranks.length > 0 ? (
-                <Select value={String(formData.newRank)} onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })}>
+                <Select value={String(formData.newRank)} onChange={(e) => setFormData((prev) => ({ ...prev, newRank: parseInt(e.target.value) }))}>
                   {ranks.map((r) => <option key={r.id} value={String(r.id)}>{r.name}</option>)}
                 </Select>
               ) : (
-                <Input type="number" min="1" max="11" value={formData.newRank} onChange={(e) => setFormData({ ...formData, newRank: parseInt(e.target.value) })} />
+                <Input type="number" min="1" max="11" value={formData.newRank} onChange={(e) => setFormData((prev) => ({ ...prev, newRank: parseInt(e.target.value) }))} />
               )}
               <span className="text-[10px] text-zinc-500 font-heading shrink-0">Prestige</span>
-              <Select value={String(formData.prestigeLevel ?? 0)} onChange={(e) => setFormData({ ...formData, prestigeLevel: parseInt(e.target.value) })} className="w-16">
+              <Select value={String(formData.prestigeLevel ?? 0)} onChange={(e) => setFormData((prev) => ({ ...prev, prestigeLevel: parseInt(e.target.value) }))} className="w-16">
                 {[0, 1, 2, 3, 4, 5].map((p) => (
                   <option key={p} value={String(p)}>{p === 0 ? 'None' : `P${p}`}</option>
                 ))}
@@ -1358,17 +1444,17 @@ export default function Admin() {
             </ActionRow>
 
             <ActionRow icon={Coins} label="Add Points">
-              <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData({ ...formData, points: raw === '' ? 0 : parseInt(raw, 10) })} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Crosshair} label="Give Bullets">
-              <Input type="number" min="1" value={formData.bullets} onChange={(e) => setFormData({ ...formData, bullets: parseInt(e.target.value) })} />
+              <Input type="number" min="1" value={formData.bullets} onChange={(e) => setFormData((prev) => ({ ...prev, bullets: parseInt(e.target.value) }))} />
               <BtnPrimary onClick={handleAddBullets}>Give</BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Car} label="Add Car">
-              <Select value={formData.carId} onChange={(e) => setFormData({ ...formData, carId: e.target.value })}>
+              <Select value={formData.carId} onChange={(e) => setFormData((prev) => ({ ...prev, carId: e.target.value }))}>
                 {cars.length > 0 ? cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>) : Array.from({ length: 20 }, (_, i) => <option key={i} value={`car${i + 1}`}>Car {i + 1}</option>)}
               </Select>
               <BtnPrimary onClick={handleAddCar}>Add</BtnPrimary>
@@ -1445,14 +1531,14 @@ export default function Admin() {
               <button type="button" onClick={handleRemoveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Remove</button>
             </ActionRow>
             <ActionRow icon={Mail} label="Change Email" description="Set a new email for the target user">
-              <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData({ ...formData, adminNewEmail: e.target.value })} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
+              <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewEmail: e.target.value }))} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
               <BtnPrimary onClick={handleChangeEmail}>Set</BtnPrimary>
             </ActionRow>
             <ActionRow icon={LogOut} label="Log Out User" description="Invalidate all sessions; they must log in again">
               <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
             </ActionRow>
             <ActionRow icon={KeyRound} label="Set Password" description="Set a new password (min 6 chars); user is logged out">
-              <Input type="password" value={formData.adminNewPassword} onChange={(e) => setFormData({ ...formData, adminNewPassword: e.target.value })} placeholder="New password" className="flex-1 min-w-0 text-[11px]" autoComplete="off" />
+              <Input type="password" value={formData.adminNewPassword} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewPassword: e.target.value }))} placeholder="New password" className="flex-1 min-w-0 text-[11px]" autoComplete="off" />
               <BtnPrimary onClick={handleSetPassword}>Set</BtnPrimary>
             </ActionRow>
             <ActionRow icon={Lock} label="Clear Login Lockout" description="Remove lockout so they can try logging in again">
@@ -1480,7 +1566,7 @@ export default function Admin() {
         {!collapsed.search && (
           <div className="p-2 space-y-1">
             <ActionRow icon={Settings} label="Set Search Time" description="Per user: 1–999 mins, or 0 to clear override">
-              <Input type="number" min={0} max={999} value={formData.searchMinutes} onChange={(e) => setFormData({ ...formData, searchMinutes: parseInt(e.target.value) || 0 })} placeholder="Mins" />
+              <Input type="number" min={0} max={999} value={formData.searchMinutes} onChange={(e) => setFormData((prev) => ({ ...prev, searchMinutes: parseInt(e.target.value) || 0 }))} placeholder="Mins" />
               <BtnPrimary onClick={handleSetSearchTime}>Set</BtnPrimary>
             </ActionRow>
 

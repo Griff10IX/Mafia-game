@@ -1030,6 +1030,30 @@ def register(router):
             "by_similar_username": name_groups[:50],
         }
 
+    @router.get("/admin/users/search")
+    async def admin_search_users(
+        q: str = Query(..., min_length=1, max_length=100),
+        limit: int = Query(50, ge=1, le=100),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Search users by username or email (substring, case-insensitive). Admin only. Returns id, username, email, is_dead, created_at."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        q_clean = (q or "").strip()
+        if not q_clean:
+            return {"users": []}
+        pattern = re.compile(re.escape(q_clean), re.IGNORECASE)
+        cursor = db.users.find(
+            {"$or": [{"username": {"$regex": pattern}}, {"email": {"$regex": pattern}}]},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "created_at": 1},
+        ).limit(limit)
+        raw = await cursor.to_list(limit)
+        users = [
+            {"id": u.get("id"), "username": u.get("username"), "email": u.get("email"), "is_dead": bool(u.get("is_dead")), "created_at": u.get("created_at")}
+            for u in raw
+        ]
+        return {"users": users}
+
     @router.get("/admin/user-registration")
     async def admin_user_registration(target_username: str, current_user: dict = Depends(get_current_user)):
         """Get a user's registration info (email, username, created_at, IPs) by username. Safe for admin view."""
