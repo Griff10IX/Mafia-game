@@ -461,7 +461,7 @@ async def run_booze_arrivals():
     now_iso = now.isoformat()
 
     stuck_jailed = db.users.find(
-        {"auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}},
+        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}},
         {"_id": 0, "id": 1, "traveling_to": 1},
     )
     async for u in stuck_jailed:
@@ -473,7 +473,7 @@ async def run_booze_arrivals():
                 logger.warning("Auto rank booze cleanup: arrival update for jailed %s failed: %s", u.get("id"), e)
 
     cursor = db.users.find(
-        {"auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}},
+        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}},
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(200)
@@ -498,6 +498,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
     interval = interval_seconds if interval_seconds is not None else await get_auto_rank_interval_seconds(db)
     cursor = db.users.find(
         {
+            "auto_rank_purchased": True,
             "auto_rank_enabled": True,
             "$or": [
                 {"auto_rank_next_run_at": {"$exists": False}},
@@ -537,7 +538,7 @@ async def run_bust_5sec_loop():
             continue
         try:
             cursor = db.users.find(
-                {"auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True},
+                {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True},
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
             )
             users = await cursor.to_list(500)
@@ -580,7 +581,7 @@ async def run_auto_rank_oc_loop():
         now = datetime.now(timezone.utc)
         try:
             cursor = db.users.find(
-                {"auto_rank_enabled": True, "auto_rank_oc": True},
+                {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True},
                 {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
             )
             users = await cursor.to_list(500)

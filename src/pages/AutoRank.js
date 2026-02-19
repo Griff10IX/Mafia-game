@@ -96,7 +96,7 @@ export default function AutoRank() {
         setIsAdmin(!!checkRes.data?.is_admin);
         if (meRes?.data) {
           setPrefs({
-            auto_rank_enabled: meRes.data.auto_rank_enabled !== false,
+            auto_rank_enabled: meRes.data.auto_rank_enabled === true,
             auto_rank_crimes: meRes.data.auto_rank_crimes !== false,
             auto_rank_gta: meRes.data.auto_rank_gta !== false,
             auto_rank_bust_every_5_sec: !!meRes.data.auto_rank_bust_every_5_sec,

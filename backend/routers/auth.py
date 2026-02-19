@@ -197,6 +197,8 @@ def register(router):
                 "registration_ip": _client_ip(request),
                 "login_ips": [_client_ip(request)] if _client_ip(request) else [],
                 "email_verified": not require_verification,
+                "auto_rank_purchased": False,
+                "auto_rank_enabled": False,
             }
 
             await db.users.insert_one(user_doc.copy())
