@@ -56,7 +56,7 @@ export default function ArmourWeapons() {
   const [buyingLevel, setBuyingLevel] = useState(null);
   const [equippingLevel, setEquippingLevel] = useState(null);
   const [buyingId, setBuyingId] = useState(null);
-  const [activeTab, setActiveTab] = useState('weapons');
+  const [activeTab, setActiveTab] = useState('armoury');
 
   const fetchAll = async () => {
     setLoading(true);
@@ -309,31 +309,26 @@ export default function ArmourWeapons() {
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 aw-fade-in`} style={{ animationDelay: '0.04s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="flex border-b border-primary/20 bg-primary/5">
-          <Tab active={activeTab === 'weapons'} onClick={() => setActiveTab('weapons')} icon={Swords}>
-            Weapons
-          </Tab>
-          <Tab active={activeTab === 'armour'} onClick={() => setActiveTab('armour')} icon={Shield}>
-            Armour
-          </Tab>
-          <Tab active={activeTab === 'bullet-factory'} onClick={() => setActiveTab('bullet-factory')} icon={Factory}>
+          <Tab active={activeTab === 'armoury'} onClick={() => setActiveTab('armoury')} icon={Factory}>
             Armoury
           </Tab>
         </div>
 
-        <div className="p-3">
-          {activeTab === 'bullet-factory' && <BulletFactory me={me} ownedArmouryState={ownedArmouryState} />}
-          {activeTab === 'weapons' && (
-            <div className="space-y-1">
-              {/* Table Header */}
-              <div className="grid grid-cols-[1fr_5rem_5rem_7rem] gap-2 px-2 py-1 text-[10px] text-mutedForeground uppercase font-heading border-b border-zinc-700/50">
-                <span>Weapon</span>
-                <span className="text-right">Damage</span>
-                <span className="text-right">Cost</span>
-                <span className="text-right">Action</span>
-              </div>
-              
-              {/* Weapon Rows */}
-              <div className="max-h-80 overflow-y-auto space-y-0.5">
+        <div className="p-3 space-y-6">
+          <BulletFactory me={me} ownedArmouryState={ownedArmouryState} />
+
+          {/* Weapons section */}
+          <div className="space-y-1">
+            <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-zinc-700/50">
+              <Swords size={12} /> Weapons
+            </div>
+            <div className="grid grid-cols-[1fr_5rem_5rem_7rem] gap-2 px-2 py-1 text-[10px] text-mutedForeground uppercase font-heading border-b border-zinc-700/50">
+              <span>Weapon</span>
+              <span className="text-right">Damage</span>
+              <span className="text-right">Cost</span>
+              <span className="text-right">Action</span>
+            </div>
+            <div className="max-h-80 overflow-y-auto space-y-0.5">
                 {weaponRows.map((w) => {
                   const isEquipped = !!w.equipped;
                   const isOwned = !!w.owned;
@@ -406,22 +401,21 @@ export default function ArmourWeapons() {
                     </div>
                   );
                 })}
-              </div>
             </div>
-          )}
+          </div>
 
-          {activeTab === 'armour' && (
-            <div className="space-y-1">
-              {/* Table Header */}
-              <div className="grid grid-cols-[1fr_4rem_5rem_7rem] gap-2 px-2 py-1 text-[10px] text-mutedForeground uppercase font-heading border-b border-zinc-700/50">
-                <span>Armour</span>
-                <span className="text-center">Level</span>
-                <span className="text-right">Cost</span>
-                <span className="text-right">Action</span>
-              </div>
-              
-              {/* Armour Rows */}
-              <div className="max-h-80 overflow-y-auto space-y-0.5">
+          {/* Armour section */}
+          <div className="space-y-1">
+            <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-zinc-700/50">
+              <Shield size={12} /> Armour
+            </div>
+            <div className="grid grid-cols-[1fr_4rem_5rem_7rem] gap-2 px-2 py-1 text-[10px] text-mutedForeground uppercase font-heading border-b border-zinc-700/50">
+              <span>Armour</span>
+              <span className="text-center">Level</span>
+              <span className="text-right">Cost</span>
+              <span className="text-right">Action</span>
+            </div>
+            <div className="max-h-80 overflow-y-auto space-y-0.5">
                 {armourRows.map((o) => {
                   const isEquipped = !!o.equipped;
                   const isOwned = !!o.owned;
@@ -497,9 +491,8 @@ export default function ArmourWeapons() {
                     </div>
                   );
                 })}
-              </div>
             </div>
-          )}
+          </div>
         </div>
         <div className="aw-art-line text-primary mx-3" />
       </div>
