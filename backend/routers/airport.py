@@ -230,6 +230,8 @@ async def _start_travel_impl(
     booze_run: bool = False,
 ) -> dict:
     """Start travel for user (by user dict). Returns {message, travel_time, destination} or raises HTTPException. Used by travel() and auto_rank booze. If booze_run=True, damage is 0.3%% per run and custom/exclusive cars take no damage."""
+    if booze_run and travel_method == "airport":
+        raise HTTPException(status_code=400, detail="Booze runs can only use a car, not airport.")
     if destination not in STATES:
         raise HTTPException(status_code=400, detail="Invalid destination")
     now_utc = datetime.now(timezone.utc)
