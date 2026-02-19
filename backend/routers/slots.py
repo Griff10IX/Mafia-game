@@ -124,7 +124,7 @@ async def _run_slots_draw_if_needed(state: str):
 
     # Run draw when: no doc, no next_draw_at, or next_draw_at is due (past or now)
     if not doc or not next_draw_at or next_draw_at <= now:
-        logging.info("Slots draw running for state=%s (doc=%s, next_draw_at=%s)", state, bool(doc), next_draw_at)
+        logging.getLogger().info("Slots draw running for state=%s (doc=%s, next_draw_at=%s)", state, bool(doc), next_draw_at)
         next_draw_iso = _next_draw_utc().isoformat()
         previous_owner_id = doc.get("owner_id") if doc else None
         # Clear current owner and set cooldown for previous owner
@@ -188,7 +188,7 @@ async def _run_slots_draw_if_needed(state: str):
 
 async def run_slots_draws_due():
     """Run the lottery draw for every state where next_draw_at is due. Call from a background task so draws run on time even if no one is on the page."""
-    logging.info("Slots draw check starting (states=%s)", len(STATES or []))
+    logging.getLogger().info("Slots draw check starting (states=%s)", len(STATES or []))
     for state in (STATES or []):
         try:
             await _run_slots_draw_if_needed(state)
@@ -260,6 +260,8 @@ def register(router):
     @router.get("/casino/slots/config")
     async def casino_slots_config(current_user: dict = Depends(get_current_user)):
         """Slots config: max_bet (owner or default), symbols, current_state, states. May be state-owned or player-owned."""
+        # Log so we can confirm this endpoint is hit (check server console or backend/logs/server.log)
+        logging.getLogger().info("Slots config requested - running draw check for all states")
         # Run draw check for ALL states when config is loaded so draws run even if ticker is delayed or not running
         await run_slots_draws_due()
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
