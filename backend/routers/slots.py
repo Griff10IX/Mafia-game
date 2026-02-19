@@ -151,6 +151,10 @@ async def _run_slots_draw_if_needed(state: str):
                 if t and now < t:
                     continue
             eligible.append(uid)
+        # Testing mode (1-min draws): if everyone is on cooldown, still pick a winner from entries so the draw works
+        if not eligible and user_ids and SLOTS_DRAW_INTERVAL_MINUTES == 1:
+            eligible = list(user_ids)
+            logging.getLogger().info("Slots draw state=%s: all %s entries on cooldown, treating all as eligible (testing)", state, len(user_ids))
         if eligible:
             winner_id = random.choice(eligible)
             winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
