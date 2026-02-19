@@ -22,21 +22,10 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
   return [
     {
       type: 'group',
-      id: 'you',
-      icon: User,
-      label: 'You',
-      items: [
-        { path: '/dashboard', label: 'Dashboard' },
-        { path: '/objectives', label: 'Objectives' },
-        { path: '/profile', label: 'Profile' },
-        { path: '/stats', label: 'Stats' },
-        { path: '/dead-alive', label: 'Dead > Alive' },
-        { path: '/bank', label: 'Bank' },
-        { action: 'theme', label: 'Theme' },
-        { action: 'logout', label: 'Logout' },
-        { path: '/auto-rank', label: 'Auto Rank' },
-        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }, { path: '/admin/locked', label: 'Locked accounts' }] : []),
-      ],
+      id: 'go',
+      icon: ChevronRight,
+      label: 'Go',
+      items: goItems,
     },
     {
       type: 'group',
@@ -49,6 +38,19 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/hitlist', label: 'Hitlist' },
         { path: '/bodyguards', label: 'Bodyguards' },
         { path: '/armour-weapons', label: 'Armoury' },
+      ],
+    },
+    {
+      type: 'group',
+      id: 'rank',
+      icon: Target,
+      label: 'Rank',
+      items: [
+        { path: '/crimes', label: 'Crimes' },
+        { path: '/gta', label: 'GTA' },
+        { path: '/jail', label: 'Jail' },
+        { path: '/organised-crime', label: 'Organised Crime' },
+        { path: '/prestige', label: 'Prestige' },
       ],
     },
     {
@@ -68,22 +70,20 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
     },
     {
       type: 'group',
-      id: 'go',
-      icon: Plane,
-      label: 'Go',
-      items: goItems,
-    },
-    {
-      type: 'group',
-      id: 'rank',
-      icon: Target,
-      label: 'Rank',
+      id: 'you',
+      icon: User,
+      label: 'You',
       items: [
-        { path: '/crimes', label: 'Crimes' },
-        { path: '/gta', label: 'GTA' },
-        { path: '/jail', label: 'Jail' },
-        { path: '/organised-crime', label: 'Organised Crime' },
-        { path: '/prestige', label: 'Prestige' },
+        { path: '/dashboard', label: 'Dashboard' },
+        { path: '/objectives', label: 'Objectives' },
+        { path: '/profile', label: 'Profile' },
+        { path: '/stats', label: 'Stats' },
+        { path: '/dead-alive', label: 'Dead > Alive' },
+        { path: '/bank', label: 'Bank' },
+        { action: 'theme', label: 'Theme' },
+        { action: 'logout', label: 'Logout' },
+        { path: '/auto-rank', label: 'Auto Rank' },
+        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }, { path: '/admin/locked', label: 'Locked accounts' }] : []),
       ],
     },
     {
@@ -1403,7 +1403,7 @@ export default function Layout({ children }) {
                     title={item.label}
                   >
                     <span className="relative inline-flex">
-                      <Icon size={22} strokeWidth={2} />
+                      <Icon size={18} strokeWidth={2} />
                       {isInbox && unreadCount > 0 && (
                         <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
                           {unreadCount > 9 ? '9+' : unreadCount}
@@ -1435,7 +1435,7 @@ export default function Layout({ children }) {
                     title={item.label}
                   >
                     <span className="relative inline-flex">
-                      <Icon size={22} strokeWidth={2} />
+                      <Icon size={18} strokeWidth={2} />
                       {showInboxBadge && (
                         <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
                           {unreadCount > 9 ? '9+' : unreadCount}
