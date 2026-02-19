@@ -453,8 +453,8 @@ ACCOUNT_LOCKED_WHITELIST = {"/api/auth/me", "/api/account-locked"}
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
     request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
 ):
     user_id: Optional[str] = None
     try:
