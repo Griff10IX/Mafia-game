@@ -8,7 +8,7 @@ _auto_rank_config_cache: Optional[dict] = None
 _auto_rank_config_cache_until: Optional[datetime] = None
 AUTO_RANK_CONFIG_CACHE_SECONDS = 3
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
@@ -775,19 +775,64 @@ def register(router):
         auto_rank_enabled: Optional[bool] = None
 
     @router.get("/admin/auto-rank/users")
-    async def admin_list_auto_rank_users(current_user: dict = Depends(get_current_user)):
+    async def admin_list_auto_rank_users(
+        online_only: bool = Query(False, description="If true, return only users currently online"),
+        current_user: dict = Depends(get_current_user),
+    ):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
+        now = datetime.now(timezone.utc)
+        five_min_ago = now - timedelta(minutes=5)
+        query = {"is_dead": {"$ne": True}, "$or": [{"auto_rank_purchased": True}, {"auto_rank_enabled": True}]}
+        if online_only:
+            query = {
+                "is_dead": {"$ne": True},
+                "$or": [{"auto_rank_purchased": True}, {"auto_rank_enabled": True}],
+                "$and": [
+                    {"$or": [
+                        {"last_seen": {"$gte": five_min_ago.isoformat()}},
+                        {"forced_online_until": {"$gt": now.isoformat()}},
+                        {"auto_rank_enabled": True},
+                    ]},
+                ],
+            }
         cursor = db.users.find(
-            {"is_dead": {"$ne": True}, "$or": [{"auto_rank_purchased": True}, {"auto_rank_enabled": True}]},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
+            query,
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "forced_online_until": 1, **{f: 1 for f in _PREFERENCE_FIELDS}},
         )
         users = await cursor.to_list(500)
+
+        def _is_online(u):
+            if u.get("auto_rank_enabled"):
+                return True
+            ls = u.get("last_seen")
+            if ls:
+                try:
+                    ts = datetime.fromisoformat(ls.replace("Z", "+00:00") if ls.endswith("Z") else ls)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts >= five_min_ago:
+                        return True
+                except Exception:
+                    pass
+            fu = u.get("forced_online_until")
+            if fu:
+                try:
+                    ts = datetime.fromisoformat(fu.replace("Z", "+00:00") if fu.endswith("Z") else fu)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts > now:
+                        return True
+                except Exception:
+                    pass
+            return False
+
         return {
             "users": [
                 {
                     "id": u.get("id"),
                     "username": u.get("username"),
+                    "online": _is_online(u),
                     **_extract_preferences(u),
                     "telegram_chat_id": u.get("telegram_chat_id") or "",
                     "telegram_bot_token": u.get("telegram_bot_token") or "",

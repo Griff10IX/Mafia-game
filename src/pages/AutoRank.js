@@ -34,6 +34,8 @@ export default function AutoRank() {
   const [inputValue, setInputValue] = useState('120');
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
+  const [adminUsersFilter, setAdminUsersFilter] = useState('all'); // 'all' | 'online_only'
+  const [hideOffline, setHideOffline] = useState(false);
   const [editingChatId, setEditingChatId] = useState({});
   const [editingToken, setEditingToken] = useState({});
   const [savingUser, setSavingUser] = useState(null);
@@ -201,10 +203,15 @@ export default function AutoRank() {
     }
   };
 
-  const fetchAdminUsers = () => {
+  const fetchAdminUsers = (nextFilter) => {
     if (!isAdmin) return;
+    const filter = nextFilter !== undefined ? nextFilter : adminUsersFilter;
+    if (nextFilter !== undefined) setAdminUsersFilter(nextFilter);
     setAdminUsersLoading(true);
-    api.get('/admin/auto-rank/users').then((r) => setAdminUsers(r.data?.users ?? [])).catch(() => setAdminUsers([])).finally(() => setAdminUsersLoading(false));
+    api.get('/admin/auto-rank/users', { params: { online_only: filter === 'online_only' } })
+      .then((r) => setAdminUsers(r.data?.users ?? []))
+      .catch(() => setAdminUsers([]))
+      .finally(() => setAdminUsersLoading(false));
   };
 
   const handleSaveUserChatId = async (username, newChatId) => {
@@ -573,18 +580,51 @@ export default function AutoRank() {
               </div>
             </div>
             <div className="p-4 md:p-5 overflow-x-auto">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <span className="text-xs font-heading text-mutedForeground">Filter:</span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => fetchAdminUsers('all')}
+                    className={`px-2 py-1 rounded text-xs font-heading font-bold border ${adminUsersFilter === 'all' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-secondary border-border text-mutedForeground hover:text-foreground'}`}
+                  >
+                    All
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => fetchAdminUsers('online_only')}
+                    className={`px-2 py-1 rounded text-xs font-heading font-bold border ${adminUsersFilter === 'online_only' ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-secondary border-border text-mutedForeground hover:text-foreground'}`}
+                  >
+                    Online only
+                  </button>
+                </div>
+                <label className="flex items-center gap-1.5 text-xs font-heading text-mutedForeground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={hideOffline}
+                    onChange={(e) => setHideOffline(e.target.checked)}
+                    className="rounded border-border"
+                  />
+                  Hide offline
+                </label>
+              </div>
               <p className="text-xs text-mutedForeground font-heading mb-3">
                 Alive users who have purchased or have Auto Rank enabled. Edit Telegram chat ID and bot token per user; Disable turns off Auto Rank for that account.
               </p>
               {adminUsersLoading ? (
                 <p className="text-sm text-mutedForeground font-heading">Loading...</p>
-              ) : adminUsers.length === 0 ? (
-                <p className="text-sm text-mutedForeground font-heading">No alive users with Auto Rank purchased.</p>
-              ) : (
+              ) : (() => {
+                const displayed = hideOffline && adminUsersFilter === 'all' ? adminUsers.filter((u) => u.online) : adminUsers;
+                return displayed.length === 0 ? (
+                  <p className="text-sm text-mutedForeground font-heading">
+                    {adminUsersFilter === 'online_only' ? 'No online users with Auto Rank.' : hideOffline ? 'No online users to show.' : 'No alive users with Auto Rank purchased.'}
+                  </p>
+                ) : (
                 <table className="w-full text-left border-collapse text-sm font-heading">
                   <thead>
                     <tr className="border-b border-border">
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Username</th>
+                      <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Online</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Enabled</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">Crimes</th>
                       <th className="py-2 pr-2 font-bold text-mutedForeground uppercase text-xs">GTA</th>
@@ -597,9 +637,14 @@ export default function AutoRank() {
                     </tr>
                   </thead>
                   <tbody>
-                    {adminUsers.map((u) => (
+                    {displayed.map((u) => (
                       <tr key={u.id || u.username} className="border-b border-border/50">
                         <td className="py-2 pr-2 text-foreground font-medium">{u.username}</td>
+                        <td className="py-2 pr-2">
+                          <span className={u.online ? 'text-emerald-400' : 'text-mutedForeground'} title={u.online ? 'Online' : 'Offline'}>
+                            {u.online ? '●' : '○'}
+                          </span>
+                        </td>
                         <td className="py-2 pr-2">
                           <span className={u.auto_rank_enabled ? 'text-emerald-400' : 'text-mutedForeground'}>{u.auto_rank_enabled ? 'Yes' : 'No'}</span>
                         </td>
@@ -710,7 +755,8 @@ export default function AutoRank() {
                     ))}
                   </tbody>
                 </table>
-              )}
+              );
+              })()}
             </div>
             <div className="ar-art-line text-primary mx-3" />
           </div>
