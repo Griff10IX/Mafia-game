@@ -127,10 +127,6 @@ async def _run_slots_draw_if_needed(state: str):
         logging.getLogger().info("Slots draw running for state=%s (doc=%s, next_draw_at=%s)", state, bool(doc), next_draw_at)
         next_draw_iso = _next_draw_utc().isoformat()
         previous_owner_id = doc.get("owner_id") if doc else None
-        # Clear current owner and set cooldown for previous owner
-        cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
-        if previous_owner_id:
-            await db.users.update_one({"id": previous_owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
         # Get entries and filter by cooldown only. Slots lottery allows winners who own other casinos (unlike claim-based games).
         # Match slots_entries by exact state first, then case-insensitive so we find entries regardless of casing
         entries_doc = await db.slots_entries.find_one({"state": st}, {"_id": 0, "user_ids": 1, "state": 1})
@@ -156,6 +152,10 @@ async def _run_slots_draw_if_needed(state: str):
             eligible = list(user_ids)
             logging.getLogger().info("Slots draw state=%s: all %s entries on cooldown, treating all as eligible (testing)", state, len(user_ids))
         if eligible:
+            # Only the previous owner gets cooldown; entrants who lost can enter the next draw
+            cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
+            if previous_owner_id:
+                await db.users.update_one({"id": previous_owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
             winner_id = random.choice(eligible)
             winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
             winner_name = (winner.get("username") or "?") if winner else "?"
@@ -185,21 +185,18 @@ async def _run_slots_draw_if_needed(state: str):
             for uid in set(user_ids):
                 _invalidate_slots_ownership_cache(uid)
         else:
-            # No eligible entries: stay state-owned, just advance next draw
+            # No eligible entries: advance next draw; keep current owner if any (so winner keeps slots until next draw with entries)
             logging.getLogger().info(
                 "Slots draw no winner state=%s (entries=%s eligible=%s)",
                 state, len(user_ids), len(eligible),
             )
+            update_payload = {"state": filter_state, "next_draw_at": next_draw_iso}
+            if not (doc and doc.get("owner_id")):
+                update_payload["owner_id"] = None
+                update_payload["owner_username"] = None
             await db.slots_ownership.update_one(
                 {"state": filter_state},
-                {
-                    "$set": {
-                        "state": filter_state,
-                        "owner_id": None,
-                        "owner_username": None,
-                        "next_draw_at": next_draw_iso,
-                    }
-                },
+                {"$set": update_payload},
                 upsert=True,
             )
         return
