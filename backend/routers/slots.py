@@ -148,14 +148,15 @@ async def _run_slots_draw_if_needed(state: str):
         if eligible:
             winner_id = random.choice(eligible)
             winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
+            winner_name = (winner.get("username") or "?") if winner else "?"
             expires_at = next_draw_iso
-            await db.slots_ownership.update_one(
+            res = await db.slots_ownership.update_one(
                 {"state": filter_state},
                 {
                     "$set": {
                         "state": filter_state,
                         "owner_id": winner_id,
-                        "owner_username": (winner.get("username") or "?") if winner else "?",
+                        "owner_username": winner_name,
                         "max_bet": SLOTS_MAX_BET,
                         "buy_back_reward": 0,
                         "expires_at": expires_at,
@@ -165,11 +166,19 @@ async def _run_slots_draw_if_needed(state: str):
                 },
                 upsert=True,
             )
+            logging.getLogger().info(
+                "Slots draw winner state=%s winner=%s (%s) matched=%s modified=%s",
+                state, winner_id, winner_name, res.matched_count, res.modified_count,
+            )
             await db.slots_entries.update_one({"state": st}, {"$set": {"user_ids": []}}, upsert=True)
             for uid in set(user_ids):
                 _invalidate_slots_ownership_cache(uid)
         else:
             # No eligible entries: stay state-owned, just advance next draw
+            logging.getLogger().info(
+                "Slots draw no winner state=%s (entries=%s eligible=%s)",
+                state, len(user_ids), len(eligible),
+            )
             await db.slots_ownership.update_one(
                 {"state": filter_state},
                 {
