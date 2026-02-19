@@ -253,9 +253,11 @@ async def _start_travel_impl(
         except Exception:
             pass
 
-    max_travels = MAX_TRAVELS_PER_HOUR + user.get("extra_airmiles", 0)
-    if user.get("travels_this_hour", 0) >= max_travels:
-        raise HTTPException(status_code=400, detail="Travel limit reached. Buy extra airmiles or wait.")
+    # Travel limit applies to airport/manual travel; booze runs (car only) are exempt so auto rank can run
+    if not booze_run:
+        max_travels = MAX_TRAVELS_PER_HOUR + user.get("extra_airmiles", 0)
+        if user.get("travels_this_hour", 0) >= max_travels:
+            raise HTTPException(status_code=400, detail="Travel limit reached. Buy extra airmiles or wait.")
 
     travel_time = 45
     method_name = "Walking"
@@ -327,17 +329,18 @@ async def _start_travel_impl(
         else:
             car_to_damage = user_car
 
+    inc_travels = {} if booze_run else {"travels_this_hour": 1}
     if travel_time <= 0:
         await db.users.update_one(
             {"id": user["id"]},
-            {"$set": {"current_state": destination}, "$inc": {"travels_this_hour": 1}}
+            {"$set": {"current_state": destination}, **({"$inc": inc_travels} if inc_travels else {})}
         )
     else:
         arrives_at = (now_utc + timedelta(seconds=travel_time)).isoformat()
-        await db.users.update_one(
-            {"id": user["id"]},
-            {"$set": {"traveling_to": destination, "travel_arrives_at": arrives_at}, "$inc": {"travels_this_hour": 1}}
-        )
+        update = {"$set": {"traveling_to": destination, "travel_arrives_at": arrives_at}}
+        if inc_travels:
+            update["$inc"] = inc_travels
+        await db.users.update_one({"id": user["id"]}, update)
         if car_to_damage:
             current_damage = min(100, max(0, float(car_to_damage.get("damage_percent", 0))))
             if booze_run:
