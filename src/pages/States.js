@@ -78,6 +78,7 @@ const CityCard = ({
   games,
   allOwners,
   getEffectiveMaxBet,
+  getEffectiveBuyBack,
   isHighestBet,
   bulletFactory,
   airportSlot1,
@@ -94,6 +95,10 @@ const CityCard = ({
   
   // Count owned casinos
   const ownedCount = games.filter(g => g && (allOwners[g.id] || {})[city]?.username).length;
+  // Highest max bet and buy-back in this city
+  const highestBet = games.length ? Math.max(...games.map(g => getEffectiveMaxBet(g, city))) : 0;
+  const buyBacks = games.filter(g => GAMES_WITH_BUYBACK.includes(g?.id)).map(g => getEffectiveBuyBack(g, city)).filter(n => n != null && Number(n) > 0);
+  const highestBuyBack = buyBacks.length ? Math.max(...buyBacks.map(Number)) : null;
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-corner st-fade-in`}>
@@ -108,7 +113,13 @@ const CityCard = ({
           <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">{city}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[9px] text-mutedForeground">{ownedCount}/{games.length} owned</span>
+          <div className="flex items-center gap-1 text-[9px]">
+            <span className="text-mutedForeground">{ownedCount}/{games.length} owned</span>
+            {highestBuyBack != null && (
+              <span className="text-primary font-bold">{Number(highestBuyBack).toLocaleString()} pts</span>
+            )}
+            <span className="text-primary font-bold">Max: {formatMaxBet(highestBet)}</span>
+          </div>
           {expanded ? <ChevronDown size={10} className="text-primary" /> : <ChevronRight size={10} className="text-primary" />}
         </div>
       </button>
@@ -480,6 +491,7 @@ export default function States() {
             games={games}
             allOwners={allOwners}
             getEffectiveMaxBet={getEffectiveMaxBet}
+            getEffectiveBuyBack={getEffectiveBuyBack}
             isHighestBet={isHighestBet}
             bulletFactory={bulletFactoryByState[city]}
             airportSlot1={airportSlot1ByState[city]}
