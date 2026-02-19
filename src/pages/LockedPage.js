@@ -10,7 +10,9 @@ export default function LockedPage() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [comment, setComment] = useState('');
+  const [reply, setReply] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [submittingReply, setSubmittingReply] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +82,26 @@ export default function LockedPage() {
     }
   };
 
+  const handleSubmitReply = async (e) => {
+    e.preventDefault();
+    if (!data?.can_submit_reply || submittingReply || !reply.trim()) return;
+    setSubmittingReply(true);
+    try {
+      await api.post('/account-locked-reply', { reply: reply.trim() });
+      setData((prev) => ({
+        ...prev,
+        can_submit_reply: false,
+        user_reply: reply.trim(),
+        user_reply_at: new Date().toISOString(),
+      }));
+      setReply('');
+    } catch (err) {
+      // keep form
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.href = '/';
@@ -111,8 +133,50 @@ export default function LockedPage() {
           </h1>
         </div>
         <p className="text-sm text-zinc-300 font-heading mb-4 text-center">
-          Your account is being reviewed. You can only access this page and submit one message explaining your side. We will get back to you once the investigation is complete.
+          Your account is being reviewed. You can only access this page and submit one message explaining your side. We will be in contact with you here.
         </p>
+
+        {data.admin_message && (
+          <div className="rounded border border-primary/30 bg-primary/5 p-4 mb-4">
+            <p className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">Message from staff</p>
+            <p className="text-sm text-foreground font-heading whitespace-pre-wrap">{data.admin_message}</p>
+            {data.admin_message_at && (
+              <p className="text-[10px] text-zinc-500 mt-2">{new Date(data.admin_message_at).toLocaleString()}</p>
+            )}
+          </div>
+        )}
+
+        {data.can_submit_reply && (
+          <form onSubmit={handleSubmitReply} className="space-y-3 mb-4">
+            <label className="block text-[10px] font-heading text-zinc-400 uppercase tracking-wider mb-1">
+              Reply to staff (one submission)
+            </label>
+            <textarea
+              value={reply}
+              onChange={(e) => setReply(e.target.value.slice(0, MAX_COMMENT_LENGTH))}
+              placeholder="Your reply..."
+              rows={3}
+              className="w-full px-3 py-2 rounded border border-zinc-600 bg-zinc-800/50 text-foreground text-sm font-heading placeholder:text-zinc-500 focus:border-amber-500/50 focus:outline-none resize-y"
+              maxLength={MAX_COMMENT_LENGTH}
+              disabled={submittingReply}
+            />
+            <button
+              type="submit"
+              disabled={submittingReply || !reply.trim()}
+              className="w-full py-2 rounded font-heading font-bold text-xs uppercase tracking-wider border-2 border-amber-500/60 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {submittingReply ? 'Sending...' : 'Send reply'}
+            </button>
+          </form>
+        )}
+
+        {data.user_reply && !data.can_submit_reply && (
+          <div className="rounded border border-zinc-600/50 bg-zinc-800/30 p-3 mb-4">
+            <p className="text-[10px] font-heading text-zinc-400 uppercase tracking-wider mb-1">Your reply to staff</p>
+            <p className="text-sm text-foreground font-heading whitespace-pre-wrap">{data.user_reply}</p>
+            {data.user_reply_at && <p className="text-[10px] text-zinc-500 mt-1">{new Date(data.user_reply_at).toLocaleString()}</p>}
+          </div>
+        )}
 
         {secondsRemaining != null && (
           <p className="text-center text-amber-400 font-heading font-bold text-sm mb-4">

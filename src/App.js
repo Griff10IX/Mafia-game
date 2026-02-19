@@ -4,6 +4,7 @@ import { Toaster } from "./components/ui/sonner";
 import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
+import VerifyEmail from "./pages/VerifyEmail";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -44,6 +45,7 @@ const Attemps = lazy(() => import("./pages/Attemps"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Store = lazy(() => import("./pages/Store"));
 const Admin = lazy(() => import("./pages/Admin"));
+const AdminLocked = lazy(() => import("./pages/AdminLocked"));
 const AutoRank = lazy(() => import("./pages/AutoRank"));
 const Travel = lazy(() => import("./pages/Travel"));
 const States = lazy(() => import("./pages/States"));
@@ -107,6 +109,10 @@ function App() {
           <Route
             path="/reset-password"
             element={<ResetPassword />}
+          />
+          <Route
+            path="/verify-email"
+            element={<VerifyEmail setIsAuthenticated={setIsAuthenticated} />}
           />
           <Route
             path="/locked"
@@ -304,6 +310,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Admin />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/admin/locked"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <AdminLocked />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

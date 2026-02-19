@@ -517,7 +517,7 @@ def register(router):
             {"id": target["id"]},
             {
                 "$set": {"account_locked": False},
-                "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": ""},
+                "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": "", "account_locked_admin_message": "", "account_locked_admin_message_at": "", "account_locked_user_reply": "", "account_locked_user_reply_at": ""},
             },
         )
         return {"message": f"Unlocked {target_username}. They can access the app again."}
@@ -529,7 +529,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         cursor = db.users.find(
             {"account_locked": True},
-            {"_id": 0, "username": 1, "account_locked_at": 1, "account_locked_until": 1, "account_locked_comment": 1, "account_locked_comment_at": 1},
+            {"_id": 0, "username": 1, "account_locked_at": 1, "account_locked_until": 1, "account_locked_comment": 1, "account_locked_comment_at": 1, "account_locked_admin_message": 1, "account_locked_admin_message_at": 1, "account_locked_user_reply": 1, "account_locked_user_reply_at": 1},
         )
         users = await cursor.to_list(100)
         return {"locked": users}
@@ -555,6 +555,27 @@ def register(router):
             },
         )
         return {"message": "You are locked for 60 seconds. You will be redirected to the locked page.", "account_locked_until": until_iso}
+
+    class LockedAccountMessageBody(BaseModel):
+        target_username: str
+        message: str
+
+    @router.post("/admin/locked-account-message")
+    async def admin_locked_account_message(body: LockedAccountMessageBody, current_user: dict = Depends(get_current_user)):
+        """Leave a message for a locked user; they see it on the locked page and can reply once."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(body.target_username)
+        target = await db.users.find_one({"username": username_pattern, "account_locked": True}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found or not locked")
+        msg = (body.message or "").strip()[:2000]
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$set": {"account_locked_admin_message": msg, "account_locked_admin_message_at": now_iso}},
+        )
+        return {"message": f"Message sent to {target.get('username', body.target_username)}.", "account_locked_admin_message_at": now_iso}
 
     @router.post("/admin/kill-player")
     async def admin_kill_player(target_username: str, current_user: dict = Depends(get_current_user)):

@@ -135,6 +135,8 @@ async def ensure_all_indexes(db):
         # --- Auth / payments ---
         await db.users.create_index("email")
         await db.password_resets.create_index("token", unique=True)
+        await db.email_verifications.create_index("token", unique=True)
+        await db.email_verifications.create_index("expires_at")
         await db.login_lockouts.create_index("email", unique=True)
         await db.payment_transactions.create_index("session_id", unique=True)
 

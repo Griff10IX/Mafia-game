@@ -35,7 +35,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
         { path: '/auto-rank', label: 'Auto Rank' },
-        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }] : []),
+        ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }, { path: '/admin/locked', label: 'Locked accounts' }] : []),
       ],
     },
     {
@@ -607,7 +607,8 @@ export default function Layout({ children }) {
   ];
 
   const adminNavItems = isAdmin ? [
-    { path: '/admin', icon: Settings, label: 'Admin Tools' }
+    { path: '/admin', icon: Settings, label: 'Admin Tools' },
+    { path: '/admin/locked', icon: Lock, label: 'Locked accounts' },
   ] : [];
 
   /* Inline theme styles – same noir variables as other pages */

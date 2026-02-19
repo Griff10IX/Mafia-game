@@ -32,6 +32,14 @@ class PasswordResetConfirm(BaseModel):
     new_password: str
 
 
+class VerifyEmailBody(BaseModel):
+    token: str
+
+
+class ResendVerificationBody(BaseModel):
+    email: EmailStr
+
+
 class AccountLockedCommentBody(BaseModel):
     comment: str
 
@@ -43,6 +51,20 @@ class AccountLockedCommentBody(BaseModel):
         s = str(v).strip()
         if len(s) > 2000:
             raise ValueError("Comment must be at most 2000 characters")
+        return s
+
+
+class AccountLockedReplyBody(BaseModel):
+    reply: str
+
+    @field_validator("reply", mode="before")
+    @classmethod
+    def trim_and_limit(cls, v):
+        if v is None:
+            return ""
+        s = str(v).strip()
+        if len(s) > 2000:
+            raise ValueError("Reply must be at most 2000 characters")
         return s
 
 
@@ -169,27 +191,32 @@ def register(router):
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "registration_ip": _client_ip(request),
                 "login_ips": [_client_ip(request)] if _client_ip(request) else [],
+                "email_verified": False,
             }
 
-            result = await db.users.insert_one(user_doc.copy())
+            await db.users.insert_one(user_doc.copy())
 
-            token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0)})
-
-            user_response = {
-                "id": user_doc["id"],
+            # Email verification: create token and send link
+            verification_token = str(uuid.uuid4())
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+            await db.email_verifications.insert_one({
+                "token": verification_token,
+                "user_id": user_id,
                 "email": user_doc["email"],
                 "username": user_doc["username"],
-                "rank": user_doc["rank"],
-                "money": user_doc["money"],
-                "points": user_doc["points"],
-                "bodyguard_slots": user_doc["bodyguard_slots"],
-                "current_state": user_doc["current_state"],
-                "total_kills": user_doc["total_kills"],
-                "total_deaths": user_doc["total_deaths"],
-                "created_at": user_doc["created_at"]
-            }
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "expires_at": expires_at.isoformat(),
+            })
+            try:
+                from email_sender import send_verification_email
+                send_verification_email(user_doc["email"], user_doc["username"], verification_token)
+            except Exception as e:
+                logging.warning("Failed to send verification email: %s", e)
 
-            return {"token": token, "user": user_response}
+            return {
+                "message": "Please check your email to verify your account. Then you can log in.",
+                "verify_required": True,
+            }
         except HTTPException:
             raise
         except Exception as e:
@@ -244,6 +271,11 @@ def register(router):
             )
         # Success: clear lockout for this email
         await db.login_lockouts.delete_one({"email": email_clean})
+        if user.get("email_verified") is False:
+            raise HTTPException(
+                status_code=403,
+                detail="Please verify your email first. Check your inbox or request a new verification link.",
+            )
         if user.get("is_dead"):
             raise HTTPException(
                 status_code=403,
@@ -286,9 +318,14 @@ def register(router):
             "used": False
         })
 
+        try:
+            from email_sender import send_password_reset_email
+            send_password_reset_email(user["email"], user["username"], reset_token)
+        except Exception as e:
+            logging.warning("Failed to send password reset email: %s", e)
+
         return {
             "message": "If an account exists with that email, a password reset link has been sent.",
-            "token": reset_token,
             "expires_in_minutes": 60
         }
 
@@ -321,6 +358,54 @@ def register(router):
         )
 
         return {"message": "Password has been reset successfully. You can now login with your new password."}
+
+    @router.post("/auth/verify-email")
+    async def verify_email(body: VerifyEmailBody):
+        """Verify email with token from link; marks user verified and returns JWT + user."""
+        record = await db.email_verifications.find_one({"token": body.token}, {"_id": 0})
+        if not record:
+            raise HTTPException(status_code=400, detail="Invalid or expired verification link.")
+        expires_at = datetime.fromisoformat(record["expires_at"].replace("Z", "+00:00"))
+        if datetime.now(timezone.utc) > expires_at:
+            await db.email_verifications.delete_one({"token": body.token})
+            raise HTTPException(status_code=400, detail="Verification link has expired. Request a new one.")
+        await db.users.update_one({"id": record["user_id"]}, {"$set": {"email_verified": True}})
+        await db.email_verifications.delete_one({"token": body.token})
+        user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found.")
+        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0)})
+        user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
+        return {"token": token, "user": user_response}
+
+    @router.post("/auth/resend-verification")
+    async def resend_verification(body: ResendVerificationBody):
+        """Send a new verification email if the account exists and is not verified."""
+        email_clean = (body.email or "").strip().lower()
+        email_pattern = re.compile("^" + re.escape(email_clean) + "$", re.IGNORECASE)
+        user = await db.users.find_one({"email": email_pattern}, {"_id": 0, "id": 1, "email": 1, "username": 1, "email_verified": 1})
+        if not user:
+            return {"message": "If an account exists with that email, a new verification link has been sent."}
+        if user.get("email_verified") is True:
+            return {"message": "That account is already verified. You can log in."}
+        # Delete any old verification for this user
+        await db.email_verifications.delete_many({"user_id": user["id"]})
+        verification_token = str(uuid.uuid4())
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
+        await db.email_verifications.insert_one({
+            "token": verification_token,
+            "user_id": user["id"],
+            "email": user["email"],
+            "username": user["username"],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": expires_at.isoformat(),
+        })
+        try:
+            from email_sender import send_verification_email
+            send_verification_email(user["email"], user["username"], verification_token)
+        except Exception as e:
+            logging.warning("Failed to send verification email: %s", e)
+        return {"message": "If an account exists with that email, a new verification link has been sent."}
 
     def _safe_int(val, default=0):
         if val is None:
@@ -401,6 +486,7 @@ def register(router):
                 account_locked_until=u.get("account_locked_until"),
                 account_locked_comment=u.get("account_locked_comment"),
                 can_submit_comment=bool(u.get("account_locked", False)) and not u.get("account_locked_comment"),
+                email_verified=bool(u.get("email_verified", True)),
             )
         except HTTPException:
             raise
@@ -432,12 +518,19 @@ def register(router):
         """Locked page data: only for locked users; others get account_locked false."""
         locked = bool(current_user.get("account_locked", False))
         can_submit = locked and not current_user.get("account_locked_comment")
+        has_admin_message = bool(current_user.get("account_locked_admin_message"))
+        can_submit_reply = locked and has_admin_message and not current_user.get("account_locked_user_reply")
         return {
             "account_locked": locked,
             "can_submit_comment": can_submit,
             "comment": current_user.get("account_locked_comment"),
             "comment_at": current_user.get("account_locked_comment_at"),
             "account_locked_until": current_user.get("account_locked_until"),
+            "admin_message": current_user.get("account_locked_admin_message"),
+            "admin_message_at": current_user.get("account_locked_admin_message_at"),
+            "user_reply": current_user.get("account_locked_user_reply"),
+            "user_reply_at": current_user.get("account_locked_user_reply_at"),
+            "can_submit_reply": can_submit_reply,
         }
 
     @router.post("/account-locked")
@@ -453,6 +546,22 @@ def register(router):
             {"$set": {"account_locked_comment": body.comment, "account_locked_comment_at": now_iso}},
         )
         return {"message": "Your comment has been recorded.", "comment_at": now_iso}
+
+    @router.post("/account-locked-reply")
+    async def post_account_locked_reply(body: AccountLockedReplyBody, current_user: dict = Depends(get_current_user)):
+        """Reply once to staff message while locked. Only when staff has left a message and user has not replied yet."""
+        if not current_user.get("account_locked"):
+            raise HTTPException(status_code=400, detail="Your account is not locked.")
+        if not current_user.get("account_locked_admin_message"):
+            raise HTTPException(status_code=400, detail="No message from staff to reply to.")
+        if current_user.get("account_locked_user_reply"):
+            raise HTTPException(status_code=400, detail="You have already replied.")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"account_locked_user_reply": body.reply, "account_locked_user_reply_at": now_iso}},
+        )
+        return {"message": "Your reply has been recorded.", "user_reply_at": now_iso}
 
     @router.get("/user/casino-property")
     async def get_casino_property(current_user: dict = Depends(get_current_user)):

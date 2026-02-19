@@ -7,6 +7,7 @@ import styles from '../styles/noir.module.css';
 export default function Landing({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
+  const [verifySentForEmail, setVerifySentForEmail] = useState(null); // show "Resend verification" after register or login 403
 
   useEffect(() => {
     const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
@@ -21,10 +22,26 @@ export default function Landing({ setIsAuthenticated }) {
     password: '',
   });
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+
+  const handleResendVerification = async () => {
+    const email = verifySentForEmail || formData.email;
+    if (!email) return;
+    setResendLoading(true);
+    try {
+      await api.post('/auth/resend-verification', { email });
+      toast.success('If an account exists with that email, a new verification link has been sent.');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to resend.');
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setVerifySentForEmail(null);
 
     try {
       const endpoint = isLogin ? '/auth/login' : '/auth/register';
@@ -33,6 +50,11 @@ export default function Landing({ setIsAuthenticated }) {
         : formData;
 
       const response = await api.post(endpoint, payload);
+      if (response.data.verify_required) {
+        toast.success(response.data.message || 'Check your email to verify your account.');
+        setVerifySentForEmail(formData.email);
+        return;
+      }
       localStorage.setItem('token', response.data.token);
       setIsAuthenticated(true);
       toast.success(isLogin ? 'Welcome back!' : 'Account created successfully!');
@@ -77,6 +99,9 @@ export default function Landing({ setIsAuthenticated }) {
         msg = reason.startsWith('Cannot log in') || reason.startsWith('Registration failed') ? reason : `${prefix}${reason}`.trim();
       } else {
         msg = isLogin ? 'Cannot log in. Please try again.' : 'Registration failed. Please try again.';
+      }
+      if (error.response?.status === 403 && typeof msg === 'string' && msg.toLowerCase().includes('verify your email')) {
+        setVerifySentForEmail(formData.email);
       }
       toast.error(msg);
     } finally {
@@ -208,6 +233,22 @@ export default function Landing({ setIsAuthenticated }) {
               >
                 {loading ? 'Processing...' : isLogin ? 'Enter the Family' : 'Join the Family'}
               </button>
+
+              {verifySentForEmail && (
+                <div className="pt-2 border-t mt-2" style={{ borderColor: 'var(--noir-muted)', opacity: 0.8 }}>
+                  <p className="text-xs mb-2" style={{ color: 'var(--noir-muted)' }}>
+                    Didn&apos;t get the email? Send another verification link.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={resendLoading}
+                    onClick={handleResendVerification}
+                    className={`w-full ${styles.btnPrimary} opacity-80 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth disabled:opacity-50`}
+                  >
+                    {resendLoading ? 'Sending...' : 'Resend verification email'}
+                  </button>
+                </div>
+              )}
             </form>
           </div>
 

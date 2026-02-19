@@ -376,6 +376,7 @@ class UserResponse(BaseModel):
     account_locked_until: Optional[str] = None  # when set, lock auto-expires at this time (e.g. test lock)
     account_locked_comment: Optional[str] = None  # user's one-time comment
     can_submit_comment: bool = False  # true when locked and no comment submitted yet
+    email_verified: bool = True  # false until user clicks verification link
 
 class NotificationCreate(BaseModel):
     title: str
@@ -449,7 +450,7 @@ def _log_auth_failure(user_id: Optional[str], status: int, reason: str):
     )
 
 
-ACCOUNT_LOCKED_WHITELIST = {"/api/auth/me", "/api/account-locked"}
+ACCOUNT_LOCKED_WHITELIST = {"/api/auth/me", "/api/account-locked", "/api/account-locked-reply"}
 
 
 async def get_current_user(
@@ -494,7 +495,7 @@ async def get_current_user(
                     {"id": user_id},
                     {
                         "$set": {"account_locked": False},
-                        "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": ""},
+                        "$unset": {"account_locked_at": "", "account_locked_comment": "", "account_locked_comment_at": "", "account_locked_until": "", "account_locked_admin_message": "", "account_locked_admin_message_at": "", "account_locked_user_reply": "", "account_locked_user_reply_at": ""},
                     },
                 )
                 user = await db.users.find_one({"id": user_id}, {"_id": 0})

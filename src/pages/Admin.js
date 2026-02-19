@@ -83,6 +83,8 @@ export default function Admin() {
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
   const [lockedAccounts, setLockedAccounts] = useState([]);
   const [lockedAccountsLoading, setLockedAccountsLoading] = useState(false);
+  const [lockedMessageByUser, setLockedMessageByUser] = useState({});
+  const [sendingMessageTo, setSendingMessageTo] = useState(null);
 
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
@@ -350,6 +352,22 @@ export default function Admin() {
       setLockedAccounts([]);
     } finally {
       setLockedAccountsLoading(false);
+    }
+  };
+
+  const handleSendLockedMessage = async (username) => {
+    const message = (lockedMessageByUser[username] || '').trim();
+    if (!message) { toast.error('Enter a message'); return; }
+    setSendingMessageTo(username);
+    try {
+      await api.post('/admin/locked-account-message', { target_username: username, message });
+      toast.success('Message sent');
+      setLockedMessageByUser((prev) => ({ ...prev, [username]: '' }));
+      fetchLockedAccounts();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSendingMessageTo(null);
     }
   };
 
@@ -1313,6 +1331,34 @@ export default function Admin() {
                     {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
                     {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
                     {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
+                    {u.account_locked_admin_message && (
+                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                        <span className="text-primary font-bold">Staff message:</span>
+                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
+                        {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_admin_message_at).toLocaleString()}</div>}
+                      </div>
+                    )}
+                    {u.account_locked_user_reply && (
+                      <div className="mt-1">
+                        <span className="text-emerald-400 font-bold">Their reply:</span>
+                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
+                        {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_user_reply_at).toLocaleString()}</div>}
+                      </div>
+                    )}
+                    <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                      <textarea
+                        value={lockedMessageByUser[u.username] ?? ''}
+                        onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
+                        placeholder="Leave message for user (they can reply once)"
+                        rows={2}
+                        className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
+                        maxLength={2000}
+                        disabled={sendingMessageTo === u.username}
+                      />
+                      <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                        {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
