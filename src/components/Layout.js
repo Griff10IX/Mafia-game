@@ -297,25 +297,39 @@ export default function Layout({ children }) {
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // Refetch on route change so top bar and sidebar badges are fresh when navigating
+    // Shell ready: only auth/me + rank-progress so user and rank appear ASAP
     fetchData();
-    fetchUnreadCount();
-    fetchWarStatus();
-    fetchRankingCounts();
-    if (user) fetchAutoRankPrefs();
+    // Defer badge/notification fetches to after first paint so they don't block shell
+    const deferred = setTimeout(() => {
+      fetchUnreadCount();
+      fetchWarStatus();
+      fetchRankingCounts();
+    }, 0);
+    return () => clearTimeout(deferred);
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetchWarStatus();
-    const id = setInterval(fetchWarStatus, 15000);
-    return () => clearInterval(id);
+    let intervalId;
+    const deferred = setTimeout(() => {
+      fetchWarStatus();
+      intervalId = setInterval(fetchWarStatus, 15000);
+    }, 0);
+    return () => {
+      clearTimeout(deferred);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    // Lightweight polling so the sidebar badges stay fresh
-    fetchRankingCounts();
-    const id = setInterval(fetchRankingCounts, 15000);
-    return () => clearInterval(id);
+    let intervalId;
+    const deferred = setTimeout(() => {
+      fetchRankingCounts();
+      intervalId = setInterval(fetchRankingCounts, 15000);
+    }, 0);
+    return () => {
+      clearTimeout(deferred);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -330,9 +344,15 @@ export default function Layout({ children }) {
         // keep existing state
       }
     };
-    pollNotifications();
-    const id = setInterval(pollNotifications, 5000);
-    return () => clearInterval(id);
+    let intervalId;
+    const deferred = setTimeout(() => {
+      pollNotifications();
+      intervalId = setInterval(pollNotifications, 5000);
+    }, 0);
+    return () => {
+      clearTimeout(deferred);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchFlashNews = async () => {
@@ -478,9 +498,15 @@ export default function Layout({ children }) {
   };
 
   useEffect(() => {
-    fetchTravelStatus();
-    const id = setInterval(fetchTravelStatus, 1000);
-    return () => clearInterval(id);
+    let intervalId;
+    const deferred = setTimeout(() => {
+      fetchTravelStatus();
+      intervalId = setInterval(fetchTravelStatus, 1000);
+    }, 0);
+    return () => {
+      clearTimeout(deferred);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLogout = () => {
