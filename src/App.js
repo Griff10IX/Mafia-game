@@ -1,61 +1,67 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "./components/ui/sonner";
 import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import Dashboard from "./pages/Dashboard";
-import UsersOnline from "./pages/UsersOnline";
-import Ranking from "./pages/Ranking";
-import Crimes from "./pages/Crimes";
-import GTA from "./pages/GTA";
-import Garage from "./pages/Garage";
-import SellCars from "./pages/SellCars";
-import BuyCars from "./pages/BuyCars";
-import CarProfile from "./pages/CarProfile";
-import ViewCar from "./pages/ViewCar";
-import Jail from "./pages/Jail";
-import OrganisedCrime from "./pages/OrganisedCrime";
-import Attack from "./pages/Attack";
-import Bodyguards from "./pages/Bodyguards";
-import HitlistPage from "./pages/HitlistPage";
-import FamilyPage from "./pages/FamilyPage.js";
-import FamilyProfilePage from "./pages/FamilyProfilePage.js";
-import Properties from "./pages/Properties";
-import Casino from "./pages/Casino";
-import Dice from "./pages/Casinos/Dice.js";
-import Rlt from "./pages/Casinos/Rlt.js";
-import Blackjack from "./pages/Casinos/BlackjackPage";
-import HorseRacing from "./pages/Casinos/HorseRacingPage";
-import Slots from "./pages/Casinos/SlotsPage";
-import CrackSafe from "./pages/CrackSafe";
-import Prestige from "./pages/Prestige";
-import VideoPoker from "./pages/Casinos/VideoPokerPage";
-import SportsBetting from "./pages/SportsBetting";
-import Bank from "./pages/Bank";
-import ArmourWeapons from "./pages/ArmourWeapons";
-import Attemps from "./pages/Attemps";
-import Leaderboard from "./pages/Leaderboard";
-import Store from "./pages/Store";
-import Admin from "./pages/Admin";
-import AutoRank from "./pages/AutoRank";
-import Travel from "./pages/Travel";
-import States from "./pages/States";
-import MyProperties from "./pages/MyProperties";
-import BoozeRun from "./pages/BoozeRun.js";
-import Inbox from "./pages/Inbox";
-import InboxChat from "./pages/InboxChat";
-import Forum from "./pages/Forum";
-import ForumTopic from "./pages/ForumTopic";
-import DeadAlive from "./pages/DeadAlive";
-import Profile from "./pages/Profile";
-import Stats from "./pages/Stats";
-import Objectives from "./pages/Objectives";
-import QuickTrade from "./pages/QuickTrade";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./context/ThemeContext";
 import "@/App.css";
+
+// Lazy-load authenticated pages to shrink initial bundle
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const UsersOnline = lazy(() => import("./pages/UsersOnline"));
+const Ranking = lazy(() => import("./pages/Ranking"));
+const Crimes = lazy(() => import("./pages/Crimes"));
+const GTA = lazy(() => import("./pages/GTA"));
+const Garage = lazy(() => import("./pages/Garage"));
+const SellCars = lazy(() => import("./pages/SellCars"));
+const BuyCars = lazy(() => import("./pages/BuyCars"));
+const CarProfile = lazy(() => import("./pages/CarProfile"));
+const ViewCar = lazy(() => import("./pages/ViewCar"));
+const Jail = lazy(() => import("./pages/Jail"));
+const OrganisedCrime = lazy(() => import("./pages/OrganisedCrime"));
+const Attack = lazy(() => import("./pages/Attack"));
+const Bodyguards = lazy(() => import("./pages/Bodyguards"));
+const HitlistPage = lazy(() => import("./pages/HitlistPage"));
+const FamilyPage = lazy(() => import("./pages/FamilyPage.js"));
+const FamilyProfilePage = lazy(() => import("./pages/FamilyProfilePage.js"));
+const Properties = lazy(() => import("./pages/Properties"));
+const Casino = lazy(() => import("./pages/Casino"));
+const Dice = lazy(() => import("./pages/Casinos/Dice.js"));
+const Rlt = lazy(() => import("./pages/Casinos/Rlt.js"));
+const Blackjack = lazy(() => import("./pages/Casinos/BlackjackPage"));
+const HorseRacing = lazy(() => import("./pages/Casinos/HorseRacingPage"));
+const Slots = lazy(() => import("./pages/Casinos/SlotsPage"));
+const CrackSafe = lazy(() => import("./pages/CrackSafe"));
+const Prestige = lazy(() => import("./pages/Prestige"));
+const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
+const SportsBetting = lazy(() => import("./pages/SportsBetting"));
+const Bank = lazy(() => import("./pages/Bank"));
+const ArmourWeapons = lazy(() => import("./pages/ArmourWeapons"));
+const Attemps = lazy(() => import("./pages/Attemps"));
+const Leaderboard = lazy(() => import("./pages/Leaderboard"));
+const Store = lazy(() => import("./pages/Store"));
+const Admin = lazy(() => import("./pages/Admin"));
+const AutoRank = lazy(() => import("./pages/AutoRank"));
+const Travel = lazy(() => import("./pages/Travel"));
+const States = lazy(() => import("./pages/States"));
+const MyProperties = lazy(() => import("./pages/MyProperties"));
+const BoozeRun = lazy(() => import("./pages/BoozeRun.js"));
+const Inbox = lazy(() => import("./pages/Inbox"));
+const InboxChat = lazy(() => import("./pages/InboxChat"));
+const Forum = lazy(() => import("./pages/Forum"));
+const ForumTopic = lazy(() => import("./pages/ForumTopic"));
+const DeadAlive = lazy(() => import("./pages/DeadAlive"));
+const Profile = lazy(() => import("./pages/Profile"));
+const Stats = lazy(() => import("./pages/Stats"));
+const Objectives = lazy(() => import("./pages/Objectives"));
+const QuickTrade = lazy(() => import("./pages/QuickTrade"));
+
+const PageLoader = () => (
+  <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
+);
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -81,6 +87,7 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <ThemeProvider>
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route
             path="/"
@@ -695,6 +702,7 @@ function App() {
             }
           />
         </Routes>
+        </Suspense>
         </ThemeProvider>
       </BrowserRouter>
       <Toaster position="bottom-center" offset="max(16px, env(safe-area-inset-bottom, 16px))" />
