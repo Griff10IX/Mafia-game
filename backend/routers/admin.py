@@ -237,6 +237,17 @@ def register(router):
             )
         return {"message": "Slots draw reset to default (every 3h on the hour) for all states"}
 
+    @router.post("/admin/slots/clear-cooldowns")
+    async def admin_slots_clear_cooldowns(current_user: dict = Depends(get_current_user)):
+        """Clear slots_cooldown_until for all users so everyone can enter/win the draw again. For testing."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        result = await db.users.update_many(
+            {"slots_cooldown_until": {"$exists": True}},
+            {"$unset": {"slots_cooldown_until": ""}},
+        )
+        return {"message": f"Slots cooldown cleared for {result.modified_count} user(s). They are eligible for the next draw."}
+
     @router.post("/admin/cars/delete-all")
     async def admin_delete_all_cars(current_user: dict = Depends(get_current_user)):
         """Delete every user's cars (all documents in user_cars). For testing."""

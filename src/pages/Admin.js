@@ -226,6 +226,15 @@ export default function Admin() {
     }
   };
 
+  const handleSlotsClearCooldowns = async () => {
+    try {
+      const res = await api.post('/admin/slots/clear-cooldowns');
+      toast.success(res.data?.message || 'Slots cooldowns cleared');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear cooldowns');
+    }
+  };
+
   const handleToggleEvents = async () => {
     try {
       const res = await api.post('/admin/events/toggle', { enabled: !eventsEnabled });
@@ -1080,10 +1089,11 @@ export default function Admin() {
         />
         {!collapsed.slotsDraw && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-mutedForeground font-heading">Set the next lottery draw to 1 minute for all states, or reset to default 3 hours.</p>
+            <p className="text-[10px] text-mutedForeground font-heading">Set the next lottery draw to 1 minute for all states, or reset to default 3 hours. Clear cooldowns so everyone can enter/win the draw (testing).</p>
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleSlotsDraw1Min}>Set next draw in 1 min</BtnPrimary>
               <BtnSecondary onClick={handleSlotsDrawReset}>Reset to default (3h)</BtnSecondary>
+              <BtnSecondary onClick={handleSlotsClearCooldowns}>Clear slots cooldowns</BtnSecondary>
             </div>
           </div>
         )}
