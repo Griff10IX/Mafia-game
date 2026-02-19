@@ -1,6 +1,7 @@
 # Casino Slots: state-owned or player-owned (3h lottery). Enter to win draw; owner sets max bet & buy-back.
 # If owner can't pay a win, ownership transfers to winner (buy-back offer). After your 3h you can't enter next draw.
 from datetime import datetime, timezone, timedelta
+import logging
 import re
 import random
 import uuid
@@ -108,6 +109,8 @@ async def _run_slots_draw_if_needed(state: str):
     stored_state, doc = await _get_slots_ownership_doc(state)
     now = datetime.now(timezone.utc)
     st = stored_state or state
+    # Use exact state from doc for DB updates so we always match the document we read
+    filter_state = (doc.get("state") if doc else None) or state
     next_draw_at = _parse_iso_datetime(doc.get("next_draw_at") if doc else None) if doc else None
 
     # If stored time is in the future but from old "3h on the hour" schedule, run draw now and then use 1-min schedule
@@ -119,9 +122,9 @@ async def _run_slots_draw_if_needed(state: str):
         else:
             return
 
-    # Ensure we have a doc with next_draw_at
+    # Run draw when: no doc, no next_draw_at, or next_draw_at is due (past or now)
     if not doc or not next_draw_at or next_draw_at <= now:
-        # Run draw now (or first time: no next_draw_at or it's in the past)
+        logging.info("Slots draw running for state=%s (doc=%s, next_draw_at=%s)", state, bool(doc), next_draw_at)
         next_draw_iso = _next_draw_utc().isoformat()
         previous_owner_id = doc.get("owner_id") if doc else None
         # Clear current owner and set cooldown for previous owner
@@ -147,10 +150,10 @@ async def _run_slots_draw_if_needed(state: str):
             winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
             expires_at = next_draw_iso
             await db.slots_ownership.update_one(
-                {"state": st},
+                {"state": filter_state},
                 {
                     "$set": {
-                        "state": st,
+                        "state": filter_state,
                         "owner_id": winner_id,
                         "owner_username": (winner.get("username") or "?") if winner else "?",
                         "max_bet": SLOTS_MAX_BET,
@@ -168,10 +171,10 @@ async def _run_slots_draw_if_needed(state: str):
         else:
             # No eligible entries: stay state-owned, just advance next draw
             await db.slots_ownership.update_one(
-                {"state": st},
+                {"state": filter_state},
                 {
                     "$set": {
-                        "state": st,
+                        "state": filter_state,
                         "owner_id": None,
                         "owner_username": None,
                         "next_draw_at": next_draw_iso,
@@ -185,7 +188,6 @@ async def _run_slots_draw_if_needed(state: str):
 
 async def run_slots_draws_due():
     """Run the lottery draw for every state where next_draw_at is due. Call from a background task so draws run on time even if no one is on the page."""
-    import logging
     for state in (STATES or []):
         try:
             await _run_slots_draw_if_needed(state)
@@ -257,9 +259,10 @@ def register(router):
     @router.get("/casino/slots/config")
     async def casino_slots_config(current_user: dict = Depends(get_current_user)):
         """Slots config: max_bet (owner or default), symbols, current_state, states. May be state-owned or player-owned."""
+        # Run draw check for ALL states when config is loaded so draws run even if ticker is delayed or not running
+        await run_slots_draws_due()
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         current_state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")
-        await _run_slots_draw_if_needed(current_state)
         stored_state, doc = await _get_slots_ownership_doc(current_state)
         max_bet = SLOTS_MAX_BET
         state_owned = True
