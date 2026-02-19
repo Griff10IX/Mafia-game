@@ -905,33 +905,57 @@ async def _increase_kill_inflation_on_kill(user_id: str) -> float:
 # My-properties -> routers/properties.py
 
 # ============ My Properties (1 casino + 1 property max) ============
+def _slots_expired(doc) -> bool:
+    """True if slots doc has expires_at in the past."""
+    if not doc or not doc.get("expires_at"):
+        return True
+    try:
+        t = datetime.fromisoformat(doc["expires_at"].replace("Z", "+00:00"))
+        if t.tzinfo is None:
+            t = t.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) >= t
+    except Exception:
+        return True
+
+
 async def _get_casino_property_profit(user_id: str):
-    """Return (casino_profit_cash, property_profit_points, has_casino, has_property) for header display and menu visibility."""
-    casino_cash = 0
-    has_casino = False
-    for _game_type, coll in [
+    """Return (casino_profit_cash, property_profit_points, has_casino, has_property) for header display and menu visibility. Uses parallel DB reads."""
+    casino_colls = [
         ("dice", db.dice_ownership),
         ("roulette", db.roulette_ownership),
         ("blackjack", db.blackjack_ownership),
         ("horseracing", db.horseracing_ownership),
         ("videopoker", db.videopoker_ownership),
         ("slots", db.slots_ownership),
-    ]:
-        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1, "expires_at": 1})
-        if doc:
-            if _game_type == "slots" and doc.get("expires_at"):
-                try:
-                    t = datetime.fromisoformat(doc["expires_at"].replace("Z", "+00:00"))
-                    if t.tzinfo is None:
-                        t = t.replace(tzinfo=timezone.utc)
-                    if datetime.now(timezone.utc) >= t:
-                        continue
-                except Exception:
-                    continue
-            casino_cash = int(doc.get("total_earnings") or doc.get("profit") or 0)
-            has_casino = True
-            break
-    prop = await _user_owns_any_property(user_id)
+    ]
+    # Parallel: all 6 casino ownerships + airport + bullet_factory
+    async def fetch_casino(game_type, coll):
+        return await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1, "expires_at": 1})
+
+    casino_tasks = [fetch_casino(gt, c) for gt, c in casino_colls]
+    airport_task = db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1, "total_earnings": 1})
+    bullet_task = db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
+    results = await asyncio.gather(*casino_tasks, airport_task, bullet_task)
+    casino_docs = results[:6]
+    airport_doc, bullet_doc = results[6], results[7]
+
+    casino_cash = 0
+    has_casino = False
+    for (game_type, _), doc in zip(casino_colls, casino_docs):
+        if not doc:
+            continue
+        if game_type == "slots" and _slots_expired(doc):
+            continue
+        casino_cash = int(doc.get("total_earnings") or doc.get("profit") or 0)
+        has_casino = True
+        break
+
+    if airport_doc:
+        prop = {"type": "airport", "state": airport_doc.get("state"), "slot": airport_doc.get("slot", 1), "price_per_travel": airport_doc.get("price_per_travel"), "total_earnings": airport_doc.get("total_earnings", 0)}
+    elif bullet_doc:
+        prop = {"type": "bullet_factory", "state": bullet_doc.get("state"), "price_per_bullet": bullet_doc.get("price_per_bullet"), "total_earnings": 0}
+    else:
+        prop = None
     property_pts = int(prop.get("total_earnings") or 0) if prop else 0
     has_property = prop is not None
     return (casino_cash, property_pts, has_casino, has_property)
