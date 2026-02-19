@@ -340,7 +340,7 @@ def register(router):
             money_val = _safe_float(current_user.get("money"), 0.0)
             wealth_id, wealth_name = get_wealth_rank(money_val)
             wealth_range = get_wealth_rank_range(money_val)
-            casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(current_user["id"])
+            # Casino/property loaded separately via GET /user/casino-property to keep auth/me fast
             u = current_user
             return UserResponse(
                 id=str(u["id"]),
@@ -378,9 +378,9 @@ def register(router):
                 crew_oc_timer_reduced=bool(u.get("crew_oc_timer_reduced", False)),
                 admin_ghost_mode=bool(u.get("admin_ghost_mode", False)),
                 admin_acting_as_normal=bool(u.get("admin_acting_as_normal", False)),
-                casino_profit=int(casino_cash) if casino_cash is not None else 0,
-                property_profit=int(property_pts) if property_pts is not None else 0,
-                has_casino_or_property=has_casino or has_property,
+                casino_profit=0,
+                property_profit=0,
+                has_casino_or_property=False,
                 theme_preferences=u.get("theme_preferences"),
             )
         except HTTPException:
@@ -407,3 +407,13 @@ def register(router):
                 status_code=500,
                 detail="Profile could not be loaded for your account. The issue has been logged; please try again or contact support.",
             )
+
+    @router.get("/user/casino-property")
+    async def get_casino_property(current_user: dict = Depends(get_current_user)):
+        """Lightweight endpoint for casino/property profit and menu flag. Called after first paint so auth/me stays fast."""
+        casino_cash, property_pts, has_casino, has_property = await _get_casino_property_profit(current_user["id"])
+        return {
+            "casino_profit": int(casino_cash) if casino_cash is not None else 0,
+            "property_profit": int(property_pts) if property_pts is not None else 0,
+            "has_casino_or_property": has_casino or has_property,
+        }

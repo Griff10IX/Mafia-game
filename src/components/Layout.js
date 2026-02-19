@@ -299,11 +299,12 @@ export default function Layout({ children }) {
   useEffect(() => {
     // Shell ready: only auth/me + rank-progress so user and rank appear ASAP
     fetchData();
-    // Defer badge/notification fetches to after first paint so they don't block shell
+    // Defer badge/notification and casino-property fetches to after first paint so they don't block shell
     const deferred = setTimeout(() => {
       fetchUnreadCount();
       fetchWarStatus();
       fetchRankingCounts();
+      fetchCasinoProperty();
     }, 0);
     return () => clearTimeout(deferred);
   }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -410,6 +411,17 @@ export default function Layout({ children }) {
       setUnreadCount(response.data.unread_count);
     } catch (error) {
       console.error('Failed to fetch notifications');
+    }
+  };
+
+  const fetchCasinoProperty = async () => {
+    try {
+      const res = await api.get('/user/casino-property');
+      if (res.data) {
+        setUser((prev) => (prev ? { ...prev, ...res.data } : prev));
+      }
+    } catch {
+      // optional; nav and header fall back to has_casino_or_property false
     }
   };
 
