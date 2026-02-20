@@ -19,6 +19,10 @@ class WipeConfirmation(BaseModel):
     confirmation_text: str  # Must be exactly "WIPE ALL DATA"
 
 
+class NewReleaseConfirmation(BaseModel):
+    confirmation_text: str  # Must be exactly "NEW RELEASE"
+
+
 class EventsToggleRequest(BaseModel):
     enabled: bool
 
@@ -1223,6 +1227,62 @@ def register(router):
         total = sum(deleted.values())
         logging.warning(f"🚨 DATABASE WIPE completed by {current_user['email']}: {total} documents deleted")
         return {"message": f"⚠️ DATABASE WIPED: {total} documents deleted from the game", "details": deleted}
+
+    @router.post("/admin/database-fresh")
+    async def admin_database_fresh(confirm: NewReleaseConfirmation, current_user: dict = Depends(get_current_user)):
+        """Wipe the entire database and re-seed game data so the game starts from the very beginning (new release)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if confirm.confirmation_text != "NEW RELEASE":
+            raise HTTPException(
+                status_code=400,
+                detail='Confirmation required. Send {"confirmation_text": "NEW RELEASE"} to confirm full database reset.'
+            )
+        logging.warning(f"🚨 DATABASE FRESH / NEW RELEASE initiated by {current_user['email']} ({current_user['username']})")
+        # All collections that hold game state or user data (wipe everything then re-seed config)
+        collections_to_wipe = [
+            "users", "family_members", "families", "family_wars", "family_war_stats", "family_racket_attacks",
+            "family_crew_oc_applications", "bodyguards", "bodyguard_invites", "user_cars", "user_properties",
+            "user_weapons", "attacks", "attack_attempts", "notifications", "extortions", "sports_bets", "sports_events",
+            "blackjack_games", "blackjack_buy_back_offers", "blackjack_ownership", "dice_ownership", "dice_buy_back_offers",
+            "roulette_ownership", "horseracing_ownership", "videopoker_ownership", "videopoker_games",
+            "slots_ownership", "slots_entries", "slots_buy_back_offers", "interest_deposits", "password_resets",
+            "money_transfers", "bank_deposits", "bullet_factory", "airport_ownership", "hitlist",
+            "user_organised_crime", "oc_pending_heists", "oc_invites", "user_crimes", "jail_npcs", "bust_events",
+            "test_npcs", "crimes", "weapons", "properties", "game_config", "game_settings",
+            "forum_topics", "forum_comments", "forum_comment_likes", "trade_sell_offers", "trade_buy_offers",
+            "dealer_stock", "user_gta", "gta_cooldowns", "safe_game", "safe_daily",
+            "security_flags", "security_logs", "bans", "ip_bans", "activity_log", "gambling_log",
+            "entertainer_games", "payment_transactions", "email_verifications", "login_lockouts",
+            "war_kill_feed", "crime_earnings", "crime_events", "profile_load_errors",
+        ]
+        deleted = {}
+        for coll_name in collections_to_wipe:
+            try:
+                res = await db[coll_name].delete_many({})
+                deleted[coll_name] = res.deleted_count
+            except Exception as e:
+                logging.warning("database-fresh: skip %s: %s", coll_name, e)
+                deleted[coll_name] = 0
+        total = sum(deleted.values())
+        # Re-seed game data (weapons, properties, crimes) and ensure indexes
+        try:
+            await srv.init_game_data()
+            from ensure_indexes import ensure_all_indexes
+            await ensure_all_indexes(db)
+        except Exception as e:
+            logging.exception("database-fresh: re-seed/indexes failed: %s", e)
+            return {
+                "message": f"Database wiped ({total} documents deleted) but re-seed failed: {e}",
+                "details": deleted,
+                "reseed_ok": False,
+            }
+        logging.warning(f"🚨 DATABASE FRESH completed by {current_user['email']}: {total} docs deleted, game data re-seeded")
+        return {
+            "message": f"Database reset complete. {total} documents deleted. Game data re-seeded. New release ready.",
+            "details": deleted,
+            "reseed_ok": True,
+        }
 
     @router.post("/admin/delete-user/{user_id}")
     async def admin_delete_single_user(user_id: str, current_user: dict = Depends(get_current_user)):

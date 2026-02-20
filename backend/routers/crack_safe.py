@@ -208,11 +208,18 @@ def register(router):
         else:
             attempts_remaining = None
 
+        # Only sometimes reveal how many digits were in the correct position (randomly, not every attempt)
+        show_position_hint = random.random() < 0.5
+        message = (
+            f"Wrong combination. {correct_positions} number{'s' if correct_positions != 1 else ''} in the correct position."
+            if show_position_hint
+            else "Wrong combination."
+        )
         return {
             "cracked": False,
-            "correct_positions": correct_positions,
+            "correct_positions": correct_positions if show_position_hint else None,
             "clues": clues,
-            "message": f"Wrong combination. {correct_positions} number{'s' if correct_positions != 1 else ''} in the correct position.",
+            "message": message,
             "attempts_remaining": attempts_remaining,
         }
 

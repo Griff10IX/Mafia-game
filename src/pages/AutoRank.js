@@ -370,7 +370,7 @@ export default function AutoRank() {
               icon={Crosshair}
               label="Run crimes"
               description="Auto-commit crimes per cycle."
-              checked={prefs.auto_rank_crimes}
+              checked={prefs.auto_rank_enabled ? prefs.auto_rank_crimes : false}
               disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
               onToggle={() => updatePref('auto_rank_crimes', !prefs.auto_rank_crimes)}
             />
@@ -378,7 +378,7 @@ export default function AutoRank() {
               icon={Car}
               label="Run GTA"
               description="One theft per cycle when cooldown ready."
-              checked={prefs.auto_rank_gta}
+              checked={prefs.auto_rank_enabled ? prefs.auto_rank_gta : false}
               disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
               onToggle={() => updatePref('auto_rank_gta', !prefs.auto_rank_gta)}
             />
@@ -386,7 +386,7 @@ export default function AutoRank() {
               icon={Lock}
               label="Jail bust every 5 sec"
               description="Bust every 5s; when nobody in jail, runs crimes + GTA instead."
-              checked={prefs.auto_rank_bust_every_5_sec}
+              checked={prefs.auto_rank_enabled ? prefs.auto_rank_bust_every_5_sec : false}
               disabled={savingPrefs || !prefs.auto_rank_enabled}
               onToggle={() => updatePref('auto_rank_bust_every_5_sec', !prefs.auto_rank_bust_every_5_sec)}
             />
@@ -394,7 +394,7 @@ export default function AutoRank() {
               icon={Briefcase}
               label="Run Organised Crime (NPC)"
               description="Heist with you + 3 NPCs when OC cooldown ready."
-              checked={prefs.auto_rank_oc}
+              checked={prefs.auto_rank_enabled ? prefs.auto_rank_oc : false}
               disabled={savingPrefs || !prefs.auto_rank_enabled}
               onToggle={() => updatePref('auto_rank_oc', !prefs.auto_rank_oc)}
             />
@@ -402,7 +402,7 @@ export default function AutoRank() {
               icon={Wine}
               label="Run booze running"
               description="Buy, travel, sell on round-trip route."
-              checked={prefs.auto_rank_booze}
+              checked={prefs.auto_rank_enabled ? prefs.auto_rank_booze : false}
               disabled={savingPrefs || !prefs.auto_rank_enabled}
               onToggle={() => updatePref('auto_rank_booze', !prefs.auto_rank_booze)}
             />

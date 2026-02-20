@@ -139,7 +139,9 @@ export default function Admin() {
   const [searchResults, setSearchResults] = useState(null);
   const [deleteUserId, setDeleteUserId] = useState('');
   const [wipeConfirmText, setWipeConfirmText] = useState('');
+  const [freshConfirmText, setFreshConfirmText] = useState('');
   const [dbLoading, setDbLoading] = useState(false);
+  const [dbFreshLoading, setDbFreshLoading] = useState(false);
   const [giveAllPoints, setGiveAllPoints] = useState(100);
   const [giveAllMoney, setGiveAllMoney] = useState(10000);
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
@@ -821,6 +823,23 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed');
     } finally {
       setDbLoading(false);
+    }
+  };
+
+  const handleDatabaseFresh = async () => {
+    if (freshConfirmText !== 'NEW RELEASE') { toast.error('Type "NEW RELEASE" to confirm'); return; }
+    if (!window.confirm('FINAL WARNING: Wipe ENTIRE database and re-seed from scratch? Game starts from zero. You will be logged out.')) return;
+    setDbFreshLoading(true);
+    try {
+      const res = await api.post('/admin/database-fresh', { confirmation_text: 'NEW RELEASE' });
+      toast.success(res.data?.message || 'Database reset. New release ready.');
+      setFreshConfirmText('');
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setDbFreshLoading(false);
     }
   };
 
@@ -2322,8 +2341,26 @@ export default function Admin() {
                   onChange={(e) => setWipeConfirmText(e.target.value)}
                   className="flex-1 bg-zinc-900/50 border border-red-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-red-500 focus:outline-none"
                 />
-                <BtnDanger onClick={handleWipeAllUsers} disabled={dbLoading || wipeConfirmText !== 'WIPE ALL'}>
+                <BtnDanger onClick={handleWipeAllUsers} disabled={dbLoading || dbFreshLoading || wipeConfirmText !== 'WIPE ALL'}>
                   {dbLoading ? '...' : 'WIPE'}
+                </BtnDanger>
+              </div>
+            </div>
+
+            {/* Database fresh / New release */}
+            <div className="space-y-2 p-2 rounded border border-red-500/50 bg-red-500/5">
+              <label className="text-[10px] text-red-400 font-heading uppercase font-bold">🔄 NEW RELEASE (full reset)</label>
+              <p className="text-[10px] text-red-400/80">Wipe entire database and re-seed weapons, properties, crimes. Game starts from the very beginning. You will be logged out.</p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder='Type "NEW RELEASE"'
+                  value={freshConfirmText}
+                  onChange={(e) => setFreshConfirmText(e.target.value)}
+                  className="flex-1 bg-zinc-900/50 border border-red-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-red-500 focus:outline-none"
+                />
+                <BtnDanger onClick={handleDatabaseFresh} disabled={dbLoading || dbFreshLoading || freshConfirmText !== 'NEW RELEASE'}>
+                  {dbFreshLoading ? '...' : 'New release'}
                 </BtnDanger>
               </div>
             </div>
