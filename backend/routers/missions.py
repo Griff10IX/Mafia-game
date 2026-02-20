@@ -5,6 +5,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 import os
 import sys
+import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import (
@@ -15,7 +16,9 @@ from server import (
     send_notification,
     STATES,
     RANKS,
+    CARS,
 )
+from routers.booze_run import BOOZE_TYPES
 
 # City order for map progression (same as STATES)
 CITY_ORDER = list(STATES) if STATES else ["Chicago", "New York", "Las Vegas", "Atlantic City"]
@@ -25,6 +28,21 @@ CITY_ORDER = list(STATES) if STATES else ["Chicago", "New York", "Las Vegas", "A
 # Difficulty: 1-3 easy, 4-6 medium, 7-8 hard, 9-10 boss/special. Frontend stars: >=8 -> 3, >=5 -> 2, else 1.
 MISSIONS = [
     # Chicago (districts: The Loop, South Side, West Side, North Side, Near North, Stockyards)
+    {
+        "id": "m_chicago_start",
+        "city": "Chicago",
+        "area": "The Loop",
+        "order": 0,
+        "type": "starter",
+        "requirements": {"crimes": 0},
+        "title": "Meet the Fixer",
+        "description": "The outfit runs this city. Report to the Fixer in The Loop — he'll put you to work.",
+        "reward_money": 100,
+        "reward_points": 2,
+        "difficulty": 1,
+        "unlocks_city": None,
+        "character_id": "char_chicago_fixer",
+    },
     {
         "id": "m_chicago_crimes",
         "city": "Chicago",
@@ -111,6 +129,7 @@ MISSIONS = [
         "description": "Kill 4 hitlist NPCs. Add targets from the Hitlist and take them out. Show them we own the yards.",
         "reward_money": 550,
         "reward_points": 9,
+        "reward_bullets": 50,
         "difficulty": 5,
         "unlocks_city": None,
         "character_id": None,
@@ -142,6 +161,7 @@ MISSIONS = [
         "description": "Complete 3 booze run deliveries. We need a driver who doesn't ask questions.",
         "reward_money": 600,
         "reward_points": 12,
+        "reward_booze": {"bathtub_gin": 15, "moonshine": 10},
         "difficulty": 3,
         "unlocks_city": None,
         "character_id": "char_ny_smuggler",
@@ -172,6 +192,7 @@ MISSIONS = [
         "description": "Steal 3 cars. The Mechanic needs wheels.",
         "reward_money": 700,
         "reward_points": 14,
+        "reward_car_id": "car2",
         "difficulty": 4,
         "unlocks_city": None,
         "character_id": "char_ny_mechanic",
@@ -667,6 +688,9 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "description": m["description"],
             "reward_money": m.get("reward_money", 0),
             "reward_points": m.get("reward_points", 0),
+            "reward_car_id": m.get("reward_car_id"),
+            "reward_booze": m.get("reward_booze"),
+            "reward_bullets": m.get("reward_bullets", 0),
             "unlocks_city": m.get("unlocks_city"),
             "character_id": m.get("character_id"),
             "difficulty": m.get("difficulty", 5),
@@ -703,6 +727,9 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "description": m["description"],
             "reward_money": m.get("reward_money", 0),
             "reward_points": m.get("reward_points", 0),
+            "reward_car_id": m.get("reward_car_id"),
+            "reward_booze": m.get("reward_booze"),
+            "reward_bullets": m.get("reward_bullets", 0),
             "unlocks_city": m.get("unlocks_city"),
             "character_id": m.get("character_id"),
             "difficulty": m.get("difficulty", 5),
@@ -750,6 +777,9 @@ async def complete_mission(
     user_id = current_user["id"]
     reward_money = int(mission.get("reward_money") or 0)
     reward_points = int(mission.get("reward_points") or 0)
+    reward_car_id = (mission.get("reward_car_id") or "").strip() or None
+    reward_booze = mission.get("reward_booze")
+    reward_bullets = int(mission.get("reward_bullets") or 0)
     unlocks_city = mission.get("unlocks_city")
     completion_doc = {"mission_id": mission_id, "completed_at": datetime.now(timezone.utc).isoformat()}
     update = {"$push": {"mission_completions": completion_doc}}
@@ -759,10 +789,27 @@ async def complete_mission(
     if reward_points:
         update["$inc"] = update.get("$inc") or {}
         update["$inc"]["rank_points"] = reward_points
+    if reward_bullets:
+        update["$inc"] = update.get("$inc") or {}
+        update["$inc"]["bullets"] = reward_bullets
+    if isinstance(reward_booze, dict) and reward_booze:
+        booze_ids = [b["id"] for b in BOOZE_TYPES]
+        update["$inc"] = update.get("$inc") or {}
+        for bid, amt in reward_booze.items():
+            if bid in booze_ids and amt and int(amt) > 0:
+                update["$inc"][f"booze_carrying.{bid}"] = int(amt)
+                update.setdefault("$set", {})[f"booze_carrying_cost.{bid}"] = 0
     if unlocks_city:
         update["$set"] = update.get("$set") or {}
         update["$set"]["unlocked_maps_up_to"] = unlocks_city
     await db.users.update_one({"id": user_id}, update)
+    if reward_car_id and next((c for c in CARS if c.get("id") == reward_car_id), None):
+        await db.user_cars.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "car_id": reward_car_id,
+            "acquired_at": datetime.now(timezone.utc).isoformat(),
+        })
     try:
         if reward_points:
             rp_before = int(current_user.get("rank_points") or 0)
@@ -782,6 +829,9 @@ async def complete_mission(
         "mission_id": mission_id,
         "reward_money": reward_money,
         "reward_points": reward_points,
+        "reward_car_id": reward_car_id,
+        "reward_booze": reward_booze if isinstance(reward_booze, dict) else None,
+        "reward_bullets": reward_bullets,
         "unlocked_city": unlocks_city,
     }
 

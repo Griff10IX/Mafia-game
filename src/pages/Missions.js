@@ -169,8 +169,38 @@ function Modal({ city, dist, missions, onClose, onStart, starting }) {
             )}
             {prim.reward_money > 0 && (
               <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Bank Profit</span>
-                <span className="text-emerald-400 font-bold">{fmt(prim.reward_money)}</span>
+                <span className="text-zinc-400">Daily income</span>
+                <span className="text-emerald-400 font-bold">Adds {fmt(prim.reward_money)} to daily income</span>
+              </div>
+            )}
+            {prim.reward_points > 0 && (
+              <div className="flex justify-between text-[9px] font-heading">
+                <span className="text-zinc-400">Rank points</span>
+                <span className="text-primary font-bold">+{prim.reward_points} RP</span>
+              </div>
+            )}
+            {prim.reward_car_id && (
+              <div className="flex justify-between text-[9px] font-heading">
+                <span className="text-zinc-400">Car</span>
+                <span className="text-primary font-bold">1 car</span>
+              </div>
+            )}
+            {prim.reward_booze && typeof prim.reward_booze === 'object' && Object.keys(prim.reward_booze).length > 0 && (
+              <div className="flex justify-between text-[9px] font-heading">
+                <span className="text-zinc-400">Booze</span>
+                <span className="text-primary font-bold">{Object.values(prim.reward_booze).reduce((s, n) => s + Number(n || 0), 0)} units</span>
+              </div>
+            )}
+            {prim.reward_bullets > 0 && (
+              <div className="flex justify-between text-[9px] font-heading">
+                <span className="text-zinc-400">Bullets</span>
+                <span className="text-primary font-bold">+{prim.reward_bullets}</span>
+              </div>
+            )}
+            {prim.unlocks_city && (
+              <div className="flex justify-between text-[9px] font-heading">
+                <span className="text-zinc-400">Unlocks</span>
+                <span className="text-primary font-bold">{prim.unlocks_city}</span>
               </div>
             )}
             <div className="flex justify-between text-[9px] font-heading">
@@ -376,7 +406,14 @@ export default function Missions() {
     try {
       const r = await api.post('/missions/complete', { mission_id: id });
       if (r.data?.completed) {
-        toast.success(r.data.unlocked_city ? `${r.data.unlocked_city} unlocked!` : 'Complete!');
+        const parts = [];
+        if (r.data.reward_money > 0) parts.push(fmt(r.data.reward_money));
+        if (r.data.reward_points > 0) parts.push(`+${r.data.reward_points} RP`);
+        if (r.data.reward_car_id) parts.push('Car');
+        if (r.data.reward_booze && Object.keys(r.data.reward_booze).length > 0) parts.push('Booze');
+        if (r.data.reward_bullets > 0) parts.push(`+${r.data.reward_bullets} bullets`);
+        if (r.data.unlocked_city) parts.push(`${r.data.unlocked_city} unlocked!`);
+        toast.success(parts.length ? parts.join(' · ') : 'Complete!');
         refreshUser();
         const [m, d] = await Promise.all([api.get('/missions/map'), api.get('/missions')]);
         setData(m.data);
@@ -448,7 +485,7 @@ export default function Missions() {
       <div className="rounded-lg border border-zinc-700/50 bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 p-2.5 sm:p-3 mb-3 fade" style={{ animationDelay: '0.3s' }}>
         <h3 className="text-xs font-heading font-bold text-primary mb-1.5">Mission Guide</h3>
         <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
-          Complete missions in each district to earn bank profit. Click districts on the map to view objectives, progress, and rewards.
+          Complete missions to add to your daily income — the more you complete, the more you earn each day. Click districts on the map to view objectives, progress, and rewards.
         </p>
       </div>
 
