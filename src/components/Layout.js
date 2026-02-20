@@ -1246,7 +1246,7 @@ export default function Layout({ children }) {
           };
           return (
             <>
-            <div className={`flex items-center ${topBarGapClass} flex-1 min-w-0 overflow-x-auto md:overflow-visible overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
+            <div className={`hidden md:flex items-center ${topBarGapClass} flex-1 min-w-0 overflow-x-auto overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
               {/* Global user search: click icon to reveal search bar — same size as other chips */}
               <div className="relative shrink-0 z-10 snap-start" ref={userSearchRef}>
                 {!userSearchExpanded ? (
@@ -1560,8 +1560,8 @@ export default function Layout({ children }) {
         </div>
       )}
 
-      {/* Floating notification ball: draggable, position persisted */}
-      {user && notificationBallPosition && (
+      {/* Floating mobile menu ball: all stats, search, notifications; draggable, position persisted */}
+      {user && notificationBallPosition && isMobileViewport && (
         <div
           ref={notificationBallRef}
           className="fixed z-50 touch-none"
@@ -1580,7 +1580,7 @@ export default function Layout({ children }) {
               borderColor: 'var(--noir-primary)',
               color: 'var(--noir-primary)',
             }}
-            aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
+            aria-label="Stats and notifications"
             onPointerDown={(e) => {
               e.preventDefault();
               const ballX = notificationBallPosition.x;
@@ -1623,7 +1623,7 @@ export default function Layout({ children }) {
               document.addEventListener('pointercancel', onUp);
             }}
           >
-            <Bell size={26} strokeWidth={2} className="shrink-0" />
+            <LayoutGrid size={26} strokeWidth={2} className="shrink-0" />
             {unreadCount > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 min-w-[20px] h-[20px] rounded-full flex items-center justify-center text-[11px] font-heading font-bold text-white"
@@ -1635,34 +1635,114 @@ export default function Layout({ children }) {
           </button>
           {notificationPanelOpen && (
             <div
-              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(320px,calc(100vw-2rem))] max-h-[min(400px,60vh)] flex flex-col rounded-lg border-2 shadow-xl"
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(340px,calc(100vw-1.5rem))] max-h-[min(85vh,520px)] flex flex-col rounded-xl border-2 shadow-xl overflow-hidden"
               style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
             >
-              <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-                <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>Notifications</h3>
-                <p className="text-xs mt-0.5 font-heading" style={{ color: 'var(--noir-muted)' }}>View & manage your notifications</p>
+              <div className="p-3 border-b shrink-0 flex items-center gap-2" style={{ borderColor: 'var(--noir-border)' }}>
+                <h3 className="font-heading font-semibold text-sm shrink-0" style={{ color: 'var(--noir-primary)' }}>Stats & Notifications</h3>
               </div>
-              <div className="overflow-y-auto flex-1 min-h-0">
-                {notificationList.length === 0 ? (
-                  <div className="p-4 text-center font-heading text-sm" style={{ color: 'var(--noir-muted)' }}>No notifications</div>
-                ) : (
-                  notificationList.slice(0, 12).map((n) => (
-                    <button
-                      key={n.id}
-                      type="button"
-                      onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
-                      className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
-                      style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.06)' }}
-                    >
-                      <span className="font-semibold block truncate">{n.title}</span>
-                      <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
-                    </button>
-                  ))
+              <div className="overflow-y-auto flex-1 min-h-0 p-2 space-y-2">
+                {/* User search */}
+                <div className="flex items-center gap-2">
+                  <Search size={16} className="shrink-0" style={{ color: 'var(--noir-muted)' }} />
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
+                    onFocus={() => { setUserSearchOpen(true); }}
+                    placeholder="Search user..."
+                    className="flex-1 min-w-0 py-2 px-3 rounded-lg border font-heading text-sm bg-noir-surface border-primary/20"
+                    style={{ color: 'var(--noir-foreground)' }}
+                    autoComplete="off"
+                  />
+                </div>
+                {userSearchOpen && userSearchQuery.trim().length > 0 && (
+                  <div className="rounded-lg border overflow-hidden max-h-40 overflow-y-auto" style={{ borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)' }}>
+                    {userSearchLoading ? (
+                      <div className="p-3 text-center text-xs font-heading" style={{ color: 'var(--noir-muted)' }}>Searching...</div>
+                    ) : userSearchResults.length === 0 ? (
+                      <div className="p-3 text-center text-xs font-heading" style={{ color: 'var(--noir-muted)' }}>No users found</div>
+                    ) : (
+                      userSearchResults.map((u) => (
+                        <Link
+                          key={u.username}
+                          to={`/profile/${encodeURIComponent(u.username)}`}
+                          onClick={() => { setUserSearchOpen(false); setUserSearchQuery(''); setUserSearchResults([]); setNotificationPanelOpen(false); }}
+                          className="block w-full text-left px-3 py-2.5 border-b font-heading text-sm"
+                          style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
+                        >
+                          {u.username}
+                        </Link>
+                      ))
+                    )}
+                  </div>
                 )}
+                {/* Stats rows */}
+                <div className="grid grid-cols-2 gap-2">
+                  {rankProgress && (
+                    <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                      <TrendingUp size={18} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-heading text-xs truncate" style={{ color: 'var(--noir-muted)' }}>{rankProgress.current_rank_name}</p>
+                        <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: '#333' }}>
+                          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
+                        </div>
+                      </div>
+                      <span className="font-heading text-xs font-bold shrink-0" style={{ color: 'var(--noir-primary)' }}>
+                        {(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}%
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                    <DollarSign size={18} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                    <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{formatMoney(user.money)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                    <Zap size={18} className="shrink-0" style={{ color: 'var(--noir-foreground)' }} />
+                    <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.points)} pts</span>
+                  </div>
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                    <Crosshair size={18} className="shrink-0 text-red-400" />
+                    <span className="font-heading text-sm" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.bullets)}</span>
+                  </div>
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                    <Skull size={18} className="shrink-0 text-red-400" />
+                    <span className="font-heading text-sm" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.total_kills)}</span>
+                  </div>
+                  <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                    <Building2 size={18} className="shrink-0 text-emerald-400" />
+                    <span className="font-heading text-xs truncate" style={{ color: 'var(--noir-foreground)' }}>
+                      C {formatMoneyCompact(user.casino_profit ?? 0)} · P {formatCompact(user.property_profit ?? 0)} pts
+                    </span>
+                  </div>
+                </div>
+                {/* Notifications */}
+                <div className="pt-1 border-t" style={{ borderColor: 'var(--noir-border)' }}>
+                  <p className="font-heading text-[10px] uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Notifications</p>
+                  {notificationList.length === 0 ? (
+                    <div className="py-3 text-center font-heading text-xs" style={{ color: 'var(--noir-muted)' }}>No notifications</div>
+                  ) : (
+                    <div className="space-y-0 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--noir-border)' }}>
+                      {notificationList.slice(0, 8).map((n) => (
+                        <button
+                          key={n.id}
+                          type="button"
+                          onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
+                          className="w-full text-left px-3 py-2 border-b font-heading text-xs last:border-b-0"
+                          style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.08)' }}
+                        >
+                          <span className="font-semibold block truncate">{n.title}</span>
+                          <span className="block truncate mt-0.5 opacity-90">{n.message}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="p-2 border-t shrink-0 flex gap-2" style={{ borderColor: 'var(--noir-border)' }}>
-                <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View all</button>
-                <button type="button" onClick={() => { markAllNotificationsRead(); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
+              <div className="p-2 border-t shrink-0 flex flex-wrap gap-2" style={{ borderColor: 'var(--noir-border)' }}>
+                <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View inbox</button>
+                <button type="button" onClick={() => { markAllNotificationsRead(); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
+                <button type="button" onClick={() => { setNotificationPanelOpen(false); setTopBarCustomizeOpen(true); }} className="py-1.5 px-3 rounded-lg text-xs font-heading border ml-auto" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>Customize bar</button>
               </div>
             </div>
           )}
