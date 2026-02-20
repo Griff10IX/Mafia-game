@@ -117,6 +117,7 @@ export default function Missions() {
   const [characters, setCharacters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCity, setSelectedCity] = useState(null);
+  const [selectedArea, setSelectedArea] = useState(null);
   const [completing, setCompleting] = useState(null);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
 
@@ -164,6 +165,10 @@ export default function Missions() {
     if (city) fetchCharacters(city);
   }, [city]);
 
+  useEffect(() => {
+    setSelectedArea(null);
+  }, [city]);
+
   const handleComplete = async (missionId) => {
     setCompleting(missionId);
     try {
@@ -192,6 +197,18 @@ export default function Missions() {
 
   const characterById = Object.fromEntries((characters || []).map((c) => [c.id, c]));
   const missionByCharacterId = Object.fromEntries((cityMissions || []).filter((m) => m.character_id).map((m) => [m.character_id, m]));
+
+  const cityAreas = city && byCity[city]?.areas
+    ? Object.entries(byCity[city].areas)
+        .filter(([name]) => name && name !== '—')
+        .map(([name, missions]) => ({ name, missions: missions || [] }))
+    : [];
+  const missionsToShow = selectedArea
+    ? (cityMissions || []).filter((m) => (m.area || '—') === selectedArea)
+    : (cityMissions || []);
+  const charactersToShow = selectedArea
+    ? (characters || []).filter((c) => c.area === selectedArea)
+    : (characters || []);
 
   const getDialogueForCharacter = (char) => {
     const mission = missionByCharacterId[char.id];
@@ -249,13 +266,70 @@ export default function Missions() {
 
       {city && (
         <>
-          {characters.length > 0 && (
+          {cityAreas.length > 0 && (
             <section>
               <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">
-                Characters — {city}
+                2D map — {city}
+              </h2>
+              <p className="text-[11px] text-mutedForeground font-heading mb-2">
+                Click a district to see its missions and characters.
+              </p>
+              <div
+                className="grid gap-2 w-full max-w-2xl"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}
+              >
+                {!selectedArea && (
+                  <div
+                    className="col-span-full sm:col-span-1 rounded-lg border-2 border-primary/50 bg-primary/10 p-3 text-left"
+                    aria-label="All districts selected"
+                  >
+                    <span className="text-[11px] font-heading font-bold text-primary block">All districts</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">Showing all</span>
+                  </div>
+                )}
+                {selectedArea && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedArea(null)}
+                    className="rounded-lg border border-zinc-600 bg-zinc-800/50 p-3 text-left hover:bg-zinc-700/50 hover:border-zinc-500"
+                  >
+                    <span className="text-[11px] font-heading font-bold text-foreground block">All districts</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">Show all</span>
+                  </button>
+                )}
+                {cityAreas.map(({ name, missions }) => {
+                  const done = (missions || []).filter((m) => m.completed).length;
+                  const total = (missions || []).length;
+                  const isSelected = selectedArea === name;
+                  return (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => setSelectedArea(isSelected ? null : name)}
+                      className={`rounded-lg border-2 p-3 text-left transition-colors ${
+                        isSelected
+                          ? 'border-primary bg-primary/15'
+                          : 'border-zinc-600 bg-zinc-800/40 hover:bg-zinc-700/50 hover:border-zinc-500'
+                      }`}
+                    >
+                      <span className="text-[11px] font-heading font-bold text-foreground block">{name}</span>
+                      <span className="text-[10px] text-mutedForeground font-heading">
+                        {done}/{total} missions
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {charactersToShow.length > 0 && (
+            <section>
+              <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">
+                Characters{selectedArea ? ` — ${selectedArea}` : ` — ${city}`}
               </h2>
               <div className="flex flex-wrap gap-2">
-                {characters.map((c) => (
+                {charactersToShow.map((c) => (
                   <button
                     key={c.id}
                     type="button"
@@ -271,13 +345,15 @@ export default function Missions() {
           )}
           <section>
             <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">
-              {city}
+              {selectedArea ? `${city} — ${selectedArea}` : city}
             </h2>
             <div className="space-y-2">
-              {cityMissions.length === 0 ? (
-                <p className="text-[11px] text-mutedForeground">No missions in this city.</p>
+              {missionsToShow.length === 0 ? (
+                <p className="text-[11px] text-mutedForeground">
+                  {selectedArea ? 'No missions in this district.' : 'No missions in this city.'}
+                </p>
               ) : (
-                cityMissions.map((m) => (
+                missionsToShow.map((m) => (
                   <MissionCard
                     key={m.id}
                     mission={m}
