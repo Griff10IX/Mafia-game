@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { HelpCircle, Clock, AlertCircle, Bot, Skull } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
-import { getCrimesPrefetch } from '../utils/prefetchCache';
+import { getCrimesPrefetch, clearCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -367,6 +367,7 @@ export default function Crimes() {
           )
         );
       }
+      clearCrimesPrefetch();
       await fetchCrimes();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to commit crime');
@@ -458,6 +459,7 @@ export default function Crimes() {
         }
         toast.success(parts.join(' and '));
       }
+      clearCrimesPrefetch();
       await fetchCrimes();
     } finally {
       setCommitAllLoading(false);
