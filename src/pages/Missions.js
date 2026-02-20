@@ -6,8 +6,51 @@ import { toast } from 'sonner';
 const STYLES = `
   @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .fade { animation: fade 0.25s ease-out both; }
-  @keyframes glow { 0%, 100% { filter: drop-shadow(0 0 4px rgba(212,175,55,0.2)); } 50% { filter: drop-shadow(0 0 8px rgba(212,175,55,0.35)); } }
-  .glow { animation: glow 3s ease-in-out infinite; }
+  
+  @keyframes blur-shift {
+    0%, 100% { transform: translate(0, 0) scale(1); filter: blur(100px); }
+    50% { transform: translate(30px, -30px) scale(1.1); filter: blur(120px); }
+  }
+  .map-blur-bg {
+    position: absolute;
+    width: 250%;
+    height: 250%;
+    top: -75%;
+    left: -75%;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+  }
+  .blur-orb {
+    position: absolute;
+    border-radius: 50%;
+    animation: blur-shift 25s ease-in-out infinite;
+  }
+  .blur-orb:nth-child(1) {
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(212,175,55,0.4) 0%, transparent 70%);
+    top: 10%;
+    left: 20%;
+  }
+  .blur-orb:nth-child(2) {
+    width: 350px;
+    height: 350px;
+    background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
+    top: 50%;
+    right: 15%;
+    animation-delay: -12s;
+    animation-duration: 30s;
+  }
+  .blur-orb:nth-child(3) {
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(212,175,55,0.25) 0%, transparent 70%);
+    bottom: 15%;
+    left: 35%;
+    animation-delay: -18s;
+    animation-duration: 35s;
+  }
 `;
 
 const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
@@ -19,8 +62,8 @@ const MAPS = {
     lakePath: 'M 280,0 L 320,0 L 320,600 L 280,600 L 280,550 L 265,480 L 270,400 L 280,320 L 285,240 L 280,160 L 275,80 Z',
     districts: [
       { name: 'The Loop', path: 'M 160,300 L 230,300 L 230,350 L 160,350 Z', lbl: { x: 195, y: 325 } },
-      { name: 'South Side', path: 'M 140,350 L 265,350 L 265,530 L 140,550 L 120,480 Z', lbl: { x: 190, y: 440 } },
       { name: 'West Side', path: 'M 40,240 L 160,240 L 160,400 L 50,410 Z', lbl: { x: 105, y: 325 } },
+      { name: 'South Side', path: 'M 140,350 L 265,350 L 265,530 L 140,550 L 120,480 Z', lbl: { x: 190, y: 440 } },
       { name: 'North Side', path: 'M 180,100 L 280,80 L 280,300 L 160,300 Z', lbl: { x: 220, y: 200 } },
       { name: 'Near North', path: 'M 230,220 L 285,210 L 285,300 L 230,300 Z', lbl: { x: 257, y: 255 } },
       { name: 'Stockyards', path: 'M 50,410 L 140,400 L 140,520 L 60,530 Z', lbl: { x: 100, y: 465 } }
@@ -31,41 +74,41 @@ const MAPS = {
     hudsonPath: 'M 120,0 L 135,180 L 140,360 L 135,500 L 125,650',
     eastPath: 'M 240,0 L 245,180 L 250,360 L 255,500 L 260,650',
     districts: [
+      { name: 'Brooklyn Heights', path: 'M 200,445 L 285,435 L 295,530 L 190,530 Z', lbl: { x: 247, y: 487 } },
       { name: 'Financial District', path: 'M 135,530 L 180,530 L 190,580 L 170,605 L 135,590 Z', lbl: { x: 162, y: 570 } },
+      { name: 'Williamsburg', path: 'M 210,360 L 315,350 L 315,435 L 285,435 L 200,445 Z', lbl: { x: 262, y: 397 } },
       { name: 'Chinatown', path: 'M 135,490 L 190,490 L 190,530 L 135,530 Z', lbl: { x: 162, y: 510 } },
       { name: 'Greenwich Village', path: 'M 135,445 L 200,445 L 200,490 L 135,490 Z', lbl: { x: 167, y: 467 } },
-      { name: 'Midtown', path: 'M 140,360 L 210,360 L 210,445 L 135,445 Z', lbl: { x: 172, y: 402 } },
       { name: 'Upper West Side', path: 'M 135,270 L 185,270 L 185,360 L 140,360 Z', lbl: { x: 160, y: 315 } },
       { name: 'Upper East Side', path: 'M 185,270 L 235,270 L 235,360 L 185,360 Z', lbl: { x: 210, y: 315 } },
       { name: 'Harlem', path: 'M 135,180 L 245,180 L 245,270 L 135,270 Z', lbl: { x: 190, y: 225 } },
       { name: 'Bronx', path: 'M 140,70 L 260,70 L 265,160 L 245,180 L 135,180 Z', lbl: { x: 200, y: 125 } },
-      { name: 'Brooklyn Heights', path: 'M 200,445 L 285,435 L 295,530 L 190,530 Z', lbl: { x: 247, y: 487 } },
-      { name: 'Williamsburg', path: 'M 210,360 L 315,350 L 315,435 L 285,435 L 200,445 Z', lbl: { x: 262, y: 397 } },
       { name: 'Queens', path: 'M 235,180 L 385,170 L 395,350 L 315,350 L 210,360 Z', lbl: { x: 305, y: 265 } },
-      { name: 'Staten Island', path: 'M 30,470 L 95,460 L 105,570 L 50,580 Z', lbl: { x: 67, y: 520 } }
+      { name: 'Staten Island', path: 'M 30,470 L 95,460 L 105,570 L 50,580 Z', lbl: { x: 67, y: 520 } },
+      { name: 'Midtown', path: 'M 140,360 L 210,360 L 210,445 L 135,445 Z', lbl: { x: 172, y: 402 } }
     ]
   },
   'Las Vegas': {
     vb: { w: 350, h: 500 },
     mountainPath: 'M 0,100 L 70,85 L 110,120 L 0,135 M 330,70 L 350,120 L 330,170',
     districts: [
-      { name: 'The Strip', path: 'M 145,180 L 205,180 L 205,380 L 145,380 Z', lbl: { x: 175, y: 280 } },
-      { name: 'Downtown', path: 'M 135,85 L 215,85 L 215,180 L 145,180 Z', lbl: { x: 175, y: 132 } },
-      { name: 'Paradise', path: 'M 205,180 L 295,170 L 305,380 L 205,380 Z', lbl: { x: 255, y: 280 } },
       { name: 'Summerlin', path: 'M 35,150 L 145,160 L 145,330 L 45,320 Z', lbl: { x: 95, y: 245 } },
-      { name: 'Henderson', path: 'M 205,380 L 305,380 L 315,465 L 195,465 Z', lbl: { x: 255, y: 422 } },
-      { name: 'North Las Vegas', path: 'M 110,35 L 240,35 L 230,85 L 215,85 L 135,85 Z', lbl: { x: 175, y: 60 } },
       { name: 'Arts District', path: 'M 45,160 L 145,160 L 145,240 L 55,235 Z', lbl: { x: 100, y: 200 } },
-      { name: 'Boulder Strip', path: 'M 295,90 L 330,90 L 340,170 L 295,170 Z', lbl: { x: 317, y: 130 } }
+      { name: 'The Strip', path: 'M 145,180 L 205,180 L 205,380 L 145,380 Z', lbl: { x: 175, y: 280 } },
+      { name: 'Paradise', path: 'M 205,180 L 295,170 L 305,380 L 205,380 Z', lbl: { x: 255, y: 280 } },
+      { name: 'North Las Vegas', path: 'M 110,35 L 240,35 L 230,85 L 215,85 L 135,85 Z', lbl: { x: 175, y: 60 } },
+      { name: 'Henderson', path: 'M 205,380 L 305,380 L 315,465 L 195,465 Z', lbl: { x: 255, y: 422 } },
+      { name: 'Boulder Strip', path: 'M 295,90 L 330,90 L 340,170 L 295,170 Z', lbl: { x: 317, y: 130 } },
+      { name: 'Downtown', path: 'M 135,85 L 215,85 L 215,180 L 145,180 Z', lbl: { x: 175, y: 132 } }
     ]
   },
   'Atlantic City': {
     vb: { w: 350, h: 450 },
     oceanPath: 'M 270,0 L 290,90 L 310,180 L 330,270 L 350,360 L 350,450',
     districts: [
+      { name: 'Inlet', path: 'M 70,330 L 220,320 L 220,400 L 90,410 Z', lbl: { x: 145, y: 365 } },
       { name: 'Boardwalk', path: 'M 70,85 L 290,70 L 310,180 L 90,195 Z', lbl: { x: 190, y: 132 } },
       { name: 'Marina District', path: 'M 90,195 L 310,180 L 330,315 L 110,330 Z', lbl: { x: 220, y: 252 } },
-      { name: 'Inlet', path: 'M 70,330 L 220,320 L 220,400 L 90,410 Z', lbl: { x: 145, y: 365 } },
       { name: 'Chelsea', path: 'M 220,320 L 330,315 L 340,400 L 220,400 Z', lbl: { x: 280, y: 360 } }
     ]
   }
@@ -74,10 +117,11 @@ const MAPS = {
 /* Modal */
 function Modal({ city, dist, missions, onClose, onStart, starting }) {
   if (!dist) return null;
-  const list = missions.filter(m => m.area === dist);
+  const list = missions.filter(m => m.area === dist).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   const prim = list.find(m => !m.completed) || list[0];
   const stars = prim?.difficulty >= 8 ? 3 : prim?.difficulty >= 5 ? 2 : 1;
   const can = prim && !prim.completed && prim.requirements_met;
+  const progress = prim?.progress;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90" onClick={onClose}>
@@ -105,12 +149,24 @@ function Modal({ city, dist, missions, onClose, onStart, starting }) {
                 )}
                 <span className={`font-heading font-medium ${m.completed ? 'text-emerald-400' : 'text-foreground'}`}>{m.title}</span>
               </div>
+              {!m.completed && m.description && (
+                <p className="text-[8px] text-zinc-500 mt-1 pl-5">{m.description}</p>
+              )}
             </div>
           ))}
         </div>
 
         {prim && (
           <div className="px-3 py-2 border-t border-zinc-700/50 bg-zinc-900/50 space-y-1">
+            {prim.description && (
+              <p className="text-[9px] text-zinc-400 font-heading">{prim.description}</p>
+            )}
+            {progress?.description && !prim.completed && (
+              <div className="flex justify-between text-[9px] font-heading">
+                <span className="text-zinc-400">Progress</span>
+                <span className="text-foreground">{progress.description}</span>
+              </div>
+            )}
             {prim.reward_money > 0 && (
               <div className="flex justify-between text-[9px] font-heading">
                 <span className="text-zinc-400">Bank Profit</span>
@@ -155,7 +211,7 @@ function Modal({ city, dist, missions, onClose, onStart, starting }) {
   );
 }
 
-/* City Map */
+/* City Map - Brazil Style */
 function CityMap({ city, missions, onClick }) {
   const map = MAPS[city];
   if (!map) return null;
@@ -165,85 +221,124 @@ function CityMap({ city, missions, onClick }) {
     return { done: list.filter(m => m.completed).length, total: list.length };
   };
 
-  const fill = (dist) => {
+  const getFill = (dist) => {
     const { done, total } = stats(dist);
-    if (!total) return 'url(#none)';
-    if (done === total) return 'url(#done)';
-    if (done > 0) return 'url(#prog)';
-    return 'url(#avail)';
+    if (!total) return 'rgba(20, 20, 20, 0.7)';
+    if (done === total) return 'rgba(34, 197, 94, 0.3)';
+    if (done > 0) return 'rgba(234, 179, 8, 0.3)';
+    return 'rgba(30, 30, 30, 0.6)';
+  };
+
+  const getStroke = (dist) => {
+    const { done, total } = stats(dist);
+    if (!total) return '#3f3f46';
+    if (done === total) return '#22c55e';
+    if (done > 0) return '#eab308';
+    return '#52525b';
   };
 
   return (
-    <svg viewBox={`0 0 ${map.vb.w} ${map.vb.h}`} className="w-full glow" style={{ maxHeight: 500 }}>
-      <defs>
-        <linearGradient id="done" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#22c55e" stopOpacity="0.75" />
-          <stop offset="100%" stopColor="#16a34a" stopOpacity="0.85" />
-        </linearGradient>
-        <linearGradient id="prog" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#eab308" stopOpacity="0.65" />
-          <stop offset="100%" stopColor="#ca8a04" stopOpacity="0.75" />
-        </linearGradient>
-        <linearGradient id="avail" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#52525b" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#3f3f46" stopOpacity="0.6" />
-        </linearGradient>
-        <linearGradient id="none" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#27272a" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#18181b" stopOpacity="0.4" />
-        </linearGradient>
-        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#3f3f46" strokeWidth="0.3" opacity="0.15" />
-        </pattern>
-      </defs>
+    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '8px', background: '#000' }}>
+      {/* Blurred atmospheric background */}
+      <div className="map-blur-bg">
+        <div className="blur-orb" />
+        <div className="blur-orb" />
+        <div className="blur-orb" />
+      </div>
+      
+      <svg viewBox={`0 0 ${map.vb.w} ${map.vb.h}`} className="w-full" style={{ maxHeight: 500, position: 'relative', zIndex: 1 }}>
+        <defs>
+          <filter id="glow-complete">
+            <feGaussianBlur stdDeviation="3" result="blur"/>
+            <feMerge>
+              <feMergeNode in="blur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+          <filter id="inner-shadow">
+            <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
+            <feOffset dx="0" dy="0"/>
+            <feComposite operator="out" in2="SourceAlpha"/>
+            <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0"/>
+            <feMerge>
+              <feMergeNode/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
 
-      <rect width={map.vb.w} height={map.vb.h} fill="#0a0a0a" />
-      <rect width={map.vb.w} height={map.vb.h} fill="url(#grid)" />
+        {/* Pure black background */}
+        <rect width={map.vb.w} height={map.vb.h} fill="#000000" />
 
-      {map.lakePath && <path d={map.lakePath} fill="#1e3a5f" fillOpacity="0.3" stroke="#2563eb" strokeWidth="1" strokeOpacity="0.2" />}
-      {map.hudsonPath && <path d={map.hudsonPath} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.2" />}
-      {map.eastPath && <path d={map.eastPath} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.2" />}
-      {map.oceanPath && <path d={map.oceanPath} fill="none" stroke="#2563eb" strokeWidth="3" opacity="0.25" />}
-      {map.mountainPath && <path d={map.mountainPath} fill="none" stroke="#52525b" strokeWidth="1.5" opacity="0.15" />}
+        {/* Water - barely visible */}
+        {map.lakePath && <path d={map.lakePath} fill="#0a0a0f" opacity="0.5" stroke="#1a1a20" strokeWidth="0.8" strokeOpacity="0.2" />}
+        {map.hudsonPath && <path d={map.hudsonPath} fill="none" stroke="#1a1a20" strokeWidth="1" opacity="0.15" />}
+        {map.eastPath && <path d={map.eastPath} fill="none" stroke="#1a1a20" strokeWidth="1" opacity="0.15" />}
+        {map.oceanPath && <path d={map.oceanPath} fill="none" stroke="#1a1a20" strokeWidth="1.5" opacity="0.15" />}
+        {map.mountainPath && <path d={map.mountainPath} fill="none" stroke="#2a2a2a" strokeWidth="0.8" opacity="0.1" />}
 
-      {map.districts.map(d => {
-        const st = stats(d.name);
-        return (
-          <g key={d.name}>
-            <path
-              d={d.path}
-              fill={fill(d.name)}
-              stroke="#71717a"
-              strokeWidth="1.5"
-              className="cursor-pointer transition-all duration-200 hover:opacity-80"
-              onClick={() => onClick(d.name)}
-              role="button"
-              tabIndex={0}
-            />
-            <text
-              x={d.lbl.x} y={d.lbl.y - 6}
-              textAnchor="middle"
-              fill="#fafafa"
-              className="font-heading font-bold pointer-events-none select-none"
-              style={{ fontSize: 11, textShadow: '0 1px 3px #000' }}
-            >
-              {d.name}
-            </text>
-            {st.total > 0 && (
+        {/* Districts */}
+        {map.districts.map(d => {
+          const st = stats(d.name);
+          const distFill = getFill(d.name);
+          const distStroke = getStroke(d.name);
+          
+          return (
+            <g key={d.name}>
+              <path
+                d={d.path}
+                fill={distFill}
+                stroke={distStroke}
+                strokeWidth="1.5"
+                style={{ 
+                  filter: st.done === st.total && st.total > 0 ? 'url(#glow-complete)' : 'url(#inner-shadow)',
+                  strokeLinecap: 'round',
+                  strokeLinejoin: 'round',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer'
+                }}
+                className="district-path"
+                onClick={() => onClick(d.name)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.fill = st.total > 0 && st.done === st.total ? 'rgba(34, 197, 94, 0.5)' : 
+                                                 st.done > 0 ? 'rgba(234, 179, 8, 0.5)' : 'rgba(50, 50, 50, 0.7)';
+                  e.currentTarget.style.strokeWidth = '2.5';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.fill = distFill;
+                  e.currentTarget.style.strokeWidth = '1.5';
+                }}
+                role="button"
+                tabIndex={0}
+              />
               <text
-                x={d.lbl.x} y={d.lbl.y + 8}
+                x={d.lbl.x} y={d.lbl.y - 6}
                 textAnchor="middle"
-                fill={st.done === st.total ? '#22c55e' : st.done > 0 ? '#eab308' : '#a1a1aa'}
+                fill="#fafafa"
                 className="font-heading font-bold pointer-events-none select-none"
-                style={{ fontSize: 10, textShadow: '0 1px 2px #000' }}
+                style={{ 
+                  fontSize: 11, 
+                  textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 30px rgba(0,0,0,0.9), 0 4px 12px rgba(0,0,0,0.8)' 
+                }}
               >
-                {st.done}/{st.total}
+                {d.name}
               </text>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+              {st.total > 0 && (
+                <text
+                  x={d.lbl.x} y={d.lbl.y + 8}
+                  textAnchor="middle"
+                  fill={st.done === st.total ? '#22c55e' : st.done > 0 ? '#eab308' : '#71717a'}
+                  className="font-heading font-bold pointer-events-none select-none"
+                  style={{ fontSize: 10, textShadow: '0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.8)' }}
+                >
+                  {st.done}/{st.total}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
@@ -353,7 +448,7 @@ export default function Missions() {
       <div className="rounded-lg border border-zinc-700/50 bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 p-2.5 sm:p-3 mb-3 fade" style={{ animationDelay: '0.3s' }}>
         <h3 className="text-xs font-heading font-bold text-primary mb-1.5">Mission Guide</h3>
         <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
-          Complete missions in each district to earn daily empire income. Click districts on the map to view objectives and rewards.
+          Complete missions in each district to earn bank profit. Click districts on the map to view objectives, progress, and rewards.
         </p>
       </div>
 

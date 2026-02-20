@@ -617,7 +617,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             if hitlist_entry:
                 rewards = hitlist_entry.get("npc_rewards") or {}
                 rp_added = int(rewards.get("rank_points", 0) or 0)
-                inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1}
+                inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1, "hitlist_npc_kills": 1}
                 booze = rewards.get("booze")
                 if isinstance(booze, dict) and booze:
                     booze_ids = [b["id"] for b in BOOZE_TYPES]
