@@ -52,6 +52,90 @@ We can introduce **mission characters** as a new entity (e.g. `mission_character
 
 ---
 
+## 3.3 Special mission characters (1920s–1930s American mafia)
+
+All mission characters are **inspired by** the era (Prohibition, bootlegging, street crews, syndicates) and **fictional** — no real names or direct likenesses. Tone: noir, tough, period slang where it fits.
+
+### Archetypes by role
+
+| Role | Era vibe | Example role in missions |
+|------|----------|---------------------------|
+| **The Fixer** | Connects people, “makes problems go away,” knows everyone. | Gives intel missions, unlock contacts, “go do X and come back.” |
+| **The Enforcer** | Muscle, collector, “remind” people to pay. | “Rough up” / collect — map to crimes or attacks. |
+| **The Bookkeeper** | Counts the money, keeps the books, launders. | Earn $X, bank deposits, or “deliver cash” step. |
+| **The Smuggler** | Booze, goods, runs between cities. | Travel, booze run, or “move a shipment” (travel + earn). |
+| **The Boss** | Capo / Don figure, gives the big orders. | Unlock next district or city; “you’ve proven yourself.” |
+| **The Corrupt Cop** | On the pad, tips off raids, looks the other way. | Jail / bust related, or “pay protection” (cash) to avoid heat. |
+| **The Mechanic** | Garage, chop shop, “lost” cars. | GTA, steal X cars, or “deliver this car to the docks.” |
+| **The Mouthpiece** | Lawyer, talks to the law, gets people out. | Jail bust, or “get someone out” as a mission step. |
+| **The Bartender / Speakeasy Owner** | Front for the operation, hears everything. | Hub character, intro to others; “someone’s looking for a driver.” |
+
+### Characters by city (fictional, era-inspired)
+
+**Chicago**
+- **“The Fixer” (e.g. Vinnie or a nickname)** — Downtown. First contact; “the outfit’s always looking for reliable people.” Gives: commit X crimes, earn X, then “go see the Bookkeeper at the docks.”  
+- **“The Bookkeeper”** — Docks / warehouse district. All business: “show me you can make money.” Mission: earn $X from crimes or deliver a “package” (travel or GTA step).  
+- **“The Enforcer”** — South Side or industrial. “Someone’s behind on a debt. Remind them.” → commit crimes or win X attacks.  
+- **Boss (e.g. “the Old Man” or a title)** — Unlocks after other Chicago missions. “You’re ready for the big leagues. New York’s waiting.” → unlocks New York map.
+
+**New York**
+- **“The Smuggler”** — Waterfront. “We need a driver. Run the route, don’t ask questions.” → booze run or travel + earn.  
+- **“The Mouthpiece”** — Courthouse / legal district. “One of ours is in the can. Get him out.” → bust X from jail.  
+- **“The Mechanic”** — Garage / chop shop. “We need three cars by Friday.” → steal X cars (GTA).  
+- **NY Boss** — Unlocks Las Vegas after New York story missions.
+
+**Las Vegas**
+- **“The Builder”** — Desert / construction. Pre-casino era: “we’re putting something big out here. Earn your share.” → high cash or rank missions.  
+- **“The Gambler”** — Card room / back room. “The house always wins. Unless you’re with us.” → earn X from crimes or a “high stakes” objective.  
+- **Vegas Boss** — Unlocks Atlantic City.
+
+**Atlantic City**
+- **“The Shore Boss”** — Boardwalk / back alleys. “Last stop. Prove you’re made.” → toughest stat missions or a “final test” (e.g. rank Don, or big earnings).  
+- **“The Corrupt Cop”** — Police station / docks. “Keep the heat off. Pay the right people.” → pay $X or complete busts without getting locked up.  
+- **Final Boss / “The Commission”** — Unlock after all four cities; optional “you’re made” capstone mission (prestige or title).
+
+### Mafia characters quick reference
+
+| ID | Name | City | Area | Role |
+|----|------|------|------|------|
+| `char_chicago_fixer` | The Fixer | Chicago | Downtown | fixer |
+| `char_chicago_bookkeeper` | The Bookkeeper | Chicago | Docks | bookkeeper |
+| `char_chicago_enforcer` | The Enforcer | Chicago | South Side | enforcer |
+| `char_chicago_boss` | The Old Man | Chicago | Downtown | boss |
+| `char_ny_smuggler` | The Smuggler | New York | Waterfront | smuggler |
+| `char_ny_mouthpiece` | The Mouthpiece | New York | Courthouse | mouthpiece |
+| `char_ny_mechanic` | The Mechanic | New York | Garage | mechanic |
+| `char_ny_boss` | NY Boss | New York | Downtown | boss |
+| `char_vegas_builder` | The Builder | Las Vegas | Desert | builder |
+| `char_vegas_gambler` | The Gambler | Las Vegas | Card room | gambler |
+| `char_vegas_boss` | Vegas Boss | Las Vegas | Downtown | boss |
+| `char_ac_shore_boss` | The Shore Boss | Atlantic City | Boardwalk | shore_boss |
+| `char_ac_cop` | The Corrupt Cop | Atlantic City | Docks | cop |
+| `char_ac_commission` | The Commission | Atlantic City | — | boss |
+
+### Data shape for characters
+
+- `id` (e.g. `char_chicago_fixer`)  
+- `name` (display, e.g. “The Fixer”)  
+- `city` (Chicago / New York / Las Vegas / Atlantic City)  
+- `area` (Downtown, Docks, South Side, Waterfront, etc.)  
+- `role` (fixer, enforcer, bookkeeper, smuggler, boss, cop, mechanic, mouthpiece, bartender, gambler, builder, shore_boss)  
+- `era_flavor` (optional: “Prohibition Chicago,” “NY syndicate,” “Vegas before the strip,” “Atlantic City bootleggers”)  
+- `dialogue_intro` — First time you meet: short blurb (1–3 sentences).  
+- `dialogue_mission_offer` — When they give a mission: what they say.  
+- `dialogue_in_progress` — “Come back when it’s done.”  
+- `dialogue_complete` — “You’re good. Here’s your cut.” / “The boss wants to see you.”  
+- `mission_id` — Which mission(s) they give (can be one or a chain).  
+- `portrait_ref` (optional) — Asset id for UI (placeholder or final art).
+
+### Tone and copy
+
+- Short, punchy lines; avoid long paragraphs.  
+- Period-appropriate slang where it fits: “the can,” “the pad,” “vig,” “the outfit,” “made,” “square,” “heat,” “the law.”  
+- No real names or direct references to real people; keep it clearly fictional “noir mafia” America.
+
+---
+
 ## 4. Data model (backend)
 
 ### 4.1 Collections / concepts
@@ -60,8 +144,8 @@ We can introduce **mission characters** as a new entity (e.g. `mission_character
   - `missions` (or seed JSON): list of mission definitions.
   - Fields per mission: `id`, `city`, `area` (optional), `order` (for unlock order), `type` (e.g. `crime_count`, `gta_count`, `special`), `requirements` (e.g. `{ "crimes": 10 }`), `title`, `description`, `reward_money`, `reward_points`, `unlocks_city` (next city id or null), `character_id` (for special missions).
 
-- **Mission characters (optional)**
-  - `mission_characters`: `id`, `name`, `city`, `area`, `mission_id`, `dialogue_intro`, `dialogue_complete`, etc.
+- **Mission characters** (see §3.3 for full list and 1920s–30s archetypes)
+  - `mission_characters`: `id`, `name`, `city`, `area`, `role`, `era_flavor` (optional), `mission_id` (or list), `dialogue_intro`, `dialogue_mission_offer`, `dialogue_in_progress`, `dialogue_complete`, `portrait_ref` (optional).
 
 - **User progress**
   - `user_missions` or fields on `users`: which missions are completed, which city map is unlocked, current step for special missions.
