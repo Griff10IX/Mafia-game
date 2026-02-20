@@ -49,6 +49,7 @@ export default function ArmourWeapons() {
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(null);
   const [ownedArmouryState, setOwnedArmouryState] = useState(null);
+  const [armouryViewingState, setArmouryViewingState] = useState(null); // state used for list/stock; send with buy so correct armoury decrements
   const [armourData, setArmourData] = useState({ current_level: 0, options: [] });
   const [weapons, setWeapons] = useState([]);
   const [event, setEvent] = useState(null);
@@ -81,6 +82,7 @@ export default function ArmourWeapons() {
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
       setOwnedArmouryState(ownedState);
+      setArmouryViewingState(effectiveState || null);
     } catch {
       toast.error('Failed to load armour & weapons');
     } finally {
@@ -94,7 +96,7 @@ export default function ArmourWeapons() {
   const buyArmour = async (level) => {
     setBuyingLevel(level);
     try {
-      const state = ownedArmouryState || me?.current_state;
+      const state = armouryViewingState ?? ownedArmouryState ?? me?.current_state;
       const res = await api.post('/armour/buy', { level, ...(state ? { state } : {}) });
       toast.success(res.data.message || 'Purchased armour');
       refreshUser();
@@ -146,7 +148,7 @@ export default function ArmourWeapons() {
   const buyWeapon = async (weaponId, currency) => {
     setBuyingId(weaponId);
     try {
-      const state = ownedArmouryState || me?.current_state;
+      const state = armouryViewingState ?? ownedArmouryState ?? me?.current_state;
       const response = await api.post(`/weapons/${weaponId}/buy`, { currency, ...(state ? { state } : {}) });
       toast.success(response.data.message);
       refreshUser();

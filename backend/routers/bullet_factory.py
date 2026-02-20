@@ -64,9 +64,13 @@ class StateOptionalBody(BaseModel):
 
 
 def _normalize_state(state: str) -> str:
-    if not state or state not in STATES:
+    if not state or not (state or "").strip():
         return STATES[0] if STATES else ""
-    return state
+    s = (state or "").strip()
+    for st in (STATES or []):
+        if st and s.lower() == st.lower():
+            return st
+    return STATES[0] if STATES else ""
 
 
 async def get_armoury_for_state(state: str):
