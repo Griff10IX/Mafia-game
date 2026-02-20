@@ -10,7 +10,7 @@ const STYLES = `
   .glow { animation: glow 3s ease-in-out infinite; }
 `;
 
-const fmt = (n) => \`$\${Number(n ?? 0).toLocaleString()}\`;
+const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
 /* ULTRA-REALISTIC CITY MAPS */
 const MAPS = {
@@ -92,7 +92,7 @@ function Modal({ city, dist, missions, onClose, onStart, starting }) {
 
         <div className="px-3 py-2.5 space-y-1.5 max-h-[40vh] overflow-y-auto">
           {list.map(m => (
-            <div key={m.id} className={\`p-2 rounded border text-[9px] \${m.completed ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-800/60 border-zinc-700/50'}\`}>
+            <div key={m.id} className={`p-2 rounded border text-[9px] ${m.completed ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-800/60 border-zinc-700/50'}`}>
               <div className="flex gap-1.5">
                 {m.completed ? (
                   <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
@@ -103,7 +103,7 @@ function Modal({ city, dist, missions, onClose, onStart, starting }) {
                 ) : (
                   <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-zinc-700/50 border border-zinc-600/50" />
                 )}
-                <span className={\`font-heading font-medium \${m.completed ? 'text-emerald-400' : 'text-foreground'}\`}>{m.title}</span>
+                <span className={`font-heading font-medium ${m.completed ? 'text-emerald-400' : 'text-foreground'}`}>{m.title}</span>
               </div>
             </div>
           ))}
@@ -180,7 +180,7 @@ function CityMap({ city, missions, onClick }) {
   };
 
   return (
-    <svg viewBox={\`0 0 \${map.vb.w} \${map.vb.h}\`} className="w-full glow" style={{ maxHeight: 500 }}>
+    <svg viewBox={`0 0 ${map.vb.w} ${map.vb.h}`} className="w-full glow" style={{ maxHeight: 500 }}>
       <defs>
         <linearGradient id="done" x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor="#22c55e" stopOpacity="0.75" />
@@ -261,16 +261,16 @@ function Stats({ data }) {
         <I size={13} className="text-zinc-500" />
         <span className="text-[8px] text-zinc-400 font-heading uppercase tracking-wider">{label}</span>
       </div>
-      <div className={\`text-base font-heading font-bold \${clr}\`}>{val}</div>
+      <div className={`text-base font-heading font-bold ${clr}`}>{val}</div>
     </div>
   );
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <Card icon={DollarSign} label="Cash" val={\`\${fmt(data.cash)}/day\`} clr="text-emerald-400" />
-      <Card icon={Award} label="Points" val={\`\${data.pts}/day\`} clr="text-primary" />
-      <Card icon={Crosshair} label="Bullets" val={\`\${data.bullets}/day\`} clr="text-foreground" />
-      <Card icon={Briefcase} label="Ranks" val={\`\${data.ranks}/day\`} clr="text-foreground" />
+      <Card icon={DollarSign} label="Cash" val={`${fmt(data.cash)}/day`} clr="text-emerald-400" />
+      <Card icon={Award} label="Points" val={`${data.pts}/day`} clr="text-primary" />
+      <Card icon={Crosshair} label="Bullets" val={`${data.bullets}/day`} clr="text-foreground" />
+      <Card icon={Briefcase} label="Ranks" val={`${data.ranks}/day`} clr="text-foreground" />
     </div>
   );
 }
@@ -309,7 +309,7 @@ export default function Missions() {
     try {
       const r = await api.post('/missions/complete', { mission_id: id });
       if (r.data?.completed) {
-        toast.success(r.data.unlocked_city ? \`\${r.data.unlocked_city} unlocked!\` : 'Complete!');
+        toast.success(r.data.unlocked_city ? `${r.data.unlocked_city} unlocked!` : 'Complete!');
         refreshUser();
         const [m, d] = await Promise.all([api.get('/missions/map'), api.get('/missions')]);
         setData(m.data);
@@ -357,11 +357,11 @@ export default function Missions() {
           <button
             key={c}
             onClick={() => setCity(c)}
-            className={\`px-2.5 py-1.5 rounded text-[10px] font-heading font-bold border transition-all active:scale-95 \${
+            className={`px-2.5 py-1.5 rounded text-[10px] font-heading font-bold border transition-all active:scale-95 ${
               city === c
                 ? 'bg-gradient-to-b from-primary to-primary/80 text-zinc-900 border-primary'
                 : 'bg-zinc-800/60 text-foreground border-zinc-700 hover:bg-zinc-700/60'
-            }\`}
+            }`}
           >
             {c}
           </button>
