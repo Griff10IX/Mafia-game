@@ -267,6 +267,16 @@ function BulletFactoryTab({ me, ownedArmouryState }) {
   }, [fetchData]);
 
   useEffect(() => {
+    if (!data || activeTab !== 'production') return;
+    const fs = (data.state || '').toLowerCase();
+    const inCity = fs && (currentState || '').toLowerCase() === fs;
+    const hasOwner = !!data.owner_id;
+    const isOwner = data.is_owner === true;
+    const show = inCity && (isOwner || !hasOwner);
+    if (!show) setActiveTab('shop');
+  }, [data, activeTab, currentState]);
+
+  useEffect(() => {
     if (!data) return;
     let cancelled = false;
     (async () => {
@@ -446,6 +456,9 @@ function BulletFactoryTab({ me, ownedArmouryState }) {
 
   const hasOwner = !!data?.owner_id;
   const isOwner = data?.is_owner ?? false;
+  const factoryState = (data?.state || '').toLowerCase();
+  const inArmouryCity = factoryState && (currentState || '').toLowerCase() === factoryState;
+  const showProductionTab = inArmouryCity && (isOwner || !hasOwner);
   const canBuy = data?.can_buy ?? false;
   const accumulated = data?.accumulated_bullets ?? 0;
   const productionPer24h = data?.production_per_24h ?? 5000;
@@ -563,12 +576,12 @@ function BulletFactoryTab({ me, ownedArmouryState }) {
           <ConveyorBelt />
         </div>
 
-        {/* Tabs: Shop (everyone), Production (owner only; or everyone when unclaimed so they can claim) */}
+        {/* Tabs: Shop (everyone), Production (only when in this armoury's city and you own it or it's unclaimed) */}
         <div className="flex border-b border-zinc-700/50 px-4">
           <FactoryTab active={activeTab === 'shop'} onClick={() => setActiveTab('shop')} icon={ShoppingCart}>
             Shop
           </FactoryTab>
-          {(!hasOwner || isOwner) && (
+          {showProductionTab && (
             <FactoryTab active={activeTab === 'production'} onClick={() => setActiveTab('production')} icon={Factory}>
               Production
             </FactoryTab>
@@ -722,7 +735,7 @@ function BulletFactoryTab({ me, ownedArmouryState }) {
         </div>
         )}
 
-        {activeTab === 'production' && (!hasOwner || isOwner) && (
+        {activeTab === 'production' && showProductionTab && (
         <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
 
           {/* Left Column — Stats & Gauge */}
