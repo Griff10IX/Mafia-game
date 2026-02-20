@@ -1063,7 +1063,7 @@ export default function Layout({ children }) {
 
       {/* Top bar */}
       <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-3 md:px-4 gap-2 md:gap-3 py-2 md:py-0`}>
-        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0 shrink-0 overflow-hidden">
+        <div className="flex items-center gap-2 md:gap-3 flex-1 md:flex-initial min-w-0 shrink-0 overflow-hidden">
         {mobileNavStyle !== 'bottom' && (
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1191,16 +1191,16 @@ export default function Layout({ children }) {
             if (statId === 'bullets') {
               return (
                 <div className={`${chipClass} hidden md:flex`} title="Bullets">
-                  <Crosshair size={topBarIconSizeEffective} className="text-red-400" />
-                  <span className={`font-heading ${topBarTextClass} text-foreground`} data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
+                  <Crosshair size={topBarIconSizeEffective} className="text-red-400 shrink-0" />
+                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums`} data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
                 </div>
               );
             }
             if (statId === 'kills') {
               return (
                 <div className={`${chipClass} hidden md:flex`} title="Kills">
-                  <Skull size={topBarIconSizeEffective} className="text-red-400" />
-                  <span className={`font-heading ${topBarTextClass} text-foreground`} data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
+                  <Skull size={topBarIconSizeEffective} className="text-red-400 shrink-0" />
+                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums min-w-[1.25rem] text-right`} data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
                 </div>
               );
             }
@@ -1223,21 +1223,25 @@ export default function Layout({ children }) {
               );
             }
             if (statId === 'property') {
-              const casinoStr = `$${Number(casinoProfit).toLocaleString()}`;
-              const propertyStr = `${Number(propertyProfit).toLocaleString()} pts`;
+              const casinoNum = Number(casinoProfit);
+              const propertyNum = Number(propertyProfit);
+              const casinoStr = `$${(Number.isFinite(casinoNum) ? casinoNum : 0).toLocaleString()}`;
+              const propertyStr = `${(Number.isFinite(propertyNum) ? propertyNum : 0).toLocaleString()} pts`;
               const casinoShort = formatMoneyCompact(casinoProfit);
               const propertyShort = formatCompact(propertyProfit) + ' pts';
+              const casinoColor = (Number.isFinite(casinoNum) ? casinoNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
+              const propertyColor = (Number.isFinite(propertyNum) ? propertyNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
               return (
                 <div className={chipClass} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
                   <Building2 size={topBarIconSizeEffective} className="text-emerald-400 shrink-0" />
                   <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap`}>
                     <span className="text-mutedForeground md:inline hidden">Casino </span>
                     <span className="text-mutedForeground md:hidden">C </span>
-                    <span className={casinoProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{casinoStr}</span></span>
+                    <span className={casinoColor}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{casinoStr}</span></span>
                     <span className="text-mutedForeground mx-0.5">·</span>
                     <span className="text-mutedForeground md:inline hidden">Property </span>
                     <span className="text-mutedForeground md:hidden">P </span>
-                    <span className={propertyProfit >= 0 ? 'text-emerald-500' : 'text-red-400'}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{propertyStr}</span></span>
+                    <span className={propertyColor}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{propertyStr}</span></span>
                   </span>
                 </div>
               );
@@ -1249,7 +1253,7 @@ export default function Layout({ children }) {
           };
           return (
             <>
-            <div className={`hidden md:flex items-center ${topBarGapClass} flex-1 min-w-0 overflow-x-auto overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
+            <div className={`hidden md:flex items-center ${topBarGapClass} flex-1 min-w-0 justify-end overflow-x-auto overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
               {/* Global user search: click icon to reveal search bar — same size as other chips */}
               <div className="relative shrink-0 z-10 snap-start" ref={userSearchRef}>
                 {!userSearchExpanded ? (
