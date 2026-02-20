@@ -315,7 +315,7 @@ export default function Travel() {
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
       ]);
       setTravelInfo(infoRes.data);
-      setAutoRankBoozeOn(!!meRes.data?.auto_rank_booze);
+      setAutoRankBoozeOn(!!(meRes.data?.auto_rank_enabled && meRes.data?.auto_rank_booze));
     } catch (error) {
       toast.error('Failed to load travel info');
       console.error('Error fetching travel info:', error);

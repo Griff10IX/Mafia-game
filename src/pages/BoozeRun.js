@@ -647,7 +647,7 @@ export default function BoozeRun() {
   }, [fetchConfig]);
 
   useEffect(() => {
-    api.get('/auto-rank/me').then((r) => setAutoRankBoozeDisabled(!!r.data?.auto_rank_booze)).catch(() => setAutoRankBoozeDisabled(false));
+    api.get('/auto-rank/me').then((r) => setAutoRankBoozeDisabled(!!(r.data?.auto_rank_enabled && r.data?.auto_rank_booze))).catch(() => setAutoRankBoozeDisabled(false));
   }, []);
 
   const rotationEndRef = useRef(null);

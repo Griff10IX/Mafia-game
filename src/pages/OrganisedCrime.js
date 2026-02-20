@@ -451,7 +451,7 @@ export default function OrganisedCrime() {
       }
       
       if (autoRankRes.data) {
-        setAutoRankOcDisabled(!!autoRankRes.data.auto_rank_oc);
+        setAutoRankOcDisabled(!!(autoRankRes.data.auto_rank_enabled && autoRankRes.data.auto_rank_oc));
       }
       
       if (configRes.data?.jobs?.length && !selectedJobId) {

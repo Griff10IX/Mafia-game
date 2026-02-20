@@ -296,7 +296,7 @@ export default function Jail() {
       setJailedPlayers(playersRes.data.players);
       setJailStats(statsRes.data || {});
       const ar = autoRankRes.data || {};
-      setAutoRankJailDisabled(!!ar.auto_rank_bust_every_5_sec);
+      setAutoRankJailDisabled(!!(ar.auto_rank_enabled && ar.auto_rank_bust_every_5_sec));
     } catch (error) {
       console.error('Failed to load jail data:', error);
       toast.error('Failed to load jail data');

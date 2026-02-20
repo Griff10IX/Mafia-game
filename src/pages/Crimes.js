@@ -331,7 +331,7 @@ export default function Crimes() {
         setEventsEnabled(!!eventsRes.data?.events_enabled);
         setCrimeStats(statsRes.data || {});
         const ar = autoRankRes.data || {};
-        setAutoRankCrimesDisabled(!!(ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec));
+        setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec)));
       }).catch(() => {});
     } catch (error) {
       toast.error('Failed to load crimes');

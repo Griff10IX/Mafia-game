@@ -429,7 +429,7 @@ export default function GTA() {
       }
       if (autoRankRes.status === 'fulfilled' && autoRankRes.value?.data) {
         const ar = autoRankRes.value.data;
-        setAutoRankGtaDisabled(!!(ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec));
+        setAutoRankGtaDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec)));
       }
     } catch (error) {
       toast.error('Failed to load GTA data');
