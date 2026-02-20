@@ -521,7 +521,7 @@ async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
             entry = {
                 "user_car_id": user_car_id,
                 "car_id": car_id,
-                "car_name": user_car.get("car_name"),
+                "car_name": user_car.get("car_name") or car_info.get("name") or "Car",
                 "acquired_at": user_car.get("acquired_at"),
                 "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
                 **car_info,

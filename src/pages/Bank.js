@@ -534,7 +534,7 @@ export default function Bank() {
     return <LoadingSpinner />;
   }
 
-  const deposits = Array.isArray(overview?.deposits) ? overview.deposits : [];
+  const deposits = Array.isArray(overview?.deposits) ? overview.deposits.filter((d) => !d.claimed_at) : [];
   const transfers = Array.isArray(overview?.transfers) ? overview.transfers : [];
 
   return (

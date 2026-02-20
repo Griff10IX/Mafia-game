@@ -234,31 +234,34 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
       {!isCollapsed && (
         <div className="p-1">
           <div className="grid grid-cols-5 gap-1">
-            {recentStolen.map((car, index) => (
-              <div
-                key={car.user_car_id ?? index}
-                data-testid={`recent-stolen-car-${index}`}
-                className="bg-zinc-800/30 border border-primary/10 rounded p-0.5 flex flex-col items-center text-center hover:border-primary/30 transition-all min-w-0"
-              >
-                <div className="w-14 h-14 rounded overflow-hidden bg-zinc-900/50 shrink-0">
-                  {car.image ? (
-                    <img
-                      src={car.image}
-                      alt={car.car_name}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Car size={12} className="text-primary/40" />
-                    </div>
-                  )}
+            {recentStolen.map((car, index) => {
+              const displayName = car.car_name || car.name || 'Car';
+              return (
+                <div
+                  key={car.user_car_id ?? `car-${index}`}
+                  data-testid={`recent-stolen-car-${index}`}
+                  className="bg-zinc-800/30 border border-primary/10 rounded p-0.5 flex flex-col items-center text-center hover:border-primary/30 transition-all min-w-0 overflow-hidden"
+                >
+                  <div className="w-14 h-14 rounded overflow-hidden bg-zinc-900/50 shrink-0 flex-shrink-0">
+                    {car.image ? (
+                      <img
+                        src={car.image}
+                        alt={displayName}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Car size={12} className="text-primary/40" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-[7px] font-heading font-bold text-primary truncate w-full min-h-[1rem] leading-tight mt-0.5 px-0.5 flex items-center justify-center">
+                    {displayName}
+                  </div>
                 </div>
-                <div className="text-[7px] font-heading font-bold text-primary truncate w-full leading-tight mt-0.5 px-0.5">
-                  {car.car_name}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <p className="text-[8px] text-mutedForeground font-heading mt-0.5 text-center">
             <Link to="/garage" className="text-primary hover:underline">View full garage →</Link>

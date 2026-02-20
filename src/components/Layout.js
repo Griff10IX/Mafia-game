@@ -1178,9 +1178,9 @@ export default function Layout({ children }) {
               return (
                 <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={`${rankProgress.current_rank_name}: ${progressLabel}%`}>
                   <TrendingUp size={topBarIconSizeEffective} className="text-primary shrink-0" />
-                  <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
-                    <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
-                    <div className="w-10 sm:w-16" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+                  <div className="flex flex-col min-w-[5rem] flex-1 sm:flex-initial shrink-0">
+                    <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankProgress.current_rank_name}</span>
+                    <div className="w-10 sm:w-16 shrink-0" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
@@ -1231,17 +1231,19 @@ export default function Layout({ children }) {
               const propertyShort = formatCompact(propertyProfit) + ' pts';
               const casinoColor = (Number.isFinite(casinoNum) ? casinoNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
               const propertyColor = (Number.isFinite(propertyNum) ? propertyNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
+              // Use compact format on desktop when full strings would overflow (avoid left truncation in top bar)
+              const useCompactOnDesktop = casinoStr.length > 11 || propertyStr.length > 14;
               return (
                 <div className={chipClass} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
                   <Building2 size={topBarIconSizeEffective} className="text-emerald-400 shrink-0" />
                   <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap`}>
                     <span className="text-mutedForeground md:inline hidden">Casino </span>
                     <span className="text-mutedForeground md:hidden">C </span>
-                    <span className={casinoColor}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{casinoStr}</span></span>
+                    <span className={casinoColor}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? casinoShort : casinoStr}</span></span>
                     <span className="text-mutedForeground mx-0.5">·</span>
                     <span className="text-mutedForeground md:inline hidden">Property </span>
                     <span className="text-mutedForeground md:hidden">P </span>
-                    <span className={propertyColor}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{propertyStr}</span></span>
+                    <span className={propertyColor}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? propertyShort : propertyStr}</span></span>
                   </span>
                 </div>
               );
