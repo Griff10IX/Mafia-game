@@ -13,12 +13,13 @@ from fastapi import HTTPException, Query
 logger = logging.getLogger(__name__)
 
 MIN_INTERVAL_SECONDS = 5
-DEFAULT_INTERVAL_SECONDS = 2 * 60
+# 5% slower: default 120 -> 126, loop wake 30 -> 32, bust 5 -> 6, OC 60 -> 63
+DEFAULT_INTERVAL_SECONDS = 126  # was 2*60; 5% slower
 GAME_CONFIG_ID = "auto_rank"
-BUST_EVERY_5SEC_INTERVAL = 5
-CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 30
-LOOP_WAKE_SECONDS = 30  # Main loop (and booze no-car retry) every 30s
-OC_LOOP_INTERVAL_SECONDS = 60
+BUST_EVERY_5SEC_INTERVAL = 6  # was 5; 5% slower
+CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 32  # was 30; 5% slower
+LOOP_WAKE_SECONDS = 32  # was 30; main loop (and booze no-car retry) 5% slower
+OC_LOOP_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
 
 
@@ -328,9 +329,18 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 
 
 # ─── Main per-user cycle (crimes + GTA + booze) ──────────────────
+# Auto rank abides the same timer rules as manual play:
+# - Crimes: only commits crimes whose user_crimes.cooldown_until has passed (per-crime cooldown from crimes collection).
+#   _commit_crime_impl also enforces cooldown and sets next cooldown_until from the crime's cooldown_seconds.
+# - GTA: only runs when gta_cooldowns shows no active cooldown. _attempt_gta_impl enforces cooldown and sets
+#   cooldown_until from the attempted option's cooldown (one attempt = all options on cooldown).
+# - OC: run_oc_heist_npc_only checks oc_cooldown_until and returns without running if on cooldown.
+# - Booze: uses same buy/sell/travel impls; travel duration and arrival are enforced there.
+# - Jail: no cooldown per bust; success rate only. CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC throttles how often we run crimes+GTA when bust-every-5sec is on.
+
 
 async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, crimes: Optional[list] = None):
-    """Commit all crimes off cooldown, then one GTA, then booze if enabled. Send summary to Telegram."""
+    """Commit all crimes off cooldown, then one GTA (if off cooldown), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Send summary to Telegram."""
     import server as srv
     from routers.crimes import _commit_crime_impl
     from routers.gta import _attempt_gta_impl, GTA_OPTIONS
@@ -365,7 +375,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     run_crimes = user.get("auto_rank_crimes", True) or bust_every_5
     run_gta = user.get("auto_rank_gta", True) or bust_every_5
 
-    # --- Crimes ---
+    # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
         if crimes is None:
             crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
@@ -380,6 +390,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(100)
             cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
+            # Only crimes whose cooldown_until has passed (or never set); _commit_crime_impl will re-check and set next cooldown from crime's cooldown_seconds
             available = [
                 c for c in crimes
                 if c["min_rank"] <= rank_id
@@ -413,6 +424,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
         return
 
+    # --- GTA: only if global GTA cooldown has passed; _attempt_gta_impl enforces and sets cooldown from option's cooldown (60/90/120/180/240s) ---
     if run_gta:
         cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
         until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
@@ -567,7 +579,7 @@ async def run_bust_5sec_loop():
 
 
 async def run_auto_rank_oc_loop():
-    """Background loop: for OC users, run OC with NPC only when timer is ready."""
+    """Background loop: for OC users, run OC with NPC only when timer is ready. run_oc_heist_npc_only enforces oc_cooldown_until (6h/4h) and sets next cooldown."""
     import server as srv
     from routers.oc import run_oc_heist_npc_only
     from security import send_telegram_to_chat
