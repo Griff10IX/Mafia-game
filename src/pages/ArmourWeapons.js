@@ -301,7 +301,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const buyArmour = async (level) => {
     setBuyingArmourLevel(level);
     try {
-      const res = await api.post('/armour/buy', { level });
+      const res = await api.post('/armour/buy', { level, state: data?.state || effectiveState });
       toast.success(res.data?.message || 'Purchased armour');
       refreshUser();
       fetchData();
@@ -319,7 +319,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const buyWeapon = async (weaponId, currency) => {
     setBuyingWeaponId(weaponId);
     try {
-      await api.post(`/weapons/${weaponId}/buy`, { currency });
+      await api.post(`/weapons/${weaponId}/buy`, { currency, state: data?.state || effectiveState });
       toast.success('Weapon purchased');
       refreshUser();
       fetchData();
