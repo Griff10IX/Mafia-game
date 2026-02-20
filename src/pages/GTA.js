@@ -306,7 +306,6 @@ const GTAProgressBar = ({ progress }) => {
           aria-valuemax={92}
         />
       </div>
-      <span className="text-[9px] text-primary font-heading w-6">{pct}%</span>
     </div>
   );
 };
