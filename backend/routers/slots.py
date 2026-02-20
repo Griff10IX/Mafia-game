@@ -21,7 +21,8 @@ from server import (
 SLOTS_MAX_BET = 5_000_000
 SLOTS_HOUSE_EDGE = 0.05  # 5% house edge on wins
 SLOTS_OWNERSHIP_HOURS = 3
-SLOTS_DRAW_INTERVAL_MINUTES = 1  # Draw every 1 min (for testing; was 3h on the hour)
+# Draw every 3 hours on the hour (00:00, 03:00, 06:00, 09:00, 12:00, 15:00, 18:00, 21:00 UTC)
+SLOTS_DRAW_HOURS_UTC = (0, 3, 6, 9, 12, 15, 18, 21)
 # 3-reel slot: symbols with weights (higher = more frequent)
 SLOTS_SYMBOLS = [
     {"id": "cherry", "name": "Cherry", "weight": 40, "mult_3": 3},
@@ -95,8 +96,14 @@ def _parse_iso_datetime(s: str):
 
 
 def _next_draw_utc():
-    """Return next draw time (now + SLOTS_DRAW_INTERVAL_MINUTES)."""
-    return datetime.now(timezone.utc) + timedelta(minutes=SLOTS_DRAW_INTERVAL_MINUTES)
+    """Return next draw time: next 3h on the hour (00:00, 03:00, 06:00, ..., 21:00 UTC)."""
+    now = datetime.now(timezone.utc)
+    today = now.date()
+    for h in SLOTS_DRAW_HOURS_UTC:
+        candidate = datetime(today.year, today.month, today.day, h, 0, 0, 0, tzinfo=timezone.utc)
+        if candidate > now:
+            return candidate
+    return datetime(today.year, today.month, today.day, 0, 0, 0, 0, tzinfo=timezone.utc) + timedelta(days=1)
 
 
 def get_next_slots_draw_on_the_hour_utc() -> str:
@@ -105,22 +112,13 @@ def get_next_slots_draw_on_the_hour_utc() -> str:
 
 
 async def _run_slots_draw_if_needed(state: str):
-    """Run draw when next_draw_at is due (every SLOTS_DRAW_INTERVAL_MINUTES). If no entries, advance next_draw_at and continue."""
+    """Run draw when next_draw_at is due (every 3h on the hour: 00:00, 03:00, ..., 21:00 UTC). If no entries, advance next_draw_at and continue."""
     stored_state, doc = await _get_slots_ownership_doc(state)
     now = datetime.now(timezone.utc)
     st = stored_state or state
     # Use exact state from doc for DB updates so we always match the document we read
     filter_state = (doc.get("state") if doc else None) or state
     next_draw_at = _parse_iso_datetime(doc.get("next_draw_at") if doc else None) if doc else None
-
-    # If stored time is in the future but from old "3h on the hour" schedule, run draw now and then use 1-min schedule
-    if doc and next_draw_at and next_draw_at > now:
-        on_the_hour = next_draw_at.minute == 0 and next_draw_at.second == 0
-        too_far = (next_draw_at - now) > timedelta(minutes=2)
-        if on_the_hour or too_far:
-            next_draw_at = now  # fall through and run draw now; draw block will set next_draw_at to now+1min
-        else:
-            return
 
     # Run draw when: no doc, no next_draw_at, or next_draw_at is due (past or now)
     if not doc or not next_draw_at or next_draw_at <= now:
@@ -147,10 +145,6 @@ async def _run_slots_draw_if_needed(state: str):
                 if t and now < t:
                     continue
             eligible.append(uid)
-        # Testing mode (1-min draws): if everyone is on cooldown, still pick a winner from entries so the draw works
-        if not eligible and user_ids and SLOTS_DRAW_INTERVAL_MINUTES == 1:
-            eligible = list(user_ids)
-            logging.getLogger().info("Slots draw state=%s: all %s entries on cooldown, treating all as eligible (testing)", state, len(user_ids))
         if eligible:
             # Only the previous owner gets cooldown; entrants who lost can enter the next draw
             cooldown_until = (now + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
@@ -307,7 +301,7 @@ def register(router):
             "expires_at": expires_at,
             "next_draw_at": next_draw_at,
             "ownership_hours": SLOTS_OWNERSHIP_HOURS,
-            "draw_interval_minutes": SLOTS_DRAW_INTERVAL_MINUTES,
+            "draw_interval_minutes": 180,  # 3h on the hour (for UI label; draws at 00:00, 03:00, ..., 21:00 UTC)
         }
 
     @router.get("/casino/slots/ownership")

@@ -129,7 +129,12 @@ function loadStatOrder() {
     const raw = localStorage.getItem(TOPBAR_STAT_ORDER_KEY);
     if (!raw) return DEFAULT_STAT_ORDER;
     const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed) && parsed.length) return parsed;
+    if (!Array.isArray(parsed) || !parsed.length) return DEFAULT_STAT_ORDER;
+    // Merge in any stats from default that are missing (e.g. 'property' added later) so casino/prop profit always can show
+    const seen = new Set(parsed);
+    const added = DEFAULT_STAT_ORDER.filter((id) => !seen.has(id));
+    if (added.length) return [...parsed, ...added];
+    return parsed;
   } catch (_) {}
   return DEFAULT_STAT_ORDER;
 }

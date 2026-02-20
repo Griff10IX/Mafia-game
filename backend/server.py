@@ -624,9 +624,10 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
         return
     winner_id = war["family_b_id"] if war["family_a_id"] == victim_family_id else war["family_a_id"]
     loser_id = victim_family_id
-    now = datetime.now(timezone.utc).isoformat()
-    loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1})
-    winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1, "rackets": 1, "treasury": 1})
+    winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1, "boss_id": 1, "racket_income_bonus_percent": 1})
     winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id
     loser_family_name = (loser_family or {}).get("name") or (loser_family or {}).get("tag") or loser_id
     if not winner_family:
@@ -637,16 +638,18 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
         return
     winner_boss_id = winner_family.get("boss_id")
     loser_rackets = (loser_family or {}).get("rackets") or {}
-    winner_rackets = (winner_family.get("rackets") or {}).copy()
-    prize_rackets = []
-    for racket_id, state in loser_rackets.items():
-        w_level = (winner_rackets.get(racket_id) or {}).get("level", 0)
-        l_level = state.get("level", 0)
-        if l_level > w_level:
-            winner_rackets[racket_id] = {"level": l_level, "last_collected_at": state.get("last_collected_at")}
-            racket_def = next((r for r in FAMILY_RACKETS if r["id"] == racket_id), None)
-            prize_rackets.append({"racket_id": racket_id, "name": racket_def["name"] if racket_def else racket_id, "level": l_level})
-    await db.families.update_one({"id": winner_id}, {"$set": {"rackets": winner_rackets}})
+    loser_treasury = int((loser_family or {}).get("treasury", 0) or 0)
+    ev = await get_effective_event()
+    prize_racket_cash = compute_loser_racket_cash(loser_rackets, ev, now=now_dt)
+    total_cash_prize = loser_treasury + prize_racket_cash
+    if total_cash_prize > 0:
+        await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
+    current_bonus = float((winner_family.get("racket_income_bonus_percent") or 0) or 0)
+    new_bonus = min(current_bonus + WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT)
+    await db.families.update_one(
+        {"id": winner_id},
+        {"$set": {"racket_income_bonus_percent": new_bonus}}
+    )
     loser_member_ids = [m["user_id"] for m in members]
     exclusive_cars = await db.user_cars.find({"user_id": {"$in": loser_member_ids}}).to_list(500)
     for uc in exclusive_cars:
@@ -671,15 +674,15 @@ async def _family_war_check_wipe_and_award(victim_family_id: str):
             "winner_family_name": winner_family_name,
             "loser_family_name": loser_family_name,
             "prize_exclusive_cars": prize_count,
-            "prize_rackets": prize_rackets,
+            "prize_rackets": None,
+            "prize_treasury": loser_treasury,
+            "prize_racket_cash": prize_racket_cash,
         }},
     )
-    await send_notification_to_family(
-        winner_id,
-        "🏆 War Won",
-        f"Your family won the war. You took the enemy's rackets and {prize_count} exclusive car(s) as prize.",
-        "reward",
-    )
+    msg = f"Your family won the war. You received ${total_cash_prize:,} (their treasury + racket cash) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all racket income."
+    if prize_count:
+        msg += f" You also took {prize_count} exclusive car(s)."
+    await send_notification_to_family(winner_id, "🏆 War Won", msg, "reward")
 
 
 async def _family_in_active_war(family_id: str) -> bool:
@@ -1053,7 +1056,7 @@ async def _user_owns_any_property(user_id: str):
 # Register modular routers (crimes, gta, jail, attack, etc.)
 from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, slots, video_poker, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe, prestige
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
-from routers.families import FAMILY_RACKETS  # used by _family_war_check_wipe_and_award and seed
+from routers.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
 from routers.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index  # flash news
 CASINO_GAMES = [

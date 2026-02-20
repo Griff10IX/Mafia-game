@@ -161,6 +161,43 @@ def _racket_income_and_cooldown(racket_id: str, level: int, ev: dict):
     return int(base_income * payout_mult), cooldown * cooldown_mult
 
 
+# When a family wins a war (enemy wiped), winner gets this % extra on all racket income (passive, permanent stack).
+WAR_WIN_RACKET_INCOME_BONUS_PERCENT = 2.5
+# Cap: bonus from war wins cannot exceed this (anything after 25% is not added).
+RACKET_INCOME_BONUS_CAP_PERCENT = 25.0
+
+
+def _racket_available_income(racket_id: str, level: int, last_collected_at: Optional[str], ev: dict, now=None):
+    """Income that would be collected now if the racket is off cooldown; 0 if on cooldown."""
+    if level <= 0:
+        return 0
+    income, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
+    if cooldown_h <= 0:
+        return income
+    if not last_collected_at:
+        return income
+    try:
+        last_dt = datetime.fromisoformat(str(last_collected_at).replace("Z", "+00:00"))
+        if now is None:
+            now = datetime.now(timezone.utc)
+        if (last_dt + timedelta(hours=cooldown_h)) <= now:
+            return income
+    except Exception:
+        return income
+    return 0
+
+
+def compute_loser_racket_cash(rackets: dict, ev: dict, now=None):
+    """Sum of uncollected (available) income from all rackets. Used when awarding war winner."""
+    total = 0
+    for racket_id, state in (rackets or {}).items():
+        level = state.get("level", 0)
+        if level <= 0:
+            continue
+        total += _racket_available_income(racket_id, level, state.get("last_collected_at"), ev, now=now)
+    return total
+
+
 def _racket_previous_id(racket_id: str):
     ids = [x["id"] for x in FAMILY_RACKETS]
     if racket_id not in ids:
@@ -185,42 +222,37 @@ async def cleanup_dead_families():
                 "$or": [{"family_a_id": family_id}, {"family_b_id": family_id}],
                 "status": {"$in": ["active", "truce_offered"]}
             }, {"_id": 0}).to_list(10)
-            now = datetime.now(timezone.utc).isoformat()
+            now_dt = datetime.now(timezone.utc)
+            now = now_dt.isoformat()
             rackets = fam.get("rackets") or {}
-            treasury = fam.get("treasury", 0)
+            treasury = int(fam.get("treasury", 0) or 0)
+            ev = await get_effective_event()
+            prize_racket_cash = compute_loser_racket_cash(rackets, ev, now=now_dt)
+            total_cash_prize = treasury + prize_racket_cash
             assets_transferred = False
             for active_war in active_wars:
                 winner_id = active_war["family_b_id"] if active_war["family_a_id"] == family_id else active_war["family_a_id"]
                 loser_id = family_id
                 war_status = "family_a_wins" if winner_id == active_war["family_a_id"] else "family_b_wins"
-                prize_rackets_list = []
                 prize_treasury = 0
+                prize_racket_cash_record = 0
                 if not assets_transferred:
-                    if rackets:
-                        winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "rackets": 1, "boss_id": 1})
-                        winner_rackets = (winner_fam or {}).get("rackets") or {}
-                        for racket_id, state in rackets.items():
-                            level = state.get("level", 0)
-                            if level > 0:
-                                existing = winner_rackets.get(racket_id, {}).get("level", 0)
-                                if level > existing:
-                                    winner_rackets[racket_id] = {"level": level, "last_collected_at": None}
-                                    racket_def = next((r for r in FAMILY_RACKETS if r["id"] == racket_id), None)
-                                    prize_rackets_list.append({
-                                        "racket_id": racket_id,
-                                        "name": racket_def["name"] if racket_def else racket_id,
-                                        "level": level
-                                    })
-                        await db.families.update_one({"id": winner_id}, {"$set": {"rackets": winner_rackets}})
-                    if treasury > 0:
-                        await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": treasury}})
-                        prize_treasury = treasury
-                    await send_notification_to_family(
-                        winner_id,
-                        "🏆 WAR VICTORY!",
-                        f"The enemy family {fam['name']} has been destroyed! You've captured their rackets and ${treasury:,} from their treasury.",
-                        "system"
+                    winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "treasury": 1, "racket_income_bonus_percent": 1})
+                    if winner_fam is not None:
+                        if total_cash_prize > 0:
+                            await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
+                            prize_treasury = treasury
+                            prize_racket_cash_record = prize_racket_cash
+                        current_bonus = float((winner_fam.get("racket_income_bonus_percent") or 0) or 0)
+                        new_bonus = min(current_bonus + WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT)
+                        await db.families.update_one(
+                            {"id": winner_id},
+                            {"$set": {"racket_income_bonus_percent": new_bonus}}
+                        )
+                    msg = (
+                        f"The enemy family {fam['name']} has been destroyed! You received ${total_cash_prize:,} (their treasury + racket cash) and a permanent +{WAR_WIN_RACKET_INCOME_BONUS_PERCENT}% on all your racket income."
                     )
+                    await send_notification_to_family(winner_id, "🏆 WAR VICTORY!", msg, "system")
                     assets_transferred = True
                 winner_fam_doc = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
                 winner_family_name = (winner_fam_doc or {}).get("name") or (winner_fam_doc or {}).get("tag") or winner_id
@@ -234,8 +266,9 @@ async def cleanup_dead_families():
                         "winner_family_name": winner_family_name,
                         "loser_family_name": loser_family_name,
                         "ended_at": now,
-                        "prize_rackets": prize_rackets_list if prize_rackets_list else None,
-                        "prize_treasury": prize_treasury
+                        "prize_rackets": None,
+                        "prize_treasury": prize_treasury,
+                        "prize_racket_cash": prize_racket_cash_record,
                     }}
                 )
             await db.family_members.delete_many({"family_id": family_id})
@@ -442,6 +475,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         else:
             members.append(entry)
     rackets_raw = fam.get("rackets") or {}
+    racket_bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
     rackets = []
     now = datetime.now(timezone.utc)
     racket_ids_ordered = [x["id"] for x in FAMILY_RACKETS]
@@ -462,6 +496,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 can_unlock = True
             last_at = state.get("last_collected_at")
             income_per, cooldown_h = _racket_income_and_cooldown(rid, level, ev)
+            effective_income = int(income_per * (1 + racket_bonus_pct / 100.0))
             next_collect_at = None
             if last_at and level > 0 and cooldown_h > 0:
                 try:
@@ -477,7 +512,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 "level": level, "locked": locked, "required_racket_name": required_racket_name, "can_unlock": can_unlock,
                 "unlock_cost": RACKET_UNLOCK_COST if locked else None,
                 "cooldown_hours": r["cooldown_hours"], "effective_cooldown_hours": cooldown_h,
-                "income_per_collect": income_per, "effective_income_per_collect": income_per,
+                "income_per_collect": income_per, "effective_income_per_collect": effective_income,
                 "next_collect_at": next_collect_at,
             })
         except Exception:
@@ -492,6 +527,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "treasury": fam.get("treasury", 0), "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
+            "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
@@ -887,7 +923,7 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1})
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     rackets = (fam.get("rackets") or {}).copy()
@@ -900,6 +936,8 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         raise HTTPException(status_code=404, detail="Racket not found")
     ev = await get_effective_event()
     income, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
+    bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
+    income_final = int(income * (1 + bonus_pct / 100.0))
     last_at = state.get("last_collected_at")
     now = datetime.now(timezone.utc)
     if last_at:
@@ -913,10 +951,10 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
             pass
     now_iso = now.isoformat()
     rackets[racket_id] = {**state, "level": level, "last_collected_at": now_iso}
-    await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": income}})
-    msg = random.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income)
+    await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
+    msg = random.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
     _invalidate_my_cache(current_user["id"])
-    return {"message": msg, "amount": income}
+    return {"message": msg, "amount": income_final}
 
 
 async def families_racket_unlock(racket_id: str, current_user: dict = Depends(get_current_user)):
