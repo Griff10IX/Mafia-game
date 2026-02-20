@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Map, CheckCircle2, Circle, User, MessageCircle, X, MapPin, Navigation } from 'lucide-react';
+import { Map, CheckCircle2, Circle, User, MessageCircle, X, MapPin, Navigation, ZoomIn, ZoomOut } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -17,10 +17,29 @@ const MISSION_STYLES = `
   .pulse-map { animation: pulse-map 2s ease-in-out infinite; }
   
   @keyframes map-glow {
-    0%, 100% { filter: drop-shadow(0 0 8px rgba(234, 179, 8, 0.3)); }
-    50% { filter: drop-shadow(0 0 16px rgba(234, 179, 8, 0.5)); }
+    0%, 100% { 
+      filter: drop-shadow(0 0 12px rgba(212, 175, 55, 0.4));
+    }
+    50% { 
+      filter: drop-shadow(0 0 24px rgba(212, 175, 55, 0.6));
+    }
   }
   .map-glow { animation: map-glow 3s ease-in-out infinite; }
+  
+  @keyframes smoke-drift {
+    0% { transform: translateY(0) translateX(0) scale(1); opacity: 0.1; }
+    50% { transform: translateY(-100px) translateX(20px) scale(1.5); opacity: 0.05; }
+    100% { transform: translateY(-200px) translateX(-10px) scale(2); opacity: 0; }
+  }
+  
+  .smoke { animation: smoke-drift 8s ease-out infinite; }
+  
+  @keyframes territory-pulse {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.02); }
+  }
+  
+  .territory-selected { animation: territory-pulse 2s ease-in-out infinite; }
 `;
 
 /* ═══════════════════════════════════════════════════════
@@ -34,7 +53,44 @@ function formatReward(money, points) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   City Map Data
+   USA Map Regions (Simplified territories for cities)
+   ═══════════════════════════════════════════════════════ */
+const USA_MAP = {
+  viewBox: { w: 960, h: 600 },
+  territories: [
+    {
+      city: 'Chicago',
+      // Illinois/Midwest region
+      path: 'M 520,200 L 580,200 L 590,240 L 580,280 L 540,290 L 510,270 Z',
+      label: { x: 550, y: 245 },
+      pin: { x: 555, y: 240 }
+    },
+    {
+      city: 'New York',
+      // Northeast region  
+      path: 'M 720,140 L 780,150 L 790,180 L 780,210 L 740,220 L 710,200 Z',
+      label: { x: 750, y: 180 },
+      pin: { x: 755, y: 175 }
+    },
+    {
+      city: 'Las Vegas',
+      // Nevada/Southwest
+      path: 'M 180,280 L 240,270 L 260,310 L 250,350 L 200,360 L 170,330 Z',
+      label: { x: 220, y: 315 },
+      pin: { x: 225, y: 310 }
+    },
+    {
+      city: 'Atlantic City',
+      // New Jersey coast
+      path: 'M 780,180 L 820,185 L 830,210 L 820,235 L 780,240 L 770,215 Z',
+      label: { x: 800, y: 210 },
+      pin: { x: 805, y: 205 }
+    }
+  ]
+};
+
+/* ═══════════════════════════════════════════════════════
+   City Map Regions (District level)
    ═══════════════════════════════════════════════════════ */
 const MAP_VIEWBOX = { w: 400, h: 260 };
 
@@ -66,97 +122,179 @@ const cityMapRegions = {
    ═══════════════════════════════════════════════════════ */
 const LoadingSpinner = () => (
   <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-    <Map size={32} className="text-amber-500 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-    <span className="text-zinc-300 text-[9px] sm:text-[10px] font-heading uppercase tracking-wider">Loading missions...</span>
+    <Map size={32} className="text-primary animate-pulse" />
+    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <span className="text-primary text-[9px] sm:text-[10px] font-heading uppercase tracking-wider">Loading territories...</span>
   </div>
 );
 
 /* ═══════════════════════════════════════════════════════
-   Mission Card
+   USA Territory Map (Main Overview)
    ═══════════════════════════════════════════════════════ */
-function MissionCard({ mission, onComplete, completing, characterName, onTalkToCharacter }) {
-  const { completed, requirements_met, progress, character_id } = mission;
-  const canComplete = !completed && requirements_met;
-  const prog = progress || {};
-  const desc = prog.description ?? (prog.current != null && prog.target != null ? `${prog.current}/${prog.target}` : '');
+function USATerritoryMap({ unlockedCities, currentCity, onSelectCity, cityStats }) {
+  const getTerritoryFill = (city) => {
+    if (!unlockedCities.includes(city)) return 'url(#lockedGradient)';
+    const stats = cityStats[city];
+    if (!stats) return 'url(#unlockedGradient)';
+    const { done, total } = stats;
+    if (total > 0 && done === total) return 'url(#completedGradient)';
+    if (done > 0) return 'url(#inProgressGradient)';
+    return 'url(#unlockedGradient)';
+  };
+
+  const getTerritoryStroke = (city) => {
+    if (currentCity === city) return '#d4af37';
+    if (!unlockedCities.includes(city)) return '#3f3f46';
+    return '#71717a';
+  };
 
   return (
-    <div
-      className={`relative rounded-lg border p-2.5 sm:p-3 transition-all ${
-        completed
-          ? 'bg-emerald-500/10 border-emerald-500/30'
-          : canComplete
-          ? 'bg-amber-500/10 border-amber-500/30'
-          : 'bg-zinc-800/40 border-zinc-700/40'
-      }`}
-    >
-      {/* Status indicator dot */}
-      <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
-        completed ? 'bg-emerald-400' : canComplete ? 'bg-amber-400 pulse-map' : 'bg-zinc-600'
-      }`} />
-      
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h3 className="text-xs sm:text-sm font-heading font-bold text-foreground">
-              {mission.title}
-            </h3>
-            {character_id && characterName && (
-              <button
-                type="button"
-                onClick={() => onTalkToCharacter?.(character_id)}
-                className="text-[9px] sm:text-[10px] text-primary font-heading flex items-center gap-1 hover:underline transition-colors"
+    <div className="relative w-full">
+      {/* Atmospheric background elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-10 left-20 w-40 h-40 bg-primary/5 rounded-full blur-3xl smoke" style={{ animationDelay: '0s' }} />
+        <div className="absolute top-40 right-32 w-32 h-32 bg-primary/5 rounded-full blur-3xl smoke" style={{ animationDelay: '2s' }} />
+        <div className="absolute bottom-20 left-1/3 w-36 h-36 bg-primary/5 rounded-full blur-3xl smoke" style={{ animationDelay: '4s' }} />
+      </div>
+
+      <svg
+        viewBox={`0 0 ${USA_MAP.viewBox.w} ${USA_MAP.viewBox.h}`}
+        className="w-full relative z-10"
+        style={{ minHeight: 300, maxHeight: 600 }}
+        aria-label="USA Territory Map"
+      >
+        {/* Gradients */}
+        <defs>
+          <linearGradient id="lockedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#27272a" />
+            <stop offset="100%" stopColor="#18181b" />
+          </linearGradient>
+          <linearGradient id="unlockedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#52525b" />
+            <stop offset="100%" stopColor="#3f3f46" />
+          </linearGradient>
+          <linearGradient id="inProgressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#eab308" />
+            <stop offset="100%" stopColor="#ca8a04" />
+          </linearGradient>
+          <linearGradient id="completedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#22c55e" />
+            <stop offset="100%" stopColor="#16a34a" />
+          </linearGradient>
+          
+          {/* Glow filters */}
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Territory shapes */}
+        {USA_MAP.territories.map(({ city, path, label, pin }) => {
+          const isUnlocked = unlockedCities.includes(city);
+          const isSelected = currentCity === city;
+          const stats = cityStats[city];
+          
+          return (
+            <g key={city}>
+              {/* Territory area */}
+              <path
+                d={path}
+                fill={getTerritoryFill(city)}
+                stroke={getTerritoryStroke(city)}
+                strokeWidth={isSelected ? 3 : 2}
+                className={`cursor-pointer transition-all duration-300 ${isSelected ? 'territory-selected' : ''} ${isUnlocked ? 'hover:opacity-80' : ''}`}
+                style={{
+                  opacity: isUnlocked ? 1 : 0.4,
+                  filter: isSelected ? 'url(#glow)' : 'none'
+                }}
+                onClick={() => isUnlocked && onSelectCity(city)}
+                onKeyDown={(e) => {
+                  if (isUnlocked && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    onSelectCity(city);
+                  }
+                }}
+                role="button"
+                tabIndex={isUnlocked ? 0 : -1}
+                aria-label={`${city} — ${isUnlocked ? 'unlocked' : 'locked'} — ${stats ? `${stats.done}/${stats.total} missions complete` : 'click to view'}`}
+              />
+              
+              {/* Location pin */}
+              {isUnlocked && (
+                <g>
+                  <circle
+                    cx={pin.x}
+                    cy={pin.y}
+                    r={isSelected ? 8 : 6}
+                    fill="#d4af37"
+                    stroke="#1a1a1a"
+                    strokeWidth="2"
+                    className={isSelected ? 'pulse-map' : ''}
+                  />
+                  <circle
+                    cx={pin.x}
+                    cy={pin.y}
+                    r={3}
+                    fill="#1a1a1a"
+                  />
+                </g>
+              )}
+              
+              {/* City label */}
+              <text
+                x={label.x}
+                y={label.y}
+                textAnchor="middle"
+                fill={isUnlocked ? '#fafafa' : '#52525b'}
+                className="font-heading font-bold pointer-events-none select-none"
+                style={{ 
+                  fontSize: isSelected ? 18 : 16,
+                  textShadow: '0 2px 4px rgba(0,0,0,0.8)',
+                  fontWeight: isSelected ? 'bold' : 'normal'
+                }}
               >
-                <MessageCircle size={10} className="sm:w-3 sm:h-3" />
-                Talk to {characterName}
-              </button>
-            )}
-            {character_id && !characterName && (
-              <span className="text-[9px] sm:text-[10px] text-zinc-400 font-heading flex items-center gap-1">
-                <User size={10} className="sm:w-3 sm:h-3" />
-                Character
-              </span>
-            )}
-          </div>
-          
-          <p className="text-[10px] sm:text-[11px] text-zinc-400 leading-relaxed">
-            {mission.description}
-          </p>
-          
-          {!completed && desc && (
-            <p className="text-[10px] sm:text-[11px] text-amber-400 mt-1.5 font-heading font-medium">
-              Progress: {desc}
-            </p>
-          )}
-          
-          <div className="flex flex-wrap gap-2 mt-2 text-[9px] sm:text-[10px] font-heading">
-            <span className="text-emerald-400 font-medium">
-              {formatReward(mission.reward_money, mission.reward_points)}
-            </span>
-            {mission.unlocks_city && (
-              <span className="text-amber-400 font-medium">
-                · Unlocks {mission.unlocks_city}
-              </span>
-            )}
-          </div>
+                {city}
+              </text>
+              
+              {/* Mission count */}
+              {stats && isUnlocked && (
+                <text
+                  x={label.x}
+                  y={label.y + 18}
+                  textAnchor="middle"
+                  fill={stats.done === stats.total ? '#22c55e' : stats.done > 0 ? '#eab308' : '#a1a1aa'}
+                  className="font-heading font-bold pointer-events-none select-none"
+                  style={{ fontSize: 12, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+                >
+                  {stats.done}/{stats.total}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Legend */}
+      <div className="absolute top-3 right-3 bg-zinc-900/95 border border-zinc-700 rounded-lg p-2.5 text-[9px] sm:text-[10px] font-heading backdrop-blur-sm">
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="w-3 h-3 rounded" style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' }} />
+          <span className="text-zinc-300">Complete</span>
         </div>
-        
-        <div className="shrink-0 flex items-center">
-          {completed ? (
-            <CheckCircle2 size={20} className="text-emerald-400 sm:w-5 sm:h-5" aria-label="Completed" />
-          ) : canComplete ? (
-            <button
-              type="button"
-              onClick={() => onComplete(mission.id)}
-              disabled={completing === mission.id}
-              className="px-2.5 sm:px-3 py-1.5 rounded bg-gradient-to-b from-amber-600 to-amber-700 text-white text-[10px] sm:text-[11px] font-heading font-bold hover:from-amber-500 hover:to-amber-600 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
-            >
-              {completing === mission.id ? 'Completing...' : 'Complete'}
-            </button>
-          ) : (
-            <Circle size={20} className="text-zinc-600 sm:w-5 sm:h-5" aria-label="Locked" />
-          )}
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="w-3 h-3 rounded" style={{ background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)' }} />
+          <span className="text-zinc-300">In Progress</span>
+        </div>
+        <div className="flex items-center gap-1.5 mb-1">
+          <div className="w-3 h-3 rounded" style={{ background: 'linear-gradient(135deg, #52525b 0%, #3f3f46 100%)' }} />
+          <span className="text-zinc-300">Available</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="w-3 h-3 rounded" style={{ background: 'linear-gradient(135deg, #27272a 0%, #18181b 100%)' }} />
+          <span className="text-zinc-300">Locked</span>
         </div>
       </div>
     </div>
@@ -164,7 +302,7 @@ function MissionCard({ mission, onComplete, completing, characterName, onTalkToC
 }
 
 /* ═══════════════════════════════════════════════════════
-   Interactive City Map SVG
+   City District Map (Detailed View)
    ═══════════════════════════════════════════════════════ */
 function CityMapSVG({ city, areasWithCounts, selectedArea, onSelectArea }) {
   const regions = cityMapRegions[city];
@@ -184,7 +322,7 @@ function CityMapSVG({ city, areasWithCounts, selectedArea, onSelectArea }) {
   
   const getStroke = (areaName) => {
     const isSelected = selectedArea === areaName;
-    return isSelected ? '#f59e0b' : '#71717a';
+    return isSelected ? '#d4af37' : '#71717a';
   };
   
   const getStrokeWidth = (areaName) => {
@@ -192,116 +330,182 @@ function CityMapSVG({ city, areasWithCounts, selectedArea, onSelectArea }) {
   };
 
   return (
-    <div className="relative">
-      {/* Legend */}
-      <div className="absolute top-2 right-2 sm:top-3 sm:right-3 bg-zinc-900/90 border border-zinc-700 rounded p-2 text-[8px] sm:text-[9px] font-heading z-10">
-        <div className="flex items-center gap-1.5 mb-1">
-          <div className="w-3 h-3 rounded" style={{ background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)' }} />
-          <span className="text-zinc-300">Complete</span>
-        </div>
-        <div className="flex items-center gap-1.5 mb-1">
-          <div className="w-3 h-3 rounded" style={{ background: 'linear-gradient(135deg, #eab308 0%, #ca8a04 100%)' }} />
-          <span className="text-zinc-300">In Progress</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded bg-zinc-700" />
-          <span className="text-zinc-300">Locked</span>
-        </div>
-      </div>
+    <svg
+      viewBox={`0 0 ${MAP_VIEWBOX.w} ${MAP_VIEWBOX.h}`}
+      className="w-full rounded-lg border-2 border-primary/30 bg-zinc-900 shadow-xl map-glow"
+      style={{ minHeight: 200, display: 'block' }}
+      aria-label={`District map of ${city}`}
+    >
+      {/* Gradients */}
+      <defs>
+        <linearGradient id="selectedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#d4af37" />
+          <stop offset="100%" stopColor="#b8860b" />
+        </linearGradient>
+        <linearGradient id="completedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#22c55e" />
+          <stop offset="100%" stopColor="#16a34a" />
+        </linearGradient>
+        <linearGradient id="inProgressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#eab308" />
+          <stop offset="100%" stopColor="#ca8a04" />
+        </linearGradient>
+        <linearGradient id="defaultGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#52525b" />
+          <stop offset="100%" stopColor="#3f3f46" />
+        </linearGradient>
+        
+        {/* Grid pattern */}
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#3f3f46" strokeWidth="0.5" />
+        </pattern>
+      </defs>
       
-      <svg
-        viewBox={`0 0 ${MAP_VIEWBOX.w} ${MAP_VIEWBOX.h}`}
-        className="w-full rounded-lg border-2 border-amber-500/30 bg-zinc-900 shadow-lg map-glow"
-        style={{ minHeight: 200, display: 'block' }}
-        aria-label={`Interactive map of ${city}`}
-      >
-        {/* Gradients */}
-        <defs>
-          <linearGradient id="selectedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#f59e0b" />
-            <stop offset="100%" stopColor="#d97706" />
-          </linearGradient>
-          <linearGradient id="completedGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#22c55e" />
-            <stop offset="100%" stopColor="#16a34a" />
-          </linearGradient>
-          <linearGradient id="inProgressGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#eab308" />
-            <stop offset="100%" stopColor="#ca8a04" />
-          </linearGradient>
-          <linearGradient id="defaultGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#52525b" />
-            <stop offset="100%" stopColor="#3f3f46" />
-          </linearGradient>
-          
-          {/* Grid pattern */}
-          <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#3f3f46" strokeWidth="0.5" />
-          </pattern>
-        </defs>
+      {/* Background grid */}
+      <rect width={MAP_VIEWBOX.w} height={MAP_VIEWBOX.h} fill="url(#grid)" opacity="0.3" />
+      
+      {/* Map regions */}
+      {regions.map(({ area, points, label }) => {
+        const counts = areasWithCounts.find((a) => a.name === area);
+        const done = counts ? counts.missions.filter((m) => m.completed).length : 0;
+        const total = counts ? counts.missions.length : 0;
         
-        {/* Background grid */}
-        <rect width={MAP_VIEWBOX.w} height={MAP_VIEWBOX.h} fill="url(#grid)" opacity="0.3" />
-        
-        {/* Map regions */}
-        {regions.map(({ area, points, label }) => {
-          const counts = areasWithCounts.find((a) => a.name === area);
-          const done = counts ? counts.missions.filter((m) => m.completed).length : 0;
-          const total = counts ? counts.missions.length : 0;
-          
-          return (
-            <g key={area}>
-              <polygon
-                points={points}
-                fill={getFill(area)}
-                stroke={getStroke(area)}
-                strokeWidth={getStrokeWidth(area)}
-                className="cursor-pointer transition-all duration-200 hover:opacity-80"
-                style={{ 
-                  opacity: selectedArea && selectedArea !== area ? 0.5 : 1,
-                  filter: selectedArea === area ? 'drop-shadow(0 0 8px rgba(245, 158, 11, 0.6))' : 'none'
-                }}
-                onClick={() => onSelectArea(area)}
-                onKeyDown={(e) => { 
-                  if (e.key === 'Enter' || e.key === ' ') { 
-                    e.preventDefault(); 
-                    onSelectArea(area); 
-                  } 
-                }}
-                role="button"
-                tabIndex={0}
-                aria-label={`${area} — ${total > 0 ? `${done}/${total} missions complete` : 'no missions'} — click to view`}
-              />
-              
-              {/* Area label */}
+        return (
+          <g key={area}>
+            <polygon
+              points={points}
+              fill={getFill(area)}
+              stroke={getStroke(area)}
+              strokeWidth={getStrokeWidth(area)}
+              className="cursor-pointer transition-all duration-200 hover:opacity-80"
+              style={{ 
+                opacity: selectedArea && selectedArea !== area ? 0.5 : 1,
+                filter: selectedArea === area ? 'drop-shadow(0 0 12px rgba(212, 175, 55, 0.6))' : 'none'
+              }}
+              onClick={() => onSelectArea(area)}
+              onKeyDown={(e) => { 
+                if (e.key === 'Enter' || e.key === ' ') { 
+                  e.preventDefault(); 
+                  onSelectArea(area); 
+                } 
+              }}
+              role="button"
+              tabIndex={0}
+              aria-label={`${area} — ${total > 0 ? `${done}/${total} missions complete` : 'no missions'} — click to view`}
+            />
+            
+            {/* Area label */}
+            <text
+              x={label.x}
+              y={label.y - 8}
+              textAnchor="middle"
+              fill="#fafafa"
+              className="font-heading font-bold pointer-events-none select-none"
+              style={{ fontSize: 13, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+            >
+              {area}
+            </text>
+            
+            {/* Mission count */}
+            {total > 0 && (
               <text
                 x={label.x}
-                y={label.y - 8}
+                y={label.y + 8}
                 textAnchor="middle"
-                fill="#fafafa"
+                fill={done === total ? '#22c55e' : done > 0 ? '#eab308' : '#a1a1aa'}
                 className="font-heading font-bold pointer-events-none select-none"
-                style={{ fontSize: 13, textShadow: '0 1px 3px rgba(0,0,0,0.8)' }}
+                style={{ fontSize: 11, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
               >
-                {area}
+                {done}/{total}
               </text>
-              
-              {/* Mission count */}
-              {total > 0 && (
-                <text
-                  x={label.x}
-                  y={label.y + 8}
-                  textAnchor="middle"
-                  fill={done === total ? '#22c55e' : done > 0 ? '#eab308' : '#a1a1aa'}
-                  className="font-heading font-bold pointer-events-none select-none"
-                  style={{ fontSize: 11, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
-                >
-                  {done}/{total}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Mission Card
+   ═══════════════════════════════════════════════════════ */
+function MissionCard({ mission, onComplete, completing, characterName, onTalkToCharacter }) {
+  const { completed, requirements_met, progress, character_id } = mission;
+  const canComplete = !completed && requirements_met;
+  const prog = progress || {};
+  const desc = prog.description ?? (prog.current != null && prog.target != null ? `${prog.current}/${prog.target}` : '');
+
+  return (
+    <div
+      className={`relative rounded-lg border p-2.5 sm:p-3 transition-all ${
+        completed
+          ? 'bg-emerald-500/10 border-emerald-500/30'
+          : canComplete
+          ? 'bg-primary/10 border-primary/30'
+          : 'bg-zinc-800/40 border-zinc-700/40'
+      }`}
+    >
+      <div className={`absolute top-2 right-2 w-2 h-2 rounded-full ${
+        completed ? 'bg-emerald-400' : canComplete ? 'bg-primary pulse-map' : 'bg-zinc-600'
+      }`} />
+      
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="text-xs sm:text-sm font-heading font-bold text-foreground">
+              {mission.title}
+            </h3>
+            {character_id && characterName && (
+              <button
+                type="button"
+                onClick={() => onTalkToCharacter?.(character_id)}
+                className="text-[9px] sm:text-[10px] text-primary font-heading flex items-center gap-1 hover:underline transition-colors"
+              >
+                <MessageCircle size={10} className="sm:w-3 sm:h-3" />
+                {characterName}
+              </button>
+            )}
+          </div>
+          
+          <p className="text-[10px] sm:text-[11px] text-zinc-400 leading-relaxed">
+            {mission.description}
+          </p>
+          
+          {!completed && desc && (
+            <p className="text-[10px] sm:text-[11px] text-primary mt-1.5 font-heading font-medium">
+              Progress: {desc}
+            </p>
+          )}
+          
+          <div className="flex flex-wrap gap-2 mt-2 text-[9px] sm:text-[10px] font-heading">
+            <span className="text-emerald-400 font-medium">
+              {formatReward(mission.reward_money, mission.reward_points)}
+            </span>
+            {mission.unlocks_city && (
+              <span className="text-primary font-medium">
+                · Unlocks {mission.unlocks_city}
+              </span>
+            )}
+          </div>
+        </div>
+        
+        <div className="shrink-0 flex items-center">
+          {completed ? (
+            <CheckCircle2 size={20} className="text-emerald-400 sm:w-5 sm:h-5" />
+          ) : canComplete ? (
+            <button
+              type="button"
+              onClick={() => onComplete(mission.id)}
+              disabled={completing === mission.id}
+              className="px-2.5 sm:px-3 py-1.5 rounded bg-gradient-to-b from-primary to-primary/80 text-zinc-900 text-[10px] sm:text-[11px] font-heading font-bold hover:from-primary/90 hover:to-primary/70 disabled:opacity-50 transition-all active:scale-95 shadow-sm"
+            >
+              {completing === mission.id ? '...' : 'Complete'}
+            </button>
+          ) : (
+            <Circle size={20} className="text-zinc-600 sm:w-5 sm:h-5" />
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -321,11 +525,10 @@ function DialogueModal({ character, dialogue, onClose }) {
         className="rounded-lg border border-zinc-600 bg-zinc-900 shadow-2xl max-w-md w-full p-3 sm:p-4 mission-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="flex items-center justify-between gap-2 mb-3 pb-3 border-b border-zinc-700">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center">
-              <User size={16} className="text-amber-400 sm:w-5 sm:h-5" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center">
+              <User size={16} className="text-primary sm:w-5 sm:h-5" />
             </div>
             <div>
               <h3 className="text-xs sm:text-sm font-heading font-bold text-foreground">
@@ -341,25 +544,22 @@ function DialogueModal({ character, dialogue, onClose }) {
             type="button" 
             onClick={onClose} 
             className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-foreground transition-colors" 
-            aria-label="Close"
           >
             <X size={16} className="sm:w-4 sm:h-4" />
           </button>
         </div>
         
-        {/* Dialogue */}
         <div className="bg-zinc-800/50 rounded p-3 sm:p-4 mb-3 border border-zinc-700/50">
           <p className="text-[11px] sm:text-xs text-foreground/90 font-heading leading-relaxed italic">
             &ldquo;{dialogue}&rdquo;
           </p>
         </div>
         
-        {/* Close button */}
         <div className="flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-gradient-to-b from-amber-600 to-amber-700 text-white text-[10px] sm:text-[11px] font-heading font-bold hover:from-amber-500 hover:to-amber-600 transition-all active:scale-95 shadow-sm"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-gradient-to-b from-primary to-primary/80 text-zinc-900 text-[10px] sm:text-[11px] font-heading font-bold hover:from-primary/90 hover:to-primary/70 transition-all active:scale-95"
           >
             Close
           </button>
@@ -381,6 +581,7 @@ export default function Missions() {
   const [selectedArea, setSelectedArea] = useState(null);
   const [completing, setCompleting] = useState(null);
   const [selectedCharacter, setSelectedCharacter] = useState(null);
+  const [showDistrictMap, setShowDistrictMap] = useState(false);
 
   const fetchMap = async () => {
     try {
@@ -444,7 +645,10 @@ export default function Missions() {
         );
         refreshUser();
         await Promise.all([fetchMap(), fetchMissions()]);
-        if (res.data.unlocked_city) setSelectedCity(res.data.unlocked_city);
+        if (res.data.unlocked_city) {
+          setSelectedCity(res.data.unlocked_city);
+          setShowDistrictMap(false);
+        }
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Could not complete mission');
@@ -456,6 +660,16 @@ export default function Missions() {
   const unlocked = mapData?.unlocked_cities?.length ? mapData.unlocked_cities : ['Chicago'];
   const byCity = mapData?.by_city || {};
   const cityMissions = (city && byCity[city]?.missions) || [];
+
+  // Calculate city stats for USA map
+  const cityStats = {};
+  Object.keys(byCity).forEach(c => {
+    const missions = byCity[c]?.missions || [];
+    cityStats[c] = {
+      done: missions.filter(m => m.completed).length,
+      total: missions.length
+    };
+  });
 
   const characterById = Object.fromEntries((characters || []).map((c) => [c.id, c]));
   const missionByCharacterId = Object.fromEntries((cityMissions || []).filter((m) => m.character_id).map((m) => [m.character_id, m]));
@@ -491,7 +705,7 @@ export default function Missions() {
 
   if (loading && !mapData) {
     return (
-      <div className="space-y-3 px-3 sm:px-4">
+      <div className="min-h-screen bg-zinc-950 px-3 sm:px-4">
         <style>{MISSION_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -499,63 +713,55 @@ export default function Missions() {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-4 px-3 sm:px-4 pb-6">
+    <div className="min-h-screen bg-zinc-950 px-3 sm:px-4 pb-6">
       <style>{MISSION_STYLES}</style>
       
-      {/* Page Header */}
-      <div className="mission-fade-in">
-        <div className="flex items-center gap-2 mb-1">
-          <Map size={20} className="text-amber-500 sm:w-5 sm:h-5" />
-          <h1 className="text-base sm:text-lg font-heading font-bold text-foreground">Missions</h1>
+      {/* Hero Section with USA Map */}
+      <div className="relative py-6 sm:py-8 mission-fade-in">
+        <div className="mb-4">
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading font-bold text-foreground mb-2">
+            Welcome to America
+          </h1>
+          <p className="text-xs sm:text-sm text-zinc-400 font-heading">
+            Take over the nation, one city at a time.
+          </p>
         </div>
-        <p className="text-[10px] sm:text-[11px] text-zinc-400 font-heading leading-relaxed">
-          Complete missions in each city to unlock the next. Talk to characters, complete jobs, collect rewards.
-        </p>
+
+        {/* USA Territory Map */}
+        <div className="rounded-xl border-2 border-primary/30 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-zinc-900/90 p-4 sm:p-6 shadow-2xl">
+          <USATerritoryMap
+            unlockedCities={unlocked}
+            currentCity={city}
+            onSelectCity={(c) => {
+              setSelectedCity(c);
+              setShowDistrictMap(true);
+            }}
+            cityStats={cityStats}
+          />
+        </div>
       </div>
 
-      {/* City Selector */}
-      {unlocked.length > 0 && (
-        <div className="flex flex-wrap gap-2 mission-fade-in" style={{ animationDelay: '0.1s' }}>
-          {unlocked.map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setSelectedCity(c)}
-              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded text-[10px] sm:text-[11px] font-heading font-bold border transition-all active:scale-95 ${
-                city === c
-                  ? 'bg-gradient-to-b from-amber-600 to-amber-700 text-white border-amber-500 shadow-sm'
-                  : 'bg-zinc-800/60 text-foreground border-zinc-700 hover:bg-zinc-700/60'
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {city && (
+      {city && showDistrictMap && (
         <>
-          {/* Interactive Map */}
+          {/* District Map Section */}
           {cityAreas.length > 0 && (
-            <section className="mission-fade-in" style={{ animationDelay: '0.2s' }}>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <h2 className="text-xs sm:text-sm font-heading font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Navigation size={14} className="sm:w-4 sm:h-4" />
-                  Map of {city}
+            <section className="mb-6 mission-fade-in" style={{ animationDelay: '0.2s' }}>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <h2 className="text-sm sm:text-base font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                  <Navigation size={16} className="sm:w-5 sm:h-5" />
+                  {city} Districts
                 </h2>
-                {selectedArea && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedArea(null)}
-                    className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded border border-zinc-600 bg-zinc-800/80 text-[9px] sm:text-[10px] font-heading font-bold hover:bg-zinc-700 transition-all active:scale-95"
-                  >
-                    Show All
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => setShowDistrictMap(false)}
+                  className="px-2.5 sm:px-3 py-1 sm:py-1.5 rounded border border-zinc-600 bg-zinc-800/80 text-[9px] sm:text-[10px] font-heading font-bold hover:bg-zinc-700 transition-all active:scale-95"
+                >
+                  Back to USA Map
+                </button>
               </div>
               
               <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading mb-3 leading-relaxed">
-                Click an area on the map to filter missions and characters. Green = complete, yellow = in progress, gray = locked.
+                Click a district to filter missions by area.
               </p>
               
               <CityMapSVG
@@ -564,15 +770,25 @@ export default function Missions() {
                 selectedArea={selectedArea}
                 onSelectArea={(area) => setSelectedArea(selectedArea === area ? null : area)}
               />
+              
+              {selectedArea && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedArea(null)}
+                  className="mt-3 px-3 sm:px-4 py-1.5 sm:py-2 rounded border border-primary/40 bg-primary/10 text-primary text-[10px] sm:text-[11px] font-heading font-bold hover:bg-primary/20 transition-all active:scale-95"
+                >
+                  Show All Districts
+                </button>
+              )}
             </section>
           )}
 
           {/* Characters */}
           {charactersToShow.length > 0 && (
-            <section className="mission-fade-in" style={{ animationDelay: '0.3s' }}>
-              <h2 className="text-xs sm:text-sm font-heading font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <User size={14} className="sm:w-4 sm:h-4" />
-                Characters{selectedArea ? ` — ${selectedArea}` : ` — ${city}`}
+            <section className="mb-6 mission-fade-in" style={{ animationDelay: '0.3s' }}>
+              <h2 className="text-sm sm:text-base font-heading font-bold text-primary uppercase tracking-wider mb-3 flex items-center gap-2">
+                <User size={16} className="sm:w-5 sm:h-5" />
+                Characters{selectedArea ? ` — ${selectedArea}` : ''}
               </h2>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                 {charactersToShow.map((c) => (
@@ -580,7 +796,7 @@ export default function Missions() {
                     key={c.id}
                     type="button"
                     onClick={() => handleTalkToCharacter(c.id)}
-                    className="px-2.5 sm:px-3 py-2 sm:py-2.5 rounded border border-zinc-600 bg-zinc-800/50 hover:bg-zinc-700/60 hover:border-amber-500/30 text-left transition-all active:scale-95"
+                    className="px-2.5 sm:px-3 py-2 sm:py-2.5 rounded border border-zinc-600 bg-zinc-800/50 hover:bg-zinc-700/60 hover:border-primary/30 text-left transition-all active:scale-95"
                   >
                     <span className="text-[10px] sm:text-[11px] font-heading font-bold text-foreground block truncate">
                       {c.name}
@@ -596,15 +812,15 @@ export default function Missions() {
 
           {/* Missions List */}
           <section className="mission-fade-in" style={{ animationDelay: '0.4s' }}>
-            <h2 className="text-xs sm:text-sm font-heading font-bold text-amber-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <CheckCircle2 size={14} className="sm:w-4 sm:h-4" />
-              {selectedArea ? `${city} — ${selectedArea}` : city}
+            <h2 className="text-sm sm:text-base font-heading font-bold text-primary uppercase tracking-wider mb-3 flex items-center gap-2">
+              <CheckCircle2 size={16} className="sm:w-5 sm:h-5" />
+              {selectedArea ? `${city} — ${selectedArea}` : `${city} Missions`}
             </h2>
             <div className="space-y-2">
               {missionsToShow.length === 0 ? (
-                <div className="rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-4 text-center">
-                  <p className="text-[10px] sm:text-[11px] text-zinc-400 font-heading">
-                    {selectedArea ? 'No missions in this area.' : 'No missions in this city.'}
+                <div className="rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-6 text-center">
+                  <p className="text-[10px] sm:text-xs text-zinc-400 font-heading">
+                    {selectedArea ? 'No missions in this district.' : 'No missions in this city.'}
                   </p>
                 </div>
               ) : (
@@ -633,12 +849,11 @@ export default function Missions() {
         />
       )}
 
-      {/* No cities unlocked message */}
       {!city && unlocked.length === 0 && (
-        <div className="rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-6 text-center mission-fade-in">
-          <Map size={32} className="mx-auto mb-3 text-zinc-600" />
-          <p className="text-xs sm:text-sm text-zinc-400 font-heading">
-            Complete the game to unlock missions.
+        <div className="rounded-lg border border-zinc-700/40 bg-zinc-800/30 p-8 text-center mission-fade-in">
+          <Map size={40} className="mx-auto mb-4 text-zinc-600" />
+          <p className="text-sm text-zinc-400 font-heading">
+            Complete the game to unlock territories.
           </p>
         </div>
       )}
