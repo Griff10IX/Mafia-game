@@ -291,6 +291,39 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         if not hitlist_npc:
             raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
     now = datetime.now(timezone.utc)
+    # Reuse existing active search for this target (one search per target per attacker)
+    existing = await db.attacks.find_one(
+        {
+            "attacker_id": current_user["id"],
+            "target_id": target["id"],
+            "status": {"$in": ["searching", "found"]},
+        },
+        {"_id": 0, "id": 1, "status": 1, "found_at": 1, "location_state": 1, "planned_location_state": 1},
+    )
+    if existing:
+        if existing.get("expires_at"):
+            try:
+                exp = datetime.fromisoformat(existing["expires_at"].replace("Z", "+00:00"))
+                if exp.tzinfo is None:
+                    exp = exp.replace(tzinfo=timezone.utc)
+                if now >= exp:
+                    await db.attacks.delete_one({"id": existing["id"], "attacker_id": current_user["id"]})
+                else:
+                    return AttackSearchResponse(
+                        attack_id=existing["id"],
+                        status=existing.get("status", "searching"),
+                        message=f"Already searching for {request.target_username}.",
+                        estimated_completion=existing.get("found_at", now.isoformat()),
+                    )
+            except Exception:
+                pass
+        else:
+            return AttackSearchResponse(
+                attack_id=existing["id"],
+                status=existing.get("status", "searching"),
+                message=f"Already searching for {request.target_username}.",
+                estimated_completion=existing.get("found_at", now.isoformat()),
+            )
     override_minutes = current_user.get("search_minutes_override")
     if override_minutes is not None:
         try:
@@ -311,6 +344,7 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     attack_id = str(uuid.uuid4())
     note = (request.note or "").strip()
     note = note[:80] if note else None
+    target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
     await db.attacks.insert_one({
         "id": attack_id,
         "attacker_id": current_user["id"],
@@ -322,7 +356,7 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         "search_started": now.isoformat(),
         "found_at": found_at.isoformat(),
         "expires_at": expires_at.isoformat(),
-        "planned_location_state": random.choice(STATES),
+        "planned_location_state": target_state,
         "location_state": None,
         "result": None,
         "rewards": None
@@ -356,7 +390,8 @@ async def get_attack_status(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     found_time = datetime.fromisoformat(attack["found_at"])
     if attack["status"] == "searching" and now >= found_time:
-        new_location = attack.get("location_state") or attack.get("planned_location_state") or random.choice(STATES)
+        target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "current_state": 1})
+        new_location = (target_user.get("current_state") if target_user and target_user.get("current_state") in STATES else None) or attack.get("planned_location_state") or random.choice(STATES)
         await db.attacks.update_one(
             {"id": attack["id"]},
             {"$set": {"status": "found", "location_state": new_location}}
@@ -422,7 +457,8 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
         if attack["status"] == "searching":
             found_time = datetime.fromisoformat(attack["found_at"])
             if now >= found_time:
-                new_location = attack.get("location_state") or attack.get("planned_location_state") or random.choice(STATES)
+                target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "current_state": 1})
+                new_location = (target_user.get("current_state") if target_user and target_user.get("current_state") in STATES else None) or attack.get("planned_location_state") or random.choice(STATES)
                 await db.attacks.update_one({"id": attack["id"]}, {"$set": {"status": "found", "location_state": new_location}})
                 attack["status"] = "found"
                 attack["location_state"] = new_location
