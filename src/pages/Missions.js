@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Map, X, Star, DollarSign, Award, Crosshair, Briefcase, Lock } from 'lucide-react';
+import { Map, X, Star, Lock } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 
@@ -117,12 +117,6 @@ function Modal({ city, dist, missions, onClose, onStart, starting }) {
                 <span className="text-emerald-400 font-bold">{fmt(prim.reward_money)}</span>
               </div>
             )}
-            {prim.reward_points > 0 && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Empire Reward</span>
-                <span className="text-primary font-bold">{prim.reward_points} Pts</span>
-              </div>
-            )}
             <div className="flex justify-between text-[9px] font-heading">
               <span className="text-zinc-400">Difficulty</span>
               <div className="flex gap-0.5">
@@ -206,7 +200,7 @@ function CityMap({ city, missions, onClick }) {
       <rect width={map.vb.w} height={map.vb.h} fill="#0a0a0a" />
       <rect width={map.vb.w} height={map.vb.h} fill="url(#grid)" />
 
-      {map.lakePath && <path d={map.lakePath} fill="#1e3a5f" opacity="0.3" stroke="#2563eb" strokeWidth="1" opacity="0.2" />}
+      {map.lakePath && <path d={map.lakePath} fill="#1e3a5f" fillOpacity="0.3" stroke="#2563eb" strokeWidth="1" strokeOpacity="0.2" />}
       {map.hudsonPath && <path d={map.hudsonPath} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.2" />}
       {map.eastPath && <path d={map.eastPath} fill="none" stroke="#2563eb" strokeWidth="2" opacity="0.2" />}
       {map.oceanPath && <path d={map.oceanPath} fill="none" stroke="#2563eb" strokeWidth="3" opacity="0.25" />}
@@ -250,28 +244,6 @@ function CityMap({ city, missions, onClick }) {
         );
       })}
     </svg>
-  );
-}
-
-/* Stats */
-function Stats({ data }) {
-  const Card = ({ icon: I, label, val, clr = 'text-foreground' }) => (
-    <div className="rounded border border-zinc-700/50 bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 p-2.5">
-      <div className="flex items-center gap-1.5 mb-1">
-        <I size={13} className="text-zinc-500" />
-        <span className="text-[8px] text-zinc-400 font-heading uppercase tracking-wider">{label}</span>
-      </div>
-      <div className={`text-base font-heading font-bold ${clr}`}>{val}</div>
-    </div>
-  );
-
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <Card icon={DollarSign} label="Cash" val={`${fmt(data.cash)}/day`} clr="text-emerald-400" />
-      <Card icon={Award} label="Points" val={`${data.pts}/day`} clr="text-primary" />
-      <Card icon={Crosshair} label="Bullets" val={`${data.bullets}/day`} clr="text-foreground" />
-      <Card icon={Briefcase} label="Ranks" val={`${data.ranks}/day`} clr="text-foreground" />
-    </div>
   );
 }
 
@@ -383,10 +355,6 @@ export default function Missions() {
         <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
           Complete missions in each district to earn daily empire income. Click districts on the map to view objectives and rewards.
         </p>
-      </div>
-
-      <div className="fade" style={{ animationDelay: '0.35s' }}>
-        <Stats data={{ cash: 0, pts: 0, bullets: 0, ranks: 0 }} />
       </div>
 
       {dist && <Modal city={city} dist={dist} missions={cityMissions} onClose={() => setDist(null)} onStart={start} starting={starting} />}

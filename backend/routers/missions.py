@@ -21,12 +21,13 @@ from server import (
 CITY_ORDER = list(STATES) if STATES else ["Chicago", "New York", "Las Vegas", "Atlantic City"]
 
 # Mission definitions: id, city, area, order, type, requirements, title, description, rewards, unlocks_city, character_id
+# Areas must match MAPS districts in src/pages/Missions.js (The Loop, South Side, West Side, North Side, Near North, Stockyards; Financial District, Chinatown, Greenwich Village, Midtown, Upper West Side, Upper East Side, Harlem, Bronx, Brooklyn Heights, Williamsburg, Queens, Staten Island; The Strip, Downtown, Paradise, Summerlin, Henderson, North Las Vegas, Arts District, Boulder Strip; Boardwalk, Marina District, Inlet, Chelsea)
 MISSIONS = [
-    # Chicago
+    # Chicago (districts: The Loop, South Side, West Side, North Side, Near North, Stockyards)
     {
         "id": "m_chicago_crimes",
         "city": "Chicago",
-        "area": "Downtown",
+        "area": "The Loop",
         "order": 1,
         "type": "crime_count",
         "requirements": {"crimes": 5},
@@ -40,7 +41,7 @@ MISSIONS = [
     {
         "id": "m_chicago_earn",
         "city": "Chicago",
-        "area": "Docks",
+        "area": "West Side",
         "order": 2,
         "type": "crime_profit",
         "requirements": {"crime_profit": 1000},
@@ -68,7 +69,7 @@ MISSIONS = [
     {
         "id": "m_chicago_boss",
         "city": "Chicago",
-        "area": "Downtown",
+        "area": "The Loop",
         "order": 4,
         "type": "special",
         "requirements": {"complete_missions": ["m_chicago_crimes", "m_chicago_earn", "m_chicago_attacks"]},
@@ -79,11 +80,11 @@ MISSIONS = [
         "unlocks_city": "New York",
         "character_id": "char_chicago_boss",
     },
-    # New York (placeholder missions — can expand later)
+    # New York (districts: Financial District, Chinatown, Greenwich Village, Midtown, Upper West Side, Upper East Side, Harlem, Bronx, Brooklyn Heights, Williamsburg, Queens, Staten Island)
     {
         "id": "m_ny_smuggle",
         "city": "New York",
-        "area": "Waterfront",
+        "area": "Brooklyn Heights",
         "order": 1,
         "type": "booze_sells",
         "requirements": {"booze_sells": 3},
@@ -97,7 +98,7 @@ MISSIONS = [
     {
         "id": "m_ny_busts",
         "city": "New York",
-        "area": "Courthouse",
+        "area": "Financial District",
         "order": 2,
         "type": "jail_busts",
         "requirements": {"jail_busts": 2},
@@ -111,7 +112,7 @@ MISSIONS = [
     {
         "id": "m_ny_gta",
         "city": "New York",
-        "area": "Garage",
+        "area": "Williamsburg",
         "order": 3,
         "type": "gta_count",
         "requirements": {"gta": 3},
@@ -125,7 +126,7 @@ MISSIONS = [
     {
         "id": "m_ny_boss",
         "city": "New York",
-        "area": "Downtown",
+        "area": "Midtown",
         "order": 4,
         "type": "special",
         "requirements": {"complete_missions": ["m_ny_smuggle", "m_ny_busts", "m_ny_gta"]},
@@ -136,11 +137,11 @@ MISSIONS = [
         "unlocks_city": "Las Vegas",
         "character_id": "char_ny_boss",
     },
-    # Las Vegas
+    # Las Vegas (districts: The Strip, Downtown, Paradise, Summerlin, Henderson, North Las Vegas, Arts District, Boulder Strip)
     {
         "id": "m_vegas_earn",
         "city": "Las Vegas",
-        "area": "Desert",
+        "area": "Summerlin",
         "order": 1,
         "type": "earn_money",
         "requirements": {"money": 10000},
@@ -154,7 +155,7 @@ MISSIONS = [
     {
         "id": "m_vegas_crimes",
         "city": "Las Vegas",
-        "area": "Card room",
+        "area": "The Strip",
         "order": 2,
         "type": "crime_count",
         "requirements": {"crimes": 15},
@@ -179,7 +180,7 @@ MISSIONS = [
         "unlocks_city": "Atlantic City",
         "character_id": "char_vegas_boss",
     },
-    # Atlantic City
+    # Atlantic City (districts: Boardwalk, Marina District, Inlet, Chelsea)
     {
         "id": "m_ac_rank",
         "city": "Atlantic City",
@@ -197,7 +198,7 @@ MISSIONS = [
     {
         "id": "m_ac_busts",
         "city": "Atlantic City",
-        "area": "Docks",
+        "area": "Marina District",
         "order": 2,
         "type": "jail_busts",
         "requirements": {"jail_busts": 5},
@@ -211,7 +212,7 @@ MISSIONS = [
     {
         "id": "m_ac_commission",
         "city": "Atlantic City",
-        "area": "—",
+        "area": "Chelsea",
         "order": 3,
         "type": "special",
         "requirements": {"complete_missions": ["m_ac_rank", "m_ac_busts"]},
@@ -224,14 +225,14 @@ MISSIONS = [
     },
 ]
 
-# Mission characters (1920s–30s mafia style)
+# Mission characters (1920s–30s mafia style). Areas must match MAPS districts in Missions.js.
 MISSION_CHARACTERS = [
-    {"id": "char_chicago_fixer", "name": "The Fixer", "city": "Chicago", "area": "Downtown", "role": "fixer",
+    {"id": "char_chicago_fixer", "name": "The Fixer", "city": "Chicago", "area": "The Loop", "role": "fixer",
      "dialogue_intro": "The outfit's always looking for reliable people. You want in? Show me what you can do.",
      "dialogue_mission_offer": "Commit five jobs. No questions. Come back when it's done.",
      "dialogue_in_progress": "Come back when it's done.",
-     "dialogue_complete": "You're good. Go see the Bookkeeper at the docks — he'll have more work."},
-    {"id": "char_chicago_bookkeeper", "name": "The Bookkeeper", "city": "Chicago", "area": "Docks", "role": "bookkeeper",
+     "dialogue_complete": "You're good. Go see the Bookkeeper on the West Side — he'll have more work."},
+    {"id": "char_chicago_bookkeeper", "name": "The Bookkeeper", "city": "Chicago", "area": "West Side", "role": "bookkeeper",
      "dialogue_intro": "I don't care about names. I care about numbers. Show me you can make money.",
      "dialogue_mission_offer": "Earn a grand from the street. Bring the vig. Then we talk.",
      "dialogue_in_progress": "No vig, no talk. Get to work.",
@@ -240,38 +241,38 @@ MISSION_CHARACTERS = [
      "dialogue_intro": "Someone's behind on a debt. I need a reminder delivered. You in?",
      "dialogue_mission_offer": "Win two fights. No excuses. Then the Old Man might see you.",
      "dialogue_in_progress": "Two. Not one. Come back when you're done.",
-     "dialogue_complete": "You've got a mean streak. The Old Man wants to see you. Downtown."},
-    {"id": "char_chicago_boss", "name": "The Old Man", "city": "Chicago", "area": "Downtown", "role": "boss",
+     "dialogue_complete": "You've got a mean streak. The Old Man wants to see you. The Loop."},
+    {"id": "char_chicago_boss", "name": "The Old Man", "city": "Chicago", "area": "The Loop", "role": "boss",
      "dialogue_intro": "You've done good work. The big leagues are in New York. Finish what we asked and I'll get you a ticket.",
      "dialogue_mission_offer": "You know what to do. Crimes, cash, and two wins. Report back when it's all done.",
      "dialogue_in_progress": "Not yet. Finish the list.",
      "dialogue_complete": "You're ready. New York's waiting. Don't disappoint me."},
-    {"id": "char_ny_smuggler", "name": "The Smuggler", "city": "New York", "area": "Waterfront", "role": "smuggler",
+    {"id": "char_ny_smuggler", "name": "The Smuggler", "city": "New York", "area": "Brooklyn Heights", "role": "smuggler",
      "dialogue_intro": "We need a driver. Run the route, don't ask questions. You in?",
      "dialogue_mission_offer": "Three deliveries. Booze. Get it done.",
      "dialogue_in_progress": "Run the route. Come back when you're done.",
      "dialogue_complete": "Good. The Mouthpiece might have work for you."},
-    {"id": "char_ny_mouthpiece", "name": "The Mouthpiece", "city": "New York", "area": "Courthouse", "role": "mouthpiece",
+    {"id": "char_ny_mouthpiece", "name": "The Mouthpiece", "city": "New York", "area": "Financial District", "role": "mouthpiece",
      "dialogue_intro": "One of ours is in the can. I need him out. You do the heavy lifting.",
      "dialogue_mission_offer": "Bust two out. Jail. You know the drill.",
      "dialogue_in_progress": "Two. Then we talk.",
-     "dialogue_complete": "The Mechanic needs wheels. Garage. Go."},
-    {"id": "char_ny_mechanic", "name": "The Mechanic", "city": "New York", "area": "Garage", "role": "mechanic",
+     "dialogue_complete": "The Mechanic needs wheels. Williamsburg. Go."},
+    {"id": "char_ny_mechanic", "name": "The Mechanic", "city": "New York", "area": "Williamsburg", "role": "mechanic",
      "dialogue_intro": "We need three cars by Friday. Clean jobs. You in?",
      "dialogue_mission_offer": "Steal three cars. Bring them in. That's it.",
      "dialogue_in_progress": "Three cars. Friday.",
-     "dialogue_complete": "You're solid. The Boss wants to see you. Downtown."},
-    {"id": "char_ny_boss", "name": "NY Boss", "city": "New York", "area": "Downtown", "role": "boss",
+     "dialogue_complete": "You're solid. The Boss wants to see you. Midtown."},
+    {"id": "char_ny_boss", "name": "NY Boss", "city": "New York", "area": "Midtown", "role": "boss",
      "dialogue_intro": "Vegas is next. Prove yourself here first.",
      "dialogue_mission_offer": "Smuggler, Mouthpiece, Mechanic — do their jobs. Then come back.",
      "dialogue_in_progress": "Finish the work.",
      "dialogue_complete": "You're ready for Vegas. Don't look back."},
-    {"id": "char_vegas_builder", "name": "The Builder", "city": "Las Vegas", "area": "Desert", "role": "builder",
+    {"id": "char_vegas_builder", "name": "The Builder", "city": "Las Vegas", "area": "Summerlin", "role": "builder",
      "dialogue_intro": "We're putting something big out here. Earn your share.",
      "dialogue_mission_offer": "Have ten grand on hand. Show me you're serious.",
      "dialogue_in_progress": "Ten thousand. Then we talk.",
-     "dialogue_complete": "The Gambler has more work. Card room."},
-    {"id": "char_vegas_gambler", "name": "The Gambler", "city": "Las Vegas", "area": "Card room", "role": "gambler",
+     "dialogue_complete": "The Gambler has more work. The Strip."},
+    {"id": "char_vegas_gambler", "name": "The Gambler", "city": "Las Vegas", "area": "The Strip", "role": "gambler",
      "dialogue_intro": "The house always wins. Unless you're with us. Prove it.",
      "dialogue_mission_offer": "Fifteen jobs. Crimes. Then the Boss sees you.",
      "dialogue_in_progress": "Fifteen. No less.",
@@ -285,13 +286,13 @@ MISSION_CHARACTERS = [
      "dialogue_intro": "Last stop. Prove you're made.",
      "dialogue_mission_offer": "Reach Hustler. Then we talk.",
      "dialogue_in_progress": "Hustler. That's the bar.",
-     "dialogue_complete": "You're made. The Cop on the docks has one more test. Then the Commission."},
-    {"id": "char_ac_cop", "name": "The Corrupt Cop", "city": "Atlantic City", "area": "Docks", "role": "cop",
+     "dialogue_complete": "You're made. The Cop in the Marina District has one more test. Then the Commission."},
+    {"id": "char_ac_cop", "name": "The Corrupt Cop", "city": "Atlantic City", "area": "Marina District", "role": "cop",
      "dialogue_intro": "Keep the heat off. Pay the right people. Bust five out of the can.",
      "dialogue_mission_offer": "Bust five. Then the Commission will see you.",
      "dialogue_in_progress": "Five busts. Go.",
      "dialogue_complete": "You're in. The Commission. They're waiting."},
-    {"id": "char_ac_commission", "name": "The Commission", "city": "Atlantic City", "area": "—", "role": "boss",
+    {"id": "char_ac_commission", "name": "The Commission", "city": "Atlantic City", "area": "Chelsea", "role": "boss",
      "dialogue_intro": "You've come a long way. Finish the work on the shore. Then we'll talk.",
      "dialogue_mission_offer": "Shore Boss and the Cop. Do their jobs. Then you're one of us.",
      "dialogue_in_progress": "Not yet. Finish the list.",
