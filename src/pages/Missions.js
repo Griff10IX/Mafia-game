@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Map, CheckCircle2, Circle, User } from 'lucide-react';
+import { Map, CheckCircle2, Circle, User, MessageCircle, X } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -11,7 +11,7 @@ function formatReward(money, points) {
   return parts.length ? parts.join(' · ') : '—';
 }
 
-function MissionCard({ mission, onComplete, completing }) {
+function MissionCard({ mission, onComplete, completing, characterName, onTalkToCharacter }) {
   const { completed, requirements_met, progress, character_id } = mission;
   const canComplete = !completed && requirements_met;
   const prog = progress || {};
@@ -29,7 +29,16 @@ function MissionCard({ mission, onComplete, completing }) {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-sm font-heading font-bold text-foreground">{mission.title}</h3>
-            {character_id && (
+            {character_id && characterName && (
+              <button
+                type="button"
+                onClick={() => onTalkToCharacter?.(character_id)}
+                className="text-[10px] text-primary font-heading flex items-center gap-1 hover:underline"
+              >
+                <MessageCircle className="w-3 h-3" /> Talk to {characterName}
+              </button>
+            )}
+            {character_id && !characterName && (
               <span className="text-[10px] text-mutedForeground font-heading flex items-center gap-1">
                 <User className="w-3 h-3" /> Character
               </span>
@@ -69,12 +78,47 @@ function MissionCard({ mission, onComplete, completing }) {
   );
 }
 
+function DialogueModal({ character, dialogue, onClose }) {
+  if (!character) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={onClose}>
+      <div
+        className="rounded-lg border border-zinc-600 bg-zinc-900 shadow-xl max-w-md w-full p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <User className="w-5 h-5 text-primary" />
+            <h3 className="text-sm font-heading font-bold text-foreground">{character.name}</h3>
+            <span className="text-[10px] text-mutedForeground font-heading">({character.area})</span>
+          </div>
+          <button type="button" onClick={onClose} className="p-1 rounded hover:bg-zinc-700 text-mutedForeground" aria-label="Close">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-[12px] text-foreground/90 font-heading leading-relaxed italic">&ldquo;{dialogue}&rdquo;</p>
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-[11px] font-heading font-bold hover:bg-primary/90"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Missions() {
   const [mapData, setMapData] = useState(null);
   const [missions, setMissions] = useState(null);
+  const [characters, setCharacters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCity, setSelectedCity] = useState(null);
   const [completing, setCompleting] = useState(null);
+  const [selectedCharacter, setSelectedCharacter] = useState(null);
 
   const fetchMap = async () => {
     try {
@@ -96,6 +140,15 @@ export default function Missions() {
     }
   };
 
+  const fetchCharacters = async (cityFilter) => {
+    try {
+      const res = await api.get('/missions/characters', { params: cityFilter ? { city: cityFilter } : {} });
+      setCharacters(res.data?.characters || []);
+    } catch (e) {
+      setCharacters([]);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -106,6 +159,10 @@ export default function Missions() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (city) fetchCharacters(city);
+  }, [city]);
 
   const handleComplete = async (missionId) => {
     setCompleting(missionId);
@@ -132,6 +189,22 @@ export default function Missions() {
   const byCity = mapData?.by_city || {};
   const cityMissions = (city && byCity[city]?.missions) || [];
   const unlocked = mapData?.unlocked_cities || [];
+
+  const characterById = Object.fromEntries((characters || []).map((c) => [c.id, c]));
+  const missionByCharacterId = Object.fromEntries((cityMissions || []).filter((m) => m.character_id).map((m) => [m.character_id, m]));
+
+  const getDialogueForCharacter = (char) => {
+    const mission = missionByCharacterId[char.id];
+    if (mission?.completed) return char.dialogue_complete || char.dialogue_intro || 'Done.';
+    if (mission?.requirements_met) return char.dialogue_in_progress || char.dialogue_mission_offer || char.dialogue_intro || 'Come back when it\'s done.';
+    return char.dialogue_intro || char.dialogue_mission_offer || 'We need to talk.';
+  };
+
+  const handleTalkToCharacter = (characterId) => {
+    const char = characterById[characterId];
+    if (!char) return;
+    setSelectedCharacter({ character: char, dialogue: getDialogueForCharacter(char) });
+  };
 
   if (loading && !mapData) {
     return (
@@ -175,25 +248,57 @@ export default function Missions() {
       )}
 
       {city && (
-        <section>
-          <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">
-            {city}
-          </h2>
-          <div className="space-y-2">
-            {cityMissions.length === 0 ? (
-              <p className="text-[11px] text-mutedForeground">No missions in this city.</p>
-            ) : (
-              cityMissions.map((m) => (
-                <MissionCard
-                  key={m.id}
-                  mission={m}
-                  onComplete={handleComplete}
-                  completing={completing}
-                />
-              ))
-            )}
-          </div>
-        </section>
+        <>
+          {characters.length > 0 && (
+            <section>
+              <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">
+                Characters — {city}
+              </h2>
+              <div className="flex flex-wrap gap-2">
+                {characters.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => handleTalkToCharacter(c.id)}
+                    className="px-3 py-2 rounded border border-zinc-600 bg-zinc-800/50 hover:bg-zinc-700/50 text-left"
+                  >
+                    <span className="text-[11px] font-heading font-bold text-foreground block">{c.name}</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">{c.area}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+          <section>
+            <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">
+              {city}
+            </h2>
+            <div className="space-y-2">
+              {cityMissions.length === 0 ? (
+                <p className="text-[11px] text-mutedForeground">No missions in this city.</p>
+              ) : (
+                cityMissions.map((m) => (
+                  <MissionCard
+                    key={m.id}
+                    mission={m}
+                    onComplete={handleComplete}
+                    completing={completing}
+                    characterName={characterById[m.character_id]?.name}
+                    onTalkToCharacter={handleTalkToCharacter}
+                  />
+                ))
+              )}
+            </div>
+          </section>
+        </>
+      )}
+
+      {selectedCharacter && (
+        <DialogueModal
+          character={selectedCharacter.character}
+          dialogue={selectedCharacter.dialogue}
+          onClose={() => setSelectedCharacter(null)}
+        />
       )}
 
       {!city && unlocked.length === 0 && (
