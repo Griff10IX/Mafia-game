@@ -215,9 +215,10 @@ const StatCard = ({ icon: Icon, label, value, highlight, pulseActive }) => (
 /* ═══════════════════════════════════════════════════════
    Main BulletFactory Component
    ═══════════════════════════════════════════════════════ */
-export default function BulletFactory({ me, ownedArmouryState }) {
+export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [me, setMe] = useState(meProp ?? null);
   const [activeTab, setActiveTab] = useState('shop');
   const [claiming, setClaiming] = useState(false);
   const [settingPrice, setSettingPrice] = useState(false);
@@ -230,6 +231,18 @@ export default function BulletFactory({ me, ownedArmouryState }) {
   const [weaponsList, setWeaponsList] = useState([]);
   const [buyingArmourLevel, setBuyingArmourLevel] = useState(null);
   const [buyingWeaponId, setBuyingWeaponId] = useState(null);
+
+  useEffect(() => {
+    if (meProp?.money != null) {
+      setMe(meProp);
+      return;
+    }
+    let cancelled = false;
+    api.get('/auth/me').then((res) => {
+      if (!cancelled && res.data) setMe(res.data);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [meProp]);
 
   const currentState = me?.current_state;
   const effectiveState = ownedArmouryState || currentState;
@@ -275,6 +288,8 @@ export default function BulletFactory({ me, ownedArmouryState }) {
       await api.post('/bullet-factory/claim', { state: data?.state || currentState });
       toast.success('You now own the Bullet Factory!');
       refreshUser();
+      const meRes = await api.get('/auth/me').catch(() => ({}));
+      if (meRes.data) setMe(meRes.data);
       fetchData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to claim factory');
@@ -405,7 +420,7 @@ export default function BulletFactory({ me, ownedArmouryState }) {
   const productionPer24h = data?.production_per_24h ?? 5000;
   const productionTickMins = data?.production_tick_minutes ?? 20;
   const production = data?.production_per_hour ?? productionPer24h / 24;
-  const claimCost = data?.claim_cost ?? 0;
+  const claimCost = Number(data?.claim_cost ?? 0);
   const pricePerBullet = data?.price_per_bullet ?? null;
   const priceMin = data?.price_min ?? 1;
   const priceMax = data?.price_max ?? 100000;
