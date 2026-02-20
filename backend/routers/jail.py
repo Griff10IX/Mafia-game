@@ -73,28 +73,33 @@ JAIL_BUST_FAIL_MESSAGES = [
 ]
 
 
+# Jail busts a bit harder: raw rates multiplied by this (0.9 = 10% less success)
+JAIL_BUST_DIFFICULTY_MULT = 0.9
+
+
 def _player_bust_success_rate(total_attempts: int) -> float:
-    """Calculate player bust success rate based on experience (total attempts, not just successes). Softer curve: higher base rates, lower thresholds for max 90%."""
+    """Calculate player bust success rate based on experience (total attempts, not just successes). Softer curve: higher base rates, lower thresholds for max 90%. Then multiplied by JAIL_BUST_DIFFICULTY_MULT."""
     if total_attempts < 150:
-        return 0.06  # 6% - Everyone starts here (was 3% at 250)
+        raw = 0.06  # 6% - Everyone starts here
     elif total_attempts < 350:
-        return 0.12  # 12% (was 8% at 500)
+        raw = 0.12
     elif total_attempts < 700:
-        return 0.20  # 20% (was 12% at 1000)
+        raw = 0.20
     elif total_attempts < 1500:
-        return 0.28  # 28% (was 18% at 2000)
+        raw = 0.28
     elif total_attempts < 3000:
-        return 0.38  # 38% (was 25% at 4000)
+        raw = 0.38
     elif total_attempts < 5500:
-        return 0.50  # 50% (was 35% at 7000)
+        raw = 0.50
     elif total_attempts < 9500:
-        return 0.62  # 62% (was 45% at 12000)
+        raw = 0.62
     elif total_attempts < 14500:
-        return 0.72  # 72% (was 60% at 18000)
+        raw = 0.72
     elif total_attempts < 20000:
-        return 0.82  # 82% (was 75% at 25000)
+        raw = 0.82
     else:
-        return 0.90  # 90% - Master buster (was 85% at 25k)
+        raw = 0.90  # Master buster
+    return raw * JAIL_BUST_DIFFICULTY_MULT
 
 
 # Cache for jail NPCs list (invalidated when spawn adds or bust removes an NPC)

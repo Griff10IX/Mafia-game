@@ -224,6 +224,55 @@ systemctl reload nginx
 
 Open **http://YOUR_DROPLET_IP** or **http://yourdomain.com**. You should see the app; login will call `/api` on the same host.
 
+### 8.1 Redirect this server to another URL (e.g. Ionos)
+
+If you want everyone who visits this DigitalOcean server (or its domain) to be sent to another URL (e.g. your site on **Ionos**):
+
+1. Edit the Nginx config:
+   ```bash
+   nano /etc/nginx/sites-available/mafia
+   ```
+
+2. Replace the whole `server { ... }` block with a redirect-only block (use your real Ionos URL):
+
+   ```nginx
+   server {
+       listen 80;
+       server_name yourdomain.com www.yourdomain.com _;
+
+       return 301 https://YOUR-SITE.ionos.co.uk$request_uri;
+   }
+   ```
+
+   For HTTPS (if you already have certbot), add a second block so both HTTP and HTTPS redirect:
+
+   ```nginx
+   server {
+       listen 80;
+       server_name yourdomain.com www.yourdomain.com _;
+       return 301 https://YOUR-SITE.ionos.co.uk$request_uri;
+   }
+
+   server {
+       listen 443 ssl;
+       server_name yourdomain.com www.yourdomain.com _;
+       # ssl_certificate and ssl_certificate_key are set by certbot
+       include /etc/letsencrypt/options-ssl-nginx.conf;
+       ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+       return 301 https://YOUR-SITE.ionos.co.uk$request_uri;
+   }
+   ```
+
+3. Replace `YOUR-SITE.ionos.co.uk` with your actual Ionos URL (e.g. `yoursite.ionos.co.uk` or your custom domain hosted there).
+
+4. Test and reload:
+   ```bash
+   nginx -t
+   systemctl reload nginx
+   ```
+
+Visitors to your Droplet IP or domain will now be sent to the Ionos URL (path and query string are kept via `$request_uri`).
+
 ---
 
 ## 9. HTTPS (Let's Encrypt)

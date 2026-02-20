@@ -811,11 +811,17 @@ export default function Admin() {
     if (!window.confirm('FINAL WARNING: Delete ALL users?')) return;
     setDbLoading(true);
     try {
-      const res = await api.post('/admin/wipe-all-users');
-      toast.success(res.data?.message || 'Wiped');
+      const res = await api.post('/admin/wipe-all-users', { confirmation_text: 'WIPE ALL DATA' });
+      toast.success(res.data?.message || 'Database wiped.');
       setWipeConfirmText('');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-    finally { setDbLoading(false); }
+      // Current user no longer exists; clear token and send to login so the app doesn't break
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setDbLoading(false);
+    }
   };
 
   const handleDropAllCars = async () => {

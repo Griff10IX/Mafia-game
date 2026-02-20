@@ -15,13 +15,13 @@ logger = logging.getLogger(__name__)
 # GTA options and request/response models
 # ---------------------------------------------------------------------------
 
-# Cooldowns: shorter than before (similar to crimes). Unlock by rank.
+# Cooldowns: shorter than before (similar to crimes). Unlock by rank. (10% harder: success_rate * 0.9)
 GTA_OPTIONS = [
-    {"id": "easy", "name": "Street Parking", "success_rate": 0.90, "jail_time": 8, "difficulty": 1, "cooldown": 20, "min_rank": 3},
-    {"id": "medium", "name": "Residential Area", "success_rate": 0.78, "jail_time": 15, "difficulty": 2, "cooldown": 45, "min_rank": 4},
-    {"id": "hard", "name": "Downtown District", "success_rate": 0.60, "jail_time": 25, "difficulty": 3, "cooldown": 90, "min_rank": 5},
-    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.45, "jail_time": 40, "difficulty": 4, "cooldown": 120, "min_rank": 6},
-    {"id": "legendary", "name": "Private Estate", "success_rate": 0.28, "jail_time": 50, "difficulty": 5, "cooldown": 180, "min_rank": 7},
+    {"id": "easy", "name": "Street Parking", "success_rate": 0.81, "jail_time": 8, "difficulty": 1, "cooldown": 20, "min_rank": 3},
+    {"id": "medium", "name": "Residential Area", "success_rate": 0.70, "jail_time": 15, "difficulty": 2, "cooldown": 45, "min_rank": 4},
+    {"id": "hard", "name": "Downtown District", "success_rate": 0.54, "jail_time": 25, "difficulty": 3, "cooldown": 90, "min_rank": 5},
+    {"id": "expert", "name": "Luxury Garage", "success_rate": 0.41, "jail_time": 40, "difficulty": 4, "cooldown": 120, "min_rank": 6},
+    {"id": "legendary", "name": "Private Estate", "success_rate": 0.25, "jail_time": 50, "difficulty": 5, "cooldown": 180, "min_rank": 7},
 ]
 
 
@@ -94,6 +94,9 @@ GTA_PROGRESS_MAX_DROP_FROM_PEAK = 12
 
 # On GTA failure, this chance you get caught (jail); otherwise you get away with no car
 GTA_CAUGHT_CHANCE = 0.4
+
+# 10% harder: success roll uses this multiplier (0.9 = 10% less success chance)
+GTA_DIFFICULTY_MULT = 0.9
 
 GTA_SUCCESS_MESSAGES = [
     "Success! You stole a {car_name}!",
@@ -237,7 +240,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
     
     ev = await get_effective_event()
     success_rate = progress / 100.0
-    gta_rate = success_rate * ev.get("gta_success", 1.0)
+    gta_rate = success_rate * ev.get("gta_success", 1.0) * GTA_DIFFICULTY_MULT
     success = random.random() < min(1.0, gta_rate)
     
     if success:

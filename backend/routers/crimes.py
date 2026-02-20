@@ -20,6 +20,9 @@ CRIME_PROGRESS_DROP_PER_FAIL_MIN = 1
 CRIME_PROGRESS_DROP_PER_FAIL_MAX = 3
 CRIME_PROGRESS_MAX_DROP_FROM_PEAK = 15    # once hit 92%, can never go below 77%
 
+# 10% harder: success roll uses this multiplier
+CRIME_DIFFICULTY_MULT = 0.9
+
 CRIME_SUCCESS_MESSAGES = [
     "Success! You earned ${reward:,} and {rank_points} rank points",
     "Clean score. ${reward:,} and {rank_points} rank points in your pocket.",
@@ -283,7 +286,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         progress_max = int(progress_max)
     else:
         progress_max = max(progress, _progress_from_attempts(crime_attempts))
-    success_rate = progress / 100.0
+    success_rate = (progress / 100.0) * CRIME_DIFFICULTY_MULT
     success = random.random() < success_rate
 
     if success:
