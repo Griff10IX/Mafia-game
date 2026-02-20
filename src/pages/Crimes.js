@@ -418,43 +418,37 @@ export default function Crimes() {
     let failed = 0;
     let totalCash = 0;
     let totalRankPoints = 0;
-    
+
     try {
-      for (const crime of available) {
-        try {
-          const response = await api.post(`/crimes/${crime.id}/commit`);
+      const results = await Promise.allSettled(
+        available.map((crime) => api.post(`/crimes/${crime.id}/commit`))
+      );
+
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const crime = available[i];
+        if (result.status === 'fulfilled') {
+          const response = result.value;
           if (response.data?.success) {
             committed += 1;
-            
             const msg = response.data?.message || '';
             const cashMatch = msg.match(/\$([0-9,]+)/);
             const rpMatch = msg.match(/(\d+)\s*(?:RP|rank points?)/i);
-            
-            if (cashMatch) {
-              totalCash += parseInt(cashMatch[1].replace(/,/g, ''), 10) || 0;
-            }
-            if (rpMatch) {
-              totalRankPoints += parseInt(rpMatch[1], 10) || 0;
-            }
-            
-            refreshUser();
+            if (cashMatch) totalCash += parseInt(cashMatch[1].replace(/,/g, ''), 10) || 0;
+            if (rpMatch) totalRankPoints += parseInt(rpMatch[1], 10) || 0;
           } else {
             failed += 1;
             toast.error(response.data?.message || `${crime.name} failed`);
           }
-          await fetchCrimes();
-        } catch (err) {
+        } else {
           failed += 1;
-          const detail = err.response?.data?.detail ?? err.message ?? 'Request failed';
+          const detail = result.reason?.response?.data?.detail ?? result.reason?.message ?? 'Request failed';
           toast.error(detail);
-          await refreshUser();
-          await fetchCrimes();
-          if (typeof detail === 'string' && detail.toLowerCase().includes('jail')) {
-            break;
-          }
         }
       }
+
       if (committed > 0) {
+        refreshUser();
         const parts = [`Committed ${committed} crime${committed !== 1 ? 's' : ''}`];
         if (totalCash > 0 || totalRankPoints > 0) {
           const rewards = [];
@@ -464,6 +458,7 @@ export default function Crimes() {
         }
         toast.success(parts.join(' and '));
       }
+      await fetchCrimes();
     } finally {
       setCommitAllLoading(false);
     }
