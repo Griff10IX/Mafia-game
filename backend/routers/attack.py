@@ -291,39 +291,6 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         if not hitlist_npc:
             raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
     now = datetime.now(timezone.utc)
-    # Reuse existing active search for this target (one search per target per attacker)
-    existing = await db.attacks.find_one(
-        {
-            "attacker_id": current_user["id"],
-            "target_id": target["id"],
-            "status": {"$in": ["searching", "found"]},
-        },
-        {"_id": 0, "id": 1, "status": 1, "found_at": 1, "location_state": 1, "planned_location_state": 1},
-    )
-    if existing:
-        if existing.get("expires_at"):
-            try:
-                exp = datetime.fromisoformat(existing["expires_at"].replace("Z", "+00:00"))
-                if exp.tzinfo is None:
-                    exp = exp.replace(tzinfo=timezone.utc)
-                if now >= exp:
-                    await db.attacks.delete_one({"id": existing["id"], "attacker_id": current_user["id"]})
-                else:
-                    return AttackSearchResponse(
-                        attack_id=existing["id"],
-                        status=existing.get("status", "searching"),
-                        message=f"Already searching for {request.target_username}.",
-                        estimated_completion=existing.get("found_at", now.isoformat()),
-                    )
-            except Exception:
-                pass
-        else:
-            return AttackSearchResponse(
-                attack_id=existing["id"],
-                status=existing.get("status", "searching"),
-                message=f"Already searching for {request.target_username}.",
-                estimated_completion=existing.get("found_at", now.isoformat()),
-            )
     override_minutes = current_user.get("search_minutes_override")
     if override_minutes is not None:
         try:
