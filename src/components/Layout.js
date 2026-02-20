@@ -1179,48 +1179,56 @@ export default function Layout({ children }) {
               const rankName = rankProgress?.current_rank_name ?? 'Rank';
               return (
                 <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
-                  <TrendingUp size={topBarIconSizeEffective} className="text-primary shrink-0" />
+                  <TrendingUp size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
                   <div className="flex flex-col min-w-[5rem] flex-1 sm:flex-initial shrink-0">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
                     <div className="w-10 sm:w-16 shrink-0" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
-                  <span className={`${topBarTextClass} text-primary font-heading shrink-0`}>{progressLabel}{rankProgress ? '%' : ''}</span>
+                  <span className={`${topBarTextClass} text-primary font-heading shrink-0 tabular-nums min-w-[2.5rem] text-right`}>{progressLabel}{rankProgress ? '%' : ''}</span>
                 </div>
               );
             }
             if (statId === 'bullets') {
+              const bulletsStr = formatInt(user.bullets);
               return (
-                <div className={`${chipClass} hidden md:flex`} title="Bullets">
-                  <Crosshair size={topBarIconSizeEffective} className="text-red-400 shrink-0" />
-                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums`} data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
+                <div className={`${chipClass} hidden md:flex min-w-0`} title={`Bullets: ${bulletsStr}`}>
+                  <Crosshair size={topBarIconSizeEffective} className="text-red-400 shrink-0" aria-hidden />
+                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[6rem]`} data-testid="topbar-bullets">{bulletsStr}</span>
                 </div>
               );
             }
             if (statId === 'kills') {
+              const killsStr = formatInt(user.total_kills);
               return (
-                <div className={`${chipClass} hidden md:flex`} title="Kills">
-                  <Skull size={topBarIconSizeEffective} className="text-red-400 shrink-0" />
-                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums min-w-[1.25rem] text-right`} data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
+                <div className={`${chipClass} hidden md:flex min-w-0`} title={`Kills: ${killsStr}`}>
+                  <Skull size={topBarIconSizeEffective} className="text-red-400 shrink-0" aria-hidden />
+                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums min-w-[1.5rem] text-right`} data-testid="topbar-kills">{killsStr}</span>
                 </div>
               );
             }
             if (statId === 'money') {
+              const moneyFull = formatMoney(user.money);
+              const moneyCompact = formatMoneyCompact(user.money);
+              const useCompact = moneyFull.length > 14;
               return (
-                <div className={chipClass} title={`Cash: ${formatMoney(user.money)}`}>
-                  <DollarSign size={topBarIconSizeEffective} className="text-primary shrink-0" />
-                  <span className={`font-heading ${topBarTextClass} text-primary md:hidden`} data-testid="topbar-money">{formatMoneyCompact(user.money)}</span>
-                  <span className="font-heading text-xs text-primary hidden md:inline" data-testid="topbar-money-full">{formatMoney(user.money)}</span>
+                <div className={`${chipClass} min-w-0`} title={`Cash: ${moneyFull}`}>
+                  <DollarSign size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
+                  <span className={`font-heading ${topBarTextClass} text-primary md:hidden`} data-testid="topbar-money">{moneyCompact}</span>
+                  <span className={`font-heading text-xs text-primary hidden md:inline tabular-nums ${useCompact ? '' : 'truncate max-w-[7rem]'}`} data-testid="topbar-money-full">{useCompact ? moneyCompact : moneyFull}</span>
                 </div>
               );
             }
             if (statId === 'points') {
+              const pointsFull = formatInt(user.points);
+              const pointsCompact = formatCompact(user.points);
+              const useCompactDesktop = pointsFull.length > 12;
               return (
-                <div className={chipClass} title={`Premium Points: ${formatInt(user.points)}`}>
-                  <Zap size={topBarIconSizeEffective} className="text-primary shrink-0" />
-                  <span className={`font-heading ${topBarTextClass} text-foreground md:hidden`} data-testid="topbar-points">{formatInt(user.points)}</span>
-                  <span className="font-heading text-xs text-foreground hidden md:inline" data-testid="topbar-points-full">{formatInt(user.points)}</span>
+                <div className={`${chipClass} min-w-0`} title={`Premium Points: ${pointsFull}`}>
+                  <Zap size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
+                  <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-points">{pointsFull}</span>
+                  <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-points-full">{useCompactDesktop ? `${pointsCompact} pts` : pointsFull}</span>
                 </div>
               );
             }
@@ -1233,19 +1241,18 @@ export default function Layout({ children }) {
               const propertyShort = formatCompact(propertyProfit) + ' pts';
               const casinoColor = (Number.isFinite(casinoNum) ? casinoNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
               const propertyColor = (Number.isFinite(propertyNum) ? propertyNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
-              // Use compact format on desktop when full strings would overflow (avoid left truncation in top bar)
               const useCompactOnDesktop = casinoStr.length > 11 || propertyStr.length > 14;
               return (
-                <div className={chipClass} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
-                  <Building2 size={topBarIconSizeEffective} className="text-emerald-400 shrink-0" />
-                  <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap`}>
-                    <span className="text-mutedForeground md:inline hidden">Casino </span>
-                    <span className="text-mutedForeground md:hidden">C </span>
-                    <span className={casinoColor}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? casinoShort : casinoStr}</span></span>
-                    <span className="text-mutedForeground mx-0.5">·</span>
-                    <span className="text-mutedForeground md:inline hidden">Property </span>
-                    <span className="text-mutedForeground md:hidden">P </span>
-                    <span className={propertyColor}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? propertyShort : propertyStr}</span></span>
+                <div className={`${chipClass} min-w-0`} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
+                  <Building2 size={topBarIconSizeEffective} className="text-emerald-400 shrink-0" aria-hidden />
+                  <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap tabular-nums min-w-0 flex items-center gap-0.5`}>
+                    <span className="text-mutedForeground md:inline hidden shrink-0">Casino</span>
+                    <span className="text-mutedForeground md:hidden shrink-0">C</span>
+                    <span className={`${casinoColor} tabular-nums`}><span className="md:hidden">{casinoShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? casinoShort : casinoStr}</span></span>
+                    <span className="text-mutedForeground shrink-0">·</span>
+                    <span className="text-mutedForeground md:inline hidden shrink-0">Property</span>
+                    <span className="text-mutedForeground md:hidden shrink-0">P</span>
+                    <span className={`${propertyColor} tabular-nums`}><span className="md:hidden">{propertyShort}</span><span className="hidden md:inline">{useCompactOnDesktop ? propertyShort : propertyStr}</span></span>
                   </span>
                 </div>
               );

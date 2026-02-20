@@ -94,7 +94,8 @@ export default function ArmourWeapons() {
   const buyArmour = async (level) => {
     setBuyingLevel(level);
     try {
-      const res = await api.post('/armour/buy', { level });
+      const state = ownedArmouryState || me?.current_state;
+      const res = await api.post('/armour/buy', { level, ...(state ? { state } : {}) });
       toast.success(res.data.message || 'Purchased armour');
       refreshUser();
       await fetchAll();
@@ -145,7 +146,8 @@ export default function ArmourWeapons() {
   const buyWeapon = async (weaponId, currency) => {
     setBuyingId(weaponId);
     try {
-      const response = await api.post(`/weapons/${weaponId}/buy`, { currency });
+      const state = ownedArmouryState || me?.current_state;
+      const response = await api.post(`/weapons/${weaponId}/buy`, { currency, ...(state ? { state } : {}) });
       toast.success(response.data.message);
       refreshUser();
       fetchAll();

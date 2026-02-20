@@ -40,6 +40,7 @@ class WeaponResponse(BaseModel):
 
 class WeaponBuyRequest(BaseModel):
     currency: str  # "money" or "points"
+    state: Optional[str] = None  # armoury state to use for stock (must match the state whose stock is shown)
 
 
 class WeaponEquipRequest(BaseModel):
@@ -184,7 +185,7 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
 
     # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
     from routers.bullet_factory import get_armoury_for_state
-    state = (current_user.get("current_state") or "").strip()
+    state = (request.state or current_user.get("current_state") or "").strip()
     factory = await get_armoury_for_state(state) if state else None
     weapon_stock = (factory.get("weapon_stock") or {}) if factory else {}
     owner_id = factory.get("owner_id") if factory else None

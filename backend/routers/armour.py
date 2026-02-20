@@ -1,4 +1,6 @@
 # Armour endpoints: options, buy, equip, unequip, sell
+from typing import Optional
+
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException, Request
@@ -8,6 +10,7 @@ from server import db, get_current_user, get_effective_event, ARMOUR_SETS, ARMOU
 
 class ArmourBuyRequest(BaseModel):
     level: int  # 1-5
+    state: Optional[str] = None  # armoury state to use for stock (must match the state whose stock is shown)
 
 
 async def get_armour_options(request: Request, current_user: dict = Depends(get_current_user)):
@@ -75,7 +78,7 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
 
     # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
     from routers.bullet_factory import get_armoury_for_state
-    state = (current_user.get("current_state") or "").strip()
+    state = (request.state or current_user.get("current_state") or "").strip()
     factory = await get_armoury_for_state(state) if state else None
     armour_stock = (factory.get("armour_stock") or {}) if factory else {}
     owner_id = factory.get("owner_id") if factory else None
