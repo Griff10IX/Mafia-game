@@ -40,6 +40,7 @@ export default function MyProperties() {
   const [airportTransferUsername, setAirportTransferUsername] = useState('');
   const [airportSellPoints, setAirportSellPoints] = useState('');
   const [bulletPrice, setBulletPrice] = useState('');
+  const [armouryDetail, setArmouryDetail] = useState(null);
 
   const fetchMyProperties = useCallback(async () => {
     try {
@@ -59,6 +60,10 @@ export default function MyProperties() {
         const list = bulletListRes.data?.factories ?? [];
         const f = list.find((x) => x.state === property.state);
         if (f?.price_per_bullet != null) setBulletPrice(String(f.price_per_bullet));
+        const detailRes = await api.get('/bullet-factory', { params: { state: property.state } }).catch(() => ({ data: null }));
+        setArmouryDetail(detailRes.data || null);
+      } else {
+        setArmouryDetail(null);
       }
     } catch {
       toast.error('Failed to load properties');
@@ -265,7 +270,7 @@ export default function MyProperties() {
 
       <div className="relative mp-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Holdings</p>
-        <p className="text-[10px] text-zinc-500 font-heading italic">One casino and one property. Dice + Airport, Blackjack + Bullet Factory, or Roulette + Armory.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">One casino and one property. Dice + Airport, Blackjack + Armoury, or Roulette + Armory.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -440,10 +445,32 @@ export default function MyProperties() {
               <>
                 <div className="flex items-center gap-2 mb-2">
                   <Factory size={18} className="text-primary" />
-                  <span className="font-heading font-bold text-foreground">Bullet Factory</span>
+                  <span className="font-heading font-bold text-foreground">Armoury</span>
                   <span className="text-mutedForeground text-sm">· {data.property.state}</span>
                 </div>
-                <p className="text-[11px] text-mutedForeground mb-2">Set price per bullet and collect from the factory.</p>
+                <p className="text-[11px] text-mutedForeground mb-2">Set price per bullet and collect from the armoury.</p>
+                {armouryDetail && (
+                  <div className="rounded border border-zinc-700/50 bg-zinc-900/40 px-2.5 py-2 mb-2 space-y-1.5">
+                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Profit &amp; stock</div>
+                    <div className="text-[11px] text-foreground">
+                      <span className="text-mutedForeground">Profit to collect: </span>
+                      <span className="text-primary font-bold">
+                        {formatMoney((armouryDetail.accumulated_bullets ?? 0) * (armouryDetail.price_per_bullet ?? 0))}
+                      </span>
+                      <span className="text-mutedForeground"> ({Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()} bullets × {formatMoney(armouryDetail.price_per_bullet ?? 0)}/ea)</span>
+                    </div>
+                    <div className="text-[11px] text-foreground">
+                      <span className="text-mutedForeground">Stock: </span>
+                      <span>Bullets {Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()}</span>
+                      {Object.keys(armouryDetail.armour_stock || {}).filter((k) => (armouryDetail.armour_stock[k] || 0) > 0).length > 0 && (
+                        <span> · Armour {Object.entries(armouryDetail.armour_stock || {}).filter(([, q]) => (q || 0) > 0).map(([lv, q]) => `Lv.${lv}: ${q}`).join(', ')}</span>
+                      )}
+                      {Object.keys(armouryDetail.weapon_stock || {}).length > 0 && (
+                        <span> · Weapons {Object.values(armouryDetail.weapon_stock || {}).reduce((a, b) => a + (b || 0), 0)}</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <input
                     type="text"
@@ -476,7 +503,7 @@ export default function MyProperties() {
               </>
             ) : (
               <p className="text-sm text-mutedForeground">
-                None. Claim an <Link to="/states" className="text-primary underline">Airport</Link>, <Link to="/armour-weapons" className="text-primary underline">Bullet Factory</Link>, or Armory from States (Armory coming soon).
+                None. Claim an <Link to="/states" className="text-primary underline">Airport</Link> or <Link to="/armour-weapons" className="text-primary underline">Armoury</Link> from States.
               </p>
             )}
           </div>
@@ -490,7 +517,7 @@ export default function MyProperties() {
         </div>
         <div className="p-3">
           <p className="text-[11px] text-mutedForeground">
-            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong> (one of: Dice, Blackjack, Roulette, Horse Racing) and <strong>1 property</strong> (one of: Airport, Bullet Factory, Armory). Not two casinos or two properties.
+            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong> (one of: Dice, Blackjack, Roulette, Horse Racing) and <strong>1 property</strong> (one of: Airport, Armoury). Not two casinos or two properties.
           </p>
         </div>
         <div className="mp-art-line text-primary mx-3" />
