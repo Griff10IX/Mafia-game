@@ -112,17 +112,17 @@ function CityMapSVG({ city, areasWithCounts, selectedArea, onSelectArea }) {
     const counts = areasWithCounts.find((a) => a.name === areaName);
     const done = counts ? counts.missions.filter((m) => m.completed).length : 0;
     const total = counts ? counts.missions.length : 0;
-    if (isSelected) return 'var(--primary)';
-    if (total > 0 && done === total) return 'var(--primary)';
-    return 'rgba(39,39,42,0.6)';
+    if (isSelected) return '#b45309';
+    if (total > 0 && done === total) return '#92400e';
+    return '#52525b';
   };
-  const getStroke = (areaName) => (selectedArea === areaName ? 'var(--primary)' : 'rgba(113,113,122,0.8)');
+  const getStroke = (areaName) => (selectedArea === areaName ? '#ea580c' : '#71717a');
 
   return (
     <svg
       viewBox={`0 0 ${MAP_VIEWBOX.w} ${MAP_VIEWBOX.h}`}
-      className="w-full max-w-2xl h-auto rounded-lg border border-zinc-600 bg-zinc-900/80"
-      style={{ minHeight: 220 }}
+      className="w-full max-w-2xl rounded-lg border-2 border-zinc-500 bg-zinc-800"
+      style={{ minHeight: 220, display: 'block' }}
       aria-label={`Map of ${city}`}
     >
       {regions.map(({ area, points, label }) => (
@@ -131,9 +131,9 @@ function CityMapSVG({ city, areasWithCounts, selectedArea, onSelectArea }) {
             points={points}
             fill={getFill(area)}
             stroke={getStroke(area)}
-            strokeWidth={2}
+            strokeWidth={2.5}
             className="cursor-pointer transition-all duration-150 hover:opacity-90"
-            style={{ opacity: selectedArea && selectedArea !== area ? 0.5 : 1 }}
+            style={{ opacity: selectedArea && selectedArea !== area ? 0.6 : 1 }}
             onClick={() => onSelectArea(area)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectArea(area); } }}
             role="button"
@@ -145,7 +145,8 @@ function CityMapSVG({ city, areasWithCounts, selectedArea, onSelectArea }) {
             y={label.y}
             textAnchor="middle"
             dominantBaseline="middle"
-            className="font-heading font-bold fill-zinc-100 pointer-events-none select-none"
+            fill="#fafafa"
+            className="font-heading font-bold pointer-events-none select-none"
             style={{ fontSize: 14 }}
           >
             {area}
@@ -268,10 +269,10 @@ export default function Missions() {
     }
   };
 
-  const city = selectedCity || mapData?.current_city || mapData?.unlocked_cities?.[0];
+  const unlocked = mapData?.unlocked_cities?.length ? mapData.unlocked_cities : ['Chicago'];
+  const city = selectedCity || mapData?.current_city || unlocked[0];
   const byCity = mapData?.by_city || {};
   const cityMissions = (city && byCity[city]?.missions) || [];
-  const unlocked = mapData?.unlocked_cities || [];
 
   const characterById = Object.fromEntries((characters || []).map((c) => [c.id, c]));
   const missionByCharacterId = Object.fromEntries((cityMissions || []).filter((m) => m.character_id).map((m) => [m.character_id, m]));
@@ -280,7 +281,9 @@ export default function Missions() {
     ? Object.entries(byCity[city].areas)
         .filter(([name]) => name && name !== '—')
         .map(([name, missions]) => ({ name, missions: missions || [] }))
-    : [];
+    : (city && cityMapRegions[city]
+        ? cityMapRegions[city].map(({ area }) => ({ name: area, missions: [] }))
+        : []);
   const missionsToShow = selectedArea
     ? (cityMissions || []).filter((m) => (m.area || '—') === selectedArea)
     : (cityMissions || []);
@@ -305,21 +308,21 @@ export default function Missions() {
     return (
       <div className={`space-y-3 ${styles.pageContent}`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <Map className="w-8 h-8 text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-wider">Loading missions...</span>
+          <Map className="w-8 h-8 text-amber-500 animate-pulse" />
+          <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-zinc-300 text-[10px] font-heading uppercase tracking-wider">Loading missions...</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`}>
+    <div className={`space-y-4 ${styles.pageContent} min-h-[60vh] bg-zinc-950/50`}>
       <div className="flex flex-wrap items-center gap-2">
-        <Map className="w-5 h-5 text-primary" />
+        <Map className="w-5 h-5 text-amber-500" />
         <h1 className="text-lg font-heading font-bold text-foreground">Missions</h1>
       </div>
-      <p className="text-[11px] text-mutedForeground font-heading">
+      <p className="text-[11px] text-zinc-400 font-heading">
         Complete missions in each city to unlock the next. Talk to the characters, do the jobs, report back.
       </p>
 
