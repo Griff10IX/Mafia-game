@@ -1112,8 +1112,10 @@ export default function Layout({ children }) {
               const progress = (typeof pct === 'number' && !Number.isNaN(pct) && pct > 0)
                 ? Math.min(100, Math.max(0, pct))
                 : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
+              const hasPremiumBar = !!user?.premium_rank_bar;
+              const progressLabel = hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0);
               return (
-                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={`${rankProgress.current_rank_name}: ${progress.toFixed(2)}%`}>
+                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={`${rankProgress.current_rank_name}: ${progressLabel}%`}>
                   <TrendingUp size={topBarIconSize} className="text-primary shrink-0" />
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
@@ -1121,7 +1123,7 @@ export default function Layout({ children }) {
                       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
-                  <span className={`${topBarTextClass} text-primary font-heading shrink-0`}>{progress.toFixed(0)}%</span>
+                  <span className={`${topBarTextClass} text-primary font-heading shrink-0`}>{progressLabel}%</span>
                 </div>
               );
             }

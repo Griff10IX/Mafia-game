@@ -58,6 +58,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
   const progressPct = (typeof pctFromApi === 'number' && !Number.isNaN(pctFromApi) && pctFromApi > 0)
     ? Math.min(100, Math.max(0, pctFromApi))
     : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
+  const progressLabel = hasPremiumBar ? progressPct.toFixed(2) : progressPct.toFixed(0);
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-corner dash-scale-in`}>
@@ -95,6 +96,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
                   {' / '}{((rankProgress.rank_points_current || 0) + (rankProgress.rank_points_needed || 0)).toLocaleString()}
                 </span>
               )}
+              <span className="text-mutedForeground font-normal ml-1">({progressLabel}%)</span>
             </span>
           </div>
           <div className="relative w-full h-2 bg-secondary rounded-full overflow-hidden border border-primary/20">
