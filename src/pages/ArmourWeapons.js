@@ -822,21 +822,26 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                     {/* Stock Display */}
                     <div className="grid grid-cols-2 gap-2 mb-2 sm:mb-3">
                       <div className="rounded bg-zinc-900/50 p-1.5 sm:p-2 border border-zinc-700/30">
+                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase mb-0.5 sm:mb-1">Bullets</p>
+                        <div className="text-[9px] sm:text-[10px] font-heading text-foreground">
+                          {Number(accumulated ?? 0).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="rounded bg-zinc-900/50 p-1.5 sm:p-2 border border-zinc-700/30">
                         <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase mb-0.5 sm:mb-1">Armour Stock</p>
                         <div className="text-[9px] sm:text-[10px] font-heading text-foreground">
-                          {Object.entries(data?.armour_stock || {}).filter(([, q]) => q > 0).length
-                            ? Object.entries(data.armour_stock).filter(([, q]) => q > 0).map(([lv, q]) => (
-                                <span key={lv} className="mr-1">Lv.{lv}:{q}</span>
+                          {Object.entries(data?.armour_stock || {}).filter(([, q]) => Number(q || 0) > 0).length
+                            ? Object.entries(data.armour_stock).filter(([, q]) => Number(q || 0) > 0).map(([lv, q]) => (
+                                <span key={lv} className="mr-1">Lv.{lv}:{Number(q)}</span>
                               ))
                             : '—'}
                         </div>
                       </div>
-                      
-                      <div className="rounded bg-zinc-900/50 p-1.5 sm:p-2 border border-zinc-700/30">
+                      <div className="rounded bg-zinc-900/50 p-1.5 sm:p-2 border border-zinc-700/30 col-span-2 sm:col-span-1">
                         <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase mb-0.5 sm:mb-1">Weapon Stock</p>
                         <div className="text-[9px] sm:text-[10px] font-heading text-foreground">
-                          {Object.entries(data?.weapon_stock || {}).filter(([, q]) => q > 0).length
-                            ? Object.values(data.weapon_stock).reduce((a, b) => a + b, 0) + ' units'
+                          {Object.entries(data?.weapon_stock || {}).filter(([, q]) => Number(q || 0) > 0).length
+                            ? Object.values(data.weapon_stock || {}).reduce((a, b) => a + Number(b || 0), 0) + ' units'
                             : '—'}
                         </div>
                       </div>

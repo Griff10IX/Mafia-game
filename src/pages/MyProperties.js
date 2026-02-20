@@ -240,8 +240,8 @@ export default function MyProperties() {
     if (!data.property || data.property.type !== 'bullet_factory' || saving) return;
     setSaving(true);
     try {
-      await api.post('/bullet-factory/collect', { state: data.property.state });
-      toast.success('Bullets collected');
+      const res = await api.post('/bullet-factory/collect', { state: data.property.state });
+      toast.success(res.data?.message || 'Refreshed');
       fetchMyProperties();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (e) {
@@ -453,20 +453,20 @@ export default function MyProperties() {
                   <div className="rounded border border-zinc-700/50 bg-zinc-900/40 px-2.5 py-2 mb-2 space-y-1.5">
                     <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Profit &amp; stock</div>
                     <div className="text-[11px] text-foreground">
-                      <span className="text-mutedForeground">Profit to collect: </span>
+                      <span className="text-mutedForeground">Stock value (bullets at your price): </span>
                       <span className="text-primary font-bold">
-                        {formatMoney((armouryDetail.accumulated_bullets ?? 0) * (armouryDetail.price_per_bullet ?? 0))}
+                        {formatMoney(Number(armouryDetail.accumulated_bullets ?? 0) * Number(armouryDetail.price_per_bullet ?? 0))}
                       </span>
-                      <span className="text-mutedForeground"> ({Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()} bullets × {formatMoney(armouryDetail.price_per_bullet ?? 0)}/ea)</span>
+                      <span className="text-mutedForeground"> ({Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()} bullets × {formatMoney(armouryDetail.price_per_bullet ?? 0)}/ea). Sales are paid to you when players buy.</span>
                     </div>
                     <div className="text-[11px] text-foreground">
                       <span className="text-mutedForeground">Stock: </span>
                       <span>Bullets {Number(armouryDetail.accumulated_bullets ?? 0).toLocaleString()}</span>
-                      {Object.keys(armouryDetail.armour_stock || {}).filter((k) => (armouryDetail.armour_stock[k] || 0) > 0).length > 0 && (
-                        <span> · Armour {Object.entries(armouryDetail.armour_stock || {}).filter(([, q]) => (q || 0) > 0).map(([lv, q]) => `Lv.${lv}: ${q}`).join(', ')}</span>
+                      {Object.entries(armouryDetail.armour_stock || {}).filter(([, q]) => Number(q || 0) > 0).length > 0 && (
+                        <span> · Armour {Object.entries(armouryDetail.armour_stock).filter(([, q]) => Number(q || 0) > 0).map(([lv, q]) => `Lv.${lv}: ${Number(q)}`).join(', ')}</span>
                       )}
-                      {Object.keys(armouryDetail.weapon_stock || {}).length > 0 && (
-                        <span> · Weapons {Object.values(armouryDetail.weapon_stock || {}).reduce((a, b) => a + (b || 0), 0)}</span>
+                      {(Object.values(armouryDetail.weapon_stock || {}).reduce((a, b) => a + Number(b || 0), 0) || 0) > 0 && (
+                        <span> · Weapons {Object.values(armouryDetail.weapon_stock || {}).reduce((a, b) => a + Number(b || 0), 0)} units</span>
                       )}
                     </div>
                   </div>

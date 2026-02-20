@@ -386,6 +386,21 @@ async def claim_bullet_factory(
     }
 
 
+async def collect_bullet_factory(
+    body: StateOptionalRequest = Body(default=StateOptionalRequest()),
+    current_user: dict = Depends(get_current_user),
+):
+    """No-op for armoury: bullet and armour/weapon sales are paid to the owner when players buy. Returns success for UI compatibility."""
+    state = _normalize_state(body.state or current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    if factory.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    return {
+        "message": "Sales are paid to you when players buy. No separate collection.",
+        "state": state,
+    }
+
+
 async def start_armour_production(
     request: StartArmourProductionRequest,
     current_user: dict = Depends(get_current_user),
@@ -1153,6 +1168,7 @@ def register(router):
     router.add_api_route("/bullet-factory/list", get_bullet_factory_list, methods=["GET"])
     router.add_api_route("/bullet-factory/claim", claim_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
+    router.add_api_route("/bullet-factory/collect", collect_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/buy", buy_bullets, methods=["POST"])
     router.add_api_route("/bullet-factory/start-armour-production", start_armour_production, methods=["POST"])
     router.add_api_route("/bullet-factory/start-weapon-production", start_weapon_production, methods=["POST"])
