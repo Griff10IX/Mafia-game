@@ -59,6 +59,7 @@ const DeadAlive = lazy(() => import("./pages/DeadAlive"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Stats = lazy(() => import("./pages/Stats"));
 const Objectives = lazy(() => import("./pages/Objectives"));
+const Missions = lazy(() => import("./pages/Missions"));
 const QuickTrade = lazy(() => import("./pages/QuickTrade"));
 const LockedPage = lazy(() => import("./pages/LockedPage"));
 
@@ -202,6 +203,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Objectives />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/missions"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Missions />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

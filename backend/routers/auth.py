@@ -199,6 +199,8 @@ def register(router):
                 "email_verified": not require_verification,
                 "auto_rank_purchased": False,
                 "auto_rank_enabled": False,
+                "mission_completions": [],
+                "unlocked_maps_up_to": "Chicago",
             }
 
             await db.users.insert_one(user_doc.copy())

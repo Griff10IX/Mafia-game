@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -77,6 +77,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
       items: [
         { path: '/dashboard', label: 'Dashboard' },
         { path: '/objectives', label: 'Objectives' },
+        { path: '/missions', label: 'Missions' },
         { path: '/profile', label: 'Profile' },
         { path: '/stats', label: 'Stats' },
         { path: '/dead-alive', label: 'Dead > Alive' },
@@ -650,6 +651,7 @@ export default function Layout({ children }) {
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
     { path: '/objectives', icon: ListChecks, label: 'Objectives' },
+    { path: '/missions', icon: Map, label: 'Missions' },
     { path: '/profile', icon: User, label: 'Profile' },
     { path: '/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/bank', icon: Landmark, label: 'Bank' },

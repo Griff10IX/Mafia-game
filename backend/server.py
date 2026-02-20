@@ -1076,6 +1076,8 @@ forum.register(api_router)
 entertainer.register(api_router)
 armoury.register(api_router)
 objectives.register(api_router)
+from routers import missions
+missions.register(api_router)
 attack.register(api_router)
 bank.register(api_router)
 families.register(api_router)

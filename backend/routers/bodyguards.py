@@ -140,6 +140,8 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "dead_at": None,
         "points_at_death": None,
         "retrieval_used": False,
+        "mission_completions": [],
+        "unlocked_maps_up_to": "Chicago",
         "last_seen": now_iso,
         "created_at": now_iso,
         "is_npc": True,
