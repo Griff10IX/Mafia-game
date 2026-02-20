@@ -111,6 +111,17 @@ const DEFAULT_STAT_ORDER = ['rank', 'bullets', 'kills', 'money', 'points', 'prop
 const TOPBAR_STAT_LABELS = { rank: 'Rank', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', property: 'Casino & Property', notifications: 'Notifications' };
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
+const NOTIFICATION_BALL_POSITION_KEY = 'notification_ball_position';
+
+function loadNotificationBallPosition() {
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_BALL_POSITION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') return { x: parsed.x, y: parsed.y };
+  } catch (_) {}
+  return null;
+}
 
 function loadStatOrder() {
   try {
@@ -160,6 +171,9 @@ export default function Layout({ children }) {
   const [travelStatus, setTravelStatus] = useState(null); // { traveling: bool, destination, seconds_remaining }
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [notificationList, setNotificationList] = useState([]);
+  const [notificationBallPosition, setNotificationBallPosition] = useState(null);
+  const notificationBallRef = useRef(null);
+  const notificationDragRef = useRef({ isDragging: false, startX: 0, startY: 0, ballX: 0, ballY: 0 });
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [topBarCustomizeOpen, setTopBarCustomizeOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
@@ -212,6 +226,19 @@ export default function Layout({ children }) {
   }, []);
 
   useEffect(() => {
+    const saved = loadNotificationBallPosition();
+    if (saved) {
+      const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
+      setNotificationBallPosition({
+        x: clamp(saved.x, 0, typeof window !== 'undefined' ? window.innerWidth - 56 : 300),
+        y: clamp(saved.y, 0, typeof window !== 'undefined' ? window.innerHeight - 56 : 400),
+      });
+    } else if (typeof window !== 'undefined') {
+      setNotificationBallPosition({ x: window.innerWidth - 72, y: window.innerHeight - 120 });
+    }
+  }, []);
+
+  useEffect(() => {
     setMobileBottomMenuOpen(null);
   }, [location.pathname]);
 
@@ -229,7 +256,8 @@ export default function Layout({ children }) {
   useEffect(() => {
     if (!notificationPanelOpen) return;
     const handleClickOutside = (e) => {
-      if (notificationPanelRef.current && !notificationPanelRef.current.contains(e.target)) {
+      const ballEl = notificationBallRef.current;
+      if (ballEl && !ballEl.contains(e.target)) {
         setNotificationPanelOpen(false);
       }
     };
@@ -1296,56 +1324,7 @@ export default function Layout({ children }) {
               </div>
               {statOrder.map((statId) => {
                 if (statId === 'notifications') {
-                  return (
-                    <div key="notifications" className={`relative shrink-0 snap-start ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} transition-all duration-150 ease-out ${draggingStatId === 'notifications' ? 'opacity-50 scale-95' : ''}`} ref={notificationPanelRef} draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')} onDragEnd={handleDragEnd}>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
-                        className={`flex items-center justify-center gap-1 min-h-[40px] md:min-h-0 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors ${topBarChipPadding}`}
-                        aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
-                      >
-                        <Bell size={topBarIconSizeEffective} strokeWidth={2} />
-                        {unreadCount > 0 && (
-                          <span className="min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-noir-bg text-[10px] font-heading font-bold">
-                            {unreadCount > 99 ? '99+' : unreadCount}
-                          </span>
-                        )}
-                      </button>
-                      {notificationPanelOpen && (
-                        <div
-                          className="absolute top-full right-0 mt-1 w-[320px] max-h-[400px] flex flex-col rounded border shadow-xl z-50"
-                          style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
-                        >
-                          <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
-                            <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>Notifications</h3>
-                            <p className="text-xs mt-0.5 font-heading" style={{ color: 'var(--noir-muted)' }}>View & manage your notifications</p>
-                          </div>
-                          <div className="overflow-y-auto flex-1 min-h-0">
-                            {notificationList.length === 0 ? (
-                              <div className="p-4 text-center font-heading text-sm" style={{ color: 'var(--noir-muted)' }}>No notifications</div>
-                            ) : (
-                              notificationList.slice(0, 12).map((n) => (
-                                <button
-                                  key={n.id}
-                                  type="button"
-                                  onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
-                                  className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
-                                  style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.06)' }}
-                                >
-                                  <span className="font-semibold block truncate">{n.title}</span>
-                                  <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
-                                </button>
-                              ))
-                            )}
-                          </div>
-                          <div className="p-2 border-t shrink-0 flex gap-2" style={{ borderColor: 'var(--noir-border)' }}>
-                            <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View all</button>
-                            <button type="button" onClick={() => { markAllNotificationsRead(); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
+                  return null;
                 }
                 const content = renderStat(statId);
                 if (!content) return null;
@@ -1578,6 +1557,115 @@ export default function Layout({ children }) {
               return null;
             })}
           </nav>
+        </div>
+      )}
+
+      {/* Floating notification ball: draggable, position persisted */}
+      {user && notificationBallPosition && (
+        <div
+          ref={notificationBallRef}
+          className="fixed z-50 touch-none"
+          style={{
+            left: notificationBallPosition.x,
+            top: notificationBallPosition.y,
+            width: 56,
+            height: 56,
+          }}
+        >
+          <button
+            type="button"
+            className="relative w-full h-full rounded-full flex items-center justify-center shadow-lg border-2 transition-transform active:scale-95 select-none"
+            style={{
+              backgroundColor: 'var(--noir-content)',
+              borderColor: 'var(--noir-primary)',
+              color: 'var(--noir-primary)',
+            }}
+            aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
+            onPointerDown={(e) => {
+              e.preventDefault();
+              const ballX = notificationBallPosition.x;
+              const ballY = notificationBallPosition.y;
+              notificationDragRef.current = { isDragging: false, startX: e.clientX, startY: e.clientY, ballX, ballY, lastX: ballX, lastY: ballY };
+              const onMove = (e2) => {
+                const r = notificationDragRef.current;
+                if (!r) return;
+                const dx = e2.clientX - r.startX;
+                const dy = e2.clientY - r.startY;
+                if (!r.isDragging && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) r.isDragging = true;
+                if (r.isDragging) {
+                  const w = window.innerWidth;
+                  const h = window.innerHeight;
+                  const size = 56;
+                  const nextX = Math.max(0, Math.min(w - size, r.ballX + dx));
+                  const nextY = Math.max(0, Math.min(h - size, r.ballY + dy));
+                  r.lastX = nextX;
+                  r.lastY = nextY;
+                  setNotificationBallPosition({ x: nextX, y: nextY });
+                }
+              };
+              const onUp = () => {
+                const r = notificationDragRef.current;
+                if (!r) return;
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                document.removeEventListener('pointercancel', onUp);
+                if (r.isDragging) {
+                  try {
+                    localStorage.setItem(NOTIFICATION_BALL_POSITION_KEY, JSON.stringify({ x: r.lastX, y: r.lastY }));
+                  } catch (_) {}
+                } else {
+                  openNotificationPanel();
+                }
+                notificationDragRef.current = null;
+              };
+              document.addEventListener('pointermove', onMove);
+              document.addEventListener('pointerup', onUp);
+              document.addEventListener('pointercancel', onUp);
+            }}
+          >
+            <Bell size={26} strokeWidth={2} className="shrink-0" />
+            {unreadCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 min-w-[20px] h-[20px] rounded-full flex items-center justify-center text-[11px] font-heading font-bold text-white"
+                style={{ backgroundColor: 'var(--noir-primary)' }}
+              >
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </button>
+          {notificationPanelOpen && (
+            <div
+              className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-[min(320px,calc(100vw-2rem))] max-h-[min(400px,60vh)] flex flex-col rounded-lg border-2 shadow-xl"
+              style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
+            >
+              <div className="p-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border)' }}>
+                <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>Notifications</h3>
+                <p className="text-xs mt-0.5 font-heading" style={{ color: 'var(--noir-muted)' }}>View & manage your notifications</p>
+              </div>
+              <div className="overflow-y-auto flex-1 min-h-0">
+                {notificationList.length === 0 ? (
+                  <div className="p-4 text-center font-heading text-sm" style={{ color: 'var(--noir-muted)' }}>No notifications</div>
+                ) : (
+                  notificationList.slice(0, 12).map((n) => (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }}
+                      className="w-full text-left px-3 py-2 border-b font-heading text-sm hover:bg-noir-raised/80 transition-colors"
+                      style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.06)' }}
+                    >
+                      <span className="font-semibold block truncate">{n.title}</span>
+                      <span className="block truncate text-xs mt-0.5 opacity-90">{n.message}</span>
+                    </button>
+                  ))
+                )}
+              </div>
+              <div className="p-2 border-t shrink-0 flex gap-2" style={{ borderColor: 'var(--noir-border)' }}>
+                <button type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/inbox'); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>View all</button>
+                <button type="button" onClick={() => { markAllNotificationsRead(); }} className="flex-1 py-1.5 rounded text-xs font-heading border transition-colors" style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-foreground)' }}>Clear all</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
