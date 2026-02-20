@@ -25,6 +25,7 @@ export default function Properties() {
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [attackLoading, setAttackLoading] = useState(null); // property_id+username
+  const [collectAllLoading, setCollectAllLoading] = useState(false);
 
   useEffect(() => {
     fetchProperties();
@@ -94,6 +95,31 @@ export default function Properties() {
     }
   };
 
+  const collectibleProperties = properties.filter((p) => p.owned && p.available_income >= 1);
+  const collectAll = async () => {
+    if (collectibleProperties.length === 0 || collectAllLoading) return;
+    setCollectAllLoading(true);
+    let collected = 0;
+    let total = 0;
+    for (const prop of collectibleProperties) {
+      try {
+        const res = await api.post(`/properties/${prop.id}/collect`);
+        collected++;
+        const msg = res.data?.message || '';
+        const match = msg.match(/\$([\d,]+(?:\.\d+)?)/);
+        if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
+      } catch {
+        toast.error(`Failed to collect from ${prop.name}`);
+      }
+    }
+    if (collected > 0) {
+      refreshUser();
+      fetchProperties();
+      toast.success(total > 0 ? `Collected $${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from ${collected} propert${collected === 1 ? 'y' : 'ies'}` : `Collected from ${collected} propert${collected === 1 ? 'y' : 'ies'}`);
+    }
+    setCollectAllLoading(false);
+  };
+
   if (loading) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
@@ -111,11 +137,22 @@ export default function Properties() {
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="properties-page">
       <style>{PROP_STYLES}</style>
 
-      <div className="relative prop-fade-in flex items-center justify-between gap-3 flex-wrap">
+      <div className="relative prop-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[9px] text-primary/50 font-heading uppercase tracking-[0.25em]">Investments</p>
           <p className="text-[10px] text-zinc-500 font-heading italic">Passive income from businesses.</p>
         </div>
+        {collectibleProperties.length > 0 && (
+          <button
+            type="button"
+            onClick={collectAll}
+            disabled={collectAllLoading}
+            className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
+          >
+            <DollarSign size={12} />
+            {collectAllLoading ? '...' : `Collect all (${collectibleProperties.length})`}
+          </button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

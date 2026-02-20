@@ -303,18 +303,31 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
 // RACKETS TAB
 // ============================================================================
 
-const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onUpgrade, onUnlock, event, eventsEnabled }) => {
+const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onCollectAll, collectAllLoading, readyCount, onUpgrade, onUnlock, event, eventsEnabled }) => {
   const maxLevel = config?.racket_max_level ?? 5;
 
   return (
     <div className="space-y-3">
-      {/* Event Banner */}
-      {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] border border-primary/30 bg-primary/5">
-          <span className="text-primary font-heading font-bold">✨ {event.name}</span>
-          <span className="text-zinc-400">{event.message}</span>
-        </div>
-      )}
+      {/* Event Banner + Collect all */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] border border-primary/30 bg-primary/5">
+            <span className="text-primary font-heading font-bold">✨ {event.name}</span>
+            <span className="text-zinc-400">{event.message}</span>
+          </div>
+        )}
+        {readyCount > 0 && (
+          <button
+            type="button"
+            onClick={onCollectAll}
+            disabled={collectAllLoading}
+            className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5 shrink-0"
+          >
+            <DollarSign size={12} />
+            {collectAllLoading ? '...' : `Collect all (${readyCount})`}
+          </button>
+        )}
+      </div>
 
       {/* Racket Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -1346,6 +1359,7 @@ export default function FamilyPage() {
   const [, setTick] = useState(0);
   const [racketAttackTargets, setRacketAttackTargets] = useState([]);
   const [racketAttackLoading, setRacketAttackLoading] = useState(null);
+  const [collectAllRacketsLoading, setCollectAllRacketsLoading] = useState(false);
   const [raidCooldownUntil, setRaidCooldownUntil] = useState(0);
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
   const [crewOCCommitting, setCrewOCCommitting] = useState(false);
@@ -1405,6 +1419,27 @@ export default function FamilyPage() {
   const handleDeposit = async (e) => { e.preventDefault(); const amount = parseInt(depositAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/deposit', { amount }); toast.success('Deposited'); setDepositAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleWithdraw = async (e) => { e.preventDefault(); const amount = parseInt(withdrawAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/withdraw', { amount }); toast.success('Withdrew'); setWithdrawAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const collectRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/collect`); toast.success(res.data?.message || 'Collected'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const collectAllRackets = async () => {
+    const ready = rackets.filter(r => r.level > 0 && (formatTimeLeft(r.next_collect_at) === 'Ready' || !formatTimeLeft(r.next_collect_at)));
+    if (ready.length === 0 || collectAllRacketsLoading) return;
+    setCollectAllRacketsLoading(true);
+    let collected = 0;
+    let total = 0;
+    for (const r of ready) {
+      try {
+        const res = await api.post(`/families/rackets/${r.id}/collect`);
+        collected++;
+        total += Number(res.data?.amount ?? 0);
+      } catch (e) {
+        toast.error(apiDetail(e));
+      }
+    }
+    if (collected > 0) {
+      fetchData();
+      toast.success(total > 0 ? `Collected ${formatMoneyFull(total)} from ${collected} racket${collected === 1 ? '' : 's'}` : `Collected from ${collected} racket${collected === 1 ? '' : 's'}`);
+    }
+    setCollectAllRacketsLoading(false);
+  };
   const upgradeRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/upgrade`); toast.success(res.data?.message || 'Upgraded'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const unlockRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/unlock`); toast.success(res.data?.message || 'Unlocked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const attackFamilyRacket = async (familyId, racketId) => {
@@ -1599,7 +1634,7 @@ export default function FamilyPage() {
 
             {/* Tab content */}
             <div className="p-4">
-              {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
+              {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onCollectAll={collectAllRackets} collectAllLoading={collectAllRacketsLoading} readyCount={readyRackets} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
               {activeTab === 'crewoc' && (
                 <CrewOCTab
                   family={family} myRole={myRole} crewOCCooldownUntil={family?.crew_oc_cooldown_until}

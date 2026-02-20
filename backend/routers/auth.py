@@ -317,7 +317,16 @@ def register(router):
 
         email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
         user = await db.users.find_one({"email": email_pattern}, {"_id": 0})
-        if not user or not verify_password(user_data.password, user["password_hash"]):
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="No account found with that email. Please register or check the email address.",
+            )
+        try:
+            password_ok = verify_password(user_data.password, user.get("password_hash") or "")
+        except Exception:
+            password_ok = False
+        if not password_ok:
             # Record failed attempt and optionally lock out
             locked_until = None
             doc = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "failed_count": 1})
@@ -331,7 +340,7 @@ def register(router):
             )
             raise HTTPException(
                 status_code=401,
-                detail="Invalid email or password. Use Forgot password if you need to reset. After 3 failed attempts this email is locked for 5 minutes.",
+                detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this email is locked for 5 minutes.",
             )
         # Success: clear lockout for this email
         await db.login_lockouts.delete_one({"email": email_clean})

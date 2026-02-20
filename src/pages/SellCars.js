@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckSquare, Square, DollarSign } from 'lucide-react';
+import { CheckSquare, Square, DollarSign, Car } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -13,7 +13,7 @@ const SELL_STYLES = `
   .sc-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-// GTA rarities (match backend)
+// GTA rarities (match backend and BuyCars)
 const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'exclusive'];
 const RARITY_LABELS = {
   common: 'Common',
@@ -23,6 +23,15 @@ const RARITY_LABELS = {
   legendary: 'Legendary',
   custom: 'Customs',
   exclusive: 'Exclusives',
+};
+const RARITY_COLOR = {
+  common: 'text-gray-400',
+  uncommon: 'text-green-400',
+  rare: 'text-blue-400',
+  ultra_rare: 'text-purple-400',
+  legendary: 'text-yellow-400',
+  custom: 'text-orange-400',
+  exclusive: 'text-red-400',
 };
 const TRAVEL_TIMES = {
   exclusive: 7,
@@ -39,7 +48,7 @@ const PAGE_SIZE = 15;
 export default function SellCars() {
   const [cars, setCars] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterRarity, setFilterRarity] = useState('all');
+  const [selectedRarity, setSelectedRarity] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [listPrice, setListPrice] = useState('');
   const [selling, setSelling] = useState(false);
@@ -61,10 +70,23 @@ export default function SellCars() {
     fetchCars();
   }, []);
 
+  const raritySummary = useMemo(() => {
+    const counts = {};
+    cars.forEach((c) => {
+      const r = c.rarity || 'common';
+      counts[r] = (counts[r] || 0) + 1;
+    });
+    return GTA_RARITIES.filter((r) => (counts[r] || 0) > 0).map((r) => ({
+      rarity: r,
+      label: RARITY_LABELS[r] || r,
+      count: counts[r] || 0,
+    }));
+  }, [cars]);
+
   const filteredCars = useMemo(() => {
-    if (filterRarity === 'all') return cars;
-    return cars.filter((c) => (c.rarity || 'common') === filterRarity);
-  }, [cars, filterRarity]);
+    if (!selectedRarity) return cars;
+    return cars.filter((c) => (c.rarity || 'common') === selectedRarity);
+  }, [cars, selectedRarity]);
 
   const totalPages = Math.max(1, Math.ceil(filteredCars.length / PAGE_SIZE));
   const paginatedCars = useMemo(() => {
@@ -74,7 +96,8 @@ export default function SellCars() {
 
   useEffect(() => {
     setPage(0);
-  }, [filterRarity]);
+    setSelectedIds(new Set());
+  }, [selectedRarity]);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
@@ -181,71 +204,97 @@ export default function SellCars() {
     <div className={`space-y-4 ${styles.pageContent}`}>
       <style>{SELL_STYLES}</style>
 
-      <div className="relative sc-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">List for Sale</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Sell Cars</h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">List cars from your garage. Select cars and set a price.</p>
+      <div className="relative sc-fade-in flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">List for Sale</p>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase flex items-center gap-2">Sell Cars</h1>
+          <p className="text-[10px] text-zinc-500 font-heading italic mt-1">List cars from your garage. Select cars and set a price.</p>
+        </div>
+        <Link
+          to="/garage"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-primary/30 text-primary font-heading text-[11px] font-bold hover:bg-primary/10"
+        >
+          <Car size={12} />
+          Garage
+        </Link>
       </div>
 
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 sc-fade-in`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        {/* Title + Filter + Pagination in one bar */}
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell Cars</span>
-          <div className="flex items-center gap-2">
-            <label className="text-[10px] font-heading text-mutedForeground uppercase">Filter:</label>
-            <select
-              value={filterRarity}
-              onChange={(e) => setFilterRarity(e.target.value)}
-              className="bg-input border border-border rounded px-1.5 py-1 text-[11px] font-heading text-foreground focus:border-primary/50 focus:outline-none min-w-[100px]"
-            >
-              <option value="all">All</option>
-              {GTA_RARITIES.map((r) => (
-                <option key={r} value={r}>{RARITY_LABELS[r] || r}</option>
+        {/* By rarity: pill buttons (same as Buy Cars) */}
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-[10px] font-heading text-mutedForeground uppercase">By rarity:</span>
+          {raritySummary.length === 0 ? (
+            <span className="text-[10px] text-mutedForeground">No cars</span>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setSelectedRarity(null)}
+                className={`text-[11px] font-heading font-bold py-0.5 px-1 rounded transition-colors ${
+                  selectedRarity === null
+                    ? 'bg-primary/20 text-primary border border-primary/50'
+                    : 'border border-transparent hover:bg-secondary/50 text-mutedForeground hover:text-foreground'
+                }`}
+              >
+                All
+              </button>
+              {raritySummary.map((row) => (
+                <button
+                  key={row.rarity}
+                  type="button"
+                  onClick={() => setSelectedRarity(selectedRarity === row.rarity ? null : row.rarity)}
+                  className={`text-[11px] font-heading font-bold py-0.5 px-1 rounded transition-colors ${
+                    selectedRarity === row.rarity
+                      ? 'bg-primary/20 text-primary border border-primary/50'
+                      : `border border-transparent hover:bg-secondary/50 ${RARITY_COLOR[row.rarity] || 'text-foreground'}`
+                  }`}
+                >
+                  {row.label} ({row.count})
+                </button>
               ))}
-            </select>
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                disabled={page === 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
-              >
-                Prev
-              </button>
-              <button
-                type="button"
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+              {selectedRarity && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedRarity(null)}
+                  className="text-[10px] font-heading text-mutedForeground hover:text-primary"
+                >
+                  Show all
+                </button>
+              )}
+            </>
+          )}
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
               <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
-                <th className="w-7 py-1 pl-1.5 pr-0" />
+                <th className="w-7 py-1 pl-1.5 pr-0">
+                  <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10" title="Check all">
+                    {paginatedCars.filter((c) => c.car_id !== 'car_custom').length > 0 &&
+                    paginatedCars.filter((c) => c.car_id !== 'car_custom').every((c) => selectedIds.has(c.user_car_id)) ? (
+                      <CheckSquare size={12} className="text-primary" />
+                    ) : (
+                      <Square size={12} className="text-mutedForeground" />
+                    )}
+                  </button>
+                </th>
                 <th className="text-left py-1 px-2">Car</th>
                 <th className="text-right py-1 px-2">Price</th>
-                <th className="text-right py-1 px-2">Bullets</th>
                 <th className="text-right py-1 px-2">Damage</th>
                 <th className="text-right py-1 px-2">Speed</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {paginatedCars.map((car) => {
-                const bullets = Math.floor((car.value || 0) / 10);
                 const speed = TRAVEL_TIMES[car.rarity] ?? 45;
                 const isListed = !!car.listed_for_sale;
+                const rarity = car.rarity || 'common';
                 return (
                   <tr key={car.user_car_id} className="sc-row transition-colors">
                     <td className="py-1 pl-1.5 pr-0">
-                      {car.car_id !== 'car_custom' && (
+                      {car.car_id !== 'car_custom' ? (
                         <button
                           type="button"
                           onClick={() => toggleSelect(car.user_car_id)}
@@ -257,18 +306,24 @@ export default function SellCars() {
                             <Square size={12} className="text-mutedForeground" />
                           )}
                         </button>
+                      ) : (
+                        <span className="inline-block w-4" />
                       )}
                     </td>
-                    <td className="py-1 px-2 font-heading">
-                      <Link to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`} className="text-foreground hover:text-primary transition-colors">
+                    <td className="py-1 px-2">
+                      <span className={`font-heading font-bold ${RARITY_COLOR[rarity] || 'text-foreground'}`}>
+                        {RARITY_LABELS[rarity] || rarity}:
+                      </span>{' '}
+                      <Link to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`} className="font-heading text-foreground hover:text-primary transition-colors">
                         {car.name}
                       </Link>
                     </td>
-                    <td className="py-1 px-2 text-right font-heading text-emerald-400">
+                    <td className="py-1 px-2 text-right font-heading font-bold text-emerald-400">
                       {isListed ? `$${(car.sale_price ?? 0).toLocaleString()}` : '—'}
                     </td>
-                    <td className="py-1 px-2 text-right text-mutedForeground font-heading">{bullets}</td>
-                    <td className="py-1 px-2 text-right font-heading">{car.damage_percent != null ? `${car.damage_percent}%` : '—'}</td>
+                    <td className="py-1 px-2 text-right text-mutedForeground font-heading">
+                      {car.damage_percent != null ? `${car.damage_percent}%` : '—'}
+                    </td>
                     <td className="py-1 px-2 text-right text-mutedForeground font-heading">{speed} secs</td>
                   </tr>
                 );
@@ -277,42 +332,60 @@ export default function SellCars() {
           </table>
         </div>
         {paginatedCars.length === 0 && (
-          <p className="py-2 text-center text-[11px] text-mutedForeground font-heading">No cars to sell</p>
+          <p className="py-2 text-center text-[11px] text-mutedForeground font-heading">
+            {selectedRarity ? `No cars in ${RARITY_LABELS[selectedRarity]}.` : 'No cars to sell.'}
+          </p>
         )}
 
-        <div className="px-3 py-2.5 bg-primary/8 border-t border-primary/20 flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1 cursor-pointer">
-            <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10">
-              {paginatedCars.length > 0 && paginatedCars.every((c) => selectedIds.has(c.user_car_id)) ? (
-                <CheckSquare size={12} className="text-primary" />
-              ) : (
-                <Square size={12} className="text-mutedForeground" />
-              )}
+        <div className="px-3 py-2.5 bg-primary/8 border-t border-primary/20 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-mutedForeground font-heading uppercase">Check all</span>
+            <FormattedNumberInput
+              value={listPrice}
+              onChange={setListPrice}
+              placeholder="Price..."
+              className="w-20 bg-input border border-border rounded px-1.5 py-1 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+            />
+            <button
+              type="button"
+              disabled={selectedIds.size === 0 || selling}
+              onClick={handleSell}
+              className={`px-3 py-1 rounded font-heading font-bold uppercase text-[11px] border ${
+                selectedIds.size > 0 && !selling
+                  ? 'bg-primary/20 text-primary border-primary/50 hover:bg-primary/30'
+                  : 'bg-secondary/50 text-mutedForeground border-border cursor-not-allowed'
+              }`}
+            >
+              Sell
             </button>
-            <span className="text-[10px] font-heading text-mutedForeground uppercase">Check all</span>
-          </label>
-          <FormattedNumberInput
-            value={listPrice}
-            onChange={setListPrice}
-            placeholder="Price..."
-            className="w-20 bg-input border border-border rounded px-1.5 py-1 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
-          />
-          <button
-            type="button"
-            disabled={selectedIds.size === 0 || selling}
-            onClick={handleSell}
-            className="px-2 py-1 rounded bg-primary/20 text-primary border border-primary/50 font-heading font-bold uppercase text-[11px] hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Sell
-          </button>
-          <button
-            type="button"
-            disabled={selectedIds.size === 0 || stopping}
-            onClick={handleStopSelling}
-            className="px-2 py-1 rounded bg-secondary border border-border text-foreground font-heading font-bold uppercase text-[11px] hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Stop Selling
-          </button>
+            <button
+              type="button"
+              disabled={selectedIds.size === 0 || stopping}
+              onClick={handleStopSelling}
+              className="px-2 py-1 rounded bg-secondary border border-border text-foreground font-heading font-bold uppercase text-[11px] hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Stop Selling
+            </button>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
+            >
+              Prev
+            </button>
+            <span className="text-[10px] font-heading text-mutedForeground px-1.5">{page + 1}/{totalPages}</span>
+            <button
+              type="button"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+              className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
+            >
+              Next
+            </button>
+          </div>
         </div>
         <div className="sc-art-line text-primary mx-3" />
       </div>

@@ -182,13 +182,14 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         if current_user.get("points", 0) < price:
             raise HTTPException(status_code=400, detail="Insufficient points")
 
-    # Fulfill from armoury in same state if available (owner gets 35% margin)
+    # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
     from routers.bullet_factory import get_armoury_for_state
     state = (current_user.get("current_state") or "").strip()
     factory = await get_armoury_for_state(state) if state else None
-    weapon_stock = factory.get("weapon_stock") or {}
+    weapon_stock = (factory.get("weapon_stock") or {}) if factory else {}
     owner_id = factory.get("owner_id") if factory else None
-    if owner_id and owner_id != current_user["id"] and weapon_stock.get(weapon_id, 0) >= 1:
+    has_stock = weapon_stock.get(weapon_id, 0) >= 1
+    if factory and has_stock:
         weapon_stock = dict(weapon_stock)
         weapon_stock[weapon_id] = weapon_stock[weapon_id] - 1
         if weapon_stock[weapon_id] <= 0:
@@ -197,12 +198,13 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
             {"state": factory.get("state")},
             {"$set": {"weapon_stock": weapon_stock}},
         )
-        if currency == "money":
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": price}})
-        else:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
-            await db.users.update_one({"id": owner_id}, {"$inc": {"points": price}})
+        if owner_id and owner_id != current_user["id"]:
+            if currency == "money":
+                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": price}})
+            else:
+                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
+                await db.users.update_one({"id": owner_id}, {"$inc": {"points": price}})
         await db.user_weapons.update_one(
             {"user_id": current_user["id"], "weapon_id": weapon_id},
             {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},

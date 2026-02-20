@@ -1,6 +1,19 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight, Bot } from 'lucide-react';
+
+const RARITY_COLORS = {
+  common: 'text-gray-400',
+  uncommon: 'text-green-400',
+  rare: 'text-blue-400',
+  ultra_rare: 'text-purple-400',
+  legendary: 'text-yellow-400',
+  custom: 'text-orange-400',
+  exclusive: 'text-red-400',
+};
+function getRarityColor(rarity) {
+  return RARITY_COLORS[rarity] || 'text-foreground';
+}
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -232,17 +245,21 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
       </button>
       
       {!isCollapsed && (
-        <div className="p-1">
-          <div className="grid grid-cols-5 gap-0.5">
+        <div className="p-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
             {recentStolen.map((car, index) => {
               const displayName = car.car_name || car.name || 'Car';
+              const rarity = (car.rarity || 'common').replace(/_/g, ' ');
+              const value = car.value ?? 0;
+              const damage = Math.min(100, Math.max(0, Number(car.damage_percent) ?? 0));
               return (
-                <div
+                <Link
                   key={car.user_car_id ?? `car-${index}`}
+                  to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
                   data-testid={`recent-stolen-car-${index}`}
-                  className="bg-zinc-800/30 border border-primary/10 rounded p-0.5 flex flex-col items-center text-center hover:border-primary/30 transition-all min-w-0 overflow-hidden w-full max-w-[4.5rem]"
+                  className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1.5 transition-all overflow-hidden block text-left`}
                 >
-                  <div className="w-10 h-10 rounded overflow-hidden bg-zinc-900/50 shrink-0 flex-shrink-0 aspect-square">
+                  <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1 relative">
                     {car.image ? (
                       <img
                         src={car.image}
@@ -252,18 +269,29 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
-                        <Car size={10} className="text-primary/40" />
+                        <Car size={24} className="text-primary/30" />
                       </div>
                     )}
                   </div>
-                  <div className="text-[6px] font-heading font-bold text-primary truncate w-full min-h-[0.875rem] leading-tight mt-0.5 px-0.5 flex items-center justify-center">
+                  <div className={`text-[7px] font-heading font-bold uppercase tracking-wider ${getRarityColor(car.rarity)} mb-0.5`}>
+                    {rarity}
+                  </div>
+                  <div className="text-[10px] font-heading font-bold text-foreground truncate mb-0.5">
                     {displayName}
                   </div>
-                </div>
+                  <div className="text-[9px] text-primary font-heading font-bold">
+                    ${Number(value).toLocaleString()}
+                  </div>
+                  {damage > 0 && (
+                    <p className="text-[8px] font-heading text-mutedForeground mt-0.5">
+                      {damage}% damage
+                    </p>
+                  )}
+                </Link>
               );
             })}
           </div>
-          <p className="text-[8px] text-mutedForeground font-heading mt-0.5 text-center">
+          <p className="text-[9px] text-mutedForeground font-heading mt-2 text-center">
             <Link to="/garage" className="text-primary hover:underline">View full garage →</Link>
           </p>
         </div>

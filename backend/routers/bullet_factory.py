@@ -411,10 +411,13 @@ async def start_armour_production(
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -pay}})
     else:
         raise HTTPException(status_code=400, detail="Armour level has no production cost")
-    now = datetime.now(timezone.utc)
-    now_iso = now.isoformat()
     armour_hours = dict(factory.get("armour_production_hours") or {})
     key = str(level)
+    current_hrs = float(armour_hours.get(key) or 0)
+    if current_hrs > 0.01:
+        raise HTTPException(status_code=400, detail="Cannot stack production. Wait for this level to finish, then produce again (1 hour at a time).")
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
     armour_hours[key] = (armour_hours.get(key) or 0) + 1.0
     await db.bullet_factory.update_one(
         {"state": state},
@@ -460,9 +463,12 @@ async def start_weapon_production(
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -pay}})
     else:
         raise HTTPException(status_code=400, detail="Weapon has no production cost")
+    weapon_hours = dict(factory.get("weapon_production_hours") or {})
+    current_hrs = float(weapon_hours.get(weapon_id) or 0)
+    if current_hrs > 0.01:
+        raise HTTPException(status_code=400, detail="Cannot stack production. Wait for this weapon to finish, then produce again (1 hour at a time).")
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
-    weapon_hours = dict(factory.get("weapon_production_hours") or {})
     weapon_hours[weapon_id] = (weapon_hours.get(weapon_id) or 0) + 1.0
     await db.bullet_factory.update_one(
         {"state": state},
@@ -483,25 +489,28 @@ async def start_armour_production_all(
     request: Optional[StateOptionalBody] = Body(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """Owner pays for 1 hour of armour production for all 5 levels in bulk; stock accumulates for each level."""
+    """Owner pays for 1 hour of armour production for all levels that have no production queued (no stacking — only add when finished)."""
     state = _normalize_state((request.state if request else None) or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
-    total_money = sum((a.get("cost_money") or 0) for a in ARMOUR_SETS) * ARMOURY_ARMOUR_RATE_PER_HOUR
-    total_points = sum((a.get("cost_points") or 0) for a in ARMOUR_SETS) * ARMOURY_ARMOUR_RATE_PER_HOUR
+    armour_hours = dict(factory.get("armour_production_hours") or {})
+    levels_to_add = [a for a in ARMOUR_SETS if float(armour_hours.get(str(a["level"])) or 0) <= 0.01]
+    if not levels_to_add:
+        raise HTTPException(status_code=400, detail="Cannot stack. All armour levels are still producing. Wait for them to finish, then use Produce all again (1 hr each).")
+    total_money = sum((a.get("cost_money") or 0) for a in levels_to_add) * ARMOURY_ARMOUR_RATE_PER_HOUR
+    total_points = sum((a.get("cost_points") or 0) for a in levels_to_add) * ARMOURY_ARMOUR_RATE_PER_HOUR
     if total_money > 0 and (current_user.get("money") or 0) < total_money:
-        raise HTTPException(status_code=400, detail=f"Insufficient cash. Produce all armour costs ${total_money:,}.")
+        raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(levels_to_add)} level(s).")
     if total_points > 0 and (current_user.get("points") or 0) < total_points:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Produce all armour costs {total_points} pts.")
+        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(levels_to_add)} level(s).")
     if total_money > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -total_money}})
     if total_points > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -total_points}})
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
-    armour_hours = dict(factory.get("armour_production_hours") or {})
-    for a in ARMOUR_SETS:
+    for a in levels_to_add:
         key = str(a["level"])
         armour_hours[key] = (armour_hours.get(key) or 0) + 1.0
     await db.bullet_factory.update_one(
@@ -509,7 +518,7 @@ async def start_armour_production_all(
         {"$set": {"armour_production_hours": armour_hours, "armour_production_last_tick": now_iso}},
     )
     return {
-        "message": f"Started armour production for all levels (1 hr each). {ARMOURY_ARMOUR_RATE_PER_HOUR}/hr per level.",
+        "message": f"Started armour production (1 hr each for {len(levels_to_add)} level(s)). {ARMOURY_ARMOUR_RATE_PER_HOUR}/hr per level.",
         "state": state,
         "produce_all_armour_cost_money": total_money,
         "produce_all_armour_cost_points": total_points,
@@ -520,35 +529,37 @@ async def start_weapon_production_all(
     request: Optional[StateOptionalBody] = Body(None),
     current_user: dict = Depends(get_current_user),
 ):
-    """Owner pays for 1 hour of weapon production for all weapons in bulk; stock accumulates for each weapon."""
+    """Owner pays for 1 hour of weapon production for all weapons that have no production queued (no stacking — only add when finished)."""
     state = _normalize_state((request.state if request else None) or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
     weapons = await db.weapons.find({}, {"_id": 0, "id": 1, "price_money": 1, "price_points": 1}).to_list(200)
-    total_money = sum((w.get("price_money") or 0) for w in weapons) * ARMOURY_WEAPON_RATE_PER_HOUR
-    total_points = sum((w.get("price_points") or 0) for w in weapons) * ARMOURY_WEAPON_RATE_PER_HOUR
+    weapon_hours = dict(factory.get("weapon_production_hours") or {})
+    weapons_to_add = [w for w in weapons if w.get("id") and float(weapon_hours.get(w["id"]) or 0) <= 0.01]
+    if not weapons_to_add:
+        raise HTTPException(status_code=400, detail="Cannot stack. All weapons are still producing. Wait for them to finish, then use Produce all again (1 hr each).")
+    total_money = sum((w.get("price_money") or 0) for w in weapons_to_add) * ARMOURY_WEAPON_RATE_PER_HOUR
+    total_points = sum((w.get("price_points") or 0) for w in weapons_to_add) * ARMOURY_WEAPON_RATE_PER_HOUR
     if total_money > 0 and (current_user.get("money") or 0) < total_money:
-        raise HTTPException(status_code=400, detail=f"Insufficient cash. Produce all weapons costs ${total_money:,}.")
+        raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(weapons_to_add)} weapon(s).")
     if total_points > 0 and (current_user.get("points") or 0) < total_points:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Produce all weapons costs {total_points} pts.")
+        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(weapons_to_add)} weapon(s).")
     if total_money > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -total_money}})
     if total_points > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -total_points}})
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
-    weapon_hours = dict(factory.get("weapon_production_hours") or {})
-    for w in weapons:
-        wid = w.get("id")
-        if wid:
-            weapon_hours[wid] = (weapon_hours.get(wid) or 0) + 1.0
+    for w in weapons_to_add:
+        wid = w["id"]
+        weapon_hours[wid] = (weapon_hours.get(wid) or 0) + 1.0
     await db.bullet_factory.update_one(
         {"state": state},
         {"$set": {"weapon_production_hours": weapon_hours, "weapon_production_last_tick": now_iso}},
     )
     return {
-        "message": f"Started weapon production for all weapons (1 hr each). {ARMOURY_WEAPON_RATE_PER_HOUR}/hr per weapon.",
+        "message": f"Started weapon production (1 hr each for {len(weapons_to_add)} weapon(s)). {ARMOURY_WEAPON_RATE_PER_HOUR}/hr per weapon.",
         "state": state,
         "produce_all_weapons_cost_money": total_money,
         "produce_all_weapons_cost_points": total_points,

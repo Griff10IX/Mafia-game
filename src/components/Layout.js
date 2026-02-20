@@ -1165,26 +1165,28 @@ export default function Layout({ children }) {
           const renderStat = (statId) => {
             const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 ${topBarChipPadding} rounded-sm shrink-0 min-h-[40px] md:min-h-0 cursor-grab active:cursor-grabbing touch-manipulation`;
             if (statId === 'rank') {
-              if (!rankProgress) return null;
-              const pct = Number(rankProgress.rank_points_progress);
-              const current = Number(rankProgress.rank_points_current) || 0;
-              const needed = Number(rankProgress.rank_points_needed) || 0;
+              const pct = rankProgress ? Number(rankProgress.rank_points_progress) : 0;
+              const current = rankProgress ? (Number(rankProgress.rank_points_current) || 0) : 0;
+              const needed = rankProgress ? (Number(rankProgress.rank_points_needed) || 0) : 0;
               const total = current + needed;
-              const progress = (typeof pct === 'number' && !Number.isNaN(pct) && pct > 0)
-                ? Math.min(100, Math.max(0, pct))
-                : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
+              const progress = rankProgress
+                ? ((typeof pct === 'number' && !Number.isNaN(pct) && pct > 0)
+                  ? Math.min(100, Math.max(0, pct))
+                  : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0))
+                : 0;
               const hasPremiumBar = !!user?.premium_rank_bar;
-              const progressLabel = hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0);
+              const progressLabel = rankProgress ? (hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0)) : '—';
+              const rankName = rankProgress?.current_rank_name ?? 'Rank';
               return (
-                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={`${rankProgress.current_rank_name}: ${progressLabel}%`}>
+                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
                   <TrendingUp size={topBarIconSizeEffective} className="text-primary shrink-0" />
                   <div className="flex flex-col min-w-[5rem] flex-1 sm:flex-initial shrink-0">
-                    <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankProgress.current_rank_name}</span>
+                    <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
                     <div className="w-10 sm:w-16 shrink-0" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
-                  <span className={`${topBarTextClass} text-primary font-heading shrink-0`}>{progressLabel}%</span>
+                  <span className={`${topBarTextClass} text-primary font-heading shrink-0`}>{progressLabel}{rankProgress ? '%' : ''}</span>
                 </div>
               );
             }
@@ -1255,105 +1257,116 @@ export default function Layout({ children }) {
           };
           return (
             <>
-            <div className={`hidden md:flex items-center ${topBarGapClass} flex-1 min-w-0 justify-end overflow-x-auto overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
-              {/* Global user search: click icon to reveal search bar — same size as other chips */}
-              <div className="relative shrink-0 z-10 snap-start" ref={userSearchRef}>
-                {!userSearchExpanded ? (
+            <div className={`hidden md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0`}>
+              {/* Pinned left: search + rank so they always stay visible */}
+              <div className="flex items-center shrink-0 gap-1 md:gap-2">
+                <div className="relative shrink-0 z-10" ref={userSearchRef}>
+                  {!userSearchExpanded ? (
+                    <button
+                      type="button"
+                      draggable={false}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setUserSearchExpanded(true);
+                        setUserSearchOpen(true);
+                        setTimeout(() => userSearchInputRef.current?.focus(), 0);
+                      }}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                      className={`flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation ${topBarChipPadding}`}
+                      aria-label="Search user"
+                      title="Search user"
+                    >
+                      <Search size={topBarIconSizeEffective} strokeWidth={2} />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5">
+                      <Search size={14} className="text-primary/50 shrink-0 md:w-3 md:h-3" aria-hidden />
+                      <input
+                        ref={userSearchInputRef}
+                        type="text"
+                        value={userSearchQuery}
+                        onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
+                        onFocus={() => setUserSearchOpen(true)}
+                        placeholder="Search user..."
+                        className="flex-1 min-w-0 py-0.5 bg-transparent font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0 text-[16px] md:text-[11px]"
+                        data-testid="topbar-user-search"
+                        autoComplete="off"
+                      />
+                    </div>
+                  )}
+                  {userSearchExpanded && userSearchOpen && (
+                    <div
+                      className="absolute top-full left-0 mt-1 w-[min(calc(100vw-2rem),260px)] max-w-[260px] max-h-[min(60vh,280px)] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
+                      style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
+                    >
+                      <div className="p-2.5 border-b shrink-0 md:p-2" style={{ borderColor: 'var(--noir-border)' }}>
+                        <p className="text-xs font-heading text-mutedForeground md:text-[10px]">Find any user — online, offline, or dead</p>
+                      </div>
+                      <div className="flex-1 min-h-0">
+                        {userSearchLoading ? (
+                          <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">Searching...</div>
+                        ) : userSearchResults.length === 0 ? (
+                          <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">
+                            {userSearchQuery.trim().length < 1 ? 'Type to search' : 'No users found'}
+                          </div>
+                        ) : (
+                          userSearchResults.map((u) => (
+                            <Link
+                              key={u.username}
+                              to={`/profile/${encodeURIComponent(u.username)}`}
+                              onClick={() => { setUserSearchOpen(false); setUserSearchExpanded(false); setUserSearchQuery(''); setUserSearchResults([]); }}
+                              className="flex items-center justify-between gap-2 w-full text-left px-3 py-3 min-h-[44px] border-b font-heading text-sm hover:bg-noir-raised/80 active:bg-noir-raised/90 transition-colors touch-manipulation md:py-2 md:min-h-0"
+                              style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
+                            >
+                              <span className="truncate font-semibold">{u.username}</span>
+                              <div className="flex gap-1 shrink-0">
+                                {u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 md:text-[9px] md:px-1">Dead</span>}
+                                {u.in_jail && !u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 md:text-[9px] md:px-1">Jail</span>}
+                                {u.is_bodyguard && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 md:text-[9px] md:px-1">Robot</span>}
+                              </div>
+                            </Link>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {statOrder.includes('rank') && (() => {
+                  const content = renderStat('rank');
+                  if (!content) return null;
+                  return (
+                    <div key="rank" draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, 'rank')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'rank')} onDragEnd={handleDragEnd} className={`shrink-0 transition-all duration-150 ease-out ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} ${draggingStatId === 'rank' ? 'opacity-50 scale-95' : ''}`}>
+                      {content}
+                    </div>
+                  );
+                })()}
+              </div>
+              {/* Scrollable right: other stats */}
+              <div className={`flex items-center ${topBarGapClass} flex-1 min-w-0 justify-end overflow-x-auto overflow-y-hidden scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
+                {statOrder.filter((statId) => statId !== 'rank' && statId !== 'notifications').map((statId) => {
+                  const content = renderStat(statId);
+                  if (!content) return null;
+                  return (
+                    <div key={statId} draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 snap-start transition-all duration-150 ease-out ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
+                      {content}
+                    </div>
+                  );
+                })}
+                {isMobileViewport && (
                   <button
                     type="button"
-                    draggable={false}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setUserSearchExpanded(true);
-                      setUserSearchOpen(true);
-                      setTimeout(() => userSearchInputRef.current?.focus(), 0);
-                    }}
-                    onMouseDown={(e) => {
-                      e.stopPropagation();
-                    }}
-                    className={`flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation ${topBarChipPadding}`}
-                    aria-label="Search user"
-                    title="Search user"
+                    onClick={() => setTopBarCustomizeOpen(true)}
+                    className="shrink-0 flex items-center justify-center gap-1 min-h-[40px] px-2 py-1.5 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
+                    aria-label="Customize top bar"
+                    title="Reorder, size & spacing"
                   >
-                    <Search size={topBarIconSizeEffective} strokeWidth={2} />
+                    <Settings size={topBarIconSizeEffective} strokeWidth={2} />
                   </button>
-                ) : (
-                  <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5">
-                    <Search size={14} className="text-primary/50 shrink-0 md:w-3 md:h-3" aria-hidden />
-                    <input
-                      ref={userSearchInputRef}
-                      type="text"
-                      value={userSearchQuery}
-                      onChange={(e) => { setUserSearchQuery(e.target.value); setUserSearchOpen(true); }}
-                      onFocus={() => setUserSearchOpen(true)}
-                      placeholder="Search user..."
-                      className="flex-1 min-w-0 py-0.5 bg-transparent font-heading text-foreground placeholder:text-mutedForeground focus:outline-none border-0 text-[16px] md:text-[11px]"
-                      data-testid="topbar-user-search"
-                      autoComplete="off"
-                    />
-                  </div>
-                )}
-                {userSearchExpanded && userSearchOpen && (
-                  <div
-                    className="absolute top-full left-0 mt-1 w-[min(calc(100vw-2rem),260px)] max-w-[260px] max-h-[min(60vh,280px)] overflow-y-auto rounded border shadow-xl z-[100] flex flex-col"
-                    style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}
-                  >
-                    <div className="p-2.5 border-b shrink-0 md:p-2" style={{ borderColor: 'var(--noir-border)' }}>
-                      <p className="text-xs font-heading text-mutedForeground md:text-[10px]">Find any user — online, offline, or dead</p>
-                    </div>
-                    <div className="flex-1 min-h-0">
-                      {userSearchLoading ? (
-                        <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">Searching...</div>
-                      ) : userSearchResults.length === 0 ? (
-                        <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">
-                          {userSearchQuery.trim().length < 1 ? 'Type to search' : 'No users found'}
-                        </div>
-                      ) : (
-                        userSearchResults.map((u) => (
-                          <Link
-                            key={u.username}
-                            to={`/profile/${encodeURIComponent(u.username)}`}
-                            onClick={() => { setUserSearchOpen(false); setUserSearchExpanded(false); setUserSearchQuery(''); setUserSearchResults([]); }}
-                            className="flex items-center justify-between gap-2 w-full text-left px-3 py-3 min-h-[44px] border-b font-heading text-sm hover:bg-noir-raised/80 active:bg-noir-raised/90 transition-colors touch-manipulation md:py-2 md:min-h-0"
-                            style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}
-                          >
-                            <span className="truncate font-semibold">{u.username}</span>
-                            <div className="flex gap-1 shrink-0">
-                              {u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 md:text-[9px] md:px-1">Dead</span>}
-                              {u.in_jail && !u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 md:text-[9px] md:px-1">Jail</span>}
-                              {u.is_bodyguard && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 md:text-[9px] md:px-1">Robot</span>}
-                            </div>
-                          </Link>
-                        ))
-                      )}
-                    </div>
-                  </div>
                 )}
               </div>
-              {statOrder.map((statId) => {
-                if (statId === 'notifications') {
-                  return null;
-                }
-                const content = renderStat(statId);
-                if (!content) return null;
-                return (
-                  <div key={statId} draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 snap-start transition-all duration-150 ease-out ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
-                    {content}
-                  </div>
-                );
-              })}
-              {isMobileViewport && (
-                <button
-                  type="button"
-                  onClick={() => setTopBarCustomizeOpen(true)}
-                  className="shrink-0 flex items-center justify-center gap-1 min-h-[40px] px-2 py-1.5 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
-                  aria-label="Customize top bar"
-                  title="Reorder, size & spacing"
-                >
-                  <Settings size={topBarIconSizeEffective} strokeWidth={2} />
-                </button>
-              )}
             </div>
             {topBarCustomizeOpen && (
               <>

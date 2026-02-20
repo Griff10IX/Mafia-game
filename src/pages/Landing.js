@@ -89,7 +89,9 @@ export default function Landing({ setIsAuthenticated }) {
         } else {
           msg = String(d);
         }
-        if (!msg.startsWith('Cannot log in') && !msg.startsWith('Login failed') && !msg.startsWith('Registration failed')) {
+        // Use backend message as-is for login (e.g. "No account found...", "Wrong password..."); only add prefix for generic/tech messages
+        const skipPrefix = isLogin && (msg.startsWith('Cannot log in') || msg.startsWith('Login failed') || msg.startsWith('No account found') || msg.startsWith('Wrong password') || msg.startsWith('Too many failed') || msg.startsWith('Please verify your email') || msg.startsWith('This account is dead'));
+        if (!skipPrefix && !msg.startsWith('Registration failed')) {
           msg = `${prefix}${msg}`;
         }
       } else if (error.response?.status === 404) {
