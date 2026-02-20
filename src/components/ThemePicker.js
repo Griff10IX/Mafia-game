@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box, PanelLeft, LayoutDashboard } from 'lucide-react';
+import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box, PanelLeft, LayoutDashboard, Smartphone } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_WRITING_COLOURS, THEME_TEXT_STYLES, THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
@@ -112,6 +112,7 @@ export default function ThemePicker({ open, onClose }) {
     { id: 'colours', label: 'Colours', icon: Palette },
     { id: 'text', label: 'Text', icon: Type },
     { id: 'buttons', label: 'Buttons', icon: Box },
+    { id: 'mobile', label: 'Mobile layout', icon: Smartphone },
     { id: 'topbar', label: 'Top bar', icon: LayoutDashboard },
   ];
   const [activeTab, setActiveTab] = useState('presets');
@@ -642,33 +643,79 @@ export default function ThemePicker({ open, onClose }) {
                     ))}
                   </div>
                 </div>
-                <div className="pt-4 border-t border-primary/20">
-                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <LayoutDashboard className="w-3.5 h-3.5" />
-                    Mobile nav
-                  </p>
-                  <p className="text-[9px] text-mutedForeground mb-1.5">On small screens: sidebar (slide-out menu) or bottom bar.</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setMobileNavStyle('sidebar')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
-                        mobileNavStyle === 'sidebar' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
-                      }`}
-                    >
-                      <PanelLeft className="w-3.5 h-3.5" />
-                      Sidebar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMobileNavStyle('bottom')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
-                        mobileNavStyle === 'bottom' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
-                      }`}
-                    >
-                      <LayoutGrid className="w-3.5 h-3.5" />
-                      Bottom bar
-                    </button>
+              </>
+            )}
+            {activeTab === 'mobile' && (
+              <>
+                <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Smartphone className="w-3.5 h-3.5" />
+                  Mobile layout
+                </p>
+                <p className="text-[9px] text-mutedForeground mb-3">Navigation, stats ball, and bar appearance on small screens.</p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Navigation</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">On small screens: sidebar (slide-out menu) or bottom bar.</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setMobileNavStyle('sidebar')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          mobileNavStyle === 'sidebar' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        <PanelLeft className="w-3.5 h-3.5" />
+                        Sidebar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMobileNavStyle('bottom')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          mobileNavStyle === 'bottom' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        Bottom bar
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Stats ball & panel</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">On mobile, tap the floating ball to open stats and notifications. Drag the ball to move it; position is saved. Use &quot;Customize bar&quot; inside the ball to reorder items and set size.</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Chip size (stats panel)</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['small', 'medium', 'large'].map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setTopBarSize(v)}
+                          className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                            topBarSize === v ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                          }`}
+                        >
+                          {v.charAt(0).toUpperCase() + v.slice(1)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Spacing between chips</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {['compact', 'normal', 'spread'].map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setTopBarGap(v)}
+                          className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                            topBarGap === v ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                          }`}
+                        >
+                          {v === 'compact' ? 'Close' : v === 'spread' ? 'Spread' : 'Normal'}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </>

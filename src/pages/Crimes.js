@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { HelpCircle, Clock, AlertCircle, Bot, Skull } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
+import { getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -67,6 +68,48 @@ const LoadingSpinner = () => (
     <Skull size={22} className="text-primary/40 animate-pulse" />
     <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
     <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
+  </div>
+);
+
+const CrimesPageSkeleton = () => (
+  <div className={`space-y-2 ${styles.pageContent}`}>
+    <style>{CRIMES_STYLES}</style>
+    <div className="relative">
+      <div className="h-3 w-3/4 rounded bg-zinc-700/60 animate-pulse" />
+    </div>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crimes stats</span>
+      </div>
+      <div className="p-2 space-y-1">
+        <div className="h-3 w-full rounded bg-zinc-700/50 animate-pulse" />
+        <div className="h-3 w-2/3 rounded bg-zinc-700/40 animate-pulse" />
+      </div>
+      <div className="cr-art-line text-primary mx-2.5" />
+    </div>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Available Crimes</span>
+      </div>
+      <div className="p-1.5 space-y-0.5">
+        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+          <div key={i} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md bg-zinc-800/20 border border-transparent">
+            <div className="flex items-center gap-1 min-w-0 flex-1">
+              <span className="w-2 h-2 rounded bg-zinc-600/60 shrink-0" />
+              <div className="h-3 w-24 rounded bg-zinc-700/50 animate-pulse shrink-0" />
+              <div className="h-3 w-16 rounded bg-zinc-700/40 animate-pulse hidden sm:block" />
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <div className="h-4 w-8 rounded bg-zinc-700/50 animate-pulse" />
+              <div className="h-6 w-14 rounded bg-zinc-700/60 animate-pulse" />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="cr-art-line text-primary mx-2.5" />
+    </div>
   </div>
 );
 
@@ -261,25 +304,38 @@ export default function Crimes() {
 
   const fetchCrimes = async () => {
     try {
-      const [crimesRes, meRes, eventsRes, statsRes, autoRankRes] = await Promise.all([
-        api.get('/crimes'),
-        api.get('/auth/me'),
+      const prefetched = getCrimesPrefetch();
+      let crimesData;
+      if (prefetched) {
+        crimesData = prefetched;
+        const meRes = await api.get('/auth/me');
+        setCrimes(crimesData);
+        setUser(meRes.data);
+        setLoading(false);
+      } else {
+        const [crimesRes, meRes] = await Promise.all([
+          api.get('/crimes'),
+          api.get('/auth/me'),
+        ]);
+        crimesData = crimesRes.data;
+        setCrimes(crimesData);
+        setUser(meRes.data);
+        setLoading(false);
+      }
+      Promise.all([
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/crimes/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
-      ]);
-      
-      setCrimes(crimesRes.data);
-      setUser(meRes.data);
-      setEvent(eventsRes.data?.event ?? null);
-      setEventsEnabled(!!eventsRes.data?.events_enabled);
-      setCrimeStats(statsRes.data || {});
-      const ar = autoRankRes.data || {};
-      setAutoRankCrimesDisabled(!!(ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec));
+      ]).then(([eventsRes, statsRes, autoRankRes]) => {
+        setEvent(eventsRes.data?.event ?? null);
+        setEventsEnabled(!!eventsRes.data?.events_enabled);
+        setCrimeStats(statsRes.data || {});
+        const ar = autoRankRes.data || {};
+        setAutoRankCrimesDisabled(!!(ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec));
+      }).catch(() => {});
     } catch (error) {
       toast.error('Failed to load crimes');
       console.error('Error fetching crimes:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -416,12 +472,7 @@ export default function Crimes() {
   const commitAllCount = crimeRows.filter((c) => c.can_commit).length;
 
   if (loading) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent}`}>
-        <style>{CRIMES_STYLES}</style>
-        <LoadingSpinner />
-      </div>
-    );
+    return <CrimesPageSkeleton />;
   }
 
   return (

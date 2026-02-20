@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
+import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -756,6 +757,8 @@ export default function Layout({ children }) {
                           <Link
                             to="/crimes"
                             onClick={() => setSidebarOpen(false)}
+                            onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
+                            onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
                             className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
@@ -1469,11 +1472,14 @@ export default function Layout({ children }) {
                       : sub.path === '/forum'
                         ? location.pathname === '/forum' && !location.state?.category
                         : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
+                    const prefetchCrimes = sub.path === '/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
                     return (
                       <Link
                         key={sub.path ? `${sub.path}-${sub.label}` : idx}
                         to={to}
                         onClick={() => setMobileBottomMenuOpen(null)}
+                        onMouseEnter={prefetchCrimes}
+                        onFocus={prefetchCrimes}
                         role="menuitem"
                         className={`block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors ${
                           isActive ? 'bg-primary/20' : ''
@@ -1493,6 +1499,19 @@ export default function Layout({ children }) {
             style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}
             aria-label="Mobile navigation"
           >
+            {hasCasinoOrProperty && typeof user?.casino_profit === 'number' && (
+              <div
+                className="shrink-0 flex items-center px-2 py-1 rounded-md border font-heading text-[10px] font-bold tabular-nums"
+                style={{
+                  borderColor: 'var(--noir-border-mid)',
+                  backgroundColor: 'var(--noir-surface)',
+                  color: user.casino_profit >= 0 ? 'var(--emerald-400, #34d399)' : 'var(--red-400, #f87171)',
+                }}
+                title={user.casino_profit >= 0 ? 'Casino profit (players losing)' : 'Casino loss (players winning)'}
+              >
+                {user.casino_profit >= 0 ? '+' : ''}{formatMoney(user.casino_profit)}
+              </div>
+            )}
             {mobileBottomNavItems.map((item) => {
               const Icon = item.icon;
               if (item.type === 'link') {
