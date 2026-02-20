@@ -78,6 +78,84 @@ function MissionCard({ mission, onComplete, completing, characterName, onTalkToC
   );
 }
 
+// Stylized 2D map of each city — clickable regions (SVG)
+const MAP_VIEWBOX = { w: 400, h: 260 };
+const cityMapRegions = {
+  Chicago: [
+    { area: 'Docks', points: '0,0 110,0 110,260 0,260', label: { x: 55, y: 130 } },
+    { area: 'South Side', points: '110,180 400,180 400,260 110,260', label: { x: 255, y: 220 } },
+    { area: 'Downtown', points: '110,0 400,0 400,180 110,180', label: { x: 255, y: 90 } },
+  ],
+  'New York': [
+    { area: 'Waterfront', points: '0,160 400,160 400,260 0,260', label: { x: 200, y: 210 } },
+    { area: 'Downtown', points: '0,0 200,0 200,80 0,80', label: { x: 100, y: 40 } },
+    { area: 'Courthouse', points: '200,0 400,0 400,160 200,160', label: { x: 300, y: 80 } },
+    { area: 'Garage', points: '0,80 200,80 200,160 0,160', label: { x: 100, y: 120 } },
+  ],
+  'Las Vegas': [
+    { area: 'Desert', points: '0,0 140,0 140,260 0,260', label: { x: 70, y: 130 } },
+    { area: 'Card room', points: '140,0 260,0 260,260 140,260', label: { x: 200, y: 130 } },
+    { area: 'Downtown', points: '260,0 400,0 400,260 260,260', label: { x: 330, y: 130 } },
+  ],
+  'Atlantic City': [
+    { area: 'Boardwalk', points: '0,0 400,0 400,110 0,110', label: { x: 200, y: 55 } },
+    { area: 'Docks', points: '0,110 400,110 400,260 0,260', label: { x: 200, y: 185 } },
+  ],
+};
+
+function CityMapSVG({ city, areasWithCounts, selectedArea, onSelectArea }) {
+  const regions = cityMapRegions[city];
+  if (!regions || regions.length === 0) return null;
+
+  const getFill = (areaName) => {
+    const isSelected = selectedArea === areaName;
+    const counts = areasWithCounts.find((a) => a.name === areaName);
+    const done = counts ? counts.missions.filter((m) => m.completed).length : 0;
+    const total = counts ? counts.missions.length : 0;
+    if (isSelected) return 'var(--primary)';
+    if (total > 0 && done === total) return 'var(--primary)';
+    return 'rgba(39,39,42,0.6)';
+  };
+  const getStroke = (areaName) => (selectedArea === areaName ? 'var(--primary)' : 'rgba(113,113,122,0.8)');
+
+  return (
+    <svg
+      viewBox={`0 0 ${MAP_VIEWBOX.w} ${MAP_VIEWBOX.h}`}
+      className="w-full max-w-2xl h-auto rounded-lg border border-zinc-600 bg-zinc-900/80"
+      style={{ minHeight: 220 }}
+      aria-label={`Map of ${city}`}
+    >
+      {regions.map(({ area, points, label }) => (
+        <g key={area}>
+          <polygon
+            points={points}
+            fill={getFill(area)}
+            stroke={getStroke(area)}
+            strokeWidth={2}
+            className="cursor-pointer transition-all duration-150 hover:opacity-90"
+            style={{ opacity: selectedArea && selectedArea !== area ? 0.5 : 1 }}
+            onClick={() => onSelectArea(area)}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectArea(area); } }}
+            role="button"
+            tabIndex={0}
+            aria-label={`${area} — click to view missions`}
+          />
+          <text
+            x={label.x}
+            y={label.y}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            className="font-heading font-bold fill-zinc-100 pointer-events-none select-none"
+            style={{ fontSize: 14 }}
+          >
+            {area}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function DialogueModal({ character, dialogue, onClose }) {
   if (!character) return null;
   return (
@@ -269,56 +347,27 @@ export default function Missions() {
           {cityAreas.length > 0 && (
             <section>
               <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">
-                2D map — {city}
+                Map of {city}
               </h2>
               <p className="text-[11px] text-mutedForeground font-heading mb-2">
-                Click a district to see its missions and characters.
+                Click an area on the map to view missions and characters there. Accept and complete missions from the list below.
               </p>
-              <div
-                className="grid gap-2 w-full max-w-2xl"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))' }}
-              >
-                {!selectedArea && (
-                  <div
-                    className="col-span-full sm:col-span-1 rounded-lg border-2 border-primary/50 bg-primary/10 p-3 text-left"
-                    aria-label="All districts selected"
-                  >
-                    <span className="text-[11px] font-heading font-bold text-primary block">All districts</span>
-                    <span className="text-[10px] text-mutedForeground font-heading">Showing all</span>
-                  </div>
-                )}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <CityMapSVG
+                  city={city}
+                  areasWithCounts={cityAreas}
+                  selectedArea={selectedArea}
+                  onSelectArea={(area) => setSelectedArea(selectedArea === area ? null : area)}
+                />
                 {selectedArea && (
                   <button
                     type="button"
                     onClick={() => setSelectedArea(null)}
-                    className="rounded-lg border border-zinc-600 bg-zinc-800/50 p-3 text-left hover:bg-zinc-700/50 hover:border-zinc-500"
+                    className="self-start px-3 py-1.5 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading font-bold hover:bg-zinc-700"
                   >
-                    <span className="text-[11px] font-heading font-bold text-foreground block">All districts</span>
-                    <span className="text-[10px] text-mutedForeground font-heading">Show all</span>
+                    Show all areas
                   </button>
                 )}
-                {cityAreas.map(({ name, missions }) => {
-                  const done = (missions || []).filter((m) => m.completed).length;
-                  const total = (missions || []).length;
-                  const isSelected = selectedArea === name;
-                  return (
-                    <button
-                      key={name}
-                      type="button"
-                      onClick={() => setSelectedArea(isSelected ? null : name)}
-                      className={`rounded-lg border-2 p-3 text-left transition-colors ${
-                        isSelected
-                          ? 'border-primary bg-primary/15'
-                          : 'border-zinc-600 bg-zinc-800/40 hover:bg-zinc-700/50 hover:border-zinc-500'
-                      }`}
-                    >
-                      <span className="text-[11px] font-heading font-bold text-foreground block">{name}</span>
-                      <span className="text-[10px] text-mutedForeground font-heading">
-                        {done}/{total} missions
-                      </span>
-                    </button>
-                  );
-                })}
               </div>
             </section>
           )}
