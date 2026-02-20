@@ -1054,7 +1054,7 @@ async def _user_owns_any_property(user_id: str):
 
 # Crime endpoints -> see routers/crimes.py
 # Register modular routers (crimes, gta, jail, attack, etc.)
-from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, bullet_factory, objectives, attack, bank, families, weapons, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, slots, video_poker, notifications, hitlist, properties, store, racket, leaderboard, armour, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe, prestige
+from routers import crimes, gta, jail, oc, organised_crime, forum, entertainer, armoury, objectives, attack, bank, families, bodyguards, airport, quicktrade, booze_run, dice, roulette, blackjack, horseracing, slots, video_poker, notifications, hitlist, properties, store, racket, leaderboard, meta, user_progress, states, events, security_admin, sports_betting, auth, profile, admin, payments, stats, dead_alive, users, giphy, crack_safe, prestige
 from routers.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
 from routers.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT  # used by _family_war_check_wipe_and_award and seed
 from routers.bodyguards import _create_robot_bodyguard_user  # used by seed
@@ -1074,12 +1074,11 @@ organised_crime.register(api_router)
 oc.register(api_router)
 forum.register(api_router)
 entertainer.register(api_router)
-bullet_factory.register(api_router)
+armoury.register(api_router)
 objectives.register(api_router)
 attack.register(api_router)
 bank.register(api_router)
 families.register(api_router)
-weapons.register(api_router)
 bodyguards.register(api_router)
 airport.register(api_router)
 quicktrade.register(api_router)
@@ -1096,7 +1095,6 @@ properties.register(api_router)
 store.register(api_router)
 racket.register(api_router)
 leaderboard.register(api_router)
-armour.register(api_router)
 meta.register(api_router)
 user_progress.register(api_router)
 states.register(api_router)

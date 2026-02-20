@@ -44,7 +44,7 @@ from server import (
 )
 from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
-from routers.weapons import _best_weapon_for_user
+from routers.armoury import _best_weapon_for_user
 from routers.families import resolve_family_id
 
 
