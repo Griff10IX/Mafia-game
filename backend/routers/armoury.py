@@ -790,8 +790,9 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
         armour_stock[str(level)] = armour_stock[str(level)] - 1
         if armour_stock[str(level)] <= 0:
             del armour_stock[str(level)]
+        state_key = factory.get("state") or _normalize_state(state)
         await db.bullet_factory.update_one(
-            {"state": factory.get("state")},
+            {"state": state_key},
             {"$set": {"armour_stock": armour_stock}},
         )
         if owner_id and owner_id != current_user["id"]:
@@ -1053,8 +1054,9 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         weapon_stock[weapon_id] = weapon_stock[weapon_id] - 1
         if weapon_stock[weapon_id] <= 0:
             del weapon_stock[weapon_id]
+        state_key = factory.get("state") or _normalize_state(state)
         await db.bullet_factory.update_one(
-            {"state": factory.get("state")},
+            {"state": state_key},
             {"$set": {"weapon_stock": weapon_stock}},
         )
         if owner_id and owner_id != current_user["id"]:

@@ -302,12 +302,13 @@ function BulletFactoryTab({ me, ownedArmouryState }) {
   const buyArmour = async (level) => {
     setBuyingArmourLevel(level);
     try {
-      const res = await api.post('/armour/buy', { level });
+      const state = data?.state || effectiveState || currentState;
+      const res = await api.post('/armour/buy', { level, ...(state ? { state } : {}) });
       toast.success(res.data?.message || 'Purchased armour');
       refreshUser();
       fetchData();
       if (armourOptions.length) {
-        const optsRes = await api.get('/armour/options');
+        const optsRes = await api.get('/armour/options', { params: state ? { state } : {} });
         if (optsRes.data?.options) setArmourOptions(optsRes.data.options);
       }
     } catch (e) {
@@ -320,11 +321,12 @@ function BulletFactoryTab({ me, ownedArmouryState }) {
   const buyWeapon = async (weaponId, currency) => {
     setBuyingWeaponId(weaponId);
     try {
-      await api.post(`/weapons/${weaponId}/buy`, { currency });
+      const state = data?.state || effectiveState || currentState;
+      await api.post(`/weapons/${weaponId}/buy`, { currency, ...(state ? { state } : {}) });
       toast.success('Weapon purchased');
       refreshUser();
       fetchData();
-      const weaponsRes = await api.get('/weapons');
+      const weaponsRes = await api.get('/weapons', { params: state ? { state } : {} });
       if (Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
     } catch (e) {
       const detail = e.response?.data?.detail;
