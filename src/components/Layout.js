@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -108,6 +108,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
 
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
 const DEFAULT_STAT_ORDER = ['rank', 'bullets', 'kills', 'money', 'points', 'property', 'notifications'];
+const TOPBAR_STAT_LABELS = { rank: 'Rank', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', property: 'Casino & Property', notifications: 'Notifications' };
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
 
@@ -160,6 +161,8 @@ export default function Layout({ children }) {
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [notificationList, setNotificationList] = useState([]);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [topBarCustomizeOpen, setTopBarCustomizeOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
@@ -198,6 +201,14 @@ export default function Layout({ children }) {
     };
     window.addEventListener('topbar-prefs-changed', onTopBarPrefs);
     return () => window.removeEventListener('topbar-prefs-changed', onTopBarPrefs);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const fn = () => setIsMobileViewport(mq.matches);
+    fn();
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
   }, []);
 
   useEffect(() => {
@@ -1095,14 +1106,33 @@ export default function Layout({ children }) {
             });
             setDraggingStatId(null);
           };
+          const moveStat = (fromIndex, direction) => {
+            const toIndex = direction === 'up' ? fromIndex - 1 : fromIndex + 1;
+            if (toIndex < 0 || toIndex >= statOrder.length) return;
+            setStatOrder((prev) => {
+              const next = [...prev];
+              [next[fromIndex], next[toIndex]] = [next[toIndex], next[fromIndex]];
+              try { localStorage.setItem(TOPBAR_STAT_ORDER_KEY, JSON.stringify(next)); } catch (_) {}
+              return next;
+            });
+          };
+          const setTopBarGapPersist = (v) => {
+            try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
+            window.dispatchEvent(new Event('topbar-prefs-changed'));
+          };
+          const setTopBarSizePersist = (v) => {
+            try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {}
+            window.dispatchEvent(new Event('topbar-prefs-changed'));
+          };
           const casinoProfit = user.casino_profit ?? 0;
           const propertyProfit = user.property_profit ?? 0;
-          const topBarGapClass = topBarGap === 'compact' ? 'gap-1' : topBarGap === 'spread' ? 'gap-4' : 'gap-2';
+          const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-3 md:gap-4' : 'gap-2 md:gap-2';
           const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
-          const topBarChipPadding = topBarSize === 'small' ? 'px-1.5 py-0.5' : topBarSize === 'large' ? 'px-2.5 py-1.5' : 'px-2 py-1';
-          const topBarTextClass = topBarSize === 'small' ? 'text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
+          const topBarIconSizeEffective = isMobileViewport ? Math.max(16, topBarIconSize) : topBarIconSize;
+          const topBarChipPadding = topBarSize === 'small' ? 'px-2 py-1.5 md:px-1.5 md:py-0.5' : topBarSize === 'large' ? 'px-2.5 py-1.5 md:px-2.5 md:py-1.5' : 'px-2 py-1.5 md:px-2 md:py-1';
+          const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
           const renderStat = (statId) => {
-            const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 ${topBarChipPadding} rounded-sm shrink-0 cursor-grab active:cursor-grabbing`;
+            const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 ${topBarChipPadding} rounded-sm shrink-0 min-h-[40px] md:min-h-0 cursor-grab active:cursor-grabbing touch-manipulation`;
             if (statId === 'rank') {
               if (!rankProgress) return null;
               const pct = Number(rankProgress.rank_points_progress);
@@ -1116,7 +1146,7 @@ export default function Layout({ children }) {
               const progressLabel = hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0);
               return (
                 <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={`${rankProgress.current_rank_name}: ${progressLabel}%`}>
-                  <TrendingUp size={topBarIconSize} className="text-primary shrink-0" />
+                  <TrendingUp size={topBarIconSizeEffective} className="text-primary shrink-0" />
                   <div className="flex flex-col min-w-0 flex-1 sm:flex-initial">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading">{rankProgress.current_rank_name}</span>
                     <div className="w-10 sm:w-16" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
@@ -1130,7 +1160,7 @@ export default function Layout({ children }) {
             if (statId === 'bullets') {
               return (
                 <div className={`${chipClass} hidden md:flex`} title="Bullets">
-                  <Crosshair size={topBarIconSize} className="text-red-400" />
+                  <Crosshair size={topBarIconSizeEffective} className="text-red-400" />
                   <span className={`font-heading ${topBarTextClass} text-foreground`} data-testid="topbar-bullets">{formatInt(user.bullets)}</span>
                 </div>
               );
@@ -1138,7 +1168,7 @@ export default function Layout({ children }) {
             if (statId === 'kills') {
               return (
                 <div className={`${chipClass} hidden md:flex`} title="Kills">
-                  <Skull size={topBarIconSize} className="text-red-400" />
+                  <Skull size={topBarIconSizeEffective} className="text-red-400" />
                   <span className={`font-heading ${topBarTextClass} text-foreground`} data-testid="topbar-kills">{formatInt(user.total_kills)}</span>
                 </div>
               );
@@ -1146,7 +1176,7 @@ export default function Layout({ children }) {
             if (statId === 'money') {
               return (
                 <div className={chipClass} title={`Cash: ${formatMoney(user.money)}`}>
-                  <DollarSign size={topBarIconSize} className="text-primary shrink-0" />
+                  <DollarSign size={topBarIconSizeEffective} className="text-primary shrink-0" />
                   <span className={`font-heading ${topBarTextClass} text-primary md:hidden`} data-testid="topbar-money">{formatMoneyCompact(user.money)}</span>
                   <span className="font-heading text-xs text-primary hidden md:inline" data-testid="topbar-money-full">{formatMoney(user.money)}</span>
                 </div>
@@ -1155,7 +1185,7 @@ export default function Layout({ children }) {
             if (statId === 'points') {
               return (
                 <div className={chipClass} title={`Premium Points: ${formatInt(user.points)}`}>
-                  <Zap size={topBarIconSize} className="text-primary shrink-0" />
+                  <Zap size={topBarIconSizeEffective} className="text-primary shrink-0" />
                   <span className={`font-heading ${topBarTextClass} text-foreground md:hidden`} data-testid="topbar-points">{formatInt(user.points)}</span>
                   <span className="font-heading text-xs text-foreground hidden md:inline" data-testid="topbar-points-full">{formatInt(user.points)}</span>
                 </div>
@@ -1168,7 +1198,7 @@ export default function Layout({ children }) {
               const propertyShort = formatCompact(propertyProfit) + ' pts';
               return (
                 <div className={chipClass} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
-                  <Building2 size={topBarIconSize} className="text-emerald-400 shrink-0" />
+                  <Building2 size={topBarIconSizeEffective} className="text-emerald-400 shrink-0" />
                   <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap`}>
                     <span className="text-mutedForeground md:inline hidden">Casino </span>
                     <span className="text-mutedForeground md:hidden">C </span>
@@ -1187,6 +1217,7 @@ export default function Layout({ children }) {
             return null;
           };
           return (
+            <>
             <div className={`flex items-center ${topBarGapClass} flex-1 min-w-0 overflow-x-auto md:overflow-visible overflow-y-hidden py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0 scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
               {/* Global user search: click icon to reveal search bar — same size as other chips */}
               <div className="relative shrink-0 z-10 snap-start" ref={userSearchRef}>
@@ -1208,7 +1239,7 @@ export default function Layout({ children }) {
                     aria-label="Search user"
                     title="Search user"
                   >
-                    <Search size={topBarIconSize} strokeWidth={2} />
+                    <Search size={topBarIconSizeEffective} strokeWidth={2} />
                   </button>
                 ) : (
                   <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5">
@@ -1266,14 +1297,14 @@ export default function Layout({ children }) {
               {statOrder.map((statId) => {
                 if (statId === 'notifications') {
                   return (
-                    <div key="notifications" className={`relative shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out snap-start ${draggingStatId === 'notifications' ? 'opacity-50 scale-95' : ''}`} ref={notificationPanelRef} draggable onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')} onDragEnd={handleDragEnd}>
+                    <div key="notifications" className={`relative shrink-0 snap-start ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} transition-all duration-150 ease-out ${draggingStatId === 'notifications' ? 'opacity-50 scale-95' : ''}`} ref={notificationPanelRef} draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, 'notifications')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'notifications')} onDragEnd={handleDragEnd}>
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openNotificationPanel(); }}
-                        className={`flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors ${topBarChipPadding}`}
+                        className={`flex items-center justify-center gap-1 min-h-[40px] md:min-h-0 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 transition-colors ${topBarChipPadding}`}
                         aria-label={unreadCount ? `${unreadCount} unread notifications` : 'Notifications'}
                       >
-                        <Bell size={topBarIconSize} strokeWidth={2} />
+                        <Bell size={topBarIconSizeEffective} strokeWidth={2} />
                         {unreadCount > 0 && (
                           <span className="min-w-[14px] h-3.5 px-1 flex items-center justify-center rounded-full bg-primary text-noir-bg text-[10px] font-heading font-bold">
                             {unreadCount > 99 ? '99+' : unreadCount}
@@ -1319,12 +1350,75 @@ export default function Layout({ children }) {
                 const content = renderStat(statId);
                 if (!content) return null;
                 return (
-                  <div key={statId} draggable onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 cursor-grab active:cursor-grabbing transition-all duration-150 ease-out snap-start ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
+                  <div key={statId} draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, statId)} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, statId)} onDragEnd={handleDragEnd} className={`shrink-0 snap-start transition-all duration-150 ease-out ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} ${draggingStatId === statId ? 'opacity-50 scale-95' : ''}`}>
                     {content}
                   </div>
                 );
               })}
+              {isMobileViewport && (
+                <button
+                  type="button"
+                  onClick={() => setTopBarCustomizeOpen(true)}
+                  className="shrink-0 flex items-center justify-center gap-1 min-h-[40px] px-2 py-1.5 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
+                  aria-label="Customize top bar"
+                  title="Reorder, size & spacing"
+                >
+                  <Settings size={topBarIconSizeEffective} strokeWidth={2} />
+                </button>
+              )}
             </div>
+            {topBarCustomizeOpen && (
+              <>
+                <div className="fixed inset-0 z-50 bg-black/50 md:hidden" aria-hidden onClick={() => setTopBarCustomizeOpen(false)} />
+                <div className="fixed bottom-0 left-0 right-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-xl border-t shadow-2xl md:hidden safe-area-pb" style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-border-mid)' }}>
+                  <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b shrink-0" style={{ borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-content)' }}>
+                    <h3 className="font-heading font-semibold text-sm" style={{ color: 'var(--noir-primary)' }}>Customize top bar</h3>
+                    <button type="button" onClick={() => setTopBarCustomizeOpen(false)} className="p-2 rounded-lg font-heading text-xs border transition-colors" style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}>Done</button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <div>
+                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Order</p>
+                      <ul className="space-y-1">
+                        {statOrder.map((statId, idx) => (
+                          <li key={statId} className="flex items-center justify-between gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                            <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{TOPBAR_STAT_LABELS[statId] ?? statId}</span>
+                            <div className="flex items-center gap-0.5 shrink-0">
+                              <button type="button" onClick={() => moveStat(idx, 'up')} disabled={idx === 0} className="p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation" style={{ borderColor: 'var(--noir-border-mid)' }} aria-label="Move up">
+                                <ChevronUp size={18} strokeWidth={2} style={{ color: 'var(--noir-foreground)' }} />
+                              </button>
+                              <button type="button" onClick={() => moveStat(idx, 'down')} disabled={idx === statOrder.length - 1} className="p-2 rounded-lg border transition-colors disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation" style={{ borderColor: 'var(--noir-border-mid)' }} aria-label="Move down">
+                                <ChevronDown size={18} strokeWidth={2} style={{ color: 'var(--noir-foreground)' }} />
+                              </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip size</p>
+                      <div className="flex flex-wrap gap-2">
+                        {['small', 'medium', 'large'].map((v) => (
+                          <button key={v} type="button" onClick={() => setTopBarSizePersist(v)} className={`px-4 py-2.5 rounded-lg border-2 text-sm font-heading uppercase tracking-wider transition-colors touch-manipulation ${topBarSize === v ? 'border-primary' : ''}`} style={topBarSize === v ? { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)', color: 'var(--noir-primary)' } : { borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>
+                            {v.charAt(0).toUpperCase() + v.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Spacing</p>
+                      <div className="flex flex-wrap gap-2">
+                        {['compact', 'normal', 'spread'].map((v) => (
+                          <button key={v} type="button" onClick={() => setTopBarGapPersist(v)} className={`px-4 py-2.5 rounded-lg border-2 text-sm font-heading uppercase tracking-wider transition-colors touch-manipulation ${topBarGap === v ? 'border-primary' : ''}`} style={topBarGap === v ? { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)', color: 'var(--noir-primary)' } : { borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>
+                            {v === 'compact' ? 'Close' : v === 'spread' ? 'Spread' : 'Normal'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+            </>
           );
         })()}
         </div>
@@ -1416,7 +1510,7 @@ export default function Layout({ children }) {
             );
           })()}
           <nav
-            className="flex items-center justify-between gap-0 overflow-x-auto overflow-y-hidden py-2 px-1 safe-area-pb scrollbar-thin"
+            className="flex items-center justify-between gap-0 overflow-x-auto overflow-y-hidden py-1.5 px-1 safe-area-pb scrollbar-thin"
             style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}
             aria-label="Mobile navigation"
           >
@@ -1430,7 +1524,7 @@ export default function Layout({ children }) {
                     key={item.path}
                     to={item.path}
                     onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
-                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[44px] rounded-lg transition-colors ${
+                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[40px] rounded-lg transition-colors ${
                       isActive ? 'bg-primary/25 border border-primary/50' : ''
                     }`}
                     style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
@@ -1438,14 +1532,14 @@ export default function Layout({ children }) {
                     title={item.label}
                   >
                     <span className="relative inline-flex">
-                      <Icon size={18} strokeWidth={2} />
+                      <Icon size={15} strokeWidth={2} />
                       {isInbox && unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
+                        <span className="absolute -top-0.5 -right-1.5 min-w-[12px] h-[12px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">
                           {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                       )}
                     </span>
-                    <span className="text-[9px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
+                    <span className="text-[8px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
                   </Link>
                 );
               }
@@ -1461,7 +1555,7 @@ export default function Layout({ children }) {
                     key={item.id}
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
-                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[44px] rounded-lg transition-colors ${
+                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[40px] rounded-lg transition-colors ${
                       isOpen || isActive ? 'bg-primary/25 border border-primary/50' : ''
                     }`}
                     style={isOpen || isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
@@ -1470,14 +1564,14 @@ export default function Layout({ children }) {
                     title={item.label}
                   >
                     <span className="relative inline-flex">
-                      <Icon size={18} strokeWidth={2} />
+                      <Icon size={15} strokeWidth={2} />
                       {showInboxBadge && (
-                        <span className="absolute -top-1 -right-2 min-w-[14px] h-[14px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-0.5">
+                        <span className="absolute -top-0.5 -right-1.5 min-w-[12px] h-[12px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">
                           {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                       )}
                     </span>
-                    <span className="text-[9px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
+                    <span className="text-[8px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
                   </button>
                 );
               }
