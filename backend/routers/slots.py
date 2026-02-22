@@ -14,6 +14,9 @@ from server import (
     db,
     get_current_user,
     STATES,
+    get_rank_info,
+    CAPO_RANK_ID,
+    maybe_auto_relinquish_below_capo,
     log_gambling,
 )
 
@@ -56,6 +59,9 @@ async def _get_slots_ownership_doc(state: str):
     """Return (normalized_state, doc). Doc may have expired owner - caller checks expires_at."""
     if not state:
         return None, None
+    norm = _normalize_state(state)
+    if norm:
+        await maybe_auto_relinquish_below_capo(db.slots_ownership, {"state": norm})
     pattern = re.compile(f"^{re.escape(state)}$", re.IGNORECASE)
     doc = await db.slots_ownership.find_one({"state": pattern}, {"_id": 0})
     if doc:
@@ -151,23 +157,25 @@ async def _run_slots_draw_if_needed(state: str):
             if previous_owner_id:
                 await db.users.update_one({"id": previous_owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
             winner_id = random.choice(eligible)
-            winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
+            winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1, "rank_points": 1})
             winner_name = (winner.get("username") or "?") if winner else "?"
             expires_at = next_draw_iso
+            winner_rank_id, _ = get_rank_info((winner or {}).get("rank_points", 0))
+            slots_set = {
+                "state": filter_state,
+                "owner_id": winner_id,
+                "owner_username": winner_name,
+                "max_bet": SLOTS_MAX_BET,
+                "buy_back_reward": 0,
+                "expires_at": expires_at,
+                "profit": 0,
+                "next_draw_at": next_draw_iso,
+            }
+            if winner_rank_id < CAPO_RANK_ID:
+                slots_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             res = await db.slots_ownership.update_one(
                 {"state": filter_state},
-                {
-                    "$set": {
-                        "state": filter_state,
-                        "owner_id": winner_id,
-                        "owner_username": winner_name,
-                        "max_bet": SLOTS_MAX_BET,
-                        "buy_back_reward": 0,
-                        "expires_at": expires_at,
-                        "profit": 0,
-                        "next_draw_at": next_draw_iso,
-                    }
-                },
+                {"$set": slots_set},
                 upsert=True,
             )
             logging.getLogger().info(
@@ -586,24 +594,27 @@ def register(router):
         points_offered = int((doc or {}).get("buy_back_reward") or 0)
 
         if shortfall > 0:
+            next_draw_iso = _next_draw_utc().isoformat()
+            spin_winner_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+            spin_owner_set = {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}
+            if spin_winner_rank_id < CAPO_RANK_ID:
+                spin_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             if points_offered <= 0:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
                 # End owner's 3h: clear ownership and set cooldown
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
-                next_draw_iso = _next_draw_utc().isoformat()
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
-                    {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},
+                    {"$set": spin_owner_set},
                 )
                 ownership_transferred = True
             else:
                 ownership_transferred = True
-                next_draw_iso = _next_draw_utc().isoformat()
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
-                    {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}},
+                    {"$set": spin_owner_set},
                 )
                 offer_id = str(uuid.uuid4())
                 expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()

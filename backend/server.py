@@ -114,6 +114,7 @@ RANKS = [
     {"id": 10, "name": "Don", "required_points": 200000},
     {"id": 11, "name": "Godfather", "required_points": 400000},
 ]
+CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo owners have 3h grace then auto-relinquish
 
 # Prestige: 5 levels unlocked after reaching Godfather. Each level harder to rank through.
 PRESTIGE_CONFIGS = {
@@ -756,6 +757,21 @@ def get_rank_info(rank_points: int, prestige_mult: float = 1.0):
     return 1, RANKS[0]["name"]
 
 
+async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict):
+    """If the ownership doc has owner_id and below_capo_acquired_at and 3+ hours have passed, clear ownership."""
+    doc = await coll.find_one(filter_dict, {"_id": 0, "owner_id": 1, "below_capo_acquired_at": 1})
+    if not doc or not doc.get("owner_id") or not doc.get("below_capo_acquired_at"):
+        return
+    acquired = doc["below_capo_acquired_at"]
+    if isinstance(acquired, str):
+        acquired = datetime.fromisoformat(acquired.replace("Z", "+00:00"))
+    if (datetime.now(timezone.utc) - acquired).total_seconds() >= 3 * 3600:
+        await coll.update_one(
+            filter_dict,
+            {"$set": {"owner_id": None, "owner_username": None}, "$unset": {"below_capo_acquired_at": 1}},
+        )
+
+
 def get_wealth_rank(money: int | float) -> tuple[int, str]:
     """Get wealth rank (1920s–1930s style) based on cash on hand. Returns (id, name)."""
     m = int(money) if money is not None else 0
@@ -969,7 +985,7 @@ async def _get_casino_property_profit(user_id: str):
         ("videopoker", db.videopoker_ownership),
         ("slots", db.slots_ownership),
     ]
-    # Parallel: all 6 casino ownerships + airport + bullet_factory
+    # Parallel: all 6 casino ownerships + airport + armoury (bullet_factory)
     async def fetch_casino(game_type, coll):
         return await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1, "expires_at": 1})
 
@@ -1041,13 +1057,18 @@ from routers.video_poker import VIDEO_POKER_MAX_BET  # CASINO_GAMES
 
 
 async def _user_owns_any_property(user_id: str):
-    """Return first property owned by user: {type, state, ...} or None. Rule: 1 property only (airport, bullet_factory, or armory). Add armory when armory.js/ownership exists."""
+    """Return first property owned by user: {type, state, ...} or None. Rule: 1 property only (airport or armoury). Armoury = bullet factory + armour + weapons (single ownership in db.bullet_factory)."""
     doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1, "total_earnings": 1})
     if doc:
         return {"type": "airport", "state": doc.get("state"), "slot": doc.get("slot", 1), "price_per_travel": doc.get("price_per_travel"), "total_earnings": doc.get("total_earnings", 0)}
     doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
     if doc:
-        return {"type": "bullet_factory", "state": doc.get("state"), "price_per_bullet": doc.get("price_per_bullet")}
+        state = doc.get("state")
+        if state:
+            await maybe_auto_relinquish_below_capo(db.bullet_factory, {"state": state})
+        doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
+        if doc:
+            return {"type": "bullet_factory", "state": doc.get("state"), "price_per_bullet": doc.get("price_per_bullet")}
     # TODO: when armory ownership exists, check db.armory_ownership (or similar) and return {"type": "armory", "state": ...}
     return None
 

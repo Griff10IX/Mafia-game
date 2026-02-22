@@ -26,6 +26,7 @@ from server import (
     DEFAULT_HEALTH,
     KILL_CASH_PERCENT,
     ADMIN_EMAILS,
+    CAPO_RANK_ID,
     get_rank_info,
     get_effective_event,
     send_notification,
@@ -768,6 +769,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         killer_username = (current_user.get("username") or "").strip()
         transferred_one = False
         transferred_casino_type = None
+        casino_set = {"owner_id": killer_id, "owner_username": killer_username}
+        if attacker_rank_id < CAPO_RANK_ID:
+            casino_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         for _game_type, coll in casino_colls:
             if killer_owns_casino:
                 await coll.update_many(
@@ -777,7 +781,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
             elif not transferred_one:
                 res = await coll.update_one(
                     {"owner_id": victim_id},
-                    {"$set": {"owner_id": killer_id, "owner_username": killer_username}},
+                    {"$set": casino_set},
                 )
                 if res.modified_count:
                     transferred_one = True
@@ -799,9 +803,12 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     {"$set": {"owner_id": None, "owner_username": None}},
                 )
             else:
+                airport_set = {"owner_id": killer_id, "owner_username": killer_username}
+                if attacker_rank_id < CAPO_RANK_ID:
+                    airport_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
                 res = await db.airport_ownership.update_one(
                     {"owner_id": victim_id},
-                    {"$set": {"owner_id": killer_id, "owner_username": killer_username}},
+                    {"$set": airport_set},
                 )
                 if res.modified_count:
                     transferred_airport = True

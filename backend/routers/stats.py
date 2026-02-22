@@ -131,18 +131,32 @@ def register(router):
             if len(recent_kills) >= 15:
                 break
 
-        top_dead = await db.users.find(
-            {"is_dead": True},
-            {"_id": 0, "username": 1, "total_kills": 1, "rank_points": 1, "dead_at": 1}
-        ).sort("total_kills", -1).limit(20).to_list(20)
-        top_dead_users = []
-        for u in top_dead:
-            rid, rname = get_rank_info(int(u.get("rank_points", 0) or 0))
-            top_dead_users.append({
-                "username": u.get("username"),
-                "total_kills": int(u.get("total_kills", 0) or 0),
-                "rank_name": rname,
-                "dead_at": u.get("dead_at"),
+        # Wiped families: wars that ended with one family wiped (all dead)
+        wiped_wars = await db.family_wars.find(
+            {"status": {"$in": ["family_a_wins", "family_b_wins"]}},
+            {"_id": 0, "id": 1, "winner_family_id": 1, "winner_family_name": 1, "loser_family_id": 1, "loser_family_name": 1, "ended_at": 1}
+        ).sort("ended_at", -1).limit(30).to_list(30)
+        wiped_families = []
+        for w in wiped_wars:
+            war_id = w.get("id")
+            winner_id = w.get("winner_family_id")
+            winner_name = (w.get("winner_family_name") or "?").strip() or "?"
+            loser_name = (w.get("loser_family_name") or "?").strip() or "?"
+            # Aggregate winner-side stats for this war (player kills, BG kills; whether winner was in a family)
+            stats_docs = await db.family_war_stats.find(
+                {"war_id": war_id, "family_id": winner_id},
+                {"_id": 0, "kills": 1, "bodyguard_kills": 1, "deaths": 1}
+            ).to_list(100)
+            player_kills = sum(int(s.get("kills") or 0) for s in stats_docs)
+            bodyguard_kills = sum(int(s.get("bodyguard_kills") or 0) for s in stats_docs)
+            wiped_families.append({
+                "war_id": war_id,
+                "wiped_family_name": loser_name,
+                "wiped_by_family_name": winner_name,
+                "wiped_by_in_family": True,
+                "ended_at": w.get("ended_at"),
+                "player_kills": player_kills,
+                "bodyguard_kills": bodyguard_kills,
             })
 
         return {
@@ -174,5 +188,5 @@ def register(router):
             },
             "rank_stats": rank_stats,
             "recent_kills": recent_kills,
-            "top_dead_users": top_dead_users,
+            "wiped_families": wiped_families,
         }

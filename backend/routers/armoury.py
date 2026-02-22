@@ -1,7 +1,6 @@
-# Bullet Factory / Armoury: one per state. Bullets 3000/hour; owner can also produce armour & weapons (pay per hour, stock accumulates).
-# Owner can claim (pay), set price. Bullets are sold from factory stock (no collect); others buy at owner's price (or unowned price).
-# Armoury: owner clicks "Produce" for armour or weapons, pays production cost for 1 hour; stock accumulates at rate/hour.
-# Merged: bullet_factory, armour, weapons.
+# Armoury: one per state (bullet factory + armour + weapons). Single ownership entity (db.bullet_factory).
+# Owner can claim (pay), set bullet price; produces up to 5k bullets per day and can produce armour & weapons (pay per hour, stock accumulates).
+# Bullets sold from factory stock; armour/weapons from armoury stock. Others buy at owner's price (or unowned price).
 from datetime import datetime, timezone, timedelta
 import os
 import sys
@@ -13,7 +12,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel
 
-from server import db, get_current_user, get_effective_event, STATES, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -87,6 +86,8 @@ async def get_armoury_for_state(state: str):
 
 async def _get_or_create_factory(state: str):
     state = _normalize_state(state)
+    if state:
+        await maybe_auto_relinquish_below_capo(db.bullet_factory, {"state": state})
     doc = await db.bullet_factory.find_one({"state": state}, {"_id": 0})
     if doc:
         return doc
@@ -342,7 +343,7 @@ async def get_bullet_factory_list(current_user: dict = Depends(get_current_user)
 
 
 async def _user_owns_any_property(user_id: str):
-    """Check if user owns any property (airport, bullet factory, or armory). Max 1 per player. Add armory when armory ownership exists."""
+    """Check if user owns any property (airport or armoury). Max 1 per player. Armoury = bullet factory + armour + weapons (single ownership)."""
     doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1})
     if doc:
         return {"type": "airport", "state": doc.get("state")}
@@ -356,19 +357,22 @@ async def claim_bullet_factory(
     body: StateOptionalRequest = Body(default=StateOptionalRequest()),
     current_user: dict = Depends(get_current_user),
 ):
-    """Pay to become the bullet factory owner in this state. Max 1 property per player."""
+    """Pay to become the armoury owner in this state (bullets + armour + weapons). Max 1 property per player. Requires Capo or higher."""
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    if rank_id < CAPO_RANK_ID:
+        raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim the armoury. Reach Capo to hold one.")
     owned_prop = await _user_owns_any_property(current_user["id"])
     if owned_prop:
-        raise HTTPException(status_code=400, detail="You may only own 1 property (airport or bullet factory). Relinquish it first (My Properties or States).")
+        raise HTTPException(status_code=400, detail="You may only own 1 property (airport or armoury). Relinquish it first (My Properties or States).")
     state = _normalize_state(body.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id"):
-        raise HTTPException(status_code=400, detail="Bullet factory in this state already has an owner")
+        raise HTTPException(status_code=400, detail="The armoury in this state already has an owner")
     user_money = int(current_user.get("money") or 0)
     if user_money < BULLET_FACTORY_CLAIM_COST:
         raise HTTPException(
             status_code=400,
-            detail=f"You need ${BULLET_FACTORY_CLAIM_COST:,} to claim the Bullet Factory",
+            detail=f"You need ${BULLET_FACTORY_CLAIM_COST:,} to claim the armoury",
         )
     now = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
@@ -380,7 +384,7 @@ async def claim_bullet_factory(
         {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "last_collected_at": now}},
     )
     return {
-        "message": f"You now own the Bullet Factory in {state}. It produces 3,000 bullets per hour.",
+        "message": f"You now own the armoury in {state} (bullets, armour & weapons). It produces up to 5,000 bullets per day.",
         "state": state,
         "owner_id": current_user["id"],
     }

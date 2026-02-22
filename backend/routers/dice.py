@@ -16,6 +16,9 @@ from server import (
     STATES,
     log_gambling,
     get_wealth_rank,
+    get_rank_info,
+    CAPO_RANK_ID,
+    maybe_auto_relinquish_below_capo,
     _user_owns_any_casino,
     _username_pattern,
 )
@@ -91,11 +94,12 @@ async def _get_dice_ownership_doc(city: str):
     """Get dice ownership doc for a city (case-insensitive match). Returns (normalized_city, doc)."""
     if not city:
         return None, None
+    norm = _normalize_city_for_dice(city)
+    await maybe_auto_relinquish_below_capo(db.dice_ownership, {"city": norm})
     pattern = re.compile(f"^{re.escape(city)}$", re.IGNORECASE)
     doc = await db.dice_ownership.find_one({"city": pattern}, {"_id": 0})
     if doc:
         return doc.get("city") or city, doc
-    norm = _normalize_city_for_dice(city)
     doc = await db.dice_ownership.find_one({"city": norm}, {"_id": 0})
     if doc:
         return norm, doc
@@ -244,7 +248,10 @@ def register(router):
                 await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
             else:
                 ownership_transferred = True
-                await db.dice_ownership.update_one({"city": db_city}, {"$set": {"owner_id": current_user["id"], "owner_username": current_user["username"]}})
+                dice_owner_set = {"owner_id": current_user["id"], "owner_username": current_user["username"]}
+                if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                    dice_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                await db.dice_ownership.update_one({"city": db_city}, {"$set": dice_owner_set})
                 expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                 offer_id = str(uuid.uuid4())
                 buy_back_doc = {
@@ -270,7 +277,10 @@ def register(router):
 
     @router.post("/casino/dice/claim")
     async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depends(get_current_user)):
-        """Claim ownership of the dice table in a city (cost in points). Max 1 casino per player."""
+        """Claim ownership of the dice table in a city (cost in points). Max 1 casino per player. Requires Capo or higher."""
+        rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+        if rank_id < CAPO_RANK_ID:
+            raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
@@ -428,9 +438,12 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user["id"]:
             raise HTTPException(status_code=403, detail="You do not own this table")
         target_username_pattern = _username_pattern(request.target_username.strip())
-        target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": target["id"], "owner_username": target["username"]}})
+        send_set = {"owner_id": target["id"], "owner_username": target["username"]}
+        if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
+            send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+        await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
         _invalidate_ownership_cache(target["id"])
         return {"message": "Ownership transferred."}

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, _user_owns_any_property
+from server import db, get_current_user, get_rank_info, CAPO_RANK_ID, _user_owns_any_property
 
 # Cache for list endpoints (short TTL; invalidate on any mutation)
 _sell_offers_cache: Optional[tuple] = None
@@ -316,6 +316,11 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="Property not found or not for sale")
     if prop.get("owner_id") == buyer_id:
         raise HTTPException(status_code=400, detail="Cannot buy your own property")
+    prop_type = prop.get("type") or ""
+    if prop_type.startswith("casino_") or prop_type == "airport":
+        rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+        if rank_id < CAPO_RANK_ID:
+            raise HTTPException(status_code=403, detail="You must be rank Capo or higher to buy a casino or property. Reach Capo to hold one.")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer:
         raise HTTPException(status_code=404, detail="User not found")
@@ -358,6 +363,14 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         city = prop.get("location")
         if city:
             await db.horseracing_ownership.update_one(
+                {"city": city},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
+                upsert=True
+            )
+    elif prop_type == "casino_videopoker":
+        city = prop.get("location")
+        if city:
+            await db.videopoker_ownership.update_one(
                 {"city": city},
                 {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True

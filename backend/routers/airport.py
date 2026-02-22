@@ -14,6 +14,9 @@ from server import (
     STATES,
     CARS,
     TRAVEL_TIMES,
+    get_rank_info,
+    CAPO_RANK_ID,
+    maybe_auto_relinquish_below_capo,
     _user_owns_any_property,
     _username_pattern,
 )
@@ -416,6 +419,9 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
 
 
 async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(get_current_user)):
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    if rank_id < CAPO_RANK_ID:
+        raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a property (airport). Reach Capo to hold one.")
     if req.state not in STATES:
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
@@ -426,6 +432,7 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
     user_location = (current_user.get("current_state") or "").strip()
     if user_location != req.state:
         raise HTTPException(status_code=400, detail=f"You must be in {req.state} to claim this airport. Travel there first.")
+    await maybe_auto_relinquish_below_capo(db.airport_ownership, {"state": req.state, "slot": req.slot})
     doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if not doc:
         await db.airport_ownership.insert_one({"state": req.state, "slot": req.slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
@@ -448,6 +455,7 @@ async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = De
         raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
     if req.price_per_travel < AIRPORT_PRICE_MIN or req.price_per_travel > AIRPORT_PRICE_MAX:
         raise HTTPException(status_code=400, detail=f"Price must be {AIRPORT_PRICE_MIN}–{AIRPORT_PRICE_MAX} points per travel")
+    await maybe_auto_relinquish_below_capo(db.airport_ownership, {"state": req.state, "slot": req.slot})
     doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this airport slot")
@@ -464,6 +472,7 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
         raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
+    await maybe_auto_relinquish_below_capo(db.airport_ownership, {"state": req.state, "slot": req.slot})
     doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this airport slot")
@@ -473,7 +482,7 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
     target_username_pattern = _username_pattern(target_username)
     if not target_username_pattern:
         raise HTTPException(status_code=404, detail="User not found")
-    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1})
+    target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:
@@ -481,9 +490,12 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
     owned = await _user_owns_any_property(target["id"])
     if owned:
         raise HTTPException(status_code=400, detail="That user already owns a property")
+    airport_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}
+    if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
+        airport_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
     await db.airport_ownership.update_one(
         {"state": req.state, "slot": req.slot},
-        {"$set": {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}}
+        {"$set": airport_set}
     )
     _invalidate_airports_list_cache()
     _invalidate_travel_info_cache(current_user["id"])
@@ -498,6 +510,7 @@ async def airport_sell_on_trade(req: AirportSellRequest, current_user: dict = De
         raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
     if req.points < 0:
         raise HTTPException(status_code=400, detail="Points must be non-negative")
+    await maybe_auto_relinquish_below_capo(db.airport_ownership, {"state": req.state, "slot": req.slot})
     doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if not doc or doc.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own this airport slot")

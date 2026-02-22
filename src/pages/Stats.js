@@ -216,42 +216,45 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
   </div>
 );
 
-const DeadUsersListView = ({ users }) => (
+const WipedFamiliesListView = ({ families }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-corner stat-fade-in`} style={{ animationDelay: '0.1s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
-        Top Dead Users
+        Wiped Families
       </h2>
     </div>
+    <p className="px-2 py-1 text-[9px] text-zinc-500 font-heading italic border-b border-zinc-700/40">
+      Families that were wiped (all members killed). Who wiped them and war stats.
+    </p>
 
     {/* Desktop view */}
     <div className="hidden md:block">
       <div className="px-2 py-1 bg-zinc-800/50 text-[8px] font-heading font-bold text-zinc-500 uppercase tracking-wider grid grid-cols-12 gap-1 border-b border-zinc-700/40">
-        <div className="col-span-5">Username</div>
-        <div className="col-span-2 text-center">Kills</div>
-        <div className="col-span-3">Rank</div>
-        <div className="col-span-2 text-right">Died</div>
+        <div className="col-span-3">Wiped</div>
+        <div className="col-span-3">Wiped by</div>
+        <div className="col-span-1 text-center">K</div>
+        <div className="col-span-1 text-center">BG</div>
+        <div className="col-span-2">In family</div>
+        <div className="col-span-2 text-right">Ended</div>
       </div>
-      {users.length === 0 ? (
+      {families.length === 0 ? (
         <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
-          No dead users yet.
+          No wiped families yet.
         </div>
       ) : (
         <div className="divide-y divide-zinc-700/30">
-          {users.map((u) => (
+          {families.map((w) => (
             <div
-              key={u.username + (u.dead_at || '')}
+              key={(w.war_id || '') + (w.ended_at || '') + (w.wiped_family_name || '')}
               className="stat-row grid grid-cols-12 gap-1 px-2 py-1.5 text-[10px] font-heading"
             >
-              <div className="col-span-5 text-foreground font-bold truncate"><Link to={`/profile/${encodeURIComponent(u.username)}`} className="text-primary hover:underline">{u.username}</Link></div>
-              <div className="col-span-2 text-center text-mutedForeground tabular-nums">
-                {formatNumber(u.total_kills)}
-              </div>
-              <div className="col-span-3 text-mutedForeground truncate">{u.rank_name || '—'}</div>
-              <div className="col-span-2 text-right text-mutedForeground tabular-nums">
-                {formatDateTime(u.dead_at)}
-              </div>
+              <div className="col-span-3 text-foreground font-bold truncate" title={w.wiped_family_name}>{w.wiped_family_name || '—'}</div>
+              <div className="col-span-3 text-primary truncate" title={w.wiped_by_family_name}>{w.wiped_by_family_name || '—'}</div>
+              <div className="col-span-1 text-center text-mutedForeground tabular-nums">{formatNumber(w.player_kills)}</div>
+              <div className="col-span-1 text-center text-mutedForeground tabular-nums">{formatNumber(w.bodyguard_kills)}</div>
+              <div className="col-span-2 text-mutedForeground text-[9px]">{w.wiped_by_in_family ? 'Yes' : 'Solo'}</div>
+              <div className="col-span-2 text-right text-mutedForeground tabular-nums">{formatDateTime(w.ended_at)}</div>
             </div>
           ))}
         </div>
@@ -260,28 +263,28 @@ const DeadUsersListView = ({ users }) => (
 
     {/* Mobile view */}
     <div className="md:hidden divide-y divide-zinc-700/30">
-      {users.length === 0 ? (
+      {families.length === 0 ? (
         <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
-          No dead users yet.
+          No wiped families yet.
         </div>
       ) : (
-        users.map((u) => (
-          <div key={u.username + (u.dead_at || '')} className="stat-row p-2 space-y-1">
+        families.map((w) => (
+          <div key={(w.war_id || '') + (w.ended_at || '') + (w.wiped_family_name || '')} className="stat-row p-2 space-y-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-heading font-bold text-foreground truncate">
-                  <Link to={`/profile/${encodeURIComponent(u.username)}`} className="text-primary hover:underline">{u.username}</Link>
-                </div>
-                <div className="text-[9px] text-mutedForeground mt-0.5">
-                  {u.rank_name || '—'}
-                </div>
+                <div className="text-[10px] font-heading font-bold text-foreground truncate">{w.wiped_family_name || '—'}</div>
+                <div className="text-[9px] text-primary mt-0.5">Wiped by {w.wiped_by_family_name || '—'}</div>
               </div>
-              <div className="text-[9px] text-emerald-400 font-bold tabular-nums">
-                {formatNumber(u.total_kills)} kills
+              <div className="text-[9px] text-mutedForeground shrink-0">
+                {w.wiped_by_in_family ? 'In family' : 'Solo'}
               </div>
             </div>
+            <div className="flex items-center gap-3 text-[9px] text-mutedForeground">
+              <span><strong className="text-foreground">{formatNumber(w.player_kills)}</strong> kills</span>
+              <span><strong className="text-foreground">{formatNumber(w.bodyguard_kills)}</strong> BG kills</span>
+            </div>
             <div className="text-[9px] text-mutedForeground tabular-nums">
-              Died {formatDateTime(u.dead_at)}
+              Ended {formatDateTime(w.ended_at)}
             </div>
           </div>
         ))
@@ -333,11 +336,11 @@ export default function Stats() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [usersOnlyKills, setUsersOnlyKills] = useState(true);
-  const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'dead'
+  const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
   const rankStats = Array.isArray(data?.rank_stats) ? data.rank_stats : [];
   const recentKills = Array.isArray(data?.recent_kills) ? data.recent_kills : [];
-  const topDeadUsers = Array.isArray(data?.top_dead_users) ? data.top_dead_users : [];
+  const wipedFamilies = Array.isArray(data?.wiped_families) ? data.wiped_families : [];
 
   useEffect(() => {
     let cancelled = false;
@@ -399,14 +402,14 @@ export default function Stats() {
         </button>
         <button
           type="button"
-          onClick={() => setStatsListTab('dead')}
+          onClick={() => setStatsListTab('wiped')}
           className={`flex items-center gap-1 px-2 py-1.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 -mb-0.5 touch-manipulation ${
-            statsListTab === 'dead'
+            statsListTab === 'wiped'
               ? 'text-primary border-primary bg-primary/5'
               : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
           }`}
         >
-          Top Dead Users
+          Wiped Families
         </button>
       </div>
 
@@ -419,8 +422,8 @@ export default function Stats() {
         />
       )}
 
-      {statsListTab === 'dead' && (
-        <DeadUsersListView users={topDeadUsers} />
+      {statsListTab === 'wiped' && (
+        <WipedFamiliesListView families={wipedFamilies} />
       )}
     </div>
   );
