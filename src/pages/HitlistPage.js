@@ -29,12 +29,6 @@ const HITLIST_STYLES = `
   }
   .flicker-light { animation: flicker 3s ease-in-out infinite; }
   
-  @keyframes paper-flutter {
-    0%, 100% { transform: rotate(0deg); }
-    50% { transform: rotate(0.5deg); }
-  }
-  .paper-card:hover { animation: paper-flutter 2s ease-in-out infinite; }
-  
   @keyframes stamp-appear {
     0% { transform: scale(2.5) rotate(-20deg); opacity: 0; }
     60% { transform: scale(1.1) rotate(-14deg); opacity: 1; }
@@ -166,7 +160,7 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
   const costLabel = [needCash > 0 && `$${Number(needCash).toLocaleString()}`, needPoints > 0 && `${Number(needPoints).toLocaleString()}p`].filter(Boolean).join(' + ');
   
   return (
-    <div className={`relative rounded-lg overflow-hidden border-2 ${onHitlist ? 'border-red-900/40 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-red-950/20' : 'border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90'} hit-fade-in paper-card`}>
+    <div className={`relative rounded-lg overflow-hidden border-2 ${onHitlist ? 'border-red-900/40 bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-red-950/20' : 'border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90'} hit-fade-in`}>
       {/* Decorative elements */}
       <SmokeWisp delay={0} className="top-2 left-2" />
       <SmokeWisp delay={1.5} className="top-2 right-2" />
@@ -313,7 +307,7 @@ const PlaceBountyCard = ({
   onSubmit,
   hasReward,
 }) => (
-  <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in paper-card" style={{ animationDelay: '0.1s' }}>
+  <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in" style={{ animationDelay: '0.1s' }}>
     {/* Decorations */}
     <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl pointer-events-none flicker-light" />
     <BulletHole top="16px" left="16px" />
@@ -450,7 +444,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
     (cash === 0 || haveCash >= cash) && (points === 0 || havePoints >= points);
 
   return (
-    <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in paper-card" style={{ animationDelay: '0.2s' }}>
+    <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 hit-fade-in" style={{ animationDelay: '0.2s' }}>
       {/* Decorations */}
       <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl pointer-events-none flicker-light" />
       <BulletHole top="20px" right="20px" />

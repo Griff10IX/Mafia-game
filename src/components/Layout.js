@@ -1069,8 +1069,8 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar */}
-      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-3 md:px-4 gap-2 md:gap-3 py-2 md:py-0`}>
-        <div className="flex items-center gap-2 md:gap-3 flex-1 md:flex-initial min-w-0 shrink-0 overflow-hidden">
+      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-3 md:px-3 gap-2 md:gap-2 py-2 md:py-0`}>
+        <div className="flex items-center gap-2 md:gap-2 flex-1 min-w-0 shrink-0 overflow-hidden md:justify-end">
         {mobileNavStyle !== 'bottom' && (
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1271,9 +1271,9 @@ export default function Layout({ children }) {
           };
           return (
             <>
-            <div className={`hidden md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-1 md:py-0 -mx-3 pl-3 pr-4 md:mx-0 md:px-0`}>
-              {/* Pinned left: search + rank so they always stay visible */}
-              <div className="flex items-center shrink-0 gap-1 md:gap-2">
+            <div className={`hidden md:flex items-center ${topBarGapClass} shrink-0 py-1 md:py-0 md:mx-0 md:px-0`}>
+              {/* Search + rank + stats cluster aligned right */}
+              <div className="flex items-center shrink-0 gap-1 md:gap-1.5">
                 <div className="relative shrink-0 z-10" ref={userSearchRef}>
                   {!userSearchExpanded ? (
                     <button

@@ -18,21 +18,21 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
   return (
     <section className={`relative ${styles.panel} rounded-lg overflow-hidden shadow-lg shadow-primary/5`}>
       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
-        <Icon className="text-primary shrink-0" size={18} />
+      <div className="px-3 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
+        <Icon className="text-primary shrink-0" size={14} />
         <div>
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{title}</h2>
-          <p className="text-[10px] text-zinc-500 font-heading italic">{topLabel}</p>
+          <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">{title}</h2>
+          <p className="text-[9px] text-zinc-500 font-heading italic leading-tight">{topLabel}</p>
         </div>
       </div>
-      <div className="p-3 space-y-1.5">
+      <div className="p-2 space-y-1">
         {list.length === 0 ? (
-          <p className="text-xs text-mutedForeground italic py-6 text-center font-heading">No data yet.</p>
+          <p className="text-[10px] text-mutedForeground italic py-3 text-center font-heading">No data yet.</p>
         ) : (
           list.map((entry) => (
             <div
               key={`${title}-${entry.rank}-${entry.username}`}
-              className={`flex items-center gap-3 p-2 rounded-sm border transition-colors ${
+              className={`flex items-center gap-2 p-1.5 rounded-sm border transition-colors ${
                 entry.is_current_user
                   ? 'bg-primary/15 border-primary/40'
                   : `${styles.surfaceMuted} border-primary/10 hover:border-primary/30`
@@ -40,7 +40,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
               data-testid={`leaderboard-${title.toLowerCase().replace(/\s+/g, '-')}-${entry.rank}`}
             >
               <div
-                className={`flex items-center justify-center w-8 h-8 rounded-sm font-heading font-bold text-sm shrink-0 ${
+                className={`flex items-center justify-center w-6 h-6 rounded-sm font-heading font-bold text-[10px] shrink-0 ${
                   entry.rank === 1
                     ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                     : entry.rank === 2
@@ -53,7 +53,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
                 {entry.rank}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="font-heading font-medium text-foreground truncate text-sm">
+                <div className="font-heading font-medium text-foreground truncate text-xs">
                   <Link
                     to={`/profile/${encodeURIComponent(entry.username)}`}
                     className="hover:text-primary"
@@ -62,21 +62,21 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
                     {entry.username}
                   </Link>
                   {entry.is_current_user && (
-                    <span className="ml-1.5 text-xs text-primary font-normal">(You)</span>
+                    <span className="ml-1 text-[10px] text-primary font-normal">(You)</span>
                   )}
                 </div>
-                <div className="text-xs text-primary font-heading">
+                <div className="text-[10px] text-primary font-heading">
                   {typeof entry.value === 'number' ? entry.value.toLocaleString() : (entry.value ?? '—')} {valueLabel}
                 </div>
               </div>
               {entry.rank <= 3 && (
                 <span className="shrink-0" aria-hidden>
                   {entry.rank === 1 ? (
-                    <Trophy className="text-primary" size={18} />
+                    <Trophy className="text-primary" size={14} />
                   ) : entry.rank === 2 ? (
-                    <Medal className="text-zinc-400" size={18} />
+                    <Medal className="text-zinc-400" size={14} />
                   ) : (
-                    <Award className="text-amber-500" size={18} />
+                    <Award className="text-amber-500" size={14} />
                   )}
                 </span>
               )}
@@ -84,7 +84,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
           ))
         )}
       </div>
-      <div className="lb-art-line text-primary mx-3" />
+      <div className="lb-art-line text-primary mx-2" />
     </section>
   );
 }
@@ -115,59 +115,59 @@ export default function Leaderboard() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Trophy size={28} className="text-primary/40 animate-pulse" />
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
-        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading leaderboards…</span>
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+        <Trophy size={22} className="text-primary/40 animate-pulse" />
+        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
+        <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading…</span>
       </div>
     );
   }
 
   return (
-    <div className={`space-y-5 ${styles.pageContent}`} data-testid="leaderboard-page">
+    <div className={`space-y-3 ${styles.pageContent}`} data-testid="leaderboard-page">
       <style>{LB_STYLES}</style>
       <header className="relative lb-fade-in">
-        <p className="text-[10px] text-zinc-500 font-heading italic mb-4">
+        <p className="text-[9px] text-zinc-500 font-heading italic mb-2">
           {viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats'}
         </p>
-        <div className="flex flex-wrap items-center justify-center gap-3 mb-3">
-          <span className="text-xs text-mutedForeground font-heading uppercase tracking-wider">View:</span>
-          <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+          <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">View:</span>
+          <div className="flex flex-wrap gap-0.5">
             <button
               type="button"
               onClick={() => setViewMode('alive')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
+              className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
                 viewMode === 'alive'
                   ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                   : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
               }`}
             >
-              <Trophy size={12} />
+              <Trophy size={10} />
               Top {topLimit}
             </button>
             <button
               type="button"
               onClick={() => setViewMode('dead')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
+              className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
                 viewMode === 'dead'
                   ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                   : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
               }`}
             >
-              <Skull size={12} />
+              <Skull size={10} />
               Top dead
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <span className="text-xs text-mutedForeground font-heading uppercase tracking-wider">Show:</span>
-          <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap items-center justify-center gap-1.5">
+          <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Show:</span>
+          <div className="flex flex-wrap gap-0.5">
             {TOP_OPTIONS.map((n) => (
               <button
                 key={n}
                 type="button"
                 onClick={() => setTopLimit(n)}
-                className={`px-2.5 py-1.5 rounded-sm text-xs font-heading font-bold uppercase tracking-wider transition-colors ${
+                className={`px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
                   topLimit === n
                     ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
                     : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
@@ -180,16 +180,16 @@ export default function Leaderboard() {
           <button
             type="button"
             onClick={fetchLeaderboard}
-            className="flex items-center gap-1.5 text-xs text-mutedForeground hover:text-primary border border-primary/20 hover:border-primary/40 rounded-sm px-3 py-1.5 transition-colors font-heading"
+            className="flex items-center gap-1 text-[10px] text-mutedForeground hover:text-primary border border-primary/20 hover:border-primary/40 rounded-sm px-2 py-1 transition-colors font-heading"
             title="Refresh leaderboards"
           >
-            <RefreshCw size={12} />
+            <RefreshCw size={10} />
             Refresh
           </button>
         </div>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Kills' : 'Top Kills'}
           icon={Target}
@@ -224,47 +224,47 @@ export default function Leaderboard() {
       {viewMode === 'alive' && (
       <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-          <div className="flex items-center gap-2">
-            <Trophy size={16} className="text-primary" />
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Weekly Rewards</h2>
+        <div className="px-3 py-1.5 bg-primary/8 border-b border-primary/20">
+          <div className="flex items-center gap-1.5">
+            <Trophy size={14} className="text-primary" />
+            <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Weekly Rewards</h2>
           </div>
-          <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
+          <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5 leading-tight">
             Top 10 each week receive cash, points, and rare vehicles.
           </p>
         </div>
-        <div className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div className="bg-gradient-to-b from-primary/20 to-primary/5 border border-primary/40 rounded-sm p-3">
-              <div className="flex items-center gap-2 text-primary font-heading font-bold uppercase tracking-wider mb-1">
-                <Trophy size={16} />
+        <div className="p-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="bg-gradient-to-b from-primary/20 to-primary/5 border border-primary/40 rounded-sm p-2">
+              <div className="flex items-center gap-1.5 text-primary font-heading font-bold uppercase tracking-wider text-[10px] mb-0.5">
+                <Trophy size={12} />
                 1st Place
               </div>
-              <div className="text-xs text-mutedForeground font-heading">
+              <div className="text-[10px] text-mutedForeground font-heading leading-tight">
                 $500,000 + 1,000 Points + Premium Car
               </div>
             </div>
-            <div className="bg-gradient-to-b from-zinc-600/20 to-zinc-800/20 border border-zinc-500/30 rounded-sm p-3">
-              <div className="flex items-center gap-2 text-zinc-400 font-heading font-bold uppercase tracking-wider mb-1">
-                <Medal size={16} />
+            <div className="bg-gradient-to-b from-zinc-600/20 to-zinc-800/20 border border-zinc-500/30 rounded-sm p-2">
+              <div className="flex items-center gap-1.5 text-zinc-400 font-heading font-bold uppercase tracking-wider text-[10px] mb-0.5">
+                <Medal size={12} />
                 2nd Place
               </div>
-              <div className="text-xs text-mutedForeground font-heading">
+              <div className="text-[10px] text-mutedForeground font-heading leading-tight">
                 $300,000 + 500 Points + Luxury Car
               </div>
             </div>
-            <div className="bg-gradient-to-b from-amber-700/20 to-amber-900/20 border border-amber-600/30 rounded-sm p-3">
-              <div className="flex items-center gap-2 text-amber-500 font-heading font-bold uppercase tracking-wider mb-1">
-                <Award size={16} />
+            <div className="bg-gradient-to-b from-amber-700/20 to-amber-900/20 border border-amber-600/30 rounded-sm p-2">
+              <div className="flex items-center gap-1.5 text-amber-500 font-heading font-bold uppercase tracking-wider text-[10px] mb-0.5">
+                <Award size={12} />
                 3rd Place
               </div>
-              <div className="text-xs text-mutedForeground font-heading">
+              <div className="text-[10px] text-mutedForeground font-heading leading-tight">
                 $150,000 + 250 Points + Classic Car
               </div>
             </div>
           </div>
         </div>
-        <div className="lb-art-line text-primary mx-3" />
+        <div className="lb-art-line text-primary mx-2" />
       </section>
       )}
     </div>
