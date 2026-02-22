@@ -113,16 +113,22 @@ Displayed on your profile; based only on how much cash you’re carrying.
 """
 
 
+def _markdown_bold_to_html(content: str) -> str:
+    """Convert **bold** to <strong>bold</strong> so forum HTML renderer shows bold correctly."""
+    import re
+    return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", content)
+
+
 def _load_faq_content() -> str:
     """Load FAQ body from FORUM_FAQ.md if present, else use fallback text."""
     if FAQ_MD_PATH.exists():
         try:
             content = FAQ_MD_PATH.read_text(encoding="utf-8")
             if content.strip():
-                return content.strip()
+                return _markdown_bold_to_html(content.strip())
         except Exception as e:
             print(f"Warning: could not read {FAQ_MD_PATH}: {e}. Using fallback.")
-    return FALLBACK_FAQ_CONTENT.strip()
+    return _markdown_bold_to_html(FALLBACK_FAQ_CONTENT.strip())
 
 
 def main():

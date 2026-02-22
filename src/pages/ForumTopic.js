@@ -230,7 +230,11 @@ export default function ForumTopic() {
 
   const commentCount = comments.length;
   const isFaqHtml = topic.content && (topic.content.includes('<details') || topic.content.includes('class="faq-box"') || topic.content.includes('class=\'faq-box\''));
-  const topicContent = topic.content || '—';
+  // Convert Markdown **bold** to <strong> so FAQ content renders correctly (forum stores HTML + some markdown)
+  const topicContentRaw = topic.content || '—';
+  const topicContent = isFaqHtml
+    ? topicContentRaw.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    : topicContentRaw;
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-topic-page">
