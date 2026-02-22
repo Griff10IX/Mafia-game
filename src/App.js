@@ -576,18 +576,6 @@ function App() {
           <Route path="/weapons" element={<Navigate to="/armour-weapons" replace />} />
           <Route path="/armour" element={<Navigate to="/armour-weapons" replace />} />
           <Route
-            path="/leaderboard/all-time"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Leaderboard period="alltime" />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
             path="/leaderboard"
             element={
               isAuthenticated ? (

@@ -54,9 +54,20 @@ Based only on **cash on hand** (not bank or Swiss). Shown on your profile.
 - Broke ($0) → … → Millionaire ($1M) → Billionaire ($1B) → Multi Trillionaire ($10T+)
 
 **Prestige (after Godfather):**  
-At Godfather you can **Prestige**. Five levels: Made, Earner, Capo di Capi, The Don, Godfather Legacy.  
-Each level makes the next Godfather grind harder but gives bonuses (e.g. higher crime cash, OC payouts, GTA rare car chance, NPC payouts).  
-Prestiging resets your rank to Rat and rank points to 0; you keep your prestige level and its bonuses.
+Once you reach **Godfather** you can **Prestige** from the Prestige page. You keep your prestige level and bonuses forever; your **rank** and **rank points** reset to Rat and 0. Each prestige level makes the next climb to Godfather harder (you need more effective RP to reach the same ranks).
+
+**Prestige levels (5 total):**
+<table>
+<thead><tr><th>Level</th><th>Name</th><th>RP to prestige again</th><th>Crime cash</th><th>OC payout</th><th>GTA rare</th><th>Hitlist NPC</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Made</td><td>400,000</td><td>+10%</td><td>+10%</td><td>+0.5</td><td>+10%</td></tr>
+<tr><td>2</td><td>Earner</td><td>600,000</td><td>+20%</td><td>+20%</td><td>+1.0</td><td>+20%</td></tr>
+<tr><td>3</td><td>Capo di Capi</td><td>900,000</td><td>+30%</td><td>+30%</td><td>+1.5</td><td>+30%</td></tr>
+<tr><td>4</td><td>The Don</td><td>1,400,000</td><td>+40%</td><td>+40%</td><td>+2.0</td><td>+40%</td></tr>
+<tr><td>5</td><td>Godfather Legacy</td><td>2,000,000 (max)</td><td>+50%</td><td>+50%</td><td>+2.5</td><td>+50%</td></tr>
+</tbody>
+</table>
+After prestiging you must reach Godfather again and meet the next level’s RP requirement to prestige again. Level 5 is the maximum; bonuses stay at +50% etc.
 </div>
 </details>
 
@@ -393,6 +404,21 @@ Increase **damage** (fewer bullets to kill). Rank requirement; often need previo
 </details>
 
 <details>
+<summary><strong>Properties (passive income)</strong></summary>
+<div>
+
+**Properties page:**  
+Passive income buildings: **Speakeasy** → **Bullet Factory** → **Underground Casino** → **Luxury Casino**. Buy in order; you must **max the previous** (level 10) to unlock the next.
+
+**Income:**  
+Each property has **income per hour** (base × level). **Upgrade** with cash to increase level (1–10); income per hour increases with each level. Income accumulates up to **24 hours**; collect regularly to maximise earnings.
+
+**Rule:**  
+You may own **one** of these at a time (plus one casino from Dice/Blackjack/Roulette/Horse Racing). See My Properties for your current casino and property.
+</div>
+</details>
+
+<details>
 <summary><strong>Store & Points</strong></summary>
 <div>
 
@@ -476,10 +502,10 @@ Notifications and DMs. Reply, threads, mark read.
 <div>
 
 **Leaderboard:**  
-Top players by **kills**, **crimes**, **GTA**, **jail busts**, etc.
+Two views: **Weekly** (this week, Mon–Sun UTC; resets each week) and **All-Time** (lifetime totals). Top players by **kills**, **crimes**, **GTA**, **jail busts**. Toggle “Top dead” to see rankings for dead accounts. Weekly top 10 can earn rewards (cash, points, cars).
 
 **Stats:**  
-Your totals: kills, deaths, crimes, GTA, vehicles, busts, and more. Track progress there.
+Your totals: kills, deaths, crimes, GTA, vehicles, busts, and more. Stats page also shows **wiped families** (families eliminated in war) where applicable.
 </div>
 </details>
 

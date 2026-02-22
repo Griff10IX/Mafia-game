@@ -123,7 +123,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
           />
           {showGifPicker && (
             <div className="rounded border border-zinc-700/50 overflow-hidden">
-              <GifPicker onSelect={(url) => { insertTopicMarkup('[gif]' + url + '[/gif]'); setShowGifPicker(false); }} onClose={() => setShowGifPicker(false)} />
+              <GifPicker onSelect={(url) => { if (url) insertTopicMarkup('[gif]' + url + '[/gif]'); setShowGifPicker(false); }} onClose={() => setShowGifPicker(false)} />
             </div>
           )}
           <textarea

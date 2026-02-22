@@ -307,6 +307,11 @@ export default function ForumTopic() {
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
         </div>
         <div className="p-3">
+          {topic.gif_url && (
+            <div className="mb-3">
+              <img src={topic.gif_url} alt="GIF" className="rounded max-h-64 object-contain forum-content-gif" loading="lazy" />
+            </div>
+          )}
           {isFaqHtml ? (
             <>
               <style>{FORUM_FAQ_STYLES}</style>

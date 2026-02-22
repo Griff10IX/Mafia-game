@@ -18,6 +18,7 @@ class TopicCreate(BaseModel):
     content: str
     category: Optional[str] = "general"
     crew_oc_family_id: Optional[str] = None  # set when creating a Crew OC ad (category becomes crew_oc)
+    gif_url: Optional[str] = None  # optional GIF URL (Giphy etc.); shown with topic body
 
 
 class CommentCreate(BaseModel):
@@ -129,6 +130,9 @@ async def create_topic(
         category = "general"
     if not title:
         raise HTTPException(status_code=400, detail="Title is required")
+    gif_url = (request.gif_url or "").strip()
+    if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
+        raise HTTPException(status_code=400, detail="Invalid GIF URL")
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
@@ -145,6 +149,8 @@ async def create_topic(
         "is_important": False,
         "is_locked": False,
     }
+    if gif_url:
+        doc["gif_url"] = gif_url
     if crew_oc_family_id:
         doc["crew_oc_family_id"] = crew_oc_family_id
     await db.forum_topics.insert_one(doc)

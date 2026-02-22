@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -89,11 +89,8 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
   );
 }
 
-export default function Leaderboard({ period: periodProp }) {
-  const location = useLocation();
-  const isAllTime = location.pathname === '/leaderboard/all-time' || periodProp === 'alltime';
-  const period = isAllTime ? 'alltime' : 'weekly';
-
+export default function Leaderboard() {
+  const [period, setPeriod] = useState('weekly'); // 'weekly' | 'alltime'
   const [boards, setBoards] = useState({ kills: [], crimes: [], gta: [], jail_busts: [] });
   const [loading, setLoading] = useState(true);
   const [topLimit, setTopLimit] = useState(10);
@@ -131,23 +128,37 @@ export default function Leaderboard({ period: periodProp }) {
     <div className={`space-y-3 ${styles.pageContent}`} data-testid="leaderboard-page">
       <style>{LB_STYLES}</style>
       <header className="relative lb-fade-in">
-        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-1">
-          {period === 'weekly' ? 'Weekly Leaderboard' : 'All-Time Leaderboard'}
-        </h1>
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-          <p className="text-[9px] text-zinc-500 font-heading italic">
-            {period === 'weekly'
-              ? (viewMode === 'alive' ? 'This week\'s top players (Mon–Sun UTC)' : 'This week\'s top dead by stats')
-              : (viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats')}
-          </p>
-          <Link
-            to={period === 'weekly' ? '/leaderboard/all-time' : '/leaderboard'}
-            className="inline-flex items-center gap-1 text-[10px] font-heading text-primary/70 hover:text-primary border border-primary/20 hover:border-primary/40 rounded-sm px-2 py-1 transition-colors"
+        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">Leaderboard</h1>
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
+          <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Period:</span>
+          <button
+            type="button"
+            onClick={() => setPeriod('weekly')}
+            className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
+              period === 'weekly'
+                ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
+                : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
+            }`}
           >
-            {period === 'weekly' ? <History size={10} /> : <Trophy size={10} />}
-            {period === 'weekly' ? 'All-time leaderboard' : 'Weekly leaderboard'}
-          </Link>
+            <Trophy size={10} /> Weekly
+          </button>
+          <button
+            type="button"
+            onClick={() => setPeriod('alltime')}
+            className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
+              period === 'alltime'
+                ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
+                : `${styles.surface} ${styles.raisedHover} text-foreground border border-primary/20`
+            }`}
+          >
+            <History size={10} /> All-time
+          </button>
         </div>
+        <p className="text-[9px] text-zinc-500 font-heading italic mb-2 text-center">
+          {period === 'weekly'
+            ? (viewMode === 'alive' ? 'This week\'s top players (Mon–Sun UTC)' : 'This week\'s top dead by stats')
+            : (viewMode === 'alive' ? 'The most powerful players in the underworld' : 'Top dead accounts by stats')}
+        </p>
         <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
           <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">View:</span>
           <div className="flex flex-wrap gap-0.5">

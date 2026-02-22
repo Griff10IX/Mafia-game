@@ -1,7 +1,7 @@
 """
-Seed script: creates a "FAQs" forum topic describing normal user features.
+Seed script: creates a "FAQs" forum topic from FORUM_FAQ.md (or fallback text).
 Run from backend dir: python seed_faq_topic.py
-Uses first user in DB as author, or "Game" if no users exist.
+Reads FORUM_FAQ.md from project root (parent of backend). Uses first user in DB as author.
 Skips if a topic with title "FAQs" already exists.
 """
 import os
@@ -17,12 +17,14 @@ except ModuleNotFoundError as e:
     print("Missing dependency. Install with: pip install pymongo python-dotenv")
     sys.exit(1)
 
-ROOT_DIR = Path(__file__).parent
+ROOT_DIR = Path(__file__).parent  # backend/
+PROJECT_ROOT = ROOT_DIR.parent    # project root (where FORUM_FAQ.md lives)
 load_dotenv(ROOT_DIR / ".env")
 
 FAQ_TITLE = "FAQs"
+FAQ_MD_PATH = PROJECT_ROOT / "FORUM_FAQ.md"
 
-FAQ_CONTENT = """What does each feature do? (Normal player features only.)
+FALLBACK_FAQ_CONTENT = """What does each feature do? (Normal player features only.)
 
 ——— RANKS (by rank points) ———
 Your rank unlocks crimes, GTA locations, and other content. Earn rank points from crimes, GTA, jail busts, OC heists, and kills.
@@ -111,6 +113,18 @@ Displayed on your profile; based only on how much cash you’re carrying.
 """
 
 
+def _load_faq_content() -> str:
+    """Load FAQ body from FORUM_FAQ.md if present, else use fallback text."""
+    if FAQ_MD_PATH.exists():
+        try:
+            content = FAQ_MD_PATH.read_text(encoding="utf-8")
+            if content.strip():
+                return content.strip()
+        except Exception as e:
+            print(f"Warning: could not read {FAQ_MD_PATH}: {e}. Using fallback.")
+    return FALLBACK_FAQ_CONTENT.strip()
+
+
 def main():
     mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
     client = MongoClient(mongo_url)
@@ -128,10 +142,11 @@ def main():
 
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    faq_content = _load_faq_content()
     doc = {
         "id": topic_id,
         "title": FAQ_TITLE,
-        "content": FAQ_CONTENT.strip(),
+        "content": faq_content,
         "category": "general",
         "author_id": author_id,
         "author_username": author_username,
@@ -143,7 +158,8 @@ def main():
         "is_locked": False,
     }
     db.forum_topics.insert_one(doc)
-    print(f"Created forum topic '{FAQ_TITLE}' (id={topic_id}, author={author_username}, sticky & important).")
+    source = "FORUM_FAQ.md" if FAQ_MD_PATH.exists() else "fallback text"
+    print(f"Created forum topic '{FAQ_TITLE}' (id={topic_id}, author={author_username}, content from {source}, sticky & important).")
 
 
 if __name__ == "__main__":

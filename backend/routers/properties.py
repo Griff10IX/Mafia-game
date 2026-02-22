@@ -74,12 +74,14 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             req_user = properties_map.get(required_property_id)
             if not req_user or req_user["level"] < (req_prop["max_level"] if req_prop else 0):
                 locked = True
+        # Effective income/hr = base * level (so upgrades show increased rate)
+        effective_income_per_hour = prop["income_per_hour"] * level if owned and level >= 1 else prop["income_per_hour"]
         result.append(PropertyResponse(
             id=prop["id"],
             name=prop["name"],
             property_type=prop["property_type"],
             price=prop["price"],
-            income_per_hour=prop["income_per_hour"],
+            income_per_hour=effective_income_per_hour,
             max_level=prop["max_level"],
             owned=owned,
             level=level,
