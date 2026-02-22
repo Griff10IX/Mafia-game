@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, X, Crown, Users, Shield, Clock, Lock, CheckCircle } from 'lucide-react';
+import { BookOpen, X, Crown, Clock, Lock, CheckCircle } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 const STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
@@ -54,9 +55,9 @@ const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 // Territory status badge component
 function StatusBadge({ status }) {
   const configs = {
-    complete: { icon: CheckCircle, text: 'Under Our Protection', color: '#2d5016', bg: 'rgba(45, 80, 22, 0.15)' },
-    progress: { icon: Clock, text: 'Negotiations in Progress', color: '#b8860b', bg: 'rgba(184, 134, 11, 0.15)' },
-    locked: { icon: Lock, text: 'Awaiting Family Approval', color: '#71717a', bg: 'rgba(113, 113, 122, 0.15)' }
+    complete: { icon: CheckCircle, text: 'Complete', color: 'var(--noir-profit)', bg: 'rgba(92, 184, 92, 0.15)' },
+    progress: { icon: Clock, text: 'In Progress', color: 'var(--noir-primary)', bg: 'rgba(var(--noir-primary-rgb), 0.12)' },
+    locked: { icon: Lock, text: 'Locked', color: 'var(--noir-muted)', bg: 'rgba(113, 113, 122, 0.15)' }
   };
   
   const config = configs[status] || configs.locked;
@@ -81,27 +82,24 @@ function StatusBadge({ status }) {
   );
 }
 
-// Wax seal component for completed territories
+// Seal for completed territories
 function WaxSeal() {
   return (
-    <div className="wax-seal" style={{
+    <div style={{
       position: 'absolute',
-      top: '-15px',
-      right: '-15px',
-      width: '50px',
-      height: '50px',
-      background: 'radial-gradient(circle, #8b1a1a 0%, #660000 70%)',
+      top: '-8px',
+      right: '-8px',
+      width: '32px',
+      height: '32px',
+      background: 'var(--noir-profit)',
       borderRadius: '50%',
-      border: '3px solid #4a0000',
-      boxShadow: '0 4px 15px rgba(139, 26, 26, 0.6), inset 0 2px 5px rgba(255,255,255,0.2)',
+      border: '2px solid rgba(255,255,255,0.3)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      color: '#ffd700',
-      fontSize: '1.5rem',
-      fontWeight: 'bold',
-      fontFamily: 'Crimson Text, serif',
-      transform: 'rotate(-15deg)'
+      color: '#fff',
+      fontSize: '0.9rem',
+      fontWeight: 'bold'
     }}>
       ✓
     </div>
@@ -121,74 +119,62 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
   
   return (
     <div 
-      className="fade-in"
+      className={`fade-in ${styles.panel}`}
       style={{
         animationDelay: `${index * 0.1}s`,
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(232,220,200,0.6) 100%)',
-        border: '2.5px solid #654321',
-        borderRadius: '8px',
-        padding: '25px',
-        marginBottom: '25px',
+        padding: '20px',
+        marginBottom: '16px',
         position: 'relative',
-        boxShadow: '0 6px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.5)',
         cursor: isLocked && total === 0 ? 'default' : 'pointer',
-        transition: 'all 0.3s ease',
-        opacity: isLocked && total === 0 ? 0.6 : 1
+        transition: 'all 0.2s ease',
+        opacity: isLocked && total === 0 ? 0.7 : 1
       }}
       onClick={() => total > 0 && onClick(territory.name)}
       onMouseEnter={(e) => {
-        if (total > 0) {
-          e.currentTarget.style.transform = 'translateX(3px)';
-          e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.5)';
-        }
+        if (total > 0) e.currentTarget.style.borderColor = 'rgba(var(--noir-primary-rgb), 0.5)';
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.transform = 'translateX(0)';
-        e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.5)';
+        e.currentTarget.style.borderColor = '';
       }}
     >
       {isComplete && <WaxSeal />}
       
       <div style={{
-        fontSize: '1.5rem',
+        fontSize: '1.15rem',
         fontWeight: 700,
-        color: '#2d1810',
-        marginBottom: '15px',
-        borderBottom: '2px solid #d4af37',
-        paddingBottom: '10px',
-        fontFamily: 'Crimson Text, serif',
-        letterSpacing: '0.5px'
+        color: 'var(--noir-foreground)',
+        marginBottom: '12px',
+        borderBottom: '1px solid var(--noir-border-mid)',
+        paddingBottom: '8px'
       }}>
-        {territory.name} — {territory.description || 'Territory'}
+        {territory.name} — {territory.description || 'Area'}
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          padding: '10px 0',
-          borderBottom: '1px dashed #c9a668',
-          color: '#3e2723',
-          fontSize: '1.05rem',
-          fontFamily: 'Cormorant Garamond, serif'
+          padding: '8px 0',
+          borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.25)',
+          color: 'var(--noir-foreground)',
+          fontSize: '0.9rem'
         }}>
-          <span style={{ fontWeight: 600, color: '#654321' }}>Status:</span>
+          <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Status:</span>
           <StatusBadge status={status} />
         </div>
         
-        {territory.weeklyTribute && (
+        {territory.dailyTribute != null && (
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             padding: '10px 0',
-            borderBottom: '1px dashed #c9a668',
-            color: '#3e2723',
-            fontSize: '1.05rem',
-            fontFamily: 'Cormorant Garamond, serif'
+            borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)',
+            color: 'var(--noir-foreground)',
+            fontSize: '0.95rem'
           }}>
-            <span style={{ fontWeight: 600, color: '#654321' }}>Weekly Tribute:</span>
-            <span style={{ fontWeight: 700, color: isComplete ? '#2d5016' : '#b8860b' }}>
-              {fmt(territory.weeklyTribute)}
+            <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Daily Tribute:</span>
+            <span style={{ fontWeight: 700, color: isComplete ? 'var(--noir-profit)' : 'var(--noir-primary)' }}>
+              {fmt(territory.dailyTribute)}
             </span>
           </div>
         )}
@@ -197,13 +183,12 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            padding: '10px 0',
-            borderBottom: '1px dashed #c9a668',
-            color: '#3e2723',
-            fontSize: '1.05rem',
-            fontFamily: 'Cormorant Garamond, serif'
+            padding: '8px 0',
+            borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.25)',
+            color: 'var(--noir-foreground)',
+            fontSize: '0.9rem'
           }}>
-            <span style={{ fontWeight: 600, color: '#654321' }}>Capo:</span>
+            <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Capo:</span>
             <span style={{ fontWeight: 600 }}>{territory.capo}</span>
           </div>
         )}
@@ -211,17 +196,16 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          padding: '10px 0',
-          color: '#3e2723',
-          fontSize: '1.05rem',
-          fontFamily: 'Cormorant Garamond, serif'
+          padding: '8px 0',
+          color: 'var(--noir-foreground)',
+          fontSize: '0.9rem'
         }}>
-          <span style={{ fontWeight: 600, color: '#654321' }}>Operations:</span>
+          <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Missions:</span>
           <span style={{ fontWeight: 600 }}>
             {completed}/{total} Complete
             {total > 0 && !isComplete && !isLocked && (
-              <span style={{ marginLeft: '10px', color: '#d4af37', fontSize: '0.9rem' }}>
-                [Sit-Down Available]
+              <span style={{ marginLeft: '10px', color: 'var(--noir-primary)', fontSize: '0.9rem' }}>
+                [Ready to complete]
               </span>
             )}
           </span>
@@ -250,126 +234,122 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0,0,0,0.85)',
+        background: 'rgba(0,0,0,0.8)',
         backdropFilter: 'blur(4px)',
         padding: '20px'
       }}
       onClick={onClose}
     >
       <div 
-        className="fade-in"
+        className={`fade-in ${styles.panel}`}
         style={{
           width: '100%',
           maxWidth: '600px',
           maxHeight: '85vh',
           overflowY: 'auto',
-          background: 'linear-gradient(135deg, #f5f1e8 0%, #e8dcc8 100%)',
-          border: '4px double #654321',
-          borderRadius: '12px',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-          fontFamily: 'Cormorant Garamond, serif'
+          borderRadius: '6px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div style={{
-          padding: '25px 30px',
-          background: 'linear-gradient(135deg, #654321 0%, #4a3428 100%)',
-          borderBottom: '3px double #d4af37',
+          padding: '20px 24px',
+          background: 'rgba(var(--noir-primary-rgb), 0.1)',
+          borderBottom: '1px solid var(--noir-border-mid)',
           position: 'relative'
         }}>
           <button
             onClick={onClose}
             style={{
               position: 'absolute',
-              top: '15px',
-              right: '15px',
-              padding: '8px',
-              background: 'rgba(0,0,0,0.3)',
-              border: '1px solid #d4af37',
+              top: '12px',
+              right: '12px',
+              padding: '6px',
+              background: 'transparent',
+              border: '1px solid var(--noir-border-mid)',
               borderRadius: '4px',
-              color: '#d4af37',
+              color: 'var(--noir-foreground)',
               cursor: 'pointer',
               transition: 'all 0.2s'
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#d4af37';
-              e.currentTarget.style.color = '#1a1410';
+              e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.2)';
+              e.currentTarget.style.borderColor = 'var(--noir-primary)';
+              e.currentTarget.style.color = 'var(--noir-primary)';
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(0,0,0,0.3)';
-              e.currentTarget.style.color = '#d4af37';
+              e.currentTarget.style.background = 'transparent';
+              e.currentTarget.style.borderColor = '';
+              e.currentTarget.style.color = '';
             }}
           >
             <X size={18} />
           </button>
           
           <div style={{
-            fontSize: '1.6rem',
+            fontSize: '1.25rem',
             fontWeight: 700,
-            color: '#d4af37',
-            marginBottom: '8px',
-            fontFamily: 'Crimson Text, serif',
-            paddingRight: '50px'
+            color: 'var(--noir-primary)',
+            marginBottom: '4px',
+            paddingRight: '40px'
           }}>
             {territory}
           </div>
           <div style={{
-            fontSize: '1rem',
-            color: '#c9a668',
-            fontStyle: 'italic'
+            fontSize: '0.9rem',
+            color: 'var(--noir-muted)'
           }}>
             {city}
           </div>
         </div>
         
         {/* Mission list */}
-        <div style={{ padding: '25px 30px' }}>
+        <div style={{ padding: '20px 24px' }}>
           {territoryMissions.map((mission, idx) => (
             <div
               key={mission.id}
               style={{
-                padding: '15px',
-                marginBottom: '15px',
+                padding: '12px 14px',
+                marginBottom: '10px',
                 background: mission.completed 
-                  ? 'rgba(45, 80, 22, 0.1)' 
-                  : 'rgba(101, 67, 33, 0.05)',
+                  ? 'rgba(92, 184, 92, 0.08)' 
+                  : 'rgba(var(--noir-primary-rgb), 0.04)',
                 border: mission.completed 
-                  ? '2px solid #2d5016' 
-                  : '1px solid #c9a668',
-                borderRadius: '6px'
+                  ? '1px solid var(--noir-profit)' 
+                  : '1px solid var(--noir-border-mid)',
+                borderRadius: '4px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'start', gap: '10px' }}>
                 <div style={{
-                  width: '20px',
-                  height: '20px',
+                  width: '18px',
+                  height: '18px',
                   borderRadius: '50%',
-                  border: mission.completed ? '2px solid #2d5016' : '2px solid #654321',
-                  background: mission.completed ? '#2d5016' : 'transparent',
+                  border: mission.completed ? '2px solid var(--noir-profit)' : '2px solid var(--noir-border-mid)',
+                  background: mission.completed ? 'var(--noir-profit)' : 'transparent',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
                   marginTop: '2px'
                 }}>
-                  {mission.completed && <CheckCircle size={12} color="#fff" />}
+                  {mission.completed && <CheckCircle size={10} color="#fff" />}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{
-                    fontWeight: 700,
-                    fontSize: '1.1rem',
-                    color: mission.completed ? '#2d5016' : '#2d1810',
-                    marginBottom: '6px'
+                    fontWeight: 600,
+                    fontSize: '0.95rem',
+                    color: mission.completed ? 'var(--noir-profit)' : 'var(--noir-foreground)',
+                    marginBottom: '4px'
                   }}>
                     {mission.title}
                   </div>
                   {!mission.completed && mission.description && (
                     <div style={{
-                      fontSize: '0.95rem',
-                      color: '#654321',
-                      lineHeight: 1.6,
-                      fontStyle: 'italic'
+                      fontSize: '0.85rem',
+                      color: 'var(--noir-muted)',
+                      lineHeight: 1.5
                     }}>
                       {mission.description}
                     </div>
@@ -383,31 +363,31 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         {/* Current mission details */}
         {currentMission && (
           <div style={{
-            padding: '25px 30px',
-            borderTop: '2px solid #c9a668',
-            background: 'rgba(212, 175, 55, 0.08)'
+            padding: '20px 24px',
+            borderTop: '1px solid var(--noir-border-mid)',
+            background: 'rgba(var(--noir-primary-rgb), 0.06)'
           }}>
             <div style={{
-              fontSize: '1.2rem',
+              fontSize: '0.85rem',
               fontWeight: 700,
-              color: '#654321',
-              marginBottom: '15px',
-              fontFamily: 'Crimson Text, serif'
+              color: 'var(--noir-primary)',
+              marginBottom: '12px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.06em'
             }}>
-              Consigliere's Brief:
+              Mission Brief
             </div>
             
             {currentMission.description && (
               <div style={{
-                fontSize: '1rem',
-                color: '#3e2723',
-                fontStyle: 'italic',
-                lineHeight: 1.7,
-                marginBottom: '15px',
-                paddingLeft: '15px',
-                borderLeft: '3px solid #d4af37'
+                fontSize: '0.9rem',
+                color: 'var(--noir-foreground)',
+                lineHeight: 1.6,
+                marginBottom: '12px',
+                paddingLeft: '12px',
+                borderLeft: '3px solid var(--noir-primary)'
               }}>
-                "{currentMission.description}"
+                {currentMission.description}
               </div>
             )}
             
@@ -415,12 +395,12 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.95rem',
-                padding: '10px 0',
-                borderBottom: '1px dashed #c9a668'
+                fontSize: '0.9rem',
+                padding: '8px 0',
+                borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)'
               }}>
-                <span style={{ color: '#654321', fontWeight: 600 }}>Progress:</span>
-                <span style={{ color: '#3e2723', fontWeight: 600 }}>{currentMission.progress.description}</span>
+                <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Progress:</span>
+                <span style={{ color: 'var(--noir-foreground)', fontWeight: 500 }}>{currentMission.progress.description}</span>
               </div>
             )}
             
@@ -430,11 +410,11 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
                 justifyContent: 'space-between',
                 fontSize: '0.95rem',
                 padding: '10px 0',
-                borderBottom: '1px dashed #c9a668'
+                borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)'
               }}>
-                <span style={{ color: '#654321', fontWeight: 600 }}>Weekly Tribute:</span>
-                <span style={{ color: '#2d5016', fontWeight: 700 }}>
-                  Adds {fmt(currentMission.reward_money)} to family coffers
+                <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Daily Tribute:</span>
+                <span style={{ color: 'var(--noir-profit)', fontWeight: 700 }}>
+                  {fmt(currentMission.reward_money)} cash
                 </span>
               </div>
             )}
@@ -443,12 +423,12 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.95rem',
-                padding: '10px 0',
-                borderBottom: '1px dashed #c9a668'
+                fontSize: '0.9rem',
+                padding: '8px 0',
+                borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)'
               }}>
-                <span style={{ color: '#654321', fontWeight: 600 }}>Respect Points:</span>
-                <span style={{ color: '#d4af37', fontWeight: 700 }}>+{currentMission.reward_points} RP</span>
+                <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Rank Points:</span>
+                <span style={{ color: 'var(--noir-primary)', fontWeight: 700 }}>+{currentMission.reward_points} RP</span>
               </div>
             )}
             
@@ -460,25 +440,25 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
                 padding: '10px 0',
                 borderBottom: '1px dashed #c9a668'
               }}>
-                <span style={{ color: '#654321', fontWeight: 600 }}>Unlocks Territory:</span>
-                <span style={{ color: '#d4af37', fontWeight: 700 }}>{currentMission.unlocks_city}</span>
+                <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Unlocks City:</span>
+                <span style={{ color: 'var(--noir-primary)', fontWeight: 700 }}>{currentMission.unlocks_city}</span>
               </div>
             )}
             
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              fontSize: '0.95rem',
-              padding: '10px 0'
+              fontSize: '0.9rem',
+              padding: '8px 0'
             }}>
-              <span style={{ color: '#654321', fontWeight: 600 }}>Difficulty:</span>
+              <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Difficulty:</span>
               <div style={{ display: 'flex', gap: '4px' }}>
                 {[...Array(3)].map((_, i) => (
                   <Crown
                     key={i}
                     size={14}
-                    fill={i < stars ? '#d4af37' : 'none'}
-                    color={i < stars ? '#d4af37' : '#c9a668'}
+                    fill={i < stars ? 'var(--noir-primary)' : 'none'}
+                    color={i < stars ? 'var(--noir-primary)' : 'var(--noir-muted)'}
                   />
                 ))}
               </div>
@@ -488,71 +468,67 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         
         {/* Action button */}
         <div style={{
-          padding: '20px 30px',
-          borderTop: '2px solid #c9a668'
+          padding: '16px 24px',
+          borderTop: '1px solid var(--noir-border-mid)'
         }}>
           {currentMission?.completed ? (
             <div style={{
               textAlign: 'center',
-              padding: '15px',
-              color: '#2d5016',
-              fontWeight: 700,
-              fontSize: '1.1rem',
+              padding: '12px',
+              color: 'var(--noir-profit)',
+              fontWeight: 600,
+              fontSize: '0.95rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '10px'
+              gap: '8px'
             }}>
-              <CheckCircle size={20} />
-              Operation Complete
+              <CheckCircle size={18} />
+              Complete
             </div>
           ) : canStart ? (
             <button
               onClick={() => onStart(currentMission.id)}
               disabled={starting}
+              className={styles.panel}
               style={{
                 width: '100%',
-                padding: '16px',
-                background: 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)',
-                border: '2px solid #8b6914',
-                borderRadius: '8px',
-                color: '#1a1410',
-                fontWeight: 700,
-                fontSize: '1.1rem',
-                fontFamily: 'Crimson Text, serif',
+                padding: '12px 16px',
+                background: 'rgba(var(--noir-primary-rgb), 0.2)',
+                border: '1px solid var(--noir-primary)',
+                borderRadius: '4px',
+                color: 'var(--noir-primary)',
+                fontWeight: 600,
+                fontSize: '0.95rem',
                 cursor: starting ? 'not-allowed' : 'pointer',
-                transition: 'all 0.3s ease',
-                letterSpacing: '0.5px',
-                boxShadow: '0 4px 15px rgba(212, 175, 55, 0.3)',
+                transition: 'all 0.2s ease',
                 opacity: starting ? 0.6 : 1
               }}
               onMouseEnter={(e) => {
                 if (!starting) {
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(212, 175, 55, 0.5)';
+                  e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.3)';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 175, 55, 0.3)';
+                e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.2)';
               }}
             >
-              {starting ? 'Arranging...' : 'Arrange Sit-Down'}
+              {starting ? 'Completing...' : 'Complete Mission'}
             </button>
           ) : (
             <div style={{
               textAlign: 'center',
-              padding: '15px',
-              color: '#71717a',
-              fontWeight: 600,
-              fontSize: '1rem',
+              padding: '12px',
+              color: 'var(--noir-muted)',
+              fontWeight: 500,
+              fontSize: '0.9rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '10px'
+              gap: '8px'
             }}>
-              <Lock size={18} />
-              Requires Family Approval
+              <Lock size={16} />
+              Meet requirements to unlock
             </div>
           )}
         </div>
@@ -585,7 +561,7 @@ export default function Missions() {
           setCity(mapData.data?.current_city || mapData.data?.unlocked_cities?.[0] || 'Chicago');
         }
       } catch (e) {
-        if (!cancel) toast.error('Failed to load family business records');
+        if (!cancel) toast.error('Failed to load missions');
       } finally {
         if (!cancel) setLoading(false);
       }
@@ -599,7 +575,7 @@ export default function Missions() {
       const res = await api.post('/missions/complete', { mission_id: missionId });
       if (res.data?.completed) {
         const rewards = [];
-        if (res.data.reward_money > 0) rewards.push(`+${fmt(res.data.reward_money)} weekly tribute`);
+        if (res.data.reward_money > 0) rewards.push(`+${fmt(res.data.reward_money)} daily tribute`);
         if (res.data.reward_points > 0) rewards.push(`+${res.data.reward_points} respect`);
         if (res.data.unlocked_city) rewards.push(`${res.data.unlocked_city} territory unlocked`);
         
@@ -627,14 +603,7 @@ export default function Missions() {
 
   if (loading || !data) {
     return (
-      <div style={{
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #1a1410 0%, #2d1810 100%)',
-        padding: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}>
+      <div className={styles.pageContent} style={{ minHeight: '100vh', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <style>{STYLES}</style>
         <div style={{
           display: 'flex',
@@ -642,11 +611,11 @@ export default function Missions() {
           alignItems: 'center',
           gap: '20px'
         }}>
-          <BookOpen size={40} color="#d4af37" />
+          <BookOpen size={40} className="text-primary" style={{ color: 'var(--noir-primary)' }} />
           <div style={{
             width: '50px',
             height: '50px',
-            border: '3px solid #d4af37',
+            border: '3px solid var(--noir-primary)',
             borderTopColor: 'transparent',
             borderRadius: '50%',
             animation: 'spin 1s linear infinite'
@@ -671,7 +640,7 @@ export default function Missions() {
                  name.includes('West') ? 'Contested Territory' :
                  name.includes('Stock') ? 'Meatpacking District' :
                  name.includes('Near') ? 'Lakefront Territory' : 'Territory',
-    weeklyTribute: Math.floor(Math.random() * 30000) + 20000, // Placeholder
+    dailyTribute: cityMissions.filter(m => m.area === name).reduce((s, m) => s + (m.reward_money || 0), 0),
     capo: null,
     soldiers: 0
   }));
@@ -680,70 +649,37 @@ export default function Missions() {
   const totalTribute = territories.reduce((sum, t) => {
     const territoryMissions = cityMissions.filter(m => m.area === t.name);
     const allComplete = territoryMissions.length > 0 && territoryMissions.every(m => m.completed);
-    return sum + (allComplete ? t.weeklyTribute : 0);
+    return sum + (allComplete ? (t.dailyTribute || 0) : 0);
   }, 0);
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: 'linear-gradient(135deg, #1a1410 0%, #2d1810 100%)',
-      padding: '20px',
-      fontFamily: 'Cormorant Garamond, serif',
-      position: 'relative'
-    }}>
+    <div className={styles.pageContent} style={{ minHeight: '100vh', padding: '20px', position: 'relative' }}>
       <style>{STYLES}</style>
       
-      {/* Atmospheric cigar smoke */}
-      <div className="cigar-smoke" style={{ top: '10%', left: '5%', animationDelay: '0s' }} />
-      <div className="cigar-smoke" style={{ top: '60%', right: '8%', animationDelay: '2s' }} />
-      <div className="cigar-smoke" style={{ bottom: '20%', left: '15%', animationDelay: '4s' }} />
-      
       {/* Header */}
-      <div className="fade-in" style={{
+      <div className={`fade-in ${styles.panel}`} style={{
         maxWidth: '900px',
-        margin: '0 auto 30px',
-        padding: '35px 40px',
-        background: 'linear-gradient(135deg, #f5f1e8 0%, #e8dcc8 100%)',
-        border: '4px double #654321',
-        borderRadius: '12px',
-        boxShadow: '0 15px 50px rgba(0,0,0,0.6)',
-        position: 'relative',
-        overflow: 'hidden'
+        margin: '0 auto 24px',
+        padding: '24px 28px',
+        position: 'relative'
       }}>
-        {/* Ledger lines texture */}
-        <div style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(101, 67, 33, 0.08) 30px, rgba(101, 67, 33, 0.08) 31px)',
-          pointerEvents: 'none'
-        }} />
-        
-        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
           <div style={{
-            fontSize: '2.5rem',
+            fontSize: '1.5rem',
             fontWeight: 700,
-            color: '#2d1810',
-            marginBottom: '12px',
-            fontFamily: 'Crimson Text, serif',
-            letterSpacing: '1px',
-            textShadow: '2px 2px 0 rgba(212, 175, 55, 0.2)'
+            color: 'var(--noir-primary)',
+            marginBottom: '6px',
+            letterSpacing: '0.05em',
+            textTransform: 'uppercase'
           }}>
-            🤵 THE CORLEONE FAMILY BUSINESS LEDGER 🤵
+            Missions — Daily Tribute
           </div>
           <div style={{
-            fontSize: '1.2rem',
-            color: '#654321',
-            fontStyle: 'italic',
-            marginBottom: '8px'
+            fontSize: '0.9rem',
+            color: 'var(--noir-muted)',
+            marginTop: '4px'
           }}>
-            Consigliere's Office — Private Records
-          </div>
-          <div style={{
-            fontSize: '0.95rem',
-            color: '#8b6914',
-            fontWeight: 600
-          }}>
-            "This is the business we've chosen"
+            Complete operations in each area to earn cash and RP. Rewards are your daily tribute.
           </div>
         </div>
       </div>
@@ -752,9 +688,9 @@ export default function Missions() {
       {unlocked.length > 1 && (
         <div className="fade-in" style={{
           maxWidth: '900px',
-          margin: '0 auto 25px',
+          margin: '0 auto 20px',
           display: 'flex',
-          gap: '12px',
+          gap: '10px',
           flexWrap: 'wrap',
           justifyContent: 'center',
           animationDelay: '0.1s'
@@ -763,34 +699,28 @@ export default function Missions() {
             <button
               key={c}
               onClick={() => setCity(c)}
+              className={styles.panel}
               style={{
-                padding: '12px 28px',
-                background: city === c 
-                  ? 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)'
-                  : 'linear-gradient(135deg, #3e2723 0%, #2d1810 100%)',
-                border: `2px solid ${city === c ? '#8b6914' : '#654321'}`,
-                borderRadius: '8px',
-                color: city === c ? '#1a1410' : '#d4af37',
-                fontWeight: 700,
-                fontSize: '1.05rem',
-                fontFamily: 'Crimson Text, serif',
+                padding: '10px 22px',
+                background: city === c ? 'rgba(var(--noir-primary-rgb), 0.2)' : 'transparent',
+                border: `1px solid ${city === c ? 'var(--noir-primary)' : 'var(--noir-border-mid)'}`,
+                borderRadius: '4px',
+                color: city === c ? 'var(--noir-primary)' : 'var(--noir-foreground)',
+                fontWeight: 600,
+                fontSize: '0.9rem',
                 cursor: 'pointer',
-                transition: 'all 0.3s ease',
-                boxShadow: city === c 
-                  ? '0 4px 15px rgba(212, 175, 55, 0.4)'
-                  : '0 2px 8px rgba(0,0,0,0.3)',
-                letterSpacing: '0.5px'
+                transition: 'all 0.2s ease'
               }}
               onMouseEnter={(e) => {
                 if (city !== c) {
-                  e.currentTarget.style.borderColor = '#d4af37';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.borderColor = 'var(--noir-primary)';
+                  e.currentTarget.style.color = 'var(--noir-primary)';
                 }
               }}
               onMouseLeave={(e) => {
                 if (city !== c) {
-                  e.currentTarget.style.borderColor = '#654321';
-                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.borderColor = '';
+                  e.currentTarget.style.color = '';
                 }
               }}
             >
@@ -800,43 +730,40 @@ export default function Missions() {
         </div>
       )}
       
-      {/* Family status summary */}
-      <div className="fade-in" style={{
+      {/* Status summary */}
+      <div className={`fade-in ${styles.panel}`} style={{
         maxWidth: '900px',
-        margin: '0 auto 30px',
-        padding: '25px 30px',
-        background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(139, 105, 20, 0.1) 100%)',
-        border: '2px solid #d4af37',
-        borderRadius: '10px',
+        margin: '0 auto 24px',
+        padding: '20px 24px',
         animationDelay: '0.2s'
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
           gap: '20px',
-          color: '#f5f1e8'
+          color: 'var(--noir-foreground)'
         }}>
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#c9a668', marginBottom: '6px', fontWeight: 600 }}>
-              OPERATIONS COMPLETE
+            <div style={{ fontSize: '0.75rem', color: 'var(--noir-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Missions Complete
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#d4af37', fontFamily: 'Crimson Text, serif' }}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--noir-primary)' }}>
               {completedCount}/{cityMissions.length}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#c9a668', marginBottom: '6px', fontWeight: 600 }}>
-              WEEKLY TRIBUTE
+            <div style={{ fontSize: '0.75rem', color: 'var(--noir-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Daily Tribute
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#2d5016', fontFamily: 'Crimson Text, serif' }}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--noir-profit)' }}>
               {fmt(totalTribute)}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.85rem', color: '#c9a668', marginBottom: '6px', fontWeight: 600 }}>
-              CURRENT TERRITORY
+            <div style={{ fontSize: '0.75rem', color: 'var(--noir-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Current City
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#d4af37', fontFamily: 'Crimson Text, serif' }}>
+            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--noir-primary)' }}>
               {city}
             </div>
           </div>
@@ -859,43 +786,23 @@ export default function Missions() {
         ))}
       </div>
       
-      {/* Consigliere's note */}
-      <div className="fade-in ink-drop" style={{
+      {/* Summary */}
+      <div className={`fade-in ${styles.panel}`} style={{
         maxWidth: '900px',
         margin: '40px auto 0',
-        padding: '30px',
-        background: 'rgba(212, 175, 55, 0.12)',
-        borderLeft: '5px solid #d4af37',
-        borderRadius: '6px',
-        fontStyle: 'italic',
-        lineHeight: 1.8,
-        color: '#f5f1e8',
-        fontSize: '1.05rem',
-        animationDelay: '0.8s',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+        padding: '24px',
+        borderLeft: '4px solid var(--noir-primary)',
+        animationDelay: '0.8s'
       }}>
-        <div style={{ marginBottom: '15px', fontSize: '1.15rem', fontWeight: 600, color: '#d4af37' }}>
-          Consigliere's Notes:
+        <div style={{ marginBottom: '10px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--noir-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Summary
         </div>
-        <div>
-          "Don Corleone, the family's interests continue to expand across {city}. Our operations bring in {fmt(totalTribute)} weekly, 
-          strengthening the family's position with each passing day.
-          <br /><br />
-          {completedCount < cityMissions.length 
-            ? 'Several territories still require your personal attention. I recommend we proceed with the sit-downs carefully - each arrangement must show both our strength and our respect for tradition.'
-            : 'You have secured all available operations in this territory. The family grows stronger. Perhaps it is time to consider expansion into new cities.'}
-          <br /><br />
-          Remember, Don Corleone: in this business, we keep our friends close, but our enemies closer."
-        </div>
-        <div style={{
-          marginTop: '20px',
-          textAlign: 'right',
-          fontWeight: 700,
-          color: '#d4af37',
-          fontSize: '1.1rem',
-          fontFamily: 'Crimson Text, serif'
-        }}>
-          — Tom Hagen, Consigliere
+        <div style={{ color: 'var(--noir-foreground)', fontSize: '0.95rem', lineHeight: 1.6 }}>
+          {city}: {completedCount}/{cityMissions.length} missions complete.
+          {totalTribute > 0 && <> Total daily tribute from this city: {fmt(totalTribute)} cash.</>}
+          {completedCount < cityMissions.length
+            ? ' Complete missions in each area to earn your tribute and unlock the next city.'
+            : ' All operations here are complete. Unlock more cities by finishing the final mission.'}
         </div>
       </div>
       

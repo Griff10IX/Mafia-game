@@ -30,6 +30,10 @@ class NPCToggleRequest(BaseModel):
     count: int
 
 
+class SnitchRequest(BaseModel):
+    target_username: Optional[str] = None  # if None or "random", pick random online user
+
+
 # ---------------------------------------------------------------------------
 
 from server import (
@@ -37,6 +41,7 @@ from server import (
     get_current_user,
     get_rank_info,
     maybe_process_rank_up,
+    send_notification,
     ADMIN_EMAILS,
     RANKS,
     STATES,
@@ -406,6 +411,95 @@ async def leave_jail(current_user: dict = Depends(get_current_user)):
     }
 
 
+# Snitch: when in jail, name someone (or pick random online); on success you're released and they serve time. They get a notification (not who did it).
+SNITCH_JAIL_SECONDS = 45
+
+
+async def _get_random_online_user(exclude_user_id: str):
+    """Return one random user who is online (last 5 min / forced / auto_rank), not in jail, not dead, not self."""
+    now = datetime.now(timezone.utc)
+    five_min_ago = now - timedelta(minutes=5)
+    cursor = db.users.find(
+        {
+            "id": {"$ne": exclude_user_id},
+            "in_jail": {"$ne": True},
+            "is_dead": {"$ne": True},
+            "is_bodyguard": {"$ne": True},
+            "is_npc": {"$ne": True},
+            "$or": [
+                {"last_seen": {"$gte": five_min_ago.isoformat()}},
+                {"forced_online_until": {"$gt": now.isoformat()}},
+                {"auto_rank_enabled": True},
+            ],
+        },
+        {"_id": 0, "id": 1, "username": 1},
+    )
+    users = await cursor.to_list(100)
+    if not users:
+        return None
+    return random.choice(users)
+
+
+async def snitch(
+    request: SnitchRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """When in jail: snitch on a user (by username) or pick random online. On success you're released and they serve time. They get a notification that they were snitched on (not by whom)."""
+    if not current_user.get("in_jail"):
+        raise HTTPException(status_code=400, detail="You are not in jail")
+
+    target_username = (request.target_username or "").strip()
+    target = None
+
+    if not target_username or target_username.lower() == "random":
+        target = await _get_random_online_user(current_user["id"])
+        if not target:
+            raise HTTPException(
+                status_code=400,
+                detail="No online users available to snitch on. Enter a username or try again later.",
+            )
+    else:
+        username_ci = re.compile("^" + re.escape(target_username) + "$", re.IGNORECASE)
+        target = await db.users.find_one(
+            {"username": username_ci},
+            {"_id": 0, "id": 1, "username": 1, "in_jail": 1, "is_dead": 1, "is_bodyguard": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if target["id"] == current_user["id"]:
+            raise HTTPException(status_code=400, detail="You can't snitch on yourself")
+        if target.get("in_jail"):
+            raise HTTPException(status_code=400, detail="That user is already in jail")
+        if target.get("is_dead"):
+            raise HTTPException(status_code=400, detail="That account is dead")
+        if target.get("is_bodyguard"):
+            raise HTTPException(status_code=400, detail="You can't snitch on that user")
+
+    jail_until = datetime.now(timezone.utc) + timedelta(seconds=SNITCH_JAIL_SECONDS)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"in_jail": False, "jail_until": None}},
+    )
+    await db.users.update_one(
+        {"id": target["id"]},
+        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}},
+    )
+    await send_notification(
+        target["id"],
+        "Snitched on",
+        "Someone snitched on you to the guards. You've been sent to jail. They didn't tell you who.",
+        "system",
+        category="jail",
+    )
+    return {
+        "success": True,
+        "message": f"You snitched on {target['username']}. You're free; they're serving {SNITCH_JAIL_SECONDS} seconds.",
+        "released": True,
+        "target_username": target["username"],
+        "target_jail_seconds": SNITCH_JAIL_SECONDS,
+    }
+
+
 async def get_admin_npcs(current_user: dict = Depends(get_current_user)):
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -517,6 +611,7 @@ def register(router):
     router.add_api_route("/jail/status", get_jail_status, methods=["GET"])
     router.add_api_route("/jail/set-bust-reward", set_bust_reward, methods=["POST"])
     router.add_api_route("/jail/leave", leave_jail, methods=["POST"])
+    router.add_api_route("/jail/snitch", snitch, methods=["POST"])
     router.add_api_route("/admin/npcs", get_admin_npcs, methods=["GET"])
     router.add_api_route("/admin/npcs/toggle", toggle_npcs, methods=["POST"])
     router.add_api_route("/npcs/list", list_npcs_for_attack, methods=["GET"])

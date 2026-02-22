@@ -9,22 +9,22 @@ import styles from '../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
 
-/** FAQ: use noir theme so it matches the rest of the app (panels, gold accents, charcoal). */
+/** FAQ: compact noir theme to match the rest of the app. */
 const FORUM_FAQ_STYLES = `
   .forum-faq-content { max-width: 100%; }
-  .forum-faq-content .forum-faq-outer { background: var(--noir-surface); color: var(--noir-foreground); padding: 1.2em; border-radius: 6px; border: 1px solid var(--noir-border-mid); }
-  .forum-faq-content details { margin: 0.6em 0; border: 1px solid var(--noir-border-light); border-radius: 6px; overflow: hidden; }
-  .forum-faq-content summary { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); padding: 0.6em 1em; cursor: pointer; font-weight: bold; list-style: none; border: none; }
+  .forum-faq-content .forum-faq-outer { background: var(--noir-surface); color: var(--noir-foreground); padding: 0.75em 1em; border-radius: 6px; border: 1px solid var(--noir-border-mid); }
+  .forum-faq-content details { margin: 0.25em 0; border: 1px solid var(--noir-border-light); border-radius: 4px; overflow: hidden; }
+  .forum-faq-content summary { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); padding: 0.35em 0.75em; cursor: pointer; font-weight: bold; list-style: none; border: none; font-size: 0.95em; }
   .forum-faq-content summary::-webkit-details-marker { display: none; }
   .forum-faq-content summary:hover { background: rgba(var(--noir-primary-rgb), 0.12); color: var(--noir-primary-bright); }
   .forum-faq-content details[open] summary { border-bottom: 1px solid var(--noir-border-light); }
-  .forum-faq-content details > div { padding: 1em 1.2em; background: var(--noir-content); color: var(--noir-foreground); line-height: 1.5; }
+  .forum-faq-content details > div { padding: 0.6em 0.9em; background: var(--noir-content); color: var(--noir-foreground); line-height: 1.45; }
   .forum-faq-content strong { color: var(--noir-primary); }
-  .forum-faq-content p { margin: 0.5em 0; color: var(--noir-foreground); }
-  .forum-faq-content ul, .forum-faq-content ol { margin: 0.5em 0; padding-left: 1.5em; color: var(--noir-foreground); }
-  .forum-faq-content li { color: var(--noir-foreground); }
-  .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.5em; border-radius: 6px; overflow: hidden; }
-  .forum-faq-content th, .forum-faq-content td { border: 1px solid var(--noir-border-light); padding: 0.5em 0.75em; text-align: left; color: var(--noir-foreground); }
+  .forum-faq-content p { margin: 0.35em 0; color: var(--noir-foreground); }
+  .forum-faq-content ul, .forum-faq-content ol { margin: 0.35em 0; padding-left: 1.25em; color: var(--noir-foreground); }
+  .forum-faq-content li { color: var(--noir-foreground); margin: 0.15em 0; }
+  .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.35em; border-radius: 4px; overflow: hidden; }
+  .forum-faq-content th, .forum-faq-content td { border: 1px solid var(--noir-border-light); padding: 0.35em 0.6em; text-align: left; color: var(--noir-foreground); font-size: 0.95em; }
   .forum-faq-content th { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); }
   .forum-faq-content tr:nth-child(even) { background: var(--noir-surface); }
 `;

@@ -750,7 +750,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
             {"id": victim_id},
-            {"$set": {"is_dead": True, "dead_at": now_iso, "points_at_death": target.get("points", 0), "money": 0, "health": 0}, "$inc": {"total_deaths": 1}}
+            {"$set": {"is_dead": True, "dead_at": now_iso, "points_at_death": target.get("points", 0), "money_at_death": target.get("money", 0), "money": 0, "health": 0}, "$inc": {"total_deaths": 1}}
         )
         try:
             from routers.families import maybe_promote_after_boss_death

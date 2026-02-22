@@ -31,7 +31,7 @@ export default function DeadAlive() {
       setDeadUsername('');
       setDeadPassword('');
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Retrieval failed');
+      toast.error(error.response?.data?.detail || 'Transfer failed');
     } finally {
       setLoading(false);
     }
@@ -42,7 +42,7 @@ export default function DeadAlive() {
       <style>{DA_STYLES}</style>
       <div className="relative da-fade-in">
         <p className="text-[10px] text-zinc-500 font-heading italic max-w-xl">
-          Recover a portion of points from a dead account into this account (one-time per dead account).
+          Transfer 5% of a dead account’s money and points to this account (one-time per dead account).
         </p>
       </div>
 
@@ -50,7 +50,7 @@ export default function DeadAlive() {
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-4 py-2.5 bg-amber-500/15 border-b border-amber-500/30 flex items-center gap-2">
           <AlertCircle size={18} className="text-amber-400 shrink-0" />
-          <span className="text-[10px] font-heading font-bold text-amber-200/90">You must be logged into your new account. Enter the credentials of the account that died.</span>
+          <span className="text-[10px] font-heading font-bold text-amber-200/90">You must be logged into your new account. Enter the dead account’s username and password to receive 5% of its money and points.</span>
         </div>
         <form onSubmit={handleRetrieve} className="p-6 space-y-4">
           <div>
@@ -82,7 +82,7 @@ export default function DeadAlive() {
             data-testid="retrieve-submit"
           >
             <KeyRound size={18} />
-            {loading ? 'Retrieving...' : 'Retrieve points'}
+            {loading ? 'Transferring...' : 'Transfer 5% (money & points)'}
           </button>
         </form>
         <div className="da-art-line text-primary mx-3" />
@@ -97,8 +97,8 @@ export default function DeadAlive() {
           <ul className="space-y-2 text-sm text-mutedForeground font-heading">
             <li className="flex items-start gap-2"><span className="text-primary mt-0.5">◆</span> When you are killed in an attack, that account becomes <strong className="text-foreground">dead</strong> and cannot be used again.</li>
             <li className="flex items-start gap-2"><span className="text-primary mt-0.5">◆</span> Create a new account and play as normal.</li>
-            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">◆</span> Here enter your <strong className="text-foreground">dead account</strong> username and password. We credit this (living) account with a portion of the points that account had when it died.</li>
-            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">◆</span> Retrieval is <strong className="text-foreground">one-time per dead account</strong>. After that, the dead account cannot be used for retrieval again.</li>
+            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">◆</span> Here enter your <strong className="text-foreground">dead account</strong> username and password. This account receives <strong className="text-foreground">5% of that account’s money and points</strong> (as it had when it died).</li>
+            <li className="flex items-start gap-2"><span className="text-primary mt-0.5">◆</span> Transfer is <strong className="text-foreground">one-time per dead account</strong>. After that, that dead account cannot be used again.</li>
           </ul>
         </div>
         <div className="da-art-line text-primary mx-3" />

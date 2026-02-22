@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, Users, AlertCircle, DoorOpen, Bot } from 'lucide-react';
+import { Lock, Users, AlertCircle, DoorOpen, Bot, UserMinus } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -36,7 +36,9 @@ const JailStatusCard = ({
   setRewardLoading,
   onLeaveJail,
   leavingJail,
-  currentReward
+  currentReward,
+  onSnitchClick,
+  snitching,
 }) => {
   if (inJail) {
     return (
@@ -86,15 +88,27 @@ const JailStatusCard = ({
             </div>
           </div>
           
-          <button
-            type="button"
-            onClick={onLeaveJail}
-            disabled={leavingJail}
-            className="bg-primary/20 text-primary rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
-          >
-            <DoorOpen size={10} />
-            {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            <button
+              type="button"
+              onClick={onLeaveJail}
+              disabled={leavingJail}
+              className="bg-primary/20 text-primary rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
+            >
+              <DoorOpen size={10} />
+              {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
+            </button>
+            <button
+              type="button"
+              onClick={onSnitchClick}
+              disabled={snitching}
+              className="bg-amber-500/20 text-amber-400 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
+              title="Snitch on someone to get released; they serve time and get a notification (not who did it)"
+            >
+              <UserMinus size={10} />
+              {snitching ? '...' : 'Snitch'}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -262,6 +276,10 @@ const InfoSection = () => (
           <span className="text-primary shrink-0">•</span>
           <span>Failed bust = 30s in jail</span>
         </li>
+        <li className="flex items-start gap-1">
+          <span className="text-primary shrink-0">•</span>
+          <span>In jail? Snitch on someone (or random online) — you get released, they serve time. They’re notified but not who did it.</span>
+        </li>
       </ul>
     </div>
     <div className="j-art-line text-primary mx-2.5" />
@@ -281,6 +299,9 @@ export default function Jail() {
   const [bustRewardInput, setBustRewardInput] = useState('');
   const [setRewardLoading, setSetRewardLoading] = useState(false);
   const [leavingJail, setLeavingJail] = useState(false);
+  const [showSnitchModal, setShowSnitchModal] = useState(false);
+  const [snitchTargetInput, setSnitchTargetInput] = useState('');
+  const [snitching, setSnitching] = useState(false);
 
   const [autoRankJailDisabled, setAutoRankJailDisabled] = useState(false);
 
@@ -386,6 +407,33 @@ export default function Jail() {
     }
   };
 
+  const doSnitch = async (targetUsername) => {
+    setSnitching(true);
+    try {
+      const res = await api.post('/jail/snitch', { target_username: targetUsername || undefined });
+      if (res.data?.success) {
+        toast.success(res.data.message);
+        setShowSnitchModal(false);
+        setSnitchTargetInput('');
+        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+        fetchJailData();
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Snitch failed');
+    } finally {
+      setSnitching(false);
+    }
+  };
+
+  const submitSnitch = () => {
+    const name = snitchTargetInput.trim();
+    if (name) {
+      doSnitch(name);
+    } else {
+      doSnitch('random');
+    }
+  };
+
   if (initialLoading) {
     return (
       <div className={`space-y-2 ${styles.pageContent}`}>
@@ -414,7 +462,73 @@ export default function Jail() {
         onLeaveJail={leaveJail}
         leavingJail={leavingJail}
         currentReward={jailStatus.bust_reward_cash ?? 0}
+        onSnitchClick={() => setShowSnitchModal(true)}
+        snitching={snitching}
       />
+
+      {/* Snitch modal (when in jail) */}
+      {showSnitchModal && jailStatus.in_jail && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80"
+          onClick={() => !snitching && setShowSnitchModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="snitch-modal-title"
+        >
+          <div
+            className={`${styles.panel} w-full max-w-sm rounded-lg overflow-hidden border border-amber-500/40 shadow-xl`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2 bg-amber-500/15 border-b border-amber-500/30 flex items-center gap-2">
+              <UserMinus size={14} className="text-amber-400 shrink-0" />
+              <h2 id="snitch-modal-title" className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">
+                Snitch to the guards
+              </h2>
+            </div>
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground">
+                Name someone to snitch on. If the deal goes through, you get released and they serve time. They&apos;ll get a notification that they were snitched on — but not by who.
+              </p>
+              <div>
+                <label className="block text-[9px] font-heading text-mutedForeground mb-1">Username (leave blank for random online)</label>
+                <input
+                  type="text"
+                  value={snitchTargetInput}
+                  onChange={(e) => setSnitchTargetInput(e.target.value)}
+                  placeholder="e.g. BigBoss or leave empty"
+                  className="w-full px-2.5 py-1.5 rounded border border-primary/30 bg-black/40 text-foreground text-[11px] font-heading placeholder:text-zinc-500 focus:border-amber-500/50 focus:outline-none"
+                  disabled={snitching}
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => doSnitch('random')}
+                  disabled={snitching}
+                  className="flex-1 px-3 py-1.5 rounded bg-amber-500/20 text-amber-400 text-[10px] font-heading font-bold uppercase border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50"
+                >
+                  {snitching ? '...' : 'Pick random online'}
+                </button>
+                <button
+                  type="button"
+                  onClick={submitSnitch}
+                  disabled={snitching}
+                  className="flex-1 px-3 py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                >
+                  {snitching ? '...' : 'Snitch'}
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => !snitching && setShowSnitchModal(false)}
+                className="w-full py-1 text-[10px] text-mutedForeground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bust stats */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in`} style={{ animationDelay: '0.03s' }}>

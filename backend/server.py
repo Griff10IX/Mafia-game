@@ -168,7 +168,7 @@ MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
 ARMOUR_BASE_BULLETS = {0: 5000, 1: 25000, 2: 45000, 3: 65000, 4: 85000, 5: 100000}  # base before weapon/rank reduction
 KILL_CASH_PERCENT = 0.25  # killer gets 25% of victim's cash
-DEAD_ALIVE_POINTS_PERCENT = 0.25  # retrieved points from dead account (25%)
+DEAD_ALIVE_PERCENT = 0.05  # 5% of dead account's money and points transferred when using Dead > Alive (one-time)
 
 # Game-wide daily events (rotate by UTC date). Multipliers default 1.0 when not set.
 # racket_cooldown: <1 = faster, >1 = longer; racket_payout: >1 = extra %, <1 = reduced %
@@ -483,7 +483,7 @@ async def get_current_user(
         _log_auth_failure(user_id, 403, "Account is dead")
         raise HTTPException(
             status_code=403,
-            detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to retrieve points."
+            detail="This account is dead and cannot be used. Create a new account and use Dead > Alive to transfer 5% of this account’s money and points."
         )
     # Auto-expire lock when account_locked_until is in the past
     locked_until = user.get("account_locked_until")

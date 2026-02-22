@@ -599,6 +599,7 @@ def register(router):
                 "is_dead": True,
                 "dead_at": now_iso,
                 "points_at_death": int(target.get("points", 0) or 0),
+                "money_at_death": int(target.get("money", 0) or 0),
                 "money": 0,
                 "health": 0,
             }, "$inc": {"total_deaths": 1}}

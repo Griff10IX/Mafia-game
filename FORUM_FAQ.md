@@ -476,10 +476,10 @@ Notifications and DMs. Reply, threads, mark read.
 </details>
 
 <details>
-<summary><strong>Dead / Alive & Retrieval</strong></summary>
+<summary><strong>Dead / Alive</strong></summary>
 <div>
 
-**Dead** = killed in game. You can **retrieve 25% of points** from that account into **another account** — **once**. Need dead account password. After that, retrieval is no longer available for that account.
+**Dead** = killed in game. From a new account, use **Dead > Alive**: enter the dead account’s username and password. You receive **5% of that account’s money and points** on this account — **once per dead account**. After that, that dead account cannot be used again for a transfer.
 </div>
 </details>
 

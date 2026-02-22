@@ -109,7 +109,7 @@ Displayed on your profile; based only on how much cash you’re carrying.
 • Leaderboard: Top by kills, crimes, GTA, jail busts.
 • Stats: Your stats (kills, crimes, GTA, vehicles, etc.).
 • Forum: General + Entertainer (E-Games). Create topics, reply, like.
-• Dead/Alive: If your account is dead, retrieve 25% of its points into another account once (password required).
+• Dead/Alive: If your account is dead, use Dead > Alive from a new account to receive 5% of that account’s money and points once (dead account password required).
 """
 
 
