@@ -18,6 +18,22 @@ const ROLE_ICONS = { driver: '🚗', weapons: '🔫', explosives: '💣', hacker
 const TICK_INTERVAL = 1000;
 const COLLAPSED_KEY = 'oc_sections_collapsed';
 
+/** Default cut % when 1 self + 3 NPCs: self 20%, NPCs 27/27/26 */
+function defaultPctsForSlots(slots) {
+  const selfRole = ROLE_IDS.find((r) => slots[r] === 'self');
+  const npcSlots = ROLE_IDS.filter((r) => slots[r] === 'npc');
+  const next = {};
+  if (npcSlots.length === 3 && selfRole) {
+    next[selfRole] = 20;
+    next[npcSlots[0]] = 27;
+    next[npcSlots[1]] = 27;
+    next[npcSlots[2]] = 26;
+    return next;
+  }
+  ROLE_IDS.forEach((r) => (next[r] = 25));
+  return next;
+}
+
 // Utility functions
 function formatCooldown(isoUntil) {
   if (!isoUntil) return null;
@@ -407,9 +423,10 @@ export default function OrganisedCrime() {
   const [config, setConfig] = useState({ jobs: [], roles: [] });
   const [status, setStatus] = useState(null);
   const [selectedJobId, setSelectedJobId] = useState('');
-  const [slots, setSlots] = useState({ driver: 'self', weapons: 'npc', explosives: 'npc', hacker: 'npc' });
+  const defaultSlots = { driver: 'self', weapons: 'npc', explosives: 'npc', hacker: 'npc' };
+  const [slots, setSlots] = useState(defaultSlots);
   const [inviteInputs, setInviteInputs] = useState({ driver: '', weapons: '', explosives: '', hacker: '' });
-  const [pcts, setPcts] = useState({ driver: 25, weapons: 25, explosives: 25, hacker: 25 });
+  const [pcts, setPcts] = useState(() => defaultPctsForSlots(defaultSlots));
   const [executing, setExecuting] = useState(false);
   const [sendInviteLoading, setSendInviteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -465,6 +482,18 @@ export default function OrganisedCrime() {
   }, [selectedJobId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Ensure NPC slots always have a % in by default (e.g. after load or if pcts got out of sync)
+  useEffect(() => {
+    const npcRoles = ROLE_IDS.filter((r) => slots[r] === 'npc');
+    const selfRole = ROLE_IDS.find((r) => slots[r] === 'self');
+    if (npcRoles.length === 0) return;
+    const pctTotal = ROLE_IDS.reduce((s, r) => s + (pcts[r] || 0), 0);
+    const anyNpcMissingPct = npcRoles.some((r) => (pcts[r] ?? 0) === 0);
+    if (pctTotal !== 100 || anyNpcMissingPct) {
+      setPcts(defaultPctsForSlots(slots));
+    }
+  }, [slots]);
 
   const tick = useCooldownTicker(status?.cooldown_until, fetchData);
 
@@ -777,7 +806,7 @@ export default function OrganisedCrime() {
               onValueChange={(val) => setSlot(roleId, val)}
               inviteInput={inviteInputs[roleId]}
               onInviteChange={(val) => setInviteInputs((p) => ({ ...p, [roleId]: val }))}
-              pct={pcts[roleId]}
+              pct={pcts[roleId] ?? 0}
               onPctChange={(val) => setPct(roleId, val)}
               isNpc={slots[roleId] === 'npc'}
             />

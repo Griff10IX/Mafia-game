@@ -594,7 +594,8 @@ export default function FamilyProfilePage() {
           </div>
         )}
 
-        {/* Crew OC */}
+        {/* Crew OC — only show to users not in this family (no family or other family); members of this family use their own Family page */}
+        {!isMyFamily && (
         <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in`} style={{ animationDelay: '0.3s' }}>
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-primary/10">
             <div className="flex items-center gap-2">
@@ -624,18 +625,16 @@ export default function FamilyProfilePage() {
                 ))}
               </div>
             )}
-            {!isMyFamily && (
-              crewOCApp ? (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/8 border border-primary/15">
-                  <Clock size={11} className="text-primary/60" />
-                  <p className="text-[10px] font-heading text-primary">Applied: <span className="font-bold uppercase">{crewOCApp.status}</span></p>
-                </div>
-              ) : (
-                <button type="button" onClick={handleApplyCrewOC} disabled={crewOCApplyLoading}
-                  className="w-full py-2 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all">
-                  {crewOCApplyLoading ? 'Applying...' : crewOCFee > 0 ? `Apply — $${crewOCFee.toLocaleString()}` : 'Apply (free)'}
-                </button>
-              )
+            {crewOCApp ? (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/8 border border-primary/15">
+                <Clock size={11} className="text-primary/60" />
+                <p className="text-[10px] font-heading text-primary">Applied: <span className="font-bold uppercase">{crewOCApp.status}</span></p>
+              </div>
+            ) : (
+              <button type="button" onClick={handleApplyCrewOC} disabled={crewOCApplyLoading}
+                className="w-full py-2 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all">
+                {crewOCApplyLoading ? 'Applying...' : crewOCFee > 0 ? `Apply — $${crewOCFee.toLocaleString()}` : 'Apply (free)'}
+              </button>
             )}
             {family.crew_oc_forum_topic_id && (
               <Link to={`/forum/topic/${family.crew_oc_forum_topic_id}`}
@@ -645,6 +644,7 @@ export default function FamilyProfilePage() {
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

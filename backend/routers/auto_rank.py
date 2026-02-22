@@ -424,26 +424,30 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
         return
 
-    # --- GTA: only if global GTA cooldown has passed; _attempt_gta_impl enforces and sets cooldown from option's cooldown (60/90/120/180/240s) ---
+    # --- GTA: only if global GTA cooldown has passed. Rotate through all unlocked options (by rank), not just the first. ---
     if run_gta:
         cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
         until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
         if not (until and until > now):
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
-            for opt in GTA_OPTIONS:
-                if rank_id < opt["min_rank"]:
-                    continue
+            unlocked = [opt for opt in GTA_OPTIONS if rank_id >= opt["min_rank"]]
+            if unlocked:
+                next_index = int(user.get("auto_rank_next_gta_option_index") or 0) % max(1, len(unlocked))
+                opt = unlocked[next_index]
                 try:
                     out = await _attempt_gta_impl(opt["id"], user)
+                    # Advance to next unlocked option so we rotate through all GTAs as they unlock
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"auto_rank_next_gta_option_index": (next_index + 1) % len(unlocked)}},
+                    )
                     if out.success:
                         has_success = True
                         car_name = out.car.get("name", "Car") if out.car else "Car"
                         await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now)
                         lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
-                    break
                 except Exception as e:
                     logger.exception("Auto rank GTA for %s: %s", user_id, e)
-                    break
 
     if bust_every_5:
         await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
