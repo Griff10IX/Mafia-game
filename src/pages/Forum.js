@@ -62,6 +62,7 @@ function formatTimeUntil(seconds) {
 const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [topicGifUrl, setTopicGifUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
@@ -90,14 +91,18 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
     if (!title.trim()) { toast.error('Enter a title'); return; }
     setSubmitting(true);
     try {
-      await api.post('/forum/topics', { title: title.trim(), content: content.trim(), category });
+      const payload = { title: title.trim(), content: content.trim(), category };
+      if (topicGifUrl.trim()) payload.gif_url = topicGifUrl.trim();
+      await api.post('/forum/topics', payload);
       toast.success('Topic created');
       setTitle('');
       setContent('');
+      setTopicGifUrl('');
       onClose();
       onCreated();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map((x) => x?.msg || x).join(', ') : null) || 'Failed to create topic');
     } finally {
       setSubmitting(false);
     }
@@ -123,7 +128,16 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
           />
           {showGifPicker && (
             <div className="rounded border border-zinc-700/50 overflow-hidden">
-              <GifPicker onSelect={(url) => { if (url) insertTopicMarkup('[gif]' + url + '[/gif]'); setShowGifPicker(false); }} onClose={() => setShowGifPicker(false)} />
+              <GifPicker
+                onSelect={(url) => {
+                  if (url) {
+                    setTopicGifUrl(url);
+                    insertTopicMarkup('[gif]' + url + '[/gif]');
+                  }
+                  setShowGifPicker(false);
+                }}
+                onClose={() => setShowGifPicker(false)}
+              />
             </div>
           )}
           <textarea

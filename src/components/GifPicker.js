@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import api from '../utils/api';
+import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
 function getGifUrl(gif) {
@@ -34,6 +35,7 @@ export default function GifPicker({ onSelect, onClose, className = '' }) {
       const msg = e.response?.data?.detail || e.message || 'Search failed';
       setError(msg);
       setGifs([]);
+      toast.error(typeof msg === 'string' ? msg : 'GIF search failed. If you see "Giphy not configured", add GIPHY_API_KEY to backend .env.');
     } finally {
       setLoading(false);
     }

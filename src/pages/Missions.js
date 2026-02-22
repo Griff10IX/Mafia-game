@@ -1,238 +1,558 @@
 import { useState, useEffect } from 'react';
-import { Map, X, Star, Lock } from 'lucide-react';
+import { BookOpen, X, Crown, Users, Shield, Clock, Lock, CheckCircle } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 
 const STYLES = `
-  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-  .fade { animation: fade 0.25s ease-out both; }
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap');
   
-  @keyframes blur-shift {
-    0%, 100% { transform: translate(0, 0) scale(1); filter: blur(100px); }
-    50% { transform: translate(30px, -30px) scale(1.1); filter: blur(120px); }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
-  .map-blur-bg {
-    position: absolute;
-    width: 250%;
-    height: 250%;
-    top: -75%;
-    left: -75%;
-    opacity: 0.15;
-    pointer-events: none;
-    z-index: 0;
+  
+  @keyframes pageFlip {
+    0% { transform: perspective(1000px) rotateY(0deg); }
+    50% { transform: perspective(1000px) rotateY(-10deg); }
+    100% { transform: perspective(1000px) rotateY(0deg); }
   }
-  .blur-orb {
+  
+  @keyframes inkDrop {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); opacity: 0.5; }
+    100% { transform: scale(1); opacity: 0.3; }
+  }
+  
+  @keyframes waxSeal {
+    0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+    60% { transform: scale(1.1) rotate(0deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+  }
+  
+  .fade-in { animation: fadeIn 0.6s ease-out both; }
+  .page-flip { animation: pageFlip 0.8s ease-out; }
+  .ink-drop { animation: inkDrop 1s ease-out both; }
+  .wax-seal { animation: waxSeal 0.5s ease-out both; }
+  
+  @keyframes smoke {
+    0% { transform: translateY(0) scale(1); opacity: 0.3; }
+    100% { transform: translateY(-40px) scale(1.5); opacity: 0; }
+  }
+  
+  .cigar-smoke {
     position: absolute;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    animation: blur-shift 25s ease-in-out infinite;
-  }
-  .blur-orb:nth-child(1) {
-    width: 400px;
-    height: 400px;
-    background: radial-gradient(circle, rgba(212,175,55,0.4) 0%, transparent 70%);
-    top: 10%;
-    left: 20%;
-  }
-  .blur-orb:nth-child(2) {
-    width: 350px;
-    height: 350px;
-    background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 70%);
-    top: 50%;
-    right: 15%;
-    animation-delay: -12s;
-    animation-duration: 30s;
-  }
-  .blur-orb:nth-child(3) {
-    width: 300px;
-    height: 300px;
-    background: radial-gradient(circle, rgba(212,175,55,0.25) 0%, transparent 70%);
-    bottom: 15%;
-    left: 35%;
-    animation-delay: -18s;
-    animation-duration: 35s;
+    background: radial-gradient(circle, rgba(200, 180, 160, 0.4) 0%, transparent 70%);
+    animation: smoke 4s ease-out infinite;
   }
 `;
 
 const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
-/* ULTRA-REALISTIC CITY MAPS */
-const MAPS = {
-  Chicago: {
-    vb: { w: 400, h: 600 },
-    lakePath: 'M 280,0 L 320,0 L 320,600 L 280,600 L 280,550 L 265,480 L 270,400 L 280,320 L 285,240 L 280,160 L 275,80 Z',
-    districts: [
-      { name: 'The Loop', path: 'M 160,300 L 230,300 L 230,350 L 160,350 Z', lbl: { x: 195, y: 325 } },
-      { name: 'West Side', path: 'M 40,240 L 160,240 L 160,400 L 50,410 Z', lbl: { x: 105, y: 325 } },
-      { name: 'South Side', path: 'M 140,350 L 265,350 L 265,530 L 140,550 L 120,480 Z', lbl: { x: 190, y: 440 } },
-      { name: 'North Side', path: 'M 180,100 L 280,80 L 280,300 L 160,300 Z', lbl: { x: 220, y: 200 } },
-      { name: 'Near North', path: 'M 230,220 L 285,210 L 285,300 L 230,300 Z', lbl: { x: 257, y: 255 } },
-      { name: 'Stockyards', path: 'M 50,410 L 140,400 L 140,520 L 60,530 Z', lbl: { x: 100, y: 465 } }
-    ]
-  },
-  'New York': {
-    vb: { w: 450, h: 650 },
-    hudsonPath: 'M 120,0 L 135,180 L 140,360 L 135,500 L 125,650',
-    eastPath: 'M 240,0 L 245,180 L 250,360 L 255,500 L 260,650',
-    districts: [
-      { name: 'Brooklyn Heights', path: 'M 200,445 L 285,435 L 295,530 L 190,530 Z', lbl: { x: 247, y: 487 } },
-      { name: 'Financial District', path: 'M 135,530 L 180,530 L 190,580 L 170,605 L 135,590 Z', lbl: { x: 162, y: 570 } },
-      { name: 'Williamsburg', path: 'M 210,360 L 315,350 L 315,435 L 285,435 L 200,445 Z', lbl: { x: 262, y: 397 } },
-      { name: 'Chinatown', path: 'M 135,490 L 190,490 L 190,530 L 135,530 Z', lbl: { x: 162, y: 510 } },
-      { name: 'Greenwich Village', path: 'M 135,445 L 200,445 L 200,490 L 135,490 Z', lbl: { x: 167, y: 467 } },
-      { name: 'Upper West Side', path: 'M 135,270 L 185,270 L 185,360 L 140,360 Z', lbl: { x: 160, y: 315 } },
-      { name: 'Upper East Side', path: 'M 185,270 L 235,270 L 235,360 L 185,360 Z', lbl: { x: 210, y: 315 } },
-      { name: 'Harlem', path: 'M 135,180 L 245,180 L 245,270 L 135,270 Z', lbl: { x: 190, y: 225 } },
-      { name: 'Bronx', path: 'M 140,70 L 260,70 L 265,160 L 245,180 L 135,180 Z', lbl: { x: 200, y: 125 } },
-      { name: 'Queens', path: 'M 235,180 L 385,170 L 395,350 L 315,350 L 210,360 Z', lbl: { x: 305, y: 265 } },
-      { name: 'Staten Island', path: 'M 30,470 L 95,460 L 105,570 L 50,580 Z', lbl: { x: 67, y: 520 } },
-      { name: 'Midtown', path: 'M 140,360 L 210,360 L 210,445 L 135,445 Z', lbl: { x: 172, y: 402 } }
-    ]
-  },
-  'Las Vegas': {
-    vb: { w: 350, h: 500 },
-    mountainPath: 'M 0,100 L 70,85 L 110,120 L 0,135 M 330,70 L 350,120 L 330,170',
-    districts: [
-      { name: 'Summerlin', path: 'M 35,150 L 145,160 L 145,330 L 45,320 Z', lbl: { x: 95, y: 245 } },
-      { name: 'Arts District', path: 'M 45,160 L 145,160 L 145,240 L 55,235 Z', lbl: { x: 100, y: 200 } },
-      { name: 'The Strip', path: 'M 145,180 L 205,180 L 205,380 L 145,380 Z', lbl: { x: 175, y: 280 } },
-      { name: 'Paradise', path: 'M 205,180 L 295,170 L 305,380 L 205,380 Z', lbl: { x: 255, y: 280 } },
-      { name: 'North Las Vegas', path: 'M 110,35 L 240,35 L 230,85 L 215,85 L 135,85 Z', lbl: { x: 175, y: 60 } },
-      { name: 'Henderson', path: 'M 205,380 L 305,380 L 315,465 L 195,465 Z', lbl: { x: 255, y: 422 } },
-      { name: 'Boulder Strip', path: 'M 295,90 L 330,90 L 340,170 L 295,170 Z', lbl: { x: 317, y: 130 } },
-      { name: 'Downtown', path: 'M 135,85 L 215,85 L 215,180 L 145,180 Z', lbl: { x: 175, y: 132 } }
-    ]
-  },
-  'Atlantic City': {
-    vb: { w: 350, h: 450 },
-    oceanPath: 'M 270,0 L 290,90 L 310,180 L 330,270 L 350,360 L 350,450',
-    districts: [
-      { name: 'Inlet', path: 'M 70,330 L 220,320 L 220,400 L 90,410 Z', lbl: { x: 145, y: 365 } },
-      { name: 'Boardwalk', path: 'M 70,85 L 290,70 L 310,180 L 90,195 Z', lbl: { x: 190, y: 132 } },
-      { name: 'Marina District', path: 'M 90,195 L 310,180 L 330,315 L 110,330 Z', lbl: { x: 220, y: 252 } },
-      { name: 'Chelsea', path: 'M 220,320 L 330,315 L 340,400 L 220,400 Z', lbl: { x: 280, y: 360 } }
-    ]
-  }
-};
-
-/* Modal */
-function Modal({ city, dist, missions, onClose, onStart, starting }) {
-  if (!dist) return null;
-  const list = missions.filter(m => m.area === dist).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  const prim = list.find(m => !m.completed) || list[0];
-  const stars = prim?.difficulty >= 8 ? 3 : prim?.difficulty >= 5 ? 2 : 1;
-  const can = prim && !prim.completed && prim.requirements_met;
-  const progress = prim?.progress;
-
+// Territory status badge component
+function StatusBadge({ status }) {
+  const configs = {
+    complete: { icon: CheckCircle, text: 'Under Our Protection', color: '#2d5016', bg: 'rgba(45, 80, 22, 0.15)' },
+    progress: { icon: Clock, text: 'Negotiations in Progress', color: '#b8860b', bg: 'rgba(184, 134, 11, 0.15)' },
+    locked: { icon: Lock, text: 'Awaiting Family Approval', color: '#71717a', bg: 'rgba(113, 113, 122, 0.15)' }
+  };
+  
+  const config = configs[status] || configs.locked;
+  const Icon = config.icon;
+  
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90" onClick={onClose}>
-      <div className="w-full sm:max-w-md sm:rounded-xl rounded-t-2xl border-2 border-primary/40 bg-zinc-900 shadow-2xl fade" onClick={(e) => e.stopPropagation()} style={{ maxHeight: '80vh' }}>
-        <div className="relative px-3 py-2.5 bg-primary/10 border-b border-primary/20">
-          <button onClick={onClose} className="absolute top-2 right-2 p-1 rounded hover:bg-zinc-800 text-zinc-400">
-            <X size={16} />
-          </button>
-          <h3 className="text-sm font-heading font-bold text-primary pr-7">{dist}</h3>
-          <p className="text-[8px] text-zinc-400 font-heading uppercase">{city}</p>
-        </div>
+    <div style={{
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      padding: '6px 12px',
+      background: config.bg,
+      border: `1.5px solid ${config.color}`,
+      borderRadius: '4px',
+      color: config.color,
+      fontSize: '0.85rem',
+      fontWeight: 600
+    }}>
+      <Icon size={14} />
+      <span>{config.text}</span>
+    </div>
+  );
+}
 
-        <div className="px-3 py-2.5 space-y-1.5 max-h-[40vh] overflow-y-auto">
-          {list.map(m => (
-            <div key={m.id} className={`p-2 rounded border text-[9px] ${m.completed ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-zinc-800/60 border-zinc-700/50'}`}>
-              <div className="flex gap-1.5">
-                {m.completed ? (
-                  <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center">
-                    <svg className="w-2 h-2 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
+// Wax seal component for completed territories
+function WaxSeal() {
+  return (
+    <div className="wax-seal" style={{
+      position: 'absolute',
+      top: '-15px',
+      right: '-15px',
+      width: '50px',
+      height: '50px',
+      background: 'radial-gradient(circle, #8b1a1a 0%, #660000 70%)',
+      borderRadius: '50%',
+      border: '3px solid #4a0000',
+      boxShadow: '0 4px 15px rgba(139, 26, 26, 0.6), inset 0 2px 5px rgba(255,255,255,0.2)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#ffd700',
+      fontSize: '1.5rem',
+      fontWeight: 'bold',
+      fontFamily: 'Crimson Text, serif',
+      transform: 'rotate(-15deg)'
+    }}>
+      ✓
+    </div>
+  );
+}
+
+// Territory entry component
+function TerritoryEntry({ territory, missions, onClick, index }) {
+  const territoryMissions = missions.filter(m => m.area === territory.name);
+  const completed = territoryMissions.filter(m => m.completed).length;
+  const total = territoryMissions.length;
+  const isComplete = completed === total && total > 0;
+  const inProgress = completed > 0 && completed < total;
+  const isLocked = !territoryMissions.some(m => m.requirements_met && !m.completed);
+  
+  const status = isComplete ? 'complete' : inProgress ? 'progress' : 'locked';
+  
+  return (
+    <div 
+      className="fade-in"
+      style={{
+        animationDelay: `${index * 0.1}s`,
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.7) 0%, rgba(232,220,200,0.6) 100%)',
+        border: '2.5px solid #654321',
+        borderRadius: '8px',
+        padding: '25px',
+        marginBottom: '25px',
+        position: 'relative',
+        boxShadow: '0 6px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.5)',
+        cursor: isLocked && total === 0 ? 'default' : 'pointer',
+        transition: 'all 0.3s ease',
+        opacity: isLocked && total === 0 ? 0.6 : 1
+      }}
+      onClick={() => total > 0 && onClick(territory.name)}
+      onMouseEnter={(e) => {
+        if (total > 0) {
+          e.currentTarget.style.transform = 'translateX(3px)';
+          e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.5)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.transform = 'translateX(0)';
+        e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.5)';
+      }}
+    >
+      {isComplete && <WaxSeal />}
+      
+      <div style={{
+        fontSize: '1.5rem',
+        fontWeight: 700,
+        color: '#2d1810',
+        marginBottom: '15px',
+        borderBottom: '2px solid #d4af37',
+        paddingBottom: '10px',
+        fontFamily: 'Crimson Text, serif',
+        letterSpacing: '0.5px'
+      }}>
+        {territory.name} — {territory.description || 'Territory'}
+      </div>
+      
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: '10px 0',
+          borderBottom: '1px dashed #c9a668',
+          color: '#3e2723',
+          fontSize: '1.05rem',
+          fontFamily: 'Cormorant Garamond, serif'
+        }}>
+          <span style={{ fontWeight: 600, color: '#654321' }}>Status:</span>
+          <StatusBadge status={status} />
+        </div>
+        
+        {territory.weeklyTribute && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: '10px 0',
+            borderBottom: '1px dashed #c9a668',
+            color: '#3e2723',
+            fontSize: '1.05rem',
+            fontFamily: 'Cormorant Garamond, serif'
+          }}>
+            <span style={{ fontWeight: 600, color: '#654321' }}>Weekly Tribute:</span>
+            <span style={{ fontWeight: 700, color: isComplete ? '#2d5016' : '#b8860b' }}>
+              {fmt(territory.weeklyTribute)}
+            </span>
+          </div>
+        )}
+        
+        {territory.capo && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            padding: '10px 0',
+            borderBottom: '1px dashed #c9a668',
+            color: '#3e2723',
+            fontSize: '1.05rem',
+            fontFamily: 'Cormorant Garamond, serif'
+          }}>
+            <span style={{ fontWeight: 600, color: '#654321' }}>Capo:</span>
+            <span style={{ fontWeight: 600 }}>{territory.capo}</span>
+          </div>
+        )}
+        
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: '10px 0',
+          color: '#3e2723',
+          fontSize: '1.05rem',
+          fontFamily: 'Cormorant Garamond, serif'
+        }}>
+          <span style={{ fontWeight: 600, color: '#654321' }}>Operations:</span>
+          <span style={{ fontWeight: 600 }}>
+            {completed}/{total} Complete
+            {total > 0 && !isComplete && !isLocked && (
+              <span style={{ marginLeft: '10px', color: '#d4af37', fontSize: '0.9rem' }}>
+                [Sit-Down Available]
+              </span>
+            )}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Mission modal component
+function MissionModal({ city, territory, missions, onClose, onStart, starting }) {
+  const territoryMissions = missions.filter(m => m.area === territory);
+  const currentMission = territoryMissions.find(m => !m.completed && m.requirements_met) || territoryMissions[0];
+  
+  if (!currentMission) return null;
+  
+  const stars = currentMission.difficulty >= 8 ? 3 : currentMission.difficulty >= 5 ? 2 : 1;
+  const canStart = currentMission && !currentMission.completed && currentMission.requirements_met;
+  
+  return (
+    <div 
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 50,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(0,0,0,0.85)',
+        backdropFilter: 'blur(4px)',
+        padding: '20px'
+      }}
+      onClick={onClose}
+    >
+      <div 
+        className="fade-in"
+        style={{
+          width: '100%',
+          maxWidth: '600px',
+          maxHeight: '85vh',
+          overflowY: 'auto',
+          background: 'linear-gradient(135deg, #f5f1e8 0%, #e8dcc8 100%)',
+          border: '4px double #654321',
+          borderRadius: '12px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+          fontFamily: 'Cormorant Garamond, serif'
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{
+          padding: '25px 30px',
+          background: 'linear-gradient(135deg, #654321 0%, #4a3428 100%)',
+          borderBottom: '3px double #d4af37',
+          position: 'relative'
+        }}>
+          <button
+            onClick={onClose}
+            style={{
+              position: 'absolute',
+              top: '15px',
+              right: '15px',
+              padding: '8px',
+              background: 'rgba(0,0,0,0.3)',
+              border: '1px solid #d4af37',
+              borderRadius: '4px',
+              color: '#d4af37',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#d4af37';
+              e.currentTarget.style.color = '#1a1410';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(0,0,0,0.3)';
+              e.currentTarget.style.color = '#d4af37';
+            }}
+          >
+            <X size={18} />
+          </button>
+          
+          <div style={{
+            fontSize: '1.6rem',
+            fontWeight: 700,
+            color: '#d4af37',
+            marginBottom: '8px',
+            fontFamily: 'Crimson Text, serif',
+            paddingRight: '50px'
+          }}>
+            {territory}
+          </div>
+          <div style={{
+            fontSize: '1rem',
+            color: '#c9a668',
+            fontStyle: 'italic'
+          }}>
+            {city}
+          </div>
+        </div>
+        
+        {/* Mission list */}
+        <div style={{ padding: '25px 30px' }}>
+          {territoryMissions.map((mission, idx) => (
+            <div
+              key={mission.id}
+              style={{
+                padding: '15px',
+                marginBottom: '15px',
+                background: mission.completed 
+                  ? 'rgba(45, 80, 22, 0.1)' 
+                  : 'rgba(101, 67, 33, 0.05)',
+                border: mission.completed 
+                  ? '2px solid #2d5016' 
+                  : '1px solid #c9a668',
+                borderRadius: '6px'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'start', gap: '12px' }}>
+                <div style={{
+                  width: '20px',
+                  height: '20px',
+                  borderRadius: '50%',
+                  border: mission.completed ? '2px solid #2d5016' : '2px solid #654321',
+                  background: mission.completed ? '#2d5016' : 'transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  marginTop: '2px'
+                }}>
+                  {mission.completed && <CheckCircle size={12} color="#fff" />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{
+                    fontWeight: 700,
+                    fontSize: '1.1rem',
+                    color: mission.completed ? '#2d5016' : '#2d1810',
+                    marginBottom: '6px'
+                  }}>
+                    {mission.title}
                   </div>
-                ) : (
-                  <div className="shrink-0 w-3.5 h-3.5 rounded-full bg-zinc-700/50 border border-zinc-600/50" />
-                )}
-                <span className={`font-heading font-medium ${m.completed ? 'text-emerald-400' : 'text-foreground'}`}>{m.title}</span>
+                  {!mission.completed && mission.description && (
+                    <div style={{
+                      fontSize: '0.95rem',
+                      color: '#654321',
+                      lineHeight: 1.6,
+                      fontStyle: 'italic'
+                    }}>
+                      {mission.description}
+                    </div>
+                  )}
+                </div>
               </div>
-              {!m.completed && m.description && (
-                <p className="text-[8px] text-zinc-500 mt-1 pl-5">{m.description}</p>
-              )}
             </div>
           ))}
         </div>
-
-        {prim && (
-          <div className="px-3 py-2 border-t border-zinc-700/50 bg-zinc-900/50 space-y-1">
-            {prim.description && (
-              <p className="text-[9px] text-zinc-400 font-heading">{prim.description}</p>
-            )}
-            {progress?.description && !prim.completed && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Progress</span>
-                <span className="text-foreground">{progress.description}</span>
+        
+        {/* Current mission details */}
+        {currentMission && (
+          <div style={{
+            padding: '25px 30px',
+            borderTop: '2px solid #c9a668',
+            background: 'rgba(212, 175, 55, 0.08)'
+          }}>
+            <div style={{
+              fontSize: '1.2rem',
+              fontWeight: 700,
+              color: '#654321',
+              marginBottom: '15px',
+              fontFamily: 'Crimson Text, serif'
+            }}>
+              Consigliere's Brief:
+            </div>
+            
+            {currentMission.description && (
+              <div style={{
+                fontSize: '1rem',
+                color: '#3e2723',
+                fontStyle: 'italic',
+                lineHeight: 1.7,
+                marginBottom: '15px',
+                paddingLeft: '15px',
+                borderLeft: '3px solid #d4af37'
+              }}>
+                "{currentMission.description}"
               </div>
             )}
-            {prim.reward_money > 0 && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Daily income</span>
-                <span className="text-emerald-400 font-bold">Adds {fmt(prim.reward_money)} to daily income</span>
+            
+            {currentMission.progress?.description && !currentMission.completed && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.95rem',
+                padding: '10px 0',
+                borderBottom: '1px dashed #c9a668'
+              }}>
+                <span style={{ color: '#654321', fontWeight: 600 }}>Progress:</span>
+                <span style={{ color: '#3e2723', fontWeight: 600 }}>{currentMission.progress.description}</span>
               </div>
             )}
-            {prim.reward_points > 0 && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Rank points</span>
-                <span className="text-primary font-bold">+{prim.reward_points} RP</span>
+            
+            {currentMission.reward_money > 0 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.95rem',
+                padding: '10px 0',
+                borderBottom: '1px dashed #c9a668'
+              }}>
+                <span style={{ color: '#654321', fontWeight: 600 }}>Weekly Tribute:</span>
+                <span style={{ color: '#2d5016', fontWeight: 700 }}>
+                  Adds {fmt(currentMission.reward_money)} to family coffers
+                </span>
               </div>
             )}
-            {prim.reward_car_id && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Car</span>
-                <span className="text-primary font-bold">1 car</span>
+            
+            {currentMission.reward_points > 0 && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.95rem',
+                padding: '10px 0',
+                borderBottom: '1px dashed #c9a668'
+              }}>
+                <span style={{ color: '#654321', fontWeight: 600 }}>Respect Points:</span>
+                <span style={{ color: '#d4af37', fontWeight: 700 }}>+{currentMission.reward_points} RP</span>
               </div>
             )}
-            {prim.reward_booze && typeof prim.reward_booze === 'object' && Object.keys(prim.reward_booze).length > 0 && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Booze</span>
-                <span className="text-primary font-bold">{Object.values(prim.reward_booze).reduce((s, n) => s + Number(n || 0), 0)} units</span>
+            
+            {currentMission.unlocks_city && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.95rem',
+                padding: '10px 0',
+                borderBottom: '1px dashed #c9a668'
+              }}>
+                <span style={{ color: '#654321', fontWeight: 600 }}>Unlocks Territory:</span>
+                <span style={{ color: '#d4af37', fontWeight: 700 }}>{currentMission.unlocks_city}</span>
               </div>
             )}
-            {prim.reward_bullets > 0 && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Bullets</span>
-                <span className="text-primary font-bold">+{prim.reward_bullets}</span>
-              </div>
-            )}
-            {prim.unlocks_city && (
-              <div className="flex justify-between text-[9px] font-heading">
-                <span className="text-zinc-400">Unlocks</span>
-                <span className="text-primary font-bold">{prim.unlocks_city}</span>
-              </div>
-            )}
-            <div className="flex justify-between text-[9px] font-heading">
-              <span className="text-zinc-400">Difficulty</span>
-              <div className="flex gap-0.5">
+            
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: '0.95rem',
+              padding: '10px 0'
+            }}>
+              <span style={{ color: '#654321', fontWeight: 600 }}>Difficulty:</span>
+              <div style={{ display: 'flex', gap: '4px' }}>
                 {[...Array(3)].map((_, i) => (
-                  <Star key={i} size={10} className={i < stars ? 'fill-primary text-primary' : 'text-zinc-600'} />
+                  <Crown
+                    key={i}
+                    size={14}
+                    fill={i < stars ? '#d4af37' : 'none'}
+                    color={i < stars ? '#d4af37' : '#c9a668'}
+                  />
                 ))}
               </div>
             </div>
           </div>
         )}
-
-        <div className="px-3 py-2.5 border-t border-zinc-700/50">
-          {prim?.completed ? (
-            <div className="text-center py-1 text-emerald-400 font-heading text-[10px] flex items-center justify-center gap-1">
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-              Complete
+        
+        {/* Action button */}
+        <div style={{
+          padding: '20px 30px',
+          borderTop: '2px solid #c9a668'
+        }}>
+          {currentMission?.completed ? (
+            <div style={{
+              textAlign: 'center',
+              padding: '15px',
+              color: '#2d5016',
+              fontWeight: 700,
+              fontSize: '1.1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px'
+            }}>
+              <CheckCircle size={20} />
+              Operation Complete
             </div>
-          ) : can ? (
+          ) : canStart ? (
             <button
-              onClick={() => onStart(prim.id)}
+              onClick={() => onStart(currentMission.id)}
               disabled={starting}
-              className="w-full py-2 rounded-lg bg-gradient-to-b from-primary to-primary/80 text-zinc-900 font-heading font-bold text-[10px] uppercase tracking-wide hover:from-primary/90 disabled:opacity-50 transition-all active:scale-95"
+              style={{
+                width: '100%',
+                padding: '16px',
+                background: 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)',
+                border: '2px solid #8b6914',
+                borderRadius: '8px',
+                color: '#1a1410',
+                fontWeight: 700,
+                fontSize: '1.1rem',
+                fontFamily: 'Crimson Text, serif',
+                cursor: starting ? 'not-allowed' : 'pointer',
+                transition: 'all 0.3s ease',
+                letterSpacing: '0.5px',
+                boxShadow: '0 4px 15px rgba(212, 175, 55, 0.3)',
+                opacity: starting ? 0.6 : 1
+              }}
+              onMouseEnter={(e) => {
+                if (!starting) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(212, 175, 55, 0.5)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(212, 175, 55, 0.3)';
+              }}
             >
-              {starting ? '...' : 'Start Mission'}
+              {starting ? 'Arranging...' : 'Arrange Sit-Down'}
             </button>
           ) : (
-            <div className="text-center py-1 text-zinc-500 font-heading text-[9px] flex items-center justify-center gap-1">
-              <Lock size={12} /> Locked
+            <div style={{
+              textAlign: 'center',
+              padding: '15px',
+              color: '#71717a',
+              fontWeight: 600,
+              fontSize: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px'
+            }}>
+              <Lock size={18} />
+              Requires Family Approval
             </div>
           )}
         </div>
@@ -241,144 +561,13 @@ function Modal({ city, dist, missions, onClose, onStart, starting }) {
   );
 }
 
-/* City Map - Brazil Style */
-function CityMap({ city, missions, onClick }) {
-  const map = MAPS[city];
-  if (!map) return null;
-
-  const stats = (dist) => {
-    const list = missions.filter(m => m.area === dist);
-    return { done: list.filter(m => m.completed).length, total: list.length };
-  };
-
-  const getFill = (dist) => {
-    const { done, total } = stats(dist);
-    if (!total) return 'rgba(20, 20, 20, 0.7)';
-    if (done === total) return 'rgba(34, 197, 94, 0.3)';
-    if (done > 0) return 'rgba(234, 179, 8, 0.3)';
-    return 'rgba(30, 30, 30, 0.6)';
-  };
-
-  const getStroke = (dist) => {
-    const { done, total } = stats(dist);
-    if (!total) return '#3f3f46';
-    if (done === total) return '#22c55e';
-    if (done > 0) return '#eab308';
-    return '#52525b';
-  };
-
-  return (
-    <div style={{ position: 'relative', overflow: 'hidden', borderRadius: '8px', background: '#000' }}>
-      {/* Blurred atmospheric background */}
-      <div className="map-blur-bg">
-        <div className="blur-orb" />
-        <div className="blur-orb" />
-        <div className="blur-orb" />
-      </div>
-      
-      <svg viewBox={`0 0 ${map.vb.w} ${map.vb.h}`} className="w-full" style={{ maxHeight: 500, position: 'relative', zIndex: 1 }}>
-        <defs>
-          <filter id="glow-complete">
-            <feGaussianBlur stdDeviation="3" result="blur"/>
-            <feMerge>
-              <feMergeNode in="blur"/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-          <filter id="inner-shadow">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-            <feOffset dx="0" dy="0"/>
-            <feComposite operator="out" in2="SourceAlpha"/>
-            <feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.5 0"/>
-            <feMerge>
-              <feMergeNode/>
-              <feMergeNode in="SourceGraphic"/>
-            </feMerge>
-          </filter>
-        </defs>
-
-        {/* Pure black background */}
-        <rect width={map.vb.w} height={map.vb.h} fill="#000000" />
-
-        {/* Water - barely visible */}
-        {map.lakePath && <path d={map.lakePath} fill="#0a0a0f" opacity="0.5" stroke="#1a1a20" strokeWidth="0.8" strokeOpacity="0.2" />}
-        {map.hudsonPath && <path d={map.hudsonPath} fill="none" stroke="#1a1a20" strokeWidth="1" opacity="0.15" />}
-        {map.eastPath && <path d={map.eastPath} fill="none" stroke="#1a1a20" strokeWidth="1" opacity="0.15" />}
-        {map.oceanPath && <path d={map.oceanPath} fill="none" stroke="#1a1a20" strokeWidth="1.5" opacity="0.15" />}
-        {map.mountainPath && <path d={map.mountainPath} fill="none" stroke="#2a2a2a" strokeWidth="0.8" opacity="0.1" />}
-
-        {/* Districts */}
-        {map.districts.map(d => {
-          const st = stats(d.name);
-          const distFill = getFill(d.name);
-          const distStroke = getStroke(d.name);
-          
-          return (
-            <g key={d.name}>
-              <path
-                d={d.path}
-                fill={distFill}
-                stroke={distStroke}
-                strokeWidth="1.5"
-                style={{ 
-                  filter: st.done === st.total && st.total > 0 ? 'url(#glow-complete)' : 'url(#inner-shadow)',
-                  strokeLinecap: 'round',
-                  strokeLinejoin: 'round',
-                  transition: 'all 0.3s ease',
-                  cursor: 'pointer'
-                }}
-                className="district-path"
-                onClick={() => onClick(d.name)}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.fill = st.total > 0 && st.done === st.total ? 'rgba(34, 197, 94, 0.5)' : 
-                                                 st.done > 0 ? 'rgba(234, 179, 8, 0.5)' : 'rgba(50, 50, 50, 0.7)';
-                  e.currentTarget.style.strokeWidth = '2.5';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.fill = distFill;
-                  e.currentTarget.style.strokeWidth = '1.5';
-                }}
-                role="button"
-                tabIndex={0}
-              />
-              <text
-                x={d.lbl.x} y={d.lbl.y - 6}
-                textAnchor="middle"
-                fill="#fafafa"
-                className="font-heading font-bold pointer-events-none select-none"
-                style={{ 
-                  fontSize: 11, 
-                  textShadow: '0 2px 8px rgba(0,0,0,0.95), 0 0 30px rgba(0,0,0,0.9), 0 4px 12px rgba(0,0,0,0.8)' 
-                }}
-              >
-                {d.name}
-              </text>
-              {st.total > 0 && (
-                <text
-                  x={d.lbl.x} y={d.lbl.y + 8}
-                  textAnchor="middle"
-                  fill={st.done === st.total ? '#22c55e' : st.done > 0 ? '#eab308' : '#71717a'}
-                  className="font-heading font-bold pointer-events-none select-none"
-                  style={{ fontSize: 10, textShadow: '0 1px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.8)' }}
-                >
-                  {st.done}/{st.total}
-                </text>
-              )}
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
-/* Main */
+// Main component
 export default function Missions() {
   const [data, setData] = useState(null);
   const [missions, setMissions] = useState(null);
   const [loading, setLoading] = useState(true);
   const [city, setCity] = useState(null);
-  const [dist, setDist] = useState(null);
+  const [selectedTerritory, setSelectedTerritory] = useState(null);
   const [starting, setStarting] = useState(false);
 
   useEffect(() => {
@@ -386,14 +575,17 @@ export default function Missions() {
     (async () => {
       setLoading(true);
       try {
-        const [m, d] = await Promise.all([api.get('/missions/map'), api.get('/missions')]);
+        const [mapData, missionsData] = await Promise.all([
+          api.get('/missions/map'),
+          api.get('/missions')
+        ]);
         if (!cancel) {
-          setData(m.data);
-          setMissions(d.data);
-          setCity(m.data?.current_city || m.data?.unlocked_cities?.[0] || 'Chicago');
+          setData(mapData.data);
+          setMissions(missionsData.data);
+          setCity(mapData.data?.current_city || mapData.data?.unlocked_cities?.[0] || 'Chicago');
         }
       } catch (e) {
-        if (!cancel) toast.error('Failed to load');
+        if (!cancel) toast.error('Failed to load family business records');
       } finally {
         if (!cancel) setLoading(false);
       }
@@ -401,30 +593,33 @@ export default function Missions() {
     return () => { cancel = true; };
   }, []);
 
-  const start = async (id) => {
+  const startMission = async (missionId) => {
     setStarting(true);
     try {
-      const r = await api.post('/missions/complete', { mission_id: id });
-      if (r.data?.completed) {
-        const parts = [];
-        if (r.data.reward_money > 0) parts.push(fmt(r.data.reward_money));
-        if (r.data.reward_points > 0) parts.push(`+${r.data.reward_points} RP`);
-        if (r.data.reward_car_id) parts.push('Car');
-        if (r.data.reward_booze && Object.keys(r.data.reward_booze).length > 0) parts.push('Booze');
-        if (r.data.reward_bullets > 0) parts.push(`+${r.data.reward_bullets} bullets`);
-        if (r.data.unlocked_city) parts.push(`${r.data.unlocked_city} unlocked!`);
-        toast.success(parts.length ? parts.join(' · ') : 'Complete!');
+      const res = await api.post('/missions/complete', { mission_id: missionId });
+      if (res.data?.completed) {
+        const rewards = [];
+        if (res.data.reward_money > 0) rewards.push(`+${fmt(res.data.reward_money)} weekly tribute`);
+        if (res.data.reward_points > 0) rewards.push(`+${res.data.reward_points} respect`);
+        if (res.data.unlocked_city) rewards.push(`${res.data.unlocked_city} territory unlocked`);
+        
+        toast.success(rewards.length ? rewards.join(' • ') : 'Operation complete');
         refreshUser();
-        const [m, d] = await Promise.all([api.get('/missions/map'), api.get('/missions')]);
-        setData(m.data);
-        setMissions(d.data);
-        if (r.data.unlocked_city) {
-          setCity(r.data.unlocked_city);
-          setDist(null);
+        
+        const [mapData, missionsData] = await Promise.all([
+          api.get('/missions/map'),
+          api.get('/missions')
+        ]);
+        setData(mapData.data);
+        setMissions(missionsData.data);
+        
+        if (res.data.unlocked_city) {
+          setCity(res.data.unlocked_city);
+          setSelectedTerritory(null);
         }
       }
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      toast.error(e.response?.data?.detail || 'Operation failed');
     } finally {
       setStarting(false);
     }
@@ -432,11 +627,31 @@ export default function Missions() {
 
   if (loading || !data) {
     return (
-      <div className="min-h-screen bg-zinc-950 px-2 sm:px-3 py-4 flex items-center justify-center">
+      <div style={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #1a1410 0%, #2d1810 100%)',
+        padding: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}>
         <style>{STYLES}</style>
-        <div className="flex flex-col items-center gap-2">
-          <Map size={28} className="text-primary animate-pulse" />
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '20px'
+        }}>
+          <BookOpen size={40} color="#d4af37" />
+          <div style={{
+            width: '50px',
+            height: '50px',
+            border: '3px solid #d4af37',
+            borderTopColor: 'transparent',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
     );
@@ -445,51 +660,256 @@ export default function Missions() {
   const unlocked = data?.unlocked_cities?.length ? data.unlocked_cities : ['Chicago'];
   const byCity = data?.by_city || {};
   const cityMissions = (city && byCity[city]?.missions) || [];
-  const distCount = MAPS[city]?.districts?.length || 0;
+  
+  // Map districts from actual mission data
+  const districtNames = [...new Set(cityMissions.map(m => m.area))];
+  const territories = districtNames.map(name => ({
+    name,
+    description: name.includes('Loop') ? 'Downtown Operations' :
+                 name.includes('South') ? 'Industrial District' :
+                 name.includes('North') ? 'Expansion Territory' :
+                 name.includes('West') ? 'Contested Territory' :
+                 name.includes('Stock') ? 'Meatpacking District' :
+                 name.includes('Near') ? 'Lakefront Territory' : 'Territory',
+    weeklyTribute: Math.floor(Math.random() * 30000) + 20000, // Placeholder
+    capo: null,
+    soldiers: 0
+  }));
+
+  const completedCount = cityMissions.filter(m => m.completed).length;
+  const totalTribute = territories.reduce((sum, t) => {
+    const territoryMissions = cityMissions.filter(m => m.area === t.name);
+    const allComplete = territoryMissions.length > 0 && territoryMissions.every(m => m.completed);
+    return sum + (allComplete ? t.weeklyTribute : 0);
+  }, 0);
 
   return (
-    <div className="min-h-screen bg-zinc-950 px-2 sm:px-3 py-3 sm:py-4">
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1a1410 0%, #2d1810 100%)',
+      padding: '20px',
+      fontFamily: 'Cormorant Garamond, serif',
+      position: 'relative'
+    }}>
       <style>{STYLES}</style>
       
-      <div className="mb-3 fade">
-        <h1 className="text-lg sm:text-xl font-heading font-bold text-foreground mb-1">Welcome to America</h1>
-        <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">Expand your empire, district by district.</p>
-      </div>
-
-      <div className="flex flex-wrap gap-1.5 mb-3 fade" style={{ animationDelay: '0.1s' }}>
-        {unlocked.map(c => (
-          <button
-            key={c}
-            onClick={() => setCity(c)}
-            className={`px-2.5 py-1.5 rounded text-[10px] font-heading font-bold border transition-all active:scale-95 ${
-              city === c
-                ? 'bg-gradient-to-b from-primary to-primary/80 text-zinc-900 border-primary'
-                : 'bg-zinc-800/60 text-foreground border-zinc-700 hover:bg-zinc-700/60'
-            }`}
-          >
-            {c}
-          </button>
-        ))}
-      </div>
-
-      {city && (
-        <div className="rounded-lg border-2 border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 p-2.5 sm:p-3 mb-3 fade" style={{ animationDelay: '0.2s' }}>
-          <div className="mb-2">
-            <h2 className="text-xs sm:text-sm font-heading font-bold text-primary">{city}</h2>
-            <p className="text-[8px] sm:text-[9px] text-zinc-400 font-heading">{distCount} Districts</p>
+      {/* Atmospheric cigar smoke */}
+      <div className="cigar-smoke" style={{ top: '10%', left: '5%', animationDelay: '0s' }} />
+      <div className="cigar-smoke" style={{ top: '60%', right: '8%', animationDelay: '2s' }} />
+      <div className="cigar-smoke" style={{ bottom: '20%', left: '15%', animationDelay: '4s' }} />
+      
+      {/* Header */}
+      <div className="fade-in" style={{
+        maxWidth: '900px',
+        margin: '0 auto 30px',
+        padding: '35px 40px',
+        background: 'linear-gradient(135deg, #f5f1e8 0%, #e8dcc8 100%)',
+        border: '4px double #654321',
+        borderRadius: '12px',
+        boxShadow: '0 15px 50px rgba(0,0,0,0.6)',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        {/* Ledger lines texture */}
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage: 'repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(101, 67, 33, 0.08) 30px, rgba(101, 67, 33, 0.08) 31px)',
+          pointerEvents: 'none'
+        }} />
+        
+        <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+          <div style={{
+            fontSize: '2.5rem',
+            fontWeight: 700,
+            color: '#2d1810',
+            marginBottom: '12px',
+            fontFamily: 'Crimson Text, serif',
+            letterSpacing: '1px',
+            textShadow: '2px 2px 0 rgba(212, 175, 55, 0.2)'
+          }}>
+            🤵 THE CORLEONE FAMILY BUSINESS LEDGER 🤵
           </div>
-          <CityMap city={city} missions={cityMissions} onClick={setDist} />
+          <div style={{
+            fontSize: '1.2rem',
+            color: '#654321',
+            fontStyle: 'italic',
+            marginBottom: '8px'
+          }}>
+            Consigliere's Office — Private Records
+          </div>
+          <div style={{
+            fontSize: '0.95rem',
+            color: '#8b6914',
+            fontWeight: 600
+          }}>
+            "This is the business we've chosen"
+          </div>
+        </div>
+      </div>
+      
+      {/* City selector */}
+      {unlocked.length > 1 && (
+        <div className="fade-in" style={{
+          maxWidth: '900px',
+          margin: '0 auto 25px',
+          display: 'flex',
+          gap: '12px',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          animationDelay: '0.1s'
+        }}>
+          {unlocked.map(c => (
+            <button
+              key={c}
+              onClick={() => setCity(c)}
+              style={{
+                padding: '12px 28px',
+                background: city === c 
+                  ? 'linear-gradient(135deg, #d4af37 0%, #b8860b 100%)'
+                  : 'linear-gradient(135deg, #3e2723 0%, #2d1810 100%)',
+                border: `2px solid ${city === c ? '#8b6914' : '#654321'}`,
+                borderRadius: '8px',
+                color: city === c ? '#1a1410' : '#d4af37',
+                fontWeight: 700,
+                fontSize: '1.05rem',
+                fontFamily: 'Crimson Text, serif',
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                boxShadow: city === c 
+                  ? '0 4px 15px rgba(212, 175, 55, 0.4)'
+                  : '0 2px 8px rgba(0,0,0,0.3)',
+                letterSpacing: '0.5px'
+              }}
+              onMouseEnter={(e) => {
+                if (city !== c) {
+                  e.currentTarget.style.borderColor = '#d4af37';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (city !== c) {
+                  e.currentTarget.style.borderColor = '#654321';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }
+              }}
+            >
+              {c}
+            </button>
+          ))}
         </div>
       )}
-
-      <div className="rounded-lg border border-zinc-700/50 bg-gradient-to-br from-zinc-800/50 to-zinc-900/50 p-2.5 sm:p-3 mb-3 fade" style={{ animationDelay: '0.3s' }}>
-        <h3 className="text-xs font-heading font-bold text-primary mb-1.5">Mission Guide</h3>
-        <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
-          Complete missions to add to your daily income — the more you complete, the more you earn each day. Click districts on the map to view objectives, progress, and rewards.
-        </p>
+      
+      {/* Family status summary */}
+      <div className="fade-in" style={{
+        maxWidth: '900px',
+        margin: '0 auto 30px',
+        padding: '25px 30px',
+        background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.15) 0%, rgba(139, 105, 20, 0.1) 100%)',
+        border: '2px solid #d4af37',
+        borderRadius: '10px',
+        animationDelay: '0.2s'
+      }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '20px',
+          color: '#f5f1e8'
+        }}>
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#c9a668', marginBottom: '6px', fontWeight: 600 }}>
+              OPERATIONS COMPLETE
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#d4af37', fontFamily: 'Crimson Text, serif' }}>
+              {completedCount}/{cityMissions.length}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#c9a668', marginBottom: '6px', fontWeight: 600 }}>
+              WEEKLY TRIBUTE
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#2d5016', fontFamily: 'Crimson Text, serif' }}>
+              {fmt(totalTribute)}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontSize: '0.85rem', color: '#c9a668', marginBottom: '6px', fontWeight: 600 }}>
+              CURRENT TERRITORY
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#d4af37', fontFamily: 'Crimson Text, serif' }}>
+              {city}
+            </div>
+          </div>
+        </div>
       </div>
-
-      {dist && <Modal city={city} dist={dist} missions={cityMissions} onClose={() => setDist(null)} onStart={start} starting={starting} />}
+      
+      {/* Ledger pages */}
+      <div className="page-flip" style={{
+        maxWidth: '900px',
+        margin: '0 auto'
+      }}>
+        {territories.map((territory, index) => (
+          <TerritoryEntry
+            key={territory.name}
+            territory={territory}
+            missions={cityMissions}
+            onClick={setSelectedTerritory}
+            index={index}
+          />
+        ))}
+      </div>
+      
+      {/* Consigliere's note */}
+      <div className="fade-in ink-drop" style={{
+        maxWidth: '900px',
+        margin: '40px auto 0',
+        padding: '30px',
+        background: 'rgba(212, 175, 55, 0.12)',
+        borderLeft: '5px solid #d4af37',
+        borderRadius: '6px',
+        fontStyle: 'italic',
+        lineHeight: 1.8,
+        color: '#f5f1e8',
+        fontSize: '1.05rem',
+        animationDelay: '0.8s',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+      }}>
+        <div style={{ marginBottom: '15px', fontSize: '1.15rem', fontWeight: 600, color: '#d4af37' }}>
+          Consigliere's Notes:
+        </div>
+        <div>
+          "Don Corleone, the family's interests continue to expand across {city}. Our operations bring in {fmt(totalTribute)} weekly, 
+          strengthening the family's position with each passing day.
+          <br /><br />
+          {completedCount < cityMissions.length 
+            ? 'Several territories still require your personal attention. I recommend we proceed with the sit-downs carefully - each arrangement must show both our strength and our respect for tradition.'
+            : 'You have secured all available operations in this territory. The family grows stronger. Perhaps it is time to consider expansion into new cities.'}
+          <br /><br />
+          Remember, Don Corleone: in this business, we keep our friends close, but our enemies closer."
+        </div>
+        <div style={{
+          marginTop: '20px',
+          textAlign: 'right',
+          fontWeight: 700,
+          color: '#d4af37',
+          fontSize: '1.1rem',
+          fontFamily: 'Crimson Text, serif'
+        }}>
+          — Tom Hagen, Consigliere
+        </div>
+      </div>
+      
+      {/* Mission modal */}
+      {selectedTerritory && (
+        <MissionModal
+          city={city}
+          territory={selectedTerritory}
+          missions={cityMissions}
+          onClose={() => setSelectedTerritory(null)}
+          onStart={startMission}
+          starting={starting}
+        />
+      )}
     </div>
   );
 }

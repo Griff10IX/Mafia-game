@@ -30,6 +30,10 @@ class TopicUpdate(BaseModel):
     is_sticky: Optional[bool] = None
     is_important: Optional[bool] = None
     is_locked: Optional[bool] = None
+    # Author edit (only applied if current user is topic author)
+    title: Optional[str] = None
+    content: Optional[str] = None
+    gif_url: Optional[str] = None
 
 
 async def get_topics(category: Optional[str] = None, current_user: dict = Depends(get_current_user)):
@@ -237,24 +241,49 @@ async def update_topic(
     request: TopicUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin only: set sticky, important, or locked on a topic."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Admin: set sticky, important, or locked. Author: edit title, content, gif_url."""
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
+    uid = current_user["id"]
+    is_author = topic.get("author_id") == uid
+    is_admin = _is_admin(current_user)
     updates = {}
-    if request.is_sticky is not None:
-        updates["is_sticky"] = request.is_sticky
-    if request.is_important is not None:
-        updates["is_important"] = request.is_important
-    if request.is_locked is not None:
-        updates["is_locked"] = request.is_locked
+    if is_admin:
+        if request.is_sticky is not None:
+            updates["is_sticky"] = request.is_sticky
+        if request.is_important is not None:
+            updates["is_important"] = request.is_important
+        if request.is_locked is not None:
+            updates["is_locked"] = request.is_locked
+    if is_author:
+        if request.title is not None:
+            title = (request.title or "").strip()
+            if not title:
+                raise HTTPException(status_code=400, detail="Title cannot be empty")
+            updates["title"] = title
+        if request.content is not None:
+            updates["content"] = (request.content or "").strip()
+        if request.gif_url is not None:
+            gif_url = (request.gif_url or "").strip()
+            if gif_url and not (gif_url.startswith("http://") or gif_url.startswith("https://")):
+                raise HTTPException(status_code=400, detail="Invalid GIF URL")
+            if gif_url:
+                updates["gif_url"] = gif_url
+            else:
+                updates["_unset_gif"] = True  # signal to $unset gif_url
+    if not is_admin and not is_author:
+        raise HTTPException(status_code=403, detail="Not allowed to edit this topic")
     if not updates:
         return {"message": "No changes", "topic": topic}
+    set_fields = {k: v for k, v in updates.items() if k != "_unset_gif"}
+    set_fields["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_doc = {"$set": set_fields}
+    if updates.get("_unset_gif"):
+        update_doc["$unset"] = {"gif_url": 1}
     await db.forum_topics.update_one(
         {"id": topic_id},
-        {"$set": updates},
+        update_doc,
     )
     updated = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     return {"message": "Topic updated", "topic": updated}

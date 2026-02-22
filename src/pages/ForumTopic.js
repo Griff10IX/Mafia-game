@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette } from 'lucide-react';
+import { Lock, ThumbsUp, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil } from 'lucide-react';
 import api from '../utils/api';
 import GifPicker from '../components/GifPicker';
 import { toast } from 'sonner';
@@ -9,23 +9,24 @@ import styles from '../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
 
-/** FAQ / HTML topic content: dark gray dropdowns with coloured text. */
+/** FAQ: use noir theme so it matches the rest of the app (panels, gold accents, charcoal). */
 const FORUM_FAQ_STYLES = `
-  .forum-faq-content { background: #2d2d2d; color: #b8c4d0; padding: 1.2em; border-radius: 8px; max-width: 100%; }
-  .forum-faq-content details { margin: 0.6em 0; border: 1px solid #444; border-radius: 6px; overflow: hidden; }
-  .forum-faq-content summary { background: #3a3a3a; color: #e8d4a8; padding: 0.6em 1em; cursor: pointer; font-weight: bold; list-style: none; }
+  .forum-faq-content { max-width: 100%; }
+  .forum-faq-content .forum-faq-outer { background: var(--noir-surface); color: var(--noir-foreground); padding: 1.2em; border-radius: 6px; border: 1px solid var(--noir-border-mid); }
+  .forum-faq-content details { margin: 0.6em 0; border: 1px solid var(--noir-border-light); border-radius: 6px; overflow: hidden; }
+  .forum-faq-content summary { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); padding: 0.6em 1em; cursor: pointer; font-weight: bold; list-style: none; border: none; }
   .forum-faq-content summary::-webkit-details-marker { display: none; }
-  .forum-faq-content summary:hover { background: #454545; color: #f0e0b0; }
-  .forum-faq-content details[open] summary { border-bottom: 1px solid #444; }
-  .forum-faq-content details > div { padding: 1em 1.2em; background: #252525; color: #b8c4d0; line-height: 1.5; }
-  .forum-faq-content strong { color: #d4a574; }
-  .forum-faq-content p { margin: 0.5em 0; color: #b8c4d0; }
-  .forum-faq-content ul, .forum-faq-content ol { margin: 0.5em 0; padding-left: 1.5em; color: #b8c4d0; }
-  .forum-faq-content li { color: #c0ccd8; }
-  .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.5em; }
-  .forum-faq-content th, .forum-faq-content td { border: 1px solid #444; padding: 0.5em 0.75em; text-align: left; color: #b8c4d0; }
-  .forum-faq-content th { background: #353535; color: #e8d4a8; }
-  .forum-faq-content tr:nth-child(even) { background: #2a2a2a; }
+  .forum-faq-content summary:hover { background: rgba(var(--noir-primary-rgb), 0.12); color: var(--noir-primary-bright); }
+  .forum-faq-content details[open] summary { border-bottom: 1px solid var(--noir-border-light); }
+  .forum-faq-content details > div { padding: 1em 1.2em; background: var(--noir-content); color: var(--noir-foreground); line-height: 1.5; }
+  .forum-faq-content strong { color: var(--noir-primary); }
+  .forum-faq-content p { margin: 0.5em 0; color: var(--noir-foreground); }
+  .forum-faq-content ul, .forum-faq-content ol { margin: 0.5em 0; padding-left: 1.5em; color: var(--noir-foreground); }
+  .forum-faq-content li { color: var(--noir-foreground); }
+  .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.5em; border-radius: 6px; overflow: hidden; }
+  .forum-faq-content th, .forum-faq-content td { border: 1px solid var(--noir-border-light); padding: 0.5em 0.75em; text-align: left; color: var(--noir-foreground); }
+  .forum-faq-content th { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); }
+  .forum-faq-content tr:nth-child(even) { background: var(--noir-surface); }
 `;
 const FORUM_CONTENT_STYLES = `
   .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
@@ -65,6 +66,13 @@ export default function ForumTopic() {
   const [createGameJoinFee, setCreateGameJoinFee] = useState(0);
   const [createGameSubmitting, setCreateGameSubmitting] = useState(false);
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [showEditTopic, setShowEditTopic] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editGifUrl, setEditGifUrl] = useState('');
+  const [editShowGifPicker, setEditShowGifPicker] = useState(false);
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const commentTextareaRef = useRef(null);
 
   const fetchTopic = useCallback(async () => {
@@ -88,6 +96,9 @@ export default function ForumTopic() {
 
   useEffect(() => { fetchTopic(); }, [fetchTopic]);
   useEffect(() => { api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false)); }, []);
+  useEffect(() => { api.get('/auth/me').then((r) => setUser(r.data)).catch(() => setUser(null)); }, []);
+
+  const isAuthor = topic && user && topic.author_id === user.id;
 
   const updateTopicFlags = async (payload) => {
     setAdminBusy(true);
@@ -99,6 +110,35 @@ export default function ForumTopic() {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setAdminBusy(false);
+    }
+  };
+
+  const openEditTopic = () => {
+    if (!topic) return;
+    setEditTitle(topic.title || '');
+    setEditContent(topic.content || '');
+    setEditGifUrl(topic.gif_url || '');
+    setShowEditTopic(true);
+  };
+
+  const saveEditTopic = async (e) => {
+    e.preventDefault();
+    const title = editTitle.trim();
+    if (!title) { toast.error('Title is required'); return; }
+    setEditSubmitting(true);
+    try {
+      await api.patch(`/forum/topics/${topicId}`, {
+        title,
+        content: editContent.trim(),
+        gif_url: editGifUrl.trim(),
+      });
+      toast.success('Topic updated');
+      setShowEditTopic(false);
+      fetchTopic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
@@ -230,11 +270,14 @@ export default function ForumTopic() {
 
   const commentCount = comments.length;
   const isFaqHtml = topic.content && (topic.content.includes('<details') || topic.content.includes('class="faq-box"') || topic.content.includes('class=\'faq-box\''));
-  // Convert Markdown **bold** to <strong> so FAQ content renders correctly (forum stores HTML + some markdown)
-  const topicContentRaw = topic.content || '—';
-  const topicContent = isFaqHtml
-    ? topicContentRaw.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    : topicContentRaw;
+  // Convert Markdown **bold** to <strong> and strip embedded FAQ styles so noir theme applies
+  let topicContentRaw = topic.content || '—';
+  if (isFaqHtml) {
+    topicContentRaw = topicContentRaw.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    topicContentRaw = topicContentRaw.replace(/<style>[\s\S]*?<\/style>/gi, '');
+    topicContentRaw = topicContentRaw.replace(/<div\s+style="[^"]*"[^>]*>/, '<div class="forum-faq-outer">');
+  }
+  const topicContent = topicContentRaw;
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-topic-page">
@@ -302,6 +345,72 @@ export default function ForumTopic() {
           >
             <Trash2 size={10} /> Delete
           </button>
+        </div>
+      )}
+
+      {/* Author: Edit topic */}
+      {isAuthor && !topic.crew_oc_family_id && (
+        <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+          <button
+            type="button"
+            onClick={openEditTopic}
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border border-primary/40 text-primary hover:bg-primary/10 transition-all"
+          >
+            <Pencil size={10} /> Edit topic
+          </button>
+        </div>
+      )}
+
+      {/* Edit Topic Modal */}
+      {showEditTopic && topic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className={`${styles.panel} w-full max-w-md rounded-lg overflow-hidden border border-primary/20 shadow-2xl`}>
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Edit topic</h2>
+            </div>
+            <form onSubmit={saveEditTopic} className="p-3 space-y-3">
+              <input
+                type="text"
+                placeholder="Title..."
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
+              />
+              {editShowGifPicker && (
+                <div className="rounded border border-zinc-700/50 overflow-hidden">
+                  <GifPicker
+                    onSelect={(url) => { if (url) setEditGifUrl(url); setEditShowGifPicker(false); }}
+                    onClose={() => setEditShowGifPicker(false)}
+                  />
+                </div>
+              )}
+              {editGifUrl && (
+                <div className="flex items-center gap-2">
+                  <img src={editGifUrl} alt="GIF" className="h-16 w-16 object-cover rounded" />
+                  <button type="button" onClick={() => setEditGifUrl('')} className="text-[10px] text-red-400 font-heading">Remove GIF</button>
+                </div>
+              )}
+              <textarea
+                placeholder="Content..."
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setEditShowGifPicker((v) => !v)} className="px-2 py-1 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10">GIF</button>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button type="button" onClick={() => setShowEditTopic(false)} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading font-bold uppercase rounded border border-zinc-600/50 hover:bg-zinc-600/50">
+                  Cancel
+                </button>
+                <button type="submit" disabled={editSubmitting} className="flex-1 px-4 py-2 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
+                  {editSubmitting ? '...' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+          <button type="button" onClick={() => setShowEditTopic(false)} className="absolute inset-0 -z-10" aria-label="Close" />
         </div>
       )}
 
