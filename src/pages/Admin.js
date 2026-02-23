@@ -200,6 +200,7 @@ export default function Admin() {
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
+  const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
 
   const toggleSection = (key) => {
@@ -256,9 +257,11 @@ export default function Admin() {
       const hex = res.data?.admin_online_color || '#a78bfa';
       setAdminOnlineColor(hex.startsWith('#') ? hex : '#' + hex);
       setRequireEmailVerification(!!res.data?.require_email_verification);
+      setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
     } catch {
       setAdminOnlineColor('#a78bfa');
       setRequireEmailVerification(false);
+      setStockMarketMaxPoints(3000);
     }
   };
 
@@ -268,9 +271,11 @@ export default function Admin() {
       const res = await api.patch('/admin/settings', {
         admin_online_color: adminOnlineColor,
         require_email_verification: requireEmailVerification,
+        stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
       });
       setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
       setRequireEmailVerification(!!res.data?.require_email_verification);
+      setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
       toast.success('Settings saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save');
@@ -1435,6 +1440,17 @@ export default function Admin() {
                 />
                 <span>Require email verification for new signups</span>
               </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+              <label className="text-sm font-heading text-foreground">Stock market max points (per user cap)</label>
+              <input
+                type="number"
+                min={1}
+                value={stockMarketMaxPoints}
+                onChange={(e) => setStockMarketMaxPoints(Math.max(1, parseInt(e.target.value, 10) || 3000))}
+                className="w-24 px-2 py-1 rounded border border-input bg-background text-foreground font-mono text-sm"
+              />
+              <span className="text-mutedForeground text-xs">Total points in open positions cannot exceed this.</span>
             </div>
             <BtnPrimary onClick={handleSaveAdminSettings} disabled={adminSettingsSaving}>
               {adminSettingsSaving ? 'Saving...' : 'Save settings'}

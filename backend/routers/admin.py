@@ -34,6 +34,7 @@ class AllEventsForTestingRequest(BaseModel):
 class AdminSettingsUpdate(BaseModel):
     admin_online_color: Optional[str] = None
     require_email_verification: Optional[bool] = None
+    stock_market_max_points: Optional[int] = None
 
 
 class TestUsersAutoRankRequest(BaseModel):
@@ -881,7 +882,17 @@ def register(router):
             admin_online_color = "#a78bfa"
         req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
         require_email_verification = bool(req_doc.get("value") if req_doc else False)
-        return {"admin_online_color": admin_online_color.strip(), "require_email_verification": require_email_verification}
+        sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
+        stock_market_max_points = int(sm_doc["value"]) if sm_doc and sm_doc.get("value") is not None else 3000
+        try:
+            stock_market_max_points = max(1, int(stock_market_max_points))
+        except (TypeError, ValueError):
+            stock_market_max_points = 3000
+        return {
+            "admin_online_color": admin_online_color.strip(),
+            "require_email_verification": require_email_verification,
+            "stock_market_max_points": stock_market_max_points,
+        }
 
     @router.patch("/admin/settings")
     async def admin_patch_settings(body: AdminSettingsUpdate, current_user: dict = Depends(get_current_user)):
@@ -902,11 +913,25 @@ def register(router):
                 {"$set": {"value": body.require_email_verification}},
                 upsert=True,
             )
+        if body.stock_market_max_points is not None:
+            val = max(1, int(body.stock_market_max_points))
+            await db.game_settings.update_one(
+                {"key": "stock_market_max_points"},
+                {"$set": {"value": val}},
+                upsert=True,
+            )
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
         req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
         require_email_verification = bool(req_doc.get("value") if req_doc else False)
-        return {"admin_online_color": admin_online_color, "require_email_verification": require_email_verification}
+        sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
+        stock_market_max_points = int(sm_doc["value"]) if sm_doc and sm_doc.get("value") is not None else 3000
+        stock_market_max_points = max(1, stock_market_max_points)
+        return {
+            "admin_online_color": admin_online_color,
+            "require_email_verification": require_email_verification,
+            "stock_market_max_points": stock_market_max_points,
+        }
 
     @router.get("/admin/activity-log")
     async def admin_activity_log(

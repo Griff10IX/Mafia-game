@@ -172,6 +172,29 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             await send_notification(uid, "📈 Stock auto-sold", f"Your {stock.get('name')} position was auto-sold after 7 days. Profit: {profit_points} points!", "reward")
 
 
+async def _get_stock_market_max_points() -> int:
+    """Max total points a user can have in open positions (admin setting, default 3000)."""
+    doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
+    if not doc or doc.get("value") is None:
+        return 3000
+    try:
+        return max(1, int(doc["value"]))
+    except (TypeError, ValueError):
+        return 3000
+
+
+async def _user_points_in_market(uid: str) -> int:
+    """Sum of cost (points spent) across user's open positions."""
+    cursor = db.stock_positions.find({"user_id": uid}, {"_id": 0, "units": 1, "buy_price": 1})
+    positions = await cursor.to_list(100)
+    total = 0
+    for pos in positions:
+        units = float(pos.get("units") or 0)
+        buy_price = float(pos.get("buy_price") or 0)
+        total += round(units * buy_price, 0)
+    return total
+
+
 # Fallback when CoinGecko is unavailable (deterministic from time)
 def _fallback_price(stock: dict, now_ts: float) -> float:
     sid = stock.get("id") or ""
@@ -203,6 +226,8 @@ def register(router):
         out = []
         for s in STOCKS:
             sid = s["id"]
+            cg_id = s.get("coingecko_id") or sid
+            icon_url = f"https://cdn.jsdelivr.net/gh/simplr-sh/coin-logos/images/{cg_id}/thumb.png"
             if sid in live_by_id:
                 item = live_by_id[sid]
                 out.append({
@@ -214,6 +239,8 @@ def register(router):
                     "change_1d": item.get("change_1d", 0),
                     "change_3d": item.get("change_3d", 0),
                     "change_1w": item.get("change_1w", 0),
+                    "icon_url": icon_url,
+                    "live": True,
                 })
             else:
                 price = _fallback_price(s, now_ts)
@@ -223,6 +250,8 @@ def register(router):
                     "symbol": s.get("symbol", s["id"].upper()),
                     "price": round(price, 2),
                     "change_3h": 0, "change_1d": 0, "change_3d": 0, "change_1w": 0,
+                    "icon_url": icon_url,
+                    "live": False,
                 })
         return {"stocks": out}
 
@@ -290,13 +319,20 @@ def register(router):
 
     @router.get("/stock-market/summary")
     async def stock_market_summary(current_user: dict = Depends(get_current_user)):
-        """Total trades count and total profit (from closed positions)."""
+        """Total trades, all-time profit/loss, points-in-market cap and usage."""
         uid = current_user["id"]
         cursor = db.stock_transactions.find({"user_id": uid}, {"_id": 0, "type": 1, "profit_points": 1})
         items = await cursor.to_list(1000)
         total_trades = len(items)
         total_profit = sum(int(t.get("profit_points") or 0) for t in items)
-        return {"total_trades": total_trades, "total_profit": total_profit}
+        max_points = await _get_stock_market_max_points()
+        points_in_use = await _user_points_in_market(uid)
+        return {
+            "total_trades": total_trades,
+            "total_profit": total_profit,
+            "max_points": max_points,
+            "points_in_use": points_in_use,
+        }
 
     @router.post("/stock-market/buy")
     async def stock_market_buy(request: StockBuyRequest, current_user: dict = Depends(get_current_user)):
@@ -312,7 +348,10 @@ def register(router):
         live_list = await _get_cached_live_prices()
         current_price = _get_price_by_stock_id(live_list, request.stock_id)
         if current_price is None:
-            current_price = _fallback_price(stock, now_ts)
+            raise HTTPException(
+                status_code=503,
+                detail="Price data for this stock is temporarily unavailable. Try again in a moment.",
+            )
         if current_price <= 0:
             raise HTTPException(status_code=400, detail="Invalid price")
         units = points / current_price
@@ -322,6 +361,13 @@ def register(router):
             raise HTTPException(status_code=400, detail="User not found")
         if points > int(user.get("points") or 0):
             raise HTTPException(status_code=400, detail="Insufficient points")
+        max_points = await _get_stock_market_max_points()
+        points_in_market = await _user_points_in_market(uid)
+        if points_in_market + points > max_points:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Total points in market cannot exceed {max_points}. You have {points_in_market} in open positions; this trade would be {points_in_market + points}.",
+            )
 
         position_id = str(uuid.uuid4())
         now_iso = now.isoformat()
