@@ -18,6 +18,16 @@ function formatPrice(n) {
   return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
 }
 
+function formatDateTime(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  } catch {
+    return iso;
+  }
+}
+
 function ChangeCell({ value }) {
   const num = Number(value ?? 0);
   const isPos = num > 0;
@@ -42,6 +52,7 @@ export default function StockMarket() {
   const [buying, setBuying] = useState(false);
   const [sellingId, setSellingId] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [detailPosition, setDetailPosition] = useState(null);
 
   const fetchList = useCallback(() => api.get('/stock-market/list').then((r) => setStocks(r.data?.stocks || [])).catch(() => setStocks([])), []);
   const fetchPositions = useCallback(() => api.get('/stock-market/positions').then((r) => setPositions(r.data?.positions || [])).catch(() => setPositions([])), []);
@@ -60,10 +71,15 @@ export default function StockMarket() {
     return () => clearInterval(t);
   }, [positions, fetchPositions]);
 
+  // Auto-update stocks and positions every 60 seconds (no page refresh needed)
   useEffect(() => {
-    const t = setInterval(() => { fetchList(); fetchPositions(); }, 15000);
+    const t = setInterval(() => {
+      fetchList();
+      fetchPositions();
+      fetchSummary();
+    }, 60000);
     return () => clearInterval(t);
-  }, [fetchList, fetchPositions]);
+  }, [fetchList, fetchPositions, fetchSummary]);
 
   const handleBuy = async () => {
     if (!selectedId) {
@@ -276,17 +292,24 @@ export default function StockMarket() {
                     <span className="col-span-1" />
                   </div>
                   {positions.map((p) => (
-                    <div key={p.id} className="grid grid-cols-12 gap-1 items-center text-[10px] font-heading border-b border-primary/5 py-1.5">
+                    <div
+                      key={p.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDetailPosition(p)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setDetailPosition(p); } }}
+                      className="grid grid-cols-12 gap-1 items-center text-[10px] font-heading border-b border-primary/5 py-1.5 cursor-pointer hover:bg-primary/5 rounded px-1 -mx-1 transition-colors"
+                    >
                       <span className="col-span-5 text-foreground truncate">{p.stock_name}</span>
                       <span className="col-span-3 text-right text-foreground">{p.value_points ?? 0} pts</span>
                       <span className={`col-span-3 text-right ${(p.profit_points ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {(p.profit_points ?? 0) >= 0 ? '+' : ''}{p.profit_points ?? 0}
                       </span>
-                      <span className="col-span-1">
+                      <span className="col-span-1" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           disabled={sellingId !== null || p.can_sell === false}
-                          onClick={() => handleSell(p.id)}
+                          onClick={(e) => { e.stopPropagation(); handleSell(p.id); }}
                           className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/20 text-primary text-[9px] font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
                           title={p.can_sell === false && (p.sell_available_in_seconds ?? 0) > 0 ? `3 min cooldown after buy. Sell in ${p.sell_available_in_seconds}s` : undefined}
                         >
@@ -326,6 +349,89 @@ export default function StockMarket() {
           </div>
         </div>
       )}
+
+      {detailPosition && (
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 ${styles.panel} rounded-lg border border-primary/20`}
+          style={{ margin: 0 }}
+          onClick={() => setDetailPosition(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="position-detail-title"
+        >
+          <div
+            className="w-full max-w-md rounded-lg overflow-hidden bg-zinc-900 border border-primary/20 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+              <h2 id="position-detail-title" className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Position details</h2>
+              <button type="button" onClick={() => setDetailPosition(null)} className="text-mutedForeground hover:text-foreground text-sm font-heading">Close</button>
+            </div>
+            <div className="p-3 space-y-3 text-[10px] font-heading">
+              <div>
+                <span className="text-mutedForeground uppercase tracking-wider">Stock</span>
+                <p className="text-foreground font-bold text-sm mt-0.5">{detailPosition.stock_name} ({detailPosition.symbol})</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-zinc-800/50 rounded p-2 border border-primary/10">
+                  <span className="text-mutedForeground block text-[9px] uppercase">Bought at</span>
+                  <span className="text-foreground">{formatDateTime(detailPosition.bought_at)}</span>
+                </div>
+                <div className="bg-zinc-800/50 rounded p-2 border border-primary/10">
+                  <span className="text-mutedForeground block text-[9px] uppercase">Units</span>
+                  <span className="text-foreground">{Number(detailPosition.units ?? 0).toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
+                </div>
+                <div className="bg-zinc-800/50 rounded p-2 border border-primary/10">
+                  <span className="text-mutedForeground block text-[9px] uppercase">Buy price</span>
+                  <span className="text-primary font-bold">{formatPrice(detailPosition.buy_price)}</span>
+                </div>
+                <div className="bg-zinc-800/50 rounded p-2 border border-primary/10">
+                  <span className="text-mutedForeground block text-[9px] uppercase">Current price</span>
+                  <span className="text-primary font-bold">{formatPrice(detailPosition.current_price)}</span>
+                </div>
+                <div className="bg-zinc-800/50 rounded p-2 border border-primary/10">
+                  <span className="text-mutedForeground block text-[9px] uppercase">Cost (points)</span>
+                  <span className="text-foreground">{(detailPosition.cost_points ?? 0).toLocaleString()} pts</span>
+                </div>
+                <div className="bg-zinc-800/50 rounded p-2 border border-primary/10">
+                  <span className="text-mutedForeground block text-[9px] uppercase">Current value (points)</span>
+                  <span className="text-foreground">{(detailPosition.value_points ?? 0).toLocaleString()} pts</span>
+                </div>
+              </div>
+              <div className={`rounded p-2 border ${(detailPosition.profit_points ?? 0) >= 0 ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-red-500/10 border-red-500/30'}`}>
+                <span className="text-mutedForeground block text-[9px] uppercase">Current profit / loss</span>
+                <span className={`font-bold text-sm ${(detailPosition.profit_points ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {(detailPosition.profit_points ?? 0) >= 0 ? '+' : ''}{(detailPosition.profit_points ?? 0).toLocaleString()} pts
+                </span>
+              </div>
+              {detailPosition.can_sell === false && (detailPosition.sell_available_in_seconds ?? 0) > 0 && (
+                <p className="text-amber-200/90 text-[9px]">Sell available in {detailPosition.sell_available_in_seconds}s (3 min cooldown after buy).</p>
+              )}
+              {detailPosition.auto_sell_at && (
+                <p className="text-mutedForeground text-[9px]">Auto-sold after 7 days: {formatDateTime(detailPosition.auto_sell_at)}</p>
+              )}
+            </div>
+            <div className="px-3 py-2.5 border-t border-primary/20 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDetailPosition(null)}
+                className="px-3 py-1.5 rounded border border-zinc-600 text-mutedForeground text-[10px] font-heading hover:bg-zinc-800"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                disabled={sellingId !== null || detailPosition.can_sell === false}
+                onClick={() => { handleSell(detailPosition.id); setDetailPosition(null); }}
+                className="px-3 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary text-[10px] font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
+              >
+                {sellingId === detailPosition.id ? '…' : detailPosition.can_sell !== false ? 'Sell' : `Sell in ${detailPosition.sell_available_in_seconds ?? 0}s`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

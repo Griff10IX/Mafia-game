@@ -1,5 +1,5 @@
 # Stock market: list stocks (live prices via CoinGecko), buy/sell with points, positions, history
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import asyncio
 import math
@@ -17,6 +17,7 @@ COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 _LIVE_CACHE = {"data": None, "ts": 0}
 CACHE_TTL_SEC = 60  # 1 minute
 SELL_COOLDOWN_SEC = 180  # 3 minutes after buy before allowed to sell
+AUTO_SELL_DAYS = 7  # positions are auto-sold after 7 days
 
 STOCKS = [
     {"id": "btc", "name": "Bitcoin", "symbol": "BTC", "coingecko_id": "bitcoin", "base_price": 64935},
@@ -117,6 +118,60 @@ def _get_price_by_stock_id(live_list: list, stock_id: str) -> Optional[float]:
     return None
 
 
+def _parse_bought_at(bought_at_raw) -> Optional[datetime]:
+    if not bought_at_raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(bought_at_raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, catalog: dict):
+    """Auto-sell any positions older than AUTO_SELL_DAYS; add points and record transaction."""
+    cutoff = now - timedelta(days=AUTO_SELL_DAYS)
+    cursor = db.stock_positions.find({"user_id": uid}, {"_id": 0})
+    all_pos = await cursor.to_list(100)
+    now_ts = now.timestamp()
+    for pos in all_pos:
+        bought_at = _parse_bought_at(pos.get("bought_at"))
+        if not bought_at or bought_at >= cutoff:
+            continue
+        stock = catalog.get(pos.get("stock_id"))
+        if not stock:
+            continue
+        current_price = _get_price_by_stock_id(live_list, pos.get("stock_id"))
+        if current_price is None:
+            current_price = _fallback_price(stock, now_ts)
+        units = float(pos.get("units") or 0)
+        value_points = round(units * current_price, 0)
+        await db.stock_positions.delete_one({"id": pos.get("id"), "user_id": uid})
+        await db.users.update_one({"id": uid}, {"$inc": {"points": value_points}})
+        buy_price = float(pos.get("buy_price") or 0)
+        cost_points = round(units * buy_price, 0)
+        profit_points = value_points - cost_points
+        now_iso = now.isoformat()
+        await db.stock_transactions.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": uid,
+            "stock_id": pos.get("stock_id"),
+            "stock_name": stock.get("name"),
+            "type": "sell",
+            "units": units,
+            "price": current_price,
+            "points_spent": 0,
+            "points_received": value_points,
+            "profit_points": profit_points,
+            "created_at": now_iso,
+            "auto_sold": True,
+        })
+        if profit_points > 0:
+            await send_notification(uid, "📈 Stock auto-sold", f"Your {stock.get('name')} position was auto-sold after 7 days. Profit: {profit_points} points!", "reward")
+
+
 # Fallback when CoinGecko is unavailable (deterministic from time)
 def _fallback_price(stock: dict, now_ts: float) -> float:
     sid = stock.get("id") or ""
@@ -173,11 +228,13 @@ def register(router):
 
     @router.get("/stock-market/positions")
     async def stock_market_positions(current_user: dict = Depends(get_current_user)):
-        """Current open positions and current value (using live price from CoinGecko, fallback if missing)."""
+        """Current open positions and current value (using live price from CoinGecko, fallback if missing). Auto-sells positions older than 7 days."""
         uid = current_user["id"]
-        now_ts = datetime.now(timezone.utc).timestamp()
+        now = datetime.now(timezone.utc)
+        now_ts = now.timestamp()
         live_list = await _get_cached_live_prices()
         catalog = {s["id"]: s for s in STOCKS}
+        await _process_auto_sell_expired(uid, now, live_list, catalog)
         cursor = db.stock_positions.find({"user_id": uid}, {"_id": 0})
         positions = await cursor.to_list(100)
         out = []
@@ -196,17 +253,15 @@ def register(router):
             bought_at_raw = pos.get("bought_at")
             can_sell = True
             sell_available_in_seconds = 0
-            if bought_at_raw:
-                try:
-                    bought_at = datetime.fromisoformat(bought_at_raw.replace("Z", "+00:00"))
-                    if bought_at.tzinfo is None:
-                        bought_at = bought_at.replace(tzinfo=timezone.utc)
-                    elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
-                    if elapsed < SELL_COOLDOWN_SEC:
-                        can_sell = False
-                        sell_available_in_seconds = max(0, int(SELL_COOLDOWN_SEC - elapsed))
-                except Exception:
-                    pass
+            bought_at_dt = _parse_bought_at(bought_at_raw)
+            if bought_at_raw and bought_at_dt:
+                elapsed = (now - bought_at_dt).total_seconds()
+                if elapsed < SELL_COOLDOWN_SEC:
+                    can_sell = False
+                    sell_available_in_seconds = max(0, int(SELL_COOLDOWN_SEC - elapsed))
+            auto_sell_at = None
+            if bought_at_dt:
+                auto_sell_at = (bought_at_dt + timedelta(days=AUTO_SELL_DAYS)).isoformat()
             out.append({
                 "id": pos.get("id"),
                 "stock_id": pos.get("stock_id"),
@@ -221,6 +276,7 @@ def register(router):
                 "bought_at": pos.get("bought_at"),
                 "can_sell": can_sell,
                 "sell_available_in_seconds": sell_available_in_seconds,
+                "auto_sell_at": auto_sell_at,
             })
         return {"positions": out}
 
