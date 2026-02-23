@@ -40,6 +40,7 @@ const Prestige = lazy(() => import("./pages/Prestige"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
 const SportsBetting = lazy(() => import("./pages/SportsBetting"));
+const StockMarket = lazy(() => import("./pages/StockMarket"));
 const Bank = lazy(() => import("./pages/Bank"));
 const ArmourWeapons = lazy(() => import("./pages/ArmourWeapons"));
 const Attemps = lazy(() => import("./pages/Attemps"));
@@ -156,6 +157,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Bank />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/stock-market"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <StockMarket />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

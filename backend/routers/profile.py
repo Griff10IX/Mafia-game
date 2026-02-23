@@ -57,24 +57,35 @@ def register(router):
     ChangePasswordRequest = srv.ChangePasswordRequest
     CARS = srv.CARS
 
-    async def _top_cars_for_profile(user_id: str, limit: int = 5):
-        """Return up to 5 cars owned by user, sorted by value descending (for profile showcase)."""
+    async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = True, featured_car_id: Optional[str] = None):
+        """Return up to 5 cars for profile. If show_cars is False, return []. If featured_car_id set, put that first then fill by value (max 5)."""
+        if not show_cars:
+            return []
         cursor = db.user_cars.find({"user_id": user_id}, {"_id": 0, "id": 1, "car_id": 1})
         owned = await cursor.to_list(500)
         cars_catalog = {c["id"]: c for c in (CARS or [])}
         with_value = []
+        featured = None
         for uc in owned:
             info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
             if not info:
                 continue
-            with_value.append({
+            entry = {
                 "id": uc.get("id"),
                 "name": info.get("name") or "?",
                 "value": int(info.get("value") or 0),
                 "rarity": info.get("rarity") or "common",
-            })
+            }
+            if uc.get("id") == featured_car_id:
+                featured = entry
+            else:
+                with_value.append(entry)
         with_value.sort(key=lambda x: -x["value"])
-        return with_value[:limit]
+        if featured:
+            result = [featured] + [c for c in with_value if c["id"] != featured.get("id")][: limit - 1]
+        else:
+            result = with_value[:limit]
+        return result
 
     @router.get("/users/{username}/profile")
     async def get_user_profile(username: str, current_user: dict = Depends(get_current_user)):
@@ -190,7 +201,7 @@ def register(router):
             _casinos_for_type("slots", db.slots_ownership, "state"),
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id}),
-            _top_cars_for_profile(user_id, 5),
+            _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", True), user.get("profile_featured_car_id")),
         )
 
         family_name, family_tag = family_name_tag or (None, None)
@@ -235,6 +246,7 @@ def register(router):
             "messages_sent": messages_sent,
             "messages_received": messages_received,
             "top_cars": top_cars or [],
+            "show_cars_on_profile": user.get("profile_show_cars", True),
         }
         if current_user.get("email") in ADMIN_EMAILS:
             today_utc = datetime.now(timezone.utc).date().isoformat()
@@ -345,3 +357,52 @@ def register(router):
         await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
         doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "telegram_chat_id": 1, "telegram_bot_token": 1})
         return {"message": "Telegram settings updated", "telegram_chat_id": doc.get("telegram_chat_id"), "telegram_bot_token": doc.get("telegram_bot_token")}
+
+    @router.get("/profile/cars-preferences")
+    async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):
+        """Get profile cars preferences: show on profile and featured car id."""
+        return {
+            "show_cars_on_profile": current_user.get("profile_show_cars", True),
+            "featured_car_id": current_user.get("profile_featured_car_id"),
+        }
+
+    @router.patch("/profile/cars-preferences")
+    async def update_profile_cars_preferences(
+        current_user: dict = Depends(get_current_user),
+        show_cars_on_profile: Optional[bool] = Body(None, embed=True),
+        featured_car_id: Optional[str] = Body(None, embed=True),
+    ):
+        """Update profile cars: show/hide cars on profile, set featured car (one to highlight). Max 5 cars shown; featured is first if set."""
+        uid = current_user["id"]
+        updates = {}
+        if show_cars_on_profile is not None:
+            updates["profile_show_cars"] = show_cars_on_profile
+        if featured_car_id is not None:
+            fid = (featured_car_id or "").strip() or None
+            if fid:
+                owned = await db.user_cars.find_one({"id": fid, "user_id": uid}, {"_id": 0, "id": 1})
+                if not owned:
+                    raise HTTPException(status_code=400, detail="You do not own that car")
+            updates["profile_featured_car_id"] = fid
+        if not updates:
+            return {"message": "No changes", "show_cars_on_profile": current_user.get("profile_show_cars", True), "featured_car_id": current_user.get("profile_featured_car_id")}
+        await db.users.update_one({"id": uid}, {"$set": updates})
+        new_show = updates.get("profile_show_cars") if "profile_show_cars" in updates else current_user.get("profile_show_cars", True)
+        new_featured = updates.get("profile_featured_car_id") if "profile_featured_car_id" in updates else current_user.get("profile_featured_car_id")
+        return {"message": "Profile cars preferences updated", "show_cars_on_profile": new_show, "featured_car_id": new_featured}
+
+    @router.get("/profile/my-cars")
+    async def get_profile_my_cars(current_user: dict = Depends(get_current_user)):
+        """List current user's cars (id, name, rarity) for profile featured-car picker. Max 5 shown on profile."""
+        uid = current_user["id"]
+        cursor = db.user_cars.find({"user_id": uid}, {"_id": 0, "id": 1, "car_id": 1})
+        owned = await cursor.to_list(500)
+        cars_catalog = {c["id"]: c for c in (CARS or [])}
+        out = []
+        for uc in owned:
+            info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
+            if not info:
+                continue
+            out.append({"id": uc.get("id"), "name": info.get("name") or "?", "rarity": info.get("rarity") or "common"})
+        out.sort(key=lambda x: (x["name"], x["id"]))
+        return {"cars": out}

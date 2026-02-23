@@ -321,27 +321,39 @@ const RARITY_LABELS = {
   exclusive: 'Exclusive',
 };
 
-const TopCarsCard = ({ topCars }) => {
-  if (!topCars?.length) return null;
+/** Rarity colours for profile car badges (match ViewCar / GTA). */
+const RARITY_BADGE_CLASSES = {
+  common: 'border-gray-400/70 text-gray-400',
+  uncommon: 'border-green-400/70 text-green-400',
+  rare: 'border-blue-400/70 text-blue-400',
+  ultra_rare: 'border-purple-400/70 text-purple-400',
+  legendary: 'border-amber-400/70 text-amber-400',
+  custom: 'border-primary/70 text-primary',
+  exclusive: 'border-rose-400/70 text-rose-400',
+};
+
+const TopCarsCard = ({ topCars, showCars }) => {
+  if (showCars === false || !topCars?.length) return null;
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.06s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
         <Car size={12} className="md:w-3.5 md:h-3.5 text-primary" />
         <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-          Top 5 cars
+          Cars
         </h3>
       </div>
       <div className="p-2.5 flex flex-wrap gap-2">
         {topCars.map((car) => {
           const label = RARITY_LABELS[car.rarity] || car.rarity;
+          const badgeClass = RARITY_BADGE_CLASSES[car.rarity] || RARITY_BADGE_CLASSES.common;
           return (
             <Link
               key={car.id}
               to={`/view-car?id=${encodeURIComponent(car.id)}`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border-2 border-cyan-400/70 bg-zinc-900/90 hover:bg-zinc-800/90 hover:border-cyan-400 transition-colors prof-row"
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border-2 bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row ${badgeClass}`}
             >
-              <span className="text-[10px] font-heading text-cyan-400 uppercase tracking-wide shrink-0">{label}:</span>
+              <span className="text-[10px] font-heading uppercase tracking-wide shrink-0">{label}:</span>
               <span className="text-[10px] md:text-xs font-heading font-semibold text-white truncate max-w-[140px] md:max-w-[200px]">{car.name}</span>
             </Link>
           );
@@ -592,6 +604,10 @@ export default function Profile() {
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [savingTelegram, setSavingTelegram] = useState(false);
+  const [carsShowOnProfile, setCarsShowOnProfile] = useState(true);
+  const [carsFeaturedId, setCarsFeaturedId] = useState('');
+  const [myCarsList, setMyCarsList] = useState([]);
+  const [savingCars, setSavingCars] = useState(false);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
 
@@ -658,10 +674,30 @@ export default function Profile() {
       setTelegramBotToken('');
     }
   };
+  const fetchCarsPrefs = async () => {
+    try {
+      const res = await api.get('/profile/cars-preferences');
+      setCarsShowOnProfile(res.data?.show_cars_on_profile !== false);
+      setCarsFeaturedId(res.data?.featured_car_id ?? '');
+    } catch (_) {
+      setCarsShowOnProfile(true);
+      setCarsFeaturedId('');
+    }
+  };
+  const fetchMyCars = async () => {
+    try {
+      const res = await api.get('/profile/my-cars');
+      setMyCarsList(res.data?.cars ?? []);
+    } catch (_) {
+      setMyCarsList([]);
+    }
+  };
   useEffect(() => {
     if (settingsOpen && isMe) {
       fetchPrefs();
       fetchTelegram();
+      fetchCarsPrefs();
+      fetchMyCars();
     }
   }, [settingsOpen, isMe]);
 
@@ -688,6 +724,23 @@ export default function Profile() {
       toast.error(e.response?.data?.detail || 'Failed to save Telegram settings');
     } finally {
       setSavingTelegram(false);
+    }
+  };
+
+  const saveCarsPrefs = async () => {
+    setSavingCars(true);
+    try {
+      await api.patch('/profile/cars-preferences', {
+        show_cars_on_profile: carsShowOnProfile,
+        featured_car_id: carsFeaturedId.trim() || null,
+      });
+      toast.success('Profile cars preferences saved');
+      const res = await api.get(`/users/${encodeURIComponent(me?.username)}/profile`);
+      setProfile(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setSavingCars(false);
     }
   };
 
@@ -909,7 +962,7 @@ export default function Profile() {
           <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} isOwner={isMe} />
         </div>
 
-        <TopCarsCard topCars={profile.top_cars} />
+        <TopCarsCard topCars={profile.top_cars} showCars={profile.show_cars_on_profile} />
 
         {!isMe && profile.admin_stats && (
           <AdminStatsCard adminStats={profile.admin_stats} />
@@ -992,6 +1045,47 @@ export default function Profile() {
                       {savingTelegram ? 'Saving...' : 'Save'}
                     </button>
                   </div>
+                </div>
+              </div>
+              <div className="border-t border-border pt-4">
+                <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Profile cars</h3>
+                <p className="text-xs text-mutedForeground mb-2">Show up to 5 cars on your profile. You can pick one as featured (shown first).</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <span className="text-sm text-foreground">Show cars on profile</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={carsShowOnProfile}
+                      disabled={savingCars}
+                      onClick={() => setCarsShowOnProfile((v) => !v)}
+                      className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${carsShowOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingCars ? 'opacity-60' : ''}`}
+                    >
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${carsShowOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-mutedForeground mb-1">Featured car (optional)</label>
+                    <select
+                      value={carsFeaturedId}
+                      onChange={(e) => setCarsFeaturedId(e.target.value)}
+                      disabled={savingCars}
+                      className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    >
+                      <option value="">None</option>
+                      {myCarsList.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.rarity})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={saveCarsPrefs}
+                    disabled={savingCars}
+                    className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingCars ? 'Saving…' : 'Save cars preferences'}
+                  </button>
                 </div>
               </div>
               <div className="border-t border-border pt-4">
