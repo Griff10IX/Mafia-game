@@ -38,6 +38,7 @@ const Slots = lazy(() => import("./pages/Casinos/SlotsPage"));
 const CrackSafe = lazy(() => import("./pages/CrackSafe"));
 const Prestige = lazy(() => import("./pages/Prestige"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
+const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
 const SportsBetting = lazy(() => import("./pages/SportsBetting"));
 const Bank = lazy(() => import("./pages/Bank"));
 const ArmourWeapons = lazy(() => import("./pages/ArmourWeapons"));
@@ -531,6 +532,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <VideoPoker />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/casino/mdg"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MDG />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
