@@ -23,6 +23,7 @@ from routers.booze_run import (
 
 # Store-only constants
 SILENCER_COST_POINTS = 150
+ANTI_SNITCH_COST_POINTS = 120
 OC_TIMER_COST_POINTS = 300
 CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
 AUTO_RANK_COST_POINTS = 200  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
@@ -60,6 +61,19 @@ async def buy_silencer(current_user: dict = Depends(get_current_user)):
         {"$inc": {"points": -SILENCER_COST_POINTS}, "$set": {"has_silencer": True}}
     )
     return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": SILENCER_COST_POINTS}
+
+
+async def buy_anti_snitch(current_user: dict = Depends(get_current_user)):
+    """Purchase Anti Snitch: you cannot be snitched on by other players in jail."""
+    if current_user.get("anti_snitch", False):
+        raise HTTPException(status_code=400, detail="You already have Anti Snitch")
+    if (current_user.get("points") or 0) < ANTI_SNITCH_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {ANTI_SNITCH_COST_POINTS})")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -ANTI_SNITCH_COST_POINTS}, "$set": {"anti_snitch": True}},
+    )
+    return {"message": "Anti Snitch purchased! You cannot be snitched on.", "cost": ANTI_SNITCH_COST_POINTS}
 
 
 async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
@@ -179,6 +193,7 @@ def register(router):
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
     router.add_api_route("/store/buy-silencer", buy_silencer, methods=["POST"])
+    router.add_api_route("/store/buy-anti-snitch", buy_anti_snitch, methods=["POST"])
     router.add_api_route("/store/buy-oc-timer", buy_oc_timer, methods=["POST"])
     router.add_api_route("/store/buy-crew-oc-timer", buy_crew_oc_timer, methods=["POST"])
     router.add_api_route("/store/upgrade-garage-batch", upgrade_garage_batch_limit, methods=["POST"])

@@ -278,7 +278,7 @@ const InfoSection = () => (
         </li>
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
-          <span>In jail? Snitch on someone (or random online) — you get released, they serve time. They’re notified but not who did it.</span>
+          <span>In jail? Snitch on someone (or random online). 10–20% success; on success you’re released and they serve time. Snitched-on players can’t be snitched again for 5 mins.</span>
         </li>
       </ul>
     </div>
@@ -416,6 +416,9 @@ export default function Jail() {
         setShowSnitchModal(false);
         setSnitchTargetInput('');
         window.dispatchEvent(new CustomEvent('app:refresh-user'));
+        fetchJailData();
+      } else {
+        toast.error(res.data?.message || "The guards didn't buy it. You're still in jail.");
         fetchJailData();
       }
     } catch (e) {

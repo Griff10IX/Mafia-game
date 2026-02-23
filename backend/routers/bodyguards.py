@@ -23,8 +23,23 @@ from server import (
 )
 
 # Constants (moved from server)
-BODYGUARD_SLOT_COSTS = [100, 200, 300, 400]
+BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
 BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
+
+# Bodyguard inflation: each purchase starts/resets a 3h timer; buying again before it expires adds % (2, 5, 7, 12, 17, 22, ...)
+BODYGUARD_INFLATION_HOURS = 3
+# First 4 levels: 2%, 5%, 7%, 12%; then +5% per level (17%, 22%, 27%, ...)
+BODYGUARD_INFLATION_PERCENTS_FIRST = [0.02, 0.05, 0.07, 0.12]
+BODYGUARD_INFLATION_EXTRA_PER_LEVEL = 0.05  # after level 4
+
+
+def _bodyguard_inflation_percent_for_level(level: int) -> float:
+    """Return inflation as decimal (e.g. 0.12 for 12%) for level >= 1. No cap; keeps increasing past 12%."""
+    if level < 1:
+        return 0.0
+    if level <= len(BODYGUARD_INFLATION_PERCENTS_FIRST):
+        return BODYGUARD_INFLATION_PERCENTS_FIRST[level - 1]
+    return BODYGUARD_INFLATION_PERCENTS_FIRST[-1] + (level - len(BODYGUARD_INFLATION_PERCENTS_FIRST)) * BODYGUARD_INFLATION_EXTRA_PER_LEVEL
 
 # Per-user cache for GET /bodyguards
 _bodyguards_cache: dict = {}

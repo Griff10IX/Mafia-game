@@ -411,12 +411,21 @@ async def leave_jail(current_user: dict = Depends(get_current_user)):
     }
 
 
-# Snitch: when in jail, name someone (or pick random online); on success you're released and they serve time. They get a notification (not who did it).
+# Snitch: when in jail, name someone (or pick random online). 10–20% success chance. On success you're released and they serve time; they can't be snitched on again for 5 mins.
 SNITCH_JAIL_SECONDS = 45
+SNITCH_SUCCESS_CHANCE_MIN = 0.10
+SNITCH_SUCCESS_CHANCE_MAX = 0.20
+SNITCH_IMMUNITY_MINUTES = 5
+
+
+def _snitch_success_roll() -> bool:
+    """Return True with a random chance between 10% and 20%."""
+    chance = random.uniform(SNITCH_SUCCESS_CHANCE_MIN, SNITCH_SUCCESS_CHANCE_MAX)
+    return random.random() < chance
 
 
 async def _get_random_online_user(exclude_user_id: str):
-    """Return one random user who is online (last 5 min / forced / auto_rank), not in jail, not dead, not self."""
+    """Return one random user who is online, not in jail, not dead, not self, and not in snitch immunity (snitched on in last 5 mins)."""
     now = datetime.now(timezone.utc)
     five_min_ago = now - timedelta(minutes=5)
     cursor = db.users.find(
@@ -426,10 +435,22 @@ async def _get_random_online_user(exclude_user_id: str):
             "is_dead": {"$ne": True},
             "is_bodyguard": {"$ne": True},
             "is_npc": {"$ne": True},
-            "$or": [
-                {"last_seen": {"$gte": five_min_ago.isoformat()}},
-                {"forced_online_until": {"$gt": now.isoformat()}},
-                {"auto_rank_enabled": True},
+            "anti_snitch": {"$ne": True},
+            "$and": [
+                {
+                    "$or": [
+                        {"snitched_on_until": {"$exists": False}},
+                        {"snitched_on_until": None},
+                        {"snitched_on_until": {"$lte": now.isoformat()}},
+                    ]
+                },
+                {
+                    "$or": [
+                        {"last_seen": {"$gte": five_min_ago.isoformat()}},
+                        {"forced_online_until": {"$gt": now.isoformat()}},
+                        {"auto_rank_enabled": True},
+                    ]
+                },
             ],
         },
         {"_id": 0, "id": 1, "username": 1},
@@ -462,27 +483,51 @@ async def snitch(
         username_ci = re.compile("^" + re.escape(target_username) + "$", re.IGNORECASE)
         target = await db.users.find_one(
             {"username": username_ci},
-            {"_id": 0, "id": 1, "username": 1, "in_jail": 1, "is_dead": 1, "is_bodyguard": 1},
+            {"_id": 0, "id": 1, "username": 1, "in_jail": 1, "is_dead": 1, "is_bodyguard": 1, "snitched_on_until": 1, "anti_snitch": 1},
         )
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         if target["id"] == current_user["id"]:
             raise HTTPException(status_code=400, detail="You can't snitch on yourself")
+        if target.get("anti_snitch"):
+            raise HTTPException(status_code=400, detail="That user has Anti Snitch and cannot be snitched on.")
         if target.get("in_jail"):
             raise HTTPException(status_code=400, detail="That user is already in jail")
         if target.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is dead")
         if target.get("is_bodyguard"):
             raise HTTPException(status_code=400, detail="You can't snitch on that user")
+        until_iso = target.get("snitched_on_until")
+        if until_iso:
+            try:
+                until = datetime.fromisoformat(until_iso.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if until > datetime.now(timezone.utc):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="That user was recently snitched on and can't be snitched on again for 5 minutes.",
+                    )
+            except (ValueError, TypeError):
+                pass
 
-    jail_until = datetime.now(timezone.utc) + timedelta(seconds=SNITCH_JAIL_SECONDS)
+    if not _snitch_success_roll():
+        return {
+            "success": False,
+            "message": "The guards didn't buy it. You're still in jail.",
+            "released": False,
+        }
+
+    now = datetime.now(timezone.utc)
+    jail_until = now + timedelta(seconds=SNITCH_JAIL_SECONDS)
+    snitch_immunity_until = now + timedelta(minutes=SNITCH_IMMUNITY_MINUTES)
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$set": {"in_jail": False, "jail_until": None}},
     )
     await db.users.update_one(
         {"id": target["id"]},
-        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}},
+        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitched_on_until": snitch_immunity_until.isoformat()}},
     )
     await send_notification(
         target["id"],
