@@ -217,8 +217,98 @@ export default function StockMarket() {
           <div className="stock-art-line text-primary mx-3" />
         </div>
 
-        {/* Right: Purchase + Summary + Sell */}
+        {/* Right: Sell + Summary + Purchase */}
         <div className="space-y-4">
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in`}>
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell stocks</h2>
+              <button
+                type="button"
+                onClick={() => { setHistoryOpen(true); fetchHistory(); }}
+                className="text-[9px] font-heading text-primary/80 hover:text-primary uppercase tracking-wider"
+              >
+                <History size={12} className="inline mr-0.5 align-middle" /> History
+              </button>
+            </div>
+            <div className="p-3">
+              <p className="text-[9px] text-mutedForeground font-heading mb-2">Sell your stocks here.</p>
+              {positions.length === 0 ? (
+                <p className="text-[10px] font-heading text-mutedForeground py-4 text-center">You currently have no active investments!</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-12 gap-1 text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider pb-1 border-b border-primary/10">
+                    <span className="col-span-5">Investment</span>
+                    <span className="col-span-3 text-right">Value</span>
+                    <span className="col-span-3 text-right">Profit</span>
+                    <span className="col-span-1" />
+                  </div>
+                  {positions.map((p) => (
+                    <div
+                      key={p.id}
+                      className="relative"
+                      onMouseEnter={(e) => {
+                        if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current);
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const spaceBelow = typeof window !== 'undefined' ? window.innerHeight - rect.bottom - 24 : 400;
+                        const spaceAbove = typeof window !== 'undefined' ? rect.top - 24 : 400;
+                        const showAbove = spaceBelow < 380 && spaceAbove > spaceBelow;
+                        setPopoverAnchor({
+                          left: rect.left,
+                          top: rect.bottom,
+                          rowTop: rect.top,
+                          width: rect.width,
+                          showAbove,
+                        });
+                        setDetailPosition(p);
+                      }}
+                      onMouseLeave={() => {
+                        hoverCloseTimeoutRef.current = setTimeout(() => { setDetailPosition(null); setPopoverAnchor(null); }, 150);
+                      }}
+                    >
+                      <div className="grid grid-cols-12 gap-1 items-center text-[10px] font-heading border-b border-primary/5 py-1.5 cursor-default hover:bg-primary/5 rounded px-1 -mx-1 transition-colors">
+                        <span className="col-span-5 text-foreground truncate">{p.stock_name}</span>
+                        <span className="col-span-3 text-right text-foreground">{p.value_points ?? 0} pts</span>
+                        <span className={`col-span-3 text-right ${(p.profit_points ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                          {(p.profit_points ?? 0) >= 0 ? '+' : ''}{p.profit_points ?? 0}
+                        </span>
+                        <span className="col-span-1">
+                          <button
+                            type="button"
+                            disabled={sellingId !== null || p.can_sell === false}
+                            onClick={() => handleSell(p.id)}
+                            className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/20 text-primary text-[9px] font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
+                            title={p.can_sell === false && (p.sell_available_in_seconds ?? 0) > 0 ? `3 min cooldown after buy. Sell in ${p.sell_available_in_seconds}s` : undefined}
+                          >
+                            {sellingId === p.id ? '…' : p.can_sell !== false ? 'Sell' : `Sell in ${p.sell_available_in_seconds ?? 0}s`}
+                          </button>
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 p-3 stock-fade-in`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[10px] font-heading text-mutedForeground">Points in market</span>
+              <span className="text-[10px] font-heading font-bold text-foreground">
+                {(summary.points_in_use ?? 0).toLocaleString()} / {(summary.max_points ?? 3000).toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <span className="text-[10px] font-heading text-mutedForeground">Total trades</span>
+              <span className="text-[10px] font-heading font-bold text-foreground">{summary.total_trades ?? 0}</span>
+            </div>
+            <div className="flex items-center justify-between gap-2 mt-1">
+              <span className="text-[10px] font-heading text-mutedForeground">Profit / loss (all-time)</span>
+              <span className={`text-[10px] font-heading font-bold ${(summary.total_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {(summary.total_profit ?? 0) >= 0 ? '+' : ''}{(summary.total_profit ?? 0).toLocaleString()} pts
+              </span>
+            </div>
+          </div>
+
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
@@ -234,7 +324,9 @@ export default function StockMarket() {
                   placeholder="0"
                   className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
                 />
-                <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Max {(summary.max_points ?? 3000).toLocaleString()} pts total in market</p>
+                <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+                  {(Math.max(0, (summary.max_points ?? 3000) - (summary.points_in_use ?? 0))).toLocaleString()} pts remaining (max {(summary.max_points ?? 3000).toLocaleString()} in market)
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -285,87 +377,6 @@ export default function StockMarket() {
               </button>
             </div>
           </div>
-
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 p-3 stock-fade-in`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-heading text-mutedForeground">Points in market</span>
-              <span className="text-[10px] font-heading font-bold text-foreground">
-                {(summary.points_in_use ?? 0).toLocaleString()} / {(summary.max_points ?? 3000).toLocaleString()}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-2 mt-1">
-              <span className="text-[10px] font-heading text-mutedForeground">Total trades</span>
-              <span className="text-[10px] font-heading font-bold text-foreground">{summary.total_trades ?? 0}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2 mt-1">
-              <span className="text-[10px] font-heading text-mutedForeground">Profit / loss (all-time)</span>
-              <span className={`text-[10px] font-heading font-bold ${(summary.total_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {(summary.total_profit ?? 0) >= 0 ? '+' : ''}{(summary.total_profit ?? 0).toLocaleString()} pts
-              </span>
-            </div>
-          </div>
-
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in`}>
-            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell stocks</h2>
-              <button
-                type="button"
-                onClick={() => { setHistoryOpen(true); fetchHistory(); }}
-                className="text-[9px] font-heading text-primary/80 hover:text-primary uppercase tracking-wider"
-              >
-                <History size={12} className="inline mr-0.5 align-middle" /> History
-              </button>
-            </div>
-            <div className="p-3">
-              <p className="text-[9px] text-mutedForeground font-heading mb-2">Sell your stocks here.</p>
-              {positions.length === 0 ? (
-                <p className="text-[10px] font-heading text-mutedForeground py-4 text-center">You currently have no active investments!</p>
-              ) : (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-12 gap-1 text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider pb-1 border-b border-primary/10">
-                    <span className="col-span-5">Investment</span>
-                    <span className="col-span-3 text-right">Value</span>
-                    <span className="col-span-3 text-right">Profit</span>
-                    <span className="col-span-1" />
-                  </div>
-                  {positions.map((p) => (
-                    <div
-                      key={p.id}
-                      className="relative"
-                      onMouseEnter={(e) => {
-                        if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current);
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setPopoverAnchor({ left: rect.left, top: rect.bottom, width: rect.width });
-                        setDetailPosition(p);
-                      }}
-                      onMouseLeave={() => {
-                        hoverCloseTimeoutRef.current = setTimeout(() => { setDetailPosition(null); setPopoverAnchor(null); }, 150);
-                      }}
-                    >
-                      <div className="grid grid-cols-12 gap-1 items-center text-[10px] font-heading border-b border-primary/5 py-1.5 cursor-default hover:bg-primary/5 rounded px-1 -mx-1 transition-colors">
-                        <span className="col-span-5 text-foreground truncate">{p.stock_name}</span>
-                        <span className="col-span-3 text-right text-foreground">{p.value_points ?? 0} pts</span>
-                        <span className={`col-span-3 text-right ${(p.profit_points ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {(p.profit_points ?? 0) >= 0 ? '+' : ''}{p.profit_points ?? 0}
-                        </span>
-                        <span className="col-span-1">
-                          <button
-                            type="button"
-                            disabled={sellingId !== null || p.can_sell === false}
-                            onClick={() => handleSell(p.id)}
-                            className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/20 text-primary text-[9px] font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
-                            title={p.can_sell === false && (p.sell_available_in_seconds ?? 0) > 0 ? `3 min cooldown after buy. Sell in ${p.sell_available_in_seconds}s` : undefined}
-                          >
-                            {sellingId === p.id ? '…' : p.can_sell !== false ? 'Sell' : `Sell in ${p.sell_available_in_seconds ?? 0}s`}
-                          </button>
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -396,15 +407,20 @@ export default function StockMarket() {
 
       {detailPosition && popoverAnchor && createPortal(
         <div
-          className="fixed z-[100] w-[320px] rounded-lg overflow-hidden bg-zinc-900 border border-primary/20 shadow-xl"
-          style={{ left: popoverAnchor.left, top: popoverAnchor.top + 4 }}
+          className="fixed z-[100] w-[320px] max-h-[70vh] rounded-lg overflow-hidden bg-zinc-900 border border-primary/20 shadow-xl flex flex-col"
+          style={{
+            left: popoverAnchor.left,
+            top: popoverAnchor.showAbove
+              ? (popoverAnchor.rowTop ?? popoverAnchor.top - 420) - 420 - 8
+              : popoverAnchor.top + 4,
+          }}
           onMouseEnter={() => { if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current); }}
           onMouseLeave={() => { setDetailPosition(null); setPopoverAnchor(null); }}
         >
-          <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
+          <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Position details</span>
           </div>
-          <div className="p-3 space-y-2 text-[10px] font-heading">
+          <div className="p-3 space-y-2 text-[10px] font-heading overflow-y-auto min-h-0 flex-1">
             <p className="text-foreground font-bold text-sm">{detailPosition.stock_name} ({detailPosition.symbol})</p>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="bg-zinc-800/50 rounded p-1.5 border border-primary/10">
@@ -442,7 +458,7 @@ export default function StockMarket() {
               <p className="text-mutedForeground text-[9px]">Auto-sold after 7 days: {formatDateTime(detailPosition.auto_sell_at)}</p>
             )}
           </div>
-          <div className="px-3 py-2 border-t border-primary/20 flex justify-end gap-1.5">
+          <div className="px-3 py-2 border-t border-primary/20 flex justify-end gap-1.5 shrink-0">
             <button
               type="button"
               disabled={sellingId !== null || detailPosition.can_sell === false}
