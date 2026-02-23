@@ -393,7 +393,7 @@ def register(router):
 
     @router.get("/profile/my-cars")
     async def get_profile_my_cars(current_user: dict = Depends(get_current_user)):
-        """List current user's cars (id, name, rarity) for profile featured-car picker. Max 5 shown on profile."""
+        """List current user's cars (id, name, rarity, value) for profile featured-car picker. Best cars first (by value desc)."""
         uid = current_user["id"]
         cursor = db.user_cars.find({"user_id": uid}, {"_id": 0, "id": 1, "car_id": 1})
         owned = await cursor.to_list(500)
@@ -403,6 +403,11 @@ def register(router):
             info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
             if not info:
                 continue
-            out.append({"id": uc.get("id"), "name": info.get("name") or "?", "rarity": info.get("rarity") or "common"})
-        out.sort(key=lambda x: (x["name"], x["id"]))
+            out.append({
+                "id": uc.get("id"),
+                "name": info.get("name") or "?",
+                "rarity": info.get("rarity") or "common",
+                "value": int(info.get("value") or 0),
+            })
+        out.sort(key=lambda x: (-x["value"], x["name"], x["id"]))
         return {"cars": out}

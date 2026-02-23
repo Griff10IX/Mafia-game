@@ -52,6 +52,14 @@ export default function StockMarket() {
     Promise.all([fetchList(), fetchPositions(), fetchSummary()]).finally(() => setLoading(false));
   }, [fetchList, fetchPositions, fetchSummary]);
 
+  // Refresh positions every second while any position is in sell cooldown so countdown updates
+  useEffect(() => {
+    const anyInCooldown = positions.some((p) => p.can_sell === false && (p.sell_available_in_seconds ?? 0) > 0);
+    if (!anyInCooldown) return;
+    const t = setInterval(fetchPositions, 1000);
+    return () => clearInterval(t);
+  }, [positions, fetchPositions]);
+
   useEffect(() => {
     const t = setInterval(() => { fetchList(); fetchPositions(); }, 15000);
     return () => clearInterval(t);
@@ -277,11 +285,12 @@ export default function StockMarket() {
                       <span className="col-span-1">
                         <button
                           type="button"
-                          disabled={sellingId !== null}
+                          disabled={sellingId !== null || p.can_sell === false}
                           onClick={() => handleSell(p.id)}
                           className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/20 text-primary text-[9px] font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
+                          title={p.can_sell === false && (p.sell_available_in_seconds ?? 0) > 0 ? `3 min cooldown after buy. Sell in ${p.sell_available_in_seconds}s` : undefined}
                         >
-                          {sellingId === p.id ? '…' : 'Sell'}
+                          {sellingId === p.id ? '…' : p.can_sell !== false ? 'Sell' : `Sell in ${p.sell_available_in_seconds ?? 0}s`}
                         </button>
                       </span>
                     </div>

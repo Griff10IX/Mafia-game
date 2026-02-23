@@ -84,7 +84,8 @@ export default function ViewCar() {
   const rarityLabel = (car.rarity || '').replace(/_/g, ' ');
   const rarityColor = RARITY_COLORS[car.rarity] || 'text-mutedForeground';
   const isOwner = car.owner === 'you';
-  const backTo = isOwner ? '/garage' : '/buy-cars';
+  const fromProfile = car.owner === 'profile';
+  const backTo = isOwner ? '/garage' : (fromProfile ? undefined : '/buy-cars');
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`}>
@@ -108,10 +109,10 @@ export default function ViewCar() {
             <DollarSign size={12} className="text-primary" />
             <span className="text-primary font-bold">${(car.value || 0).toLocaleString()}</span>
           </div>
-          {car.owner === 'listing' && car.seller_username && (
+          {(car.owner === 'listing' || car.owner === 'profile') && car.seller_username && (
             <div className="flex items-center gap-1 text-mutedForeground">
               <User size={12} />
-              <span>Seller: {car.seller_username}</span>
+              <span>{car.owner === 'profile' ? "Profile: " : "Seller: "}{car.seller_username}</span>
             </div>
           )}
         </div>
@@ -184,13 +185,24 @@ export default function ViewCar() {
       </div>
 
       <div className="flex justify-center">
-        <Link
-          to={backTo}
-          className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide border border-zinc-600/50 transition-all inline-flex items-center gap-1.5"
-        >
-          <ArrowLeft size={14} />
-          {isOwner ? 'Back to Garage' : 'Back to Buy Cars'}
-        </Link>
+        {backTo !== undefined ? (
+          <Link
+            to={backTo}
+            className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide border border-zinc-600/50 transition-all inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft size={14} />
+            {isOwner ? 'Back to Garage' : 'Back to Buy Cars'}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => window.history.back()}
+            className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide border border-zinc-600/50 transition-all inline-flex items-center gap-1.5"
+          >
+            <ArrowLeft size={14} />
+            Back
+          </button>
+        )}
       </div>
     </div>
   );

@@ -930,11 +930,40 @@ async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
     return out
 
 
+async def _is_car_on_owner_profile(db, owner_id: str, user_car_id: str) -> bool:
+    """Return True if owner has show_cars and this user_car id is in their profile top 5 (same logic as profile _top_cars_for_profile)."""
+    owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "profile_show_cars": 1, "profile_featured_car_id": 1})
+    if not owner or owner.get("profile_show_cars") is False:
+        return False
+    cursor = db.user_cars.find({"user_id": owner_id}, {"_id": 0, "id": 1, "car_id": 1})
+    owned = await cursor.to_list(500)
+    cars_catalog = {c["id"]: c for c in (CARS or [])}
+    with_value = []
+    featured = None
+    featured_id = owner.get("profile_featured_car_id")
+    for uc in owned:
+        info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
+        if not info:
+            continue
+        entry = {"id": uc.get("id"), "value": int(info.get("value") or 0)}
+        if uc.get("id") == featured_id:
+            featured = entry
+        else:
+            with_value.append(entry)
+    with_value.sort(key=lambda x: (-x["value"], x["id"]))
+    if featured:
+        result = [featured] + [e for e in with_value if e["id"] != featured["id"]][:4]
+    else:
+        result = with_value[:5]
+    top_ids = {e["id"] for e in result}
+    return user_car_id in top_ids
+
+
 async def get_view_car(
     id: str = Query(..., alias="id", description="Personal car instance id (user_car_id)"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Return a specific car instance by its personal id (user_car_id). Own car: full details. Others: only if listed for sale."""
+    """Return a specific car instance by its personal id (user_car_id). Own car: full details. Others: if listed for sale or shown on profile."""
     user_car = await db.user_cars.find_one({"id": id})
     if not user_car:
         try:
@@ -947,7 +976,6 @@ async def get_view_car(
     if not car_info:
         raise HTTPException(status_code=404, detail="Car not found")
     owner_id = user_car.get("user_id")
-    # Non-owners can only see a car by id when it's public: listed for sale (or later: displayed on profile)
     rarity = car_info.get("rarity") or "common"
     travel_time = TRAVEL_TIMES.get("custom", 20) if car_info.get("id") == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
     damage_percent = min(100, max(0, float(user_car.get("damage_percent", 0))))
@@ -969,13 +997,20 @@ async def get_view_car(
         out["listed_for_sale"] = bool(user_car.get("listed_for_sale"))
         out["sale_price"] = user_car.get("sale_price")
     else:
-        if not user_car.get("listed_for_sale"):
-            raise HTTPException(status_code=404, detail="Car not found")
-        seller = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
-        out["owner"] = "listing"
-        out["seller_username"] = (seller or {}).get("username", "?")
-        out["sale_price"] = user_car.get("sale_price")
-        out["listed_for_sale"] = True
+        if user_car.get("listed_for_sale"):
+            seller = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
+            out["owner"] = "listing"
+            out["seller_username"] = (seller or {}).get("username", "?")
+            out["sale_price"] = user_car.get("sale_price")
+            out["listed_for_sale"] = True
+        else:
+            on_profile = await _is_car_on_owner_profile(db, owner_id, user_car.get("id"))
+            if not on_profile:
+                raise HTTPException(status_code=404, detail="Car not found")
+            seller = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
+            out["owner"] = "profile"
+            out["seller_username"] = (seller or {}).get("username", "?")
+            out["listed_for_sale"] = False
     return out
 
 

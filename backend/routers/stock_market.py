@@ -15,7 +15,8 @@ from server import db, get_current_user, send_notification
 # CoinGecko API (free, no key). Cache to respect rate limits.
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 _LIVE_CACHE = {"data": None, "ts": 0}
-CACHE_TTL_SEC = 300  # 5 minutes
+CACHE_TTL_SEC = 60  # 1 minute
+SELL_COOLDOWN_SEC = 180  # 3 minutes after buy before allowed to sell
 
 STOCKS = [
     {"id": "btc", "name": "Bitcoin", "symbol": "BTC", "coingecko_id": "bitcoin", "base_price": 64935},
@@ -192,6 +193,20 @@ def register(router):
             value_pts = round(units * current_price, 0)
             cost_pts = round(units * buy_price, 0)
             profit_pts = round(value_pts - cost_pts, 0)
+            bought_at_raw = pos.get("bought_at")
+            can_sell = True
+            sell_available_in_seconds = 0
+            if bought_at_raw:
+                try:
+                    bought_at = datetime.fromisoformat(bought_at_raw.replace("Z", "+00:00"))
+                    if bought_at.tzinfo is None:
+                        bought_at = bought_at.replace(tzinfo=timezone.utc)
+                    elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
+                    if elapsed < SELL_COOLDOWN_SEC:
+                        can_sell = False
+                        sell_available_in_seconds = max(0, int(SELL_COOLDOWN_SEC - elapsed))
+                except Exception:
+                    pass
             out.append({
                 "id": pos.get("id"),
                 "stock_id": pos.get("stock_id"),
@@ -204,6 +219,8 @@ def register(router):
                 "cost_points": int(cost_pts),
                 "profit_points": int(profit_pts),
                 "bought_at": pos.get("bought_at"),
+                "can_sell": can_sell,
+                "sell_available_in_seconds": sell_available_in_seconds,
             })
         return {"positions": out}
 
@@ -284,6 +301,23 @@ def register(router):
         pos = await db.stock_positions.find_one({"id": request.position_id, "user_id": uid}, {"_id": 0})
         if not pos:
             raise HTTPException(status_code=404, detail="Position not found")
+        bought_at_raw = pos.get("bought_at")
+        if bought_at_raw:
+            try:
+                bought_at = datetime.fromisoformat(bought_at_raw.replace("Z", "+00:00"))
+                if bought_at.tzinfo is None:
+                    bought_at = bought_at.replace(tzinfo=timezone.utc)
+                elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
+                if elapsed < SELL_COOLDOWN_SEC:
+                    wait_sec = int(SELL_COOLDOWN_SEC - elapsed)
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"You must wait 3 minutes after buying before selling. You can sell in {wait_sec} seconds.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
         stock = next((s for s in STOCKS if s["id"] == pos.get("stock_id")), None)
         if not stock:
             raise HTTPException(status_code=400, detail="Stock not found")
