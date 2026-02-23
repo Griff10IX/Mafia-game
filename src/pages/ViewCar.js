@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { Car, ArrowLeft, Clock, DollarSign, Shield, Sparkles, User, Wrench } from 'lucide-react';
+import { Car, ArrowLeft, Clock, DollarSign, Shield, Sparkles, User, Wrench, UserCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -20,6 +20,7 @@ export default function ViewCar() {
   const id = searchParams.get('id');
   const [car, setCar] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,6 +87,23 @@ export default function ViewCar() {
   const isOwner = car.owner === 'you';
   const fromProfile = car.owner === 'profile';
   const backTo = isOwner ? '/garage' : (fromProfile ? undefined : '/buy-cars');
+
+  const setShowOnProfile = async (show) => {
+    if (!id || !isOwner) return;
+    setProfileSaving(true);
+    try {
+      await api.patch('/profile/cars-preferences', {
+        show_cars_on_profile: true,
+        featured_car_id: show ? id : null,
+      });
+      setCar((c) => (c ? { ...c, featured_on_profile: !!show, show_cars_on_profile: true } : c));
+      toast.success(show ? 'Car is now shown on your profile' : 'Removed from profile');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update profile');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`}>
@@ -177,6 +195,36 @@ export default function ViewCar() {
                     <span className="text-[10px] uppercase tracking-wider text-amber-200 font-heading">Listed for sale</span>
                   </div>
                   <div className="font-heading font-bold text-amber-400 text-lg">${(car.sale_price || 0).toLocaleString()}</div>
+                </div>
+              )}
+              {isOwner && (
+                <div className="col-span-2 bg-primary/10 rounded-md p-3 border border-primary/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <UserCircle size={14} className="text-primary" />
+                    <span className="text-[10px] uppercase tracking-wider text-primary font-heading">Profile</span>
+                  </div>
+                  {car.featured_on_profile ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-foreground font-heading text-sm">Shown on profile</span>
+                      <button
+                        type="button"
+                        disabled={profileSaving}
+                        onClick={() => setShowOnProfile(false)}
+                        className="px-2.5 py-1 rounded border border-zinc-500 text-mutedForeground text-[10px] font-heading hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        {profileSaving ? '…' : 'Remove from profile'}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={profileSaving}
+                      onClick={() => setShowOnProfile(true)}
+                      className="px-3 py-1.5 rounded border border-primary/50 bg-primary/20 text-primary text-[10px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
+                    >
+                      {profileSaving ? '…' : 'Show on profile'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
