@@ -66,6 +66,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/casino/horseracing', label: 'Horse Racing' },
         { path: '/casino/slots', label: 'Slots' },
         { path: '/casino/videopoker', label: 'Video Poker' },
+        { path: '/casino/mdg', label: 'MDG' },
         { path: '/sports-betting', label: 'Sports Betting' },
       ],
     },
@@ -850,6 +851,7 @@ export default function Layout({ children }) {
                     location.pathname === '/casino/horseracing' ||
                     location.pathname === '/casino/slots' ||
                     location.pathname === '/casino/videopoker' ||
+                    location.pathname === '/casino/mdg' ||
                     location.pathname === '/sports-betting';
 
                   return (
@@ -935,6 +937,17 @@ export default function Layout({ children }) {
                             data-testid="nav-videopoker"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Video Poker</span>
+                          </Link>
+                          <Link
+                            to="/casino/mdg"
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                              location.pathname === '/casino/mdg' ? styles.navItemActivePage : styles.sidebarNavLink
+                            }`}
+                            style={location.pathname === '/casino/mdg' ? sidebarActiveStyle : undefined}
+                            data-testid="nav-mdg"
+                          >
+                            <span className="uppercase tracking-widest font-heading flex-1">MDG</span>
                           </Link>
                           <Link
                             to="/sports-betting"

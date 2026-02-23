@@ -55,6 +55,26 @@ def register(router):
     AvatarUpdateRequest = srv.AvatarUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
     ChangePasswordRequest = srv.ChangePasswordRequest
+    CARS = srv.CARS
+
+    async def _top_cars_for_profile(user_id: str, limit: int = 5):
+        """Return up to 5 cars owned by user, sorted by value descending (for profile showcase)."""
+        cursor = db.user_cars.find({"user_id": user_id}, {"_id": 0, "id": 1, "car_id": 1})
+        owned = await cursor.to_list(500)
+        cars_catalog = {c["id"]: c for c in (CARS or [])}
+        with_value = []
+        for uc in owned:
+            info = cars_catalog.get(uc.get("car_id")) if uc.get("car_id") else None
+            if not info:
+                continue
+            with_value.append({
+                "id": uc.get("id"),
+                "name": info.get("name") or "?",
+                "value": int(info.get("value") or 0),
+                "rarity": info.get("rarity") or "common",
+            })
+        with_value.sort(key=lambda x: -x["value"])
+        return with_value[:limit]
 
     @router.get("/users/{username}/profile")
     async def get_user_profile(username: str, current_user: dict = Depends(get_current_user)):
@@ -155,6 +175,7 @@ def register(router):
             slots_casinos,
             property_,
             messages_received,
+            top_cars,
         ) = await asyncio.gather(
             _family_name_and_tag(),
             _rank_for_field("total_kills", int(user.get("total_kills") or 0)),
@@ -169,6 +190,7 @@ def register(router):
             _casinos_for_type("slots", db.slots_ownership, "state"),
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id}),
+            _top_cars_for_profile(user_id, 5),
         )
 
         family_name, family_tag = family_name_tag or (None, None)
@@ -212,6 +234,7 @@ def register(router):
             "property": property_,
             "messages_sent": messages_sent,
             "messages_received": messages_received,
+            "top_cars": top_cars or [],
         }
         if current_user.get("email") in ADMIN_EMAILS:
             today_utc = datetime.now(timezone.utc).date().isoformat()

@@ -11,6 +11,7 @@ from server import db, get_current_user, send_notification
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
+MDG_MAX_OPEN_GAMES_PER_USER = 3
 MDG_MAX_FEE_POINTS = 100_000_000
 MDG_MAX_FEE_MONEY = 1_000_000_000
 MDG_MAX_EXTRA_POT_POINTS = 100_000_000
@@ -47,7 +48,12 @@ def register(router):
 
     @router.post("/casino/mdg/create")
     async def mdg_create(request: MDGCreateRequest, current_user: dict = Depends(get_current_user)):
-        """Create a new MDG. Fee and extra pot can be points, money, or both. At least one of fee_points or fee_money must be > 0."""
+        """Create a new MDG. You are auto-joined. Fee and extra pot can be points, money, or both. Max 3 open games per user."""
+        uid = current_user["id"]
+        open_count = await db.mdg_games.count_documents({"created_by": uid, "status": "open"})
+        if open_count >= MDG_MAX_OPEN_GAMES_PER_USER:
+            raise HTTPException(status_code=400, detail=f"You can only have {MDG_MAX_OPEN_GAMES_PER_USER} open games at once. Roll or wait for existing games to fill.")
+
         fee_pts = max(0, int(request.fee_points or 0))
         fee_money = max(0.0, float(request.fee_money or 0))
         if fee_pts <= 0 and fee_money <= 0:
@@ -63,11 +69,21 @@ def register(router):
         if extra_pts > MDG_MAX_EXTRA_POT_POINTS or extra_money > MDG_MAX_EXTRA_POT_MONEY:
             raise HTTPException(status_code=400, detail="Extra pot exceeds maximum allowed")
 
+        # Creator is auto-joined: must have enough to pay fee
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, "money": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=400, detail="User not found")
+        if fee_pts > int(user.get("points") or 0):
+            raise HTTPException(status_code=400, detail="Insufficient points to create and join")
+        if fee_money > float(user.get("money") or 0):
+            raise HTTPException(status_code=400, detail="Insufficient money to create and join")
+
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
+        creator_entry = {"user_id": uid, "username": user.get("username") or "?", "paid_points": fee_pts, "paid_money": fee_money}
         doc = {
             "id": game_id,
-            "created_by": current_user["id"],
+            "created_by": uid,
             "created_by_username": current_user.get("username") or "?",
             "created_at": now_iso,
             "fee_points": fee_pts,
@@ -76,16 +92,20 @@ def register(router):
             "auto_roll_at": auto_roll_at,
             "extra_pot_points": extra_pts,
             "extra_pot_money": extra_money,
-            "entries": [],
-            "pot_points": extra_pts,
-            "pot_money": extra_money,
+            "entries": [creator_entry],
+            "pot_points": extra_pts + fee_pts,
+            "pot_money": extra_money + fee_money,
             "status": "open",
             "winner_id": None,
             "winner_username": None,
             "rolled_at": None,
         }
         await db.mdg_games.insert_one(doc)
-        return {"message": "Game created", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
+        if fee_pts:
+            await db.users.update_one({"id": uid}, {"$inc": {"points": -fee_pts}})
+        if fee_money:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": -fee_money}})
+        return {"message": "Game created and you are in it", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
     @router.post("/casino/mdg/join")
     async def mdg_join(request: MDGJoinRequest, current_user: dict = Depends(get_current_user)):
@@ -154,15 +174,15 @@ def register(router):
 
     @router.post("/casino/mdg/roll")
     async def mdg_roll(request: MDGRollRequest, current_user: dict = Depends(get_current_user)):
-        """Manually roll an open game (creator only). One random winner takes the pot. Requires at least 2 players."""
+        """Manually roll an open game (creator only). One random winner takes the pot. Creator can roll anytime (e.g. 1 player = get pot back)."""
         game = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found or already closed")
         if game.get("created_by") != current_user["id"]:
             raise HTTPException(status_code=403, detail="Only the game creator can roll")
         entries = list(game.get("entries") or [])
-        if len(entries) < MDG_MIN_PLAYERS:
-            raise HTTPException(status_code=400, detail="Need at least 2 players to roll")
+        if len(entries) < 1:
+            raise HTTPException(status_code=400, detail="No players in game")
 
         winner_entry = random.choice(entries)
         winner_id = winner_entry["user_id"]

@@ -178,7 +178,7 @@ export default function MDGPage() {
                 const playerNames = entries.map((e) => e.username).join(' – ');
                 const isIn = entries.some((e) => e.user_id === myUserId);
                 const isCreator = g.created_by === myUserId;
-                const canRoll = isCreator && entries.length >= 2;
+                const canRoll = isCreator && entries.length >= 1;
                 return (
                   <li key={g.id} className={`py-3 px-2 mdg-fade-in ${styles.raised}`} style={{ animationDelay: `${0.05 + idx * 0.02}s` }}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -232,7 +232,7 @@ export default function MDGPage() {
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Game options</h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Fee (points and/or money), max players, auto-roll when N spots filled, optional extra pot</p>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Fee (points and/or money), max players, auto-roll when N spots filled, optional extra pot. Max 3 open games. You are auto-joined.</p>
           </div>
           <div className="p-3 space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

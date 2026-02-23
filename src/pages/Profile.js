@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle } from 'lucide-react';
+import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -310,6 +310,47 @@ const HonoursCard = ({ honours }) => (
     <div className="prof-art-line text-primary mx-3" />
   </div>
 );
+
+const RARITY_LABELS = {
+  common: 'Common',
+  uncommon: 'Uncommon',
+  rare: 'Rare',
+  ultra_rare: 'Ultra rare',
+  legendary: 'Legendary',
+  custom: 'Custom',
+  exclusive: 'Exclusive',
+};
+
+const TopCarsCard = ({ topCars }) => {
+  if (!topCars?.length) return null;
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.06s' }}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
+        <Car size={12} className="md:w-3.5 md:h-3.5 text-primary" />
+        <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+          Top 5 cars
+        </h3>
+      </div>
+      <div className="p-2.5 flex flex-wrap gap-2">
+        {topCars.map((car) => {
+          const label = RARITY_LABELS[car.rarity] || car.rarity;
+          return (
+            <Link
+              key={car.id}
+              to={`/view-car?id=${encodeURIComponent(car.id)}`}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border-2 border-cyan-400/70 bg-zinc-900/90 hover:bg-zinc-800/90 hover:border-cyan-400 transition-colors prof-row"
+            >
+              <span className="text-[10px] font-heading text-cyan-400 uppercase tracking-wide shrink-0">{label}:</span>
+              <span className="text-[10px] md:text-xs font-heading font-semibold text-white truncate max-w-[140px] md:max-w-[200px]">{car.name}</span>
+            </Link>
+          );
+        })}
+      </div>
+      <div className="prof-art-line text-primary mx-3" />
+    </div>
+  );
+};
 
 const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
   const hasCasinos = ownedCasinos?.length > 0;
@@ -867,6 +908,8 @@ export default function Profile() {
           <HonoursCard honours={honours} />
           <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} isOwner={isMe} />
         </div>
+
+        <TopCarsCard topCars={profile.top_cars} />
 
         {!isMe && profile.admin_stats && (
           <AdminStatsCard adminStats={profile.admin_stats} />
