@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Gift, Clock, DollarSign, Sparkles, Hand, Grid3X3, Star } from 'lucide-react';
-import api from '../utils/api';
+import api, { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -230,7 +230,9 @@ export default function DailyRewards() {
         : null
       );
       if (res.data.result === 'win') {
-        toast.success(`You win! ${formatMoney(res.data.money_won)} + ${res.data.points_won} points`);
+        const parts = [`You win! ${formatMoney(res.data.money_won)}`];
+        if (res.data.cars_won?.length) parts.push(res.data.cars_won.join(', '));
+        toast.success(parts.join(' — '));
         window.dispatchEvent(new CustomEvent('app:refresh-user'));
       } else if (res.data.result === 'lose') {
         toast.info('Computer wins this round.');
@@ -238,7 +240,7 @@ export default function DailyRewards() {
         toast.info("It's a draw!");
       }
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Play failed');
+      toast.error(getApiErrorMessage(e) || 'Play failed');
       setLastThrow(null);
     } finally {
       setPlaying(false);
@@ -257,7 +259,7 @@ export default function DailyRewards() {
         : null
       );
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to start game');
+      toast.error(getApiErrorMessage(e) || 'Failed to start game');
     } finally {
       setTttLoading(false);
     }
@@ -277,7 +279,9 @@ export default function DailyRewards() {
           : null
         );
         if (res.data.result === 'win') {
-          toast.success(`You win! ${formatMoney(res.data.money_won)} + ${res.data.points_won} points`);
+          const parts = [`You win! ${formatMoney(res.data.money_won)}`];
+          if (res.data.cars_won?.length) parts.push(res.data.cars_won.join(', '));
+          toast.success(parts.join(' — '));
           window.dispatchEvent(new CustomEvent('app:refresh-user'));
         } else if (res.data.result === 'lose') {
           toast.info('Computer wins.');
@@ -288,7 +292,7 @@ export default function DailyRewards() {
         setTttGame(prev => prev ? { ...prev, board: res.data.board } : null);
       }
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Move failed');
+      toast.error(getApiErrorMessage(e) || 'Move failed');
     } finally {
       setTttLoading(false);
     }
@@ -363,7 +367,7 @@ export default function DailyRewards() {
           <div className="flex items-center gap-2 pt-2 border-t border-zinc-700/40">
             <DollarSign size={13} className="text-emerald-400" />
             <span className="text-[11px] text-zinc-500 font-heading">
-              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 50000)}</span> + <span className="text-primary">{info?.win_points ?? 2} pts</span>
+              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 50000)}</span> cash, maybe a car or two (max rare)
             </span>
           </div>
         </div>
@@ -494,8 +498,12 @@ export default function DailyRewards() {
                 {result.result === 'win' && (
                   <p className="text-xs font-heading text-primary">
                     <span className="shimmer-text font-bold text-sm">+{formatMoney(result.money_won)}</span>
-                    <span className="text-zinc-400 mx-1">+</span>
-                    <span className="text-primary font-bold">{result.points_won} pts</span>
+                    {result.cars_won?.length ? (
+                      <span className="text-zinc-400 mx-1">—</span>
+                    ) : null}
+                    {result.cars_won?.length ? (
+                      <span className="text-primary font-bold">{result.cars_won.join(', ')}</span>
+                    ) : null}
                   </p>
                 )}
                 <p className="text-[10px] text-zinc-600 font-heading">
@@ -719,8 +727,12 @@ export default function DailyRewards() {
                 {tttResult.result === 'win' && (
                   <p className="text-xs font-heading text-center">
                     <span className="shimmer-text font-bold text-sm">+{formatMoney(tttResult.money_won)}</span>
-                    <span className="text-zinc-400 mx-1">+</span>
-                    <span className="text-primary font-bold">{tttResult.points_won} pts</span>
+                    {tttResult.cars_won?.length ? (
+                      <span className="text-zinc-400 mx-1">—</span>
+                    ) : null}
+                    {tttResult.cars_won?.length ? (
+                      <span className="text-primary font-bold">{tttResult.cars_won.join(', ')}</span>
+                    ) : null}
                   </p>
                 )}
                 <p className="text-[10px] text-zinc-600 font-heading">

@@ -121,6 +121,8 @@ def register(router):
     async def daily_rewards_info(current_user: dict = Depends(get_current_user)):
         """Plays left in current 6h window, next play time if at limit."""
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
         plays = user.get("rps_plays") or []
         in_window = _plays_in_window(plays)
         plays_used = len(in_window)
@@ -152,7 +154,9 @@ def register(router):
         choice = (req.choice or "").strip().lower()
         if choice not in RPS_CHOICES:
             raise HTTPException(status_code=400, detail="Choice must be rock, paper, or scissors")
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1, "money": 1, "points": 1})
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1, "money": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
         plays = user.get("rps_plays") or []
         in_window = _plays_in_window(plays)
         if len(in_window) >= RPS_PLAYS_PER_WINDOW:
@@ -216,6 +220,8 @@ def register(router):
     async def daily_rewards_ttt_start(current_user: dict = Depends(get_current_user)):
         """Start a Noughts & Crosses game. Uses one of your 3 plays per 6h. Player is X or O at random; if O, computer moves first."""
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found.")
         plays = user.get("rps_plays") or []
         in_window = _plays_in_window(plays)
         if len(in_window) >= RPS_PLAYS_PER_WINDOW:

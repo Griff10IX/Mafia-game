@@ -31,6 +31,7 @@ VIDEO_POKER_DEFAULT_MAX_BET = 50_000_000
 VIDEO_POKER_ABSOLUTE_MAX_BET = 500_000_000
 VIDEO_POKER_CLAIM_COST = 500_000_000
 VIDEO_POKER_HISTORY_MAX = 10
+VIDEO_POKER_HOUSE_EDGE = 0.05  # 5% of profit to house (state head when no owner), like dice
 
 SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -420,13 +421,12 @@ def register(router):
         shortfall = 0
 
         if payout == 0:
-            if owner_id:
-                head_family_id = await get_head_family_id_for_state(city) if city else None
-                if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
-                else:
-                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                    await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+            head_family_id = await get_head_family_id_for_state(city) if city else None
+            if head_family_id:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
+            elif owner_id:
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
         elif payout == bet:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
         else:
@@ -442,6 +442,13 @@ def register(router):
                 await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"profit": -actual_owner_pay}})
                 payout = actual_payout
             else:
+                # No owner: house edge to state head (like dice)
+                head_family_id = await get_head_family_id_for_state(city) if city else None
+                if head_family_id and profit_portion > 0:
+                    edge = int(profit_portion * VIDEO_POKER_HOUSE_EDGE)
+                    if edge > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.videopoker": edge}})
+                    payout = bet + profit_portion - edge
                 await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
 
         updated_user = await db.users.find_one({"id": current_user["id"]})

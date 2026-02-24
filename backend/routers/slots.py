@@ -518,8 +518,17 @@ def register(router):
         win = payout_full > 0
 
         if not is_valid_owner:
-            # State-owned: house pays
-            new_money = user_money - bet + payout_full
+            # State-owned: house pays; house edge to state head (like dice)
+            head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
+            if win:
+                house_cut = int(bet * SLOTS_HOUSE_EDGE) if head_family_id else 0
+                if house_cut > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": house_cut, "state_head_income.slots": house_cut}})
+                new_money = user_money - bet + payout_full - house_cut
+            else:
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
+                new_money = user_money - bet
             await db.users.update_one({"id": current_user["id"]}, {"$set": {"money": new_money}})
             history_entry = {
                 "bet": bet,
