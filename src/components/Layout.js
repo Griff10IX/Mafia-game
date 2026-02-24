@@ -381,7 +381,11 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       fetchUnreadCount();
       fetchWarStatus();
-      fetchRankingCounts();
+      // Only fetch crimes/gta/jail counts when on a page that shows those badges – avoids /crimes and /gta/options on every route
+      const path = location.pathname;
+      if (['/ranking', '/crimes', '/gta', '/jail'].includes(path)) {
+        fetchRankingCounts();
+      }
       fetchCasinoProperty();
     }, 0);
     return () => clearTimeout(deferred);

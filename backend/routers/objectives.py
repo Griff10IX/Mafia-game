@@ -54,6 +54,9 @@ OBJECTIVE_TYPES_MONTHLY = [
 DAILY_COMPLETION_BONUS = {"rank_points": 25, "money": 3500, "points": 18}
 WEEKLY_COMPLETION_BONUS = {"rank_points": 180, "money": 40000, "points": 180}
 MONTHLY_COMPLETION_BONUS = {"rank_points": 600, "money": 120000, "points": 500}
+# Weekly and monthly rewards are multiplied so they feel like "x5" and "x15" vs daily
+WEEKLY_REWARD_MULTIPLIER = 5
+MONTHLY_REWARD_MULTIPLIER = 15
 
 
 def _date_seed(date_str: str) -> int:
@@ -358,9 +361,9 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
     weekly_claim_reward = None
     if weekly_all_done and not weekly_claimed:
         weekly_claim_reward = {k: v for k, v in weekly_total_rewards.items() if v}
-        weekly_claim_reward["rank_points"] = weekly_claim_reward.get("rank_points", 0) + WEEKLY_COMPLETION_BONUS.get("rank_points", 0)
-        weekly_claim_reward["money"] = weekly_claim_reward.get("money", 0) + WEEKLY_COMPLETION_BONUS.get("money", 0)
-        weekly_claim_reward["points"] = weekly_claim_reward.get("points", 0) + WEEKLY_COMPLETION_BONUS.get("points", 0)
+        weekly_claim_reward["rank_points"] = (weekly_claim_reward.get("rank_points", 0) + WEEKLY_COMPLETION_BONUS.get("rank_points", 0)) * WEEKLY_REWARD_MULTIPLIER
+        weekly_claim_reward["money"] = (weekly_claim_reward.get("money", 0) + WEEKLY_COMPLETION_BONUS.get("money", 0)) * WEEKLY_REWARD_MULTIPLIER
+        weekly_claim_reward["points"] = (weekly_claim_reward.get("points", 0) + WEEKLY_COMPLETION_BONUS.get("points", 0)) * WEEKLY_REWARD_MULTIPLIER
         if user.get("objectives_weekly_claim_notified") != week_start_str:
             await send_notification(user_id, "Objectives", "Your weekly objectives are complete! Claim your rewards on the Objectives page.", "reward", category="system")
             await db.users.update_one({"id": user_id}, {"$set": {"objectives_weekly_claim_notified": week_start_str}})
@@ -368,9 +371,9 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
     monthly_claim_reward = None
     if monthly_all_done and not monthly_claimed:
         monthly_claim_reward = {k: v for k, v in monthly_total_rewards.items() if v}
-        monthly_claim_reward["rank_points"] = monthly_claim_reward.get("rank_points", 0) + MONTHLY_COMPLETION_BONUS.get("rank_points", 0)
-        monthly_claim_reward["money"] = monthly_claim_reward.get("money", 0) + MONTHLY_COMPLETION_BONUS.get("money", 0)
-        monthly_claim_reward["points"] = monthly_claim_reward.get("points", 0) + MONTHLY_COMPLETION_BONUS.get("points", 0)
+        monthly_claim_reward["rank_points"] = (monthly_claim_reward.get("rank_points", 0) + MONTHLY_COMPLETION_BONUS.get("rank_points", 0)) * MONTHLY_REWARD_MULTIPLIER
+        monthly_claim_reward["money"] = (monthly_claim_reward.get("money", 0) + MONTHLY_COMPLETION_BONUS.get("money", 0)) * MONTHLY_REWARD_MULTIPLIER
+        monthly_claim_reward["points"] = (monthly_claim_reward.get("points", 0) + MONTHLY_COMPLETION_BONUS.get("points", 0)) * MONTHLY_REWARD_MULTIPLIER
         if user.get("objectives_monthly_claim_notified") != month_start_str:
             await send_notification(user_id, "Objectives", "Your monthly objectives are complete! Claim your rewards on the Objectives page.", "reward", category="system")
             await db.users.update_one({"id": user_id}, {"$set": {"objectives_monthly_claim_notified": month_start_str}})
@@ -464,9 +467,9 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         if not weekly_all_done or weekly_claimed:
             raise HTTPException(status_code=400, detail="Weekly objectives not complete or already claimed")
         reward = {k: v for k, v in weekly_total_rewards.items() if v}
-        reward["rank_points"] = reward.get("rank_points", 0) + WEEKLY_COMPLETION_BONUS.get("rank_points", 0)
-        reward["money"] = reward.get("money", 0) + WEEKLY_COMPLETION_BONUS.get("money", 0)
-        reward["points"] = reward.get("points", 0) + WEEKLY_COMPLETION_BONUS.get("points", 0)
+        reward["rank_points"] = (reward.get("rank_points", 0) + WEEKLY_COMPLETION_BONUS.get("rank_points", 0)) * WEEKLY_REWARD_MULTIPLIER
+        reward["money"] = (reward.get("money", 0) + WEEKLY_COMPLETION_BONUS.get("money", 0)) * WEEKLY_REWARD_MULTIPLIER
+        reward["points"] = (reward.get("points", 0) + WEEKLY_COMPLETION_BONUS.get("points", 0)) * WEEKLY_REWARD_MULTIPLIER
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
@@ -489,9 +492,9 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         if not monthly_all_done or monthly_claimed:
             raise HTTPException(status_code=400, detail="Monthly objectives not complete or already claimed")
         reward = {k: v for k, v in monthly_total_rewards.items() if v}
-        reward["rank_points"] = reward.get("rank_points", 0) + MONTHLY_COMPLETION_BONUS.get("rank_points", 0)
-        reward["money"] = reward.get("money", 0) + MONTHLY_COMPLETION_BONUS.get("money", 0)
-        reward["points"] = reward.get("points", 0) + MONTHLY_COMPLETION_BONUS.get("points", 0)
+        reward["rank_points"] = (reward.get("rank_points", 0) + MONTHLY_COMPLETION_BONUS.get("rank_points", 0)) * MONTHLY_REWARD_MULTIPLIER
+        reward["money"] = (reward.get("money", 0) + MONTHLY_COMPLETION_BONUS.get("money", 0)) * MONTHLY_REWARD_MULTIPLIER
+        reward["points"] = (reward.get("points", 0) + MONTHLY_COMPLETION_BONUS.get("points", 0)) * MONTHLY_REWARD_MULTIPLIER
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)

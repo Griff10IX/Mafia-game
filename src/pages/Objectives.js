@@ -193,7 +193,7 @@ export default function Objectives() {
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <CalendarDays className="w-4 h-4 text-primary" />
-                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">This week</h2>
+                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">This week <span className="normal-case font-bold text-primary/90">×5</span></h2>
               </div>
               <span className="text-[10px] text-mutedForeground font-heading shrink-0">Week of {weekly.week_start ?? '—'}</span>
             </div>
@@ -208,7 +208,7 @@ export default function Objectives() {
             )}
             {!weekly.claimed && weekly.all_complete && weekly.claim_reward && Object.keys(weekly.claim_reward).length > 0 && (
               <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 obj-fade-in">
-                <span className="text-[11px] font-heading text-foreground">Reward: {formatReward(weekly.claim_reward)}</span>
+                <span className="text-[11px] font-heading text-foreground">Reward: {formatReward(weekly.claim_reward)} <span className="text-primary font-bold">×5</span></span>
                 <button
                   type="button"
                   onClick={() => handleClaim('weekly')}
@@ -236,7 +236,7 @@ export default function Objectives() {
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <CalendarRange className="w-4 h-4 text-primary" />
-                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">This month</h2>
+                <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">This month <span className="normal-case font-bold text-primary/90">×15</span></h2>
               </div>
               <span className="text-[10px] text-mutedForeground font-heading shrink-0">{formatMonthStart(monthly.month_start)}</span>
             </div>
@@ -251,7 +251,7 @@ export default function Objectives() {
             )}
             {!monthly.claimed && monthly.all_complete && monthly.claim_reward && Object.keys(monthly.claim_reward).length > 0 && (
               <div className="flex flex-wrap items-center gap-2 px-3 py-2 rounded bg-primary/10 border border-primary/30 obj-fade-in">
-                <span className="text-[11px] font-heading text-foreground">Reward: {formatReward(monthly.claim_reward)}</span>
+                <span className="text-[11px] font-heading text-foreground">Reward: {formatReward(monthly.claim_reward)} <span className="text-primary font-bold">×15</span></span>
                 <button
                   type="button"
                   onClick={() => handleClaim('monthly')}
