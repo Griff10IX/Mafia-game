@@ -148,6 +148,7 @@ export default function Admin() {
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
+  const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
   const [userInspectEmail, setUserInspectEmail] = useState('');
@@ -722,6 +723,27 @@ export default function Admin() {
       toast.success(res.data?.message || 'Reset');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setResetOcTimersLoading(false); }
+  };
+
+  const handleResetDailyRewardsTimerAll = async () => {
+    if (!window.confirm('Reset Daily Rewards timer for everyone? All users will get 3 plays again (6h window).')) return;
+    setResetDailyRewardsLoading(true);
+    try {
+      const res = await api.post('/admin/daily-rewards/reset-timer');
+      toast.success(res.data?.message || 'Reset');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setResetDailyRewardsLoading(false); }
+  };
+
+  const handleResetDailyRewardsTimerUser = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setResetDailyRewardsLoading(true);
+    try {
+      const res = await api.post(`/admin/daily-rewards/reset-timer?target_username=${encodeURIComponent(username)}`);
+      toast.success(res.data?.message || 'Reset');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setResetDailyRewardsLoading(false); }
   };
 
   const handleForceOnline = async () => {
@@ -1735,6 +1757,17 @@ export default function Admin() {
             <ActionRow icon={Clock} label="Reset All OC Timers" description="Clear OC cooldown for everyone; all can run Organised Crime immediately">
               <BtnPrimary onClick={handleResetAllOcTimers} disabled={resetOcTimersLoading}>
                 {resetOcTimersLoading ? '...' : 'Reset'}
+              </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Clock} label="Reset Daily Rewards Timer" description="Clear 6h play window: all users get 3 plays again (RPS / Noughts & Crosses)">
+              <BtnPrimary onClick={handleResetDailyRewardsTimerAll} disabled={resetDailyRewardsLoading}>
+                {resetDailyRewardsLoading ? '...' : 'Reset all'}
+              </BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={Clock} label="Reset Daily Rewards for one user" description="Use Target Username above; clears their plays and any in-progress game">
+              <BtnPrimary onClick={handleResetDailyRewardsTimerUser} disabled={resetDailyRewardsLoading}>
+                {resetDailyRewardsLoading ? '...' : 'Reset user'}
               </BtnPrimary>
             </ActionRow>
           </div>

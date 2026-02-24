@@ -152,10 +152,10 @@ const EventBanner = ({ event }) => {
   );
 };
 
-// Crime progress bar: 10–92%, similar to rank bar (fail/jail drops max 15%)
+// Crime progress bar: 25–92%, similar to rank bar (fail/jail drops max 15%)
 const CrimeProgressBar = ({ progress }) => {
-  const pct = Math.min(92, Math.max(10, Number(progress) || 10));
-  const barPct = ((pct - 10) / 82) * 100; // 10% = 0% fill, 92% = 100% fill
+  const pct = Math.min(92, Math.max(25, Number(progress) || 25));
+  const barPct = ((pct - 25) / 67) * 100; // 25% = 0% fill, 92% = 100% fill
   return (
     <div
       className="flex items-center gap-1 shrink-0"
@@ -181,7 +181,7 @@ const CrimeProgressBar = ({ progress }) => {
           }}
           role="progressbar"
           aria-valuenow={pct}
-          aria-valuemin={10}
+          aria-valuemin={25}
           aria-valuemax={92}
         />
       </div>
@@ -381,7 +381,7 @@ export default function Crimes() {
     const inJail = !!user?.in_jail;
 
     return crimes.map((crime) => {
-      const progress = Math.min(92, Math.max(10, Number(crime.progress) ?? 10));
+      const progress = Math.min(92, Math.max(25, Number(crime.progress) ?? 25));
       const successRate = progress / 100;
       const risk = Math.round(100 - progress);
       const remaining = crime.next_available ? secondsUntil(crime.next_available) : null;

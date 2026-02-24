@@ -453,6 +453,37 @@ def register(router):
         )
         return {"message": f"Reset OC timers for all users ({result.modified_count} accounts)", "modified_count": result.modified_count}
 
+    @router.post("/admin/daily-rewards/reset-timer")
+    async def admin_daily_rewards_reset_timer(
+        target_username: Optional[str] = Query(None, description="Reset this user only; omit to reset all users"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Reset Daily Rewards timer (6h play window): clear rps_plays and any in-progress Noughts & Crosses game."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if target_username is not None and not (target_username or "").strip():
+            raise HTTPException(status_code=400, detail="target_username cannot be empty")
+        if target_username:
+            username_pattern = _username_pattern(target_username.strip())
+            target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+            user_id = target["id"]
+            u_res = await db.users.update_one({"id": user_id}, {"$set": {"rps_plays": []}})
+            ttt_res = await db.daily_rewards_ttt.delete_many({"user_id": user_id})
+            return {
+                "message": f"Reset Daily Rewards timer for {target.get('username', target_username)}. Cleared plays and {ttt_res.deleted_count} in-progress game(s).",
+                "modified_count": 1 if u_res.modified_count else 0,
+                "ttt_deleted_count": ttt_res.deleted_count,
+            }
+        u_res = await db.users.update_many({}, {"$set": {"rps_plays": []}})
+        ttt_res = await db.daily_rewards_ttt.delete_many({})
+        return {
+            "message": f"Reset Daily Rewards timer for all users. Cleared plays on {u_res.modified_count} accounts, removed {ttt_res.deleted_count} in-progress game(s).",
+            "modified_count": u_res.modified_count,
+            "ttt_deleted_count": ttt_res.deleted_count,
+        }
+
     @router.post("/admin/force-online")
     async def admin_force_online(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

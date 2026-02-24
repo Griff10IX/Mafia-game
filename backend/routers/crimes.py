@@ -11,8 +11,8 @@ from fastapi import Depends, HTTPException
 logger = logging.getLogger(__name__)
 
 
-# Progress bar: 10-92%. Success +6-8%. Fail -1-3%; once you've hit max, floor is 77% (never drop more than 15% from max)
-CRIME_PROGRESS_MIN = 10
+# Progress bar: 25-92%. Success +6-8%. Fail -1-3%; once you've hit max, floor is 77% (never drop more than 15% from max)
+CRIME_PROGRESS_MIN = 25
 CRIME_PROGRESS_MAX = 92
 CRIME_PROGRESS_GAIN_MIN = 6
 CRIME_PROGRESS_GAIN_MAX = 8
@@ -50,9 +50,9 @@ CRIME_FAIL_MESSAGES = [
 
 
 def _progress_from_attempts(crime_attempts: int) -> int:
-    """Migrate old attempts-based progress to new bar value (10-92)."""
+    """Migrate old attempts-based progress to new bar value (25-92)."""
     if crime_attempts < 100:
-        return 10
+        return 25
     elif crime_attempts < 300:
         return 25
     elif crime_attempts < 600:
@@ -95,7 +95,7 @@ class CrimeResponse(BaseModel):
     next_available: Optional[str]
     attempts: int = 0
     successes: int = 0
-    progress: int = 10
+    progress: int = 25
     unlocked: bool = True
 
 
