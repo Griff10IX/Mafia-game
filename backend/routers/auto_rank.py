@@ -3,7 +3,16 @@ import asyncio
 import logging
 import os
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Optional
+
+# Ensure backend/.env is loaded (e.g. when process cwd is not the backend dir)
+try:
+    from dotenv import load_dotenv
+    _backend_dir = Path(__file__).resolve().parent.parent
+    load_dotenv(_backend_dir / ".env")
+except Exception:
+    pass
 
 _auto_rank_config_cache: Optional[dict] = None
 _auto_rank_config_cache_until: Optional[datetime] = None
