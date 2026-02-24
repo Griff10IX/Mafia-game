@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
@@ -399,17 +399,7 @@ export default function Layout({ children }) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    let intervalId;
-    const deferred = setTimeout(() => {
-      fetchRankingCounts();
-      intervalId = setInterval(fetchRankingCounts, 15000);
-    }, 0);
-    return () => {
-      clearTimeout(deferred);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ranking counts (crimes/gta/jail badges) are fetched on pathname change and app:refresh-user only – no 15s polling
 
   useEffect(() => {
     const pollNotifications = async () => {
@@ -580,7 +570,7 @@ export default function Layout({ children }) {
     }
   };
 
-  const fetchTravelStatus = async () => {
+  const fetchTravelStatus = useCallback(async () => {
     try {
       const res = await api.get('/travel/status');
       const data = res.data || {};
@@ -596,19 +586,21 @@ export default function Layout({ children }) {
     } catch {
       setTravelStatus(null);
     }
-  };
+  }, []);
 
+  // Only poll travel status when on Travel page or when already travelling (so top-bar countdown updates)
   useEffect(() => {
-    let intervalId;
-    const deferred = setTimeout(() => {
-      fetchTravelStatus();
-      intervalId = setInterval(fetchTravelStatus, 1000);
-    }, 0);
-    return () => {
-      clearTimeout(deferred);
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    const path = location.pathname;
+    const isTravelPage = path === '/travel';
+    const isTraveling = travelStatus?.traveling === true;
+    if (!isTravelPage && !isTraveling) {
+      fetchTravelStatus(); // one-time check so we show icon if they're already travelling (e.g. refreshed)
+      return () => {};
+    }
+    fetchTravelStatus();
+    const intervalId = setInterval(fetchTravelStatus, 1000);
+    return () => clearInterval(intervalId);
+  }, [location.pathname, travelStatus?.traveling, fetchTravelStatus]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
