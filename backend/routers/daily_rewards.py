@@ -123,7 +123,13 @@ def register(router):
     async def daily_rewards_info(current_user: dict = Depends(get_current_user)):
         """Plays left in current 6h window, next play time if at limit."""
         # get_current_user already loaded the full user from DB
-        plays = (current_user.get("rps_plays") or [])
+        raw_plays = current_user.get("rps_plays")
+        if isinstance(raw_plays, list):
+            plays = list(raw_plays)
+        elif isinstance(raw_plays, str):
+            plays = [raw_plays]
+        else:
+            plays = []
         in_window = _plays_in_window(plays)
         plays_used = len(in_window)
         plays_left = max(0, RPS_PLAYS_PER_WINDOW - plays_used)
@@ -154,7 +160,13 @@ def register(router):
         choice = (req.choice or "").strip().lower()
         if choice not in RPS_CHOICES:
             raise HTTPException(status_code=400, detail="Choice must be rock, paper, or scissors")
-        plays = (current_user.get("rps_plays") or [])
+        raw_plays = current_user.get("rps_plays")
+        if isinstance(raw_plays, list):
+            plays = list(raw_plays)
+        elif isinstance(raw_plays, str):
+            plays = [raw_plays]  # migrate: was stored as single string by bug
+        else:
+            plays = []
         in_window = _plays_in_window(plays)
         if len(in_window) >= RPS_PLAYS_PER_WINDOW:
             raise HTTPException(
@@ -165,7 +177,7 @@ def register(router):
         result = _rps_winner(choice, computer)
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
-        new_plays = (plays + [now_iso])[-50]
+        new_plays = (plays + [now_iso])[-50:]
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$set": {"rps_plays": new_plays}},
@@ -216,7 +228,13 @@ def register(router):
     @router.post("/daily-rewards/ttt/start")
     async def daily_rewards_ttt_start(current_user: dict = Depends(get_current_user)):
         """Start a Noughts & Crosses game. Uses one of your 3 plays per 6h. Player is X or O at random; if O, computer moves first."""
-        plays = (current_user.get("rps_plays") or [])
+        raw_plays = current_user.get("rps_plays")
+        if isinstance(raw_plays, list):
+            plays = list(raw_plays)
+        elif isinstance(raw_plays, str):
+            plays = [raw_plays]
+        else:
+            plays = []
         in_window = _plays_in_window(plays)
         if len(in_window) >= RPS_PLAYS_PER_WINDOW:
             raise HTTPException(
@@ -237,7 +255,7 @@ def register(router):
             turn = "X"
         else:
             turn = "X"
-        new_plays = (plays + [now_iso])[-50]
+        new_plays = (plays + [now_iso])[-50:]
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"rps_plays": new_plays}})
         await db.daily_rewards_ttt.insert_one({
             "user_id": current_user["id"],
@@ -315,7 +333,13 @@ def register(router):
                             {"user_id": current_user["id"]},
                             {"$set": {"board": board, "turn": player_side}},
                         )
-        plays = (current_user.get("rps_plays") or [])
+        raw_plays = current_user.get("rps_plays")
+        if isinstance(raw_plays, list):
+            plays = list(raw_plays)
+        elif isinstance(raw_plays, str):
+            plays = [raw_plays]
+        else:
+            plays = []
         in_window = _plays_in_window(plays)
         next_play_at = None
         if len(in_window) >= RPS_PLAYS_PER_WINDOW and in_window:
