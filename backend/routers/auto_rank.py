@@ -553,92 +553,100 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
         )
 
 
-async def run_bust_5sec_loop():
-    """Background loop: every 5 sec, for bust-every-5-sec users, try one jail bust."""
+async def run_bust_5sec_once():
+    """Single pass: for bust-every-5-sec users, try one jail bust each. Used by cron or loop."""
     import server as srv
     db = srv.db
+    if not await get_auto_rank_enabled(db):
+        return
+    try:
+        cursor = db.users.find(
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
+        )
+        users = await cursor.to_list(500)
+        bust_target_username = None
+        npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
+        if npc:
+            bust_target_username = npc.get("username")
+        if not bust_target_username:
+            jailed = await db.users.find_one({"in_jail": True}, {"_id": 0, "username": 1})
+            if jailed:
+                bust_target_username = jailed.get("username")
+        for u in users:
+            chat_id = (u.get("telegram_chat_id") or "").strip()
+            bot_token = (u.get("telegram_bot_token") or "").strip()
+            try:
+                if bust_target_username and bust_target_username != u.get("username"):
+                    await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None, bust_target_username=bust_target_username)
+                else:
+                    await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
+            except Exception as e:
+                logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
+            await asyncio.sleep(0.3)
+    except Exception as e:
+        logger.exception("Bust 5sec cycle failed: %s", e)
+
+
+async def run_bust_5sec_loop():
+    """Background loop: every 5 sec, for bust-every-5-sec users, try one jail bust."""
     await asyncio.sleep(15)
     while True:
-        if not await get_auto_rank_enabled(db):
-            await asyncio.sleep(10)
-            continue
-        try:
-            cursor = db.users.find(
-                {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True},
-                {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
-            )
-            users = await cursor.to_list(500)
-            bust_target_username = None
-            npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
-            if npc:
-                bust_target_username = npc.get("username")
-            if not bust_target_username:
-                jailed = await db.users.find_one({"in_jail": True}, {"_id": 0, "username": 1})
-                if jailed:
-                    bust_target_username = jailed.get("username")
-            for u in users:
-                chat_id = (u.get("telegram_chat_id") or "").strip()
-                bot_token = (u.get("telegram_bot_token") or "").strip()
-                try:
-                    if bust_target_username and bust_target_username != u.get("username"):
-                        await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None, bust_target_username=bust_target_username)
-                    else:
-                        await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
-                except Exception as e:
-                    logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
-                await asyncio.sleep(0.3)
-        except Exception as e:
-            logger.exception("Bust 5sec cycle failed: %s", e)
+        await run_bust_5sec_once()
         await asyncio.sleep(BUST_EVERY_5SEC_INTERVAL)
 
 
-async def run_auto_rank_oc_loop():
-    """Background loop: for OC users, run OC with NPC only when timer is ready. run_oc_heist_npc_only enforces oc_cooldown_until (6h/4h) and sets next cooldown."""
+async def run_auto_rank_oc_once():
+    """Single pass: for OC users, run OC with NPC when timer ready. Used by cron or loop."""
     import server as srv
     from routers.oc import run_oc_heist_npc_only
     from security import send_telegram_to_chat
 
     db = srv.db
+    if not await get_auto_rank_enabled(db):
+        return
+    now = datetime.now(timezone.utc)
+    try:
+        cursor = db.users.find(
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
+        )
+        users = await cursor.to_list(500)
+        user_oc_list = await db.user_organised_crime.find(
+            {"user_id": {"$in": [u["id"] for u in users]}},
+            {"_id": 0, "user_id": 1, "selected_equipment": 1},
+        ).to_list(500)
+        user_oc_by_id = {doc["user_id"]: doc.get("selected_equipment", "basic") for doc in user_oc_list}
+        for u in users:
+            retry_at = _parse_iso(u.get("auto_rank_oc_retry_at"))
+            if retry_at and now < retry_at:
+                continue
+            chat_id = (u.get("telegram_chat_id") or "").strip()
+            bot_token = (u.get("telegram_bot_token") or "").strip() or None
+            selected_equipment = user_oc_by_id.get(u["id"], "basic")
+            try:
+                result = await run_oc_heist_npc_only(u["id"], selected_equipment_override=selected_equipment)
+                if result.get("skipped_afford"):
+                    retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
+                    await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}})
+                    continue
+                if chat_id and result.get("ran") is True and result.get("success") is True:
+                    msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
+                    await send_telegram_to_chat(chat_id, msg, bot_token)
+                if result.get("ran"):
+                    await db.users.update_one({"id": u["id"]}, {"$unset": {"auto_rank_oc_retry_at": ""}})
+            except Exception as e:
+                logger.exception("Auto rank OC for user %s: %s", u.get("id"), e)
+            await asyncio.sleep(0.5)
+    except Exception as e:
+        logger.exception("Auto rank OC cycle failed: %s", e)
+
+
+async def run_auto_rank_oc_loop():
+    """Background loop: for OC users, run OC with NPC only when timer is ready."""
     await asyncio.sleep(90)
     while True:
-        if not await get_auto_rank_enabled(db):
-            await asyncio.sleep(10)
-            continue
-        now = datetime.now(timezone.utc)
-        try:
-            cursor = db.users.find(
-                {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True},
-                {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
-            )
-            users = await cursor.to_list(500)
-            user_oc_list = await db.user_organised_crime.find(
-                {"user_id": {"$in": [u["id"] for u in users]}},
-                {"_id": 0, "user_id": 1, "selected_equipment": 1},
-            ).to_list(500)
-            user_oc_by_id = {doc["user_id"]: doc.get("selected_equipment", "basic") for doc in user_oc_list}
-            for u in users:
-                retry_at = _parse_iso(u.get("auto_rank_oc_retry_at"))
-                if retry_at and now < retry_at:
-                    continue
-                chat_id = (u.get("telegram_chat_id") or "").strip()
-                bot_token = (u.get("telegram_bot_token") or "").strip() or None
-                selected_equipment = user_oc_by_id.get(u["id"], "basic")
-                try:
-                    result = await run_oc_heist_npc_only(u["id"], selected_equipment_override=selected_equipment)
-                    if result.get("skipped_afford"):
-                        retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
-                        await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}})
-                        continue
-                    if chat_id and result.get("ran") is True and result.get("success") is True:
-                        msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
-                        await send_telegram_to_chat(chat_id, msg, bot_token)
-                    if result.get("ran"):
-                        await db.users.update_one({"id": u["id"]}, {"$unset": {"auto_rank_oc_retry_at": ""}})
-                except Exception as e:
-                    logger.exception("Auto rank OC for user %s: %s", u.get("id"), e)
-                await asyncio.sleep(0.5)
-        except Exception as e:
-            logger.exception("Auto rank OC cycle failed: %s", e)
+        await run_auto_rank_oc_once()
         await asyncio.sleep(OC_LOOP_INTERVAL_SECONDS)
 
 
@@ -665,9 +673,8 @@ async def run_auto_rank_loop():
 
 async def run_auto_rank_cron_cycle():
     """
-    Single cycle of the main Auto Rank work: booze arrivals + due users.
-    Call this from an external cron (e.g. every 2 min) when AUTO_RANK_USE_CRON=1
-    so the in-process run_auto_rank_loop() is not started.
+    Full Auto Rank cycle: booze arrivals, due users (crimes/GTA), bust pass, OC pass.
+    Call from cron (e.g. every 2 min) when AUTO_RANK_USE_CRON=1; no in-process loops are started.
     """
     import server as srv
     db = srv.db
@@ -682,6 +689,14 @@ async def run_auto_rank_cron_cycle():
         await run_auto_rank_due_users(interval_seconds=config["interval_seconds"])
     except Exception as e:
         logger.exception("Auto rank cron due-users: %s", e)
+    try:
+        await run_bust_5sec_once()
+    except Exception as e:
+        logger.exception("Auto rank cron bust: %s", e)
+    try:
+        await run_auto_rank_oc_once()
+    except Exception as e:
+        logger.exception("Auto rank cron OC: %s", e)
     return {"ok": True}
 
 

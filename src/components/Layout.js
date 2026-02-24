@@ -1242,13 +1242,10 @@ export default function Layout({ children }) {
             }
             if (statId === 'money') {
               const moneyFull = formatMoney(user.money);
-              const moneyCompact = formatMoneyCompact(user.money);
-              const useCompact = moneyFull.length > 14;
               return (
                 <div className={`${chipClass} min-w-0`} title={`Cash: ${moneyFull}`}>
                   <DollarSign size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-primary md:hidden`} data-testid="topbar-money">{moneyCompact}</span>
-                  <span className={`font-heading text-xs text-primary hidden md:inline tabular-nums ${useCompact ? '' : 'truncate max-w-[7rem]'}`} data-testid="topbar-money-full">{useCompact ? moneyCompact : moneyFull}</span>
+                  <span className={`font-heading ${topBarTextClass} text-primary tabular-nums truncate max-w-[12rem]`} data-testid="topbar-money">{moneyFull}</span>
                 </div>
               );
             }

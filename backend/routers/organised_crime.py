@@ -56,9 +56,8 @@ EQUIPMENT_TIERS = [
     }
 ]
 
-# Organised crime: 50% success; rest is fail or jail. Varied messages.
-OC_SUCCESS_RATE = 0.50
-OC_JAIL_CHANCE_ON_FAIL = 0.50  # Of the 50% failures, half go to jail
+# Organised crime: success from job base_success_rate + equipment success_bonus (capped 92%). Rest is fail or jail.
+OC_JAIL_CHANCE_ON_FAIL = 0.50  # Of failures, half go to jail
 
 OC_HEIST_SUCCESS_MESSAGES = [
     "Heist successful! You earned ${reward:,} and {rank_points} rank points!",
@@ -118,10 +117,10 @@ HEIST_JOBS = [
         "id": "country_bank",
         "name": "Country Bank",
         "base_success_rate": 0.65,
-        "reward": 1_800_000,  # With best equipment (2M cost), 92% success = profitable
+        "reward": 2_100_000,  # Always > setup+equipment max (2M) so every run profits on success
         "rank_points": 120,
-        "jail_time": 45,  # 45 seconds
-        "jail_chance": 0.05,  # 5% chance of jail on failure
+        "jail_time": 45,
+        "jail_chance": 0.05,
         "min_rank": 2,
         "setup_cost": 1_000_000
     },
@@ -318,8 +317,9 @@ async def run_heist(
         {"$inc": {"money": -total_cost}}
     )
     
-    # Fixed 50% success; rest is fail or jail
-    success = random.random() < OC_SUCCESS_RATE
+    # Success chance from job base + equipment bonus (capped 92%); ensures equipment always helps
+    success_rate = min(0.92, job["base_success_rate"] + equipment["success_bonus"])
+    success = random.random() < success_rate
     
     now = datetime.now(timezone.utc)
     

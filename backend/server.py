@@ -1280,15 +1280,17 @@ async def startup_db():
             except Exception as e:
                 logging.exception("Entertainer auto-create: %s", e)
     asyncio.create_task(entertainer_auto_create_cycle())
-    # Auto Rank: auto-commit crimes + GTA for users who bought it; send results to Telegram
+    # Auto Rank: when AUTO_RANK_USE_CRON=1, all Auto Rank (main + bust + OC) is driven by cron only
     from routers import auto_rank
     auto_rank_use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     if not auto_rank_use_cron:
         asyncio.create_task(auto_rank.run_auto_rank_loop())
+        asyncio.create_task(auto_rank.run_bust_5sec_loop())
+        asyncio.create_task(auto_rank.run_auto_rank_oc_loop())
     else:
-        logging.getLogger(__name__).info("Auto Rank: using cron (AUTO_RANK_USE_CRON=1); main loop not started. Call POST /api/auto-rank/cron with X-Cron-Secret every ~2 min.")
-    asyncio.create_task(auto_rank.run_bust_5sec_loop())
-    asyncio.create_task(auto_rank.run_auto_rank_oc_loop())
+        logging.getLogger(__name__).info(
+            "Auto Rank: using cron only (AUTO_RANK_USE_CRON=1). Call POST /api/auto-rank/cron with X-Cron-Secret every ~2 min."
+        )
     from routers import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
     # Slots: run lottery draw on schedule (every 5s check) so draws happen at next_draw_at even if no one is on the page
