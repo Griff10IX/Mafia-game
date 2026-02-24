@@ -220,8 +220,9 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
   const territoryMissions = missions
     .filter(m => m.area === territory)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  // Show brief for the next mission (first incomplete) so user sees what they're working toward
-  const nextMission = territoryMissions.find(m => !m.completed);
+  // Prefer the first incomplete mission that is actually doable (requirements met); otherwise first incomplete (e.g. locked boss)
+  const nextMission = territoryMissions.find(m => !m.completed && m.requirements_met)
+    || territoryMissions.find(m => !m.completed);
   const currentMission = nextMission || territoryMissions[territoryMissions.length - 1] || territoryMissions[0];
   
   if (!currentMission) return null;
@@ -395,6 +396,18 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               </div>
             )}
             
+            {currentMission.unlocks_city && !currentMission.completed && !currentMission.requirements_met && (
+              <div style={{
+                fontSize: '0.75rem',
+                padding: '6px 8px',
+                marginBottom: '6px',
+                background: 'rgba(var(--noir-muted-rgb, 100, 100, 100), 0.15)',
+                borderLeft: '3px solid var(--noir-muted)',
+                color: 'var(--noir-foreground)'
+              }}>
+                Complete all other missions in this city to unlock this mission.
+              </div>
+            )}
             {currentMission.progress?.description && !currentMission.completed && (
               <div style={{
                 display: 'flex',
