@@ -21,12 +21,17 @@ def register(router):
         current_user: dict = Depends(get_current_user),
     ):
         now = datetime.now(timezone.utc)
+        # Real users only: exclude NPCs (bodyguards, jail NPCs, hitlist NPCs, etc.)
+        real_user_match = {"is_npc": {"$ne": True}}
+        alive_real_match = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}}
 
-        total_users = await db.users.count_documents({})
-        alive_users = await db.users.count_documents({"is_dead": {"$ne": True}})
+        total_users = await db.users.count_documents(real_user_match)
+        alive_users = await db.users.count_documents(alive_real_match)
         dead_users = max(0, total_users - alive_users)
 
+        # Totals only from real users; total_cash only from alive real users
         totals = await db.users.aggregate([
+            {"$match": real_user_match},
             {
                 "$group": {
                     "_id": None,
@@ -36,10 +41,17 @@ def register(router):
                     "total_crimes": {"$sum": {"$ifNull": ["$total_crimes", 0]}},
                     "total_gta": {"$sum": {"$ifNull": ["$total_gta", 0]}},
                     "total_jail_busts": {"$sum": {"$ifNull": ["$jail_busts", 0]}},
+                    "total_oc_heists": {"$sum": {"$ifNull": ["$total_oc_heists", 0]}},
                 }
             }
         ]).to_list(1)
         totals_doc = totals[0] if totals else {}
+        # Total cash: alive real users only (not dead, not NPCs)
+        cash_agg = await db.users.aggregate([
+            {"$match": alive_real_match},
+            {"$group": {"_id": None, "money_total": {"$sum": {"$ifNull": ["$money", 0]}}}}
+        ]).to_list(1)
+        total_cash_alive = int(cash_agg[0].get("money_total", 0) or 0) if cash_agg else 0
 
         interest_agg = await db.bank_deposits.aggregate([
             {"$match": {"claimed_at": None}},
@@ -69,7 +81,7 @@ def register(router):
             rank_stats_map[int(rid)] = {"rank_id": int(rid), "rank_name": rname, "alive": 0, "dead": 0}
 
         users_for_rank = await db.users.find(
-            {},
+            real_user_match,
             {"_id": 0, "rank_points": 1, "is_dead": 1}
         ).to_list(50000)
         for u in users_for_rank:
@@ -162,7 +174,7 @@ def register(router):
         return {
             "generated_at": now.isoformat(),
             "game_capital": {
-                "total_cash": int(totals_doc.get("money_total", 0) or 0),
+                "total_cash": total_cash_alive,
                 "swiss_total": int(totals_doc.get("swiss_total", 0) or 0),
                 "interest_bank_total": interest_bank_total,
                 "points_total": int(totals_doc.get("points_total", 0) or 0),
@@ -174,6 +186,7 @@ def register(router):
                 "total_crimes": int(totals_doc.get("total_crimes", 0) or 0),
                 "total_gta": int(totals_doc.get("total_gta", 0) or 0),
                 "total_jail_busts": int(totals_doc.get("total_jail_busts", 0) or 0),
+                "total_oc_heists": int(totals_doc.get("total_oc_heists", 0) or 0),
                 "bullets_melted_total": 0,
             },
             "vehicle_stats": {

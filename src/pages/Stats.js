@@ -313,6 +313,7 @@ function buildUserStatsRows(data) {
     { label: 'Crimes', value: formatNumber(us?.total_crimes) },
     { label: 'GTAs', value: formatNumber(us?.total_gta) },
     { label: 'Jailbusts', value: formatNumber(us?.total_jail_busts) },
+    { label: 'OCs committed', value: formatNumber(us?.total_oc_heists ?? 0) },
     { label: 'Bullets melted', value: formatNumber(us?.bullets_melted_total ?? 0) },
   ];
 }
@@ -335,7 +336,7 @@ function buildVehicleRows(data) {
 export default function Stats() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
-  const [usersOnlyKills, setUsersOnlyKills] = useState(true);
+  const [usersOnlyKills, setUsersOnlyKills] = useState(false);
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
   const rankStats = Array.isArray(data?.rank_stats) ? data.rank_stats : [];

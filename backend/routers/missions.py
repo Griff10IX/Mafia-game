@@ -140,9 +140,9 @@ MISSIONS = [
         "area": "The Loop",
         "order": 7,
         "type": "special",
-        "requirements": {"complete_missions": ["m_chicago_start", "m_chicago_crimes", "m_chicago_earn", "m_chicago_attacks", "m_chicago_north", "m_chicago_near_north", "m_chicago_stockyards"]},
+        "requirements": {"complete_missions": ["m_chicago_start", "m_chicago_crimes", "m_chicago_earn", "m_chicago_attacks", "m_chicago_north", "m_chicago_near_north", "m_chicago_stockyards"], "complete_missions_min_count": 5},
         "title": "See the Old Man",
-        "description": "You've run every district. Report to the Old Man to get your ticket to New York.",
+        "description": "Complete most of the outfit's jobs across the city. Report to the Old Man to get your ticket to New York.",
         "reward_money": 1000,
         "reward_points": 20,
         "difficulty": 9,
@@ -323,9 +323,9 @@ MISSIONS = [
         "area": "Midtown",
         "order": 12,
         "type": "special",
-        "requirements": {"complete_missions": ["m_ny_smuggle", "m_ny_busts", "m_ny_gta", "m_ny_chinatown", "m_ny_greenwich", "m_ny_upper_west", "m_ny_upper_east", "m_ny_harlem", "m_ny_bronx", "m_ny_queens", "m_ny_staten"]},
+        "requirements": {"complete_missions": ["m_ny_smuggle", "m_ny_busts", "m_ny_gta", "m_ny_chinatown", "m_ny_greenwich", "m_ny_upper_west", "m_ny_upper_east", "m_ny_harlem", "m_ny_bronx", "m_ny_queens", "m_ny_staten"], "complete_missions_min_count": 8},
         "title": "NY Boss",
-        "description": "You've run every district. Report to the NY Boss for your ticket to Vegas.",
+        "description": "Complete most of the NY jobs. Report to the NY Boss for your ticket to Vegas.",
         "reward_money": 1500,
         "reward_points": 25,
         "difficulty": 9,
@@ -444,9 +444,9 @@ MISSIONS = [
         "area": "Downtown",
         "order": 8,
         "type": "special",
-        "requirements": {"complete_missions": ["m_vegas_earn", "m_vegas_crimes", "m_vegas_paradise", "m_vegas_henderson", "m_vegas_north", "m_vegas_arts", "m_vegas_boulder"]},
+        "requirements": {"complete_missions": ["m_vegas_earn", "m_vegas_crimes", "m_vegas_paradise", "m_vegas_henderson", "m_vegas_north", "m_vegas_arts", "m_vegas_boulder"], "complete_missions_min_count": 5},
         "title": "Vegas Boss",
-        "description": "You've run every district. Report to the Vegas Boss for your ticket to Atlantic City.",
+        "description": "Complete most of the Vegas jobs. Report to the Vegas Boss for your ticket to Atlantic City.",
         "reward_money": 2000,
         "reward_points": 30,
         "difficulty": 9,
@@ -505,9 +505,9 @@ MISSIONS = [
         "area": "Chelsea",
         "order": 4,
         "type": "special",
-        "requirements": {"complete_missions": ["m_ac_rank", "m_ac_busts", "m_ac_inlet"]},
+        "requirements": {"complete_missions": ["m_ac_rank", "m_ac_busts", "m_ac_inlet"], "complete_missions_min_count": 2},
         "title": "The Commission",
-        "description": "You've run every district. You're made. Report to the Commission.",
+        "description": "Complete most district jobs. You're made. Report to the Commission.",
         "reward_money": 3000,
         "reward_points": 50,
         "difficulty": 10,
@@ -645,11 +645,17 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
         needed_list = list(req["complete_missions"])
         needed = set(needed_list)
         done = comp & needed
-        met = needed <= done
+        min_count = req.get("complete_missions_min_count")
+        if min_count is not None:
+            # Require at least N of the list (e.g. 5 of 7) so player can report without every single mission
+            met = len(done) >= int(min_count)
+            progress["target"] = int(min_count)
+        else:
+            met = needed <= done
+            progress["target"] = len(needed)
         progress["current"] = len(done)
-        progress["target"] = len(needed)
         titles = [MISSION_ID_TO_TITLE.get(mid, mid) for mid in needed_list]
-        progress["description"] = f"Complete {len(needed)} missions ({', '.join(titles)})"
+        progress["description"] = f"Complete {progress['target']} of {len(needed)} missions ({', '.join(titles[:3])}{'…' if len(titles) > 3 else ''})"
         return met, progress
 
     for key, target in req.items():
