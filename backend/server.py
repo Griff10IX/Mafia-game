@@ -1175,6 +1175,8 @@ users.register(api_router)
 giphy.register(api_router)
 crack_safe.register(api_router)
 prestige.register(api_router)
+from routers import daily_rewards
+daily_rewards.register(api_router)
 from routers import auto_rank as auto_rank_router
 auto_rank_router.register(api_router)
 

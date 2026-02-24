@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -102,6 +102,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/booze-run', label: 'Booze Run' },
         { path: '/users-online', label: 'Users Online' },
         { path: '/families', label: 'Families' },
+        { path: '/daily-rewards', label: 'Daily Rewards' },
         { path: '/leaderboard', label: 'Leaderboard' },
         { path: '/store', label: 'Store' },
         { path: '/quick-trade', label: 'Quick Trade' },
@@ -677,6 +678,7 @@ export default function Layout({ children }) {
     { path: '/armour-weapons', icon: Sword, label: 'Armoury' },
     { path: '/casino', icon: Dice5, label: 'Casino' },
     { path: '/crack-safe', icon: Lock, label: 'Crack the Safe' },
+    { path: '/daily-rewards', icon: Gift, label: 'Daily Rewards' },
     { path: '/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/store', icon: ShoppingBag, label: 'Store' },
     { path: '/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
