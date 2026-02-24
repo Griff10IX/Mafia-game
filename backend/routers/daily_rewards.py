@@ -88,14 +88,16 @@ async def _grant_daily_win_rewards(user_id: str) -> tuple[int, list]:
     """Grant cash + optional cars (max rare). Returns (money_won, list of car names)."""
     await db.users.update_one({"id": user_id}, {"$inc": {"money": RPS_WIN_MONEY}})
     cars_won = []
-    if not DAILY_REWARDS_CAR_IDS:
+    car_ids = DAILY_REWARDS_CAR_IDS if isinstance(DAILY_REWARDS_CAR_IDS, list) else []
+    if not car_ids:
         return RPS_WIN_MONEY, cars_won
     r = random.random()
     num_cars = 2 if r < DAILY_REWARDS_CAR_2_CHANCE else (1 if r < DAILY_REWARDS_CAR_1_CHANCE else 0)
-    chosen = random.sample(DAILY_REWARDS_CAR_IDS, min(num_cars, len(DAILY_REWARDS_CAR_IDS))) if num_cars else []
+    chosen = random.sample(car_ids, min(num_cars, len(car_ids))) if num_cars else []
     now_iso = datetime.now(timezone.utc).isoformat()
+    cars_list = CARS if isinstance(CARS, list) else []
     for car_id in chosen:
-        car = next((c for c in CARS if c.get("id") == car_id), None)
+        car = next((c for c in cars_list if c.get("id") == car_id), None)
         if car:
             await db.user_cars.insert_one({
                 "id": str(uuid.uuid4()),
@@ -148,14 +150,11 @@ def register(router):
 
     @router.post("/daily-rewards/play")
     async def daily_rewards_play(req: RPSPlayRequest, current_user: dict = Depends(get_current_user)):
-        """Play rock/paper/scissors. Uses one of your 3 plays per 6h. Win = money + points."""
+        """Play rock/paper/scissors. Uses one of your 3 plays per 6h. Win = money + optional cars."""
         choice = (req.choice or "").strip().lower()
         if choice not in RPS_CHOICES:
             raise HTTPException(status_code=400, detail="Choice must be rock, paper, or scissors")
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1, "money": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found.")
-        plays = user.get("rps_plays") or []
+        plays = (current_user.get("rps_plays") or [])
         in_window = _plays_in_window(plays)
         if len(in_window) >= RPS_PLAYS_PER_WINDOW:
             raise HTTPException(
@@ -217,10 +216,7 @@ def register(router):
     @router.post("/daily-rewards/ttt/start")
     async def daily_rewards_ttt_start(current_user: dict = Depends(get_current_user)):
         """Start a Noughts & Crosses game. Uses one of your 3 plays per 6h. Player is X or O at random; if O, computer moves first."""
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found.")
-        plays = user.get("rps_plays") or []
+        plays = (current_user.get("rps_plays") or [])
         in_window = _plays_in_window(plays)
         if len(in_window) >= RPS_PLAYS_PER_WINDOW:
             raise HTTPException(
@@ -319,8 +315,7 @@ def register(router):
                             {"user_id": current_user["id"]},
                             {"$set": {"board": board, "turn": player_side}},
                         )
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1})
-        plays = user.get("rps_plays") or []
+        plays = (current_user.get("rps_plays") or [])
         in_window = _plays_in_window(plays)
         next_play_at = None
         if len(in_window) >= RPS_PLAYS_PER_WINDOW and in_window:
