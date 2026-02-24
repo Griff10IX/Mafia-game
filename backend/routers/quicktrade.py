@@ -124,10 +124,10 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
     if offer["user_id"] == buyer_id:
         raise HTTPException(status_code=400, detail="Cannot accept your own offer")
     buyer = await db.users.find_one({"id": buyer_id})
-    if not buyer or buyer.get("cash", 0) < offer["cost"]:
+    if not buyer or buyer.get("money", 0) < offer["cost"]:
         raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.users.update_one({"id": buyer_id}, {"$inc": {"cash": -offer["cost"], "points": offer["points"]}})
-    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"cash": offer["cost"]}})
+    await db.users.update_one({"id": buyer_id}, {"$inc": {"money": -offer["cost"], "points": offer["points"]}})
+    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
     await db.trade_sell_offers.update_one(
         {"_id": ObjectId(offer_id)},
         {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": datetime.now(timezone.utc)}}
@@ -221,11 +221,11 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    if user.get("cash", 0) < offer.offer:
+    if user.get("money", 0) < offer.offer:
         raise HTTPException(status_code=400, detail="Insufficient cash")
     fee = max(1, int(offer.points * 0.005))
     points_after_fee = offer.points - fee
-    await db.users.update_one({"id": user_id}, {"$inc": {"cash": -offer.offer}})
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": -offer.offer}})
     new_offer = {
         "user_id": user_id,
         "username": username,
@@ -259,7 +259,7 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
     seller = await db.users.find_one({"id": seller_id})
     if not seller or seller.get("points", 0) < offer["points"]:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await db.users.update_one({"id": seller_id}, {"$inc": {"points": -offer["points"], "cash": offer["offer"]}})
+    await db.users.update_one({"id": seller_id}, {"$inc": {"points": -offer["points"], "money": offer["offer"]}})
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["points"]}})
     await db.trade_buy_offers.update_one(
         {"_id": ObjectId(offer_id)},
@@ -280,7 +280,7 @@ async def cancel_buy_offer_delete(offer_id: str, current_user: dict = Depends(ge
     offer = await db.trade_buy_offers.find_one({"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found or already completed")
-    await db.users.update_one({"id": user_id}, {"$inc": {"cash": offer["offer"]}})
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": offer["offer"]}})
     await db.trade_buy_offers.update_one(
         {"_id": ObjectId(offer_id)},
         {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
@@ -296,7 +296,7 @@ async def cancel_buy_offer_post(offer_id: str, current_user: dict = Depends(get_
         raise HTTPException(status_code=404, detail="Offer not found or already completed")
     if offer["user_id"] != user_id:
         raise HTTPException(status_code=403, detail="You can only cancel your own offers")
-    await db.users.update_one({"id": user_id}, {"$inc": {"cash": offer["offer"]}})
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": offer["offer"]}})
     await db.trade_buy_offers.update_one(
         {"_id": ObjectId(offer_id)},
         {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}}
