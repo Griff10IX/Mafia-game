@@ -516,6 +516,9 @@ MISSIONS = [
     },
 ]
 
+# Lookup mission id -> title for human-readable progress text
+MISSION_ID_TO_TITLE = {m["id"]: m["title"] for m in MISSIONS}
+
 # Mission characters (1920s–30s mafia style). Areas must match MAPS districts in Missions.js.
 MISSION_CHARACTERS = [
     {"id": "char_chicago_fixer", "name": "The Fixer", "city": "Chicago", "area": "The Loop", "role": "fixer",
@@ -639,12 +642,14 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
     progress = {}
 
     if "complete_missions" in req:
-        needed = set(req["complete_missions"])
+        needed_list = list(req["complete_missions"])
+        needed = set(needed_list)
         done = comp & needed
         met = needed <= done
         progress["current"] = len(done)
         progress["target"] = len(needed)
-        progress["description"] = f"Complete {len(needed)} missions ({', '.join(needed)})"
+        titles = [MISSION_ID_TO_TITLE.get(mid, mid) for mid in needed_list]
+        progress["description"] = f"Complete {len(needed)} missions ({', '.join(titles)})"
         return met, progress
 
     for key, target in req.items():

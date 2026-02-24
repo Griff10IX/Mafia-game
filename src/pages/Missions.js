@@ -112,10 +112,11 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
   const completed = territoryMissions.filter(m => m.completed).length;
   const total = territoryMissions.length;
   const isComplete = completed === total && total > 0;
+  const hasDoableMission = territoryMissions.some(m => m.requirements_met && !m.completed);
+  const isLocked = !hasDoableMission;
   const inProgress = completed > 0 && completed < total;
-  const isLocked = !territoryMissions.some(m => m.requirements_met && !m.completed);
-  
-  const status = isComplete ? 'complete' : inProgress ? 'progress' : 'locked';
+  // Show "In Progress" when any mission is ready to do (even 0/X complete), not only when some are done
+  const status = isComplete ? 'complete' : (hasDoableMission || inProgress) ? 'progress' : 'locked';
   
   return (
     <div 
