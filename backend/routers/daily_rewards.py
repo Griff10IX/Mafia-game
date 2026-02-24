@@ -1,4 +1,4 @@
-# Daily Rewards: Rock Paper Scissors vs computer. 3 plays per 6 hours. Win = rewards.
+# Daily Rewards: Rock Paper Scissors and Noughts & Crosses vs computer. 3 plays per 6 hours (shared). Win = rewards.
 from datetime import datetime, timezone, timedelta
 import random
 
@@ -10,9 +10,43 @@ from server import db, get_current_user
 RPS_PLAYS_PER_WINDOW = 3
 RPS_WINDOW_HOURS = 6
 RPS_CHOICES = ["rock", "paper", "scissors"]
-# Win rewards
+# Win rewards (same for RPS and Noughts & Crosses)
 RPS_WIN_MONEY = 50_000
 RPS_WIN_POINTS = 2
+
+# Noughts & Crosses
+TTT_WIN_LINES = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)]
+
+
+def _ttt_winner(board: list) -> str:
+    """Return 'X', 'O', or '' (no winner)."""
+    for a, b, c in TTT_WIN_LINES:
+        if board[a] and board[a] == board[b] == board[c]:
+            return board[a]
+    return ""
+
+
+def _ttt_empty_cells(board: list) -> list:
+    return [i for i in range(9) if not (board[i] or "").strip()]
+
+
+def _ttt_computer_move(board: list, computer_side: str) -> int:
+    """Simple AI: win if possible, else block, else random. Returns cell index."""
+    player_side = "O" if computer_side == "X" else "X"
+    empty = _ttt_empty_cells(board)
+    if not empty:
+        return -1
+    for idx in empty:
+        b = list(board)
+        b[idx] = computer_side
+        if _ttt_winner(b) == computer_side:
+            return idx
+    for idx in empty:
+        b = list(board)
+        b[idx] = player_side
+        if _ttt_winner(b) == player_side:
+            return idx
+    return random.choice(empty)
 
 
 def _rps_winner(player: str, computer: str) -> str:
@@ -48,6 +82,10 @@ def _plays_in_window(plays: list) -> list:
 
 class RPSPlayRequest(BaseModel):
     choice: str
+
+
+class TTTMoveRequest(BaseModel):
+    cell: int
 
 
 def register(router):
@@ -133,5 +171,149 @@ def register(router):
             "money_won": money_won,
             "points_won": points_won,
             "plays_left": max(0, RPS_PLAYS_PER_WINDOW - len(plays_in_window_after)),
+            "next_play_at": next_play_at,
+        }
+
+    @router.get("/daily-rewards/ttt")
+    async def daily_rewards_ttt_status(current_user: dict = Depends(get_current_user)):
+        """Get current Noughts & Crosses game if any (for resuming)."""
+        game = await db.daily_rewards_ttt.find_one({"user_id": current_user["id"]})
+        if not game:
+            return {"has_game": False}
+        board = list(game.get("board") or [""] * 9)
+        if len(board) != 9:
+            board = (board + [""] * 9)[:9]
+        return {
+            "has_game": True,
+            "board": board,
+            "player_side": game.get("player_side") or "X",
+            "turn": game.get("turn") or "X",
+        }
+
+    @router.post("/daily-rewards/ttt/start")
+    async def daily_rewards_ttt_start(current_user: dict = Depends(get_current_user)):
+        """Start a Noughts & Crosses game. Uses one of your 3 plays per 6h. Player is X or O at random; if O, computer moves first."""
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1})
+        plays = user.get("rps_plays") or []
+        in_window = _plays_in_window(plays)
+        if len(in_window) >= RPS_PLAYS_PER_WINDOW:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You have used all {RPS_PLAYS_PER_WINDOW} plays for this 6-hour window.",
+            )
+        existing = await db.daily_rewards_ttt.find_one({"user_id": current_user["id"]})
+        if existing:
+            raise HTTPException(status_code=400, detail="Finish your current Noughts & Crosses game first.")
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        player_side = random.choice(["X", "O"])
+        computer_side = "O" if player_side == "X" else "X"
+        board = [""] * 9
+        if player_side == "O":
+            first_cell = random.choice([0, 2, 4, 6, 8])
+            board[first_cell] = computer_side
+            turn = "X"
+        else:
+            turn = "X"
+        new_plays = (plays + [now_iso])[-50]
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"rps_plays": new_plays}})
+        await db.daily_rewards_ttt.insert_one({
+            "user_id": current_user["id"],
+            "board": board,
+            "player_side": player_side,
+            "computer_side": computer_side,
+            "turn": turn,
+            "created_at": now_iso,
+        })
+        plays_after = _plays_in_window(new_plays)
+        next_play_at = None
+        if len(plays_after) >= RPS_PLAYS_PER_WINDOW and plays_after:
+            try:
+                oldest = min(
+                    datetime.fromisoformat(str(t).replace("Z", "+00:00")) if isinstance(t, str) else t for t in plays_after
+                )
+                if oldest.tzinfo is None:
+                    oldest = oldest.replace(tzinfo=timezone.utc)
+                next_play_at = (oldest + timedelta(hours=RPS_WINDOW_HOURS)).isoformat()
+            except Exception:
+                next_play_at = (now + timedelta(hours=RPS_WINDOW_HOURS)).isoformat()
+        return {
+            "board": board,
+            "player_side": player_side,
+            "turn": turn,
+            "plays_left": max(0, RPS_PLAYS_PER_WINDOW - len(plays_after)),
+            "next_play_at": next_play_at,
+        }
+
+    @router.post("/daily-rewards/ttt/move")
+    async def daily_rewards_ttt_move(req: TTTMoveRequest, current_user: dict = Depends(get_current_user)):
+        """Play a move in Noughts & Crosses. Returns updated board and result (ongoing/win/lose/draw)."""
+        cell = max(0, min(8, int(req.cell)))
+        game = await db.daily_rewards_ttt.find_one({"user_id": current_user["id"]})
+        if not game:
+            raise HTTPException(status_code=400, detail="No active game. Start one first.")
+        board = list(game.get("board") or [""] * 9)
+        if len(board) != 9:
+            board = (board + [""] * 9)[:9]
+        player_side = game.get("player_side") or "X"
+        computer_side = game.get("computer_side") or "O"
+        turn = game.get("turn") or "X"
+        if turn != player_side:
+            raise HTTPException(status_code=400, detail="Not your turn.")
+        if board[cell]:
+            raise HTTPException(status_code=400, detail="Cell already taken.")
+        board[cell] = player_side
+        winner = _ttt_winner(board)
+        result = "ongoing"
+        money_won = 0
+        points_won = 0
+        if winner:
+            result = "win" if winner == player_side else "lose"
+            if result == "win":
+                money_won = RPS_WIN_MONEY
+                points_won = RPS_WIN_POINTS
+                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": money_won, "points": points_won}})
+            await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+        else:
+            empty = _ttt_empty_cells(board)
+            if not empty:
+                result = "draw"
+                await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+            else:
+                comp_cell = _ttt_computer_move(board, computer_side)
+                if comp_cell >= 0:
+                    board[comp_cell] = computer_side
+                    winner = _ttt_winner(board)
+                    if winner:
+                        result = "lose"
+                        await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+                    elif not _ttt_empty_cells(board):
+                        result = "draw"
+                        await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
+                    else:
+                        await db.daily_rewards_ttt.update_one(
+                            {"user_id": current_user["id"]},
+                            {"$set": {"board": board, "turn": player_side}},
+                        )
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1})
+        plays = user.get("rps_plays") or []
+        in_window = _plays_in_window(plays)
+        next_play_at = None
+        if len(in_window) >= RPS_PLAYS_PER_WINDOW and in_window:
+            try:
+                oldest = min(
+                    datetime.fromisoformat(str(t).replace("Z", "+00:00")) if isinstance(t, str) else t for t in in_window
+                )
+                if oldest.tzinfo is None:
+                    oldest = oldest.replace(tzinfo=timezone.utc)
+                next_play_at = (oldest + timedelta(hours=RPS_WINDOW_HOURS)).isoformat()
+            except Exception:
+                next_play_at = (datetime.now(timezone.utc) + timedelta(hours=RPS_WINDOW_HOURS)).isoformat()
+        return {
+            "board": board,
+            "result": result,
+            "money_won": money_won,
+            "points_won": points_won,
+            "plays_left": max(0, RPS_PLAYS_PER_WINDOW - len(in_window)),
             "next_play_at": next_play_at,
         }
