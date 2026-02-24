@@ -32,6 +32,7 @@ BLACKJACK_ABSOLUTE_MAX_BET = 500_000_000
 BLACKJACK_CLAIM_COST = 500_000_000  # $500M to claim table
 BLACKJACK_HOUSE_EDGE = 0.02  # 2% of bet to owner when player loses
 BLACKJACK_HISTORY_MAX = 10
+BLACKJACK_GAME_TIMEOUT_MINUTES = 5  # Unfinished game auto-stands and finishes after this
 
 BLACKJACK_SUITS = ["H", "D", "C", "S"]
 BLACKJACK_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -153,6 +154,82 @@ async def _blackjack_settle_and_save_history(user_id: str, username: str, city: 
     await log_gambling(user_id, username or "?", "blackjack", {"city": city, "bet": bet, "result": result, "payout": payout, "player_total": player_total, "dealer_total": dealer_total})
 
 
+def _blackjack_game_is_stale(game: dict) -> bool:
+    """True if game was created more than BLACKJACK_GAME_TIMEOUT_MINUTES ago."""
+    created = game.get("created_at")
+    if not created:
+        return True
+    try:
+        if isinstance(created, str):
+            dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+        else:
+            dt = created
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return (datetime.now(timezone.utc) - dt).total_seconds() >= BLACKJACK_GAME_TIMEOUT_MINUTES * 60
+    except Exception:
+        return True
+
+
+async def _blackjack_auto_finish_game(game: dict, current_user: dict):
+    """Settle an in-progress game as if player stood (dealer to 17, result, pay/collect, history, remove game)."""
+    bj_city = game.get("city")
+    deck = list(game.get("deck") or [])
+    player_hand = list(game.get("player_hand") or [])
+    dealer_hand = list(game.get("dealer_hand") or [])
+    bet = game.get("bet", 0)
+    owner_id = game.get("owner_id")
+    dealer_total = _blackjack_hand_total(dealer_hand)
+    while dealer_total < 17 and deck:
+        card = deck.pop()
+        dealer_hand.append(card)
+        dealer_total = _blackjack_hand_total(dealer_hand)
+    player_total = _blackjack_hand_total(player_hand)
+    if dealer_total > 21:
+        result = "dealer_bust"
+        payout = bet * 2
+    elif player_total > dealer_total:
+        result = "win"
+        payout = bet * 2
+    elif player_total < dealer_total:
+        result = "lose"
+        payout = 0
+        head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
+        if head_family_id:
+            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})
+        elif owner_id:
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+            await db.blackjack_ownership.update_one({"city": bj_city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+    else:
+        result = "push"
+        payout = bet
+    if payout > 0:
+        if owner_id and result in ("win", "dealer_bust"):
+            owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+            owner_money = int((owner.get("money") or 0) or 0)
+            actual_owner_pay = min(bet, owner_money)
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": bet + actual_owner_pay}})
+            await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
+            stored_city_bj, doc_bj = await _get_blackjack_ownership_doc(bj_city)
+            if bet - actual_owner_pay > 0:
+                await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
+            else:
+                await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -bet}})
+        else:
+            if not owner_id and result in ("win", "dealer_bust"):
+                head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
+                if head_family_id:
+                    edge = int(bet * BLACKJACK_HOUSE_EDGE)
+                    if edge > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.blackjack": edge}})
+                    payout = bet * 2 - edge
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
+    await _blackjack_settle_and_save_history(
+        current_user["id"], current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
+    )
+    await db.blackjack_games.delete_one({"user_id": current_user["id"]})
+
+
 def register(router):
     @router.get("/casino/blackjack/config")
     async def casino_blackjack_config(current_user: dict = Depends(get_current_user)):
@@ -161,6 +238,35 @@ def register(router):
         _, doc = await _get_blackjack_ownership_doc(city) if city else (None, None)
         max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET) if doc else BLACKJACK_DEFAULT_MAX_BET
         return {"max_bet": max_bet, "claim_cost": BLACKJACK_CLAIM_COST}
+
+    @router.get("/casino/blackjack/current-game")
+    async def casino_blackjack_current_game(current_user: dict = Depends(get_current_user)):
+        """Return in-progress game so the UI can show it; if game is older than timeout, auto-stand and return hasGame: false."""
+        game = await db.blackjack_games.find_one({"user_id": current_user["id"]})
+        if not game:
+            return {"hasGame": False}
+        if _blackjack_game_is_stale(game):
+            await _blackjack_auto_finish_game(game, current_user)
+            return {"hasGame": False}
+        player_hand = list(game.get("player_hand") or [])
+        dealer_hand = list(game.get("dealer_hand") or [])
+        player_total = _blackjack_hand_total(player_hand)
+        dealer_visible = dealer_hand[0] if len(dealer_hand) > 0 else None
+        dealer_visible_total = _blackjack_hand_total([dealer_visible]) if dealer_visible else 0
+        dealer_hidden_count = max(0, len(dealer_hand) - 1)
+        can_hit = player_total < 21 and dealer_hidden_count > 0
+        return {
+            "hasGame": True,
+            "status": "playing",
+            "bet": game.get("bet", 0),
+            "player_hand": player_hand,
+            "dealer_hand": dealer_hand,
+            "player_total": player_total,
+            "dealer_visible_total": dealer_visible_total,
+            "dealer_hidden_count": dealer_hidden_count,
+            "can_hit": can_hit,
+            "can_stand": True,
+        }
 
     @router.get("/casino/blackjack/ownership")
     async def casino_blackjack_ownership(current_user: dict = Depends(get_current_user)):
@@ -414,7 +520,10 @@ def register(router):
             raise HTTPException(status_code=400, detail="Not enough money")
         existing = await db.blackjack_games.find_one({"user_id": current_user["id"]})
         if existing:
-            raise HTTPException(status_code=400, detail="Finish your current game first")
+            if _blackjack_game_is_stale(existing):
+                await _blackjack_auto_finish_game(existing, current_user)
+            else:
+                raise HTTPException(status_code=400, detail="Finish your current game first")
         deck = _blackjack_make_deck()
         random.shuffle(deck)
         player_hand = [deck.pop(), deck.pop()]

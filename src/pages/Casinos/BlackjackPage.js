@@ -238,7 +238,13 @@ export default function Blackjack() {
     api.get('/casino/blackjack/history').then((r) => setHistory(r.data?.history || [])).catch(() => {});
   };
 
-  useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); }, []);
+  const fetchCurrentGame = () => {
+    api.get('/casino/blackjack/current-game').then((r) => {
+      if (r.data?.hasGame) setGame(r.data);
+    }).catch(() => {});
+  };
+
+  useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); fetchCurrentGame(); }, []);
 
   const handleClaim = async () => {
     const city = ownership?.current_city;
