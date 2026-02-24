@@ -635,6 +635,7 @@ def register(router):
         game = await db.blackjack_games.find_one({"user_id": current_user["id"]})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
+        bj_city = game.get("city")
         deck = list(game.get("deck") or [])
         player_hand = list(game.get("player_hand") or [])
         dealer_hand = list(game.get("dealer_hand") or [])
@@ -664,7 +665,6 @@ def register(router):
         else:
             result = "push"
             payout = bet
-        bj_city = game.get("city")
         shortfall = 0
         buy_back_offer = None
         ownership_transferred = False
