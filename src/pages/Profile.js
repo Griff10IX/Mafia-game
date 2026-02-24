@@ -77,7 +77,8 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
 };
 
 const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney, onOpenSettings }) => {
-  const profileRows = [
+  const isAdminProfile = profile.rank_name === 'Admin';
+  const allRows = [
     { 
       label: 'Username', 
       value: profile.username, 
@@ -128,6 +129,9 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
       valueClass: 'text-red-400 font-heading font-bold' 
     },
   ];
+  const profileRows = isAdminProfile
+    ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
+    : allRows;
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
   const avatarSrc = isRobotBodyguard ? null : profile.avatar_url;
