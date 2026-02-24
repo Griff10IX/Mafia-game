@@ -139,21 +139,21 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
       {isComplete && <WaxSeal />}
       
       <div style={{
-        fontSize: '1rem',
+        fontSize: '0.95rem',
         fontWeight: 700,
         color: 'var(--noir-foreground)',
-        marginBottom: '8px',
+        marginBottom: '6px',
         borderBottom: '1px solid var(--noir-border-mid)',
-        paddingBottom: '4px'
+        paddingBottom: '3px'
       }}>
         {territory.name} — {territory.description || 'Area'}
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          padding: '4px 0',
+          padding: '2px 0',
           borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.25)',
           color: 'var(--noir-foreground)',
           fontSize: '0.8rem'
@@ -166,7 +166,7 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            padding: '6px 0',
+            padding: '4px 0',
             borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)',
             color: 'var(--noir-foreground)',
             fontSize: '0.85rem'
@@ -396,8 +396,8 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.8rem',
-                padding: '4px 0',
+                fontSize: '0.75rem',
+                padding: '2px 0',
                 borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)'
               }}>
                 <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Progress:</span>
