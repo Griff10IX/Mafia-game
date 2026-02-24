@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../constants';
@@ -1567,8 +1567,13 @@ export default function FamilyPage() {
                 </>
               )}
               {family && (
-                <div className="flex items-center gap-2 mt-2">
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
                   <RoleBadge role={myRole} size="lg" />
+                  {family.head_of_state && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold bg-primary/15 text-primary border border-primary/30">
+                      <MapPin size={9} /> Head of {family.head_of_state}
+                    </span>
+                  )}
                   {activeWars.length > 0 && (
                     <button onClick={() => { setSelectedWarIndex(0); setShowWarModal(true); }}
                       className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-red-500/15 border border-red-500/30 text-red-400 animate-pulse hover:bg-red-500/25 transition-all">

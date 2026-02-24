@@ -1,9 +1,11 @@
 # States: cities (travel), casino games, all casino owners per city
 from datetime import datetime, timezone
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Body
+from pydantic import BaseModel
 
-from server import db, get_current_user, get_wealth_rank, STATES
+from server import db, get_current_user, get_wealth_rank, STATES, get_state_heads, set_state_head
 from routers.dice import DICE_MAX_BET
+from routers.families import resolve_family_id, family_qualifies_for_state_head
 from routers.roulette import ROULETTE_MAX_BET
 from routers.blackjack import BLACKJACK_MAX_BET
 from routers.horseracing import HORSERACING_MAX_BET
@@ -18,6 +20,10 @@ CASINO_GAMES = [
     {"id": "videopoker", "name": "Video Poker", "max_bet": VIDEO_POKER_MAX_BET},
     {"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET},
 ]
+
+
+class StateClaimRequest(BaseModel):
+    state: str
 
 
 async def get_states(current_user: dict = Depends(get_current_user)):
@@ -112,6 +118,23 @@ async def get_states(current_user: dict = Depends(get_current_user)):
             # State-owned or no doc: still include so frontend can show "State owned" and next_draw_at
             slots_owners[st] = {"username": None, "max_bet": SLOTS_MAX_BET, "next_draw_at": next_draw_at}
 
+    # State heads: which family (if any) is head of each state
+    heads_raw = await get_state_heads()
+    state_heads = {}
+    head_family_ids = [fid for fid in (heads_raw or {}).values() if fid]
+    head_families = await db.families.find(
+        {"id": {"$in": head_family_ids}},
+        {"_id": 0, "id": 1, "name": 1, "tag": 1},
+    ).to_list(len(head_family_ids) or 1)
+    fam_map = {f["id"]: f for f in head_families}
+    for st in (STATES or []):
+        fid = (heads_raw or {}).get(st)
+        if fid and fam_map.get(fid):
+            f = fam_map[fid]
+            state_heads[st] = {"family_id": f["id"], "family_name": f.get("name") or "?", "family_tag": f.get("tag") or "?"}
+        else:
+            state_heads[st] = None
+
     return {
         "cities": list(STATES),
         "games": CASINO_GAMES,
@@ -121,8 +144,43 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         "horseracing_owners": horseracing_owners,
         "videopoker_owners": videopoker_owners,
         "slots_owners": slots_owners,
+        "state_heads": state_heads,
     }
+
+
+async def states_claim(
+    current_user: dict = Depends(get_current_user),
+    body: StateClaimRequest = Body(...),
+):
+    """Claim an empty state as head family. Boss only; family must qualify (top 3 members prestige >= 1)."""
+    state = (body.state or "").strip()
+    if state not in (STATES or []):
+        raise HTTPException(status_code=400, detail="Invalid state")
+    family_id = await resolve_family_id(current_user["id"])
+    if not family_id:
+        raise HTTPException(status_code=403, detail="You must be in a family to claim a state")
+    member = await db.family_members.find_one(
+        {"family_id": family_id, "user_id": current_user["id"]},
+        {"_id": 0, "role": 1},
+    )
+    role = (member or {}).get("role") or ""
+    if str(role).strip().lower() != "boss":
+        raise HTTPException(status_code=403, detail="Only the family boss can claim a state")
+    if not await family_qualifies_for_state_head(family_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Your family does not qualify: top 3 members (by prestige, then rank) must all have prestige level 1+",
+        )
+    heads = await get_state_heads()
+    if heads.get(state):
+        raise HTTPException(status_code=400, detail="State already has a head family")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "head_of_state": 1})
+    if (fam or {}).get("head_of_state"):
+        raise HTTPException(status_code=400, detail="Your family is already head of a state")
+    await set_state_head(state, family_id)
+    return {"ok": True, "state": state, "message": f"Your family is now head of {state}."}
 
 
 def register(router):
     router.add_api_route("/states", get_states, methods=["GET"])
+    router.add_api_route("/states/claim", states_claim, methods=["POST"])

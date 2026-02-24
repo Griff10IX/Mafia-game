@@ -87,12 +87,20 @@ const CityCard = ({
   onClaimAirport,
   claimingCity,
   userCurrentCity,
+  stateHeads,
+  isBoss,
+  familyQualifiesForStateHead,
+  onClaimState,
+  claimingState,
 }) => {
   const bf = bulletFactory;
   const ap = airportSlot1;
   const airportUnclaimed = !ap?.owner_username || ap.owner_username === 'Unclaimed';
   const canClaimAirport = airportUnclaimed && (userCurrentCity === city || userCurrentCity === null);
-  
+  const headFamily = stateHeads && stateHeads[city];
+  const stateUnclaimed = !headFamily;
+  const canClaimState = stateUnclaimed && isBoss && familyQualifiesForStateHead && onClaimState;
+
   // Count owned casinos
   const ownedCount = games.filter(g => g && (allOwners[g.id] || {})[city]?.username).length;
   // Highest max bet and buy-back in this city
@@ -126,6 +134,31 @@ const CityCard = ({
 
       {expanded && (
         <>
+          {/* Head family / Claim state */}
+          <div className="p-1.5 border-b border-zinc-700/30">
+            <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5 flex items-center gap-1">
+              <Users size={9} /> Head family
+            </div>
+            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded">
+              {headFamily ? (
+                <span className="text-[10px] font-heading text-foreground">
+                  {headFamily.family_name} <span className="text-primary font-bold">({headFamily.family_tag})</span>
+                </span>
+              ) : canClaimState ? (
+                <button
+                  type="button"
+                  onClick={() => onClaimState(city)}
+                  disabled={claimingState === city}
+                  className="px-1.5 py-0.5 rounded bg-primary/20 border border-primary/50 text-primary text-[9px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
+                >
+                  {claimingState === city ? '...' : 'Claim state'}
+                </button>
+              ) : (
+                <span className="text-[9px] text-zinc-500">Unclaimed</span>
+              )}
+            </div>
+          </div>
+
           {/* Casino Games */}
           <div className="p-1.5 space-y-0.5">
             <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5">🎰 Casinos</div>
@@ -280,13 +313,15 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
 // ============================================================================
 
 export default function States() {
-  const [data, setData] = useState({ cities: [], games: [] });
+  const [data, setData] = useState({ cities: [], games: [], state_heads: {} });
   const [loading, setLoading] = useState(true);
   const [bulletFactories, setBulletFactories] = useState([]);
   const [airports, setAirports] = useState([]);
   const [expandedCities, setExpandedCities] = useState({});
   const [claimingCity, setClaimingCity] = useState(null);
+  const [claimingState, setClaimingState] = useState(null);
   const [userCurrentCity, setUserCurrentCity] = useState(null);
+  const [familyMy, setFamilyMy] = useState(null);
 
   const fetchUserCity = useCallback(() => {
     api.get('/auth/me').then((r) => setUserCurrentCity(r.data?.current_state ?? null)).catch(() => setUserCurrentCity(null));
@@ -297,6 +332,11 @@ export default function States() {
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchUserCity]);
+
+  const fetchFamilyMy = useCallback(() => {
+    api.get('/families/my').then((r) => setFamilyMy(r.data ?? null)).catch(() => setFamilyMy(null));
+  }, []);
+  useEffect(() => { fetchFamilyMy(); }, [fetchFamilyMy]);
 
   const fetchStates = useCallback(() => {
     setLoading(true);
@@ -311,6 +351,7 @@ export default function States() {
           horseracing_owners: res.data?.horseracing_owners ?? {},
           videopoker_owners: res.data?.videopoker_owners ?? {},
           slots_owners: res.data?.slots_owners ?? {},
+          state_heads: res.data?.state_heads ?? {},
         });
         // Expand all cities by default
         const citiesList = res.data?.cities ?? [];
@@ -419,6 +460,24 @@ export default function States() {
     }
   };
 
+  const handleClaimState = async (state) => {
+    setClaimingState(state);
+    try {
+      await api.post('/states/claim', { state });
+      toast.success(`Your family is now head of ${state}.`);
+      fetchStates();
+      fetchFamilyMy();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to claim state');
+    } finally {
+      setClaimingState(null);
+    }
+  };
+
+  const isBoss = (familyMy?.my_role || '').toLowerCase() === 'boss';
+  const familyQualifiesForStateHead = !!familyMy?.qualifies_for_state_head;
+  const stateHeads = data.state_heads || {};
+
   if (loading) {
     return (
       <div className={`space-y-2 ${styles.pageContent}`}>
@@ -498,6 +557,11 @@ export default function States() {
             onClaimAirport={handleClaimAirport}
             claimingCity={claimingCity}
             userCurrentCity={userCurrentCity}
+            stateHeads={stateHeads}
+            isBoss={isBoss}
+            familyQualifiesForStateHead={familyQualifiesForStateHead}
+            onClaimState={handleClaimState}
+            claimingState={claimingState}
           />
         ))}
       </div>

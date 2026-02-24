@@ -8,6 +8,7 @@ def register(router):
 
     db = srv.db
     get_current_user = srv.get_current_user
+    get_head_family_id_for_state = srv.get_head_family_id_for_state
     _username_pattern = srv._username_pattern
     verify_password = srv.verify_password
     DeadAliveRetrieveRequest = srv.DeadAliveRetrieveRequest
@@ -32,6 +33,11 @@ def register(router):
             raise HTTPException(status_code=400, detail="That account had no points or cash to transfer")
         add_points = max(0, int(points_at_death * DEAD_ALIVE_PERCENT))
         add_money = max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
+        tax_money = max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
+        dead_state = (dead_user.get("current_state") or "").strip()
+        head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
+        if head_family_id and tax_money > 0:
+            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": tax_money}})
         if add_points > 0 or add_money > 0:
             await db.users.update_one(
                 {"id": current_user["id"]},

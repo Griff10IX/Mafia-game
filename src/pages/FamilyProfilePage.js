@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../utils/api';
-import { Building2, Users, TrendingUp, ArrowLeft, Crosshair, Clock, Skull } from 'lucide-react';
+import { Building2, Users, TrendingUp, ArrowLeft, Crosshair, Clock, Skull, MapPin } from 'lucide-react';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
@@ -292,6 +292,11 @@ export default function FamilyProfilePage() {
               })()}
             </div>
 
+            {family.head_of_state && (
+              <p className="text-[10px] text-primary font-heading font-bold mb-2 flex items-center gap-1">
+                <MapPin size={10} /> Head of {family.head_of_state}
+              </p>
+            )}
             {/* Intel stat strip */}
             <div className="flex items-stretch rounded-lg overflow-hidden border border-primary/15 bg-zinc-900/70 divide-x divide-primary/10">
               {[

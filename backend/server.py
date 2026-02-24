@@ -170,6 +170,45 @@ ARMOUR_BASE_BULLETS = {0: 5000, 1: 25000, 2: 45000, 3: 65000, 4: 85000, 5: 10000
 KILL_CASH_PERCENT = 0.25  # killer gets 25% of victim's cash
 DEAD_ALIVE_PERCENT = 0.95  # 5% tax: you receive 95% of dead account's money and points when using Dead > Alive (one-time)
 
+# State heads: which family (if any) is head of each state. One family per state; at most 4 families.
+async def get_state_heads() -> Dict[str, Optional[str]]:
+    """Return { state: family_id or None } for all STATES. Stored in game_settings key 'state_heads'."""
+    doc = await db.game_settings.find_one({"key": "state_heads"}, {"_id": 0, "value": 1})
+    raw = (doc or {}).get("value") or {}
+    out = {}
+    for s in (STATES or []):
+        out[s] = (raw.get(s) or "").strip() or None
+    return out
+
+
+async def get_head_family_id_for_state(state: str) -> Optional[str]:
+    """Return family_id that is head of the given state, or None."""
+    if not (state or "").strip():
+        return None
+    heads = await get_state_heads()
+    return heads.get((state or "").strip())
+
+
+async def set_state_head(state: str, family_id: Optional[str]) -> None:
+    """Set or clear the head family for a state. Updates game_settings and family head_of_state."""
+    state = (state or "").strip()
+    if state not in (STATES or []):
+        return
+    heads = await get_state_heads()
+    old_fid = heads.get(state)
+    new_value = {**heads, state: (family_id or "").strip() or None}
+    await db.game_settings.update_one(
+        {"key": "state_heads"},
+        {"$set": {"value": new_value}},
+        upsert=True,
+    )
+    if old_fid and old_fid != (family_id or "").strip():
+        await db.families.update_one({"id": old_fid}, {"$set": {"head_of_state": None}})
+    if family_id and (family_id or "").strip():
+        fid = (family_id or "").strip()
+        await db.families.update_one({"id": fid}, {"$set": {"head_of_state": state}})
+
+
 # Game-wide daily events (rotate by UTC date). Multipliers default 1.0 when not set.
 # racket_cooldown: <1 = faster, >1 = longer; racket_payout: >1 = extra %, <1 = reduced %
 # armour_weapon_cost: applies to armour shop and weapon purchases

@@ -18,6 +18,7 @@ from server import (
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
     log_gambling,
+    get_head_family_id_for_state,
 )
 
 # ----- Constants -----
@@ -550,9 +551,13 @@ def register(router):
 
         # Owner-owned
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -bet}})
+        head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
         if not win:
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-            await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet}})
+            if head_family_id:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+            else:
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet}})
             await log_gambling(
                 current_user["id"],
                 current_user.get("username") or "?",
@@ -600,8 +605,11 @@ def register(router):
             if spin_winner_rank_id < CAPO_RANK_ID:
                 spin_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             if points_offered <= 0:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                else:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                    await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
                 # End owner's 3h: clear ownership and set cooldown
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
@@ -636,8 +644,12 @@ def register(router):
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
         else:
-            await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-            await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
+            house_cut = bet - actual_payout
+            if head_family_id and house_cut > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": house_cut}})
+            else:
+                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": house_cut}})
 
         history_entry = {
             "bet": bet,

@@ -20,6 +20,7 @@ from server import (
     _user_owns_any_casino,
     _username_pattern,
     log_gambling,
+    get_head_family_id_for_state,
 )
 from routers.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.dice import DiceSellOnTradeRequest
@@ -514,8 +515,12 @@ def register(router):
         if _blackjack_is_blackjack(dealer_hand):
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": 0}})
             if owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+                head_family_id = await get_head_family_id_for_state(stored_city or city)
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                else:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet, "profit": bet}})
             await _blackjack_settle_and_save_history(
                 current_user["id"], current_user.get("username"), city, bet, "lose", 0, player_hand, dealer_hand, player_total, dealer_total
             )
@@ -575,11 +580,16 @@ def register(router):
             user = await db.users.find_one({"id": current_user["id"]})
             new_balance = (user.get("money", 0) or 0)
             if owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.blackjack_ownership.update_one(
-                    {"city": game.get("city")},
-                    {"$inc": {"total_earnings": bet, "profit": bet}}
-                )
+                bj_city = game.get("city")
+                head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                else:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                    await db.blackjack_ownership.update_one(
+                        {"city": bj_city},
+                        {"$inc": {"total_earnings": bet, "profit": bet}}
+                    )
             await _blackjack_settle_and_save_history(
                 current_user["id"], current_user.get("username"), game.get("city"), bet, "bust", 0, player_hand, game.get("dealer_hand", []), player_total, _blackjack_hand_total(game.get("dealer_hand", []))
             )
@@ -641,8 +651,13 @@ def register(router):
             result = "lose"
             payout = 0
             if owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.blackjack_ownership.update_one({"city": game.get("city")}, {"$inc": {"total_earnings": bet, "profit": bet}})
+                bj_city = game.get("city")
+                head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                else:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                    await db.blackjack_ownership.update_one({"city": bj_city}, {"$inc": {"total_earnings": bet, "profit": bet}})
         else:
             result = "push"
             payout = bet

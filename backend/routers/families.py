@@ -31,6 +31,7 @@ from server import (
     send_notification,
     send_notification_to_family,
     maybe_process_rank_up,
+    set_state_head,
     _get_active_war_between,
     _get_active_war_for_family,
     _family_war_start,
@@ -230,6 +231,7 @@ async def cleanup_dead_families():
             prize_racket_cash = compute_loser_racket_cash(rackets, ev, now=now_dt)
             total_cash_prize = treasury + prize_racket_cash
             assets_transferred = False
+            winner_id = None
             for active_war in active_wars:
                 winner_id = active_war["family_b_id"] if active_war["family_a_id"] == family_id else active_war["family_a_id"]
                 loser_id = family_id
@@ -271,6 +273,9 @@ async def cleanup_dead_families():
                         "prize_racket_cash": prize_racket_cash_record,
                     }}
                 )
+            head_state = (fam.get("head_of_state") or "").strip()
+            if head_state:
+                await set_state_head(head_state, winner_id if winner_id else None)
             await db.family_members.delete_many({"family_id": family_id})
             await db.families.delete_one({"id": family_id})
 
@@ -310,6 +315,40 @@ async def resolve_family_id(user_id: str):
         return fid
     fam = await db.families.find_one({"boss_id": user_id}, {"_id": 0, "id": 1})
     return _norm_fid((fam or {}).get("id"))
+
+
+async def family_qualifies_for_state_head(family_id: str) -> bool:
+    """True if family has at least 3 members and its top 3 (by prestige, then rank_points) all have prestige_level >= 1."""
+    if not (family_id or "").strip():
+        return False
+    members = await db.family_members.find(
+        {"family_id": family_id},
+        {"_id": 0, "user_id": 1},
+    ).to_list(100)
+    if len(members) < 3:
+        return False
+    user_ids = [m["user_id"] for m in members]
+    users = await db.users.find(
+        {"id": {"$in": user_ids}, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1, "prestige_level": 1, "rank_points": 1},
+    ).to_list(len(user_ids))
+    user_map = {u["id"]: u for u in users}
+    with_prestige = []
+    for m in members:
+        u = user_map.get(m["user_id"])
+        if not u:
+            continue
+        with_prestige.append(u)
+    if len(with_prestige) < 3:
+        return False
+    with_prestige.sort(
+        key=lambda u: (
+            -(int(u.get("prestige_level") or 0)),
+            -(int(u.get("rank_points") or 0)),
+        ),
+    )
+    top3 = with_prestige[:3]
+    return all(int(u.get("prestige_level") or 0) >= 1 for u in top3)
 
 
 # Promotion order when boss dies: next in line becomes boss, others shift up
@@ -521,6 +560,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     if family_id:
         app_cursor = db.family_crew_oc_applications.find({"family_id": family_id}, {"_id": 0}).sort("created_at", -1)
         crew_oc_applications = await app_cursor.to_list(50)
+    qualifies_for_state_head = await family_qualifies_for_state_head(family_id)
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -528,8 +568,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
+            "head_of_state": fam.get("head_of_state"),
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
+        "qualifies_for_state_head": qualifies_for_state_head,
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
         "crew_oc_applications": crew_oc_applications,
     }
@@ -588,6 +630,7 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
     crew_oc_crew += [{"username": a.get("username") or "?", "is_family_member": False} for a in accepted_apps]
     return {
         "id": fam["id"], "name": fam["name"], "tag": fam["tag"], "treasury": fam.get("treasury", 0),
+        "head_of_state": fam.get("head_of_state"),
         "member_count": len(members), "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "crew_oc_join_fee": crew_oc_join_fee, "crew_oc_cooldown_until": crew_oc_cooldown_until,
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,

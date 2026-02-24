@@ -19,6 +19,7 @@ from server import (
     maybe_auto_relinquish_below_capo,
     _user_owns_any_casino,
     _username_pattern,
+    get_head_family_id_for_state,
 )
 from routers.dice import DiceSellOnTradeRequest
 
@@ -349,11 +350,15 @@ def register(router):
         if owner_id:
             owner_cut = int(total_stake * ROULETTE_HOUSE_EDGE)
             if owner_cut > 0:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_cut}})
-                await db.roulette_ownership.update_one(
-                    {"city": stored_city or city},
-                    {"$inc": {"total_earnings": owner_cut}}
-                )
+                head_family_id = await get_head_family_id_for_state(stored_city or city)
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": owner_cut}})
+                else:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_cut}})
+                    await db.roulette_ownership.update_one(
+                        {"city": stored_city or city},
+                        {"$inc": {"total_earnings": owner_cut}}
+                    )
         win = total_payout > 0
         await log_gambling(
             current_user["id"],

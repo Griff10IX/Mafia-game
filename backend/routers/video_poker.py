@@ -20,6 +20,7 @@ from server import (
     _user_owns_any_casino,
     _username_pattern,
     log_gambling,
+    get_head_family_id_for_state,
 )
 from routers.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.dice import DiceSellOnTradeRequest
@@ -420,8 +421,12 @@ def register(router):
 
         if payout == 0:
             if owner_id:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
+                head_family_id = await get_head_family_id_for_state(city) if city else None
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                else:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                    await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})
         elif payout == bet:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": payout}})
         else:

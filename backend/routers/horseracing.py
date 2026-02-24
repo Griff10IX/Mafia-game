@@ -18,6 +18,7 @@ from server import (
     log_gambling,
     _user_owns_any_casino,
     _username_pattern,
+    get_head_family_id_for_state,
 )
 from routers.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.dice import DiceSellOnTradeRequest
@@ -333,6 +334,7 @@ def register(router):
             await db.users.update_one({"id": current_user["id"]}, {"$set": {"money": new_money}})
         else:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -bet}})
+            head_family_id = await get_head_family_id_for_state(stored_city or city) if (stored_city or city) else None
             if won:
                 owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
                 owner_money = int((owner.get("money") or 0) or 0)
@@ -350,12 +352,19 @@ def register(router):
                         {"city": stored_city or city},
                         {"$set": {"owner_id": None, "owner_username": None}}
                     )
+                elif head_family_id:
+                    edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE)
+                    if edge > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge}})
             else:
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                await db.horseracing_ownership.update_one(
-                    {"city": stored_city or city},
-                    {"$inc": {"total_earnings": bet, "profit": bet}}
-                )
+                if head_family_id:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                else:
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+                    await db.horseracing_ownership.update_one(
+                        {"city": stored_city or city},
+                        {"$inc": {"total_earnings": bet, "profit": bet}}
+                    )
         history_entry = {
             "bet": bet,
             "horse_id": horse_id,
