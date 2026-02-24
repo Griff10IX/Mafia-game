@@ -1,6 +1,7 @@
 # Auto Rank: background task that auto-commits crimes and GTA for users who bought it, sends results to Telegram
 import asyncio
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -653,6 +654,28 @@ async def run_auto_rank_loop():
         await asyncio.sleep(LOOP_WAKE_SECONDS)
 
 
+async def run_auto_rank_cron_cycle():
+    """
+    Single cycle of the main Auto Rank work: booze arrivals + due users.
+    Call this from an external cron (e.g. every 2 min) when AUTO_RANK_USE_CRON=1
+    so the in-process run_auto_rank_loop() is not started.
+    """
+    import server as srv
+    db = srv.db
+    config = await get_auto_rank_config(db)
+    if not config["enabled"]:
+        return {"ok": True, "skipped": "auto_rank disabled"}
+    try:
+        await run_booze_arrivals()
+    except Exception as e:
+        logger.exception("Auto rank cron booze arrivals: %s", e)
+    try:
+        await run_auto_rank_due_users(interval_seconds=config["interval_seconds"])
+    except Exception as e:
+        logger.exception("Auto rank cron due-users: %s", e)
+    return {"ok": True}
+
+
 # ─── API routes ───────────────────────────────────────────────────
 
 _PREFERENCE_FIELDS = ["auto_rank_enabled", "auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]
@@ -665,12 +688,25 @@ def _extract_preferences(user: dict) -> dict:
 
 def register(router):
     import server as srv
-    from fastapi import Depends, HTTPException
+    from fastapi import Depends, Header, HTTPException
     from pydantic import BaseModel
 
     db = srv.db
     get_current_user = srv.get_current_user
     _is_admin = srv._is_admin
+    cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
+
+    async def verify_cron_secret(x_cron_secret: Optional[str] = Header(None, alias="X-Cron-Secret")):
+        if not cron_secret:
+            raise HTTPException(status_code=503, detail="Cron not configured (CRON_SECRET unset)")
+        if (x_cron_secret or "") != cron_secret:
+            raise HTTPException(status_code=403, detail="Invalid cron secret")
+
+    @router.post("/auto-rank/cron")
+    async def cron_auto_rank(_: None = Depends(verify_cron_secret)):
+        """Cron endpoint: run one Auto Rank cycle (booze arrivals + due users). Call e.g. every 2 min when AUTO_RANK_USE_CRON=1. Header: X-Cron-Secret: <CRON_SECRET>."""
+        result = await run_auto_rank_cron_cycle()
+        return result
 
     class IntervalBody(BaseModel):
         interval_seconds: Optional[int] = None

@@ -2,7 +2,8 @@
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+import logging
 import os
 import sys
 import uuid
@@ -22,6 +23,28 @@ from routers.booze_run import BOOZE_TYPES
 
 # City order for map progression (same as STATES)
 CITY_ORDER = list(STATES) if STATES else ["Chicago", "New York", "Las Vegas", "Atlantic City"]
+
+# Daily tribute deposit: hour (0–23) in UTC when tribute enters the bank each day (e.g. territory cut).
+# Mission completion rewards still add to tribute_bank immediately; this is for daily scheduled deposit.
+TRIBUTE_DEPOSIT_UTC_HOUR = int(os.environ.get("TRIBUTE_DEPOSIT_UTC_HOUR", "17"))  # 5 PM UTC default
+# Amount (cash) added to each user's tribute_bank once per day at that hour. Configurable via env.
+DAILY_TRIBUTE_AMOUNT = int(os.environ.get("DAILY_TRIBUTE_AMOUNT", "500"))
+TRIBUTE_DEPOSIT_CONFIG_ID = "tribute_deposit"
+
+
+def _next_tribute_deposit_utc():
+    """Next occurrence of TRIBUTE_DEPOSIT_UTC_HOUR (UTC). Returns (next_iso, daily_time_label e.g. '5:00 PM UTC')."""
+    now = datetime.now(timezone.utc)
+    h = TRIBUTE_DEPOSIT_UTC_HOUR % 24
+    today_at = now.replace(hour=h, minute=0, second=0, microsecond=0)
+    if now >= today_at:
+        next_at = today_at + timedelta(days=1)
+    else:
+        next_at = today_at
+    am_pm = "PM" if h >= 12 else "AM"
+    hour12 = h % 12 or 12
+    time_label = f"{hour12}:00 {am_pm} UTC"
+    return next_at.isoformat(), time_label
 
 # ─────────────────────────────────────────────────────────────────────────────
 # MISSION DEFINITIONS
@@ -706,6 +729,22 @@ def _user_completed_mission_ids(user: dict) -> set:
     return {x.get("mission_id") for x in comp if x.get("mission_id")}
 
 
+def _previous_mission(mission: dict):
+    """Mission in same city with highest order still less than this one, or None."""
+    city = mission.get("city")
+    order = mission.get("order", 0)
+    candidates = [m for m in MISSIONS if m.get("city") == city and m.get("order", 0) < order]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda m: m.get("order", 0))
+
+
+def _mission_unlocked_by_previous(mission: dict, completed_ids: set) -> bool:
+    """True if this mission is unlocked by progression (previous mission in same city completed)."""
+    prev = _previous_mission(mission)
+    return prev is None or prev["id"] in completed_ids
+
+
 def _get_user_progress_value(user: dict, req_key: str) -> int:
     """
     Map a requirement key to the user's current stat value.
@@ -811,6 +850,9 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         if city and m["city"] != city:
             continue
         met, progress = _check_mission_requirements(current_user, m)
+        unlocked = _mission_unlocked_by_previous(m, completed_ids)
+        requirements_met_final = met and unlocked
+        prev = _previous_mission(m)
         missions_out.append({
             "id": m["id"],
             "city": m["city"],
@@ -829,7 +871,9 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "difficulty": m.get("difficulty", 5),
             "is_boss": m.get("is_boss", False),
             "completed": m["id"] in completed_ids,
-            "requirements_met": met,
+            "unlocked": unlocked,
+            "previous_mission_title": prev.get("title") if prev and not unlocked else None,
+            "requirements_met": requirements_met_final,
             "progress": progress,
         })
     missions_out.sort(key=lambda x: (
@@ -858,6 +902,9 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         if area not in by_city[m["city"]]["areas"]:
             by_city[m["city"]]["areas"][area] = []
         met, progress = _check_mission_requirements(current_user, m)
+        unlocked = _mission_unlocked_by_previous(m, completed_ids)
+        requirements_met_final = met and unlocked
+        prev = _previous_mission(m)
         entry = {
             "id": m["id"],
             "area": m["area"],
@@ -875,7 +922,9 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "difficulty": m.get("difficulty", 5),
             "is_boss": m.get("is_boss", False),
             "completed": m["id"] in completed_ids,
-            "requirements_met": met,
+            "unlocked": unlocked,
+            "previous_mission_title": prev.get("title") if prev and not unlocked else None,
+            "requirements_met": requirements_met_final,
             "progress": progress,
         }
         by_city[m["city"]]["areas"][area].append(entry)
@@ -884,12 +933,15 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         for area in by_city[c]["areas"]:
             by_city[c]["areas"][area].sort(key=lambda x: (1 if x.get("is_boss") else 0, x["order"]))
     tribute_bank = int(current_user.get("tribute_bank") or 0)
+    next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc()
     return {
         "current_city": current_city,
         "unlocked_cities": unlocked,
         "cities": list(unlocked),
         "by_city": by_city,
         "tribute_bank": tribute_bank,
+        "tribute_deposit_daily_at": deposit_time_label,
+        "next_tribute_deposit_at": next_deposit_iso,
     }
 
 
@@ -917,6 +969,10 @@ async def complete_mission(
     met, _ = _check_mission_requirements(current_user, mission)
     if not met:
         raise HTTPException(status_code=400, detail="Requirements not met")
+    if not _mission_unlocked_by_previous(mission, completed_ids):
+        prev = _previous_mission(mission)
+        prev_title = prev.get("title", "the previous mission") if prev else "the previous mission"
+        raise HTTPException(status_code=400, detail=f"Complete {prev_title} first")
 
     user_id = current_user["id"]
     reward_money = int(mission.get("reward_money") or 0)
@@ -1015,6 +1071,33 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
             "dialogue_complete": c.get("dialogue_complete"),
         })
     return {"characters": out}
+
+
+async def run_daily_tribute_deposit():
+    """
+    Credit DAILY_TRIBUTE_AMOUNT to every user's tribute_bank once per day at TRIBUTE_DEPOSIT_UTC_HOUR (UTC).
+    Idempotent: uses game_config last_run_utc_date so we only run once per calendar day.
+    Call from a background ticker (e.g. every 60s) so the deposit happens at the configured hour.
+    """
+    now = datetime.now(timezone.utc)
+    if now.hour != TRIBUTE_DEPOSIT_UTC_HOUR:
+        return
+    today = now.date().isoformat()
+    doc = await db.game_config.find_one({"id": TRIBUTE_DEPOSIT_CONFIG_ID}, {"_id": 0, "last_run_utc_date": 1})
+    if doc and doc.get("last_run_utc_date") == today:
+        return
+    result = await db.users.update_many({}, {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT}})
+    await db.game_config.update_one(
+        {"id": TRIBUTE_DEPOSIT_CONFIG_ID},
+        {"$set": {"last_run_utc_date": today}},
+        upsert=True,
+    )
+    logging.getLogger(__name__).info(
+        "Daily tribute deposit: credited %s to %d users at %s UTC",
+        DAILY_TRIBUTE_AMOUNT,
+        result.modified_count,
+        today,
+    )
 
 
 def register(router):

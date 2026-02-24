@@ -22,7 +22,8 @@ const BG_STYLES = `
   .bg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const BODYGUARD_SLOT_COSTS = [100, 200, 300, 400];
+// Match backend bodyguards.py: BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
+const BODYGUARD_SLOT_COSTS = [75, 150, 300, 450];
 
 export default function Bodyguards() {
   const [bodyguards, setBodyguards] = useState([]);
@@ -319,7 +320,7 @@ export default function Bodyguards() {
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
-              <span>Each robot costs points (1st: 150, 2nd: 300, 3rd: 450, 4th: 600 pts)</span>
+              <span>Slot hire: 75, 150, 300, 450 pts (robot 1.5×). Buy slot: same cost per slot.</span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>

@@ -1282,7 +1282,11 @@ async def startup_db():
     asyncio.create_task(entertainer_auto_create_cycle())
     # Auto Rank: auto-commit crimes + GTA for users who bought it; send results to Telegram
     from routers import auto_rank
-    asyncio.create_task(auto_rank.run_auto_rank_loop())
+    auto_rank_use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    if not auto_rank_use_cron:
+        asyncio.create_task(auto_rank.run_auto_rank_loop())
+    else:
+        logging.getLogger(__name__).info("Auto Rank: using cron (AUTO_RANK_USE_CRON=1); main loop not started. Call POST /api/auto-rank/cron with X-Cron-Secret every ~2 min.")
     asyncio.create_task(auto_rank.run_bust_5sec_loop())
     asyncio.create_task(auto_rank.run_auto_rank_oc_loop())
     from routers import gta as gta_router
@@ -1297,6 +1301,16 @@ async def startup_db():
                 logging.exception("Slots draw ticker: %s", e)
             await asyncio.sleep(5)
     asyncio.create_task(slots_draw_ticker())
+    # Missions: daily tribute deposit at configured UTC hour (e.g. 17:00); check every 60s
+    from routers import missions as missions_router
+    async def tribute_deposit_ticker():
+        while True:
+            try:
+                await missions_router.run_daily_tribute_deposit()
+            except Exception as e:
+                logging.exception("Daily tribute deposit ticker: %s", e)
+            await asyncio.sleep(60)
+    asyncio.create_task(tribute_deposit_ticker())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

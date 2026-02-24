@@ -11,68 +11,19 @@ import styles from '../styles/noir.module.css';
 // STYLES
 // ─────────────────────────────────────────────────────────────────────────────
 
-const STYLES = `
-  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(14px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateX(-12px); }
-    to   { opacity: 1; transform: translateX(0); }
-  }
-  @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.94); }
-    to   { opacity: 1; transform: scale(1); }
-  }
-  @keyframes shimmer {
-    0%   { background-position: -200% center; }
-    100% { background-position: 200% center; }
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes sealPop {
-    0%   { transform: scale(0) rotate(-20deg); opacity: 0; }
-    65%  { transform: scale(1.15) rotate(3deg); }
-    100% { transform: scale(1) rotate(0); opacity: 1; }
-  }
-  @keyframes pulseBorder {
-    0%,100% { border-color: rgba(234,179,8,0.4); }
-    50%     { border-color: rgba(234,179,8,0.8); }
-  }
-  @keyframes progressFill {
-    from { width: 0%; }
-    to   { width: var(--target-w); }
-  }
-
-  .m-fadeUp  { animation: fadeUp 0.4s cubic-bezier(0.22,1,0.36,1) both; }
-  .m-slideIn { animation: slideIn 0.35s cubic-bezier(0.22,1,0.36,1) both; }
-  .m-scaleIn { animation: scaleIn 0.35s cubic-bezier(0.22,1,0.36,1) both; }
-  .m-sealPop { animation: sealPop 0.5s cubic-bezier(0.22,1,0.36,1) both; }
+const MISSIONS_STYLES = `
+  @keyframes m-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes m-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+  @keyframes shimmer { 0% { background-position: -200% center; } 100% { background-position: 200% center; } }
+  @keyframes pulseBorder { 0%,100% { border-color: rgba(234,179,8,0.4); } 50% { border-color: rgba(234,179,8,0.8); } }
+  @keyframes progressFill { from { width: 0%; } to { width: var(--target-w); } }
+  .m-fade-in { animation: m-fade-in 0.4s ease-out both; }
+  .m-scale-in { animation: m-scale-in 0.3s ease-out both; }
+  .m-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .m-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   .m-boss-pulse { animation: pulseBorder 2s ease-in-out infinite; }
-
-  .shimmer-gold {
-    background: linear-gradient(90deg,#92650a 0%,#eab308 40%,#fef08a 55%,#eab308 70%,#92650a 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer 2.8s linear infinite;
-  }
-
-  .mission-card {
-    transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
-  }
-  .mission-card:active { transform: scale(0.99); }
-
-  .progress-bar-fill {
-    animation: progressFill 0.7s cubic-bezier(0.22,1,0.36,1) both;
-    animation-delay: 0.3s;
-  }
-
-  /* Cormorant for headings */
-  .font-ledger { font-family: 'Cormorant Garamond', serif; }
-  .font-body   { font-family: 'Crimson Text', serif; }
+  .shimmer-gold { background: linear-gradient(90deg,#92650a 0%,#eab308 40%,#fef08a 55%,#eab308 70%,#92650a 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: shimmer 2.8s linear infinite; }
+  .progress-bar-fill { animation: progressFill 0.5s ease-out both; }
 `;
 
 const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
@@ -146,155 +97,119 @@ function ProgressBar({ current, target, color = '#eab308' }) {
   );
 }
 
-function StatusChip({ completed, requirementsMet, isBoss }) {
+function StatusChip({ completed, requirementsMet, isBoss, unlocked }) {
   if (completed) return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-      padding: '2px 7px', borderRadius: 20,
-      background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.4)',
-      color: '#4ade80', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.05em',
-      textTransform: 'uppercase',
-    }}>
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/40 text-green-400 text-[9px] font-heading font-bold uppercase tracking-wide">
       <CheckCircle size={9} /> Done
     </span>
   );
-  if (!requirementsMet) return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-      padding: '2px 7px', borderRadius: 20,
-      background: 'rgba(63,63,70,0.4)', border: '1px solid rgba(63,63,70,0.6)',
-      color: '#71717a', fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.05em',
-      textTransform: 'uppercase',
-    }}>
+  if (!unlocked || !requirementsMet) return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground text-[9px] font-heading font-bold uppercase tracking-wide">
       <Lock size={9} /> Locked
     </span>
   );
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 3,
-      padding: '2px 7px', borderRadius: 20,
-      background: isBoss ? 'rgba(234,179,8,0.15)' : 'rgba(234,179,8,0.08)',
-      border: `1px solid ${isBoss ? 'rgba(234,179,8,0.7)' : 'rgba(234,179,8,0.4)'}`,
-      color: '#eab308', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.05em',
-      textTransform: 'uppercase',
-    }}>
+    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-heading font-bold uppercase tracking-wide ${isBoss ? 'bg-primary/15 border-primary/70 text-primary' : 'bg-primary/10 border-primary/40 text-primary'}`}>
       <Star size={9} fill="currentColor" /> Ready
     </span>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MISSION CARD (area list item)
+// MISSION CARD (area list item) – theme aligned with Crimes/GTA
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MissionCard({ mission, onClick, delay = 0 }) {
-  const { completed, requirements_met, is_boss, progress, difficulty, title, type, reward_money, reward_points } = mission;
+function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, isCurrent }) {
+  const { completed, requirements_met, is_boss, progress, difficulty, title, type, reward_money, reward_points, unlocked, previous_mission_title } = mission;
 
-  const borderColor = completed
-    ? 'rgba(74,222,128,0.3)'
-    : requirements_met && is_boss
-    ? 'rgba(234,179,8,0.6)'
-    : requirements_met
-    ? 'rgba(234,179,8,0.25)'
-    : 'rgba(39,39,42,0.8)';
-
-  const bg = completed
-    ? 'rgba(74,222,128,0.04)'
+  const borderCls = completed
+    ? 'border-green-500/30'
+    : !unlocked
+    ? 'border-zinc-700/50'
     : is_boss && requirements_met
-    ? 'rgba(234,179,8,0.06)'
-    : 'rgba(24,24,27,0.5)';
-
-  const pct = progress?.target > 0
-    ? Math.min(100, Math.round((progress.current / progress.target) * 100))
-    : completed ? 100 : 0;
+    ? 'border-primary/60 m-boss-pulse'
+    : isCurrent
+    ? 'border-primary/50'
+    : 'border-primary/20';
+  const bgCls = completed
+    ? 'bg-green-500/5'
+    : !unlocked
+    ? 'bg-zinc-800/20 opacity-80'
+    : is_boss && requirements_met
+    ? 'bg-primary/8'
+    : isCurrent
+    ? 'bg-primary/6'
+    : 'bg-zinc-800/30';
 
   return (
     <div
-      className={`mission-card m-slideIn ${is_boss && requirements_met && !completed ? 'm-boss-pulse' : ''}`}
-      style={{
-        animationDelay: `${delay}s`,
-        padding: '10px 12px',
-        borderRadius: 8,
-        border: `1px solid ${borderColor}`,
-        background: bg,
-        cursor: 'pointer',
-        position: 'relative',
-        overflow: 'hidden',
-      }}
-      onClick={() => onClick(mission)}
-      onMouseEnter={e => {
-        if (!completed) e.currentTarget.style.borderColor = is_boss ? 'rgba(234,179,8,0.8)' : 'rgba(234,179,8,0.4)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = borderColor;
-      }}
+      className={`m-fade-in m-row relative rounded-md border px-2.5 py-2 transition-all ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
+      style={{ animationDelay: `${delay}s` }}
+      onClick={() => unlocked && onClick(mission)}
     >
-      {/* Boss indicator strip */}
       {is_boss && (
-        <div style={{
-          position: 'absolute', top: 0, left: 0, bottom: 0, width: 3,
-          background: completed ? '#4ade80' : 'linear-gradient(to bottom, #eab308, #92650a)',
-        }} />
+        <div className="absolute left-0 top-0 bottom-0 w-0.5 rounded-l-md bg-gradient-to-b from-primary to-primary/70" />
       )}
-
-      <div style={{ paddingLeft: is_boss ? 8 : 0 }}>
-        {/* Top row */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
-              fontSize: '0.88rem', fontWeight: 700, lineHeight: 1.3,
-              fontFamily: "'Cormorant Garamond', serif",
-              color: completed ? '#4ade80' : requirements_met ? '#f4f4f5' : '#71717a',
-              display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
-            }}>
-              {is_boss && !completed && <Skull size={12} style={{ color: '#eab308', flexShrink: 0 }} />}
-              {completed && <CheckCircle size={11} style={{ color: '#4ade80', flexShrink: 0 }} />}
-              <span>{title}</span>
+      <div className={is_boss ? 'pl-2' : ''}>
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {missionIndex != null && missionTotal != null && (
+                <span className="text-[9px] font-heading font-bold text-primary/80 shrink-0">
+                  {missionIndex}/{missionTotal}
+                </span>
+              )}
+              {is_boss && !completed && <Skull size={11} className="text-primary shrink-0" />}
+              {completed && <CheckCircle size={11} className="text-green-400 shrink-0" />}
+              {isCurrent && !completed && unlocked && (
+                <span className="shrink-0 px-1 py-0.5 rounded bg-primary/20 border border-primary/40 text-[9px] font-heading font-bold text-primary uppercase">Current</span>
+              )}
+              <span className={`text-[11px] font-heading font-bold truncate ${completed ? 'text-green-400' : unlocked ? 'text-foreground' : 'text-mutedForeground'}`}>
+                {title}
+              </span>
             </div>
-            <div style={{
-              fontSize: '0.7rem', color: '#52525b', marginTop: 1,
-              fontFamily: "'Crimson Text', serif", fontStyle: 'italic',
-            }}>
+            <div className="text-[9px] text-mutedForeground mt-0.5 italic">
               {missionTypeLabel(type)}
-              {is_boss && ' · Boss Mission'}
+              {is_boss && ' · Final Job'}
             </div>
+            {!unlocked && previous_mission_title && (
+              <div className="text-[9px] text-amber-200/80 mt-1 flex items-center gap-1">
+                <Lock size={8} /> Complete &quot;{previous_mission_title}&quot; to unlock
+              </div>
+            )}
           </div>
-          <StatusChip completed={completed} requirementsMet={requirements_met} isBoss={is_boss} />
+          <StatusChip completed={completed} requirementsMet={requirements_met} isBoss={is_boss} unlocked={unlocked} />
         </div>
 
-        {/* Progress bar */}
-        {!completed && progress?.target > 0 && (
-          <div style={{ marginBottom: 6 }}>
+        {!completed && progress?.target > 0 && unlocked && (
+          <div className="mb-2">
             <ProgressBar current={progress.current} target={progress.target} />
-            <div style={{ fontSize: '0.65rem', color: '#52525b', marginTop: 2, textAlign: 'right' }}>
-              {progress.description}
-            </div>
+            <div className="text-[9px] text-mutedForeground mt-1 text-right">{progress.description}</div>
           </div>
         )}
         {completed && (
-          <div style={{ marginBottom: 6 }}>
+          <div className="mb-2">
             <ProgressBar current={1} target={1} color="#4ade80" />
           </div>
         )}
 
-        {/* Rewards row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div className="flex items-center gap-2 flex-wrap text-[10px]">
           {reward_money > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.7rem', color: '#4ade80' }}>
+            <span className="inline-flex items-center gap-1 text-green-400">
               <Coins size={10} /> {fmt(reward_money)}
             </span>
           )}
           {reward_points > 0 && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.7rem', color: '#eab308' }}>
+            <span className="inline-flex items-center gap-1 text-primary">
               <Star size={10} /> {reward_points} RP
             </span>
           )}
           {mission.unlocks_city && (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.7rem', color: '#a78bfa' }}>
+            <span className="inline-flex items-center gap-1 text-violet-400">
               <MapPin size={10} /> Unlocks {mission.unlocks_city}
             </span>
           )}
-          <span style={{ marginLeft: 'auto' }}>
+          <span className="ml-auto">
             <DifficultyStars difficulty={difficulty} size={10} />
           </span>
         </div>
@@ -304,68 +219,51 @@ function MissionCard({ mission, onClick, delay = 0 }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AREA SECTION
+// AREA SECTION – panel theme like Crimes/GTA
 // ─────────────────────────────────────────────────────────────────────────────
 
-function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea = false }) {
+function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea = false, missionIdToIndex, currentMissionId }) {
   const completed = missions.filter(m => m.completed).length;
   const total = missions.length;
   const allDone = completed === total && total > 0;
   const anyReady = missions.some(m => m.requirements_met && !m.completed);
+  const sorted = [...missions].sort((a, b) => a.order - b.order);
 
   return (
-    <div
-      className="m-fadeUp"
-      style={{
-        animationDelay: `${delay}s`,
-        marginBottom: 12,
-      }}
-    >
-      {/* Area header */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '5px 0 7px',
-        borderBottom: `1px solid ${isBossArea ? 'rgba(234,179,8,0.35)' : 'rgba(63,63,70,0.5)'}`,
-        marginBottom: 8,
-      }}>
-        {isBossArea
-          ? <Skull size={13} style={{ color: '#eab308', flexShrink: 0 }} />
-          : <MapPin size={12} style={{ color: allDone ? '#4ade80' : '#eab308', flexShrink: 0, opacity: 0.8 }} />
-        }
-        <span style={{
-          fontFamily: "'Cormorant Garamond', serif",
-          fontSize: '0.9rem', fontWeight: 700,
-          color: allDone ? '#4ade80' : isBossArea ? '#eab308' : '#d4d4d8',
-          letterSpacing: '0.04em',
-          flex: 1,
-        }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mb-2`} style={{ animationDelay: `${delay}s` }}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className={`px-2.5 py-1.5 border-b border-primary/20 flex items-center gap-2 ${isBossArea ? 'bg-primary/10' : 'bg-primary/8'}`}>
+        {isBossArea ? <Skull size={12} className="text-primary shrink-0" /> : <MapPin size={11} className={allDone ? 'text-green-400' : 'text-primary/80'} />}
+        <span className={`text-[9px] font-heading font-bold uppercase tracking-[0.1em] flex-1 ${allDone ? 'text-green-400' : isBossArea ? 'text-primary' : 'text-foreground'}`}>
           {areaName}
-          {isBossArea && <span style={{ fontWeight: 400, fontStyle: 'italic', marginLeft: 6, fontSize: '0.8rem', color: '#a16207' }}>Final Job</span>}
+          {isBossArea && <span className="font-normal italic ml-1 text-primary/90">Final Job</span>}
         </span>
-        <span style={{
-          fontSize: '0.68rem', fontWeight: 700,
-          color: allDone ? '#4ade80' : anyReady ? '#eab308' : '#52525b',
-          letterSpacing: '0.06em',
-        }}>
+        <span className={`text-[9px] font-heading font-bold ${allDone ? 'text-green-400' : anyReady ? 'text-primary' : 'text-mutedForeground'}`}>
           {completed}/{total}
         </span>
         {allDone && (
-          <span className="m-sealPop" style={{
-            width: 18, height: 18, borderRadius: '50%',
-            background: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0,
-          }}>
-            <CheckCircle size={10} color="#fff" />
+          <span className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center shrink-0">
+            <CheckCircle size={10} className="text-white" />
           </span>
         )}
       </div>
-
-      {/* Missions */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {missions.map((m, i) => (
-          <MissionCard key={m.id} mission={m} onClick={onMissionClick} delay={delay + i * 0.04} />
-        ))}
+      <div className="p-1.5 space-y-1.5">
+        {sorted.map((m, i) => {
+          const info = missionIdToIndex?.[m.id] ?? {};
+          return (
+            <MissionCard
+              key={m.id}
+              mission={m}
+              onClick={onMissionClick}
+              delay={delay + i * 0.03}
+              missionIndex={info.index}
+              missionTotal={info.total}
+              isCurrent={m.id === currentMissionId}
+            />
+          );
+        })}
       </div>
+      <div className="m-art-line text-primary mx-2.5" />
     </div>
   );
 }
@@ -376,30 +274,17 @@ function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea
 
 function MissionModal({ mission, onClose, onComplete, completing }) {
   if (!mission) return null;
-  const { completed, requirements_met, is_boss, progress, difficulty } = mission;
-  const canComplete = !completed && requirements_met;
+  const { completed, requirements_met, is_boss, progress, difficulty, unlocked, previous_mission_title } = mission;
+  const canComplete = !completed && requirements_met && unlocked;
   const stars = difficultyStars(difficulty);
 
   return (
     <div
-      style={{
-        position: 'fixed', inset: 0, zIndex: 60,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)',
-        padding: 16,
-      }}
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className={`m-scaleIn ${styles.panel}`}
-        style={{
-          width: '100%', maxWidth: 480, maxHeight: '88vh', overflowY: 'auto',
-          borderRadius: 10,
-          border: `1px solid ${is_boss ? 'rgba(234,179,8,0.5)' : 'rgba(63,63,70,0.8)'}`,
-          boxShadow: is_boss
-            ? '0 0 40px rgba(234,179,8,0.12), 0 20px 60px rgba(0,0,0,0.6)'
-            : '0 20px 60px rgba(0,0,0,0.5)',
-        }}
+        className={`m-scale-in ${styles.panel} w-full max-w-[480px] max-h-[88vh] overflow-y-auto rounded-lg border ${is_boss ? 'border-primary/50' : 'border-primary/20'}`}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -486,16 +371,16 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                   </div>
                 </>
               )}
-              {!requirements_met && is_boss && (
-                <div style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 6, marginTop: 8,
-                  padding: '7px 9px', borderRadius: 5,
-                  background: 'rgba(234,179,8,0.06)', border: '1px solid rgba(234,179,8,0.2)',
-                }}>
-                  <AlertCircle size={13} style={{ color: '#eab308', flexShrink: 0, marginTop: 1 }} />
-                  <span style={{ fontSize: '0.75rem', color: '#a16207', fontFamily: "'Crimson Text', serif", lineHeight: 1.4 }}>
-                    Complete the district missions first. The boss doesn't see just anyone.
-                  </span>
+              {!unlocked && previous_mission_title && (
+                <div className="flex items-start gap-1.5 mt-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
+                  <Lock size={12} className="text-amber-400 shrink-0 mt-0.5" />
+                  <span className="text-[10px] text-amber-200/90">Complete &quot;{previous_mission_title}&quot; to unlock this mission.</span>
+                </div>
+              )}
+              {unlocked && !requirements_met && is_boss && (
+                <div className="flex items-start gap-1.5 mt-2 p-2 rounded bg-primary/10 border border-primary/20">
+                  <AlertCircle size={12} className="text-primary shrink-0 mt-0.5" />
+                  <span className="text-[10px] text-primary/90">Complete the district missions first. The boss doesn&apos;t see just anyone.</span>
                 </div>
               )}
             </div>
@@ -619,13 +504,12 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
               }
             </button>
           ) : (
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-              padding: '9px',  borderRadius: 7,
-              background: 'rgba(39,39,42,0.4)', border: '1px solid rgba(63,63,70,0.5)',
-              color: '#52525b', fontSize: '0.8rem',
-            }}>
-              <Lock size={13} /> Requirements not yet met
+            <div className="flex items-center justify-center gap-2 py-2 px-3 rounded-md bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground text-[10px]">
+              {!unlocked && previous_mission_title ? (
+                <><Lock size={12} /> Complete &quot;{previous_mission_title}&quot; first</>
+              ) : (
+                <><Lock size={12} /> Requirements not yet met</>
+              )}
             </div>
           )}
         </div>
@@ -638,58 +522,61 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
 // TRIBUTE BANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
-function TributeBanner({ bank, onCollect, collecting }) {
+function formatTimeUntil(isoString) {
+  if (!isoString) return null;
+  const at = new Date(isoString);
+  const now = new Date();
+  const ms = at - now;
+  if (ms <= 0) return 'soon';
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  const d = Math.floor(h / 24);
+  if (d > 0) return `in ${d}d ${h % 24}h`;
+  if (h > 0) return `in ${h}h ${m % 60}m`;
+  if (m > 0) return `in ${m}m`;
+  return 'in <1m';
+}
+
+function TributeBanner({ bank, onCollect, collecting, tributeDepositDailyAt, nextTributeDepositAt }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!nextTributeDepositAt) return;
+    const id = setInterval(() => setTick((t) => t + 1), 60 * 1000);
+    return () => clearInterval(id);
+  }, [nextTributeDepositAt]);
   const hasBank = bank > 0;
+  const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
   return (
-    <div
-      className="m-fadeUp"
-      style={{
-        animationDelay: '0.05s',
-        padding: '10px 14px',
-        borderRadius: 8,
-        border: `1px solid ${hasBank ? 'rgba(74,222,128,0.4)' : 'rgba(63,63,70,0.5)'}`,
-        background: hasBank ? 'rgba(74,222,128,0.04)' : 'rgba(24,24,27,0.4)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        flexWrap: 'wrap',
-        marginBottom: 10,
-        borderLeft: `3px solid ${hasBank ? '#4ade80' : 'rgba(63,63,70,0.5)'}`,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <Banknote size={18} style={{ color: hasBank ? '#4ade80' : '#52525b' }} />
-        <div>
-          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            Tribute Bank
-          </div>
-          <div style={{
-            fontSize: '1rem', fontWeight: 700,
-            fontFamily: "'Cormorant Garamond', serif",
-            color: hasBank ? '#4ade80' : '#71717a',
-          }}>
-            {fmt(bank)}
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasBank ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className={`px-2.5 py-2 flex items-center justify-between gap-3 flex-wrap border-l-2 ${hasBank ? 'border-green-500 bg-green-500/5' : 'border-zinc-600 bg-primary/5'}`}>
+        <div className="flex items-center gap-2">
+          <Banknote size={16} className={hasBank ? 'text-green-400' : 'text-mutedForeground'} />
+          <div>
+            <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Tribute Bank</div>
+            <div className="text-sm font-heading font-bold text-foreground">{fmt(bank)}</div>
+            {tributeDepositDailyAt && (
+              <div className="flex items-center gap-1 mt-1 text-[9px] text-mutedForeground">
+                <Clock size={9} />
+                <span>Deposits daily at {tributeDepositDailyAt}</span>
+              </div>
+            )}
+            {nextIn && (
+              <div className="text-[9px] text-primary/80 mt-0.5">Next deposit: {nextIn}</div>
+            )}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={onCollect}
+          disabled={!hasBank || collecting}
+          className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${hasBank && !collecting ? 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30 cursor-pointer' : 'bg-zinc-800/50 border-zinc-600 text-mutedForeground cursor-not-allowed'} ${collecting ? 'opacity-60' : ''}`}
+        >
+          {collecting ? 'Collecting…' : 'Collect'}
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onCollect}
-        disabled={!hasBank || collecting}
-        style={{
-          padding: '6px 14px', borderRadius: 6,
-          background: hasBank ? 'rgba(74,222,128,0.12)' : 'rgba(39,39,42,0.4)',
-          border: `1px solid ${hasBank ? 'rgba(74,222,128,0.4)' : 'rgba(63,63,70,0.5)'}`,
-          color: hasBank ? '#4ade80' : '#52525b',
-          fontWeight: 700, fontSize: '0.78rem',
-          cursor: hasBank && !collecting ? 'pointer' : 'not-allowed',
-          opacity: collecting ? 0.6 : 1,
-          transition: 'all 0.2s',
-          letterSpacing: '0.04em',
-        }}
-        onMouseEnter={e => { if (hasBank && !collecting) e.currentTarget.style.background = 'rgba(74,222,128,0.2)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = hasBank ? 'rgba(74,222,128,0.12)' : 'rgba(39,39,42,0.4)'; }}
-      >
-        {collecting ? 'Collecting…' : 'Collect'}
-      </button>
+      <div className="m-art-line text-primary mx-2.5" />
     </div>
   );
 }
@@ -771,105 +658,98 @@ export default function Missions() {
     }
   };
 
-  // ── Loading ────────────────────────────────────────────────
   if (loading || !data) {
     return (
-      <div className={styles.pageContent} style={{
-        minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16,
-      }}>
-        <style>{STYLES}</style>
-        <BookOpen size={32} style={{ color: '#eab308', opacity: 0.5 }} />
-        <div style={{
-          width: 32, height: 32,
-          border: '2px solid rgba(234,179,8,0.2)',
-          borderTopColor: '#eab308',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite',
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div className={`flex flex-col items-center justify-center min-h-[40vh] gap-2 ${styles.pageContent}`}>
+        <style>{MISSIONS_STYLES}</style>
+        <BookOpen size={22} className="text-primary/40 animate-pulse" />
+        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
       </div>
     );
   }
 
   const unlocked = data.unlocked_cities || ['Chicago'];
   const cityMissions = missions.filter(m => m.city === city);
+  const orderedCityMissions = [...cityMissions].sort((a, b) => (a.is_boss ? 1 : 0) - (b.is_boss ? 1 : 0) || a.order - b.order);
+  const currentMission = orderedCityMissions.find(m => !m.completed && m.unlocked) ?? null;
+  const currentMissionId = currentMission?.id ?? null;
+  const missionIdToIndex = {};
+  orderedCityMissions.forEach((m, i) => {
+    missionIdToIndex[m.id] = { index: i + 1, total: orderedCityMissions.length };
+  });
 
-  // Separate boss missions from regular missions
   const normalMissions = cityMissions.filter(m => !m.is_boss);
   const bossMissions   = cityMissions.filter(m => m.is_boss);
-
-  // Group normal missions by area
   const areaMap = {};
   normalMissions.forEach(m => {
     if (!areaMap[m.area]) areaMap[m.area] = [];
     areaMap[m.area].push(m);
   });
-  // Sort areas by the minimum order of their missions
   const areaNames = Object.keys(areaMap).sort((a, b) => {
     const minA = Math.min(...areaMap[a].map(m => m.order));
     const minB = Math.min(...areaMap[b].map(m => m.order));
     return minA - minB;
   });
 
-  // Stats
   const totalMissions   = cityMissions.length;
   const completedCount  = cityMissions.filter(m => m.completed).length;
   const readyCount      = cityMissions.filter(m => m.requirements_met && !m.completed).length;
   const tributeBank     = data.tribute_bank ?? 0;
-
-  // Determine boss mission requirement info for contextual hint
   const bossM = bossMissions[0];
   const bossReqCount  = bossM?.progress?.target ?? null;
   const bossDoneCount = bossM?.progress?.current ?? 0;
-  const normalCompleted = normalMissions.filter(m => m.completed).length;
 
   return (
-    <div className={styles.pageContent} style={{ padding: '12px 14px', maxWidth: 700, margin: '0 auto' }}>
-      <style>{STYLES}</style>
+    <div className={`space-y-2 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 700, margin: '0 auto' }}>
+      <style>{MISSIONS_STYLES}</style>
 
-      {/* ── Page header ─────────────────────────────────────── */}
-      <div className="m-fadeUp" style={{ marginBottom: 12 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3,
-        }}>
-          <BookOpen size={18} style={{ color: '#eab308' }} />
-          <h1 style={{
-            fontFamily: "'Cormorant Garamond', serif",
-            fontSize: '1.3rem', fontWeight: 700, color: '#f4f4f5',
-            margin: 0, letterSpacing: '0.04em',
-          }}>
-            Missions
-          </h1>
+      {/* Page header */}
+      <div className="relative">
+        <div className="flex items-center gap-2 mb-1">
+          <BookOpen size={18} className="text-primary" />
+          <h1 className="text-base font-heading font-bold text-foreground tracking-wide">Missions</h1>
         </div>
-        <p style={{ fontFamily: "'Crimson Text', serif", fontStyle: 'italic', fontSize: '0.82rem', color: '#52525b', margin: 0 }}>
-          Complete jobs in each district. Earn tribute. Report to the boss when the city is yours.
-        </p>
+        <p className="text-[10px] text-mutedForeground italic">Complete jobs in order. Earn tribute. Report to the boss when the city is yours.</p>
       </div>
 
-      {/* ── Tribute bank ────────────────────────────────────── */}
-      <TributeBanner bank={tributeBank} onCollect={handleCollect} collecting={collecting} />
+      {/* Current mission strip – Mission X of Y */}
+      {orderedCityMissions.length > 0 && (
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+              {currentMissionId ? `Mission ${missionIdToIndex[currentMissionId]?.index ?? '—'} of ${orderedCityMissions.length}` : `${completedCount}/${totalMissions} completed`}
+            </span>
+            {currentMission && (
+              <span className="text-[10px] font-heading font-bold text-foreground truncate">
+                {currentMission.title}
+              </span>
+            )}
+            {!currentMission && completedCount === totalMissions && totalMissions > 0 && (
+              <span className="text-[10px] text-green-400 font-heading">All done in {city}</span>
+            )}
+          </div>
+          <div className="m-art-line text-primary mx-2.5" />
+        </div>
+      )}
 
-      {/* ── City tabs ───────────────────────────────────────── */}
+      <TributeBanner
+        bank={tributeBank}
+        onCollect={handleCollect}
+        collecting={collecting}
+        tributeDepositDailyAt={data?.tribute_deposit_daily_at}
+        nextTributeDepositAt={data?.next_tribute_deposit_at}
+      />
+
+      {/* City tabs */}
       {unlocked.length > 1 && (
-        <div className="m-fadeUp" style={{
-          display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10, animationDelay: '0.08s',
-        }}>
+        <div className="flex gap-1.5 flex-wrap">
           {unlocked.map(c => (
             <button
               key={c}
               onClick={() => setCity(c)}
-              style={{
-                padding: '5px 13px', borderRadius: 20,
-                border: `1px solid ${city === c ? '#eab308' : 'rgba(63,63,70,0.6)'}`,
-                background: city === c ? 'rgba(234,179,8,0.12)' : 'rgba(24,24,27,0.5)',
-                color: city === c ? '#eab308' : '#71717a',
-                fontFamily: "'Cormorant Garamond', serif",
-                fontSize: '0.82rem', fontWeight: 700,
-                cursor: 'pointer', transition: 'all 0.15s',
-                boxShadow: city === c ? '0 0 10px rgba(234,179,8,0.1)' : 'none',
-              }}
-              onMouseEnter={e => { if (city !== c) e.currentTarget.style.color = '#eab308'; }}
-              onMouseLeave={e => { if (city !== c) e.currentTarget.style.color = '#71717a'; }}
+              className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${city === c ? 'bg-primary/20 border-primary text-primary' : 'bg-zinc-800/30 border-zinc-600 text-mutedForeground hover:text-primary'}`}
             >
               {c}
             </button>
@@ -877,116 +757,88 @@ export default function Missions() {
         </div>
       )}
 
-      {/* ── City summary strip ──────────────────────────────── */}
-      <div className="m-fadeUp" style={{
-        animationDelay: '0.1s',
-        display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12,
-      }}>
-        {[
-          { label: 'Done', value: `${completedCount}/${totalMissions}`, color: '#4ade80' },
-          { label: 'Ready', value: readyCount, color: readyCount > 0 ? '#eab308' : '#52525b' },
-          { label: 'City', value: city, color: '#d4d4d8' },
-        ].map(({ label, value, color }) => (
-          <div key={label} style={{
-            flex: '1 1 90px', padding: '7px 10px', borderRadius: 7,
-            border: '1px solid rgba(39,39,42,0.8)',
-            background: 'rgba(24,24,27,0.5)',
-          }}>
-            <div style={{ fontSize: '0.62rem', fontWeight: 700, color: '#52525b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 2 }}>
-              {label}
+      {/* Stats panel */}
+      <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Progress</span>
+        </div>
+        <div className="p-2 flex gap-2 flex-wrap">
+          {[
+            { label: 'Done', value: `${completedCount}/${totalMissions}`, cls: 'text-green-400' },
+            { label: 'Ready', value: readyCount, cls: readyCount > 0 ? 'text-primary' : 'text-mutedForeground' },
+            { label: 'City', value: city, cls: 'text-foreground' },
+          ].map(({ label, value, cls }) => (
+            <div key={label} className="flex-1 min-w-[70px]">
+              <div className="text-[9px] font-heading text-mutedForeground uppercase">{label}</div>
+              <div className={`text-sm font-heading font-bold ${cls}`}>{value}</div>
             </div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: '1rem', fontWeight: 700, color }}>
-              {value}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <div className="m-art-line text-primary mx-2.5" />
       </div>
 
-      {/* ── Parallel missions note ──────────────────────────── */}
-      {readyCount > 1 && (
-        <div className="m-fadeUp" style={{
-          animationDelay: '0.12s', marginBottom: 10,
-          padding: '7px 10px', borderRadius: 7,
-          background: 'rgba(234,179,8,0.04)', border: '1px solid rgba(234,179,8,0.15)',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <Star size={12} style={{ color: '#eab308', flexShrink: 0 }} />
-          <span style={{ fontFamily: "'Crimson Text', serif", fontSize: '0.78rem', color: '#a16207', fontStyle: 'italic' }}>
-            {readyCount} missions ready — district jobs can be completed in any order.
-          </span>
-        </div>
-      )}
-
-      {/* ── Boss mission progress hint ──────────────────────── */}
+      {/* Boss progress hint */}
       {bossM && !bossM.completed && bossReqCount !== null && (
-        <div className="m-fadeUp" style={{
-          animationDelay: '0.14s', marginBottom: 10,
-          padding: '7px 10px', borderRadius: 7,
-          background: bossM.requirements_met ? 'rgba(234,179,8,0.08)' : 'rgba(39,39,42,0.4)',
-          border: `1px solid ${bossM.requirements_met ? 'rgba(234,179,8,0.4)' : 'rgba(63,63,70,0.5)'}`,
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <Skull size={12} style={{ color: bossM.requirements_met ? '#eab308' : '#52525b', flexShrink: 0 }} />
-          <span style={{ fontFamily: "'Crimson Text', serif", fontSize: '0.78rem', color: bossM.requirements_met ? '#eab308' : '#71717a', fontStyle: 'italic' }}>
-            {bossM.requirements_met
-              ? `All requirements met — report to ${bossM.title}.`
-              : `${bossDoneCount}/${bossReqCount} district missions done. Complete more to unlock "${bossM.title}".`
-            }
-          </span>
+        <div className={`relative p-2 ${styles.panel} border rounded-md m-fade-in ${bossM.requirements_met ? 'border-primary/40 bg-primary/8' : 'border-primary/20'}`}>
+          <div className="flex items-center gap-2">
+            <Skull size={11} className={bossM.requirements_met ? 'text-primary' : 'text-mutedForeground'} />
+            <span className="text-[10px] text-mutedForeground italic">
+              {bossM.requirements_met ? `All requirements met — report to ${bossM.title}.` : `${bossDoneCount}/${bossReqCount} district missions done. Complete more to unlock "${bossM.title}".`}
+            </span>
+          </div>
         </div>
       )}
 
-      {/* ── District missions ───────────────────────────────── */}
+      {/* District missions */}
       {areaNames.map((area, i) => (
         <AreaSection
           key={area}
           areaName={area}
           missions={areaMap[area].sort((a, b) => a.order - b.order)}
           onMissionClick={setSelected}
-          delay={0.15 + i * 0.05}
+          delay={0.1 + i * 0.04}
           isBossArea={false}
+          missionIdToIndex={missionIdToIndex}
+          currentMissionId={currentMissionId}
         />
       ))}
 
-      {/* ── Boss missions (always last) ─────────────────────── */}
+      {/* Boss section */}
       {bossMissions.length > 0 && (
-        <>
-          {/* Divider */}
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            margin: '16px 0 12px',
-          }}>
-            <div style={{ flex: 1, height: 1, background: 'linear-gradient(to right, transparent, rgba(234,179,8,0.3))' }} />
-            <span style={{
-              fontFamily: "'Cormorant Garamond', serif",
-              fontSize: '0.75rem', fontWeight: 700, color: '#a16207',
-              textTransform: 'uppercase', letterSpacing: '0.1em',
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              <Skull size={11} /> Final Jobs
-            </span>
-            <div style={{ flex: 1, height: 1, background: 'linear-gradient(to left, transparent, rgba(234,179,8,0.3))' }} />
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
+            <Skull size={12} className="text-primary" />
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">Final Jobs</span>
           </div>
-          {bossMissions.map((m, i) => (
-            <MissionCard
-              key={m.id}
-              mission={m}
-              onClick={setSelected}
-              delay={0.15 + (areaNames.length + i) * 0.05}
-            />
-          ))}
-        </>
-      )}
-
-      {/* ── Empty state ─────────────────────────────────────── */}
-      {cityMissions.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#52525b' }}>
-          <BookOpen size={32} style={{ opacity: 0.3, marginBottom: 10 }} />
-          <p style={{ fontFamily: "'Crimson Text', serif", fontStyle: 'italic' }}>No missions available in {city}.</p>
+          <div className="p-1.5 space-y-1.5">
+            {bossMissions.map((m, i) => {
+              const info = missionIdToIndex[m.id] ?? {};
+              return (
+                <MissionCard
+                  key={m.id}
+                  mission={m}
+                  onClick={setSelected}
+                  delay={0.1 + (areaNames.length + i) * 0.04}
+                  missionIndex={info.index}
+                  missionTotal={info.total}
+                  isCurrent={m.id === currentMissionId}
+                />
+              );
+            })}
+          </div>
+          <div className="m-art-line text-primary mx-2.5" />
         </div>
       )}
 
-      {/* ── Mission detail modal ─────────────────────────────── */}
+      {cityMissions.length === 0 && (
+        <div className="text-center py-10 text-mutedForeground">
+          <BookOpen size={28} className="opacity-40 mx-auto mb-2" />
+          <p className="text-[10px] italic">No missions available in {city}.</p>
+        </div>
+      )}
+
       {selected && (
         <MissionModal
           mission={selected}
