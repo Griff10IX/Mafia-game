@@ -301,7 +301,6 @@ function buildGameCapitalRows(data) {
     { label: 'Total cash', value: formatMoney(gc?.total_cash) },
     { label: 'Swiss bank cash', value: formatMoney(gc?.swiss_total) },
     { label: 'Interest bank cash', value: formatMoney(gc?.interest_bank_total) },
-    { label: 'Points in circulation', value: `${formatNumber(gc?.points_total)} Points` },
   ];
 }
 
