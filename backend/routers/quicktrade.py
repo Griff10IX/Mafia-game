@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_rank_info, CAPO_RANK_ID, _user_owns_any_property
+from server import db, get_current_user, get_rank_info, log_activity, CAPO_RANK_ID, _user_owns_any_property
 
 # Cache for list endpoints (short TTL; invalidate on any mutation)
 _sell_offers_cache: Optional[tuple] = None
@@ -106,6 +106,12 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     }
     result = await db.trade_sell_offers.insert_one(new_offer)
     _invalidate_trade_caches()
+    await log_activity(
+        user_id,
+        username,
+        "quicktrade_sell_offer",
+        {"points": points_after_fee, "original_points": offer.points, "cost": offer.cost, "fee": fee, "hide_name": offer.hide_name},
+    )
     return {"message": f"Sell offer created! ({points_after_fee} points after {fee} point fee)", "offer_id": str(result.inserted_id)}
 
 
@@ -127,6 +133,12 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
         {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": datetime.now(timezone.utc)}}
     )
     _invalidate_trade_caches()
+    await log_activity(
+        buyer_id,
+        buyer_username,
+        "quicktrade_accept_sell",
+        {"seller_id": offer["user_id"], "points_received": offer["points"], "cost_paid": offer["cost"], "offer_id": offer_id},
+    )
     return {"message": "Trade completed successfully", "points_received": offer["points"], "cost_paid": offer["cost"]}
 
 
@@ -227,6 +239,12 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
     }
     result = await db.trade_buy_offers.insert_one(new_offer)
     _invalidate_trade_caches()
+    await log_activity(
+        user_id,
+        username,
+        "quicktrade_buy_offer",
+        {"points": points_after_fee, "original_points": offer.points, "offer": offer.offer, "fee": fee, "hide_name": offer.hide_name},
+    )
     return {"message": f"Buy offer created! ({points_after_fee} points after {fee} point fee)", "offer_id": str(result.inserted_id)}
 
 
@@ -248,6 +266,12 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
         {"$set": {"status": "completed", "seller_id": seller_id, "seller_username": seller_username, "completed_at": datetime.now(timezone.utc)}}
     )
     _invalidate_trade_caches()
+    await log_activity(
+        seller_id,
+        seller_username,
+        "quicktrade_accept_buy",
+        {"buyer_id": offer["user_id"], "points_sold": offer["points"], "cash_received": offer["offer"], "offer_id": offer_id},
+    )
     return {"message": "Trade completed successfully", "points_sold": offer["points"], "cash_received": offer["offer"]}
 
 

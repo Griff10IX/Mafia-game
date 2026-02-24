@@ -75,6 +75,7 @@ from server import (
     get_rank_info,
     get_effective_event,
     maybe_process_rank_up,
+    log_activity,
     RANKS,
     CARS,
     TRAVEL_TIMES,
@@ -349,7 +350,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=option["jail_time"])
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat()}},
+            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}},
         )
         fail_msg = random.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=option["jail_time"])
         return GTAAttemptResponse(
@@ -634,6 +635,12 @@ async def melt_cars(
                 {"id": current_user["id"]},
                 {"$inc": {"bullets": total_bullets}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
             )
+            await log_activity(
+                current_user["id"],
+                current_user.get("username") or "?",
+                "garage_melt",
+                {"action": "bullets", "melted_count": deleted_count, "total_bullets": total_bullets, "car_ids": request.car_ids[:limit]},
+            )
             return {
                 "success": True,
                 "melted_count": deleted_count,
@@ -643,6 +650,12 @@ async def melt_cars(
             }
         await db.users.update_one(
             {"id": current_user["id"]}, {"$inc": {"money": total_value}}
+        )
+        await log_activity(
+            current_user["id"],
+            current_user.get("username") or "?",
+            "garage_scrap",
+            {"action": "cash", "scrapped_count": deleted_count, "total_value": total_value, "car_ids": request.car_ids[:limit]},
         )
         return {
             "success": True,
@@ -733,6 +746,12 @@ async def buy_car(
         {"id": current_user["id"]},
         {"$inc": {"money": -price}},
     )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "garage_buy_car",
+        {"car_id": request.car_id, "car_name": car_info.get("name"), "price": price, "source": "dealer"},
+    )
     return {
         "success": True,
         "message": f"Purchased {car_info.get('name')} for ${price:,}",
@@ -798,6 +817,12 @@ async def list_car(
     else:
         q = {"user_id": current_user["id"], "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$set": {"listed_for_sale": True, "sale_price": request.price, "listed_at": now}})
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "garage_list_car",
+        {"user_car_id": request.user_car_id, "car_id": user_car.get("car_id"), "car_name": user_car.get("car_name"), "sale_price": request.price},
+    )
     return {"message": f"Listed for ${request.price:,}", "sale_price": request.price}
 
 
@@ -865,6 +890,13 @@ async def buy_listed_car(
     )
     await db.users.update_one({"id": buyer_id}, {"$inc": {"money": -price}})
     await db.users.update_one({"id": seller_id}, {"$inc": {"money": price}})
+    seller = await db.users.find_one({"id": seller_id}, {"_id": 0, "username": 1})
+    await log_activity(
+        buyer_id,
+        current_user.get("username") or "?",
+        "garage_buy_listed_car",
+        {"car_id": user_car.get("car_id"), "car_name": car_name, "price": price, "seller_id": seller_id, "seller_username": (seller or {}).get("username", "?")},
+    )
     return {
         "message": f"Purchased {car_name} from seller for ${price:,}",
         "car_id": user_car.get("car_id"),

@@ -899,7 +899,7 @@ async def log_activity(user_id: str, username: str, action: str, details: dict):
 
 
 async def log_gambling(user_id: str, username: str, game_type: str, details: dict):
-    """Append to gambling_log for admin anti-cheat monitoring."""
+    """Append to gambling_log for admin anti-cheat monitoring. Used by all casinos: blackjack, slots, roulette, dice, videopoker, horseracing, sports_bet, mdg."""
     try:
         await db.gambling_log.insert_one({
             "id": str(uuid.uuid4()),

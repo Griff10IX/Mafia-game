@@ -137,7 +137,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         if not jail_until_iso:
             await db.users.update_one(
                 {"id": p["id"]},
-                {"$set": {"in_jail": False, "jail_until": None}},
+                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
             )
             continue
         try:
@@ -149,7 +149,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         if jail_until <= now:
             await db.users.update_one(
                 {"id": p["id"]},
-                {"$set": {"in_jail": False, "jail_until": None}},
+                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
             )
             continue
         real_players.append(p)
@@ -230,7 +230,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
+            {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
         )
         await _record_bust_event(current_user["id"], False, 0)
         return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
@@ -256,7 +256,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         rank_points = 15
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None}},
+            {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None, "snitch_attempted_this_term": False}},
         )
         reward_cash = int((target.get("bust_reward_cash") or 0) or 0)
         target_money = int((target.get("money") or 0) or 0)
@@ -285,7 +285,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0}},
+        {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
     )
     await _record_bust_event(current_user["id"], False, 0)
     return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
@@ -368,7 +368,7 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
     if jail_until <= now:
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"in_jail": False, "jail_until": None}},
+            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
         )
         return {"in_jail": False, **base}
     seconds_remaining = int((jail_until - now).total_seconds())
@@ -400,7 +400,7 @@ async def leave_jail(current_user: dict = Depends(get_current_user)):
     await db.users.update_one(
         {"id": current_user["id"]},
         {
-            "$set": {"in_jail": False, "jail_until": None},
+            "$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False},
             "$inc": {"points": -3},
         },
     )
@@ -465,9 +465,11 @@ async def snitch(
     request: SnitchRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """When in jail: snitch on a user (by username) or pick random online. On success you're released and they serve time. They get a notification that they were snitched on (not by whom)."""
+    """When in jail: snitch on a user (by username) or pick random online. On success you're released and they serve time. They get a notification that they were snitched on (not by whom). One attempt per jail term."""
     if not current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You are not in jail")
+    if current_user.get("snitch_attempted_this_term"):
+        raise HTTPException(status_code=400, detail="You can only attempt to snitch once per jail term.")
 
     target_username = (request.target_username or "").strip()
     target = None
@@ -511,6 +513,12 @@ async def snitch(
             except (ValueError, TypeError):
                 pass
 
+    # Mark attempt as used (one per jail term) before the roll
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"snitch_attempted_this_term": True}},
+    )
+
     if not _snitch_success_roll():
         return {
             "success": False,
@@ -523,11 +531,11 @@ async def snitch(
     snitch_immunity_until = now + timedelta(minutes=SNITCH_IMMUNITY_MINUTES)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$set": {"in_jail": False, "jail_until": None}},
+        {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
     )
     await db.users.update_one(
         {"id": target["id"]},
-        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitched_on_until": snitch_immunity_until.isoformat()}},
+        {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitched_on_until": snitch_immunity_until.isoformat(), "snitch_attempted_this_term": False}},
     )
     await send_notification(
         target["id"],

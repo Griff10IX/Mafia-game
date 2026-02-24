@@ -6,7 +6,7 @@ import uuid
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, CARS
+from server import db, get_current_user, log_activity, CARS
 
 RPS_PLAYS_PER_WINDOW = 3
 RPS_WINDOW_HOURS = 6
@@ -186,6 +186,12 @@ def register(router):
         cars_won = []
         if result == "win":
             money_won, cars_won = await _grant_daily_win_rewards(current_user["id"])
+        await log_activity(
+            current_user["id"],
+            current_user.get("username") or "?",
+            "daily_rewards_rps",
+            {"game": "rps", "result": result, "money_won": money_won, "cars_won": cars_won, "your_choice": choice, "computer_choice": computer},
+        )
         plays_in_window_after = _plays_in_window(new_plays)
         next_play_at = None
         if len(plays_in_window_after) >= RPS_PLAYS_PER_WINDOW and plays_in_window_after:
@@ -311,11 +317,23 @@ def register(router):
             result = "win" if winner == player_side else "lose"
             if result == "win":
                 money_won, cars_won = await _grant_daily_win_rewards(current_user["id"])
+            await log_activity(
+                current_user["id"],
+                current_user.get("username") or "?",
+                "daily_rewards_ttt",
+                {"game": "ttt", "result": result, "money_won": money_won, "cars_won": cars_won},
+            )
             await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
         else:
             empty = _ttt_empty_cells(board)
             if not empty:
                 result = "draw"
+                await log_activity(
+                    current_user["id"],
+                    current_user.get("username") or "?",
+                    "daily_rewards_ttt",
+                    {"game": "ttt", "result": "draw"},
+                )
                 await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
             else:
                 comp_cell = _ttt_computer_move(board, computer_side)
@@ -324,9 +342,21 @@ def register(router):
                     winner = _ttt_winner(board)
                     if winner:
                         result = "lose"
+                        await log_activity(
+                            current_user["id"],
+                            current_user.get("username") or "?",
+                            "daily_rewards_ttt",
+                            {"game": "ttt", "result": "lose"},
+                        )
                         await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
                     elif not _ttt_empty_cells(board):
                         result = "draw"
+                        await log_activity(
+                            current_user["id"],
+                            current_user.get("username") or "?",
+                            "daily_rewards_ttt",
+                            {"game": "ttt", "result": "draw"},
+                        )
                         await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
                     else:
                         await db.daily_rewards_ttt.update_one(

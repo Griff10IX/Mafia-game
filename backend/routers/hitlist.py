@@ -13,6 +13,7 @@ from server import (
     db,
     get_current_user,
     send_notification,
+    log_activity,
     RANKS,
     STATES,
     DEFAULT_HEALTH,
@@ -174,6 +175,12 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
             "created_at": now.isoformat(),
         })
         msg = f"Bounty placed on {target['username']} ({target_type}) for {reward_amount} {reward_type}" + (" (hidden)" if hidden else "")
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "hitlist_add",
+        {"target_username": target["username"], "target_type": target_type, "reward_cash": reward_cash, "reward_points": reward_points, "hidden": hidden},
+    )
     return {"message": msg}
 
 
@@ -264,6 +271,12 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     reward_desc = ", ".join(f"{k}: {v}" for k, v in rewards.items() if v and k != "booze") or "various"
     if isinstance(rewards.get("booze"), dict) and rewards["booze"]:
         reward_desc += ", booze"
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "hitlist_add_npc",
+        {"npc_username": npc_username, "hitlist_id": hitlist_id, "rank_name": rank_name, "npc_template_id": template.get("id", "")},
+    )
     return {"message": f"Added {base_name} (NPC) — {rank_name}. Rewards: {reward_desc}. Attack them from the Attack page.", "hitlist_id": hitlist_id}
 
 
@@ -364,6 +377,12 @@ async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
         )
     except Exception as e:
         logger.exception("Hitlist buy-off notification: %s", e)
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "hitlist_buy_off",
+        {"deleted_count": res.deleted_count, "cost_cash": cost_cash, "cost_points": cost_points},
+    )
     return {"message": f"Removed {res.deleted_count} bounty(ies). Cost: {cost_str}.", "deleted": res.deleted_count}
 
 
@@ -422,6 +441,12 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
         )
     except Exception as e:
         logger.exception("Hitlist buy-off-user notification: %s", e)
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "hitlist_buy_off_user",
+        {"target_username": target["username"], "deleted_count": res.deleted_count, "cost_cash": cost_cash, "cost_points": cost_points},
+    )
     return {"message": f"Removed all bounties on {target['username']}. Cost: {cost_str}.", "deleted": res.deleted_count}
 
 
@@ -438,6 +463,12 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": user_id}, {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}})
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "hitlist_reveal",
+        {"cost_points": cost, "entries_count": len(entries)},
+    )
     return {"message": f"Paid {cost} points. Here is who hitlisted you.", "who": who}
 
 

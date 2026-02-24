@@ -2267,6 +2267,7 @@ export default function Admin() {
                 <option value="videopoker">Video Poker</option>
                 <option value="horseracing">Horse Racing</option>
                 <option value="sports_bet">Sports</option>
+                <option value="mdg">MDG (Pot)</option>
               </select>
               <BtnPrimary onClick={fetchGamblingLog} disabled={gamblingLogLoading}>
                 {gamblingLogLoading ? '...' : 'Load'}
@@ -2308,7 +2309,7 @@ export default function Admin() {
                 {clearGamblingLoading ? '...' : 'Clear old'}
               </BtnDanger>
             </div>
-            {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all betting (dice, roulette, blackjack, slots, video poker, horseracing, sports).</p>}
+            {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
           </div>
         )}
         </div>

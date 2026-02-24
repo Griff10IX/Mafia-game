@@ -6,7 +6,7 @@ from typing import List
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, _is_admin
+from server import db, get_current_user, _is_admin, log_activity
 
 SAFE_ENTRY_COST = 5_000_000
 SAFE_JACKPOT_SEED = 100_000_000
@@ -172,6 +172,12 @@ def register(router):
             "guessed_at": now,
             "correct": cracked,
         })
+        await log_activity(
+            user["id"],
+            user.get("username") or "?",
+            "crack_safe_guess",
+            {"cracked": cracked, "correct_positions": sum(1 for a, b in zip(req.numbers, combo) if a == b), "is_admin": is_admin},
+        )
 
         if cracked:
             fresh = await db.safe_game.find_one({})
@@ -187,6 +193,12 @@ def register(router):
                     "last_winner_username": user.get("username", "?"),
                     "last_won_at": now,
                 }},
+            )
+            await log_activity(
+                user["id"],
+                user.get("username") or "?",
+                "crack_safe_jackpot",
+                {"jackpot_won": jackpot_amount},
             )
             return {
                 "cracked": True,
@@ -239,6 +251,12 @@ def register(router):
         await db.safe_daily.update_one(
             {"user_id": user["id"], "date": _today_str()},
             {"$set": {"bonus_purchased": True}},
+        )
+        await log_activity(
+            user["id"],
+            user.get("username") or "?",
+            "crack_safe_buy_attempts",
+            {"bonus_attempts": BONUS_ATTEMPTS, "cost": BONUS_ATTEMPTS_COST},
         )
         return {
             "success": True,

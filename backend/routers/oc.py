@@ -505,7 +505,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             unbreakable_until = now + timedelta(seconds=60)
             await db.users.update_one(
                 {"id": uid},
-                {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "unbreakable_until": unbreakable_until.isoformat()}},
+                {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "unbreakable_until": unbreakable_until.isoformat(), "snitch_attempted_this_term": False}},
             )
             msg = random.choice(OC_TEAM_HEIST_JAIL_MESSAGES).format(jail_time=OC_JAIL_SECONDS_TEAM)
             return {

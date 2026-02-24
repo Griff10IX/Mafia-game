@@ -42,6 +42,7 @@ from server import (
     _family_war_check_wipe_and_award,
     _user_owns_any_casino,
     _user_owns_any_property,
+    log_activity,
 )
 from routers.booze_run import BOOZE_TYPES
 from routers.objectives import update_objectives_progress
@@ -658,6 +659,15 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 if car_id: reward_parts.append("a car")
                 if isinstance(booze, dict) and booze: reward_parts.append("booze")
                 success_message = f"You killed {target_name}! (NPC) You got: " + ", ".join(reward_parts) + "."
+                try:
+                    await log_activity(
+                        killer_id,
+                        current_user.get("username") or "?",
+                        "hitlist_npc_kill",
+                        {"victim_username": target_name, "victim_id": victim_id, "rewards": rewards},
+                    )
+                except Exception:
+                    pass
                 try:
                     await db.attack_attempts.insert_one({
                         **attempt_base,

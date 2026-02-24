@@ -7,7 +7,7 @@ import uuid
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, send_notification
+from server import db, get_current_user, send_notification, log_gambling
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
@@ -107,6 +107,12 @@ def register(router):
             await db.users.update_one({"id": uid}, {"$inc": {"points": -total_pts}})
         if total_money:
             await db.users.update_one({"id": uid}, {"$inc": {"money": -total_money}})
+        await log_gambling(
+            uid,
+            current_user.get("username") or "?",
+            "mdg",
+            {"action": "create", "game_id": game_id, "fee_points": fee_pts, "fee_money": fee_money, "extra_pot_points": extra_pts, "extra_pot_money": extra_money},
+        )
         return {"message": "Game created and you are in it", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
     @router.post("/casino/mdg/join")
@@ -146,6 +152,13 @@ def register(router):
         if fee_money:
             await db.users.update_one({"id": uid}, {"$inc": {"money": -fee_money}})
 
+        await log_gambling(
+            uid,
+            user.get("username") or "?",
+            "mdg",
+            {"action": "join", "game_id": request.game_id, "fee_points": fee_pts, "fee_money": fee_money, "players_after": len(new_entries)},
+        )
+
         # Update game
         await db.mdg_games.update_one(
             {"id": request.game_id, "status": "open"},
@@ -168,6 +181,12 @@ def register(router):
             await db.mdg_games.update_one(
                 {"id": request.game_id},
                 {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso}},
+            )
+            await log_gambling(
+                winner_id,
+                winner_username,
+                "mdg",
+                {"action": "payout", "game_id": request.game_id, "pot_points": new_pot_pts, "pot_money": new_pot_money, "trigger": "auto_roll"},
             )
             await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {new_pot_pts} pts, ${new_pot_money:,.0f}", "reward")
             return {"message": "Joined; game rolled. One winner takes the pot.", "winner_id": winner_id, "winner_username": winner_username, "pot_points": new_pot_pts, "pot_money": new_pot_money}
@@ -197,6 +216,12 @@ def register(router):
         await db.mdg_games.update_one(
             {"id": request.game_id},
             {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso}},
+        )
+        await log_gambling(
+            winner_id,
+            winner_username,
+            "mdg",
+            {"action": "payout", "game_id": request.game_id, "pot_points": pot_pts, "pot_money": pot_money, "trigger": "manual_roll"},
         )
         await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}", "reward")
         return {"message": "Roll complete. One winner takes the pot.", "winner_id": winner_id, "winner_username": winner_username, "pot_points": pot_pts, "pot_money": pot_money}
