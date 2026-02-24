@@ -423,7 +423,7 @@ def register(router):
             if owner_id:
                 head_family_id = await get_head_family_id_for_state(city) if city else None
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.videopoker": bet}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.videopoker_ownership.update_one({"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}})

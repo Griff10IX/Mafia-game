@@ -352,7 +352,7 @@ def register(router):
             if owner_cut > 0:
                 head_family_id = await get_head_family_id_for_state(stored_city or city)
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": owner_cut}})
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": owner_cut, "state_head_income.roulette": owner_cut}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_cut}})
                     await db.roulette_ownership.update_one(

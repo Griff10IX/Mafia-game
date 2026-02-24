@@ -355,10 +355,10 @@ def register(router):
                 elif head_family_id:
                     edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE)
                     if edge > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge}})
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
             else:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.horseracing": bet}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.horseracing_ownership.update_one(

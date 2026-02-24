@@ -37,7 +37,7 @@ def register(router):
         dead_state = (dead_user.get("current_state") or "").strip()
         head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
         if head_family_id and tax_money > 0:
-            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": tax_money}})
+            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": tax_money, "state_head_income.dead_alive_tax": tax_money}})
         if add_points > 0 or add_money > 0:
             await db.users.update_one(
                 {"id": current_user["id"]},

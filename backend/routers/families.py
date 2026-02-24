@@ -553,6 +553,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": fam.get("head_of_state"),
+            "state_head_income": fam.get("state_head_income") or {},
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "qualifies_for_state_head": qualifies_for_state_head,

@@ -1258,6 +1258,52 @@ const CrewOCTab = ({
 };
 
 // ============================================================================
+// STATE HEAD TAB — profits from being head of state (casinos + dead tax)
+// ============================================================================
+
+const STATE_HEAD_INCOME_KEYS = [
+  { key: 'dice', label: 'Dice (house edge)' },
+  { key: 'roulette', label: 'Roulette (house edge)' },
+  { key: 'blackjack', label: 'Blackjack' },
+  { key: 'horseracing', label: 'Horse Racing' },
+  { key: 'slots', label: 'Slots' },
+  { key: 'videopoker', label: 'Video Poker' },
+  { key: 'dead_alive_tax', label: 'Dead > Alive (5% tax)' },
+];
+
+const StateHeadTab = ({ headOfState, stateHeadIncome }) => {
+  const income = stateHeadIncome || {};
+  const total = STATE_HEAD_INCOME_KEYS.reduce((sum, { key }) => sum + (Number(income[key]) || 0), 0);
+  return (
+    <div className="space-y-4">
+      <p className="text-[10px] text-zinc-500 font-heading leading-relaxed">
+        Your family is <span className="text-primary font-bold">Head of {headOfState}</span>. All house fees from casinos in that state and 5% of Dead &gt; Alive retrievals there go to the family vault. Breakdown below.
+      </p>
+      <div className="rounded-lg border border-primary/20 bg-zinc-800/30 overflow-hidden">
+        <div className="px-3 py-2 border-b border-zinc-700/40 bg-primary/8">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Profit by source</span>
+        </div>
+        <ul className="divide-y divide-zinc-700/40">
+          {STATE_HEAD_INCOME_KEYS.map(({ key, label }) => {
+            const amount = Number(income[key]) || 0;
+            return (
+              <li key={key} className="flex items-center justify-between px-3 py-2.5">
+                <span className="text-xs font-heading text-foreground">{label}</span>
+                <span className="text-xs font-heading font-bold text-primary tabular-nums">{formatMoney(amount)}</span>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="flex items-center justify-between px-3 py-2.5 border-t border-zinc-700/40 bg-primary/8">
+          <span className="text-xs font-heading font-bold text-primary">Total to vault</span>
+          <span className="text-sm font-heading font-bold text-primary tabular-nums">{formatMoney(total)}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // NO FAMILY VIEW — recruitment board
 // ============================================================================
 
@@ -1635,6 +1681,9 @@ export default function FamilyPage() {
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
               <Tab active={activeTab === 'crewoc'} onClick={() => setActiveTab('crewoc')} icon={<Crosshair size={10} />}>Crew OC</Tab>
               <Tab active={activeTab === 'treasury'} onClick={() => setActiveTab('treasury')} icon={<DollarSign size={10} />}>Vault</Tab>
+              {family?.head_of_state && (
+                <Tab active={activeTab === 'statehead'} onClick={() => setActiveTab('statehead')} icon={<MapPin size={10} />}>Head of state</Tab>
+              )}
               <Tab active={activeTab === 'roster'} onClick={() => setActiveTab('roster')} icon={<Users size={10} />}>Made Men</Tab>
               <Tab active={activeTab === 'families'} onClick={() => setActiveTab('families')} icon={<Building2 size={10} />}>Families</Tab>
               <Tab active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<Trophy size={10} />}>Vendettas</Tab>
@@ -1660,6 +1709,9 @@ export default function FamilyPage() {
                   onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />
               )}
               {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
+              {activeTab === 'statehead' && family?.head_of_state && (
+                <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} />
+              )}
               {activeTab === 'roster' && <RosterTab members={members} fallen={fallen} canManage={canManage} myRole={myRole} config={config} onKick={handleKick} onAssignRole={handleAssignRole} />}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
               {activeTab === 'history' && <WarHistoryTab wars={warHistory} onDetails={setDetailsWarId} />}

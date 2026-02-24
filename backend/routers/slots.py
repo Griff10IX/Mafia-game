@@ -554,7 +554,7 @@ def register(router):
         head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
         if not win:
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet}})
@@ -606,7 +606,7 @@ def register(router):
                 spin_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             if points_offered <= 0:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.slots": bet}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": bet - actual_payout}})
@@ -646,7 +646,7 @@ def register(router):
         else:
             house_cut = bet - actual_payout
             if head_family_id and house_cut > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": house_cut}})
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": house_cut, "state_head_income.slots": house_cut}})
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 await db.slots_ownership.update_one({"state": stored_state or state}, {"$inc": {"profit": house_cut}})

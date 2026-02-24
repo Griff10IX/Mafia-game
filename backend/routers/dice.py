@@ -226,7 +226,7 @@ def register(router):
         if not win:
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -stake}})
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake}})
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake, "state_head_income.dice": stake}})
             elif owner_id:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                 await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake}})
@@ -250,7 +250,7 @@ def register(router):
         if shortfall > 0:
             if points_offered <= 0:
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake}})
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake, "state_head_income.dice": stake}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                     await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
@@ -279,7 +279,7 @@ def register(router):
                 buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
         else:
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge}})
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.dice": edge}})
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                 await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})

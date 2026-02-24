@@ -517,7 +517,7 @@ def register(router):
             if owner_id:
                 head_family_id = await get_head_family_id_for_state(stored_city or city)
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"total_earnings": bet, "profit": bet}})
@@ -654,7 +654,7 @@ def register(router):
                 bj_city = game.get("city")
                 head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
                 if head_family_id:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet}})
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": bet, "state_head_income.blackjack": bet}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.blackjack_ownership.update_one({"city": bj_city}, {"$inc": {"total_earnings": bet, "profit": bet}})
