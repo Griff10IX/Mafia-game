@@ -38,8 +38,9 @@ def register(router):
         for user in users:
             if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
                 continue
+            _rp = int(user.get("rank_points") or 0)
             _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
-            rank_id, rank_name = get_rank_info(user.get("rank_points", 0), _prestige_mult)
+            rank_id, rank_name = get_rank_info(_rp, _prestige_mult)
             is_admin = user.get("email") in ADMIN_EMAILS
             if is_admin:
                 rank_name = "Admin"
@@ -48,11 +49,13 @@ def register(router):
                 "username": user["username"],
                 "rank": rank_id,
                 "rank_name": rank_name,
+                "rank_points": _rp,
                 "location": user["current_state"],
                 "in_jail": user.get("in_jail", False),
                 "is_admin": is_admin,
                 "prestige_level": _prestige_level,
             })
+        users_data.sort(key=lambda u: u["rank_points"], reverse=True)
 
         admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"

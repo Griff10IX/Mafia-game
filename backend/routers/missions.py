@@ -753,11 +753,13 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     for c in by_city:
         for area in by_city[c]["areas"]:
             by_city[c]["areas"][area].sort(key=lambda x: x["order"])
+    tribute_bank = int(current_user.get("tribute_bank") or 0)
     return {
         "current_city": current_city,
         "unlocked_cities": unlocked,
         "cities": list(unlocked),
         "by_city": by_city,
+        "tribute_bank": tribute_bank,
     }
 
 
@@ -796,7 +798,7 @@ async def complete_mission(
     update = {"$push": {"mission_completions": completion_doc}}
     if reward_money:
         update["$inc"] = update.get("$inc") or {}
-        update["$inc"]["money"] = reward_money
+        update["$inc"]["tribute_bank"] = reward_money
     if reward_points:
         update["$inc"] = update.get("$inc") or {}
         update["$inc"]["rank_points"] = reward_points
@@ -847,6 +849,19 @@ async def complete_mission(
     }
 
 
+async def collect_tribute(current_user: dict = Depends(get_current_user)):
+    """Collect accumulated tribute bank into cash. Tribute builds up from completed missions."""
+    user_id = current_user["id"]
+    bank = int(current_user.get("tribute_bank") or 0)
+    if bank <= 0:
+        return {"collected": 0, "tribute_bank": 0, "message": "No tribute to collect"}
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"money": bank}, "$set": {"tribute_bank": 0}},
+    )
+    return {"collected": bank, "tribute_bank": 0, "message": f"Collected {bank} cash"}
+
+
 async def get_missions_characters(current_user: dict = Depends(get_current_user), city: Optional[str] = None):
     """Return mission characters for the map (optionally filtered by city)."""
     unlocked = _user_unlocked_cities(current_user)
@@ -874,4 +889,5 @@ def register(router):
     router.add_api_route("/missions", get_missions, methods=["GET"])
     router.add_api_route("/missions/map", get_missions_map, methods=["GET"])
     router.add_api_route("/missions/complete", complete_mission, methods=["POST"])
+    router.add_api_route("/missions/collect-tribute", collect_tribute, methods=["POST"])
     router.add_api_route("/missions/characters", get_missions_characters, methods=["GET"])

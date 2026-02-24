@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BookOpen, X, Crown, Clock, Lock, CheckCircle } from 'lucide-react';
+import { BookOpen, X, Crown, Clock, Lock, CheckCircle, Banknote } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -217,7 +217,9 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
 
 // Mission modal component
 function MissionModal({ city, territory, missions, onClose, onStart, starting }) {
-  const territoryMissions = missions.filter(m => m.area === territory);
+  const territoryMissions = missions
+    .filter(m => m.area === territory)
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   // Show brief for the next mission (first incomplete) so user sees what they're working toward
   const nextMission = territoryMissions.find(m => !m.completed);
   const currentMission = nextMission || territoryMissions[territoryMissions.length - 1] || territoryMissions[0];
@@ -547,6 +549,7 @@ export default function Missions() {
   const [city, setCity] = useState(null);
   const [selectedTerritory, setSelectedTerritory] = useState(null);
   const [starting, setStarting] = useState(false);
+  const [collectingTribute, setCollectingTribute] = useState(false);
 
   useEffect(() => {
     let cancel = false;
@@ -575,9 +578,9 @@ export default function Missions() {
     setStarting(true);
     try {
       const res = await api.post('/missions/complete', { mission_id: missionId });
-      if (res.data?.completed) {
+        if (res.data?.completed) {
         const rewards = [];
-        if (res.data.reward_money > 0) rewards.push(`+${fmt(res.data.reward_money)} daily tribute`);
+        if (res.data.reward_money > 0) rewards.push(`+${fmt(res.data.reward_money)} to tribute bank`);
         if (res.data.reward_points > 0) rewards.push(`+${res.data.reward_points} respect`);
         if (res.data.unlocked_city) rewards.push(`${res.data.unlocked_city} territory unlocked`);
         
@@ -600,6 +603,32 @@ export default function Missions() {
       toast.error(e.response?.data?.detail || 'Operation failed');
     } finally {
       setStarting(false);
+    }
+  };
+
+  const loadMap = async () => {
+    try {
+      const mapData = await api.get('/missions/map');
+      setData(mapData.data);
+    } catch (_) {}
+  };
+
+  const collectTribute = async () => {
+    const bank = data?.tribute_bank ?? 0;
+    if (bank <= 0) return;
+    setCollectingTribute(true);
+    try {
+      const res = await api.post('/missions/collect-tribute');
+      const collected = res.data?.collected ?? 0;
+      if (collected > 0) {
+        toast.success(`Collected ${fmt(collected)} cash from tribute bank`);
+        refreshUser();
+        await loadMap();
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to collect');
+    } finally {
+      setCollectingTribute(false);
     }
   };
 
@@ -632,8 +661,19 @@ export default function Missions() {
   const byCity = data?.by_city || {};
   const cityMissions = (city && byCity[city]?.missions) || [];
   
-  // Map districts from actual mission data
-  const districtNames = [...new Set(cityMissions.map(m => m.area))];
+  // Map districts from actual mission data; put boss area (Old Man / city-unlock) last in path
+  const areaOrder = {};
+  cityMissions.forEach(m => {
+    const a = m.area;
+    if (areaOrder[a] === undefined) areaOrder[a] = m.order;
+    else areaOrder[a] = Math.min(areaOrder[a], m.order);
+  });
+  const bossArea = cityMissions.find(m => m.unlocks_city)?.area ?? null;
+  const districtNames = [...new Set(cityMissions.map(m => m.area))].sort((a, b) => {
+    if (bossArea && a === bossArea) return 1;
+    if (bossArea && b === bossArea) return -1;
+    return (areaOrder[a] ?? 0) - (areaOrder[b] ?? 0);
+  });
   const territories = districtNames.map(name => ({
     name,
     description: name.includes('Loop') ? 'Downtown Operations' :
@@ -684,6 +724,52 @@ export default function Missions() {
             Complete operations in each area to earn cash and RP. Rewards are your daily tribute.
           </div>
         </div>
+      </div>
+
+      {/* Tribute bank */}
+      <div className={`fade-in ${styles.panel}`} style={{
+        maxWidth: '900px',
+        margin: '0 auto 14px',
+        padding: '10px 14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '12px',
+        flexWrap: 'wrap',
+        animationDelay: '0.1s',
+        borderLeft: '4px solid var(--noir-profit)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <Banknote size={22} style={{ color: 'var(--noir-profit)' }} />
+          <div>
+            <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--noir-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Tribute bank
+            </div>
+            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--noir-profit)' }}>
+              {fmt(data?.tribute_bank ?? 0)} cash
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={collectTribute}
+          disabled={(data?.tribute_bank ?? 0) <= 0 || collectingTribute}
+          className={styles.panel}
+          style={{
+            padding: '6px 14px',
+            background: (data?.tribute_bank ?? 0) > 0 ? 'rgba(92, 184, 92, 0.2)' : 'rgba(var(--noir-primary-rgb), 0.1)',
+            border: `1px solid ${(data?.tribute_bank ?? 0) > 0 ? 'var(--noir-profit)' : 'var(--noir-border-mid)'}`,
+            borderRadius: '4px',
+            color: (data?.tribute_bank ?? 0) > 0 ? 'var(--noir-profit)' : 'var(--noir-muted)',
+            fontWeight: 600,
+            fontSize: '0.8rem',
+            cursor: (data?.tribute_bank ?? 0) > 0 && !collectingTribute ? 'pointer' : 'default',
+            transition: 'all 0.2s ease',
+            opacity: collectingTribute ? 0.7 : 1
+          }}
+        >
+          {collectingTribute ? 'Collecting...' : 'Collect'}
+        </button>
       </div>
       
       {/* City selector */}
