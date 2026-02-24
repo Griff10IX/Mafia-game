@@ -192,8 +192,8 @@ export default function DailyRewards() {
     try {
       const res = await api.get('/daily-rewards/info');
       setInfo(res.data);
-    } catch {
-      toast.error('Failed to load daily rewards');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to load daily rewards');
     } finally {
       setLoading(false);
     }

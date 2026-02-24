@@ -120,10 +120,8 @@ def register(router):
     @router.get("/daily-rewards/info")
     async def daily_rewards_info(current_user: dict = Depends(get_current_user)):
         """Plays left in current 6h window, next play time if at limit."""
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "rps_plays": 1})
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found.")
-        plays = user.get("rps_plays") or []
+        # get_current_user already loaded the full user from DB
+        plays = (current_user.get("rps_plays") or [])
         in_window = _plays_in_window(plays)
         plays_used = len(in_window)
         plays_left = max(0, RPS_PLAYS_PER_WINDOW - plays_used)
