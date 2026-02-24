@@ -633,7 +633,7 @@ async def melt_cars(
             cooldown_until = now + timedelta(seconds=cooldown_seconds)
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": {"bullets": total_bullets}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
+                {"$inc": {"bullets": total_bullets, "bullets_melted": total_bullets}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
             )
             await log_activity(
                 current_user["id"],

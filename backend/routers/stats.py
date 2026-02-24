@@ -42,6 +42,7 @@ def register(router):
                     "total_gta": {"$sum": {"$ifNull": ["$total_gta", 0]}},
                     "total_jail_busts": {"$sum": {"$ifNull": ["$jail_busts", 0]}},
                     "total_oc_heists": {"$sum": {"$ifNull": ["$total_oc_heists", 0]}},
+                    "bullets_melted_total": {"$sum": {"$ifNull": ["$bullets_melted", 0]}},
                 }
             }
         ]).to_list(1)
@@ -194,7 +195,7 @@ def register(router):
                 "total_gta": int(totals_doc.get("total_gta", 0) or 0),
                 "total_jail_busts": int(totals_doc.get("total_jail_busts", 0) or 0),
                 "total_oc_heists": int(totals_doc.get("total_oc_heists", 0) or 0),
-                "bullets_melted_total": 0,
+                "bullets_melted_total": int(totals_doc.get("bullets_melted_total", 0) or 0),
             },
             "vehicle_stats": {
                 "total_vehicles": int(total_vehicles),
