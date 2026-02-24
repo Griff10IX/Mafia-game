@@ -1261,7 +1261,7 @@ const CrewOCTab = ({
 // NO FAMILY VIEW — recruitment board
 // ============================================================================
 
-const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, warHistory, onDetails }) => (
+const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, warHistory, onDetails }) => (
   <div className="space-y-4">
     {/* Flavor text */}
     <div className="text-center py-2 fam-fade-in">
@@ -1278,6 +1278,9 @@ const NoFamilyView = ({ families, createName, setCreateName, createTag, setCreat
       </div>
       <form onSubmit={onCreate} className="p-4 space-y-3">
         <p className="text-[10px] text-zinc-500 font-heading">Become the Don. Build your empire from nothing, recruit soldiers, run rackets, and make your name feared across every borough.</p>
+        {config?.family_create_cost != null && (
+          <p className="text-[10px] font-heading text-primary">Cost: {formatMoney(config.family_create_cost)}</p>
+        )}
         <div className="flex gap-2">
           <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Family name" maxLength={30}
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors" />
@@ -1664,7 +1667,7 @@ export default function FamilyPage() {
           </div>
         </>
       ) : (
-        <NoFamilyView families={families} createName={createName} setCreateName={setCreateName} createTag={createTag} setCreateTag={setCreateTag} onCreate={handleCreate} joinId={joinId} setJoinId={setJoinId} onJoin={handleJoin} warHistory={warHistory} onDetails={setDetailsWarId} />
+        <NoFamilyView families={families} config={config} createName={createName} setCreateName={setCreateName} createTag={createTag} setCreateTag={setCreateTag} onCreate={handleCreate} joinId={joinId} setJoinId={setJoinId} onJoin={handleJoin} warHistory={warHistory} onDetails={setDetailsWarId} />
       )}
 
       {/* War Details Modal — public, opened from history */}

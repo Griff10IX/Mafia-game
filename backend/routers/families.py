@@ -40,6 +40,7 @@ from server import (
 
 # ============ Constants ============
 MAX_FAMILIES = 10
+FAMILY_CREATE_COST = 25_000_000  # $25M to create a family
 FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associate"]
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
@@ -318,37 +319,19 @@ async def resolve_family_id(user_id: str):
 
 
 async def family_qualifies_for_state_head(family_id: str) -> bool:
-    """True if family has at least 3 members and its top 3 (by prestige, then rank_points) all have prestige_level >= 1."""
+    """True if the family's boss has prestige_level >= 1."""
     if not (family_id or "").strip():
         return False
-    members = await db.family_members.find(
-        {"family_id": family_id},
-        {"_id": 0, "user_id": 1},
-    ).to_list(100)
-    if len(members) < 3:
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
+    if not fam or not (fam.get("boss_id") or "").strip():
         return False
-    user_ids = [m["user_id"] for m in members]
-    users = await db.users.find(
-        {"id": {"$in": user_ids}, "is_dead": {"$ne": True}},
-        {"_id": 0, "id": 1, "prestige_level": 1, "rank_points": 1},
-    ).to_list(len(user_ids))
-    user_map = {u["id"]: u for u in users}
-    with_prestige = []
-    for m in members:
-        u = user_map.get(m["user_id"])
-        if not u:
-            continue
-        with_prestige.append(u)
-    if len(with_prestige) < 3:
-        return False
-    with_prestige.sort(
-        key=lambda u: (
-            -(int(u.get("prestige_level") or 0)),
-            -(int(u.get("rank_points") or 0)),
-        ),
+    boss = await db.users.find_one(
+        {"id": fam["boss_id"], "is_dead": {"$ne": True}},
+        {"_id": 0, "prestige_level": 1},
     )
-    top3 = with_prestige[:3]
-    return all(int(u.get("prestige_level") or 0) >= 1 for u in top3)
+    if not boss:
+        return False
+    return int(boss.get("prestige_level") or 0) >= 1
 
 
 # Promotion order when boss dies: next in line becomes boss, others shift up
@@ -461,6 +444,7 @@ async def families_config(current_user: dict = Depends(get_current_user)):
         return _config_cache
     _config_cache = {
         "max_families": MAX_FAMILIES,
+        "family_create_cost": FAMILY_CREATE_COST,
         "roles": FAMILY_ROLES,
         "racket_max_level": RACKET_MAX_LEVEL,
         "rackets": FAMILY_RACKETS,
@@ -641,6 +625,12 @@ async def families_lookup(tag: str = None, current_user: dict = Depends(get_curr
 async def families_create(request: FamilyCreateRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_id"):
         raise HTTPException(status_code=400, detail="Already in a family")
+    user_money = int((current_user.get("money") or 0) or 0)
+    if user_money < FAMILY_CREATE_COST:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need ${FAMILY_CREATE_COST:,} to create a family. You have ${user_money:,}.",
+        )
     name = (request.name or "").strip()[:30]
     tag = (request.tag or "").strip().upper().replace(" ", "")[:4]
     if len(name) < 2 or len(tag) < 2:
@@ -662,7 +652,10 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
         "role": "boss", "joined_at": now,
     })
-    await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": family_id, "family_role": "boss"}})
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}},
+    )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Family created", "family_id": family_id}

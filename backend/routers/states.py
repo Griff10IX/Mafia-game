@@ -152,7 +152,7 @@ async def states_claim(
     current_user: dict = Depends(get_current_user),
     body: StateClaimRequest = Body(...),
 ):
-    """Claim an empty state as head family. Boss only; family must qualify (top 3 members prestige >= 1)."""
+    """Claim an empty state as head family. Boss only; family boss must have prestige level 1+."""
     state = (body.state or "").strip()
     if state not in (STATES or []):
         raise HTTPException(status_code=400, detail="Invalid state")
@@ -169,7 +169,7 @@ async def states_claim(
     if not await family_qualifies_for_state_head(family_id):
         raise HTTPException(
             status_code=403,
-            detail="Your family does not qualify: top 3 members (by prestige, then rank) must all have prestige level 1+",
+            detail="Your family does not qualify: the family boss must have prestige level 1 or higher.",
         )
     heads = await get_state_heads()
     if heads.get(state):
