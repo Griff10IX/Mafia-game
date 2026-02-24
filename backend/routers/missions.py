@@ -850,8 +850,8 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         if city and m["city"] != city:
             continue
         met, progress = _check_mission_requirements(current_user, m)
-        unlocked = _mission_unlocked_by_previous(m, completed_ids)
-        requirements_met_final = met and unlocked
+        mission_unlocked = _mission_unlocked_by_previous(m, completed_ids)
+        requirements_met_final = met and mission_unlocked
         prev = _previous_mission(m)
         missions_out.append({
             "id": m["id"],
@@ -871,8 +871,8 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "difficulty": m.get("difficulty", 5),
             "is_boss": m.get("is_boss", False),
             "completed": m["id"] in completed_ids,
-            "unlocked": unlocked,
-            "previous_mission_title": prev.get("title") if prev and not unlocked else None,
+            "unlocked": mission_unlocked,
+            "previous_mission_title": prev.get("title") if prev and not mission_unlocked else None,
             "requirements_met": requirements_met_final,
             "progress": progress,
         })
@@ -902,8 +902,8 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         if area not in by_city[m["city"]]["areas"]:
             by_city[m["city"]]["areas"][area] = []
         met, progress = _check_mission_requirements(current_user, m)
-        unlocked = _mission_unlocked_by_previous(m, completed_ids)
-        requirements_met_final = met and unlocked
+        mission_unlocked = _mission_unlocked_by_previous(m, completed_ids)
+        requirements_met_final = met and mission_unlocked
         prev = _previous_mission(m)
         entry = {
             "id": m["id"],
@@ -922,8 +922,8 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "difficulty": m.get("difficulty", 5),
             "is_boss": m.get("is_boss", False),
             "completed": m["id"] in completed_ids,
-            "unlocked": unlocked,
-            "previous_mission_title": prev.get("title") if prev and not unlocked else None,
+            "unlocked": mission_unlocked,
+            "previous_mission_title": prev.get("title") if prev and not mission_unlocked else None,
             "requirements_met": requirements_met_final,
             "progress": progress,
         }

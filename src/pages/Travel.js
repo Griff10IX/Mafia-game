@@ -76,7 +76,7 @@ const CurrentLocationCard = ({ location, travelsUsed, maxTravels, userPoints }) 
         <div className="flex items-center gap-1">
           <Clock size={10} className="text-mutedForeground" />
           <span className="text-mutedForeground">
-            Travels: <span className="font-bold text-foreground">{travelsUsed}/{maxTravels}</span> this hour
+            Airport: <span className="font-bold text-foreground">{travelsUsed}/{maxTravels}</span> this hour
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -280,8 +280,8 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
             <span className="text-foreground font-bold">Instant · {travelInfo?.airport_cost}pts</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-mutedForeground">Travel Limit</span>
-            <span className="text-foreground font-bold">{MAX_TRAVELS_PER_HOUR}/hour</span>
+            <span className="text-mutedForeground">Airport limit</span>
+            <span className="text-foreground font-bold">{MAX_TRAVELS_PER_HOUR}/hour (car unlimited)</span>
           </div>
         </div>
 

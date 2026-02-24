@@ -59,6 +59,12 @@ def register(router):
         ]).to_list(1)
         interest_bank_total = int(interest_agg[0].get("total", 0) or 0) if interest_agg else 0
 
+        quicktrade_agg = await db.trade_buy_offers.aggregate([
+            {"$match": {"status": "active"}},
+            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$offer", 0]}}}}
+        ]).to_list(1)
+        quicktrade_cash = int(quicktrade_agg[0].get("total", 0) or 0) if quicktrade_agg else 0
+
         total_vehicles = await db.user_cars.count_documents({})
         car_counts = await db.user_cars.aggregate([
             {"$group": {"_id": "$car_id", "count": {"$sum": 1}}}
@@ -177,6 +183,7 @@ def register(router):
                 "total_cash": total_cash_alive,
                 "swiss_total": int(totals_doc.get("swiss_total", 0) or 0),
                 "interest_bank_total": interest_bank_total,
+                "quicktrade_cash": quicktrade_cash,
                 "points_total": int(totals_doc.get("points_total", 0) or 0),
             },
             "user_stats": {

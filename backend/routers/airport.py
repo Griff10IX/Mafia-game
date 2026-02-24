@@ -258,17 +258,16 @@ async def _start_travel_impl(
         except Exception:
             pass
 
-    # Travel limit applies to airport/manual travel; booze runs (car only) are exempt so auto rank can run
-    if not booze_run:
-        max_travels = MAX_TRAVELS_PER_HOUR + user.get("extra_airmiles", 0)
-        if user.get("travels_this_hour", 0) >= max_travels:
-            raise HTTPException(status_code=400, detail="Travel limit reached. Buy extra airmiles or wait.")
-
     travel_time = 45
     method_name = "Walking"
     car_to_damage = None  # user_car doc to apply travel damage (2–4%) when travel_time > 0
 
     if travel_method == "airport":
+        # Airport limit (travels per hour) applies only to airport; car travel is unlimited
+        if not booze_run:
+            max_travels = MAX_TRAVELS_PER_HOUR + user.get("extra_airmiles", 0)
+            if user.get("travels_this_hour", 0) >= max_travels:
+                raise HTTPException(status_code=400, detail="Travel limit reached. Buy extra airmiles or wait.")
         if _booze_user_carrying_total(user.get("booze_carrying") or {}) > 0:
             raise HTTPException(status_code=400, detail="Cannot use airport while carrying booze. Use a car.")
         slot = airport_slot if airport_slot is not None else 1
@@ -334,7 +333,8 @@ async def _start_travel_impl(
         else:
             car_to_damage = user_car
 
-    inc_travels = {} if booze_run else {"travels_this_hour": 1}
+    # Only count airport travel against the hourly limit; car travel is unlimited
+    inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}
     if travel_time <= 0:
         await db.users.update_one(
             {"id": user["id"]},

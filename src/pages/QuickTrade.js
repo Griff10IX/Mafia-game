@@ -60,6 +60,21 @@ export default function QuickTrade() {
     }
   };
 
+  // Auto-fill offer/cost from existing offers: buy = highest + 1, sell = lowest - 1 (only when field is empty)
+  useEffect(() => {
+    if (buyOffers.length && buyOffer === '') {
+      const maxCost = Math.max(...buyOffers.map((o) => Number(o.cost) || 0));
+      if (maxCost >= 0) setBuyOffer(String(maxCost + 1));
+    }
+    if (sellOffers.length && sellCost === '') {
+      const costs = sellOffers.map((o) => Number(o.money) || 0).filter((n) => n > 0);
+      if (costs.length) {
+        const minCost = Math.min(...costs);
+        setSellCost(String(minCost - 1));
+      }
+    }
+  }, [buyOffers, sellOffers, buyOffer, sellCost]);
+
   const handleCreateSellOffer = async () => {
     if (!sellPoints || !sellCost) {
       toast.error('Enter points and cost');

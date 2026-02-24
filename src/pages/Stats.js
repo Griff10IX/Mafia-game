@@ -301,6 +301,7 @@ function buildGameCapitalRows(data) {
     { label: 'Total cash', value: formatMoney(gc?.total_cash) },
     { label: 'Swiss bank cash', value: formatMoney(gc?.swiss_total) },
     { label: 'Interest bank cash', value: formatMoney(gc?.interest_bank_total) },
+    { label: 'Quick Trade cash', value: formatMoney(gc?.quicktrade_cash) },
   ];
 }
 
