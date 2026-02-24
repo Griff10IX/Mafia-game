@@ -121,8 +121,8 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
     <div 
       className={styles.panel}
       style={{
-        padding: '12px 14px',
-        marginBottom: '10px',
+        padding: '10px 12px',
+        marginBottom: '8px',
         position: 'relative',
         cursor: isLocked && total === 0 ? 'default' : 'pointer',
         transition: 'all 0.2s ease',
@@ -217,7 +217,9 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
 // Mission modal component
 function MissionModal({ city, territory, missions, onClose, onStart, starting }) {
   const territoryMissions = missions.filter(m => m.area === territory);
-  const currentMission = territoryMissions.find(m => !m.completed && m.requirements_met) || territoryMissions[0];
+  // Show brief for the next mission (first incomplete) so user sees what they're working toward
+  const nextMission = territoryMissions.find(m => !m.completed);
+  const currentMission = nextMission || territoryMissions[territoryMissions.length - 1] || territoryMissions[0];
   
   if (!currentMission) return null;
   
@@ -235,7 +237,7 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         justifyContent: 'center',
         background: 'rgba(0,0,0,0.8)',
         backdropFilter: 'blur(4px)',
-        padding: '12px'
+        padding: '8px'
       }}
       onClick={onClose}
     >
@@ -243,8 +245,8 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         className={`fade-in ${styles.panel}`}
         style={{
           width: '100%',
-          maxWidth: '560px',
-          maxHeight: '90vh',
+          maxWidth: '520px',
+          maxHeight: '92vh',
           overflowY: 'auto',
           borderRadius: '6px',
           boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
@@ -253,7 +255,7 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
       >
         {/* Header */}
         <div style={{
-          padding: '12px 16px',
+          padding: '8px 12px',
           background: 'rgba(var(--noir-primary-rgb), 0.1)',
           borderBottom: '1px solid var(--noir-border-mid)',
           position: 'relative'
@@ -262,9 +264,9 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
             onClick={onClose}
             style={{
               position: 'absolute',
-              top: '8px',
-              right: '8px',
-              padding: '4px',
+              top: '6px',
+              right: '6px',
+              padding: '2px',
               background: 'transparent',
               border: '1px solid var(--noir-border-mid)',
               borderRadius: '4px',
@@ -287,16 +289,16 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
           </button>
           
           <div style={{
-            fontSize: '1.1rem',
+            fontSize: '1rem',
             fontWeight: 700,
             color: 'var(--noir-primary)',
-            marginBottom: '2px',
-            paddingRight: '36px'
+            marginBottom: '0',
+            paddingRight: '32px'
           }}>
             {territory}
           </div>
           <div style={{
-            fontSize: '0.8rem',
+            fontSize: '0.75rem',
             color: 'var(--noir-muted)'
           }}>
             {city}
@@ -304,13 +306,13 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         </div>
         
         {/* Mission list */}
-        <div style={{ padding: '12px 16px' }}>
+        <div style={{ padding: '8px 12px' }}>
           {territoryMissions.map((mission, idx) => (
             <div
               key={mission.id}
               style={{
-                padding: '8px 10px',
-                marginBottom: '6px',
+                padding: '6px 8px',
+                marginBottom: '4px',
                 background: mission.completed 
                   ? 'rgba(92, 184, 92, 0.08)' 
                   : 'rgba(var(--noir-primary-rgb), 0.04)',
@@ -320,10 +322,10 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
                 borderRadius: '4px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'start', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'start', gap: '6px' }}>
                 <div style={{
-                  width: '14px',
-                  height: '14px',
+                  width: '12px',
+                  height: '12px',
                   borderRadius: '50%',
                   border: mission.completed ? '2px solid var(--noir-profit)' : '2px solid var(--noir-border-mid)',
                   background: mission.completed ? 'var(--noir-profit)' : 'transparent',
@@ -333,20 +335,20 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
                   flexShrink: 0,
                   marginTop: '1px'
                 }}>
-                  {mission.completed && <CheckCircle size={8} color="#fff" />}
+                  {mission.completed && <CheckCircle size={6} color="#fff" />}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{
                     fontWeight: 600,
-                    fontSize: '0.875rem',
+                    fontSize: '0.8rem',
                     color: mission.completed ? 'var(--noir-profit)' : 'var(--noir-foreground)',
-                    marginBottom: '2px'
+                    marginBottom: '0'
                   }}>
                     {mission.title}
                   </div>
                   {!mission.completed && mission.description && (
                     <div style={{
-                      fontSize: '0.8rem',
+                      fontSize: '0.7rem',
                       color: 'var(--noir-muted)',
                       lineHeight: 1.5
                     }}>
@@ -362,15 +364,15 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         {/* Current mission details */}
         {currentMission && (
           <div style={{
-            padding: '12px 16px',
+            padding: '8px 12px',
             borderTop: '1px solid var(--noir-border-mid)',
             background: 'rgba(var(--noir-primary-rgb), 0.06)'
           }}>
             <div style={{
-              fontSize: '0.75rem',
+              fontSize: '0.7rem',
               fontWeight: 700,
               color: 'var(--noir-primary)',
-              marginBottom: '8px',
+              marginBottom: '4px',
               textTransform: 'uppercase',
               letterSpacing: '0.06em'
             }}>
@@ -379,11 +381,11 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
             
             {currentMission.description && (
               <div style={{
-                fontSize: '0.85rem',
+                fontSize: '0.8rem',
                 color: 'var(--noir-foreground)',
-                lineHeight: 1.5,
-                marginBottom: '8px',
-                paddingLeft: '10px',
+                lineHeight: 1.4,
+                marginBottom: '6px',
+                paddingLeft: '8px',
                 borderLeft: '3px solid var(--noir-primary)'
               }}>
                 {currentMission.description}
@@ -467,13 +469,13 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         
         {/* Action button */}
         <div style={{
-          padding: '10px 16px',
+          padding: '6px 12px',
           borderTop: '1px solid var(--noir-border-mid)'
         }}>
           {currentMission?.completed ? (
             <div style={{
               textAlign: 'center',
-              padding: '8px',
+              padding: '6px',
               color: 'var(--noir-profit)',
               fontWeight: 600,
               fontSize: '0.875rem',
@@ -492,7 +494,7 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               className={styles.panel}
               style={{
                 width: '100%',
-                padding: '8px 12px',
+                padding: '6px 10px',
                 background: 'rgba(var(--noir-primary-rgb), 0.2)',
                 border: '1px solid var(--noir-primary)',
                 borderRadius: '4px',
@@ -517,10 +519,10 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
           ) : (
             <div style={{
               textAlign: 'center',
-              padding: '8px',
+              padding: '6px',
               color: 'var(--noir-muted)',
               fontWeight: 500,
-              fontSize: '0.8rem',
+              fontSize: '0.75rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
