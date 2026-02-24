@@ -38,13 +38,17 @@ OC_ROLES = [
 # Setup cost paid by creator when running (so reward always exceeds cost even when split)
 OC_SETUP_COST = 1_000_000
 
-# Jobs: harder = better rewards, lower success chance. Cash = total pool on success (split by team).
-# Every job reward > OC_SETUP_COST + max equipment cost (2M) so the run is always profitable on success.
+# Organised crime: 50% success; rest is fail or jail.
+OC_SUCCESS_RATE = 0.50
+OC_JAIL_CHANCE_ON_FAIL = 0.50
+OC_JAIL_SECONDS_TEAM = 60  # Creator goes to jail on failed/jail outcome
+
+# Jobs: cash = total pool on success (split by team). Success chance is fixed 50%.
 OC_JOBS = [
-    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.65, "cash": 2_200_000, "rp": 120},
+    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.50, "cash": 2_200_000, "rp": 120},
     {"id": "state_bank", "name": "State Bank", "success_rate": 0.50, "cash": 2_800_000, "rp": 280},
-    {"id": "city_bank", "name": "City Bank", "success_rate": 0.35, "cash": 3_800_000, "rp": 560},
-    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.20, "cash": 5_500_000, "rp": 1100},
+    {"id": "city_bank", "name": "City Bank", "success_rate": 0.50, "cash": 3_800_000, "rp": 560},
+    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.50, "cash": 5_500_000, "rp": 1100},
 ]
 
 # Equipment (must match organised_crime EQUIPMENT_TIERS): used to boost success rate when running heist
@@ -77,8 +81,13 @@ OC_TEAM_HEIST_SUCCESS_MESSAGES = [
     "Heist successful. {job_name}.",
     "Score. {job_name}.",
     "You got away clean. {job_name}.",
+    "Like clockwork. {job_name}.",
+    "The vault was yours. {job_name}.",
+    "Nobody saw a thing. {job_name}.",
+    "Perfect execution. {job_name}.",
+    "The crew delivered. {job_name}.",
 ]
-# Varied failure messages for team heist (like crimes / GTA / jail / rackets)
+# Varied failure messages (escaped, no jail)
 OC_TEAM_HEIST_FAIL_MESSAGES = [
     "The heist failed. No rewards.",
     "No score — the job went sideways. No rewards.",
@@ -90,6 +99,23 @@ OC_TEAM_HEIST_FAIL_MESSAGES = [
     "No dice. The job fell through. No rewards.",
     "The heist blew up. No payout.",
     "Clean getaway, but no score. No rewards.",
+    "Inside man didn't show. You called it off and slipped away.",
+    "Too many eyes. You aborted and disappeared.",
+    "Alarm went early. You ran with nothing.",
+    "Double-crossed. You got out with your life, not the cash.",
+]
+# Varied jail messages (caught)
+OC_TEAM_HEIST_JAIL_MESSAGES = [
+    "Heist failed and you got caught! {jail_time}s jail (unbreakable 60s).",
+    "Busted! The heat was waiting. {jail_time}s in the slammer (unbreakable 60s).",
+    "No getaway. They threw the book at you — {jail_time}s jail (unbreakable 60s).",
+    "The job blew up. You're in the can for {jail_time}s (unbreakable 60s).",
+    "They had the block covered. {jail_time}s in lockup (unbreakable 60s).",
+    "The feds were onto you. Enjoy {jail_time}s in the clink (unbreakable 60s).",
+    "Someone talked. {jail_time}s in the pen (unbreakable 60s).",
+    "Cops were already there. {jail_time}s jail (unbreakable 60s).",
+    "Alarm tripped — no way out. {jail_time}s behind bars (unbreakable 60s).",
+    "Getaway car didn't start. {jail_time}s in lockup (unbreakable 60s).",
 ]
 
 
@@ -466,14 +492,29 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     ev = await get_effective_event()
     rank_mult = float(ev.get("rank_points", 1.0))
     cash_mult = float(ev.get("kill_cash", 1.0))
-    success_rate = min(0.92, job["success_rate"] + equip["success_bonus"])
-    success = random.random() < success_rate
+    success = random.random() < OC_SUCCESS_RATE
     new_cooldown_until = now + timedelta(hours=cooldown_hours)
     await db.users.update_one(
         {"id": uid},
         {"$set": {"oc_cooldown_until": new_cooldown_until.isoformat()}},
     )
     if not success:
+        goes_to_jail = random.random() < OC_JAIL_CHANCE_ON_FAIL
+        if goes_to_jail:
+            jail_until = now + timedelta(seconds=OC_JAIL_SECONDS_TEAM)
+            unbreakable_until = now + timedelta(seconds=60)
+            await db.users.update_one(
+                {"id": uid},
+                {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "unbreakable_until": unbreakable_until.isoformat()}},
+            )
+            msg = random.choice(OC_TEAM_HEIST_JAIL_MESSAGES).format(jail_time=OC_JAIL_SECONDS_TEAM)
+            return {
+                "success": False,
+                "message": msg,
+                "cooldown_until": new_cooldown_until.isoformat(),
+                "jailed": True,
+                "jail_until": jail_until.isoformat(),
+            }
         return {
             "success": False,
             "message": random.choice(OC_TEAM_HEIST_FAIL_MESSAGES),

@@ -775,7 +775,7 @@ export default function OrganisedCrime() {
         </div>
         <div className="p-2">
           <p className="text-[9px] text-mutedForeground font-heading mb-1">
-            Cash shown is your reward if the heist succeeds. Equipment above raises success chance (max 92%).
+            Cash shown is your reward if the heist succeeds. Success chance is 50%; rest is fail or jail.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             {(config.jobs || []).map((job) => (

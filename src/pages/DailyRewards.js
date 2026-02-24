@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Gift, Clock, DollarSign, Sparkles, Hand, Grid3X3 } from 'lucide-react';
+import { Gift, Clock, DollarSign, Sparkles, Hand, Grid3X3, Star } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -10,44 +10,129 @@ const GAME_MODES = [
 ];
 
 const RPS_STYLES = `
-  @keyframes rps-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-  @keyframes rps-throw {
-    0% { transform: scale(1) translateY(0); }
-    30% { transform: scale(1.15) translateY(-8px); }
-    60% { transform: scale(1.05) translateY(-4px); }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; } to { opacity: 1; }
+  }
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.7) rotate(-6deg); }
+    60%  { transform: scale(1.08) rotate(1deg); }
+    to   { opacity: 1; transform: scale(1) rotate(0deg); }
+  }
+  @keyframes floatBob {
+    0%,100% { transform: translateY(0) scale(1); }
+    50%      { transform: translateY(-6px) scale(1.04); }
+  }
+  @keyframes throwBounce {
+    0%   { transform: scale(1) translateY(0); }
+    25%  { transform: scale(1.2) translateY(-12px); }
+    55%  { transform: scale(1.06) translateY(-5px); }
+    75%  { transform: scale(1.02) translateY(-2px); }
     100% { transform: scale(1) translateY(0); }
   }
-  @keyframes rps-reveal {
-    0% { opacity: 0; transform: scale(0.3) rotate(-10deg); }
-    60% { transform: scale(1.1) rotate(2deg); }
-    100% { opacity: 1; transform: scale(1) rotate(0deg); }
+  @keyframes winPulse {
+    0%,100% { filter: drop-shadow(0 0 6px rgba(212,175,55,0.4)); transform: scale(1); }
+    50%     { filter: drop-shadow(0 0 18px rgba(212,175,55,0.85)); transform: scale(1.06); }
   }
-  @keyframes rps-idle {
-    0%,100% { transform: scale(1); }
-    50% { transform: scale(1.03); }
+  @keyframes losePulse {
+    0%,100% { filter: drop-shadow(0 0 6px rgba(239,68,68,0.3)); }
+    50%     { filter: drop-shadow(0 0 16px rgba(239,68,68,0.6)); }
   }
-  @keyframes rps-win-glow {
-    0%,100% { box-shadow: 0 0 20px rgba(212,175,55,0.3); }
-    50% { box-shadow: 0 0 40px rgba(212,175,55,0.6); }
-  }
-  @keyframes rps-shake {
+  @keyframes shake {
     0%,100% { transform: translateX(0); }
-    20% { transform: translateX(-6px); }
-    40% { transform: translateX(6px); }
-    60% { transform: translateX(-4px); }
-    80% { transform: translateX(4px); }
+    15%     { transform: translateX(-8px) rotate(-1deg); }
+    35%     { transform: translateX(8px) rotate(1deg); }
+    55%     { transform: translateX(-5px) rotate(-0.5deg); }
+    75%     { transform: translateX(5px) rotate(0.5deg); }
   }
-  .rps-fade-in { animation: rps-fade-in 0.35s ease-out both; }
-  .rps-throw { animation: rps-throw 0.5s ease-out; }
-  .rps-reveal { animation: rps-reveal 0.4s ease-out; }
-  .rps-idle { animation: rps-idle 2s ease-in-out infinite; }
-  .rps-win-glow { animation: rps-win-glow 1s ease-in-out infinite; }
-  .rps-shake { animation: rps-shake 0.4s ease-out; }
+  @keyframes resultSlide {
+    from { opacity: 0; transform: translateY(20px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes goldGlow {
+    0%,100% { box-shadow: 0 0 0px transparent; }
+    50%     { box-shadow: 0 0 20px rgba(212,175,55,0.25), 0 0 40px rgba(212,175,55,0.1); }
+  }
+  @keyframes spinnerRotate {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes dotPulse {
+    0%,80%,100% { transform: scale(0.6); opacity: 0.4; }
+    40%          { transform: scale(1); opacity: 1; }
+  }
+  @keyframes vsFloat {
+    0%,100% { transform: translateY(0) rotate(-2deg); }
+    50%      { transform: translateY(-4px) rotate(2deg); }
+  }
+  @keyframes cellPop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    60%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes winnerGlow {
+    0%,100% { background: rgba(212,175,55,0.08); }
+    50%     { background: rgba(212,175,55,0.18); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes coinSpin {
+    0%   { transform: rotateY(0deg); }
+    100% { transform: rotateY(360deg); }
+  }
+  @keyframes starBurst {
+    0%   { transform: scale(0) rotate(0deg); opacity: 1; }
+    100% { transform: scale(2.5) rotate(180deg); opacity: 0; }
+  }
+
+  .anim-fadeUp   { animation: fadeUp 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+  .anim-scaleIn  { animation: scaleIn 0.45s cubic-bezier(0.22,1,0.36,1) both; }
+  .anim-float    { animation: floatBob 2.4s ease-in-out infinite; }
+  .anim-throw    { animation: throwBounce 0.55s cubic-bezier(0.22,1,0.36,1) both; }
+  .anim-win      { animation: winPulse 1.2s ease-in-out infinite; }
+  .anim-lose     { animation: losePulse 1.2s ease-in-out infinite; }
+  .anim-shake    { animation: shake 0.45s ease-out; }
+  .anim-result   { animation: resultSlide 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+  .anim-goldGlow { animation: goldGlow 2s ease-in-out infinite; }
+  .anim-vsFloat  { animation: vsFloat 2s ease-in-out infinite; }
+  .anim-cellPop  { animation: cellPop 0.3s cubic-bezier(0.22,1,0.36,1) both; }
+
+  .shimmer-text {
+    background: linear-gradient(90deg, #a16207 0%, #eab308 40%, #fef08a 55%, #eab308 70%, #a16207 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer 2.5s linear infinite;
+  }
+  .thinking-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #eab308;
+    animation: dotPulse 1.2s ease-in-out infinite;
+  }
+  .thinking-dot:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dot:nth-child(3) { animation-delay: 0.4s; }
+
+  .rps-btn-idle:not(:disabled) { animation: floatBob 2.4s ease-in-out infinite; }
+  .rps-btn-idle:not(:disabled):hover { animation: none; transform: scale(1.06) translateY(-2px); }
+  .rps-btn-idle:nth-child(2):not(:disabled) { animation-delay: 0.3s; }
+  .rps-btn-idle:nth-child(3):not(:disabled) { animation-delay: 0.6s; }
+
+  .ttt-cell-filled { animation: cellPop 0.3s cubic-bezier(0.22,1,0.36,1) both; }
+  .winner-row { animation: winnerGlow 0.8s ease-in-out infinite; border-radius: 8px; }
+
+  .star-burst { animation: starBurst 0.6s ease-out forwards; }
 `;
 
 const CHOICES = [
-  { id: 'rock', label: 'Rock', emoji: '✊' },
-  { id: 'paper', label: 'Paper', emoji: '✋' },
+  { id: 'rock',     label: 'Rock',     emoji: '✊' },
+  { id: 'paper',    label: 'Paper',    emoji: '✋' },
   { id: 'scissors', label: 'Scissors', emoji: '✌️' },
 ];
 
@@ -60,21 +145,48 @@ function formatNextPlay(iso) {
   try {
     const d = new Date(iso);
     return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
+  } catch { return iso; }
+}
+
+function PlaysBar({ left, total }) {
+  const pct = total > 0 ? (left / total) * 100 : 0;
+  return (
+    <div className="w-full h-1.5 bg-zinc-700/60 rounded-full overflow-hidden">
+      <div
+        className="h-full rounded-full transition-all duration-700 ease-out"
+        style={{
+          width: `${pct}%`,
+          background: pct > 0
+            ? 'linear-gradient(90deg, #a16207, #eab308, #fef08a)'
+            : 'transparent',
+          boxShadow: pct > 0 ? '0 0 8px rgba(234,179,8,0.5)' : 'none',
+        }}
+      />
+    </div>
+  );
+}
+
+function ThinkingDots() {
+  return (
+    <span className="flex items-center gap-1">
+      <span className="thinking-dot" />
+      <span className="thinking-dot" />
+      <span className="thinking-dot" />
+    </span>
+  );
 }
 
 export default function DailyRewards() {
-  const [info, setInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [playing, setPlaying] = useState(false);
-  const [result, setResult] = useState(null);
-  const [lastThrow, setLastThrow] = useState(null);
-  const [gameMode, setGameMode] = useState('rps');
-  const [tttGame, setTttGame] = useState(null);
-  const [tttResult, setTttResult] = useState(null);
+  const [info,       setInfo]       = useState(null);
+  const [loading,    setLoading]    = useState(true);
+  const [playing,    setPlaying]    = useState(false);
+  const [result,     setResult]     = useState(null);
+  const [lastThrow,  setLastThrow]  = useState(null);
+  const [gameMode,   setGameMode]   = useState('rps');
+  const [tttGame,    setTttGame]    = useState(null);
+  const [tttResult,  setTttResult]  = useState(null);
   const [tttLoading, setTttLoading] = useState(false);
+  const [resultKey,  setResultKey]  = useState(0); // force re-animation
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -82,7 +194,6 @@ export default function DailyRewards() {
       setInfo(res.data);
     } catch {
       toast.error('Failed to load daily rewards');
-      setInfo(null);
     } finally {
       setLoading(false);
     }
@@ -97,9 +208,7 @@ export default function DailyRewards() {
       } else {
         setTttGame(null);
       }
-    } catch {
-      setTttGame(null);
-    }
+    } catch { setTttGame(null); }
   }, []);
 
   useEffect(() => { fetchInfo(); }, [fetchInfo]);
@@ -115,7 +224,11 @@ export default function DailyRewards() {
     try {
       const res = await api.post('/daily-rewards/play', { choice });
       setResult(res.data);
-      setInfo(prev => prev ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at } : null);
+      setResultKey(k => k + 1);
+      setInfo(prev => prev
+        ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at }
+        : null
+      );
       if (res.data.result === 'win') {
         toast.success(`You win! ${formatMoney(res.data.money_won)} + ${res.data.points_won} points`);
         window.dispatchEvent(new CustomEvent('app:refresh-user'));
@@ -127,7 +240,6 @@ export default function DailyRewards() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Play failed');
       setLastThrow(null);
-      setResult(null);
     } finally {
       setPlaying(false);
     }
@@ -140,7 +252,10 @@ export default function DailyRewards() {
     try {
       const res = await api.post('/daily-rewards/ttt/start');
       setTttGame({ board: res.data.board, player_side: res.data.player_side, turn: res.data.turn });
-      setInfo(prev => prev ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at } : null);
+      setInfo(prev => prev
+        ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at }
+        : null
+      );
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to start game');
     } finally {
@@ -152,14 +267,15 @@ export default function DailyRewards() {
     if (!tttGame || tttGame.turn !== tttGame.player_side || tttLoading) return;
     if (tttGame.board[cell]) return;
     setTttLoading(true);
-    setTttResult(null);
     try {
       const res = await api.post('/daily-rewards/ttt/move', { cell });
-      setTttGame(prev => prev ? { ...prev, board: res.data.board, turn: res.data.result === 'ongoing' ? prev.player_side : null } : null);
       if (res.data.result !== 'ongoing') {
         setTttResult(res.data);
         setTttGame(null);
-        setInfo(prev => prev ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at } : null);
+        setInfo(prev => prev
+          ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at }
+          : null
+        );
         if (res.data.result === 'win') {
           toast.success(`You win! ${formatMoney(res.data.money_won)} + ${res.data.points_won} points`);
           window.dispatchEvent(new CustomEvent('app:refresh-user'));
@@ -178,43 +294,104 @@ export default function DailyRewards() {
     }
   };
 
+  /* ── Loading ─────────────────────────────────────────────── */
   if (loading) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
         <style>{RPS_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <Gift size={28} className="text-primary/50 animate-pulse" />
-          <span className="text-primary text-xs font-heading uppercase tracking-wider">Loading...</span>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
+          <div
+            style={{
+              width: 36, height: 36,
+              border: '3px solid rgba(234,179,8,0.15)',
+              borderTopColor: '#eab308',
+              borderRadius: '50%',
+              animation: 'spinnerRotate 0.8s linear infinite',
+            }}
+          />
+          <span className="text-[10px] text-zinc-500 font-heading uppercase tracking-widest">Preparing rewards…</span>
         </div>
       </div>
     );
   }
 
+  const playsLeft  = info?.plays_left ?? 0;
+  const playsTotal = info?.plays_per_window ?? 3;
+  const canPlay    = playsLeft > 0;
+
+  /* ── Main render ─────────────────────────────────────────── */
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="daily-rewards-page">
       <style>{RPS_STYLES}</style>
 
-      <div className="rps-fade-in">
-        <p className="text-[10px] text-zinc-500 font-heading italic">Choose a game. Win rewards. 3 plays every 6 hours (shared).</p>
+      {/* Header tagline */}
+      <div className="anim-fadeUp" style={{ animationDelay: '0s' }}>
+        <p className="text-[10px] text-zinc-500 font-heading italic">
+          Choose a game. Win rewards. {playsTotal} plays every 6 hours (shared).
+        </p>
       </div>
 
-      {/* Game selector */}
-      <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 rps-fade-in`}>
+      {/* Info card */}
+      <div
+        className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp ${canPlay ? 'anim-goldGlow' : ''}`}
+        style={{ animationDelay: '0.04s' }}
+      >
+        <div className="px-4 py-3 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
+          <Gift size={15} className="text-primary" />
+          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Daily Rewards</span>
+          {canPlay && <Star size={11} className="text-primary ml-auto anim-float" fill="currentColor" />}
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles size={13} className="text-primary" />
+              <span className="text-xs font-heading text-foreground">Plays remaining</span>
+            </div>
+            <span className={`text-sm font-heading font-bold tabular-nums ${canPlay ? 'shimmer-text' : 'text-zinc-500'}`}>
+              {playsLeft} / {playsTotal}
+            </span>
+          </div>
+          <PlaysBar left={playsLeft} total={playsTotal} />
+          {!canPlay && info?.next_play_at && (
+            <div className="flex items-center gap-2 pt-1">
+              <Clock size={13} className="text-amber-400" />
+              <span className="text-[10px] text-zinc-400 font-heading">
+                Refreshes at <span className="text-amber-300">{formatNextPlay(info.next_play_at)}</span>
+              </span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 pt-2 border-t border-zinc-700/40">
+            <DollarSign size={13} className="text-emerald-400" />
+            <span className="text-[11px] text-zinc-500 font-heading">
+              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 50000)}</span> + <span className="text-primary">{info?.win_points ?? 2} pts</span>
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Mode selector */}
+      <div
+        className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp`}
+        style={{ animationDelay: '0.08s' }}
+      >
         <div className="p-2 grid grid-cols-2 gap-2">
           {GAME_MODES.map((m) => {
             const Icon = m.icon;
+            const active = gameMode === m.id;
             return (
               <button
                 key={m.id}
                 type="button"
-                onClick={() => setGameMode(m.id)}
-                className={`flex items-center justify-center gap-2 py-3 px-4 rounded-lg border-2 transition-all font-heading text-xs uppercase tracking-wider ${
-                  gameMode === m.id
-                    ? 'border-primary bg-primary/20 text-primary'
-                    : 'border-zinc-700 bg-zinc-800/50 text-zinc-400 hover:border-zinc-600'
-                }`}
+                onClick={() => { setGameMode(m.id); setResult(null); setLastThrow(null); }}
+                className="flex items-center justify-center gap-2 py-3 px-4 rounded-lg font-heading text-xs uppercase tracking-wider transition-all duration-200 active:scale-95"
+                style={{
+                  border: `2px solid ${active ? '#eab308' : 'rgba(63,63,70,1)'}`,
+                  background: active ? 'rgba(234,179,8,0.12)' : 'rgba(39,39,42,0.5)',
+                  color: active ? '#eab308' : '#71717a',
+                  boxShadow: active ? '0 0 12px rgba(234,179,8,0.15)' : 'none',
+                }}
               >
-                <Icon size={18} />
+                <Icon size={16} />
                 {m.label}
               </button>
             );
@@ -222,192 +399,344 @@ export default function DailyRewards() {
         </div>
       </div>
 
-      {/* Info card */}
-      <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 rps-fade-in`} style={{ animationDelay: '0.05s' }}>
-        <div className="px-4 py-3 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
-          <Gift size={16} className="text-primary" />
-          <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Daily Rewards</span>
-        </div>
-        <div className="p-4 grid grid-cols-2 gap-3">
-          <div className="flex items-center gap-2">
-            <Sparkles size={14} className="text-primary" />
-            <span className="text-xs font-heading text-foreground">Plays left</span>
-          </div>
-          <div className="text-sm font-heading font-bold text-primary tabular-nums">
-            {info?.plays_left ?? 0} / {info?.plays_per_window ?? 3}
-          </div>
-          {info?.next_play_at && info?.plays_left <= 0 && (
-            <>
-              <div className="flex items-center gap-2 col-span-2">
-                <Clock size={14} className="text-amber-400" />
-                <span className="text-xs text-zinc-500 font-heading">Next play</span>
-              </div>
-              <div className="text-xs font-heading text-foreground col-span-2">
-                {formatNextPlay(info.next_play_at)}
-              </div>
-            </>
-          )}
-          <div className="flex items-center gap-2 col-span-2 mt-1 pt-2 border-t border-zinc-700/40">
-            <DollarSign size={14} className="text-emerald-400" />
-            <span className="text-[11px] text-zinc-500 font-heading">Win = {formatMoney(info?.win_money ?? 50000)} + {(info?.win_points ?? 2)} points</span>
-          </div>
-        </div>
-      </div>
-
-      {/* RPS: Throw in progress */}
-      {gameMode === 'rps' && lastThrow && !result && playing && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/20 rps-fade-in`}>
-          <div className="p-4 flex items-center justify-center gap-8">
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] text-zinc-500 font-heading uppercase">You threw</span>
-              <span className="text-5xl rps-throw" role="img" aria-label={lastThrow.player}>
-                {CHOICES.find(c => c.id === lastThrow.player)?.emoji ?? '?'}
-              </span>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] text-zinc-500 font-heading uppercase">Computer</span>
-              <span className="text-4xl text-primary/60 animate-pulse">…</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* RPS: Result reveal */}
-      {gameMode === 'rps' && result && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/30 rps-fade-in rps-reveal`}>
-          <div className="p-4 flex flex-col items-center gap-4">
-            <div className="flex items-center justify-center gap-6 w-full">
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-[10px] text-zinc-500 font-heading uppercase">You</span>
-                <span className="text-4xl rps-throw" role="img" aria-label={result.your_choice}>
-                  {CHOICES.find(c => c.id === result.your_choice)?.emoji ?? '?'}
-                </span>
-                <span className="text-xs font-heading text-foreground">{CHOICES.find(c => c.id === result.your_choice)?.label ?? result.your_choice}</span>
-              </div>
-              <span className="text-xl text-zinc-500 font-heading">vs</span>
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-[10px] text-zinc-500 font-heading uppercase">Computer</span>
-                <span className="text-4xl rps-reveal" role="img" aria-label={result.computer_choice}>
-                  {CHOICES.find(c => c.id === result.computer_choice)?.emoji ?? '?'}
-                </span>
-                <span className="text-xs font-heading text-foreground">{CHOICES.find(c => c.id === result.computer_choice)?.label ?? result.computer_choice}</span>
-              </div>
-            </div>
-            <div className={`text-lg font-heading font-bold uppercase tracking-wider ${
-              result.result === 'win' ? 'text-emerald-400 rps-win-glow' : result.result === 'lose' ? 'text-red-400 rps-shake' : 'text-zinc-400'
-            }`}>
-              {result.result === 'win' ? 'You win!' : result.result === 'lose' ? 'You lose' : "Draw"}
-            </div>
-            {result.result === 'win' && (
-              <p className="text-sm font-heading text-primary">
-                +{formatMoney(result.money_won)} + {result.points_won} points
-              </p>
-            )}
-            <p className="text-[10px] text-zinc-500 font-heading">{result.plays_left} play{result.plays_left !== 1 ? 's' : ''} left this window</p>
-          </div>
-        </div>
-      )}
-
-      {/* RPS: Choices */}
+      {/* ── RPS ──────────────────────────────────────────────── */}
       {gameMode === 'rps' && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 rps-fade-in`} style={{ animationDelay: '0.1s' }}>
-          <div className="px-4 py-3 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Choose your throw</span>
-          </div>
-          <div className="p-4 grid grid-cols-3 gap-3">
-            {CHOICES.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                disabled={playing || (info?.plays_left ?? 0) <= 0}
-                onClick={() => play(c.id)}
-                className={`
-                  flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 transition-all
-                  ${(info?.plays_left ?? 0) > 0 && !playing
-                    ? 'border-primary/40 bg-primary/10 hover:bg-primary/20 hover:border-primary/60 text-primary rps-idle cursor-pointer'
-                    : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 cursor-not-allowed opacity-70'
-                  }
-                `}
-              >
-                <span className="text-4xl" role="img" aria-label={c.label}>{c.emoji}</span>
-                <span className="text-xs font-heading font-bold uppercase">{c.label}</span>
-              </button>
-            ))}
-          </div>
-          {(info?.plays_left ?? 0) <= 0 && info?.next_play_at && (
-            <p className="px-4 pb-4 text-[10px] text-zinc-500 font-heading text-center">
-              Next play available at {formatNextPlay(info.next_play_at)}
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Noughts & Crosses */}
-      {gameMode === 'ttt' && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 rps-fade-in`} style={{ animationDelay: '0.05s' }}>
-          <div className="px-4 py-3 border-b border-primary/20">
-            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Noughts & Crosses</span>
-          </div>
-          <div className="p-4">
-            {!tttGame && !tttResult && (
-              <div className="flex flex-col items-center gap-4">
-                <p className="text-xs text-zinc-500 font-heading text-center">You play vs computer. Win to earn rewards.</p>
-                <button
-                  type="button"
-                  disabled={(info?.plays_left ?? 0) <= 0 || tttLoading}
-                  onClick={tttStart}
-                  className={`px-6 py-3 rounded-xl border-2 font-heading text-sm uppercase tracking-wider transition-all ${
-                    (info?.plays_left ?? 0) > 0 && !tttLoading
-                      ? 'border-primary bg-primary/20 text-primary hover:bg-primary/30 cursor-pointer'
-                      : 'border-zinc-700 bg-zinc-800/50 text-zinc-500 cursor-not-allowed'
-                  }`}
-                >
-                  {tttLoading ? 'Starting…' : 'Start game'}
-                </button>
-                {(info?.plays_left ?? 0) <= 0 && info?.next_play_at && (
-                  <p className="text-[10px] text-zinc-500 font-heading">Next play at {formatNextPlay(info.next_play_at)}</p>
-                )}
-              </div>
-            )}
-            {tttGame && !tttResult && (
-              <div className="flex flex-col items-center gap-3">
-                <p className="text-[10px] text-zinc-500 font-heading">
-                  You are <span className="text-primary font-bold">{tttGame.player_side}</span>. {tttGame.turn === tttGame.player_side ? 'Your turn' : 'Computer thinking…'}
-                </p>
-                <div className="grid grid-cols-3 gap-1 w-[min(240px,80vw)] aspect-square">
-                  {(tttGame.board || Array(9).fill('')).map((cell, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      disabled={!!cell || tttGame.turn !== tttGame.player_side || tttLoading}
-                      onClick={() => tttMove(i)}
-                      className="flex items-center justify-center text-2xl font-bold border-2 border-primary/40 bg-primary/5 rounded-lg transition-all hover:bg-primary/15 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:bg-primary/5"
-                    >
-                      {cell || '\u00A0'}
-                    </button>
-                  ))}
+        <>
+          {/* In-flight state */}
+          {lastThrow && !result && playing && (
+            <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/30 anim-fadeUp`}>
+              <div className="p-5 flex items-center justify-center gap-10">
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">You threw</span>
+                  <span className="text-5xl anim-throw">
+                    {CHOICES.find(c => c.id === lastThrow.player)?.emoji}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 font-heading">
+                    {CHOICES.find(c => c.id === lastThrow.player)?.label}
+                  </span>
+                </div>
+                <div className="flex flex-col items-center gap-2">
+                  <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Computer</span>
+                  <ThinkingDots />
                 </div>
               </div>
-            )}
-            {tttResult && (
-              <div className="flex flex-col items-center gap-3">
-                <p className={`text-lg font-heading font-bold uppercase ${
-                  tttResult.result === 'win' ? 'text-emerald-400' : tttResult.result === 'lose' ? 'text-red-400' : 'text-zinc-400'
-                }`}>
-                  {tttResult.result === 'win' ? 'You win!' : tttResult.result === 'lose' ? 'You lose' : 'Draw'}
-                </p>
-                {tttResult.result === 'win' && (
-                  <p className="text-sm font-heading text-primary">
-                    +{formatMoney(tttResult.money_won)} + {tttResult.points_won} points
+            </div>
+          )}
+
+          {/* Result reveal */}
+          {result && (
+            <div
+              key={resultKey}
+              className={`${styles.panel} rounded-xl overflow-hidden anim-result`}
+              style={{
+                border: `2px solid ${result.result === 'win' ? 'rgba(234,179,8,0.5)' : result.result === 'lose' ? 'rgba(239,68,68,0.4)' : 'rgba(63,63,70,0.8)'}`,
+                boxShadow: result.result === 'win' ? '0 0 30px rgba(234,179,8,0.15)' : 'none',
+              }}
+            >
+              <div className="p-5 flex flex-col items-center gap-4">
+                {/* Emoji face-off */}
+                <div className="flex items-center justify-center gap-4 w-full">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">You</span>
+                    <span
+                      className={`text-5xl ${
+                        result.result === 'win'  ? 'anim-win' :
+                        result.result === 'lose' ? 'anim-lose' : ''
+                      }`}
+                    >
+                      {CHOICES.find(c => c.id === result.your_choice)?.emoji}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-heading">
+                      {CHOICES.find(c => c.id === result.your_choice)?.label}
+                    </span>
+                  </div>
+
+                  <div
+                    className="text-base font-heading font-bold text-zinc-500 px-2 anim-vsFloat"
+                    style={{ letterSpacing: '0.05em' }}
+                  >
+                    VS
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1.5">
+                    <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Computer</span>
+                    <span className="text-5xl anim-scaleIn">
+                      {CHOICES.find(c => c.id === result.computer_choice)?.emoji}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-heading">
+                      {CHOICES.find(c => c.id === result.computer_choice)?.label}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Outcome banner */}
+                <div
+                  className={`px-6 py-2 rounded-full font-heading font-bold text-sm uppercase tracking-widest ${
+                    result.result === 'win'  ? 'anim-shake' :
+                    result.result === 'lose' ? 'anim-shake' : ''
+                  }`}
+                  style={{
+                    background: result.result === 'win'
+                      ? 'linear-gradient(90deg,rgba(234,179,8,0.2),rgba(254,240,138,0.15))'
+                      : result.result === 'lose'
+                      ? 'rgba(239,68,68,0.12)'
+                      : 'rgba(63,63,70,0.4)',
+                    border: `1px solid ${
+                      result.result === 'win'  ? 'rgba(234,179,8,0.5)'  :
+                      result.result === 'lose' ? 'rgba(239,68,68,0.4)' :
+                      'rgba(63,63,70,0.6)'}`,
+                    color: result.result === 'win' ? '#eab308' : result.result === 'lose' ? '#f87171' : '#71717a',
+                  }}
+                >
+                  {result.result === 'win' ? '🏆 You win!' : result.result === 'lose' ? '💀 You lose' : '🤝 Draw'}
+                </div>
+
+                {result.result === 'win' && (
+                  <p className="text-xs font-heading text-primary">
+                    <span className="shimmer-text font-bold text-sm">+{formatMoney(result.money_won)}</span>
+                    <span className="text-zinc-400 mx-1">+</span>
+                    <span className="text-primary font-bold">{result.points_won} pts</span>
                   </p>
                 )}
-                <p className="text-[10px] text-zinc-500 font-heading">{tttResult.plays_left} play{tttResult.plays_left !== 1 ? 's' : ''} left</p>
+                <p className="text-[10px] text-zinc-600 font-heading">
+                  {result.plays_left} play{result.plays_left !== 1 ? 's' : ''} left this window
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Choice buttons */}
+          <div
+            className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp`}
+            style={{ animationDelay: '0.12s' }}
+          >
+            <div className="px-4 py-3 border-b border-primary/20 flex items-center justify-between">
+              <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Choose your throw</span>
+              {!canPlay && <span className="text-[9px] text-red-400 font-heading uppercase">Out of plays</span>}
+            </div>
+            <div className="p-4 grid grid-cols-3 gap-3">
+              {CHOICES.map((c, i) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  disabled={playing || !canPlay}
+                  onClick={() => play(c.id)}
+                  className="rps-btn-idle flex flex-col items-center justify-center gap-2 py-5 rounded-xl transition-all duration-200 active:scale-90 focus:outline-none"
+                  style={{
+                    animationDelay: `${i * 0.3}s`,
+                    border: canPlay && !playing
+                      ? '2px solid rgba(234,179,8,0.4)'
+                      : '2px solid rgba(63,63,70,0.6)',
+                    background: canPlay && !playing
+                      ? 'rgba(234,179,8,0.07)'
+                      : 'rgba(39,39,42,0.4)',
+                    opacity: playing ? 0.6 : canPlay ? 1 : 0.5,
+                    cursor: canPlay && !playing ? 'pointer' : 'not-allowed',
+                    boxShadow: canPlay && !playing
+                      ? '0 0 0px rgba(234,179,8,0)'
+                      : 'none',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={e => {
+                    if (canPlay && !playing) {
+                      e.currentTarget.style.boxShadow = '0 0 16px rgba(234,179,8,0.2)';
+                      e.currentTarget.style.borderColor = 'rgba(234,179,8,0.7)';
+                      e.currentTarget.style.background = 'rgba(234,179,8,0.14)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.boxShadow = '0 0 0px rgba(234,179,8,0)';
+                    e.currentTarget.style.borderColor = canPlay ? 'rgba(234,179,8,0.4)' : 'rgba(63,63,70,0.6)';
+                    e.currentTarget.style.background = canPlay ? 'rgba(234,179,8,0.07)' : 'rgba(39,39,42,0.4)';
+                  }}
+                >
+                  <span className="text-4xl select-none">{c.emoji}</span>
+                  <span
+                    className="text-[10px] font-heading font-bold uppercase tracking-wider"
+                    style={{ color: canPlay && !playing ? '#eab308' : '#52525b' }}
+                  >
+                    {c.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {!canPlay && info?.next_play_at && (
+              <p className="px-4 pb-4 text-[10px] text-zinc-600 font-heading text-center">
+                Next play available at {formatNextPlay(info.next_play_at)}
+              </p>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── Noughts & Crosses ────────────────────────────────── */}
+      {gameMode === 'ttt' && (
+        <div
+          className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 anim-fadeUp`}
+          style={{ animationDelay: '0.08s' }}
+        >
+          <div className="px-4 py-3 border-b border-primary/20 flex items-center justify-between">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Noughts &amp; Crosses</span>
+            {tttGame && (
+              <span className="text-[9px] font-heading uppercase tracking-wider"
+                style={{ color: tttGame.turn === tttGame.player_side ? '#4ade80' : '#eab308' }}
+              >
+                {tttGame.turn === tttGame.player_side ? '● Your turn' : '● AI thinking…'}
+              </span>
+            )}
+          </div>
+          <div className="p-4">
+
+            {/* Pre-game */}
+            {!tttGame && !tttResult && (
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="text-4xl anim-float">🎯</span>
+                  <p className="text-xs text-zinc-500 font-heading text-center mt-1">
+                    Challenge the AI. Win to earn rewards.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={!canPlay || tttLoading}
+                  onClick={tttStart}
+                  className="px-8 py-3 rounded-xl font-heading text-sm uppercase tracking-wider transition-all duration-200 active:scale-95"
+                  style={{
+                    border: canPlay && !tttLoading ? '2px solid #eab308' : '2px solid rgba(63,63,70,0.6)',
+                    background: canPlay && !tttLoading ? 'rgba(234,179,8,0.12)' : 'rgba(39,39,42,0.4)',
+                    color: canPlay && !tttLoading ? '#eab308' : '#52525b',
+                    boxShadow: canPlay && !tttLoading ? '0 0 16px rgba(234,179,8,0.15)' : 'none',
+                    cursor: canPlay && !tttLoading ? 'pointer' : 'not-allowed',
+                  }}
+                >
+                  {tttLoading ? <ThinkingDots /> : 'Start game'}
+                </button>
+                {!canPlay && info?.next_play_at && (
+                  <p className="text-[10px] text-zinc-600 font-heading">
+                    Next play at <span className="text-amber-400">{formatNextPlay(info.next_play_at)}</span>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Active game */}
+            {tttGame && !tttResult && (
+              <div className="flex flex-col items-center gap-4">
+                <p className="text-[10px] text-zinc-500 font-heading">
+                  You are <span className="text-primary font-bold text-xs">{tttGame.player_side}</span>
+                </p>
+
+                {/* Board */}
+                <div
+                  className="grid grid-cols-3"
+                  style={{
+                    width: 'min(228px, 82vw)',
+                    gap: '6px',
+                  }}
+                >
+                  {(tttGame.board || Array(9).fill('')).map((cell, i) => {
+                    const isPlayerCell = cell === tttGame.player_side;
+                    const isX = cell === 'X';
+                    const isEmpty = !cell;
+                    const isMyTurn = tttGame.turn === tttGame.player_side && !tttLoading;
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        disabled={!!cell || !isMyTurn}
+                        onClick={() => tttMove(i)}
+                        className={`flex items-center justify-center rounded-lg font-bold transition-all duration-150 active:scale-90 focus:outline-none ${cell ? 'ttt-cell-filled' : ''}`}
+                        style={{
+                          aspectRatio: '1',
+                          fontSize: '1.75rem',
+                          border: cell
+                            ? `2px solid ${isX ? 'rgba(234,179,8,0.6)' : 'rgba(167,139,250,0.5)'}`
+                            : isEmpty && isMyTurn
+                            ? '2px solid rgba(234,179,8,0.25)'
+                            : '2px solid rgba(63,63,70,0.4)',
+                          background: cell
+                            ? isX ? 'rgba(234,179,8,0.1)' : 'rgba(167,139,250,0.08)'
+                            : isEmpty && isMyTurn
+                            ? 'rgba(234,179,8,0.04)'
+                            : 'rgba(24,24,27,0.4)',
+                          color: isX ? '#eab308' : '#a78bfa',
+                          cursor: isEmpty && isMyTurn ? 'pointer' : 'not-allowed',
+                          boxShadow: cell
+                            ? isX ? '0 0 8px rgba(234,179,8,0.15)' : '0 0 8px rgba(167,139,250,0.12)'
+                            : 'none',
+                        }}
+                        onMouseEnter={e => {
+                          if (isEmpty && isMyTurn) {
+                            e.currentTarget.style.borderColor = 'rgba(234,179,8,0.5)';
+                            e.currentTarget.style.background = 'rgba(234,179,8,0.08)';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (isEmpty) {
+                            e.currentTarget.style.borderColor = isMyTurn ? 'rgba(234,179,8,0.25)' : 'rgba(63,63,70,0.4)';
+                            e.currentTarget.style.background = isMyTurn ? 'rgba(234,179,8,0.04)' : 'rgba(24,24,27,0.4)';
+                          }
+                        }}
+                      >
+                        {cell || (isEmpty && isMyTurn ? (
+                          <span style={{ opacity: 0.15, color: '#eab308', fontSize: '1.2rem' }}>+</span>
+                        ) : '')}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Thinking indicator */}
+                {tttLoading && (
+                  <div className="flex items-center gap-2">
+                    <ThinkingDots />
+                    <span className="text-[10px] text-zinc-500 font-heading">AI is thinking…</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Result */}
+            {tttResult && (
+              <div className="flex flex-col items-center gap-3 anim-result">
+                <div
+                  className="px-6 py-2.5 rounded-full font-heading font-bold text-sm uppercase tracking-widest"
+                  style={{
+                    background: tttResult.result === 'win'
+                      ? 'linear-gradient(90deg,rgba(234,179,8,0.18),rgba(254,240,138,0.12))'
+                      : tttResult.result === 'lose'
+                      ? 'rgba(239,68,68,0.1)'
+                      : 'rgba(63,63,70,0.4)',
+                    border: `1px solid ${
+                      tttResult.result === 'win'  ? 'rgba(234,179,8,0.5)'  :
+                      tttResult.result === 'lose' ? 'rgba(239,68,68,0.4)' :
+                      'rgba(63,63,70,0.5)'}`,
+                    color: tttResult.result === 'win' ? '#eab308' : tttResult.result === 'lose' ? '#f87171' : '#71717a',
+                  }}
+                >
+                  {tttResult.result === 'win' ? '🏆 You win!' : tttResult.result === 'lose' ? '💀 You lose' : '🤝 Draw'}
+                </div>
+                {tttResult.result === 'win' && (
+                  <p className="text-xs font-heading text-center">
+                    <span className="shimmer-text font-bold text-sm">+{formatMoney(tttResult.money_won)}</span>
+                    <span className="text-zinc-400 mx-1">+</span>
+                    <span className="text-primary font-bold">{tttResult.points_won} pts</span>
+                  </p>
+                )}
+                <p className="text-[10px] text-zinc-600 font-heading">
+                  {tttResult.plays_left} play{tttResult.plays_left !== 1 ? 's' : ''} left
+                </p>
                 {(info?.plays_left ?? 0) > 0 && (
                   <button
                     type="button"
                     onClick={tttStart}
                     disabled={tttLoading}
-                    className="px-6 py-2 rounded-xl border-2 border-primary/40 bg-primary/10 text-primary font-heading text-xs uppercase hover:bg-primary/20"
+                    className="px-6 py-2 rounded-xl font-heading text-xs uppercase tracking-wider transition-all duration-200 active:scale-95"
+                    style={{
+                      border: '2px solid rgba(234,179,8,0.4)',
+                      background: 'rgba(234,179,8,0.08)',
+                      color: '#eab308',
+                    }}
                   >
                     Play again
                   </button>

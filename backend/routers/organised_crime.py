@@ -56,7 +56,10 @@ EQUIPMENT_TIERS = [
     }
 ]
 
-# Varied success messages for heist
+# Organised crime: 50% success; rest is fail or jail. Varied messages.
+OC_SUCCESS_RATE = 0.50
+OC_JAIL_CHANCE_ON_FAIL = 0.50  # Of the 50% failures, half go to jail
+
 OC_HEIST_SUCCESS_MESSAGES = [
     "Heist successful! You earned ${reward:,} and {rank_points} rank points!",
     "Clean score. ${reward:,} and {rank_points} rank points.",
@@ -68,10 +71,14 @@ OC_HEIST_SUCCESS_MESSAGES = [
     "Heist successful. ${reward:,} and {rank_points} rank points.",
     "Score. ${reward:,} and {rank_points} rank points.",
     "You got away clean. ${reward:,} and {rank_points} rank points!",
+    "Like clockwork. ${reward:,} and {rank_points} rank points.",
+    "The vault was yours. ${reward:,} and {rank_points} rank points.",
+    "Nobody saw a thing. ${reward:,} and {rank_points} rank points.",
+    "Perfect execution. ${reward:,} and {rank_points} rank points.",
+    "The crew delivered. ${reward:,} and {rank_points} rank points.",
 ]
-# Varied failure messages (like crimes / GTA / jail / rackets)
 OC_HEIST_FAIL_CAUGHT_MESSAGES = [
-    "Heist failed and you got caught! {jail_time}s jail (unbreakable for 60s)",
+    "Heist failed and you got caught! {jail_time}s jail (unbreakable for 60s).",
     "Busted! The heat was waiting. {jail_time}s in the slammer (unbreakable 60s).",
     "No getaway. They threw the book at you — {jail_time}s jail (unbreakable 60s).",
     "The job blew up. You're in the can for {jail_time}s (unbreakable 60s).",
@@ -81,6 +88,11 @@ OC_HEIST_FAIL_CAUGHT_MESSAGES = [
     "The feds were onto you. Enjoy {jail_time}s in the clink (unbreakable 60s).",
     "No clean escape. {jail_time}s in the joint (unbreakable 60s).",
     "Blown cover. {jail_time}s in the slammer (unbreakable 60s).",
+    "Someone talked. {jail_time}s in the pen (unbreakable 60s).",
+    "Cops were already there. {jail_time}s jail (unbreakable 60s).",
+    "Alarm tripped — no way out. {jail_time}s behind bars (unbreakable 60s).",
+    "They had your picture. {jail_time}s in the can (unbreakable 60s).",
+    "Getaway car didn't start. {jail_time}s in lockup (unbreakable 60s).",
 ]
 OC_HEIST_FAIL_ESCAPED_MESSAGES = [
     "Heist failed, but you escaped!",
@@ -93,6 +105,11 @@ OC_HEIST_FAIL_ESCAPED_MESSAGES = [
     "Heist failed. You're free, but the take is gone.",
     "The heat was too much. You walked with your skin, that's it.",
     "Clean getaway, but no payout. Live to heist another day.",
+    "Safe cracked wrong — nothing inside. You left before the law showed.",
+    "Inside man didn't show. You called it off and slipped away.",
+    "Too many eyes. You aborted and disappeared.",
+    "Alarm went early. You ran with nothing.",
+    "Double-crossed. You got out with your life, not the cash.",
 ]
 
 # Heist jobs with different risk/reward
@@ -301,9 +318,8 @@ async def run_heist(
         {"$inc": {"money": -total_cost}}
     )
     
-    # Calculate success rate
-    success_rate = min(0.92, job["base_success_rate"] + equipment["success_bonus"])
-    success = random.random() < success_rate
+    # Fixed 50% success; rest is fail or jail
+    success = random.random() < OC_SUCCESS_RATE
     
     now = datetime.now(timezone.utc)
     
@@ -349,8 +365,8 @@ async def run_heist(
         )
     
     else:
-        # Failure - chance of jail
-        goes_to_jail = random.random() < job["jail_chance"]
+        # Failure — 50% jail, 50% escape
+        goes_to_jail = random.random() < OC_JAIL_CHANCE_ON_FAIL
         
         # Track failed heist
         await db.user_organised_crime.update_one(

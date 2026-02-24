@@ -1264,11 +1264,11 @@ const CrewOCTab = ({
 const STATE_HEAD_INCOME_KEYS = [
   { key: 'dice', label: 'Dice (house edge)' },
   { key: 'roulette', label: 'Roulette (house edge)' },
-  { key: 'blackjack', label: 'Blackjack' },
-  { key: 'horseracing', label: 'Horse Racing' },
-  { key: 'slots', label: 'Slots' },
-  { key: 'videopoker', label: 'Video Poker' },
-  { key: 'dead_alive_tax', label: 'Dead > Alive (5% tax)' },
+  { key: 'blackjack', label: 'Blackjack (house edge)' },
+  { key: 'horseracing', label: 'Horse Racing (house edge)' },
+  { key: 'slots', label: 'Slots (house edge)' },
+  { key: 'videopoker', label: 'Video Poker (house edge)' },
+  { key: 'dead_alive_tax', label: 'Dead > Alive (5% tax)', themeLabel: true },
 ];
 
 const StateHeadTab = ({ headOfState, stateHeadIncome }) => {
@@ -1284,19 +1284,19 @@ const StateHeadTab = ({ headOfState, stateHeadIncome }) => {
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Profit by source</span>
         </div>
         <ul className="divide-y divide-zinc-700/40">
-          {STATE_HEAD_INCOME_KEYS.map(({ key, label }) => {
+          {STATE_HEAD_INCOME_KEYS.map(({ key, label, themeLabel }) => {
             const amount = Number(income[key]) || 0;
             return (
               <li key={key} className="flex items-center justify-between px-3 py-2.5">
-                <span className="text-xs font-heading text-foreground">{label}</span>
-                <span className="text-xs font-heading font-bold text-primary tabular-nums">{formatMoney(amount)}</span>
+                <span className={`text-xs font-heading ${themeLabel ? 'text-primary' : 'text-foreground'}`}>{label}</span>
+                <span className="text-xs font-heading font-bold text-primary tabular-nums">{formatMoneyFull(amount)}</span>
               </li>
             );
           })}
         </ul>
         <div className="flex items-center justify-between px-3 py-2.5 border-t border-zinc-700/40 bg-primary/8">
           <span className="text-xs font-heading font-bold text-primary">Total to vault</span>
-          <span className="text-sm font-heading font-bold text-primary tabular-nums">{formatMoney(total)}</span>
+          <span className="text-sm font-heading font-bold text-primary tabular-nums">{formatMoneyFull(total)}</span>
         </div>
       </div>
     </div>

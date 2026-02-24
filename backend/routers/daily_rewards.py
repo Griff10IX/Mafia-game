@@ -1,18 +1,22 @@
-# Daily Rewards: Rock Paper Scissors and Noughts & Crosses vs computer. 3 plays per 6 hours (shared). Win = rewards.
+# Daily Rewards: Rock Paper Scissors and Noughts & Crosses vs computer. 3 plays per 6 hours (shared). Win = cash + maybe cars (no points).
 from datetime import datetime, timezone, timedelta
 import random
+import uuid
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user
+from server import db, get_current_user, CARS
 
 RPS_PLAYS_PER_WINDOW = 3
 RPS_WINDOW_HOURS = 6
 RPS_CHOICES = ["rock", "paper", "scissors"]
-# Win rewards (same for RPS and Noughts & Crosses)
 RPS_WIN_MONEY = 50_000
-RPS_WIN_POINTS = 2
+# Cars up to rare only (common, uncommon, rare)
+DAILY_REWARDS_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
+# On win: 25% chance 1 car, 8% chance 2 cars (so sometimes just cash, sometimes cash + 1 or 2 cars)
+DAILY_REWARDS_CAR_1_CHANCE = 0.25
+DAILY_REWARDS_CAR_2_CHANCE = 0.08
 
 # Noughts & Crosses
 TTT_WIN_LINES = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)]
@@ -80,6 +84,30 @@ def _plays_in_window(plays: list) -> list:
     return out
 
 
+async def _grant_daily_win_rewards(user_id: str) -> tuple[int, list]:
+    """Grant cash + optional cars (max rare). Returns (money_won, list of car names)."""
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": RPS_WIN_MONEY}})
+    cars_won = []
+    if not DAILY_REWARDS_CAR_IDS:
+        return RPS_WIN_MONEY, cars_won
+    r = random.random()
+    num_cars = 2 if r < DAILY_REWARDS_CAR_2_CHANCE else (1 if r < DAILY_REWARDS_CAR_1_CHANCE else 0)
+    chosen = random.sample(DAILY_REWARDS_CAR_IDS, min(num_cars, len(DAILY_REWARDS_CAR_IDS))) if num_cars else []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for car_id in chosen:
+        car = next((c for c in CARS if c.get("id") == car_id), None)
+        if car:
+            await db.user_cars.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "car_id": car_id,
+                "car_name": car.get("name", car_id),
+                "acquired_at": now_iso,
+            })
+            cars_won.append(car.get("name", car_id))
+    return RPS_WIN_MONEY, cars_won
+
+
 class RPSPlayRequest(BaseModel):
     choice: str
 
@@ -116,7 +144,6 @@ def register(router):
             "window_hours": RPS_WINDOW_HOURS,
             "next_play_at": next_play_at,
             "win_money": RPS_WIN_MONEY,
-            "win_points": RPS_WIN_POINTS,
         }
 
     @router.post("/daily-rewards/play")
@@ -143,14 +170,9 @@ def register(router):
             {"$set": {"rps_plays": new_plays}},
         )
         money_won = 0
-        points_won = 0
+        cars_won = []
         if result == "win":
-            money_won = RPS_WIN_MONEY
-            points_won = RPS_WIN_POINTS
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {"$inc": {"money": money_won, "points": points_won}},
-            )
+            money_won, cars_won = await _grant_daily_win_rewards(current_user["id"])
         plays_in_window_after = _plays_in_window(new_plays)
         next_play_at = None
         if len(plays_in_window_after) >= RPS_PLAYS_PER_WINDOW and plays_in_window_after:
@@ -169,7 +191,7 @@ def register(router):
             "computer_choice": computer,
             "result": result,
             "money_won": money_won,
-            "points_won": points_won,
+            "cars_won": cars_won,
             "plays_left": max(0, RPS_PLAYS_PER_WINDOW - len(plays_in_window_after)),
             "next_play_at": next_play_at,
         }
@@ -266,13 +288,11 @@ def register(router):
         winner = _ttt_winner(board)
         result = "ongoing"
         money_won = 0
-        points_won = 0
+        cars_won = []
         if winner:
             result = "win" if winner == player_side else "lose"
             if result == "win":
-                money_won = RPS_WIN_MONEY
-                points_won = RPS_WIN_POINTS
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": money_won, "points": points_won}})
+                money_won, cars_won = await _grant_daily_win_rewards(current_user["id"])
             await db.daily_rewards_ttt.delete_one({"user_id": current_user["id"]})
         else:
             empty = _ttt_empty_cells(board)
@@ -313,7 +333,7 @@ def register(router):
             "board": board,
             "result": result,
             "money_won": money_won,
-            "points_won": points_won,
+            "cars_won": cars_won,
             "plays_left": max(0, RPS_PLAYS_PER_WINDOW - len(in_window)),
             "next_play_at": next_play_at,
         }
