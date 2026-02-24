@@ -355,7 +355,7 @@ def register(router):
         if user.get("is_dead"):
             raise HTTPException(
                 status_code=403,
-                detail="This account is dead and cannot log in. Create a new account and use Dead > Alive to transfer 5% of this account’s money and points.",
+                detail="This account is dead and cannot log in. Create a new account and use Dead > Alive to receive 95% (5% tax) of this account’s money and points.",
             )
         ip = _client_ip(request)
         if ip:

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -111,8 +111,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
 }
 
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
-const DEFAULT_STAT_ORDER = ['rank', 'bullets', 'kills', 'money', 'points', 'property', 'notifications'];
-const TOPBAR_STAT_LABELS = { rank: 'Rank', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', property: 'Casino & Property', notifications: 'Notifications' };
+const DEFAULT_STAT_ORDER = ['rank', 'health', 'bullets', 'kills', 'money', 'points', 'property', 'notifications'];
+const TOPBAR_STAT_LABELS = { rank: 'Rank', health: 'Health', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', property: 'Casino & Property', notifications: 'Notifications' };
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
 const NOTIFICATION_BALL_POSITION_KEY = 'notification_ball_position';
@@ -1209,6 +1209,18 @@ export default function Layout({ children }) {
                     </div>
                   </div>
                   <span className={`${topBarTextClass} text-primary font-heading shrink-0 tabular-nums min-w-[2.5rem] text-right`}>{progressLabel}{rankProgress ? '%' : ''}</span>
+                </div>
+              );
+            }
+            if (statId === 'health') {
+              const healthVal = Number(user.health);
+              const healthStr = Number.isFinite(healthVal) ? Math.max(0, Math.min(100, Math.round(healthVal))).toString() : '100';
+              const healthNum = parseInt(healthStr, 10) || 100;
+              const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
+              return (
+                <div className={`${chipClass} hidden md:flex min-w-0`} title={`Health: ${healthStr}%`}>
+                  <Heart size={topBarIconSizeEffective} className={`${healthColor} shrink-0`} aria-hidden />
+                  <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[4rem]`} data-testid="topbar-health">{healthStr}%</span>
                 </div>
               );
             }

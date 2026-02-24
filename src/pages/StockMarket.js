@@ -48,6 +48,7 @@ export default function StockMarket() {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [buyPoints, setBuyPoints] = useState('');
+  const [buySide, setBuySide] = useState('long'); // 'long' | 'short'
   const [stopLossPct, setStopLossPct] = useState('');
   const [takeProfitPct, setTakeProfitPct] = useState('');
   const [buying, setBuying] = useState(false);
@@ -99,11 +100,12 @@ export default function StockMarket() {
       await api.post('/stock-market/buy', {
         stock_id: selectedId,
         points: pts,
-        stop_loss_pct: stopLossPct ? parseFloat(stopLossPct) : null,
-        take_profit_pct: takeProfitPct ? parseFloat(takeProfitPct) : null,
+        side: buySide,
+        stop_loss_pct: buySide === 'long' && stopLossPct ? parseFloat(stopLossPct) : null,
+        take_profit_pct: buySide === 'long' && takeProfitPct ? parseFloat(takeProfitPct) : null,
       });
       await refreshUser();
-      toast.success(`Bought for ${pts} points`);
+      toast.success(buySide === 'short' ? `Short opened for ${pts} pts notional` : `Bought for ${pts} points`);
       setBuyPoints('');
       fetchList();
       fetchPositions();
@@ -121,11 +123,15 @@ export default function StockMarket() {
       const res = await api.post('/stock-market/sell', { position_id: positionId });
       await refreshUser();
       const profit = res.data?.profit_points ?? 0;
-      const name = positions.find((p) => p.id === positionId)?.stock_name ?? 'Stock';
-      if (profit > 0) {
-        toast.success(`You sold ${name} for a profit of ${profit} points!`);
+      const pos = positions.find((p) => p.id === positionId);
+      const name = pos?.stock_name ?? 'Stock';
+      const isShort = pos?.side === 'short';
+      if (isShort) {
+        if (profit > 0) toast.success(`Covered ${name} for a profit of ${profit} points!`);
+        else toast.success(`Covered ${name}. ${profit < 0 ? `Loss: ${profit} points` : 'No change.'}`);
       } else {
-        toast.success(`Sold ${name}. ${profit < 0 ? `Loss: ${profit} points` : 'No change.'}`);
+        if (profit > 0) toast.success(`You sold ${name} for a profit of ${profit} points!`);
+        else toast.success(`Sold ${name}. ${profit < 0 ? `Loss: ${profit} points` : 'No change.'}`);
       }
       fetchList();
       fetchPositions();
@@ -146,7 +152,7 @@ export default function StockMarket() {
       <div className="relative stock-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The Exchange</p>
         <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Stocks</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Buy and sell with points. One winner per trade.</p>
+        <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Long: buy with points. Short: profit when price drops. Same cap and cooldowns.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -221,7 +227,7 @@ export default function StockMarket() {
         <div className="space-y-4">
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 stock-fade-in`}>
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell stocks</h2>
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell / Cover</h2>
               <button
                 type="button"
                 onClick={() => { setHistoryOpen(true); fetchHistory(); }}
@@ -231,16 +237,16 @@ export default function StockMarket() {
               </button>
             </div>
             <div className="p-3">
-              <p className="text-[9px] text-mutedForeground font-heading mb-2">Sell your stocks here.</p>
+              <p className="text-[9px] text-mutedForeground font-heading mb-2">Close long (sell) or short (cover) positions.</p>
               {positions.length === 0 ? (
-                <p className="text-[10px] font-heading text-mutedForeground py-4 text-center">You currently have no active investments!</p>
+                <p className="text-[10px] font-heading text-mutedForeground py-4 text-center">You have no open positions.</p>
               ) : (
                 <div className="space-y-2">
                   <div className="grid grid-cols-12 gap-1 text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider pb-1 border-b border-primary/10">
-                    <span className="col-span-5">Investment</span>
-                    <span className="col-span-3 text-right">Value</span>
-                    <span className="col-span-3 text-right">Profit</span>
-                    <span className="col-span-1" />
+                    <span className="col-span-4">Position</span>
+                    <span className="col-span-3 text-right">{positions.some((p) => p.side === 'short') ? 'Value / Cover' : 'Value'}</span>
+                    <span className="col-span-3 text-right">P/L</span>
+                    <span className="col-span-2" />
                   </div>
                   {positions.map((p) => (
                     <div
@@ -266,20 +272,25 @@ export default function StockMarket() {
                       }}
                     >
                       <div className="grid grid-cols-12 gap-1 items-center text-[10px] font-heading border-b border-primary/5 py-1.5 cursor-default hover:bg-primary/5 rounded px-1 -mx-1 transition-colors">
-                        <span className="col-span-5 text-foreground truncate">{p.stock_name}</span>
+                        <span className="col-span-4 text-foreground truncate flex items-center gap-1">
+                          <span className={`shrink-0 px-1 rounded text-[8px] font-bold ${p.side === 'short' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-primary/20 text-primary border border-primary/40'}`}>
+                            {p.side === 'short' ? 'S' : 'L'}
+                          </span>
+                          {p.stock_name}
+                        </span>
                         <span className="col-span-3 text-right text-foreground">{p.value_points ?? 0} pts</span>
                         <span className={`col-span-3 text-right ${(p.profit_points ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {(p.profit_points ?? 0) >= 0 ? '+' : ''}{p.profit_points ?? 0}
                         </span>
-                        <span className="col-span-1">
+                        <span className="col-span-2">
                           <button
                             type="button"
                             disabled={sellingId !== null || p.can_sell === false}
                             onClick={() => handleSell(p.id)}
                             className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/20 text-primary text-[9px] font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
-                            title={p.can_sell === false && (p.sell_available_in_seconds ?? 0) > 0 ? `3 min cooldown after buy. Sell in ${p.sell_available_in_seconds}s` : undefined}
+                            title={p.can_sell === false && (p.sell_available_in_seconds ?? 0) > 0 ? `3 min cooldown. Close in ${p.sell_available_in_seconds}s` : undefined}
                           >
-                            {sellingId === p.id ? '…' : p.can_sell !== false ? 'Sell' : `Sell in ${p.sell_available_in_seconds ?? 0}s`}
+                            {sellingId === p.id ? '…' : p.can_sell !== false ? (p.side === 'short' ? 'Cover' : 'Sell') : `In ${p.sell_available_in_seconds ?? 0}s`}
                           </button>
                         </span>
                       </div>
@@ -313,11 +324,27 @@ export default function StockMarket() {
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Purchase stocks</h2>
-              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Enter the amount you wish to purchase (points)</p>
+              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Long: buy with points. Short: profit if price drops (you receive points now).</p>
             </div>
             <div className="p-3 space-y-3">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBuySide('long')}
+                  className={`flex-1 px-2 py-1.5 rounded border text-[10px] font-heading font-bold uppercase ${buySide === 'long' ? 'border-primary bg-primary/20 text-primary' : 'border-primary/20 text-mutedForeground hover:border-primary/40'}`}
+                >
+                  Long
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBuySide('short')}
+                  className={`flex-1 px-2 py-1.5 rounded border text-[10px] font-heading font-bold uppercase ${buySide === 'short' ? 'border-primary bg-primary/20 text-primary' : 'border-primary/20 text-mutedForeground hover:border-primary/40'}`}
+                >
+                  Short
+                </button>
+              </div>
               <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Points</label>
+                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Points {buySide === 'short' ? '(notional size)' : ''}</label>
                 <FormattedNumberInput
                   value={buyPoints}
                   onChange={setBuyPoints}
@@ -328,6 +355,7 @@ export default function StockMarket() {
                   {(Math.max(0, (summary.max_points ?? 3000) - (summary.points_in_use ?? 0))).toLocaleString()} pts remaining (max {(summary.max_points ?? 3000).toLocaleString()} in market)
                 </p>
               </div>
+              {buySide === 'long' && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Stop loss % (optional)</label>
@@ -356,6 +384,7 @@ export default function StockMarket() {
                   />
                 </div>
               </div>
+              )}
               {selectedId && selectedStock && selectedStock.live === false && (
                 <p className="text-[9px] text-amber-200/90 font-heading">
                   Price data unavailable for this stock. Try again in a moment.
@@ -373,7 +402,7 @@ export default function StockMarket() {
                 onClick={handleBuy}
                 className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded border border-primary/40 bg-primary/20 text-primary font-heading font-bold text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
               >
-                <BarChart3 size={14} /> {buying ? 'Buying…' : 'Buy stock'}
+                <BarChart3 size={14} /> {buying ? (buySide === 'short' ? 'Opening…' : 'Buying…') : buySide === 'short' ? 'Short stock' : 'Buy stock'}
               </button>
             </div>
           </div>
@@ -391,14 +420,17 @@ export default function StockMarket() {
               {history.length === 0 ? (
                 <p className="text-[10px] text-mutedForeground font-heading">No transactions yet.</p>
               ) : (
-                history.map((t) => (
-                  <div key={t.id} className="text-[10px] font-heading py-1.5 border-b border-primary/5 flex justify-between gap-2">
-                    <span className="text-foreground">{t.type === 'buy' ? 'Buy' : 'Sell'} {t.stock_name}</span>
-                    <span className={t.profit_points > 0 ? 'text-emerald-400' : t.profit_points < 0 ? 'text-red-400' : 'text-mutedForeground'}>
-                      {t.profit_points > 0 ? '+' : ''}{t.profit_points ?? 0} pts
-                    </span>
-                  </div>
-                ))
+                history.map((t) => {
+                  const label = t.type === 'buy' ? 'Long buy' : t.type === 'sell' ? 'Long sell' : t.type === 'short' ? 'Short' : t.type === 'cover' ? 'Cover' : t.type;
+                  return (
+                    <div key={t.id} className="text-[10px] font-heading py-1.5 border-b border-primary/5 flex justify-between gap-2">
+                      <span className="text-foreground">{label} {t.stock_name}</span>
+                      <span className={t.profit_points > 0 ? 'text-emerald-400' : t.profit_points < 0 ? 'text-red-400' : 'text-mutedForeground'}>
+                        {t.profit_points > 0 ? '+' : ''}{t.profit_points ?? 0} pts
+                      </span>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -421,10 +453,15 @@ export default function StockMarket() {
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Position details</span>
           </div>
           <div className="p-3 space-y-2 text-[10px] font-heading overflow-y-auto min-h-0 flex-1">
-            <p className="text-foreground font-bold text-sm">{detailPosition.stock_name} ({detailPosition.symbol})</p>
+            <p className="text-foreground font-bold text-sm flex items-center gap-1.5">
+              {detailPosition.stock_name} ({detailPosition.symbol})
+              <span className={`px-1 rounded text-[8px] font-bold ${detailPosition.side === 'short' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40' : 'bg-primary/20 text-primary border border-primary/40'}`}>
+                {detailPosition.side === 'short' ? 'Short' : 'Long'}
+              </span>
+            </p>
             <div className="grid grid-cols-2 gap-1.5">
               <div className="bg-zinc-800/50 rounded p-1.5 border border-primary/10">
-                <span className="text-mutedForeground block text-[9px] uppercase">Bought at</span>
+                <span className="text-mutedForeground block text-[9px] uppercase">{detailPosition.side === 'short' ? 'Opened at' : 'Bought at'}</span>
                 <span className="text-foreground">{formatDateTime(detailPosition.bought_at)}</span>
               </div>
               <div className="bg-zinc-800/50 rounded p-1.5 border border-primary/10">
@@ -432,19 +469,19 @@ export default function StockMarket() {
                 <span className="text-foreground">{Number(detailPosition.units ?? 0).toLocaleString(undefined, { maximumFractionDigits: 6 })}</span>
               </div>
               <div className="bg-zinc-800/50 rounded p-1.5 border border-primary/10">
-                <span className="text-mutedForeground block text-[9px] uppercase">Buy price</span>
-                <span className="text-primary font-bold">{formatPrice(detailPosition.buy_price)}</span>
+                <span className="text-mutedForeground block text-[9px] uppercase">{detailPosition.side === 'short' ? 'Open price' : 'Buy price'}</span>
+                <span className="text-primary font-bold">{formatPrice(detailPosition.buy_price ?? detailPosition.open_price)}</span>
               </div>
               <div className="bg-zinc-800/50 rounded p-1.5 border border-primary/10">
                 <span className="text-mutedForeground block text-[9px] uppercase">Current price</span>
                 <span className="text-primary font-bold">{formatPrice(detailPosition.current_price)}</span>
               </div>
               <div className="bg-zinc-800/50 rounded p-1.5 border border-primary/10">
-                <span className="text-mutedForeground block text-[9px] uppercase">Cost (points)</span>
+                <span className="text-mutedForeground block text-[9px] uppercase">{detailPosition.side === 'short' ? 'Notional at open' : 'Cost (points)'}</span>
                 <span className="text-foreground">{(detailPosition.cost_points ?? 0).toLocaleString()} pts</span>
               </div>
               <div className="bg-zinc-800/50 rounded p-1.5 border border-primary/10">
-                <span className="text-mutedForeground block text-[9px] uppercase">Current value</span>
+                <span className="text-mutedForeground block text-[9px] uppercase">{detailPosition.side === 'short' ? 'Cover cost' : 'Current value'}</span>
                 <span className="text-foreground">{(detailPosition.value_points ?? 0).toLocaleString()} pts</span>
               </div>
             </div>
@@ -465,7 +502,7 @@ export default function StockMarket() {
               onClick={() => { handleSell(detailPosition.id); setDetailPosition(null); setPopoverAnchor(null); }}
               className="px-2.5 py-1 rounded border border-primary/40 bg-primary/20 text-primary text-[10px] font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
             >
-              {sellingId === detailPosition.id ? '…' : detailPosition.can_sell !== false ? 'Sell' : `Sell in ${detailPosition.sell_available_in_seconds ?? 0}s`}
+              {sellingId === detailPosition.id ? '…' : detailPosition.can_sell !== false ? (detailPosition.side === 'short' ? 'Cover' : 'Sell') : `In ${detailPosition.sell_available_in_seconds ?? 0}s`}
             </button>
           </div>
         </div>,

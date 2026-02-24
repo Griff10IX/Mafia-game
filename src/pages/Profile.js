@@ -604,7 +604,7 @@ export default function Profile() {
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [savingTelegram, setSavingTelegram] = useState(false);
-  const [carsShowOnProfile, setCarsShowOnProfile] = useState(true);
+  const [carsShowOnProfile, setCarsShowOnProfile] = useState(false);
   const [carsFeaturedId, setCarsFeaturedId] = useState('');
   const [myCarsList, setMyCarsList] = useState([]);
   const [savingCars, setSavingCars] = useState(false);
@@ -677,10 +677,10 @@ export default function Profile() {
   const fetchCarsPrefs = async () => {
     try {
       const res = await api.get('/profile/cars-preferences');
-      setCarsShowOnProfile(res.data?.show_cars_on_profile !== false);
+      setCarsShowOnProfile(res.data?.show_cars_on_profile === true);
       setCarsFeaturedId(res.data?.featured_car_id ?? '');
     } catch (_) {
-      setCarsShowOnProfile(true);
+      setCarsShowOnProfile(false);
       setCarsFeaturedId('');
     }
   };

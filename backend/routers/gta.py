@@ -998,7 +998,7 @@ async def get_view_car(
         out["sale_price"] = user_car.get("sale_price")
         user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "profile_featured_car_id": 1, "profile_show_cars": 1})
         out["featured_on_profile"] = (user_doc or {}).get("profile_featured_car_id") == user_car.get("id")
-        out["show_cars_on_profile"] = (user_doc or {}).get("profile_show_cars", True)
+        out["show_cars_on_profile"] = (user_doc or {}).get("profile_show_cars", False)
     else:
         if user_car.get("listed_for_sale"):
             seller = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})

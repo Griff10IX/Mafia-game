@@ -69,14 +69,16 @@ def register(router):
         if extra_pts > MDG_MAX_EXTRA_POT_POINTS or extra_money > MDG_MAX_EXTRA_POT_MONEY:
             raise HTTPException(status_code=400, detail="Extra pot exceeds maximum allowed")
 
-        # Creator is auto-joined: must have enough to pay fee
+        # Creator is auto-joined: must have enough to pay fee + extra pot
+        total_pts = fee_pts + extra_pts
+        total_money = fee_money + extra_money
         user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1, "money": 1, "username": 1})
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
-        if fee_pts > int(user.get("points") or 0):
-            raise HTTPException(status_code=400, detail="Insufficient points to create and join")
-        if fee_money > float(user.get("money") or 0):
-            raise HTTPException(status_code=400, detail="Insufficient money to create and join")
+        if total_pts > int(user.get("points") or 0):
+            raise HTTPException(status_code=400, detail="Insufficient points to create and join (fee + extra pot)")
+        if total_money > float(user.get("money") or 0):
+            raise HTTPException(status_code=400, detail="Insufficient money to create and join (fee + extra pot)")
 
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -101,10 +103,10 @@ def register(router):
             "rolled_at": None,
         }
         await db.mdg_games.insert_one(doc)
-        if fee_pts:
-            await db.users.update_one({"id": uid}, {"$inc": {"points": -fee_pts}})
-        if fee_money:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": -fee_money}})
+        if total_pts:
+            await db.users.update_one({"id": uid}, {"$inc": {"points": -total_pts}})
+        if total_money:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": -total_money}})
         return {"message": "Game created and you are in it", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
     @router.post("/casino/mdg/join")

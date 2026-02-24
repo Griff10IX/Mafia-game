@@ -1,4 +1,4 @@
-# Dead-alive: transfer 5% of dead account's money and points to current account (one-time)
+# Dead-alive: 5% tax — you receive 95% of dead account's money and points (one-time)
 from fastapi import Depends, HTTPException
 
 
@@ -15,7 +15,7 @@ def register(router):
 
     @router.post("/dead-alive/retrieve")
     async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user)):
-        """Transfer 5% of a dead account's money and points into your current account. One-time per dead account."""
+        """Transfer 95% of a dead account's money and points into your current account (5% tax). One-time per dead account."""
         username_pattern = _username_pattern(request.dead_username)
         dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not dead_user:
@@ -41,7 +41,7 @@ def register(router):
             {"id": dead_user["id"]},
             {"$set": {"retrieval_used": True}}
         )
-        msg = f"Transferred 5% from your dead account ({dead_user['username']}): "
+        msg = f"Transferred 95% from your dead account ({dead_user['username']}, 5% tax): "
         parts = []
         if add_money > 0:
             parts.append(f"${add_money:,} cash")

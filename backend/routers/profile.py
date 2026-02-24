@@ -57,7 +57,7 @@ def register(router):
     ChangePasswordRequest = srv.ChangePasswordRequest
     CARS = srv.CARS
 
-    async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = True, featured_car_id: Optional[str] = None):
+    async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, featured_car_id: Optional[str] = None):
         """Return up to 5 cars for profile. If show_cars is False, return []. If featured_car_id set, put that first then fill by value (max 5)."""
         if not show_cars:
             return []
@@ -201,7 +201,7 @@ def register(router):
             _casinos_for_type("slots", db.slots_ownership, "state"),
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id}),
-            _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", True), user.get("profile_featured_car_id")),
+            _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", False), user.get("profile_featured_car_id")),
         )
 
         family_name, family_tag = family_name_tag or (None, None)
@@ -246,7 +246,7 @@ def register(router):
             "messages_sent": messages_sent,
             "messages_received": messages_received,
             "top_cars": top_cars or [],
-            "show_cars_on_profile": user.get("profile_show_cars", True),
+            "show_cars_on_profile": user.get("profile_show_cars", False),
         }
         if current_user.get("email") in ADMIN_EMAILS:
             today_utc = datetime.now(timezone.utc).date().isoformat()
@@ -362,7 +362,7 @@ def register(router):
     async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):
         """Get profile cars preferences: show on profile and featured car id."""
         return {
-            "show_cars_on_profile": current_user.get("profile_show_cars", True),
+            "show_cars_on_profile": current_user.get("profile_show_cars", False),
             "featured_car_id": current_user.get("profile_featured_car_id"),
         }
 
@@ -385,9 +385,9 @@ def register(router):
                     raise HTTPException(status_code=400, detail="You do not own that car")
             updates["profile_featured_car_id"] = fid
         if not updates:
-            return {"message": "No changes", "show_cars_on_profile": current_user.get("profile_show_cars", True), "featured_car_id": current_user.get("profile_featured_car_id")}
+            return {"message": "No changes", "show_cars_on_profile": current_user.get("profile_show_cars", False), "featured_car_id": current_user.get("profile_featured_car_id")}
         await db.users.update_one({"id": uid}, {"$set": updates})
-        new_show = updates.get("profile_show_cars") if "profile_show_cars" in updates else current_user.get("profile_show_cars", True)
+        new_show = updates.get("profile_show_cars") if "profile_show_cars" in updates else current_user.get("profile_show_cars", False)
         new_featured = updates.get("profile_featured_car_id") if "profile_featured_car_id" in updates else current_user.get("profile_featured_car_id")
         return {"message": "Profile cars preferences updated", "show_cars_on_profile": new_show, "featured_car_id": new_featured}
 

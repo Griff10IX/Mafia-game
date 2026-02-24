@@ -67,16 +67,16 @@ function StatusBadge({ status }) {
     <div style={{
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '6px',
-      padding: '6px 12px',
+      gap: '4px',
+      padding: '4px 8px',
       background: config.bg,
-      border: `1.5px solid ${config.color}`,
+      border: `1px solid ${config.color}`,
       borderRadius: '4px',
       color: config.color,
-      fontSize: '0.85rem',
+      fontSize: '0.75rem',
       fontWeight: 600
     }}>
-      <Icon size={14} />
+      <Icon size={12} />
       <span>{config.text}</span>
     </div>
   );
@@ -87,18 +87,18 @@ function WaxSeal() {
   return (
     <div style={{
       position: 'absolute',
-      top: '-8px',
-      right: '-8px',
-      width: '32px',
-      height: '32px',
+      top: '-6px',
+      right: '-6px',
+      width: '24px',
+      height: '24px',
       background: 'var(--noir-profit)',
       borderRadius: '50%',
-      border: '2px solid rgba(255,255,255,0.3)',
+      border: '1.5px solid rgba(255,255,255,0.3)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       color: '#fff',
-      fontSize: '0.9rem',
+      fontSize: '0.75rem',
       fontWeight: 'bold'
     }}>
       ✓
@@ -119,11 +119,10 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
   
   return (
     <div 
-      className={`fade-in ${styles.panel}`}
+      className={styles.panel}
       style={{
-        animationDelay: `${index * 0.1}s`,
-        padding: '20px',
-        marginBottom: '16px',
+        padding: '12px 14px',
+        marginBottom: '10px',
         position: 'relative',
         cursor: isLocked && total === 0 ? 'default' : 'pointer',
         transition: 'all 0.2s ease',
@@ -140,24 +139,24 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
       {isComplete && <WaxSeal />}
       
       <div style={{
-        fontSize: '1.15rem',
+        fontSize: '1rem',
         fontWeight: 700,
         color: 'var(--noir-foreground)',
-        marginBottom: '12px',
+        marginBottom: '8px',
         borderBottom: '1px solid var(--noir-border-mid)',
-        paddingBottom: '8px'
+        paddingBottom: '4px'
       }}>
         {territory.name} — {territory.description || 'Area'}
       </div>
       
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          padding: '8px 0',
+          padding: '4px 0',
           borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.25)',
           color: 'var(--noir-foreground)',
-          fontSize: '0.9rem'
+          fontSize: '0.8rem'
         }}>
           <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Status:</span>
           <StatusBadge status={status} />
@@ -167,10 +166,10 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            padding: '10px 0',
+            padding: '6px 0',
             borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)',
             color: 'var(--noir-foreground)',
-            fontSize: '0.95rem'
+            fontSize: '0.85rem'
           }}>
             <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Daily Tribute:</span>
             <span style={{ fontWeight: 700, color: isComplete ? 'var(--noir-profit)' : 'var(--noir-primary)' }}>
@@ -183,10 +182,10 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
-            padding: '8px 0',
+            padding: '4px 0',
             borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.25)',
             color: 'var(--noir-foreground)',
-            fontSize: '0.9rem'
+            fontSize: '0.8rem'
           }}>
             <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Capo:</span>
             <span style={{ fontWeight: 600 }}>{territory.capo}</span>
@@ -196,15 +195,15 @@ function TerritoryEntry({ territory, missions, onClick, index }) {
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          padding: '8px 0',
+          padding: '4px 0',
           color: 'var(--noir-foreground)',
-          fontSize: '0.9rem'
+          fontSize: '0.8rem'
         }}>
           <span style={{ fontWeight: 600, color: 'var(--noir-primary)' }}>Missions:</span>
           <span style={{ fontWeight: 600 }}>
             {completed}/{total} Complete
             {total > 0 && !isComplete && !isLocked && (
-              <span style={{ marginLeft: '10px', color: 'var(--noir-primary)', fontSize: '0.9rem' }}>
+              <span style={{ marginLeft: '6px', color: 'var(--noir-primary)', fontSize: '0.8rem' }}>
                 [Ready to complete]
               </span>
             )}
@@ -236,7 +235,7 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         justifyContent: 'center',
         background: 'rgba(0,0,0,0.8)',
         backdropFilter: 'blur(4px)',
-        padding: '20px'
+        padding: '12px'
       }}
       onClick={onClose}
     >
@@ -244,8 +243,8 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         className={`fade-in ${styles.panel}`}
         style={{
           width: '100%',
-          maxWidth: '600px',
-          maxHeight: '85vh',
+          maxWidth: '560px',
+          maxHeight: '90vh',
           overflowY: 'auto',
           borderRadius: '6px',
           boxShadow: '0 20px 60px rgba(0,0,0,0.5)'
@@ -254,7 +253,7 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
       >
         {/* Header */}
         <div style={{
-          padding: '20px 24px',
+          padding: '12px 16px',
           background: 'rgba(var(--noir-primary-rgb), 0.1)',
           borderBottom: '1px solid var(--noir-border-mid)',
           position: 'relative'
@@ -263,9 +262,9 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
             onClick={onClose}
             style={{
               position: 'absolute',
-              top: '12px',
-              right: '12px',
-              padding: '6px',
+              top: '8px',
+              right: '8px',
+              padding: '4px',
               background: 'transparent',
               border: '1px solid var(--noir-border-mid)',
               borderRadius: '4px',
@@ -288,16 +287,16 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
           </button>
           
           <div style={{
-            fontSize: '1.25rem',
+            fontSize: '1.1rem',
             fontWeight: 700,
             color: 'var(--noir-primary)',
-            marginBottom: '4px',
-            paddingRight: '40px'
+            marginBottom: '2px',
+            paddingRight: '36px'
           }}>
             {territory}
           </div>
           <div style={{
-            fontSize: '0.9rem',
+            fontSize: '0.8rem',
             color: 'var(--noir-muted)'
           }}>
             {city}
@@ -305,13 +304,13 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         </div>
         
         {/* Mission list */}
-        <div style={{ padding: '20px 24px' }}>
+        <div style={{ padding: '12px 16px' }}>
           {territoryMissions.map((mission, idx) => (
             <div
               key={mission.id}
               style={{
-                padding: '12px 14px',
-                marginBottom: '10px',
+                padding: '8px 10px',
+                marginBottom: '6px',
                 background: mission.completed 
                   ? 'rgba(92, 184, 92, 0.08)' 
                   : 'rgba(var(--noir-primary-rgb), 0.04)',
@@ -321,10 +320,10 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
                 borderRadius: '4px'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'start', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'start', gap: '8px' }}>
                 <div style={{
-                  width: '18px',
-                  height: '18px',
+                  width: '14px',
+                  height: '14px',
                   borderRadius: '50%',
                   border: mission.completed ? '2px solid var(--noir-profit)' : '2px solid var(--noir-border-mid)',
                   background: mission.completed ? 'var(--noir-profit)' : 'transparent',
@@ -332,22 +331,22 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
-                  marginTop: '2px'
+                  marginTop: '1px'
                 }}>
-                  {mission.completed && <CheckCircle size={10} color="#fff" />}
+                  {mission.completed && <CheckCircle size={8} color="#fff" />}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{
                     fontWeight: 600,
-                    fontSize: '0.95rem',
+                    fontSize: '0.875rem',
                     color: mission.completed ? 'var(--noir-profit)' : 'var(--noir-foreground)',
-                    marginBottom: '4px'
+                    marginBottom: '2px'
                   }}>
                     {mission.title}
                   </div>
                   {!mission.completed && mission.description && (
                     <div style={{
-                      fontSize: '0.85rem',
+                      fontSize: '0.8rem',
                       color: 'var(--noir-muted)',
                       lineHeight: 1.5
                     }}>
@@ -363,15 +362,15 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         {/* Current mission details */}
         {currentMission && (
           <div style={{
-            padding: '20px 24px',
+            padding: '12px 16px',
             borderTop: '1px solid var(--noir-border-mid)',
             background: 'rgba(var(--noir-primary-rgb), 0.06)'
           }}>
             <div style={{
-              fontSize: '0.85rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
               color: 'var(--noir-primary)',
-              marginBottom: '12px',
+              marginBottom: '8px',
               textTransform: 'uppercase',
               letterSpacing: '0.06em'
             }}>
@@ -380,11 +379,11 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
             
             {currentMission.description && (
               <div style={{
-                fontSize: '0.9rem',
+                fontSize: '0.85rem',
                 color: 'var(--noir-foreground)',
-                lineHeight: 1.6,
-                marginBottom: '12px',
-                paddingLeft: '12px',
+                lineHeight: 1.5,
+                marginBottom: '8px',
+                paddingLeft: '10px',
                 borderLeft: '3px solid var(--noir-primary)'
               }}>
                 {currentMission.description}
@@ -395,8 +394,8 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.9rem',
-                padding: '8px 0',
+                fontSize: '0.8rem',
+                padding: '4px 0',
                 borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)'
               }}>
                 <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Progress:</span>
@@ -408,8 +407,8 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.95rem',
-                padding: '10px 0',
+                fontSize: '0.85rem',
+                padding: '4px 0',
                 borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)'
               }}>
                 <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Daily Tribute:</span>
@@ -423,8 +422,8 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.9rem',
-                padding: '8px 0',
+                fontSize: '0.8rem',
+                padding: '4px 0',
                 borderBottom: '1px dashed rgba(var(--noir-primary-rgb), 0.3)'
               }}>
                 <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Rank Points:</span>
@@ -436,8 +435,8 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               <div style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                fontSize: '0.95rem',
-                padding: '10px 0',
+                fontSize: '0.85rem',
+                padding: '4px 0',
                 borderBottom: '1px dashed #c9a668'
               }}>
                 <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Unlocks City:</span>
@@ -448,15 +447,15 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              fontSize: '0.9rem',
-              padding: '8px 0'
+              fontSize: '0.8rem',
+              padding: '4px 0'
             }}>
               <span style={{ color: 'var(--noir-primary)', fontWeight: 600 }}>Difficulty:</span>
-              <div style={{ display: 'flex', gap: '4px' }}>
+              <div style={{ display: 'flex', gap: '2px' }}>
                 {[...Array(3)].map((_, i) => (
                   <Crown
                     key={i}
-                    size={14}
+                    size={12}
                     fill={i < stars ? 'var(--noir-primary)' : 'none'}
                     color={i < stars ? 'var(--noir-primary)' : 'var(--noir-muted)'}
                   />
@@ -468,22 +467,22 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
         
         {/* Action button */}
         <div style={{
-          padding: '16px 24px',
+          padding: '10px 16px',
           borderTop: '1px solid var(--noir-border-mid)'
         }}>
           {currentMission?.completed ? (
             <div style={{
               textAlign: 'center',
-              padding: '12px',
+              padding: '8px',
               color: 'var(--noir-profit)',
               fontWeight: 600,
-              fontSize: '0.95rem',
+              fontSize: '0.875rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px'
+              gap: '6px'
             }}>
-              <CheckCircle size={18} />
+              <CheckCircle size={14} />
               Complete
             </div>
           ) : canStart ? (
@@ -493,13 +492,13 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
               className={styles.panel}
               style={{
                 width: '100%',
-                padding: '12px 16px',
+                padding: '8px 12px',
                 background: 'rgba(var(--noir-primary-rgb), 0.2)',
                 border: '1px solid var(--noir-primary)',
                 borderRadius: '4px',
                 color: 'var(--noir-primary)',
                 fontWeight: 600,
-                fontSize: '0.95rem',
+                fontSize: '0.875rem',
                 cursor: starting ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s ease',
                 opacity: starting ? 0.6 : 1
@@ -518,16 +517,16 @@ function MissionModal({ city, territory, missions, onClose, onStart, starting })
           ) : (
             <div style={{
               textAlign: 'center',
-              padding: '12px',
+              padding: '8px',
               color: 'var(--noir-muted)',
               fontWeight: 500,
-              fontSize: '0.9rem',
+              fontSize: '0.8rem',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: '8px'
+              gap: '6px'
             }}>
-              <Lock size={16} />
+              <Lock size={14} />
               Meet requirements to unlock
             </div>
           )}
@@ -603,7 +602,7 @@ export default function Missions() {
 
   if (loading || !data) {
     return (
-      <div className={styles.pageContent} style={{ minHeight: '100vh', padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div className={styles.pageContent} style={{ minHeight: '100vh', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <style>{STYLES}</style>
         <div style={{
           display: 'flex',
@@ -653,31 +652,31 @@ export default function Missions() {
   }, 0);
 
   return (
-    <div className={styles.pageContent} style={{ minHeight: '100vh', padding: '20px', position: 'relative' }}>
+    <div className={styles.pageContent} style={{ minHeight: '100vh', padding: '14px 16px', position: 'relative' }}>
       <style>{STYLES}</style>
       
       {/* Header */}
       <div className={`fade-in ${styles.panel}`} style={{
         maxWidth: '900px',
-        margin: '0 auto 24px',
-        padding: '24px 28px',
+        margin: '0 auto 14px',
+        padding: '14px 18px',
         position: 'relative'
       }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
-            fontSize: '1.5rem',
+            fontSize: '1.25rem',
             fontWeight: 700,
             color: 'var(--noir-primary)',
-            marginBottom: '6px',
+            marginBottom: '2px',
             letterSpacing: '0.05em',
             textTransform: 'uppercase'
           }}>
             Missions — Daily Tribute
           </div>
           <div style={{
-            fontSize: '0.9rem',
+            fontSize: '0.8rem',
             color: 'var(--noir-muted)',
-            marginTop: '4px'
+            marginTop: '2px'
           }}>
             Complete operations in each area to earn cash and RP. Rewards are your daily tribute.
           </div>
@@ -688,9 +687,9 @@ export default function Missions() {
       {unlocked.length > 1 && (
         <div className="fade-in" style={{
           maxWidth: '900px',
-          margin: '0 auto 20px',
+          margin: '0 auto 12px',
           display: 'flex',
-          gap: '10px',
+          gap: '8px',
           flexWrap: 'wrap',
           justifyContent: 'center',
           animationDelay: '0.1s'
@@ -701,13 +700,13 @@ export default function Missions() {
               onClick={() => setCity(c)}
               className={styles.panel}
               style={{
-                padding: '10px 22px',
+                padding: '6px 14px',
                 background: city === c ? 'rgba(var(--noir-primary-rgb), 0.2)' : 'transparent',
                 border: `1px solid ${city === c ? 'var(--noir-primary)' : 'var(--noir-border-mid)'}`,
                 borderRadius: '4px',
                 color: city === c ? 'var(--noir-primary)' : 'var(--noir-foreground)',
                 fontWeight: 600,
-                fontSize: '0.9rem',
+                fontSize: '0.8rem',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease'
               }}
@@ -733,37 +732,37 @@ export default function Missions() {
       {/* Status summary */}
       <div className={`fade-in ${styles.panel}`} style={{
         maxWidth: '900px',
-        margin: '0 auto 24px',
-        padding: '20px 24px',
+        margin: '0 auto 14px',
+        padding: '12px 16px',
         animationDelay: '0.2s'
       }}>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-          gap: '20px',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+          gap: '12px',
           color: 'var(--noir-foreground)'
         }}>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--noir-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--noir-muted)', marginBottom: '2px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Missions Complete
             </div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--noir-primary)' }}>
+            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--noir-primary)' }}>
               {completedCount}/{cityMissions.length}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--noir-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--noir-muted)', marginBottom: '2px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Daily Tribute
             </div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--noir-profit)' }}>
+            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--noir-profit)' }}>
               {fmt(totalTribute)}
             </div>
           </div>
           <div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--noir-muted)', marginBottom: '4px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            <div style={{ fontSize: '0.7rem', color: 'var(--noir-muted)', marginBottom: '2px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
               Current City
             </div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--noir-primary)' }}>
+            <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--noir-primary)' }}>
               {city}
             </div>
           </div>
@@ -771,7 +770,7 @@ export default function Missions() {
       </div>
       
       {/* Ledger pages */}
-      <div className="page-flip" style={{
+      <div style={{
         maxWidth: '900px',
         margin: '0 auto'
       }}>
@@ -789,15 +788,15 @@ export default function Missions() {
       {/* Summary */}
       <div className={`fade-in ${styles.panel}`} style={{
         maxWidth: '900px',
-        margin: '40px auto 0',
-        padding: '24px',
+        margin: '20px auto 0',
+        padding: '14px 16px',
         borderLeft: '4px solid var(--noir-primary)',
         animationDelay: '0.8s'
       }}>
-        <div style={{ marginBottom: '10px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--noir-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+        <div style={{ marginBottom: '6px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--noir-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           Summary
         </div>
-        <div style={{ color: 'var(--noir-foreground)', fontSize: '0.95rem', lineHeight: 1.6 }}>
+        <div style={{ color: 'var(--noir-foreground)', fontSize: '0.85rem', lineHeight: 1.5 }}>
           {city}: {completedCount}/{cityMissions.length} missions complete.
           {totalTribute > 0 && <> Total daily tribute from this city: {fmt(totalTribute)} cash.</>}
           {completedCount < cityMissions.length

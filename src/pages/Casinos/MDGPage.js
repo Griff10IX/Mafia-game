@@ -125,7 +125,8 @@ export default function MDGPage() {
         extra_pot_points: parseInt(createExtraPotPoints, 10) || 0,
         extra_pot_money: parseFloat(createExtraPotMoney) || 0,
       });
-      toast.success('Game created');
+      await refreshUser();
+      toast.success('Game created — fee taken (you’re in the game)');
       setCreateOpen(false);
       setCreateFeePoints('');
       setCreateFeeMoney('');

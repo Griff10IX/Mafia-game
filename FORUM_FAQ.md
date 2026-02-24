@@ -479,7 +479,7 @@ Notifications and DMs. Reply, threads, mark read.
 <summary><strong>Dead / Alive</strong></summary>
 <div>
 
-**Dead** = killed in game. From a new account, use **Dead > Alive**: enter the dead account’s username and password. You receive **5% of that account’s money and points** on this account — **once per dead account**. After that, that dead account cannot be used again for a transfer.
+**Dead** = killed in game. From a new account, use **Dead > Alive**: enter the dead account’s username and password. You receive **95% of that account’s money and points (5% tax)** on this account — **once per dead account**. After that, that dead account cannot be used again for a transfer.
 </div>
 </details>
 
