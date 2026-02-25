@@ -411,6 +411,22 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                   <span style={{ color: '#4ade80', fontWeight: 700 }}>{fmt(mission.reward_money)}</span>
                 </div>
               )}
+              {mission.reward_cash_immediate > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Banknote size={12} /> Cash (immediate)
+                  </span>
+                  <span style={{ color: '#4ade80', fontWeight: 700 }}>{fmt(mission.reward_cash_immediate)}</span>
+                </div>
+              )}
+              {mission.reward_tribute_daily > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Banknote size={12} /> Tribute bank (daily)
+                  </span>
+                  <span style={{ color: '#4ade80', fontWeight: 700 }}>{fmt(mission.reward_tribute_daily)}/day</span>
+                </div>
+              )}
               {mission.reward_points > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -425,10 +441,24 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                   <span style={{ color: '#f87171', fontWeight: 700 }}>+{mission.reward_bullets} bullets</span>
                 </div>
               )}
-              {mission.reward_car_id && (
+              {(mission.reward_car_id || (mission.reward_car_ids && mission.reward_car_ids.length > 0)) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
-                  <span style={{ color: '#71717a' }}>Vehicle</span>
-                  <span style={{ color: '#60a5fa', fontWeight: 700 }}>Car reward</span>
+                  <span style={{ color: '#71717a' }}>Vehicle{mission.reward_car_ids?.length > 1 ? 's' : ''}</span>
+                  <span style={{ color: '#60a5fa', fontWeight: 700 }}>
+                    {mission.reward_car_ids?.length ? `${mission.reward_car_ids.length} cars` : 'Car reward'}
+                  </span>
+                </div>
+              )}
+              {mission.reward_tribute_bullets_daily > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a' }}>Tribute bullets (daily)</span>
+                  <span style={{ color: '#f87171', fontWeight: 700 }}>+{mission.reward_tribute_bullets_daily}/day</span>
+                </div>
+              )}
+              {mission.reward_loot_box_pieces > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a' }}>Loot box pieces</span>
+                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>+{mission.reward_loot_box_pieces} (Loot boxes coming soon)</span>
                 </div>
               )}
               {mission.reward_booze && Object.keys(mission.reward_booze).length > 0 && (
@@ -538,7 +568,7 @@ function formatTimeUntil(isoString) {
   return 'in <1m';
 }
 
-function TributeBanner({ bank, onCollect, collecting, tributeDepositDailyAt, nextTributeDepositAt }) {
+function TributeBanner({ bank, tributeBullets = 0, onCollect, collecting, tributeDepositDailyAt, nextTributeDepositAt }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!nextTributeDepositAt) return;
@@ -546,16 +576,23 @@ function TributeBanner({ bank, onCollect, collecting, tributeDepositDailyAt, nex
     return () => clearInterval(id);
   }, [nextTributeDepositAt]);
   const hasBank = bank > 0;
+  const hasBullets = (tributeBullets || 0) > 0;
+  const hasAny = hasBank || hasBullets;
   const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasBank ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasAny ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className={`px-2.5 py-2 flex items-center justify-between gap-3 flex-wrap border-l-2 ${hasBank ? 'border-green-500 bg-green-500/5' : 'border-zinc-600 bg-primary/5'}`}>
-        <div className="flex items-center gap-2">
+      <div className={`px-2.5 py-2 flex items-center justify-between gap-3 flex-wrap border-l-2 ${hasAny ? 'border-green-500 bg-green-500/5' : 'border-zinc-600 bg-primary/5'}`}>
+        <div className="flex items-center gap-2 flex-wrap">
           <Banknote size={16} className={hasBank ? 'text-green-400' : 'text-mutedForeground'} />
           <div>
             <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Tribute Bank</div>
-            <div className="text-sm font-heading font-bold text-foreground">{fmt(bank)}</div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm font-heading font-bold text-foreground">{fmt(bank)}</span>
+              {(tributeBullets || 0) > 0 && (
+                <span className="text-[10px] font-heading font-bold text-foreground">· {(tributeBullets || 0).toLocaleString()} bullets</span>
+              )}
+            </div>
             {tributeDepositDailyAt && (
               <div className="flex items-center gap-1 mt-1 text-[9px] text-mutedForeground">
                 <Clock size={9} />
@@ -570,8 +607,8 @@ function TributeBanner({ bank, onCollect, collecting, tributeDepositDailyAt, nex
         <button
           type="button"
           onClick={onCollect}
-          disabled={!hasBank || collecting}
-          className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${hasBank && !collecting ? 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30 cursor-pointer' : 'bg-zinc-800/50 border-zinc-600 text-mutedForeground cursor-not-allowed'} ${collecting ? 'opacity-60' : ''}`}
+          disabled={!hasAny || collecting}
+          className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${hasAny && !collecting ? 'bg-green-500/20 border-green-500/40 text-green-400 hover:bg-green-500/30 cursor-pointer' : 'bg-zinc-800/50 border-zinc-600 text-mutedForeground cursor-not-allowed'} ${collecting ? 'opacity-60' : ''}`}
         >
           {collecting ? 'Collecting…' : 'Collect'}
         </button>
@@ -619,7 +656,12 @@ export default function Missions() {
       if (res.data?.completed) {
         const parts = [];
         if (res.data.reward_money > 0) parts.push(`+${fmt(res.data.reward_money)} tribute`);
+        if (res.data.reward_cash_immediate > 0) parts.push(`+${fmt(res.data.reward_cash_immediate)} cash`);
         if (res.data.reward_points > 0) parts.push(`+${res.data.reward_points} RP`);
+        if (res.data.reward_bullets > 0) parts.push(`+${res.data.reward_bullets} bullets`);
+        if (res.data.reward_car_id) parts.push('1 car');
+        if (res.data.reward_car_ids?.length) parts.push(`${res.data.reward_car_ids.length} cars`);
+        if (res.data.reward_loot_box_pieces > 0) parts.push(`+${res.data.reward_loot_box_pieces} Loot Box Piece(s)`);
         if (res.data.unlocked_city) parts.push(`${res.data.unlocked_city} unlocked!`);
         toast.success(parts.join(' · ') || 'Mission complete');
         refreshUser();
@@ -641,12 +683,18 @@ export default function Missions() {
 
   const handleCollect = async () => {
     const bank = data?.tribute_bank ?? 0;
-    if (bank <= 0) return;
+    const bullets = data?.tribute_bullets ?? 0;
+    if (bank <= 0 && bullets <= 0) return;
     setCollecting(true);
     try {
       const res = await api.post('/missions/collect-tribute');
-      if ((res.data?.collected ?? 0) > 0) {
-        toast.success(`Collected ${fmt(res.data.collected)} cash`);
+      const collectedCash = res.data?.collected ?? 0;
+      const collectedBullets = res.data?.collected_bullets ?? 0;
+      if (collectedCash > 0 || collectedBullets > 0) {
+        const parts = [];
+        if (collectedCash > 0) parts.push(`${fmt(collectedCash)} cash`);
+        if (collectedBullets > 0) parts.push(`${collectedBullets.toLocaleString()} bullets`);
+        toast.success(`Collected ${parts.join(' and ')}`);
         refreshUser();
         const mapRes = await api.get('/missions/map');
         setData(mapRes.data);
@@ -736,6 +784,7 @@ export default function Missions() {
 
       <TributeBanner
         bank={tributeBank}
+        tributeBullets={data?.tribute_bullets ?? 0}
         onCollect={handleCollect}
         collecting={collecting}
         tributeDepositDailyAt={data?.tribute_deposit_daily_at}

@@ -531,7 +531,7 @@ async def snitch(
     snitch_immunity_until = now + timedelta(minutes=SNITCH_IMMUNITY_MINUTES)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+        {"$inc": {"snitch_count": 1}, "$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
     )
     await db.users.update_one(
         {"id": target["id"]},

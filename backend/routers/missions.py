@@ -70,7 +70,34 @@ MISSIONS = [
         "unlocks_city": None,
         "character_id": None,
         "is_boss": False,
-]
+    },
+    {
+        "id": "m_second",
+        "city": "Start",
+        "area": "—",
+        "order": 1,
+        "type": "special",
+        "requirements": {
+            "in_state": "New York",
+            "jail_busts": 2,
+            "crimes": 200,
+            "snitch_count": 1,
+            "cars_melted": 1,
+        },
+        "title": "New York Run",
+        "description": "Travel to New York. Bust 2 people from jail (NPC or player). Commit 200 crimes. Snitch on another user while in jail. Melt 1 car.",
+        "reward_cash_immediate": 50_000,
+        "reward_tribute_daily": 100_000,
+        "reward_car_ids": ["car7", "car2"],
+        "reward_bullets": 2_500,
+        "reward_tribute_bullets_daily": 100,
+        "reward_loot_box_pieces": 1,
+        "difficulty": 2,
+        "unlocks_city": None,
+        "character_id": None,
+        "is_boss": False,
+    },
+]  # end MISSIONS list
 
 # Lookup mission id -> title
 MISSION_ID_TO_TITLE = {m["id"]: m["title"] for m in MISSIONS}
@@ -142,6 +169,10 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
         return rid
     if req_key == "booze_sells":
         return int(user.get("booze_runs_count") or 0)
+    if req_key == "snitch_count":
+        return int(user.get("snitch_count") or 0)
+    if req_key == "cars_melted":
+        return int(user.get("cars_melted") or 0)
     return 0
 
 
@@ -176,10 +207,16 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             progress["description"] = f"{len(done)}/{progress['target']} missions complete"
         return met, progress
 
-    # Multiple simple requirements: all must be met (e.g. crimes + jail_busts_npc)
+    # Multiple simple requirements: all must be met (e.g. crimes + jail_busts_npc + in_state)
     met_count = 0
     parts = []
     for key, target in req.items():
+        if key == "in_state":
+            met = (user.get("current_state") or "").strip() == target
+            if met:
+                met_count += 1
+            parts.append(f"Be in {target}: done" if met else f"Be in {target}: travel there")
+            continue
         current = _get_user_progress_value(user, key)
         met = current >= target
         if met:
@@ -203,6 +240,10 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             parts.append(f"{current}/{target} crimes")
         elif key == "crime_profit":
             parts.append(f"${current:,} / ${target:,} crime profit")
+        elif key == "snitch_count":
+            parts.append(f"Snitch on someone (in jail): {current}/{target}")
+        elif key == "cars_melted":
+            parts.append(f"{current}/{target} cars melted")
         else:
             parts.append(f"{current}/{target}")
     progress = {"current": met_count, "target": len(req), "description": " · ".join(parts)}
@@ -236,10 +277,15 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "title": m["title"],
             "description": m["description"],
             "reward_money": m.get("reward_money", 0),
+            "reward_cash_immediate": m.get("reward_cash_immediate", 0),
+            "reward_tribute_daily": m.get("reward_tribute_daily", 0),
             "reward_points": m.get("reward_points", 0),
             "reward_car_id": m.get("reward_car_id"),
+            "reward_car_ids": m.get("reward_car_ids") or [],
             "reward_booze": m.get("reward_booze"),
             "reward_bullets": m.get("reward_bullets", 0),
+            "reward_tribute_bullets_daily": m.get("reward_tribute_bullets_daily", 0),
+            "reward_loot_box_pieces": m.get("reward_loot_box_pieces", 0),
             "unlocks_city": m.get("unlocks_city"),
             "character_id": m.get("character_id"),
             "difficulty": m.get("difficulty", 5),
@@ -291,10 +337,15 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "title": m["title"],
             "description": m["description"],
             "reward_money": m.get("reward_money", 0),
+            "reward_cash_immediate": m.get("reward_cash_immediate", 0),
+            "reward_tribute_daily": m.get("reward_tribute_daily", 0),
             "reward_points": m.get("reward_points", 0),
             "reward_car_id": m.get("reward_car_id"),
+            "reward_car_ids": m.get("reward_car_ids") or [],
             "reward_booze": m.get("reward_booze"),
             "reward_bullets": m.get("reward_bullets", 0),
+            "reward_tribute_bullets_daily": m.get("reward_tribute_bullets_daily", 0),
+            "reward_loot_box_pieces": m.get("reward_loot_box_pieces", 0),
             "unlocks_city": m.get("unlocks_city"),
             "character_id": m.get("character_id"),
             "difficulty": m.get("difficulty", 5),
@@ -311,6 +362,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         for area in by_city[c]["areas"]:
             by_city[c]["areas"][area].sort(key=lambda x: (1 if x.get("is_boss") else 0, x["order"]))
     tribute_bank = int(current_user.get("tribute_bank") or 0)
+    tribute_bullets = int(current_user.get("tribute_bullets") or 0)
     next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc()
     return {
         "current_city": current_city,
@@ -318,6 +370,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "cities": list(unlocked),
         "by_city": by_city,
         "tribute_bank": tribute_bank,
+        "tribute_bullets": tribute_bullets,
         "tribute_deposit_daily_at": deposit_time_label,
         "next_tribute_deposit_at": next_deposit_iso,
     }
@@ -354,20 +407,27 @@ async def complete_mission(
 
     user_id = current_user["id"]
     reward_money = int(mission.get("reward_money") or 0)
+    reward_cash_immediate = int(mission.get("reward_cash_immediate") or 0)
     reward_points = int(mission.get("reward_points") or 0)
     reward_car_id = (mission.get("reward_car_id") or "").strip() or None
+    reward_car_ids = mission.get("reward_car_ids") or []
     reward_booze = mission.get("reward_booze")
     reward_bullets = int(mission.get("reward_bullets") or 0)
+    reward_loot_box_pieces = int(mission.get("reward_loot_box_pieces") or 0)
     unlocks_city = mission.get("unlocks_city")
 
     completion_doc = {"mission_id": mission_id, "completed_at": datetime.now(timezone.utc).isoformat()}
     update = {"$push": {"mission_completions": completion_doc}}
     if reward_money:
         update.setdefault("$inc", {})["tribute_bank"] = reward_money
+    if reward_cash_immediate:
+        update.setdefault("$inc", {})["money"] = reward_cash_immediate
     if reward_points:
         update.setdefault("$inc", {})["rank_points"] = reward_points
     if reward_bullets:
         update.setdefault("$inc", {})["bullets"] = reward_bullets
+    if reward_loot_box_pieces:
+        update.setdefault("$inc", {})["loot_box_pieces"] = reward_loot_box_pieces
     if isinstance(reward_booze, dict) and reward_booze:
         booze_ids = [b["id"] for b in BOOZE_TYPES]
         for bid, amt in reward_booze.items():
@@ -386,6 +446,14 @@ async def complete_mission(
             "car_id": reward_car_id,
             "acquired_at": datetime.now(timezone.utc).isoformat(),
         })
+    for cid in reward_car_ids:
+        if isinstance(cid, str) and next((c for c in CARS if c.get("id") == cid), None):
+            await db.user_cars.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "car_id": cid,
+                "acquired_at": datetime.now(timezone.utc).isoformat(),
+            })
 
     try:
         if reward_points:
@@ -407,25 +475,40 @@ async def complete_mission(
         "completed": True,
         "mission_id": mission_id,
         "reward_money": reward_money,
+        "reward_cash_immediate": reward_cash_immediate,
         "reward_points": reward_points,
         "reward_car_id": reward_car_id,
+        "reward_car_ids": reward_car_ids,
         "reward_booze": reward_booze if isinstance(reward_booze, dict) else None,
         "reward_bullets": reward_bullets,
+        "reward_loot_box_pieces": reward_loot_box_pieces,
         "unlocked_city": unlocks_city,
     }
 
 
 async def collect_tribute(current_user: dict = Depends(get_current_user)):
-    """Collect accumulated tribute bank into cash."""
+    """Collect accumulated tribute bank (cash) and tribute bullets into balance."""
     user_id = current_user["id"]
     bank = int(current_user.get("tribute_bank") or 0)
-    if bank <= 0:
-        return {"collected": 0, "tribute_bank": 0, "message": "No tribute to collect"}
-    await db.users.update_one(
-        {"id": user_id},
-        {"$inc": {"money": bank}, "$set": {"tribute_bank": 0}},
-    )
-    return {"collected": bank, "tribute_bank": 0, "message": f"Collected {bank} cash"}
+    bullets = int(current_user.get("tribute_bullets") or 0)
+    if bank <= 0 and bullets <= 0:
+        return {"collected": 0, "collected_bullets": 0, "tribute_bank": 0, "tribute_bullets": 0, "message": "No tribute to collect"}
+    update = {"$set": {}}
+    if bank > 0:
+        update["$inc"] = update.get("$inc", {})
+        update["$inc"]["money"] = bank
+        update["$set"]["tribute_bank"] = 0
+    if bullets > 0:
+        update["$inc"] = update.get("$inc", {})
+        update["$inc"]["bullets"] = bullets
+        update["$set"]["tribute_bullets"] = 0
+    await db.users.update_one({"id": user_id}, update)
+    msg = []
+    if bank > 0:
+        msg.append(f"${bank:,} cash")
+    if bullets > 0:
+        msg.append(f"{bullets:,} bullets")
+    return {"collected": bank, "collected_bullets": bullets, "tribute_bank": 0, "tribute_bullets": 0, "message": f"Collected {' and '.join(msg)}"}
 
 
 async def get_missions_characters(current_user: dict = Depends(get_current_user), city: Optional[str] = None):
@@ -451,11 +534,15 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
     return {"characters": out}
 
 
+MISSION_2_DAILY_CASH = 100_000
+MISSION_2_DAILY_BULLETS = 100
+
+
 async def run_daily_tribute_deposit():
     """
     Credit DAILY_TRIBUTE_AMOUNT to every user's tribute_bank once per day at TRIBUTE_DEPOSIT_UTC_HOUR (UTC).
+    Users who completed mission 2 (m_second) also get MISSION_2_DAILY_CASH to tribute_bank and MISSION_2_DAILY_BULLETS to tribute_bullets.
     Idempotent: uses game_config last_run_utc_date so we only run once per calendar day.
-    Call from a background ticker (e.g. every 60s) so the deposit happens at the configured hour.
     """
     now = datetime.now(timezone.utc)
     if now.hour != TRIBUTE_DEPOSIT_UTC_HOUR:
@@ -465,15 +552,22 @@ async def run_daily_tribute_deposit():
     if doc and doc.get("last_run_utc_date") == today:
         return
     result = await db.users.update_many({}, {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT}})
+    result2 = await db.users.update_many(
+        {"mission_completions": {"$elemMatch": {"mission_id": "m_second"}}},
+        {"$inc": {"tribute_bank": MISSION_2_DAILY_CASH, "tribute_bullets": MISSION_2_DAILY_BULLETS}},
+    )
     await db.game_config.update_one(
         {"id": TRIBUTE_DEPOSIT_CONFIG_ID},
         {"$set": {"last_run_utc_date": today}},
         upsert=True,
     )
     logging.getLogger(__name__).info(
-        "Daily tribute deposit: credited %s to %d users at %s UTC",
+        "Daily tribute deposit: %s cash to %d users; mission 2 bonus (%s cash + %s bullets) to %d users at %s UTC",
         DAILY_TRIBUTE_AMOUNT,
         result.modified_count,
+        MISSION_2_DAILY_CASH,
+        MISSION_2_DAILY_BULLETS,
+        result2.modified_count,
         today,
     )
 
