@@ -722,24 +722,27 @@ async def _ensure_dealer_stock_seeded():
 
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
-    """List cars available to buy from the dealer (cash). One row per dealer stock slot. Excludes custom and exclusive."""
+    """List dealer cars: one row per model with in_stock count. Excludes custom and exclusive."""
     await _ensure_dealer_stock_seeded()
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    cursor = db.dealer_stock.find({}, {"_id": 1, "car_id": 1})
-    slots = await cursor.to_list(5000)
+    # Count dealer stock per car_id
+    pipeline = [{"$group": {"_id": "$car_id", "count": {"$sum": 1}}}]
+    counts = await db.dealer_stock.aggregate(pipeline).to_list(100)
+    stock_by_car = {d["_id"]: d["count"] for d in counts}
     out = []
-    for slot in slots:
-        c = next((x for x in CARS if x.get("id") == slot.get("car_id")), None)
-        if not c or c.get("id") in DEALER_EXCLUDED_IDS:
+    for c in CARS:
+        if c.get("id") in DEALER_EXCLUDED_IDS:
             continue
+        car_id = c.get("id")
+        in_stock = stock_by_car.get(car_id, 0)
         price = int(c.get("value", 0) * _dealer_price_multiplier(c))
         min_rank = c.get("min_difficulty", 1)
         out.append({
             **{k: v for k, v in c.items()},
             "dealer_price": price,
             "min_rank": min_rank,
-            "can_buy": rank_id >= min_rank,
-            "dealer_slot_id": str(slot["_id"]),
+            "in_stock": in_stock,
+            "can_buy": rank_id >= min_rank and in_stock > 0,
         })
     return {"cars": out}
 

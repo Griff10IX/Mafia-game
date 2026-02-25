@@ -88,25 +88,30 @@ export default function BuyCars() {
       const r = l.rarity || 'common';
       forSaleByRarity[r] = (forSaleByRarity[r] || 0) + 1;
     });
+    const dealerInStockByRarity = {};
     const dealerModelsByRarity = {};
     dealerCars.forEach((c) => {
       const r = c.rarity || 'common';
       dealerModelsByRarity[r] = (dealerModelsByRarity[r] || 0) + 1;
+      dealerInStockByRarity[r] = (dealerInStockByRarity[r] || 0) + (c.in_stock ?? 0);
     });
     return RARITY_ORDER.map((r) => ({
       rarity: r,
       label: RARITY_LABELS[r] || r,
       speed: TRAVEL_TIMES[r] != null ? `${TRAVEL_TIMES[r]} secs` : '—',
       forSale: forSaleByRarity[r] || 0,
-      total: (dealerModelsByRarity[r] || 0) + (forSaleByRarity[r] || 0),
-    })).filter((row) => row.total > 0 || row.forSale > 0);
+      dealerInStock: dealerInStockByRarity[r] || 0,
+      total: (dealerInStockByRarity[r] || 0) + (forSaleByRarity[r] || 0),
+      modelCount: (dealerModelsByRarity[r] || 0) + (forSaleByRarity[r] || 0),
+    })).filter((row) => row.modelCount > 0);
   }, [dealerCars, marketplaceListings]);
 
   const allVehicles = useMemo(() => {
     const rows = [];
     dealerCars.forEach((c, i) => {
+      const inStock = c.in_stock ?? 0;
       rows.push({
-        id: `dealer:${c.dealer_slot_id ?? c.id + ':' + i}`,
+        id: `dealer:${c.id}:${i}`,
         source: 'dealer',
         carId: c.id,
         name: c.name,
@@ -114,7 +119,8 @@ export default function BuyCars() {
         speed: TRAVEL_TIMES[c.rarity] ?? 45,
         owner: 'Dealer',
         rarity: c.rarity || 'common',
-        canBuy: c.can_buy && (userMoney ?? 0) >= (c.dealer_price ?? 0),
+        inStock,
+        canBuy: (c.can_buy ?? false) && (userMoney ?? 0) >= (c.dealer_price ?? 0) && inStock > 0,
         damage_percent: 0,
       });
     });
@@ -314,6 +320,7 @@ export default function BuyCars() {
                 </th>
                 <th className="text-left py-1 px-2">Car</th>
                 <th className="text-right py-1 px-2">Price</th>
+                <th className="text-right py-1 px-2">Stock</th>
                 <th className="text-right py-1 px-2">Damage</th>
                 <th className="text-right py-1 px-2">Speed</th>
                 <th className="text-right py-1 px-2">Owner</th>
@@ -349,6 +356,17 @@ export default function BuyCars() {
                   </td>
                   <td className="py-1 px-2 text-right font-heading font-bold text-emerald-400">
                     ${(row.price || 0).toLocaleString()}
+                  </td>
+                  <td className="py-1 px-2 text-right font-heading">
+                    {row.source === 'dealer' ? (
+                      (row.inStock ?? 0) > 0 ? (
+                        <span className="text-emerald-400">In stock ({row.inStock})</span>
+                      ) : (
+                        <span className="text-amber-500/90">Out of stock</span>
+                      )
+                    ) : (
+                      <span className="text-mutedForeground">—</span>
+                    )}
                   </td>
                   <td className="py-1 px-2 text-right text-mutedForeground font-heading">
                     {row.source === 'dealer' ? '—' : `${row.damage_percent ?? 0}%`}
