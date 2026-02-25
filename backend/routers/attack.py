@@ -463,7 +463,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
                         if not first_bg.get("robot_name"):
                             display_name = search_username
                 slot_n = first_bg.get("slot_number")
-                item["first_bodyguard"] = {"display_name": display_name, "search_username": search_username, "slot_number": slot_n}
+                item["first_bodyguard"] = {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": attack.get("target_username")}
                 item["bodyguard_count"] = len(target_bgs)
         items.append(item)
     return {"attacks": items}
@@ -575,13 +575,13 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 success=False,
                 message=f"{target_name} has a bodyguard{slot_msg} called {display_name}. You need to kill them first.",
                 rewards=None,
-                first_bodyguard={"display_name": display_name, "search_username": search_username, "slot_number": slot_n},
+                first_bodyguard={"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
             )
         return AttackExecuteResponse(
             success=False,
             message=f"{target_name} has a bodyguard{slot_msg}. You need to kill them first.",
             rewards=None,
-            first_bodyguard={"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n},
+            first_bodyguard={"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
         )
     target_name = target["username"]
     target_health = float(target.get("health", DEFAULT_HEALTH))

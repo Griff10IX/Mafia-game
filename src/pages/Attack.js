@@ -972,7 +972,8 @@ export default function Attack() {
             onClick: async () => {
               setLoading(true);
               try {
-                const res = await api.post('/attack/search', { target_username: bg.search_username, note: '' });
+                const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
+                const res = await api.post('/attack/search', { target_username: bg.search_username, note });
                 toast.success(res.data?.message || 'Search started', { duration: 10000 });
                 await refreshAttacks();
               } catch (err) {

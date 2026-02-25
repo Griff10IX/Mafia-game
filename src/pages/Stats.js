@@ -233,9 +233,8 @@ const WipedFamiliesListView = ({ families }) => (
       <div className="px-2 py-1 bg-zinc-800/50 text-[8px] font-heading font-bold text-zinc-500 uppercase tracking-wider grid grid-cols-12 gap-1 border-b border-zinc-700/40">
         <div className="col-span-3">Wiped</div>
         <div className="col-span-3">Wiped by</div>
-        <div className="col-span-1 text-center">K</div>
-        <div className="col-span-1 text-center">BG</div>
-        <div className="col-span-2">In family</div>
+        <div className="col-span-2 text-center">Killed Family Members</div>
+        <div className="col-span-2 text-center">Bodyguards Lost</div>
         <div className="col-span-2 text-right">Ended</div>
       </div>
       {families.length === 0 ? (
@@ -251,9 +250,8 @@ const WipedFamiliesListView = ({ families }) => (
             >
               <div className="col-span-3 text-foreground font-bold truncate" title={w.wiped_family_name}>{w.wiped_family_name || '—'}</div>
               <div className="col-span-3 text-primary truncate" title={w.wiped_by_family_name}>{w.wiped_by_family_name || '—'}</div>
-              <div className="col-span-1 text-center text-mutedForeground tabular-nums">{formatNumber(w.player_kills)}</div>
-              <div className="col-span-1 text-center text-mutedForeground tabular-nums">{formatNumber(w.bodyguard_kills)}</div>
-              <div className="col-span-2 text-mutedForeground text-[9px]">{w.wiped_by_in_family ? 'Yes' : 'Solo'}</div>
+              <div className="col-span-2 text-center text-mutedForeground tabular-nums">{formatNumber(w.player_kills)}</div>
+              <div className="col-span-2 text-center text-mutedForeground tabular-nums">{formatNumber(w.bodyguard_kills)}</div>
               <div className="col-span-2 text-right text-mutedForeground tabular-nums">{formatDateTime(w.ended_at)}</div>
             </div>
           ))}
@@ -275,13 +273,10 @@ const WipedFamiliesListView = ({ families }) => (
                 <div className="text-[10px] font-heading font-bold text-foreground truncate">{w.wiped_family_name || '—'}</div>
                 <div className="text-[9px] text-primary mt-0.5">Wiped by {w.wiped_by_family_name || '—'}</div>
               </div>
-              <div className="text-[9px] text-mutedForeground shrink-0">
-                {w.wiped_by_in_family ? 'In family' : 'Solo'}
-              </div>
             </div>
             <div className="flex items-center gap-3 text-[9px] text-mutedForeground">
-              <span><strong className="text-foreground">{formatNumber(w.player_kills)}</strong> kills</span>
-              <span><strong className="text-foreground">{formatNumber(w.bodyguard_kills)}</strong> BG kills</span>
+              <span><strong className="text-foreground">{formatNumber(w.player_kills)}</strong> Killed Family Members</span>
+              <span><strong className="text-foreground">{formatNumber(w.bodyguard_kills)}</strong> Bodyguards Lost</span>
             </div>
             <div className="text-[9px] text-mutedForeground tabular-nums">
               Ended {formatDateTime(w.ended_at)}
