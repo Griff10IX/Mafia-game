@@ -796,17 +796,39 @@ async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_u
     return {"message": "Crew OC join fee updated.", "fee": fee}
 
 
+CREW_OC_TOPIC_WINDOW_MINUTES = 10  # Can create Crew OC topic only when OC is available or within this many mins before
+
+
 async def families_crew_oc_advertise(current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can advertise Crew OC")
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_forum_topic_id": 1})
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "name": 1, "tag": 1, "crew_oc_forum_topic_id": 1, "crew_oc_cooldown_until": 1},
+    )
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     if fam.get("crew_oc_forum_topic_id"):
         raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Go to Forum → Crew OC to find it.")
+    # Only allow when Crew OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
+    cooldown_until = fam.get("crew_oc_cooldown_until")
+    if cooldown_until:
+        try:
+            until = datetime.fromisoformat(str(cooldown_until).replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            window_start = until - timedelta(minutes=CREW_OC_TOPIC_WINDOW_MINUTES)
+            if now < window_start:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"You can only create a Crew OC topic when your Crew OC is available or up to {CREW_OC_TOPIC_WINDOW_MINUTES} minutes before it becomes available.",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     title = f"Crew OC: {fam.get('name')} [{fam.get('tag')}]"

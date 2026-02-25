@@ -1,6 +1,8 @@
 # Forum: topics, comments, views, likes
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+
+CREW_OC_TOPIC_WINDOW_MINUTES = 10  # Can create Crew OC topic only when OC is available or within this many mins before
 import uuid
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
@@ -119,7 +121,7 @@ async def create_topic(
         category = "crew_oc"
         if category not in FORUM_CATEGORIES:
             FORUM_CATEGORIES.append("crew_oc")  # ensure present
-        fam = await db.families.find_one({"id": crew_oc_family_id}, {"_id": 0, "id": 1, "name": 1, "tag": 1})
+        fam = await db.families.find_one({"id": crew_oc_family_id}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "crew_oc_cooldown_until": 1})
         if not fam:
             raise HTTPException(status_code=404, detail="Family not found")
         if current_user.get("family_id") != crew_oc_family_id:
@@ -130,6 +132,22 @@ async def create_topic(
         existing = await db.families.find_one({"id": crew_oc_family_id, "crew_oc_forum_topic_id": {"$exists": True, "$ne": None}}, {"_id": 0, "crew_oc_forum_topic_id": 1})
         if existing and existing.get("crew_oc_forum_topic_id"):
             raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Use that topic or remove the link from family first.")
+        # Crew OC topic only when OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
+        cooldown_until = fam.get("crew_oc_cooldown_until")
+        if cooldown_until:
+            try:
+                until = datetime.fromisoformat(str(cooldown_until).replace("Z", "+00:00"))
+                now = datetime.now(timezone.utc)
+                window_start = until - timedelta(minutes=CREW_OC_TOPIC_WINDOW_MINUTES)
+                if now < window_start:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"You can only create a Crew OC topic when your Crew OC is available or up to {CREW_OC_TOPIC_WINDOW_MINUTES} minutes before it becomes available.",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
     if category not in FORUM_CATEGORIES:
         category = "general"
     if not title:

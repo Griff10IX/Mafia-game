@@ -258,9 +258,9 @@ def register(router):
         if player_side == "O":
             first_cell = random.choice([0, 2, 4, 6, 8])
             board[first_cell] = computer_side
-            turn = "X"
+            turn = "O"  # Computer just moved; now player's turn
         else:
-            turn = "X"
+            turn = "X"  # Player (X) goes first
         new_plays = (plays + [now_iso])[-50:]
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"rps_plays": new_plays}})
         await db.daily_rewards_ttt.insert_one({
@@ -384,6 +384,7 @@ def register(router):
                 next_play_at = (datetime.now(timezone.utc) + timedelta(hours=RPS_WINDOW_HOURS)).isoformat()
         return {
             "board": board,
+            "turn": player_side if result == "ongoing" else None,
             "result": result,
             "money_won": money_won,
             "cars_won": cars_won,

@@ -320,7 +320,7 @@ export default function Bodyguards() {
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
-              <span>Slot hire: 75, 150, 300, 450 pts (robot 1.5×). Buy slot: same cost per slot.</span>
+              <span>Slot hire: 75, 150, 300, 450 pts</span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
