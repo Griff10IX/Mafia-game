@@ -657,15 +657,55 @@ async def melt_cars(
 
 
 # Dealer: buy cars for cash (price = value * multiplier). Custom and exclusive are not for sale.
-# Dealer has limited stock per model; one document in dealer_stock = one car available. Replenishes over time.
-DEALER_PRICE_MULTIPLIER = 1.2
+# Stock per model and price multiplier vary by rarity: rarer = less stock, more overpriced.
 DEALER_EXCLUDED_IDS = {"car_custom", "car20"}
-DEALER_STOCK_MAX_PER_CAR = 2
-DEALER_REPLENISH_INTERVAL_SECONDS = 2 * 3600  # 2 hours
+# Replenish at random intervals so restocks are spread throughout the day
+DEALER_REPLENISH_MIN_SEC = 1 * 3600   # 1 hour
+DEALER_REPLENISH_MAX_SEC = 4 * 3600   # 4 hours
+# Chance to restock this cycle (rarer = less often; sometimes high rarities don't stock)
+DEALER_RESTOCK_CHANCE_BY_RARITY = {
+    "common": 1.0,
+    "uncommon": 0.9,
+    "rare": 0.75,
+    "ultra_rare": 0.5,
+    "legendary": 0.4,
+    "custom": 0.0,
+    "exclusive": 0.0,
+}
+# Max dealer stock per car model by rarity (rarer = scarcer)
+DEALER_STOCK_MAX_BY_RARITY = {
+    "common": 2,
+    "uncommon": 2,
+    "rare": 2,
+    "ultra_rare": 1,
+    "legendary": 1,
+    "custom": 0,
+    "exclusive": 0,
+}
+# Price multiplier by rarity (rarer = more overpriced)
+DEALER_PRICE_MULTIPLIER_BY_RARITY = {
+    "common": 1.35,
+    "uncommon": 1.55,
+    "rare": 1.8,
+    "ultra_rare": 2.1,
+    "legendary": 2.4,
+    "custom": 1.2,
+    "exclusive": 1.2,
+}
+
+
+def _dealer_max_stock(car_info: dict) -> int:
+    r = car_info.get("rarity") or "common"
+    return DEALER_STOCK_MAX_BY_RARITY.get(r, 2)
+
+
+def _dealer_price_multiplier(car_info: dict) -> float:
+    r = car_info.get("rarity") or "common"
+    return DEALER_PRICE_MULTIPLIER_BY_RARITY.get(r, 1.35)
 
 
 async def _ensure_dealer_stock_seeded():
-    """If dealer_stock is empty, seed 2 of each car (except excluded)."""
+    """If dealer_stock is empty, seed stock per car by rarity (except excluded)."""
     n = await db.dealer_stock.count_documents({})
     if n > 0:
         return
@@ -674,7 +714,8 @@ async def _ensure_dealer_stock_seeded():
     for c in CARS:
         if c.get("id") in DEALER_EXCLUDED_IDS:
             continue
-        for _ in range(DEALER_STOCK_MAX_PER_CAR):
+        max_stock = _dealer_max_stock(c)
+        for _ in range(max_stock):
             to_insert.append({"car_id": c["id"], "added_at": now})
     if to_insert:
         await db.dealer_stock.insert_many(to_insert)
@@ -691,7 +732,7 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
         c = next((x for x in CARS if x.get("id") == slot.get("car_id")), None)
         if not c or c.get("id") in DEALER_EXCLUDED_IDS:
             continue
-        price = int(c.get("value", 0) * DEALER_PRICE_MULTIPLIER)
+        price = int(c.get("value", 0) * _dealer_price_multiplier(c))
         min_rank = c.get("min_difficulty", 1)
         out.append({
             **{k: v for k, v in c.items()},
@@ -719,7 +760,7 @@ async def buy_car(
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     if rank_id < car_info.get("min_difficulty", 1):
         raise HTTPException(status_code=400, detail="Rank too low to buy this car")
-    price = int(car_info.get("value", 0) * DEALER_PRICE_MULTIPLIER)
+    price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
     if current_user.get("money", 0) < price:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
     now = datetime.now(timezone.utc)
@@ -1040,7 +1081,7 @@ async def get_view_car(
 
 
 async def run_dealer_replenish_loop():
-    """Every DEALER_REPLENISH_INTERVAL_SECONDS, top up dealer stock so each car_id has up to DEALER_STOCK_MAX_PER_CAR."""
+    """Replenish dealer stock at random intervals; rarer cars sometimes skip a cycle (don't restock)."""
     import server as srv
     await asyncio.sleep(60)  # delay first run after startup
     while True:
@@ -1051,14 +1092,20 @@ async def run_dealer_replenish_loop():
             for c in CARS:
                 if c.get("id") in DEALER_EXCLUDED_IDS:
                     continue
+                r = c.get("rarity") or "common"
+                restock_chance = DEALER_RESTOCK_CHANCE_BY_RARITY.get(r, 0.8)
+                if random.random() > restock_chance:
+                    continue  # skip this car this cycle (high rarities often don't stock)
                 car_id = c["id"]
+                max_stock = _dealer_max_stock(c)
                 count = await db.dealer_stock.count_documents({"car_id": car_id})
-                need = max(0, DEALER_STOCK_MAX_PER_CAR - count)
+                need = max(0, max_stock - count)
                 if need > 0:
                     await db.dealer_stock.insert_many([{"car_id": car_id, "added_at": now} for _ in range(need)])
         except Exception as e:
             logger.exception("Dealer replenish loop: %s", e)
-        await asyncio.sleep(DEALER_REPLENISH_INTERVAL_SECONDS)
+        delay = random.uniform(DEALER_REPLENISH_MIN_SEC, DEALER_REPLENISH_MAX_SEC)
+        await asyncio.sleep(delay)
 
 
 def register(router):
