@@ -1308,32 +1308,27 @@ const StateHeadTab = ({ headOfState, stateHeadIncome }) => {
 // ============================================================================
 
 const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, warHistory, onDetails }) => (
-  <div className="space-y-4">
-    {/* Flavor text */}
-    <div className="text-center py-2 fam-fade-in">
-      <p className="text-[10px] text-zinc-500 font-heading italic leading-relaxed max-w-md mx-auto">
-        "In this world, a man without a family is nothing. You need people you can trust — people who bleed for you."
-      </p>
-    </div>
+  <div className="space-y-2">
+    <p className="text-center text-[10px] text-zinc-500 font-heading italic py-0.5 fam-fade-in">"In this world, a man without a family is nothing."</p>
 
     {/* Establish a Crime Family */}
     <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25 fam-fade-in`} style={{ animationDelay: '0.1s' }}>
-      <div className="px-4 py-3 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
-        <Building2 size={16} className="text-primary" />
+      <div className="px-3 py-2 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
+        <Building2 size={14} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Establish a Crime Family</span>
       </div>
-      <form onSubmit={onCreate} className="p-4 space-y-3">
-        <p className="text-[10px] text-zinc-500 font-heading">Become the Don. Build your empire from nothing, recruit soldiers, run rackets, and make your name feared across every borough.</p>
+      <form onSubmit={onCreate} className="p-3 space-y-2">
+        <p className="text-[10px] text-zinc-500 font-heading">Build your empire: recruit soldiers, run rackets, make your name feared.</p>
         {config?.family_create_cost != null && (
           <p className="text-[10px] font-heading text-primary">Cost: {formatMoney(config.family_create_cost)}</p>
         )}
         <div className="flex gap-2">
           <input type="text" value={createName} onChange={(e) => setCreateName(e.target.value)} placeholder="Family name" maxLength={30}
-            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors" />
+            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors" />
           <input type="text" value={createTag} onChange={(e) => setCreateTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="TAG" maxLength={4}
-            className="w-20 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-sm text-foreground font-heading uppercase text-center focus:border-primary/50 focus:outline-none transition-colors" />
+            className="w-20 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-sm text-foreground font-heading uppercase text-center focus:border-primary/50 focus:outline-none transition-colors" />
         </div>
-        <button type="submit" className="w-full py-3 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all">
+        <button type="submit" className="w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all">
           Found the Family
         </button>
       </form>
@@ -1341,19 +1336,19 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
 
     {/* Swear Allegiance */}
     <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.2s' }}>
-      <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
-        <Users size={16} className="text-primary" />
+      <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
+        <Users size={14} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Swear Allegiance</span>
       </div>
-      <form onSubmit={onJoin} className="p-4 space-y-2">
-        <p className="text-[10px] text-zinc-500 font-heading">Pledge yourself to a family. Work your way up from associate to caporegime — or maybe one day, the Don himself.</p>
+      <form onSubmit={onJoin} className="p-3 space-y-2">
+        <p className="text-[10px] text-zinc-500 font-heading">Pledge to a family. Rise from associate to capo — or one day, the Don.</p>
         <div className="flex gap-2">
           <select value={joinId} onChange={(e) => setJoinId(e.target.value)}
-            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2.5 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors">
+            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors">
             <option value="">Select family...</option>
             {families.map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]</option>)}
           </select>
-          <button type="submit" className="px-5 py-2.5 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all">
+          <button type="submit" className="px-4 py-2 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all">
             Join
           </button>
         </div>
@@ -1362,22 +1357,22 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
 
     {/* Known Families */}
     <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.3s' }}>
-      <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
-        <Building2 size={16} className="text-zinc-400" />
+      <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
+        <Building2 size={14} className="text-zinc-400" />
         <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">Known Families</span>
       </div>
-      <div className="p-3">
+      <div className="p-2">
         <FamiliesTab families={families} myFamilyId={null} />
       </div>
     </div>
 
     {/* Vendettas */}
     <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.4s' }}>
-      <div className="px-4 py-3 flex items-center gap-2 border-b border-zinc-700/30">
-        <Swords size={14} className="text-red-400/70" />
+      <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
+        <Swords size={12} className="text-red-400/70" />
         <span className="text-xs font-heading font-bold text-red-400/70 uppercase tracking-widest">Vendettas</span>
       </div>
-      <div className="p-3">
+      <div className="p-2">
         <WarHistoryTab wars={warHistory ?? []} onDetails={onDetails} />
       </div>
     </div>
@@ -1462,7 +1457,7 @@ export default function FamilyPage() {
   // Handlers — all preserved exactly
   const handleCreate = async (e) => { e.preventDefault(); const name = createName.trim(), tag = createTag.trim().toUpperCase(); if (!name || !tag) { toast.error('Name and tag required'); return; } try { await api.post('/families', { name, tag }); toast.success('Family created!'); setCreateName(''); setCreateTag(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleJoin = async (e) => { e.preventDefault(); if (!joinId) { toast.error('Select a family'); return; } try { await api.post('/families/join', { family_id: joinId }); toast.success('Joined!'); setJoinId(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
-  const handleLeave = async () => { if (!window.confirm('Leave family?')) return; try { await api.post('/families/leave'); toast.success('Left'); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleLeave = async () => { if (!window.confirm('Leave family?')) return; try { const res = await api.post('/families/leave'); if (res.data?.retribution) { toast.warning(`Left family. The family sent a hitman — you were shot and lost ${res.data.health_lost_pct ?? '?'}% health. You survived.`); } else { toast.success('Left'); } refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleKick = async (userId) => { if (!window.confirm('Kick?')) return; try { await api.post('/families/kick', { user_id: userId }); toast.success('Kicked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAssignRole = async (userId, role) => { try { await api.post('/families/assign-role', { user_id: userId, role }); toast.success(`Assigned ${getRoleConfig(role).label}`); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleDeposit = async (e) => { e.preventDefault(); const amount = parseInt(depositAmount.replace(/\D/g, ''), 10); if (!amount) return; try { await api.post('/families/deposit', { amount }); toast.success('Deposited'); setDepositAmount(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
@@ -1540,7 +1535,7 @@ export default function FamilyPage() {
   );
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="families-page">
+    <div className={`space-y-3 ${styles.pageContent}`} data-testid="families-page">
       <style>{`
         @keyframes ready-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb), 0); }
