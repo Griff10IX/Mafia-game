@@ -722,10 +722,8 @@ async def _ensure_dealer_stock_seeded():
 
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
-    """List dealer cars: one row per model with in_stock count. Excludes custom and exclusive."""
+    """List dealer cars: one row per model with in_stock count. Excludes custom and exclusive. Any rank can buy."""
     await _ensure_dealer_stock_seeded()
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    # Count dealer stock per car_id
     pipeline = [{"$group": {"_id": "$car_id", "count": {"$sum": 1}}}]
     counts = await db.dealer_stock.aggregate(pipeline).to_list(100)
     stock_by_car = {d["_id"]: d["count"] for d in counts}
@@ -736,13 +734,11 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
         car_id = c.get("id")
         in_stock = stock_by_car.get(car_id, 0)
         price = int(c.get("value", 0) * _dealer_price_multiplier(c))
-        min_rank = c.get("min_difficulty", 1)
         out.append({
             **{k: v for k, v in c.items()},
             "dealer_price": price,
-            "min_rank": min_rank,
             "in_stock": in_stock,
-            "can_buy": rank_id >= min_rank and in_stock > 0,
+            "can_buy": in_stock > 0,
         })
     return {"cars": out}
 
@@ -760,9 +756,6 @@ async def buy_car(
     result = await db.dealer_stock.delete_one({"car_id": request.car_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=400, detail="That car is out of stock. Dealer restocks in 1–2 hours.")
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    if rank_id < car_info.get("min_difficulty", 1):
-        raise HTTPException(status_code=400, detail="Rank too low to buy this car")
     price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
     if current_user.get("money", 0) < price:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")

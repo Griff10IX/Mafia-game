@@ -110,6 +110,8 @@ export default function BuyCars() {
     const rows = [];
     dealerCars.forEach((c, i) => {
       const inStock = c.in_stock ?? 0;
+      const canBuyFromApi = c.can_buy ?? false;
+      const hasEnoughMoney = (userMoney ?? 0) >= (c.dealer_price ?? 0);
       rows.push({
         id: `dealer:${c.id}:${i}`,
         source: 'dealer',
@@ -120,7 +122,8 @@ export default function BuyCars() {
         owner: 'Dealer',
         rarity: c.rarity || 'common',
         inStock,
-        canBuy: (c.can_buy ?? false) && (userMoney ?? 0) >= (c.dealer_price ?? 0) && inStock > 0,
+        minRank: c.min_rank ?? 1,
+        canBuy: canBuyFromApi && hasEnoughMoney && inStock > 0,
         damage_percent: 0,
       });
     });
@@ -330,14 +333,35 @@ export default function BuyCars() {
               {paginatedVehicles.map((row) => (
                 <tr key={row.id} className={`bc-row transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}>
                   <td className="py-1 pl-1.5 pr-0">
-                    {row.canBuy ? (
-                      <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10">
-                        {selectedIds.has(row.id) ? (
-                          <CheckSquare size={12} className="text-primary" />
-                        ) : (
-                          <Square size={12} className="text-mutedForeground" />
-                        )}
-                      </button>
+                    {row.source === 'dealer' && (row.inStock ?? 0) > 0 ? (
+                      row.canBuy ? (
+                        <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10" title="Select to buy">
+                          {selectedIds.has(row.id) ? (
+                            <CheckSquare size={12} className="text-primary" />
+                          ) : (
+                            <Square size={12} className="text-mutedForeground" />
+                          )}
+                        </button>
+                      ) : (
+                        <span
+                          className="inline-flex items-center justify-center w-5 h-5 rounded border border-amber-500/50 opacity-70 cursor-not-allowed"
+                          title={(userMoney ?? 0) >= (row.price ?? 0) ? `Rank ${row.minRank ?? 1} required to buy` : 'Insufficient funds'}
+                        >
+                          <Square size={12} className="text-amber-500/70" />
+                        </span>
+                      )
+                    ) : row.source === 'listing' ? (
+                      row.canBuy ? (
+                        <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10">
+                          {selectedIds.has(row.id) ? (
+                            <CheckSquare size={12} className="text-primary" />
+                          ) : (
+                            <Square size={12} className="text-mutedForeground" />
+                          )}
+                        </button>
+                      ) : (
+                        <span className="inline-block w-4" title="Insufficient funds" />
+                      )
                     ) : (
                       <span className="inline-block w-4" />
                     )}

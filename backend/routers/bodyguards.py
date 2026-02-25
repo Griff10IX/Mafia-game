@@ -281,8 +281,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         raise HTTPException(status_code=400, detail="Slot already occupied")
     ev = await get_effective_event()
     base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
-    cost = int(base_cost * 1.5) if is_robot else base_cost
-    cost = int(cost * ev.get("bodyguard_cost", 1.0))
+    cost = int(base_cost * ev.get("bodyguard_cost", 1.0))
     if current_user["points"] < cost:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -cost}})
