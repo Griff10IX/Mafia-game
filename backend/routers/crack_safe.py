@@ -9,7 +9,7 @@ from fastapi import Depends, HTTPException
 from server import db, get_current_user, _is_admin, log_activity
 
 SAFE_ENTRY_COST = 5_000_000
-SAFE_JACKPOT_SEED = 100_000_000
+SAFE_JACKPOT_SEED = 5_000_000
 SAFE_JACKPOT_SHARE = 0.90
 SAFE_DIGITS = 5
 SAFE_MIN = 1

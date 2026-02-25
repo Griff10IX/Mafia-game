@@ -1697,7 +1697,20 @@ export default function Layout({ children }) {
               document.addEventListener('pointercancel', onUp);
             }}
           >
-            <LayoutGrid size={26} strokeWidth={2} className="shrink-0" />
+            <div className="flex flex-col items-center justify-center gap-0 leading-none">
+              <LayoutGrid size={22} strokeWidth={2} className="shrink-0" />
+              {(() => {
+                const healthVal = Number(user?.health);
+                const healthNum = Number.isFinite(healthVal) ? Math.max(0, Math.min(100, Math.round(healthVal))) : 100;
+                const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
+                return (
+                  <span className={`font-heading text-[10px] font-bold tabular-nums ${healthColor}`} title="Health">
+                    <Heart size={10} className="inline-block align-middle mr-0.5" />
+                    {healthNum}%
+                  </span>
+                );
+              })()}
+            </div>
             {unreadCount > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 min-w-[20px] h-[20px] rounded-full flex items-center justify-center text-[11px] font-heading font-bold text-white"
