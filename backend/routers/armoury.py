@@ -682,7 +682,7 @@ async def buy_bullets(
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"money": -total_cost, "bullets": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
+        {"$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
     )
     if owner_id:
         await db.users.update_one(

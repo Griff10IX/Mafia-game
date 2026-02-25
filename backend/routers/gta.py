@@ -573,6 +573,7 @@ async def melt_cars(
     total_value = 0
     total_bullets = 0
     deleted_count = 0
+    uncommon_count = 0
     processed = 0
     for car_id in request.car_ids:
         if processed >= limit:
@@ -597,6 +598,8 @@ async def melt_cars(
             model_id = user_car["car_id"]
             car_info = next((c for c in CARS if c["id"] == model_id), None)
             if car_info:
+                if car_info.get("rarity") == "uncommon":
+                    uncommon_count += 1
                 if request.action == "bullets":
                     total_bullets += int(car_info["value"] / 10)
                 else:
@@ -623,7 +626,7 @@ async def melt_cars(
             cooldown_until = now + timedelta(seconds=cooldown_seconds)
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": {"bullets": total_bullets, "bullets_melted": total_bullets, "cars_melted": deleted_count}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
+                {"$inc": {"bullets": total_bullets, "bullets_melted": total_bullets, "cars_melted": deleted_count, "uncommon_cars_scrapped": uncommon_count}, "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()}},
             )
             await log_activity(
                 current_user["id"],
@@ -639,7 +642,7 @@ async def melt_cars(
                 "melt_bullets_cooldown_until": cooldown_until.isoformat(),
             }
         await db.users.update_one(
-            {"id": current_user["id"]}, {"$inc": {"money": total_value, "cars_melted": deleted_count}}
+            {"id": current_user["id"]}, {"$inc": {"money": total_value, "cars_melted": deleted_count, "uncommon_cars_scrapped": uncommon_count}}
         )
         await log_activity(
             current_user["id"],
