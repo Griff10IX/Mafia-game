@@ -163,6 +163,7 @@ def register(router):
                 "avatar_url": None,
                 "jail_busts": 0,
                 "jail_bust_attempts": 0,
+                "jail_busts_npc": 0,
                 "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
                 "total_crimes": 0,
                 "crime_profit": 0,

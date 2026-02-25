@@ -210,7 +210,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
             record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
             rp_before = int(current_user.get("rank_points") or 0)
-            updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
+            updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_busts_npc": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
             if bust_reward_cash > 0:
                 updates["$inc"]["money"] = bust_reward_cash
             await db.users.update_one({"id": current_user["id"]}, updates)

@@ -669,7 +669,7 @@ export default function Missions() {
     );
   }
 
-  const unlocked = data.unlocked_cities || ['Chicago'];
+  const unlocked = data.unlocked_cities || ['Start'];
   const cityMissions = missions.filter(m => m.city === city);
   const orderedCityMissions = [...cityMissions].sort((a, b) => (a.is_boss ? 1 : 0) - (b.is_boss ? 1 : 0) || a.order - b.order);
   const currentMission = orderedCityMissions.find(m => !m.completed && m.unlocked) ?? null;
@@ -710,7 +710,7 @@ export default function Missions() {
           <BookOpen size={18} className="text-primary" />
           <h1 className="text-base font-heading font-bold text-foreground tracking-wide">Missions</h1>
         </div>
-        <p className="text-[10px] text-mutedForeground italic">Complete jobs in order. Earn tribute. Report to the boss when the city is yours.</p>
+        <p className="text-[10px] text-mutedForeground italic">Prove yourself: commit 15 crimes and bust 1 NPC from jail. Earn tribute and claim your reward.</p>
       </div>
 
       {/* Current mission strip – Mission X of Y */}

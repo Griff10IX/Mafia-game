@@ -21,8 +21,10 @@ from server import (
 )
 from routers.booze_run import BOOZE_TYPES
 
-# City order for map progression (same as STATES)
-CITY_ORDER = list(STATES) if STATES else ["Chicago", "New York", "Las Vegas", "Atlantic City"]
+# Single first mission: no districts/cities
+FIRST_MISSION_ID = "m_first"
+COMMON_CAR_REWARD_ID = "car1"
+CITY_ORDER = ["Start"]  # single "city" for list/map compatibility
 
 # Daily tribute deposit: hour (0–23) in UTC when tribute enters the bank each day (e.g. territory cut).
 # Mission completion rewards still add to tribute_bank immediately; this is for daily scheduled deposit.
@@ -47,585 +49,27 @@ def _next_tribute_deposit_utc():
     return next_at.isoformat(), time_label
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MISSION DEFINITIONS
-#
-# Requirement types:
-#   crimes           – cumulative total_crimes on user
-#   crime_profit     – cumulative crime_profit on user
-#   hitlist_npc_kills– cumulative hitlist_npc_kills on user
-#   gta              – cumulative total_gta on user
-#   jail_busts       – cumulative jail_busts on user
-#   booze_sells      – cumulative booze_runs_count on user
-#   rank_id          – current rank id (from rank_points)
-#   money_earned     – cumulative total_money_earned on user (NOT current balance!)
-#   complete_missions– list of mission ids that must be completed (boss missions only)
-#
-# NOTE: earn_money was renamed to money_earned and now checks total_money_earned
-# (a cumulative counter) instead of current balance. This prevents missions from
-# becoming impossible if the player spends their money.
-#
-# Boss missions are the ONLY missions that depend on other missions being done first.
-# Every other mission only checks cumulative player stats and can be attempted
-# in any order, in parallel, without blocking each other.
+# MISSION DEFINITIONS – single first mission (no districts)
+# Requirements: crimes (total_crimes), jail_busts_npc (bust 1 NPC from jail)
 # ─────────────────────────────────────────────────────────────────────────────
 
 MISSIONS = [
-    # ── CHICAGO ──────────────────────────────────────────────────────────────
-    # Districts: The Loop, South Side, West Side, North Side, Near North, Stockyards
     {
-        "id": "m_chicago_start",
-        "city": "Chicago",
-        "area": "The Loop",
+        "id": FIRST_MISSION_ID,
+        "city": "Start",
+        "area": "—",
         "order": 0,
         "type": "starter",
-        "requirements": {"crimes": 0},
-        "title": "Meet the Fixer",
-        "description": "The outfit runs this city. Report to the Fixer in The Loop — he'll put you to work.",
-        "reward_money": 100,
-        "reward_points": 2,
+        "requirements": {"crimes": 15, "jail_busts_npc": 1},
+        "title": "Prove Yourself",
+        "description": "Commit 15 crimes and bust 1 NPC from jail. The outfit wants to see what you're made of.",
+        "reward_money": 50_000,
+        "reward_points": 50,
+        "reward_car_id": COMMON_CAR_REWARD_ID,
         "difficulty": 1,
         "unlocks_city": None,
-        "character_id": "char_chicago_fixer",
-        "is_boss": False,
-    },
-    {
-        "id": "m_chicago_crimes",
-        "city": "Chicago",
-        "area": "The Loop",
-        "order": 1,
-        "type": "crime_count",
-        "requirements": {"crimes": 5},
-        "title": "Prove Your Nerve",
-        "description": "Commit 5 crimes. The outfit wants to see you can handle the heat.",
-        "reward_money": 500,
-        "reward_points": 10,
-        "difficulty": 2,
-        "unlocks_city": None,
-        "character_id": "char_chicago_fixer",
-        "is_boss": False,
-    },
-    {
-        "id": "m_chicago_earn",
-        "city": "Chicago",
-        "area": "West Side",
-        "order": 2,
-        "type": "money_earned",
-        "requirements": {"money_earned": 1000},
-        "title": "Show Me the Money",
-        "description": "Earn $1,000 total from crimes. The Bookkeeper wants to see you can make it rain.",
-        "reward_money": 300,
-        "reward_points": 5,
-        "difficulty": 3,
-        "unlocks_city": None,
-        "character_id": "char_chicago_bookkeeper",
-        "is_boss": False,
-    },
-    {
-        "id": "m_chicago_attacks",
-        "city": "Chicago",
-        "area": "South Side",
-        "order": 3,
-        "type": "hitlist_npc_kills",
-        "requirements": {"hitlist_npc_kills": 2},
-        "title": "Collect a Debt",
-        "description": "Kill 2 hitlist NPCs. Add them from the Hitlist, then take them out. Someone's behind on a debt.",
-        "reward_money": 400,
-        "reward_points": 8,
-        "difficulty": 4,
-        "unlocks_city": None,
-        "character_id": "char_chicago_enforcer",
-        "is_boss": False,
-    },
-    {
-        "id": "m_chicago_north",
-        "city": "Chicago",
-        "area": "North Side",
-        "order": 4,
-        "type": "crime_count",
-        "requirements": {"crimes": 8},
-        "title": "North Side Heat",
-        "description": "Run 8 jobs up north. They need to know who runs this town.",
-        "reward_money": 450,
-        "reward_points": 8,
-        "difficulty": 4,
-        "unlocks_city": None,
         "character_id": None,
         "is_boss": False,
-    },
-    {
-        "id": "m_chicago_near_north",
-        "city": "Chicago",
-        "area": "Near North",
-        "order": 5,
-        "type": "money_earned",
-        "requirements": {"money_earned": 2500},
-        "title": "Near North Take",
-        "description": "Earn $2,500 total. The big players are watching.",
-        "reward_money": 600,
-        "reward_points": 10,
-        "difficulty": 5,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_chicago_stockyards",
-        "city": "Chicago",
-        "area": "Stockyards",
-        "order": 6,
-        "type": "hitlist_npc_kills",
-        "requirements": {"hitlist_npc_kills": 4},
-        "title": "Stockyards Muscle",
-        "description": "Kill 4 hitlist NPCs from the Hitlist. Show them we own the yards.",
-        "reward_money": 550,
-        "reward_points": 9,
-        "reward_bullets": 50,
-        "difficulty": 5,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        # BOSS: only unlocks after all 7 Chicago missions complete
-        "id": "m_chicago_boss",
-        "city": "Chicago",
-        "area": "The Loop",
-        "order": 99,
-        "type": "special",
-        "requirements": {
-            "complete_missions": [
-                "m_chicago_start", "m_chicago_crimes", "m_chicago_earn",
-                "m_chicago_attacks", "m_chicago_north", "m_chicago_near_north",
-                "m_chicago_stockyards",
-            ],
-            "complete_missions_min_count": 7,  # ALL 7 must be done
-        },
-        "title": "See the Old Man",
-        "description": "Complete every job across Chicago. The Old Man doesn't see just anyone — finish the list first, then report to him for your ticket to New York.",
-        "reward_money": 1000,
-        "reward_points": 20,
-        "difficulty": 9,
-        "unlocks_city": "New York",
-        "character_id": "char_chicago_boss",
-        "is_boss": True,
-    },
-
-    # ── NEW YORK ──────────────────────────────────────────────────────────────
-    # Districts: Financial District, Chinatown, Greenwich Village, Midtown,
-    #            Upper West Side, Upper East Side, Harlem, Bronx, Brooklyn Heights,
-    #            Williamsburg, Queens, Staten Island
-    {
-        "id": "m_ny_smuggle",
-        "city": "New York",
-        "area": "Brooklyn Heights",
-        "order": 1,
-        "type": "booze_sells",
-        "requirements": {"booze_sells": 3},
-        "title": "Run the Route",
-        "description": "Complete 3 booze run deliveries. We need a driver who doesn't ask questions.",
-        "reward_money": 600,
-        "reward_points": 12,
-        "reward_booze": {"bathtub_gin": 15, "moonshine": 10},
-        "difficulty": 3,
-        "unlocks_city": None,
-        "character_id": "char_ny_smuggler",
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_busts",
-        "city": "New York",
-        "area": "Financial District",
-        "order": 2,
-        "type": "jail_busts",
-        "requirements": {"jail_busts": 2},
-        "title": "Spring Him",
-        "description": "Bust 2 players or NPCs out of jail. The Mouthpiece needs them on the street.",
-        "reward_money": 500,
-        "reward_points": 10,
-        "difficulty": 4,
-        "unlocks_city": None,
-        "character_id": "char_ny_mouthpiece",
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_gta",
-        "city": "New York",
-        "area": "Williamsburg",
-        "order": 3,
-        "type": "gta_count",
-        "requirements": {"gta": 3},
-        "title": "Three Cars by Friday",
-        "description": "Steal 3 cars. The Mechanic needs wheels.",
-        "reward_money": 700,
-        "reward_points": 14,
-        "reward_car_id": "car2",
-        "difficulty": 4,
-        "unlocks_city": None,
-        "character_id": "char_ny_mechanic",
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_chinatown",
-        "city": "New York",
-        "area": "Chinatown",
-        "order": 4,
-        "type": "crime_count",
-        "requirements": {"crimes": 10},
-        "title": "Chinatown Run",
-        "description": "Ten jobs in Chinatown. Keep the tongs in line.",
-        "reward_money": 650,
-        "reward_points": 12,
-        "difficulty": 5,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_greenwich",
-        "city": "New York",
-        "area": "Greenwich Village",
-        "order": 5,
-        "type": "money_earned",
-        "requirements": {"money_earned": 3000},
-        "title": "Village Vig",
-        "description": "Earn $3,000 total. The artists pay up or they leave.",
-        "reward_money": 700,
-        "reward_points": 12,
-        "difficulty": 5,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_upper_west",
-        "city": "New York",
-        "area": "Upper West Side",
-        "order": 6,
-        "type": "jail_busts",
-        "requirements": {"jail_busts": 3},
-        "title": "West Side Spring",
-        "description": "Bust 3 out of jail. The Upper West needs our people back.",
-        "reward_money": 600,
-        "reward_points": 11,
-        "difficulty": 5,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_upper_east",
-        "city": "New York",
-        "area": "Upper East Side",
-        "order": 7,
-        "type": "crime_count",
-        "requirements": {"crimes": 12},
-        "title": "East Side Take",
-        "description": "Twelve jobs on the Upper East. The money's there if you're bold.",
-        "reward_money": 800,
-        "reward_points": 14,
-        "difficulty": 6,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_harlem",
-        "city": "New York",
-        "area": "Harlem",
-        "order": 8,
-        "type": "hitlist_npc_kills",
-        "requirements": {"hitlist_npc_kills": 5},
-        "title": "Harlem Rules",
-        "description": "Kill 5 hitlist NPCs from the Hitlist. Show them who runs the numbers.",
-        "reward_money": 750,
-        "reward_points": 13,
-        "difficulty": 6,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_bronx",
-        "city": "New York",
-        "area": "Bronx",
-        "order": 9,
-        "type": "gta_count",
-        "requirements": {"gta": 5},
-        "title": "Bronx Wheels",
-        "description": "Steal 5 cars in the Bronx. The Mechanic's buyers are waiting.",
-        "reward_money": 850,
-        "reward_points": 14,
-        "difficulty": 6,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_queens",
-        "city": "New York",
-        "area": "Queens",
-        "order": 10,
-        "type": "booze_sells",
-        "requirements": {"booze_sells": 5},
-        "title": "Queens Delivery",
-        "description": "Five booze runs into Queens. The route's hot but the payoff's worth it.",
-        "reward_money": 900,
-        "reward_points": 15,
-        "difficulty": 7,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_ny_staten",
-        "city": "New York",
-        "area": "Staten Island",
-        "order": 11,
-        "type": "money_earned",
-        "requirements": {"money_earned": 5000},
-        "title": "Staten Island Score",
-        "description": "Earn $5,000 total. Quiet but profitable.",
-        "reward_money": 950,
-        "reward_points": 16,
-        "difficulty": 7,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        # BOSS: requires 8 of 11 NY missions (player can skip 3 harder ones)
-        "id": "m_ny_boss",
-        "city": "New York",
-        "area": "Midtown",
-        "order": 99,
-        "type": "special",
-        "requirements": {
-            "complete_missions": [
-                "m_ny_smuggle", "m_ny_busts", "m_ny_gta", "m_ny_chinatown",
-                "m_ny_greenwich", "m_ny_upper_west", "m_ny_upper_east",
-                "m_ny_harlem", "m_ny_bronx", "m_ny_queens", "m_ny_staten",
-            ],
-            "complete_missions_min_count": 8,  # 8 of 11 — some flexibility
-        },
-        "title": "NY Boss",
-        "description": "Prove yourself across New York. Report to the NY Boss when 8 district jobs are done — he'll get you to Vegas.",
-        "reward_money": 1500,
-        "reward_points": 25,
-        "difficulty": 9,
-        "unlocks_city": "Las Vegas",
-        "character_id": "char_ny_boss",
-        "is_boss": True,
-    },
-
-    # ── LAS VEGAS ─────────────────────────────────────────────────────────────
-    # Districts: The Strip, Downtown, Paradise, Summerlin, Henderson,
-    #            North Las Vegas, Arts District, Boulder Strip
-    {
-        "id": "m_vegas_earn",
-        "city": "Las Vegas",
-        "area": "Summerlin",
-        "order": 1,
-        "type": "money_earned",
-        "requirements": {"money_earned": 10000},
-        "title": "Earn Your Share",
-        "description": "Earn $10,000 total. We're building something big out here.",
-        "reward_money": 1000,
-        "reward_points": 15,
-        "difficulty": 4,
-        "unlocks_city": None,
-        "character_id": "char_vegas_builder",
-        "is_boss": False,
-    },
-    {
-        "id": "m_vegas_crimes",
-        "city": "Las Vegas",
-        "area": "The Strip",
-        "order": 2,
-        "type": "crime_count",
-        "requirements": {"crimes": 15},
-        "title": "High Stakes",
-        "description": "Commit 15 crimes. The house always wins — unless you're with us.",
-        "reward_money": 800,
-        "reward_points": 12,
-        "difficulty": 6,
-        "unlocks_city": None,
-        "character_id": "char_vegas_gambler",
-        "is_boss": False,
-    },
-    {
-        "id": "m_vegas_paradise",
-        "city": "Las Vegas",
-        "area": "Paradise",
-        "order": 3,
-        "type": "crime_profit",
-        "requirements": {"crime_profit": 8000},
-        "title": "Paradise Take",
-        "description": "Earn $8,000 total from crimes. The strip's shadow pays well.",
-        "reward_money": 1100,
-        "reward_points": 14,
-        "difficulty": 6,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_vegas_henderson",
-        "city": "Las Vegas",
-        "area": "Henderson",
-        "order": 4,
-        "type": "crime_count",
-        "requirements": {"crimes": 20},
-        "title": "Henderson Heat",
-        "description": "Twenty jobs in Henderson. They need to know the outfit runs the valley.",
-        "reward_money": 1200,
-        "reward_points": 15,
-        "difficulty": 7,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_vegas_north",
-        "city": "Las Vegas",
-        "area": "North Las Vegas",
-        "order": 5,
-        "type": "hitlist_npc_kills",
-        "requirements": {"hitlist_npc_kills": 6},
-        "title": "North Vegas Muscle",
-        "description": "Kill 6 hitlist NPCs from the Hitlist. Rough territory but we're taking it.",
-        "reward_money": 1000,
-        "reward_points": 13,
-        "difficulty": 6,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_vegas_arts",
-        "city": "Las Vegas",
-        "area": "Arts District",
-        "order": 6,
-        "type": "crime_profit",
-        "requirements": {"crime_profit": 6000},
-        "title": "Arts District Score",
-        "description": "Pull in $6,000 total from crime. The galleries have deep pockets.",
-        "reward_money": 950,
-        "reward_points": 12,
-        "difficulty": 5,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_vegas_boulder",
-        "city": "Las Vegas",
-        "area": "Boulder Strip",
-        "order": 7,
-        "type": "money_earned",
-        "requirements": {"money_earned": 25000},
-        "title": "Boulder Strip Bank",
-        "description": "Earn $25,000 total. The Boulder crowd plays for keeps.",
-        "reward_money": 1500,
-        "reward_points": 16,
-        "difficulty": 7,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        # BOSS: requires 5 of 7 Vegas missions
-        "id": "m_vegas_boss",
-        "city": "Las Vegas",
-        "area": "Downtown",
-        "order": 99,
-        "type": "special",
-        "requirements": {
-            "complete_missions": [
-                "m_vegas_earn", "m_vegas_crimes", "m_vegas_paradise",
-                "m_vegas_henderson", "m_vegas_north", "m_vegas_arts", "m_vegas_boulder",
-            ],
-            "complete_missions_min_count": 5,  # 5 of 7
-        },
-        "title": "Vegas Boss",
-        "description": "Five jobs across Vegas done. The Boss will see you now — and if you impress him, Atlantic City is next.",
-        "reward_money": 2000,
-        "reward_points": 30,
-        "difficulty": 9,
-        "unlocks_city": "Atlantic City",
-        "character_id": "char_vegas_boss",
-        "is_boss": True,
-    },
-
-    # ── ATLANTIC CITY ─────────────────────────────────────────────────────────
-    # Districts: Boardwalk, Marina District, Inlet, Chelsea
-    {
-        "id": "m_ac_rank",
-        "city": "Atlantic City",
-        "area": "Boardwalk",
-        "order": 1,
-        "type": "rank",
-        "requirements": {"rank_id": 3},
-        "title": "Prove You're Made",
-        "description": "Reach Hustler rank. Last stop — show the Shore Boss you're made.",
-        "reward_money": 1500,
-        "reward_points": 20,
-        "difficulty": 7,
-        "unlocks_city": None,
-        "character_id": "char_ac_shore_boss",
-        "is_boss": False,
-    },
-    {
-        "id": "m_ac_busts",
-        "city": "Atlantic City",
-        "area": "Marina District",
-        "order": 2,
-        "type": "jail_busts",
-        "requirements": {"jail_busts": 5},
-        "title": "Keep the Heat Off",
-        "description": "Bust 5 people out of jail. Pay the right people, keep the law off our backs.",
-        "reward_money": 1200,
-        "reward_points": 18,
-        "difficulty": 7,
-        "unlocks_city": None,
-        "character_id": "char_ac_cop",
-        "is_boss": False,
-    },
-    {
-        "id": "m_ac_inlet",
-        "city": "Atlantic City",
-        "area": "Inlet",
-        "order": 3,
-        "type": "crime_count",
-        "requirements": {"crimes": 18},
-        "title": "Inlet Jobs",
-        "description": "Eighteen jobs in the Inlet. The docks are ours.",
-        "reward_money": 1100,
-        "reward_points": 16,
-        "difficulty": 6,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        # BOSS: requires all 3 AC missions
-        "id": "m_ac_commission",
-        "city": "Atlantic City",
-        "area": "Chelsea",
-        "order": 99,
-        "type": "special",
-        "requirements": {
-            "complete_missions": ["m_ac_rank", "m_ac_busts", "m_ac_inlet"],
-            "complete_missions_min_count": 3,  # ALL 3 must be done
-        },
-        "title": "The Commission",
-        "description": "All three district jobs on the shore are done. You've earned your seat at the table — report to the Commission in Chelsea.",
-        "reward_money": 3000,
-        "reward_points": 50,
-        "difficulty": 10,
-        "unlocks_city": None,
-        "character_id": "char_ac_commission",
-        "is_boss": True,
-    },
 ]
 
 # Lookup mission id -> title
@@ -635,78 +79,7 @@ MISSION_ID_TO_TITLE = {m["id"]: m["title"] for m in MISSIONS}
 # CHARACTERS
 # ─────────────────────────────────────────────────────────────────────────────
 
-MISSION_CHARACTERS = [
-    {"id": "char_chicago_fixer", "name": "The Fixer", "city": "Chicago", "area": "The Loop", "role": "fixer",
-     "dialogue_intro": "The outfit's always looking for reliable people. You want in? Show me what you can do.",
-     "dialogue_mission_offer": "Commit five jobs. No questions. Come back when it's done.",
-     "dialogue_in_progress": "Come back when it's done.",
-     "dialogue_complete": "You're good. Go see the Bookkeeper on the West Side — he'll have more work."},
-    {"id": "char_chicago_bookkeeper", "name": "The Bookkeeper", "city": "Chicago", "area": "West Side", "role": "bookkeeper",
-     "dialogue_intro": "I don't care about names. I care about numbers. Show me you can make money.",
-     "dialogue_mission_offer": "Earn a grand from the street. Bring the vig. Then we talk.",
-     "dialogue_in_progress": "No vig, no talk. Get to work.",
-     "dialogue_complete": "You'll do. The Enforcer on the South Side needs someone with nerve. Go."},
-    {"id": "char_chicago_enforcer", "name": "The Enforcer", "city": "Chicago", "area": "South Side", "role": "enforcer",
-     "dialogue_intro": "Someone's behind on a debt. I need a reminder delivered. You in?",
-     "dialogue_mission_offer": "Win two fights. No excuses. Then the Old Man might see you.",
-     "dialogue_in_progress": "Two. Not one. Come back when you're done.",
-     "dialogue_complete": "You've got a mean streak. The Old Man wants to see you. The Loop."},
-    {"id": "char_chicago_boss", "name": "The Old Man", "city": "Chicago", "area": "The Loop", "role": "boss",
-     "dialogue_intro": "You've done good work. Finish everything across the city and I'll get you a ticket to New York.",
-     "dialogue_mission_offer": "All seven jobs. Every district. Come back when the ledger's clean.",
-     "dialogue_in_progress": "Not yet. Finish the list. All of it.",
-     "dialogue_complete": "You're ready. New York's waiting. Don't disappoint me."},
-    {"id": "char_ny_smuggler", "name": "The Smuggler", "city": "New York", "area": "Brooklyn Heights", "role": "smuggler",
-     "dialogue_intro": "We need a driver. Run the route, don't ask questions. You in?",
-     "dialogue_mission_offer": "Three deliveries. Booze. Get it done.",
-     "dialogue_in_progress": "Run the route. Come back when you're done.",
-     "dialogue_complete": "Good. The Mouthpiece might have work for you."},
-    {"id": "char_ny_mouthpiece", "name": "The Mouthpiece", "city": "New York", "area": "Financial District", "role": "mouthpiece",
-     "dialogue_intro": "One of ours is in the can. I need him out. You do the heavy lifting.",
-     "dialogue_mission_offer": "Bust two out. Jail. You know the drill.",
-     "dialogue_in_progress": "Two. Then we talk.",
-     "dialogue_complete": "The Mechanic needs wheels. Williamsburg. Go."},
-    {"id": "char_ny_mechanic", "name": "The Mechanic", "city": "New York", "area": "Williamsburg", "role": "mechanic",
-     "dialogue_intro": "We need three cars by Friday. Clean jobs. You in?",
-     "dialogue_mission_offer": "Steal three cars. Bring them in. That's it.",
-     "dialogue_in_progress": "Three cars. Friday.",
-     "dialogue_complete": "You're solid. The Boss wants to see you. Midtown."},
-    {"id": "char_ny_boss", "name": "NY Boss", "city": "New York", "area": "Midtown", "role": "boss",
-     "dialogue_intro": "Vegas is next. Do eight jobs across the boroughs first.",
-     "dialogue_mission_offer": "Eight districts. Then I'll look at you.",
-     "dialogue_in_progress": "Not enough. Keep working.",
-     "dialogue_complete": "You're ready for Vegas. Don't look back."},
-    {"id": "char_vegas_builder", "name": "The Builder", "city": "Las Vegas", "area": "Summerlin", "role": "builder",
-     "dialogue_intro": "We're putting something big out here. Earn your share.",
-     "dialogue_mission_offer": "Earn ten grand. Show me you're serious.",
-     "dialogue_in_progress": "Ten thousand. Then we talk.",
-     "dialogue_complete": "The Gambler has more work. The Strip."},
-    {"id": "char_vegas_gambler", "name": "The Gambler", "city": "Las Vegas", "area": "The Strip", "role": "gambler",
-     "dialogue_intro": "The house always wins. Unless you're with us. Prove it.",
-     "dialogue_mission_offer": "Fifteen jobs. Crimes. Then the Boss sees you.",
-     "dialogue_in_progress": "Fifteen. No less.",
-     "dialogue_complete": "You're in. The Boss. Downtown."},
-    {"id": "char_vegas_boss", "name": "Vegas Boss", "city": "Las Vegas", "area": "Downtown", "role": "boss",
-     "dialogue_intro": "Atlantic City's the last stop. Finish five jobs here first.",
-     "dialogue_mission_offer": "Five district jobs. Then I'll get you to the shore.",
-     "dialogue_in_progress": "Not yet.",
-     "dialogue_complete": "Atlantic City. The Shore Boss is waiting."},
-    {"id": "char_ac_shore_boss", "name": "The Shore Boss", "city": "Atlantic City", "area": "Boardwalk", "role": "shore_boss",
-     "dialogue_intro": "Last stop. Prove you're made.",
-     "dialogue_mission_offer": "Reach Hustler. Then we talk.",
-     "dialogue_in_progress": "Hustler. That's the bar.",
-     "dialogue_complete": "You're made. The Cop in the Marina District has one more test. Then the Commission."},
-    {"id": "char_ac_cop", "name": "The Corrupt Cop", "city": "Atlantic City", "area": "Marina District", "role": "cop",
-     "dialogue_intro": "Keep the heat off. Pay the right people. Bust five out of jail.",
-     "dialogue_mission_offer": "Bust five. Then the Commission will see you.",
-     "dialogue_in_progress": "Five busts. Go.",
-     "dialogue_complete": "You're in. The Commission. They're waiting."},
-    {"id": "char_ac_commission", "name": "The Commission", "city": "Atlantic City", "area": "Chelsea", "role": "boss",
-     "dialogue_intro": "All the shore jobs are done. Finish the list and you're one of us.",
-     "dialogue_mission_offer": "All three. Shore Boss, Cop, the Inlet. Then come to me.",
-     "dialogue_in_progress": "Not yet. Finish the list.",
-     "dialogue_complete": "You're made. Welcome to the Commission."},
-]
+MISSION_CHARACTERS = []
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -714,14 +87,8 @@ MISSION_CHARACTERS = [
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _user_unlocked_cities(user: dict) -> List[str]:
-    """Return list of cities the user has unlocked (in order). Default: Chicago only."""
-    up_to = (user.get("unlocked_maps_up_to") or "").strip() or "Chicago"
-    out = []
-    for c in CITY_ORDER:
-        out.append(c)
-        if c == up_to:
-            break
-    return out
+    """Single first mission: no city progression."""
+    return ["Start"]
 
 
 def _user_completed_mission_ids(user: dict) -> set:
@@ -766,6 +133,8 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
         return int(user.get("total_gta") or 0)
     if req_key == "jail_busts":
         return int(user.get("jail_busts") or 0)
+    if req_key == "jail_busts_npc":
+        return int(user.get("jail_busts_npc") or 0)
     if req_key == "rank_id":
         rp = int(user.get("rank_points") or 0)
         mult = float(user.get("prestige_rank_multiplier") or 1.0)
@@ -807,32 +176,37 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             progress["description"] = f"{len(done)}/{progress['target']} missions complete"
         return met, progress
 
+    # Multiple simple requirements: all must be met (e.g. crimes + jail_busts_npc)
+    met_count = 0
+    parts = []
     for key, target in req.items():
         current = _get_user_progress_value(user, key)
+        met = current >= target
+        if met:
+            met_count += 1
         if key == "rank_id":
             rank_name = next((r["name"] for r in RANKS if r["id"] == target), str(target))
-            progress = {"current": current, "target": target, "description": f"Reach {rank_name}"}
+            parts.append(f"Reach {rank_name}: {current}/{target}" if not met else f"Reach {rank_name}: done")
         elif key == "hitlist_npc_kills":
-            progress = {"current": current, "target": target, "description": f"{current}/{target} hitlist NPC kills"}
+            parts.append(f"{current}/{target} hitlist NPC kills")
         elif key == "money_earned":
-            progress = {"current": current, "target": target, "description": f"${current:,} / ${target:,} earned total"}
+            parts.append(f"${current:,} / ${target:,} earned")
         elif key == "booze_sells":
-            progress = {"current": current, "target": target, "description": f"{current}/{target} booze runs"}
+            parts.append(f"{current}/{target} booze runs")
         elif key == "jail_busts":
-            progress = {"current": current, "target": target, "description": f"{current}/{target} jail busts"}
+            parts.append(f"{current}/{target} jail busts")
+        elif key == "jail_busts_npc":
+            parts.append(f"Bust 1 NPC from jail: {current}/1")
         elif key == "gta":
-            progress = {"current": current, "target": target, "description": f"{current}/{target} cars stolen"}
+            parts.append(f"{current}/{target} cars stolen")
         elif key == "crimes":
-            progress = {"current": current, "target": target, "description": f"{current}/{target} crimes"}
+            parts.append(f"{current}/{target} crimes")
         elif key == "crime_profit":
-            progress = {"current": current, "target": target, "description": f"${current:,} / ${target:,} crime profit"}
+            parts.append(f"${current:,} / ${target:,} crime profit")
         else:
-            progress = {"current": current, "target": target, "description": f"{current}/{target}"}
-        met = current >= target
-        return met, progress
-
-    # starter type — always met
-    return True, {"current": 0, "target": 0, "description": "Always available"}
+            parts.append(f"{current}/{target}")
+    progress = {"current": met_count, "target": len(req), "description": " · ".join(parts)}
+    return met_count >= len(req), progress
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -876,21 +250,25 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "requirements_met": requirements_met_final,
             "progress": progress,
         })
-    missions_out.sort(key=lambda x: (
-        CITY_ORDER.index(x["city"]) if x["city"] in CITY_ORDER else 999,
-        # Boss missions always sort last within their city
-        1 if x.get("is_boss") else 0,
-        x["order"],
-    ))
+    missions_out.sort(key=lambda x: (CITY_ORDER.index(x["city"]) if x["city"] in CITY_ORDER else 999, 1 if x.get("is_boss") else 0, x["order"]))
+    # Send inbox notification once: "Prove yourself" mission offer (if not yet completed and not yet sent)
+    completed_ids = _user_completed_mission_ids(current_user)
+    if FIRST_MISSION_ID not in completed_ids and not current_user.get("first_mission_notification_sent"):
+        await send_notification(
+            current_user["id"],
+            "Prove Yourself",
+            "The outfit wants to see what you're made of. Commit 15 crimes and bust 1 NPC from jail. Reward: $50,000, 1 common car, and 50 rank points. Check Missions to track progress and claim your reward.",
+            "system",
+            category="missions",
+        )
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"first_mission_notification_sent": True}})
     return {"missions": missions_out, "unlocked_cities": unlocked}
 
 
 async def get_missions_map(current_user: dict = Depends(get_current_user)):
-    """Map state: current city, unlocked cities, areas and missions per city."""
+    """Map state: current city, unlocked cities, areas and missions per city (single mission, no districts)."""
     unlocked = _user_unlocked_cities(current_user)
-    current_city = (current_user.get("current_state") or "").strip() or "Chicago"
-    if current_city not in CITY_ORDER:
-        current_city = CITY_ORDER[0] if CITY_ORDER else "Chicago"
+    current_city = "Start"
     completed_ids = _user_completed_mission_ids(current_user)
     by_city = {}
     for m in MISSIONS:
