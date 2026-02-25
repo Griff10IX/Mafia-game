@@ -29,6 +29,8 @@ CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
 AUTO_RANK_COST_POINTS = 200  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
 BULLET_PACKS = {5000: 500, 10000: 1000, 50000: 5000, 100000: 10000}
 CUSTOM_CAR_COST = 500
+BUY_HEALTH_COST_POINTS = 15
+FULL_HEALTH = 100
 
 
 class CustomCarPurchase(BaseModel):
@@ -159,6 +161,20 @@ async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
     }
 
 
+async def buy_health(current_user: dict = Depends(get_current_user)):
+    """Restore health to 100% for 15 points."""
+    if (current_user.get("points") or 0) < BUY_HEALTH_COST_POINTS:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {BUY_HEALTH_COST_POINTS})")
+    current_health = float(current_user.get("health", FULL_HEALTH))
+    if current_health >= FULL_HEALTH:
+        raise HTTPException(status_code=400, detail="You already have full health")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -BUY_HEALTH_COST_POINTS}, "$set": {"health": FULL_HEALTH}}
+    )
+    return {"message": "Full health restored!", "health": FULL_HEALTH, "cost": BUY_HEALTH_COST_POINTS}
+
+
 async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
     if current_user["points"] < CUSTOM_CAR_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -199,4 +215,5 @@ def register(router):
     router.add_api_route("/store/upgrade-garage-batch", upgrade_garage_batch_limit, methods=["POST"])
     router.add_api_route("/store/buy-booze-capacity", buy_booze_capacity, methods=["POST"])
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
+    router.add_api_route("/store/buy-health", buy_health, methods=["POST"])
     router.add_api_route("/store/buy-custom-car", buy_custom_car, methods=["POST"])

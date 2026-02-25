@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot } from 'lucide-react';
+import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -27,6 +27,7 @@ const BULLET_PACKS = [
 ];
 
 const UPGRADES = [
+  { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: 200, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_enabled', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
@@ -249,7 +250,7 @@ export default function Store() {
           {UPGRADES.map((u) => {
             const owned = u.ownedKey && user?.[u.ownedKey];
             const extra = u.extra?.(user, boozeConfig);
-            const disabled = u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max;
+            const disabled = (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) || (u.id === 'health' && Number(user?.health ?? 100) >= 100);
             return (
               <StoreCard
                 key={u.id}
