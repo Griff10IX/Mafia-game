@@ -682,6 +682,11 @@ async def families_join(request: FamilyJoinRequest, current_user: dict = Depends
     return {"message": "Joined family"}
 
 
+RETRIBUTION_CHANCE = 0.5  # 50% chance family sends a hitman when you leave
+RETRIBUTION_MAX_HEALTH_LOSS_PCT = 0.5  # Lose up to 50% of current health (you don't die)
+MIN_HEALTH_PCT = 1  # Health can never drop below 1% (e.g. if user leaves multiple families in a row)
+
+
 async def families_leave(current_user: dict = Depends(get_current_user)):
     family_id = current_user.get("family_id")
     if not family_id:
@@ -693,6 +698,22 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
     await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": None, "family_role": None}})
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
+
+    # 50% chance of retribution: family sends a hitman; you get shot and lose up to 50% health (you don't die)
+    if random.random() < RETRIBUTION_CHANCE:
+        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "health": 1})
+        health = max(0, min(100, float(user_doc.get("health") or 100)))
+        loss_pct = random.uniform(0, RETRIBUTION_MAX_HEALTH_LOSS_PCT)
+        damage = health * loss_pct
+        new_health = max(MIN_HEALTH_PCT, health - damage)
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"health": new_health}})
+        _invalidate_my_cache(current_user["id"])
+        return {
+            "message": "Left family. The family sent a hitman—you were shot and lost health. You survived.",
+            "retribution": True,
+            "health_lost_pct": round(loss_pct * 100, 1),
+            "health_now": round(new_health, 1),
+        }
     return {"message": "Left family"}
 
 
