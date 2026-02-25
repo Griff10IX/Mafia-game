@@ -217,7 +217,14 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
                 met_count += 1
             parts.append(f"Be in {target}: done" if met else f"Be in {target}: travel there")
             continue
-        current = _get_user_progress_value(user, key)
+        if key == "crimes" and mission.get("id") == FIRST_MISSION_ID:
+            total = int(user.get("total_crimes") or 0)
+            baseline = user.get("mission_1_crimes_baseline")
+            if baseline is None:
+                baseline = total
+            current = max(0, total - baseline)
+        else:
+            current = _get_user_progress_value(user, key)
         met = current >= target
         if met:
             met_count += 1
@@ -258,6 +265,11 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
     """List missions for unlocked cities with completion status and progress."""
     unlocked = _user_unlocked_cities(current_user)
     completed_ids = _user_completed_mission_ids(current_user)
+    # Ensure first mission crimes baseline exists (so crimes count only after mission started)
+    if FIRST_MISSION_ID not in completed_ids and current_user.get("mission_1_crimes_baseline") is None:
+        baseline = int(current_user.get("total_crimes") or 0)
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"mission_1_crimes_baseline": baseline}})
+        current_user["mission_1_crimes_baseline"] = baseline
     missions_out = []
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -307,7 +319,11 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "system",
             category="missions",
         )
-        await db.users.update_one({"id": current_user["id"]}, {"$set": {"first_mission_notification_sent": True}})
+        baseline = int(current_user.get("total_crimes") or 0)
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"first_mission_notification_sent": True, "mission_1_crimes_baseline": baseline}},
+        )
     return {"missions": missions_out, "unlocked_cities": unlocked}
 
 
@@ -316,6 +332,10 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     unlocked = _user_unlocked_cities(current_user)
     current_city = "Start"
     completed_ids = _user_completed_mission_ids(current_user)
+    if FIRST_MISSION_ID not in completed_ids and current_user.get("mission_1_crimes_baseline") is None:
+        baseline = int(current_user.get("total_crimes") or 0)
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"mission_1_crimes_baseline": baseline}})
+        current_user["mission_1_crimes_baseline"] = baseline
     by_city = {}
     for m in MISSIONS:
         if m["city"] not in unlocked:

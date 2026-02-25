@@ -103,9 +103,14 @@ function StatusChip({ completed, requirementsMet, isBoss, unlocked }) {
       <CheckCircle size={9} /> Done
     </span>
   );
-  if (!unlocked || !requirementsMet) return (
+  if (!unlocked) return (
     <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground text-[9px] font-heading font-bold uppercase tracking-wide">
       <Lock size={9} /> Locked
+    </span>
+  );
+  if (!requirementsMet) return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground text-[9px] font-heading font-bold uppercase tracking-wide">
+      In progress
     </span>
   );
   return (
