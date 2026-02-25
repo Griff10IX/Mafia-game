@@ -564,21 +564,11 @@ async def melt_cars(
                 detail=f"Melt for bullets on cooldown. Next melt in {secs}s.",
             )
         batch_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
-        if len(request.car_ids) > batch_limit:
-            raise HTTPException(
-                status_code=400,
-                detail=f"You can only melt up to {batch_limit} cars at a time. Upgrade your limit in the Store.",
-            )
         limit = min(batch_limit, len(request.car_ids))
     else:
-        # Scrap (cash): no cooldown, batch limit applies
-        limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
-        if len(request.car_ids) > limit:
-            raise HTTPException(
-                status_code=400,
-                detail=f"You can only scrap up to {limit} cars at a time. Upgrade your limit in the Store.",
-            )
-        limit = len(request.car_ids)
+        # Scrap (cash): no cooldown; process up to batch_limit, leave the rest
+        batch_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
+        limit = min(batch_limit, len(request.car_ids))
 
     total_value = 0
     total_bullets = 0
