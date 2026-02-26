@@ -197,6 +197,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     username_ci = re.compile("^" + re.escape(target_name) + "$", re.IGNORECASE) if target_name else None
     if not username_ci:
         return {"success": False, "error": "Target username required", "error_code": 400}
+    if current_user.get("in_jail"):
+        return {"success": False, "error": "You cannot attempt a bust while you are in jail.", "error_code": 400}
 
     total_attempts = int(current_user.get("jail_bust_attempts", 0) or 0)
     player_success_rate = _player_bust_success_rate(total_attempts)
