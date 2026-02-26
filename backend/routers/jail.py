@@ -270,7 +270,6 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     success = random.random() < player_success_rate
     if success:
         rank_points = 15
-        from datetime import datetime, timezone
         now_utc = datetime.now(timezone.utc)
         rp_perk_until = current_user.get("rp_perk_until")
         if rp_perk_until:

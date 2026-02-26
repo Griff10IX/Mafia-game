@@ -31,7 +31,16 @@ LOOT_EXCLUSIVE_CAR_ID = "car21"
 ARMOUR_LEVEL_6_NAME = "Steel Plate Bulletproof Vest (1922)"
 
 GAME_SETTINGS_LOOT_COUNTS_KEY = "loot_exclusive_counts"
+GAME_SETTINGS_LOOT_RARITY_KEY = "loot_box_rarity"
 PERK_DURATION_HOURS = 24
+
+# Default rarity config (admin can override via game_settings)
+DEFAULT_RARITY_CONFIG = {
+    "exclusive_chance": 0.02,
+    "common_pct": 55,
+    "uncommon_pct": 32,
+    "rare_pct": 13,
+}
 GTA_RARE_DROP_PERK_ATTEMPTS = 100
 
 # Box quality: how many prizes (1-2, 1-3, or 1-5). Weights: common 55%, uncommon 32%, rare 13%
@@ -104,6 +113,45 @@ async def _increment_claimed_count(typ: str):
     )
 
 
+async def _get_loot_rarity_config() -> Dict[str, Any]:
+    """Return current loot box rarity config (exclusive_chance 0-1, common_pct, uncommon_pct, rare_pct). Uses defaults if not set."""
+    doc = await db.game_settings.find_one({"key": GAME_SETTINGS_LOOT_RARITY_KEY}, {"_id": 0, "value": 1})
+    raw = (doc or {}).get("value") or {}
+    def pct(key: str, default: int) -> float:
+        try:
+            v = raw.get(key)
+            return max(0, min(100, float(v))) / 100.0 if v is not None else default / 100.0
+        except (TypeError, ValueError):
+            return default / 100.0
+    def chance(key: str, default: float) -> float:
+        try:
+            v = raw.get(key)
+            return max(0.0, min(1.0, float(v))) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+    return {
+        "exclusive_chance": chance("exclusive_chance", DEFAULT_RARITY_CONFIG["exclusive_chance"]),
+        "common_pct": int(round((raw.get("common_pct") if raw.get("common_pct") is not None else DEFAULT_RARITY_CONFIG["common_pct"]) or 0)),
+        "uncommon_pct": int(round((raw.get("uncommon_pct") if raw.get("uncommon_pct") is not None else DEFAULT_RARITY_CONFIG["uncommon_pct"]) or 0)),
+        "rare_pct": int(round((raw.get("rare_pct") if raw.get("rare_pct") is not None else DEFAULT_RARITY_CONFIG["rare_pct"]) or 0)),
+    }
+
+
+async def _set_loot_rarity_config(config: Dict[str, Any]) -> None:
+    """Persist loot box rarity config to game_settings."""
+    value = {
+        "exclusive_chance": max(0.0, min(1.0, float(config.get("exclusive_chance", DEFAULT_RARITY_CONFIG["exclusive_chance"])))),
+        "common_pct": max(0, min(100, int(config.get("common_pct", DEFAULT_RARITY_CONFIG["common_pct"])))),
+        "uncommon_pct": max(0, min(100, int(config.get("uncommon_pct", DEFAULT_RARITY_CONFIG["uncommon_pct"])))),
+        "rare_pct": max(0, min(100, int(config.get("rare_pct", DEFAULT_RARITY_CONFIG["rare_pct"])))),
+    }
+    await db.game_settings.update_one(
+        {"key": GAME_SETTINGS_LOOT_RARITY_KEY},
+        {"$set": {"value": value}},
+        upsert=True,
+    )
+
+
 async def _user_has_loot_exclusive_weapon(user_id: str) -> bool:
     uw = await db.user_weapons.find_one({"user_id": user_id, "weapon_id": LOOT_EXCLUSIVE_WEAPON_ID, "quantity": {"$gte": 1}}, {"_id": 1})
     return uw is not None
@@ -128,6 +176,14 @@ async def _user_has_exclusive_property(user_id: str) -> bool:
 
 class LootBoxOpenRequest(BaseModel):
     tier: Optional[str] = "standard"
+
+
+class LootBoxRarityAdminUpdate(BaseModel):
+    """Admin-only: set loot box rarity (percent 0–100). exclusive_chance_pct = chance per prize for exclusive (e.g. 2 = 2%)."""
+    exclusive_chance_pct: Optional[float] = None
+    common_pct: Optional[int] = None
+    uncommon_pct: Optional[int] = None
+    rare_pct: Optional[int] = None
 
 
 def _active_rewards_from_user(user: dict) -> List[Dict[str, Any]]:
@@ -177,16 +233,63 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     }
 
 
-def _roll_box_quality() -> Tuple[str, int]:
-    """Roll box quality and return (quality_name, num_prizes). Prizes: common 1-2, uncommon 1-3, rare 1-5."""
-    r = random.random()
+async def get_loot_box_rarity_admin(current_user: dict = Depends(get_current_user)):
+    """Admin only: return current loot box rarity config for the admin UI (exclusive % and box quality %)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    config = await _get_loot_rarity_config()
+    return {
+        "exclusive_chance_pct": round(config["exclusive_chance"] * 100, 2),
+        "common_pct": config["common_pct"],
+        "uncommon_pct": config["uncommon_pct"],
+        "rare_pct": config["rare_pct"],
+    }
+
+
+async def set_loot_box_rarity_admin(
+    body: LootBoxRarityAdminUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin only: update loot box rarity (percent 0–100). exclusive_chance_pct = chance per prize for exclusive (e.g. 2 = 2%)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    config = await _get_loot_rarity_config()
+    if body.exclusive_chance_pct is not None:
+        config["exclusive_chance"] = max(0.0, min(100.0, float(body.exclusive_chance_pct))) / 100.0
+    if body.common_pct is not None:
+        config["common_pct"] = max(0, min(100, int(body.common_pct)))
+    if body.uncommon_pct is not None:
+        config["uncommon_pct"] = max(0, min(100, int(body.uncommon_pct)))
+    if body.rare_pct is not None:
+        config["rare_pct"] = max(0, min(100, int(body.rare_pct)))
+    await _set_loot_rarity_config(config)
+    return {
+        "message": "Loot box rarity updated",
+        "exclusive_chance_pct": round(config["exclusive_chance"] * 100, 2),
+        "common_pct": config["common_pct"],
+        "uncommon_pct": config["uncommon_pct"],
+        "rare_pct": config["rare_pct"],
+    }
+
+
+def _roll_box_quality_from_config(config: Dict[str, Any]) -> Tuple[str, int]:
+    """Roll box quality from config (common_pct, uncommon_pct, rare_pct). Returns (quality_name, num_prizes). Prizes: common 1-2, uncommon 1-3, rare 1-5."""
+    c = config.get("common_pct") or 0
+    u = config.get("uncommon_pct") or 0
+    r = config.get("rare_pct") or 0
+    total = c + u + r
+    if total <= 0:
+        c, u, r = 55, 32, 13
+        total = 100
+    probs = [(c / total, (1, 2)), (u / total, (1, 3)), (r / total, (1, 5))]
+    names = ["common", "uncommon", "rare"]
+    roll = random.random()
     acc = 0.0
-    for name, prob, (lo, hi) in BOX_QUALITY_ROLL:
-        acc += prob
-        if r <= acc:
-            return (name, random.randint(lo, hi))
-    name, _, (lo, hi) = BOX_QUALITY_ROLL[-1]
-    return (name, random.randint(lo, hi))
+    for i, (p, (lo, hi)) in enumerate(probs):
+        acc += p
+        if roll <= acc:
+            return (names[i], random.randint(lo, hi))
+    return ("rare", random.randint(1, 5))
 
 
 async def open_loot_box(
@@ -210,16 +313,18 @@ async def open_loot_box(
             raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
         new_pieces = int(res.get("loot_box_pieces") or 0)
 
-    box_quality, num_prizes = _roll_box_quality()
+    rarity_config = await _get_loot_rarity_config()
+    box_quality, num_prizes = _roll_box_quality_from_config(rarity_config)
     rewards: List[Dict[str, Any]] = []
     merged_inc: Dict[str, int] = {}
     merged_set: Dict[str, Any] = {}
     now = datetime.now(timezone.utc)
 
+    exclusive_chance = rarity_config.get("exclusive_chance") or EXCLUSIVE_CHANCE
     for _ in range(num_prizes):
         claimed = await _get_claimed_counts()
         roll = random.random()
-        if roll < EXCLUSIVE_CHANCE:
+        if roll < exclusive_chance:
             available = []
             if claimed["weapon"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_loot_exclusive_weapon(user_id):
                 available.append("weapon")
@@ -430,3 +535,5 @@ def register(router):
     router.add_api_route("/loot-box/status", get_loot_box_status, methods=["GET"])
     router.add_api_route("/loot-box/open", open_loot_box, methods=["POST"])
     router.add_api_route("/loot-box/speakeasy/collect", collect_speakeasy, methods=["POST"])
+    router.add_api_route("/loot-box/admin/rarity", get_loot_box_rarity_admin, methods=["GET"])
+    router.add_api_route("/loot-box/admin/rarity", set_loot_box_rarity_admin, methods=["POST"])

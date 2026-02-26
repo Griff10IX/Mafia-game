@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap } from 'lucide-react';
+import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -356,6 +356,10 @@ export default function LootBox() {
   const [loading, setLoading] = useState(true);
   const [phase, setPhase] = useState('idle'); // idle | shaking | exploding | done
   const [result, setResult] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [rarityConfig, setRarityConfig] = useState(null);
+  const [rarityForm, setRarityForm] = useState({ exclusive_chance_pct: 2, common_pct: 55, uncommon_pct: 32, rare_pct: 13 });
+  const [raritySaving, setRaritySaving] = useState(false);
 
   const loadStatus = async () => {
     try {
@@ -369,6 +373,44 @@ export default function LootBox() {
   };
 
   useEffect(() => { loadStatus(); }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const adminRes = await api.get('/admin/check');
+        if (!cancelled && adminRes.data?.is_admin) {
+          setIsAdmin(true);
+          const rRes = await api.get('/loot-box/admin/rarity');
+          if (!cancelled && rRes.data) {
+            setRarityConfig(rRes.data);
+            setRarityForm({
+              exclusive_chance_pct: rRes.data.exclusive_chance_pct ?? 2,
+              common_pct: rRes.data.common_pct ?? 55,
+              uncommon_pct: rRes.data.uncommon_pct ?? 32,
+              rare_pct: rRes.data.rare_pct ?? 13,
+            });
+          }
+        }
+      } catch {
+        if (!cancelled) setIsAdmin(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const saveRarity = async () => {
+    setRaritySaving(true);
+    try {
+      const res = await api.post('/loot-box/admin/rarity', rarityForm);
+      setRarityConfig(res.data);
+      toast.success(res.data?.message ?? 'Rarity updated');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save rarity');
+    } finally {
+      setRaritySaving(false);
+    }
+  };
 
   const handleOpen = async () => {
     const pieces = status?.loot_box_pieces ?? 0;
@@ -478,6 +520,77 @@ export default function LootBox() {
               </div>
               <div className="lb-art-line text-primary mx-2.5" />
             </div>
+
+            {/* Admin: Loot box rarity */}
+            {isAdmin && (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/30 border-dashed lb-fade-in`} style={{ animationDelay: '0.06s' }}>
+                <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-2.5 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-1.5">
+                  <Shield size={12} className="text-primary shrink-0" />
+                  <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Admin — Rarity %</span>
+                </div>
+                <div className="p-2.5 space-y-2">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] font-heading">
+                    <label className="flex items-center gap-1.5">
+                      <span className="text-mutedForeground w-24">Exclusive %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        step={0.1}
+                        value={rarityForm.exclusive_chance_pct}
+                        onChange={(e) => setRarityForm((f) => ({ ...f, exclusive_chance_pct: parseFloat(e.target.value) || 0 }))}
+                        className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <span className="text-mutedForeground w-24">Common %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={rarityForm.common_pct}
+                        onChange={(e) => setRarityForm((f) => ({ ...f, common_pct: parseInt(e.target.value, 10) || 0 }))}
+                        className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <span className="text-mutedForeground w-24">Uncommon %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={rarityForm.uncommon_pct}
+                        onChange={(e) => setRarityForm((f) => ({ ...f, uncommon_pct: parseInt(e.target.value, 10) || 0 }))}
+                        className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5">
+                      <span className="text-mutedForeground w-24">Rare %</span>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={rarityForm.rare_pct}
+                        onChange={(e) => setRarityForm((f) => ({ ...f, rare_pct: parseInt(e.target.value, 10) || 0 }))}
+                        className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
+                      />
+                    </label>
+                  </div>
+                  <p className="text-[9px] text-mutedForeground italic">Exclusive % = chance per prize (e.g. 2 = 2%). Common/Uncommon/Rare = box quality split (need not sum to 100).</p>
+                  <button
+                    type="button"
+                    onClick={saveRarity}
+                    disabled={raritySaving}
+                    className="w-full py-1.5 px-2 rounded border border-primary/40 bg-primary/15 text-primary font-heading text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-primary/25 disabled:opacity-50"
+                  >
+                    <Save size={12} />
+                    {raritySaving ? 'Saving…' : 'Save rarity'}
+                  </button>
+                </div>
+                <div className="lb-art-line text-primary mx-2.5" />
+              </div>
+            )}
 
             {/* Active rewards */}
             {(status?.active_rewards?.length > 0) && (
