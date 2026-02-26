@@ -3,8 +3,15 @@ import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap } from 'lu
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import styles from '../styles/noir.module.css';
 
 const CAP = 3;
+
+const LOOT_BOX_STYLES = `
+  @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  .lb-fade-in { animation: lb-fade-in 0.4s ease-out both; }
+  .lb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+`;
 
 /* GTA-style rarity text colors for cars */
 const RARITY_COLORS = {
@@ -174,16 +181,8 @@ function RewardIcon({ type, rarity }) {
   };
   const Icon = iconMap[type] || Gift;
   return (
-    <div style={{
-      width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: isExclusive
-        ? 'linear-gradient(135deg, #78350f, #d97706, #78350f)'
-        : 'rgba(234,179,8,0.12)',
-      border: isExclusive ? '1px solid #f59e0b' : '1px solid rgba(234,179,8,0.25)',
-      flexShrink: 0,
-      animation: isExclusive ? 'goldPulse 2s ease-in-out infinite' : undefined,
-    }}>
-      <Icon size={16} color={isExclusive ? '#fde68a' : '#eab308'} />
+    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${isExclusive ? 'bg-primary/30 border-primary' : 'bg-primary/10 border-primary/30'}`}>
+      <Icon size={16} className={isExclusive ? 'text-primary' : 'text-primary/90'} />
     </div>
   );
 }
@@ -209,33 +208,18 @@ function rewardLabel(reward) {
 
 function RarityBadge({ rarity }) {
   if (!rarity) return null;
-  const cfg = {
-    loot_exclusive: { bg: 'linear-gradient(90deg,#92400e,#d97706,#92400e)', color: '#fef3c7', shimmer: true },
-    exclusive:      { bg: 'linear-gradient(90deg,#4c1d95,#7c3aed,#4c1d95)', color: '#ede9fe', shimmer: true },
-    ultra_rare:     { bg: 'linear-gradient(90deg,#5b21b6,#8b5cf6)', color: '#ede9fe' },
-    rare:           { bg: 'linear-gradient(90deg,#1e3a8a,#3b82f6)', color: '#dbeafe' },
-    uncommon:       { bg: 'linear-gradient(90deg,#14532d,#22c55e)', color: '#dcfce7' },
-    common:         { bg: 'rgba(255,255,255,0.06)', color: '#9ca3af' },
-    standard:       { bg: 'rgba(255,255,255,0.06)', color: '#9ca3af' },
+  const classes = {
+    loot_exclusive: 'bg-primary/25 text-primary border border-primary/40',
+    exclusive:      'bg-purple-500/25 text-purple-200 border border-purple-400/40',
+    ultra_rare:     'bg-purple-500/20 text-purple-200 border border-purple-400/30',
+    rare:           'bg-blue-500/20 text-blue-200 border border-blue-400/30',
+    uncommon:       'bg-green-500/20 text-green-200 border border-green-400/30',
+    common:         'bg-zinc-600/30 text-mutedForeground border border-zinc-500/30',
+    standard:       'bg-zinc-600/30 text-mutedForeground border border-zinc-500/30',
   };
-  const s = cfg[rarity] ?? cfg.common;
+  const c = classes[rarity] ?? classes.standard;
   return (
-    <span style={{
-      display: 'inline-block',
-      fontSize: 9,
-      padding: '2px 6px',
-      borderRadius: 4,
-      background: s.shimmer
-        ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%), ' + s.bg
-        : s.bg,
-      backgroundSize: s.shimmer ? '200% 100%, auto' : 'auto',
-      animation: s.shimmer ? 'shimmer 2.5s linear infinite' : undefined,
-      color: s.color,
-      textTransform: 'capitalize',
-      fontFamily: "'Cinzel', serif",
-      letterSpacing: '0.05em',
-      verticalAlign: 'middle',
-    }}>
+    <span className={`inline-block text-[9px] px-1.5 py-0.5 rounded capitalize font-heading tracking-wider ${c}`}>
       {rarity.replace(/_/g, ' ')}
     </span>
   );
@@ -245,21 +229,9 @@ function RarityBadge({ rarity }) {
 function PiecesBar({ pieces }) {
   const pct = Math.min((pieces / 100) * 100, 100);
   return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{
-        height: 6, borderRadius: 99,
-        background: 'rgba(255,255,255,0.07)',
-        overflow: 'hidden',
-        border: '1px solid rgba(234,179,8,0.15)',
-      }}>
-        <div style={{
-          height: '100%',
-          width: `${pct}%`,
-          background: 'linear-gradient(90deg, #92400e, #eab308, #fbbf24)',
-          borderRadius: 99,
-          transition: 'width 1s cubic-bezier(0.22,1,0.36,1)',
-          boxShadow: '0 0 10px rgba(234,179,8,0.5)',
-        }} />
+    <div className="mt-2">
+      <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden border border-primary/20">
+        <div className="h-full bg-primary/80 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
@@ -268,50 +240,22 @@ function PiecesBar({ pieces }) {
 /* ─── Chest icon ─── */
 function ChestIcon({ shaking, exploding }) {
   return (
-    <div style={{
-      position: 'relative',
-      width: 80, height: 80,
-      margin: '0 auto 16px',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      animation: exploding
-        ? 'boxExplode 0.6s ease-out forwards'
-        : shaking
-        ? 'boxShake 0.5s ease-in-out infinite'
-        : undefined,
-    }}>
+    <div
+      className="relative w-20 h-20 mx-auto mb-4 flex items-center justify-center"
+      style={{
+        animation: exploding ? 'boxExplode 0.6s ease-out forwards' : shaking ? 'boxShake 0.5s ease-in-out infinite' : undefined,
+      }}
+    >
       <Particles active={exploding} />
-      {/* Chest body */}
-      <div style={{
-        width: 64, height: 52, borderRadius: '4px 4px 8px 8px',
-        background: 'linear-gradient(180deg, #78350f 0%, #451a03 100%)',
-        border: '2px solid #d97706',
-        position: 'relative', overflow: 'hidden',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.6), inset 0 2px 4px rgba(234,179,8,0.2)',
-      }}>
-        {/* lock */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%,-50%)',
-          width: 14, height: 14, borderRadius: '50%',
-          background: 'radial-gradient(circle, #fbbf24, #92400e)',
-          border: '1px solid #f59e0b',
-          animation: shaking || exploding ? 'goldPulse 0.4s ease-in-out infinite' : 'goldPulse 2s ease-in-out infinite',
-        }} />
-        {/* bands */}
-        <div style={{ position: 'absolute', top: '30%', left: 0, right: 0, height: 2, background: 'rgba(234,179,8,0.5)' }} />
-        <div style={{ position: 'absolute', top: '65%', left: 0, right: 0, height: 2, background: 'rgba(234,179,8,0.5)' }} />
+      <div className="w-14 h-11 rounded-b border-2 border-primary bg-gradient-to-b from-primary/40 to-primary/10 relative overflow-hidden shadow-lg">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary border border-primary/80 shadow-inner" />
+        <div className="absolute top-[30%] left-0 right-0 h-0.5 bg-primary/50" />
+        <div className="absolute top-[65%] left-0 right-0 h-0.5 bg-primary/50" />
       </div>
-      {/* lid */}
-      <div style={{
-        position: 'absolute', top: 0, left: 8, right: 8, height: 24,
-        borderRadius: '6px 6px 0 0',
-        background: 'linear-gradient(180deg, #92400e 0%, #78350f 100%)',
-        border: '2px solid #d97706',
-        borderBottom: 'none',
-        boxShadow: '0 -2px 8px rgba(234,179,8,0.2)',
-        animation: exploding ? 'chestLidOpen 0.4s 0.1s ease-out forwards' : undefined,
-        transformOrigin: 'top center',
-      }} />
+      <div
+        className="absolute top-0 left-2 right-2 h-6 rounded-t border-2 border-b-0 border-primary bg-gradient-to-b from-primary/50 to-primary/20 shadow-sm"
+        style={{ animation: exploding ? 'chestLidOpen 0.4s 0.1s ease-out forwards' : undefined, transformOrigin: 'top center' }}
+      />
     </div>
   );
 }
@@ -320,29 +264,15 @@ function ChestIcon({ shaking, exploding }) {
 function ScarcityRow({ icon: Icon, label, claimed, cap }) {
   const full = claimed >= cap;
   return (
-    <li style={{
-      display: 'flex', alignItems: 'center', gap: 10,
-      padding: '6px 10px',
-      borderRadius: 6,
-      background: full ? 'rgba(239,68,68,0.08)' : 'rgba(234,179,8,0.05)',
-      border: `1px solid ${full ? 'rgba(239,68,68,0.25)' : 'rgba(234,179,8,0.1)'}`,
-      animation: `fadeUp 0.4s ease-out both`,
-    }}>
-      <Icon size={13} color={full ? '#f87171' : '#d97706'} />
-      <span style={{ flex: 1, fontFamily: "'Crimson Text', serif", fontSize: 13, color: '#d1d5db' }}>{label}</span>
-      <div style={{ display: 'flex', gap: 4 }}>
+    <li className={`flex items-center gap-2 py-1.5 px-2 rounded border ${full ? 'bg-red-500/10 border-red-500/25' : 'bg-primary/5 border-primary/15'}`}>
+      <Icon size={12} className={full ? 'text-red-400 shrink-0' : 'text-primary shrink-0'} />
+      <span className="flex-1 text-[10px] font-heading text-foreground">{label}</span>
+      <div className="flex gap-0.5">
         {Array.from({ length: cap }, (_, i) => (
-          <div key={i} style={{
-            width: 8, height: 8, borderRadius: '50%',
-            background: i < claimed ? (full ? '#ef4444' : '#eab308') : 'rgba(255,255,255,0.1)',
-            border: `1px solid ${i < claimed ? (full ? '#ef4444' : '#d97706') : 'rgba(255,255,255,0.15)'}`,
-            transition: 'all 0.3s ease',
-          }} />
+          <div key={i} className={`w-1.5 h-1.5 rounded-full border ${i < claimed ? (full ? 'bg-red-400 border-red-400' : 'bg-primary border-primary') : 'bg-zinc-600 border-zinc-500'}`} />
         ))}
       </div>
-      <span style={{ fontFamily: "'Cinzel', serif", fontSize: 10, color: full ? '#f87171' : '#9ca3af', minWidth: 36, textAlign: 'right' }}>
-        {claimed}/{cap}
-      </span>
+      <span className={`text-[9px] font-heading min-w-[2rem] text-right ${full ? 'text-red-400' : 'text-mutedForeground'}`}>{claimed}/{cap}</span>
     </li>
   );
 }
@@ -351,104 +281,52 @@ function ScarcityRow({ icon: Icon, label, claimed, cap }) {
 function ResultModal({ result, onClose }) {
   const rewards = result.rewards || (result.reward ? [result.reward] : []);
   const quality = result.box_quality;
-  const isGold = quality === 'gold' || quality === 'exclusive';
 
   return (
     <div
       onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 16,
-        background: 'rgba(0,0,0,0.75)',
-        backdropFilter: 'blur(4px)',
-        animation: 'overlayIn 0.25s ease-out',
-      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+      style={{ animation: 'overlayIn 0.25s ease-out' }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        style={{
-          borderRadius: 12,
-          background: 'linear-gradient(160deg, #1c1008 0%, #0f0902 100%)',
-          border: `1px solid ${isGold ? '#d97706' : 'rgba(234,179,8,0.3)'}`,
-          boxShadow: isGold
-            ? '0 0 60px rgba(234,179,8,0.25), 0 24px 80px rgba(0,0,0,0.8)'
-            : '0 24px 80px rgba(0,0,0,0.8)',
-          padding: '28px 24px 24px',
-          maxWidth: 420, width: '100%',
-          maxHeight: '85vh',
-          display: 'flex', flexDirection: 'column',
-          animation: 'modalIn 0.35s cubic-bezier(0.22,1,0.36,1)',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
+        className={`${styles.panel} rounded-lg border border-primary/30 max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl`}
+        style={{ animation: 'modalIn 0.35s cubic-bezier(0.22,1,0.36,1)' }}
       >
-        {/* header ornament */}
-        <div style={{
-          position: 'absolute', top: 0, left: 0, right: 0, height: 2,
-          background: isGold
-            ? 'linear-gradient(90deg, transparent, #d97706, #fbbf24, #d97706, transparent)'
-            : 'linear-gradient(90deg, transparent, rgba(234,179,8,0.4), transparent)',
-        }} />
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+        <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+        <div className="px-4 pt-4 pb-2 flex justify-between items-start">
           <div>
-            <h3 style={{
-              fontFamily: "'Cinzel', serif", fontWeight: 700, fontSize: 18,
-              color: '#fef3c7',
-              animation: isGold ? 'textGlow 2s ease-in-out infinite' : undefined,
-            }}>
-              {isGold ? '✦ Golden Score ✦' : 'The Envelope, Please'}
-            </h3>
+            <h3 className="text-lg font-heading font-bold text-primary">The Envelope, Please</h3>
             {quality && (
-              <p style={{ fontFamily: "'Crimson Text', serif", fontStyle: 'italic', fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+              <p className="text-[11px] text-mutedForeground font-heading italic mt-0.5 capitalize">
                 {quality} box — {rewards.length} prize{rewards.length !== 1 ? 's' : ''}
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              padding: 6, borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)',
-              background: 'rgba(255,255,255,0.05)', cursor: 'pointer', color: '#9ca3af',
-              transition: 'all 0.15s',
-            }}
-          >
+          <button type="button" onClick={onClose} className="p-1.5 rounded border border-primary/20 bg-primary/5 text-mutedForeground hover:text-foreground transition-colors">
             <X size={16} />
           </button>
         </div>
-
-        {/* divider */}
-        <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(234,179,8,0.3),transparent)', margin: '12px 0' }} />
-
-        {/* rewards list */}
-        <ul style={{ listStyle: 'none', padding: 0, margin: 0, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="h-px bg-primary/20 mx-4" />
+        <ul className="list-none p-0 m-0 overflow-y-auto flex-1 flex flex-col gap-2 p-4">
           {rewards.map((r, i) => (
             <li
               key={i}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '10px 12px',
-                borderRadius: 8,
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(234,179,8,0.1)',
-                animation: `rewardPop 0.45s ${i * 0.12}s cubic-bezier(0.22,1,0.36,1) both`,
-              }}
+              className="flex items-center gap-2 p-2 rounded border border-primary/15 bg-primary/5"
+              style={{ animation: `rewardPop 0.45s ${i * 0.12}s cubic-bezier(0.22,1,0.36,1) both` }}
             >
               <RewardIcon type={r.type} rarity={r.rarity} />
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: '#e5e7eb', lineHeight: 1.4 }}>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] font-heading text-foreground leading-snug">
                   {r.type === 'cars' && r.items?.length ? (
-                    <span style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', alignItems: 'baseline' }}>
+                    <span className="flex flex-wrap gap-x-2 gap-y-0.5 items-baseline">
                       {r.items.map((it, idx) => {
                         const rarity = (it.rarity ?? 'common').replace(/_/g, ' ');
                         const colorClass = getRarityColor(it.rarity ?? 'common');
                         return (
                           <span key={idx}>
                             {it.name}{' '}
-                            <span className={`font-heading font-bold uppercase tracking-wider ${colorClass}`}>
-                              ({rarity})
-                            </span>
+                            <span className={`font-bold uppercase tracking-wider ${colorClass}`}>({rarity})</span>
                             {idx < r.items.length - 1 ? ', ' : null}
                           </span>
                         );
@@ -458,23 +336,14 @@ function ResultModal({ result, onClose }) {
                     rewardLabel(r)
                   )}
                 </div>
-                {r.rarity && <div style={{ marginTop: 4 }}><RarityBadge rarity={r.rarity} /></div>}
+                {r.rarity && <div className="mt-1"><RarityBadge rarity={r.rarity} /></div>}
               </div>
             </li>
           ))}
         </ul>
-
-        <div style={{
-          marginTop: 16, paddingTop: 12,
-          borderTop: '1px solid rgba(234,179,8,0.15)',
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        }}>
-          <span style={{ fontFamily: "'Crimson Text', serif", fontStyle: 'italic', fontSize: 12, color: '#6b7280' }}>
-            Pieces remaining
-          </span>
-          <span style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: '#eab308', fontWeight: 700 }}>
-            {result.new_pieces ?? 0}
-          </span>
+        <div className="mt-auto pt-3 px-4 pb-4 border-t border-primary/20 flex justify-between items-center">
+          <span className="text-[11px] text-mutedForeground font-heading italic">Pieces remaining</span>
+          <span className="text-sm font-heading font-bold text-primary">{result.new_pieces ?? 0}</span>
         </div>
       </div>
     </div>
@@ -532,212 +401,151 @@ export default function LootBox() {
 
   if (loading) {
     return (
-      <div style={{ padding: 24, fontFamily: "'Cinzel', serif", color: '#9ca3af', textAlign: 'center' }}>
-        <div style={{ animation: 'tickerBlink 1s ease-in-out infinite' }}>Loading the vault…</div>
+      <div className={`space-y-2 ${styles.pageContent}`}>
+        <style>{LOOT_BOX_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+          <Gift size={24} className="text-primary/50 animate-pulse" />
+          <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Loading the vault…</span>
+        </div>
       </div>
     );
   }
 
+  const last10 = status?.last_10_wins ?? [];
+
   return (
     <>
       <style>{globalStyles}</style>
+      <style>{LOOT_BOX_STYLES}</style>
 
-      <div style={{
-        padding: '20px 16px',
-        maxWidth: 480,
-        margin: '0 auto',
-        fontFamily: "'Crimson Text', serif",
-        position: 'relative',
-      }}>
-
-        {/* ── Header ── */}
-        <div style={{ marginBottom: 20, animation: 'fadeUp 0.5s ease-out' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
-            <Gift size={20} color="#d97706" />
-            <h1 style={{
-              fontFamily: "'Cinzel', serif", fontWeight: 900, fontSize: 20,
-              color: '#fef3c7', margin: 0, letterSpacing: '0.04em',
-            }}>
-              The Vault
-            </h1>
-          </div>
-          <p style={{ fontSize: 13, color: '#6b7280', margin: 0, fontStyle: 'italic', lineHeight: 1.5 }}>
-            Earn pieces from{' '}
-            <Link to="/missions" style={{ color: '#d97706', textDecoration: 'none', borderBottom: '1px solid rgba(217,119,6,0.3)' }}>
-              the Consigliere's Ledger
-            </Link>
-            . One hundred pieces open a box. The exclusives are scarce.
-          </p>
-        </div>
-
-        {/* ── Chest card ── */}
-        <div style={{
-          borderRadius: 12,
-          background: 'linear-gradient(160deg, #1c1008, #0f0902)',
-          border: '1px solid rgba(234,179,8,0.2)',
-          padding: '24px 20px',
-          marginBottom: 12,
-          position: 'relative',
-          overflow: 'hidden',
-          animation: `fadeUp 0.5s 0.1s ease-out both, ${canOpen ? 'borderMarch 3s ease-in-out infinite' : 'none'}`,
-        }}>
-          <Embers />
-
-          <ChestIcon
-            shaking={phase === 'shaking'}
-            exploding={phase === 'exploding'}
-          />
-
-          {/* pieces counter */}
-          <div style={{ textAlign: 'center', marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: 6 }}>
-              <span style={{
-                fontFamily: "'Cinzel', serif", fontSize: 36, fontWeight: 900,
-                color: '#eab308',
-                animation: pieces >= 100 ? 'textGlow 2s ease-in-out infinite' : undefined,
-                lineHeight: 1,
-              }}>
-                {pieces}
-              </span>
-              <span style={{ fontFamily: "'Cinzel', serif", fontSize: 14, color: '#6b7280' }}>/100</span>
+      <div className={`space-y-2 ${styles.pageContent}`} data-testid="lootbox-page">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+          {/* ── Main column ── */}
+          <div className="space-y-2 min-w-0">
+            {/* Header */}
+            <div className="relative lb-fade-in">
+              <p className="text-[9px] text-zinc-500 font-heading italic">Earn pieces from <Link to="/missions" className="text-primary underline">the Consigliere's Ledger</Link>. One hundred pieces open a box. Exclusives are scarce.</p>
             </div>
-            <div style={{ fontFamily: "'Crimson Text', serif", fontStyle: 'italic', fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-              pieces collected
+
+            {/* Chest card */}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">The Vault</span>
+              </div>
+              <div className="p-4 relative">
+                <Embers />
+                <ChestIcon shaking={phase === 'shaking'} exploding={phase === 'exploding'} />
+                <div className="text-center mb-3">
+                  <div className="flex items-baseline justify-center gap-1.5">
+                    <span className="text-2xl font-heading font-bold text-primary">{pieces}</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">/100</span>
+                  </div>
+                  <p className="text-[9px] text-mutedForeground font-heading italic mt-0.5">pieces collected</p>
+                </div>
+                <PiecesBar pieces={pieces} />
+                <button
+                  type="button"
+                  onClick={handleOpen}
+                  disabled={!canOpen}
+                  className={`w-full mt-3 py-2 px-3 rounded font-heading font-bold uppercase tracking-wider text-[10px] border flex items-center justify-center gap-2 transition-all ${
+                    canOpen
+                      ? 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30'
+                      : 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 cursor-not-allowed'
+                  }`}
+                >
+                  <Package size={14} />
+                  {phase === 'shaking' ? 'RATTLING THE LOCK…' : phase === 'exploding' ? 'THE VAULT OPENS…' : canOpen ? 'CRACK THE VAULT' : `${100 - pieces} PIECES NEEDED`}
+                </button>
+              </div>
+              <div className="lb-art-line text-primary mx-2.5" />
             </div>
-          </div>
 
-          <PiecesBar pieces={pieces} />
-
-          {/* CTA button */}
-          <button
-            type="button"
-            onClick={handleOpen}
-            disabled={!canOpen}
-            style={{
-              width: '100%',
-              marginTop: 16,
-              padding: '11px 16px',
-              borderRadius: 8,
-              border: canOpen ? '1px solid #d97706' : '1px solid rgba(255,255,255,0.06)',
-              background: canOpen
-                ? 'linear-gradient(135deg, #92400e 0%, #d97706 50%, #92400e 100%)'
-                : 'rgba(255,255,255,0.04)',
-              backgroundSize: '200% 100%',
-              color: canOpen ? '#fef3c7' : '#4b5563',
-              fontFamily: "'Cinzel', serif",
-              fontWeight: 700,
-              fontSize: 13,
-              letterSpacing: '0.08em',
-              cursor: canOpen ? 'pointer' : 'not-allowed',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-              transition: 'all 0.2s',
-              boxShadow: canOpen ? '0 0 20px rgba(217,119,6,0.25)' : 'none',
-              animation: canOpen ? 'shimmer 3s linear infinite' : undefined,
-            }}
-          >
-            <Package size={15} />
-            {phase === 'shaking' ? 'RATTLING THE LOCK…'
-              : phase === 'exploding' ? 'THE VAULT OPENS…'
-              : canOpen ? 'CRACK THE VAULT'
-              : `${100 - pieces} PIECES NEEDED`}
-          </button>
-        </div>
-
-        {/* ── Scarcity card ── */}
-        <div style={{
-          borderRadius: 12,
-          background: 'rgba(15,9,2,0.8)',
-          border: '1px solid rgba(234,179,8,0.12)',
-          padding: '16px',
-          animation: 'fadeUp 0.5s 0.25s ease-out both',
-        }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
-          }}>
-            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(234,179,8,0.2), transparent)' }} />
-            <span style={{
-              fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 600,
-              color: '#9ca3af', letterSpacing: '0.15em', textTransform: 'uppercase',
-            }}>
-              Exclusive Scarcity
-            </span>
-            <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.2))' }} />
-          </div>
-          <p style={{ fontFamily: "'Crimson Text', serif", fontStyle: 'italic', fontSize: 12, color: '#4b5563', textAlign: 'center', marginBottom: 10 }}>
-            Each exclusive may only be claimed by {CAP} made men across the family.
-          </p>
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <ScarcityRow icon={Swords}    label="Exclusive Weapon"  claimed={claimed.weapon}   cap={CAP} />
-            <ScarcityRow icon={Car}       label="Exclusive Vehicle" claimed={claimed.car}      cap={CAP} />
-            <ScarcityRow icon={Shield}    label="Exclusive Armour"  claimed={claimed.armour}   cap={CAP} />
-            <ScarcityRow icon={Building2} label="Speakeasy"         claimed={claimed.property} cap={CAP} />
-          </ul>
-        </div>
-
-        {/* ── Active rewards (stacked perks) ── */}
-        {(status?.active_rewards?.length > 0) && (
-          <div style={{
-            borderRadius: 12,
-            background: 'rgba(15,9,2,0.8)',
-            border: '1px solid rgba(234,179,8,0.12)',
-            padding: '16px',
-            animation: 'fadeUp 0.5s 0.3s ease-out both',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
-            }}>
-              <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(234,179,8,0.2), transparent)' }} />
-              <span style={{
-                fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 600,
-                color: '#eab308', letterSpacing: '0.15em', textTransform: 'uppercase',
-              }}>
-                Active rewards
-              </span>
-              <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.2))' }} />
+            {/* Scarcity card */}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in`} style={{ animationDelay: '0.05s' }}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Exclusive Scarcity</span>
+              </div>
+              <div className="p-2">
+                <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-2">Each exclusive may only be claimed by {CAP} made men across the family.</p>
+                <ul className="list-none p-0 m-0 flex flex-col gap-1">
+                  <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={CAP} />
+                  <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={CAP} />
+                  <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={CAP} />
+                  <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={CAP} />
+                </ul>
+              </div>
+              <div className="lb-art-line text-primary mx-2.5" />
             </div>
-            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {status.active_rewards.map((ar, i) => (
-                <li key={i} style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  padding: '8px 10px', borderRadius: 6,
-                  background: 'rgba(234,179,8,0.06)', border: '1px solid rgba(234,179,8,0.15)',
-                }}>
-                  <Zap size={14} color="#eab308" style={{ flexShrink: 0 }} />
-                  <span style={{ fontFamily: "'Crimson Text', serif", fontSize: 12, color: '#e5e7eb', flex: 1 }}>
-                    {ar.name}
-                    {ar.expires_at && (() => {
-                      try {
-                        const until = new Date(ar.expires_at.replace('Z', 'Z'));
-                        const now = new Date();
-                        const ms = until - now;
-                        if (ms <= 0) return null;
-                        const h = Math.floor(ms / 3600000);
-                        const m = Math.floor((ms % 3600000) / 60000);
-                        return (
-                          <span style={{ color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>
-                            ({h}h {m}m left)
-                          </span>
-                        );
-                      } catch {
-                        return null;
-                      }
-                    })()}
-                    {ar.attempts_remaining != null && (
-                      <span style={{ color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>
-                        ({ar.attempts_remaining} attempts left)
+
+            {/* Active rewards */}
+            {(status?.active_rewards?.length > 0) && (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in`} style={{ animationDelay: '0.07s' }}>
+                <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                  <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Active rewards</span>
+                </div>
+                <ul className="p-2 list-none m-0 flex flex-col gap-1">
+                  {status.active_rewards.map((ar, i) => (
+                    <li key={i} className="flex items-center gap-2 text-[10px] font-heading text-foreground bg-primary/5 border border-primary/15 rounded px-2 py-1.5">
+                      <Zap size={12} className="text-primary shrink-0" />
+                      <span>
+                        {ar.name}
+                        {ar.expires_at && (() => {
+                          try {
+                            const until = new Date(ar.expires_at.replace('Z', 'Z'));
+                            const ms = until - new Date();
+                            if (ms <= 0) return null;
+                            const h = Math.floor(ms / 3600000);
+                            const m = Math.floor((ms % 3600000) / 60000);
+                            return <span className="text-mutedForeground italic ml-1">({h}h {m}m left)</span>;
+                          } catch { return null; }
+                        })()}
+                        {ar.attempts_remaining != null && <span className="text-mutedForeground italic ml-1">({ar.attempts_remaining} attempts left)</span>}
                       </span>
-                    )}
-                  </span>
-                </li>
-              ))}
-            </ul>
+                    </li>
+                  ))}
+                </ul>
+                <div className="lb-art-line text-primary mx-2.5" />
+              </div>
+            )}
           </div>
-        )}
 
+          {/* ── Side: Last 10 wins ── */}
+          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in h-fit`} style={{ animationDelay: '0.05s' }}>
+            <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Last 10 wins</span>
+            </div>
+            <div className="p-2 max-h-[60vh] overflow-y-auto">
+              {last10.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading italic">No opens yet.</p>
+              ) : (
+                <ul className="list-none p-0 m-0 space-y-2">
+                  {last10.map((win, i) => (
+                    <li key={i} className="text-[9px] font-heading border-b border-primary/10 pb-2 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between gap-1 text-mutedForeground uppercase tracking-wider">
+                        <span>{win.box_quality ?? '—'} · {win.prizes_count ?? 0} prize{(win.prizes_count ?? 0) !== 1 ? 's' : ''}</span>
+                        <span>{win.opened_at ? new Date(win.opened_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</span>
+                      </div>
+                      <ul className="mt-0.5 space-y-0.5 text-foreground">
+                        {(win.rewards || []).slice(0, 5).map((r, j) => (
+                          <li key={j} className="truncate">{rewardLabel(r)}</li>
+                        ))}
+                        {(win.rewards?.length ?? 0) > 5 && <li className="text-mutedForeground">+{(win.rewards?.length ?? 0) - 5} more</li>}
+                      </ul>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="lb-art-line text-primary mx-2.5" />
+          </div>
+        </div>
+
+        {result && <ResultModal result={result} onClose={closeModal} />}
       </div>
-
-      {/* ── Result Modal ── */}
-      {result && <ResultModal result={result} onClose={closeModal} />}
     </>
   );
 }

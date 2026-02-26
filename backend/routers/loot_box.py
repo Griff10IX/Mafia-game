@@ -66,6 +66,22 @@ PERK_LABELS = {
 }
 
 
+def _stacked_perk_until(merged_set: Dict[str, Any], user: dict, field_name: str, now: datetime) -> str:
+    """Return new expiry ISO for a time-based perk, stacking on existing if still active."""
+    base_iso = merged_set.get(field_name) or user.get(field_name)
+    if not base_iso:
+        return (now + timedelta(hours=PERK_DURATION_HOURS)).isoformat()
+    try:
+        until = datetime.fromisoformat(base_iso.replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        if until > now:
+            return (until + timedelta(hours=PERK_DURATION_HOURS)).isoformat()
+    except Exception:
+        pass
+    return (now + timedelta(hours=PERK_DURATION_HOURS)).isoformat()
+
+
 async def _get_claimed_counts():
     doc = await db.game_settings.find_one({"key": GAME_SETTINGS_LOOT_COUNTS_KEY}, {"_id": 0, "value": 1})
     raw = (doc or {}).get("value") or {}
@@ -151,10 +167,13 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     pieces = int(current_user.get("loot_box_pieces") or 0)
     claimed = await _get_claimed_counts()
     active_rewards = _active_rewards_from_user(current_user)
+    last_10_wins = list(current_user.get("loot_box_recent") or [])[-10:]
+    last_10_wins.reverse()  # newest first for display
     return {
         "loot_box_pieces": pieces,
         "claimed_counts": claimed,
         "active_rewards": active_rewards,
+        "last_10_wins": last_10_wins,
     }
 
 
@@ -323,17 +342,16 @@ async def open_loot_box(
             rewards.append({"type": "bullets", "amount": amount, "rarity": "standard"})
         else:
             perk = random.choice(PERK_TYPES)
-            until_iso = (now + timedelta(hours=PERK_DURATION_HOURS)).isoformat()
             if perk == "property_income_10":
-                merged_set["property_income_perk_until"] = until_iso
+                merged_set["property_income_perk_until"] = _stacked_perk_until(merged_set, current_user, "property_income_perk_until", now)
             elif perk == "rp_10":
-                merged_set["rp_perk_until"] = until_iso
+                merged_set["rp_perk_until"] = _stacked_perk_until(merged_set, current_user, "rp_perk_until", now)
             elif perk == "jail_bust_10":
-                merged_set["jail_bust_payout_perk_until"] = until_iso
+                merged_set["jail_bust_payout_perk_until"] = _stacked_perk_until(merged_set, current_user, "jail_bust_payout_perk_until", now)
             elif perk == "airport_cost":
-                merged_set["airport_cost_perk_until"] = until_iso
+                merged_set["airport_cost_perk_until"] = _stacked_perk_until(merged_set, current_user, "airport_cost_perk_until", now)
             else:
-                merged_set["gta_rare_drop_perk_attempts_remaining"] = GTA_RARE_DROP_PERK_ATTEMPTS
+                merged_inc["gta_rare_drop_perk_attempts_remaining"] = merged_inc.get("gta_rare_drop_perk_attempts_remaining", 0) + GTA_RARE_DROP_PERK_ATTEMPTS
             rewards.append({
                 "type": "perk",
                 "name": PERK_LABELS.get(perk, perk),
@@ -347,6 +365,18 @@ async def open_loot_box(
         if merged_set:
             update["$set"] = merged_set
         await db.users.update_one({"id": user_id}, update)
+
+    # Append to last-10 wins (newest at end; frontend can reverse for display)
+    win_entry = {
+        "opened_at": now.isoformat(),
+        "box_quality": box_quality,
+        "prizes_count": len(rewards),
+        "rewards": rewards,
+    }
+    await db.users.update_one(
+        {"id": user_id},
+        {"$push": {"loot_box_recent": {"$each": [win_entry], "$slice": -10}}},
+    )
 
     return {
         "rewards": rewards,

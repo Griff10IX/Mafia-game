@@ -383,9 +383,11 @@ export default function Jail() {
         toast.success(msg);
         refreshUser();
       } else {
-        toast.error(response.data.message);
+        const jailTime = response.data.jail_time ?? 30;
+        toast.error(response.data.message + (jailTime ? ` You're in jail for ${jailTime}s.` : ''));
+        refreshUser();
       }
-      fetchJailData();
+      await fetchJailData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to bust out');
     } finally {
