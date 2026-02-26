@@ -220,7 +220,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
             except Exception as e:
                 logger.exception("Rank-up notification (jail NPC bust): %s", e)
-            await db.jail_npcs.delete_one({"username": npc["username"]})
+            npc_username = npc.get("username")
+            if npc_username is not None:
+                await db.jail_npcs.delete_one({"username": npc_username})
             _invalidate_jail_npcs_cache()
             try:
                 await update_objectives_progress(current_user["id"], "busts", 1)
@@ -305,7 +307,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         except Exception:
             pass
         await _record_bust_event(current_user["id"], True, cash_to_pay)
-        msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target["username"])
+        display_name = target.get("username") or target_username or "Unknown"
+        msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=display_name)
         return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay}
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     await db.users.update_one(
@@ -319,7 +322,11 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
 async def bust_out_of_jail(
     request: BustOutRequest, current_user: dict = Depends(get_current_user)
 ):
-    result = await _attempt_bust_impl(current_user, request.target_username or "")
+    try:
+        result = await _attempt_bust_impl(current_user, request.target_username or "")
+    except Exception as e:
+        logger.exception("Jail bust failed: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to process bust. Please try again.")
     if result.get("error"):
         raise HTTPException(status_code=result.get("error_code", 400), detail=result["error"])
     # bust_events are recorded inside _attempt_bust_impl (so Auto Rank busts are counted too)
