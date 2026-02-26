@@ -15,6 +15,7 @@ from server import (
     db,
     get_current_user,
     send_notification,
+    _is_admin,
     CARS,
     ARMOUR_BASE_BULLETS,
 )
@@ -114,15 +115,20 @@ async def open_loot_box(
 ):
     cost = LOOT_BOX_PIECES_PER_OPEN
     user_id = current_user["id"]
-    res = await db.users.find_one_and_update(
-        {"id": user_id, "loot_box_pieces": {"$gte": cost}},
-        {"$inc": {"loot_box_pieces": -cost}},
-        projection={"_id": 0, "id": 1, "loot_box_pieces": 1},
-        return_document=True,
-    )
-    if not res:
-        raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
-    new_pieces = int(res.get("loot_box_pieces") or 0)
+    is_admin_test = _is_admin(current_user)
+    if is_admin_test:
+        res = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "loot_box_pieces": 1})
+        new_pieces = int(res.get("loot_box_pieces") or 0) if res else 0
+    else:
+        res = await db.users.find_one_and_update(
+            {"id": user_id, "loot_box_pieces": {"$gte": cost}},
+            {"$inc": {"loot_box_pieces": -cost}},
+            projection={"_id": 0, "id": 1, "loot_box_pieces": 1},
+            return_document=True,
+        )
+        if not res:
+            raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
+        new_pieces = int(res.get("loot_box_pieces") or 0)
     claimed = await _get_claimed_counts()
 
     roll = random.random()
