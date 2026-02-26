@@ -408,19 +408,20 @@ export default function LootBox() {
   const saveRarity = async () => {
     setRaritySaving(true);
     try {
+      const rawExclusive = Number(rarityForm.exclusive_chance_pct);
+      const exclusivePct = (rawExclusive === rawExclusive) ? Math.max(0, Math.min(100, rawExclusive)) : 2;
+      const isExclusive100 = exclusivePct >= 100;
       const c = Math.max(0, Math.min(100, rarityForm.common_pct ?? 0));
       const u = Math.max(0, Math.min(100, rarityForm.uncommon_pct ?? 0));
       const r = Math.max(0, Math.min(100, rarityForm.rare_pct ?? 0));
       const sum = c + u + r;
-      const rawExclusive = Number(rarityForm.exclusive_chance_pct);
-      const exclusivePct = (rawExclusive === rawExclusive) ? Math.max(0, Math.min(100, rawExclusive)) : 2;
       const payload = {
         exclusive_chance_pct: exclusivePct,
-        common_pct: sum > 0 ? c : 55,
-        uncommon_pct: sum > 0 ? u : 32,
-        rare_pct: sum > 0 ? r : 13,
+        common_pct: isExclusive100 ? 0 : (sum > 0 ? c : 55),
+        uncommon_pct: isExclusive100 ? 0 : (sum > 0 ? u : 32),
+        rare_pct: isExclusive100 ? 0 : (sum > 0 ? r : 13),
       };
-      if (sum > 0 && sum !== 100) {
+      if (!isExclusive100 && sum > 0 && sum !== 100) {
         const scale = 100 / sum;
         payload.common_pct = Math.round(c * scale);
         payload.uncommon_pct = Math.round(u * scale);
