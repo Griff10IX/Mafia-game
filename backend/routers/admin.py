@@ -193,6 +193,22 @@ def register(router):
         )
         return {"message": f"Gave ${amount:,} to {result.modified_count} accounts", "updated": result.modified_count}
 
+    @router.post("/admin/add-loot-pieces")
+    async def admin_add_loot_pieces(target_username: str, pieces: int, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if pieces < 0:
+            raise HTTPException(status_code=400, detail="Pieces must be non-negative")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$inc": {"loot_box_pieces": pieces}},
+        )
+        return {"message": f"Added {pieces} loot box pieces to {target_username}"}
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

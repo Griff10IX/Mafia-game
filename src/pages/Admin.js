@@ -124,6 +124,7 @@ export default function Admin() {
     prestigeLevel: 0,
     points: 100,
     bullets: 5000,
+    lootPieces: 100,
     carId: 'car1',
     lockMinutes: 5,
     searchMinutes: 1,
@@ -414,6 +415,13 @@ export default function Admin() {
   const handleAddCar = async () => {
     try {
       const response = await api.post(`/admin/add-car?target_username=${formData.targetUsername}&car_id=${formData.carId}`);
+      toast.success(response.data.message);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleAddLootPieces = async () => {
+    try {
+      const response = await api.post(`/admin/add-loot-pieces?target_username=${encodeURIComponent(formData.targetUsername)}&pieces=${formData.lootPieces}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
@@ -1623,6 +1631,11 @@ export default function Admin() {
                 {cars.length > 0 ? cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>) : Array.from({ length: 20 }, (_, i) => <option key={i} value={`car${i + 1}`}>Car {i + 1}</option>)}
               </Select>
               <BtnPrimary onClick={handleAddCar}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Gift} label="Give Loot Box Pieces" description="Add pieces for Loot Box (100 = 1 open)">
+              <Input type="number" min="0" value={formData.lootPieces} onChange={(e) => setFormData((prev) => ({ ...prev, lootPieces: parseInt(e.target.value, 10) || 0 }))} />
+              <BtnPrimary onClick={handleAddLootPieces}>Give</BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
