@@ -6,6 +6,21 @@ import { toast } from 'sonner';
 
 const CAP = 3;
 
+/* GTA-style rarity text colors for cars */
+const RARITY_COLORS = {
+  common: 'text-gray-400',
+  uncommon: 'text-green-400',
+  rare: 'text-blue-400',
+  ultra_rare: 'text-purple-400',
+  legendary: 'text-yellow-400',
+  custom: 'text-orange-400',
+  exclusive: 'text-red-400',
+  loot_exclusive: 'text-amber-400',
+};
+function getRarityColor(rarity) {
+  return RARITY_COLORS[rarity] || 'text-gray-400';
+}
+
 /* ─── Inline styles & keyframes ─── */
 const globalStyles = `
   @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
@@ -423,7 +438,25 @@ function ResultModal({ result, onClose }) {
               <RewardIcon type={r.type} rarity={r.rarity} />
               <div style={{ flex: 1 }}>
                 <div style={{ fontFamily: "'Cinzel', serif", fontSize: 12, color: '#e5e7eb', lineHeight: 1.4 }}>
-                  {rewardLabel(r)}
+                  {r.type === 'cars' && r.items?.length ? (
+                    <span style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 8px', alignItems: 'baseline' }}>
+                      {r.items.map((it, idx) => {
+                        const rarity = (it.rarity ?? 'common').replace(/_/g, ' ');
+                        const colorClass = getRarityColor(it.rarity ?? 'common');
+                        return (
+                          <span key={idx}>
+                            {it.name}{' '}
+                            <span className={`font-heading font-bold uppercase tracking-wider ${colorClass}`}>
+                              ({rarity})
+                            </span>
+                            {idx < r.items.length - 1 ? ', ' : null}
+                          </span>
+                        );
+                      })}
+                    </span>
+                  ) : (
+                    rewardLabel(r)
+                  )}
                 </div>
                 {r.rarity && <div style={{ marginTop: 4 }}><RarityBadge rarity={r.rarity} /></div>}
               </div>
@@ -640,6 +673,66 @@ export default function LootBox() {
             <ScarcityRow icon={Building2} label="Speakeasy"         claimed={claimed.property} cap={CAP} />
           </ul>
         </div>
+
+        {/* ── Active rewards (stacked perks) ── */}
+        {(status?.active_rewards?.length > 0) && (
+          <div style={{
+            borderRadius: 12,
+            background: 'rgba(15,9,2,0.8)',
+            border: '1px solid rgba(234,179,8,0.12)',
+            padding: '16px',
+            animation: 'fadeUp 0.5s 0.3s ease-out both',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12,
+            }}>
+              <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(234,179,8,0.2), transparent)' }} />
+              <span style={{
+                fontFamily: "'Cinzel', serif", fontSize: 10, fontWeight: 600,
+                color: '#eab308', letterSpacing: '0.15em', textTransform: 'uppercase',
+              }}>
+                Active rewards
+              </span>
+              <div style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.2))' }} />
+            </div>
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {status.active_rewards.map((ar, i) => (
+                <li key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 6,
+                  background: 'rgba(234,179,8,0.06)', border: '1px solid rgba(234,179,8,0.15)',
+                }}>
+                  <Zap size={14} color="#eab308" style={{ flexShrink: 0 }} />
+                  <span style={{ fontFamily: "'Crimson Text', serif", fontSize: 12, color: '#e5e7eb', flex: 1 }}>
+                    {ar.name}
+                    {ar.expires_at && (() => {
+                      try {
+                        const until = new Date(ar.expires_at.replace('Z', 'Z'));
+                        const now = new Date();
+                        const ms = until - now;
+                        if (ms <= 0) return null;
+                        const h = Math.floor(ms / 3600000);
+                        const m = Math.floor((ms % 3600000) / 60000);
+                        return (
+                          <span style={{ color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>
+                            ({h}h {m}m left)
+                          </span>
+                        );
+                      } catch {
+                        return null;
+                      }
+                    })()}
+                    {ar.attempts_remaining != null && (
+                      <span style={{ color: '#9ca3af', fontStyle: 'italic', marginLeft: 4 }}>
+                        ({ar.attempts_remaining} attempts left)
+                      </span>
+                    )}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
       </div>
 

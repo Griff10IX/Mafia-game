@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building, TrendingUp, DollarSign, Lock } from 'lucide-react';
+import { Building, TrendingUp, DollarSign, Lock, Zap } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -22,6 +22,7 @@ function formatMoney(n) {
 
 export default function Properties() {
   const [properties, setProperties] = useState([]);
+  const [propertyIncomePerkUntil, setPropertyIncomePerkUntil] = useState(null);
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [attackLoading, setAttackLoading] = useState(null); // property_id+username
@@ -35,7 +36,9 @@ export default function Properties() {
   const fetchProperties = async () => {
     try {
       const response = await api.get('/properties');
-      setProperties(response.data);
+      const data = response.data;
+      setProperties(Array.isArray(data) ? data : (data?.properties ?? []));
+      setPropertyIncomePerkUntil(data?.property_income_perk_until ?? null);
     } catch (error) {
       toast.error('Failed to load properties');
     } finally {
@@ -142,6 +145,23 @@ export default function Properties() {
           <p className="text-[9px] text-primary/50 font-heading uppercase tracking-[0.25em]">Investments</p>
           <p className="text-[10px] text-zinc-500 font-heading italic">Passive income from businesses.</p>
         </div>
+        {propertyIncomePerkUntil && (() => {
+          try {
+            const until = new Date(propertyIncomePerkUntil.replace('Z', 'Z'));
+            if (until <= new Date()) return null;
+            const ms = until - new Date();
+            const h = Math.floor(ms / 3600000);
+            const m = Math.floor((ms % 3600000) / 60000);
+            return (
+              <div className="flex items-center gap-1.5 text-[10px] font-heading text-amber-400/90 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+                <Zap size={10} className="shrink-0" />
+                <span>Loot box: 10% property income for 24h ({h}h {m}m left)</span>
+              </div>
+            );
+          } catch {
+            return null;
+          }
+        })()}
         {collectibleProperties.length > 0 && (
           <button
             type="button"

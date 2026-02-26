@@ -114,12 +114,46 @@ class LootBoxOpenRequest(BaseModel):
     tier: Optional[str] = "standard"
 
 
+def _active_rewards_from_user(user: dict) -> List[Dict[str, Any]]:
+    """Build list of currently active loot perks (can stack)."""
+    now = datetime.now(timezone.utc)
+    active = []
+    # Time-based perks
+    for key, label in [
+        ("property_income_perk_until", PERK_LABELS["property_income_10"]),
+        ("rp_perk_until", PERK_LABELS["rp_10"]),
+        ("jail_bust_payout_perk_until", PERK_LABELS["jail_bust_10"]),
+        ("airport_cost_perk_until", PERK_LABELS["airport_cost"]),
+    ]:
+        until_iso = user.get(key)
+        if not until_iso:
+            continue
+        try:
+            until = datetime.fromisoformat(until_iso.replace("Z", "+00:00"))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            if now < until:
+                active.append({"name": label, "expires_at": until_iso})
+        except Exception:
+            pass
+    # Attempts-based perk
+    attempts = int(user.get("gta_rare_drop_perk_attempts_remaining") or 0)
+    if attempts > 0:
+        active.append({
+            "name": PERK_LABELS["gta_rare_100"],
+            "attempts_remaining": attempts,
+        })
+    return active
+
+
 async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     pieces = int(current_user.get("loot_box_pieces") or 0)
     claimed = await _get_claimed_counts()
+    active_rewards = _active_rewards_from_user(current_user)
     return {
         "loot_box_pieces": pieces,
         "claimed_counts": claimed,
+        "active_rewards": active_rewards,
     }
 
 

@@ -9,6 +9,11 @@ from fastapi import Depends, HTTPException
 from server import db, get_current_user
 
 
+class PropertiesListResponse(BaseModel):
+    properties: List["PropertyResponse"]
+    property_income_perk_until: Optional[str] = None  # When 10% property income loot perk expires (ISO)
+
+
 class PropertyResponse(BaseModel):
     id: str
     name: str
@@ -89,7 +94,10 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             locked=locked,
             required_property_name=required_property_name,
         ))
-    return result
+    return PropertiesListResponse(
+        properties=result,
+        property_income_perk_until=current_user.get("property_income_perk_until"),
+    )
 
 
 async def buy_property(property_id: str, current_user: dict = Depends(get_current_user)):
@@ -191,7 +199,7 @@ def register(router):
         property_ = await _user_owns_any_property(user_id)
         return {"casino": casino, "property": property_}
 
-    router.add_api_route("/properties", get_properties, methods=["GET"], response_model=List[PropertyResponse])
+    router.add_api_route("/properties", get_properties, methods=["GET"], response_model=PropertiesListResponse)
     router.add_api_route("/properties/{property_id}/buy", buy_property, methods=["POST"])
     router.add_api_route("/properties/{property_id}/collect", collect_property_income, methods=["POST"])
     router.add_api_route("/my-properties", get_my_properties, methods=["GET"])
