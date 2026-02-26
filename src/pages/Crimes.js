@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
-import { HelpCircle, Clock, AlertCircle, Bot, Skull } from 'lucide-react';
+import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -301,6 +301,7 @@ export default function Crimes() {
   });
 
   const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(false);
+  const [activeLootPerks, setActiveLootPerks] = useState([]);
 
   const fetchCrimes = async () => {
     try {
@@ -308,9 +309,17 @@ export default function Crimes() {
       let crimesData;
       if (prefetched) {
         crimesData = prefetched;
-        const meRes = await api.get('/auth/me');
+        const [meRes, lootStatusRes] = await Promise.all([
+          api.get('/auth/me'),
+          api.get('/loot-box/status').catch(() => ({ data: {} })),
+        ]);
         setCrimes(crimesData);
         setUser(meRes.data);
+        if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
+          setActiveLootPerks(lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10'));
+        } else {
+          setActiveLootPerks([]);
+        }
         setLoading(false);
       } else {
         const [crimesRes, meRes] = await Promise.all([
@@ -326,12 +335,19 @@ export default function Crimes() {
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/crimes/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
-      ]).then(([eventsRes, statsRes, autoRankRes]) => {
+        api.get('/loot-box/status').catch(() => ({ data: {} })),
+      ]).then(([eventsRes, statsRes, autoRankRes, lootStatusRes]) => {
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
         setCrimeStats(statsRes.data || {});
         const ar = autoRankRes.data || {};
         setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec)));
+        if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
+          const rewards = lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10');
+          setActiveLootPerks(rewards);
+        } else {
+          setActiveLootPerks([]);
+        }
       }).catch(() => {});
     } catch (error) {
       toast.error('Failed to load crimes');
@@ -484,6 +500,29 @@ export default function Crimes() {
       {autoRankCrimesDisabled && <AutoRankCrimesNotice />}
 
       {eventsEnabled && <EventBanner event={event} />}
+
+      {activeLootPerks.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 cr-fade-in">
+          {activeLootPerks.map((ar, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-[10px] font-heading text-amber-400/90 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+              <Zap size={10} className="shrink-0" />
+              <span>
+                {ar.name}
+                {ar.expires_at && (() => {
+                  try {
+                    const until = new Date(ar.expires_at.replace('Z', 'Z'));
+                    const ms = until - new Date();
+                    if (ms <= 0) return null;
+                    const h = Math.floor(ms / 3600000);
+                    const m = Math.floor((ms % 3600000) / 60000);
+                    return ` (${h}h ${m}m left)`;
+                  } catch { return null; }
+                })()}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Stats */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in`} style={{ animationDelay: '0.03s' }}>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, Lock, ChevronDown, ChevronRight, Bot } from 'lucide-react';
+import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap } from 'lucide-react';
 
 const RARITY_COLORS = {
   common: 'text-gray-400',
@@ -399,15 +399,17 @@ export default function GTA() {
   };
 
   const [autoRankGtaDisabled, setAutoRankGtaDisabled] = useState(false);
+  const [activeLootPerks, setActiveLootPerks] = useState([]);
 
   const fetchData = async () => {
     try {
-      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes] = await Promise.allSettled([
+      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes] = await Promise.allSettled([
         api.get('/gta/options'),
         api.get('/gta/recent-stolen'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/gta/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
+        api.get('/loot-box/status').catch(() => ({ data: {} })),
       ]);
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
@@ -430,6 +432,12 @@ export default function GTA() {
       if (autoRankRes.status === 'fulfilled' && autoRankRes.value?.data) {
         const ar = autoRankRes.value.data;
         setAutoRankGtaDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec)));
+      }
+      if (lootStatusRes.status === 'fulfilled' && Array.isArray(lootStatusRes.value?.data?.active_rewards)) {
+        const rewards = lootStatusRes.value.data.active_rewards.filter((r) => r.type === 'rp_10' || r.type === 'gta_rare_100');
+        setActiveLootPerks(rewards);
+      } else {
+        setActiveLootPerks([]);
       }
     } catch (error) {
       toast.error('Failed to load GTA data');
@@ -527,6 +535,30 @@ export default function GTA() {
 
       {autoRankGtaDisabled && <AutoRankGtaNotice />}
       <EventBanner event={event} eventsEnabled={eventsEnabled} />
+
+      {activeLootPerks.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 gta-fade-in">
+          {activeLootPerks.map((ar, i) => (
+            <div key={i} className="flex items-center gap-1.5 text-[10px] font-heading text-amber-400/90 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
+              <Zap size={10} className="shrink-0" />
+              <span>
+                {ar.name}
+                {ar.expires_at && (() => {
+                  try {
+                    const until = new Date(ar.expires_at.replace('Z', 'Z'));
+                    const ms = until - new Date();
+                    if (ms <= 0) return null;
+                    const h = Math.floor(ms / 3600000);
+                    const m = Math.floor((ms % 3600000) / 60000);
+                    return ` (${h}h ${m}m left)`;
+                  } catch { return null; }
+                })()}
+                {ar.attempts_remaining != null && ` (${ar.attempts_remaining} attempts left)`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* GTA stats */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in`} style={{ animationDelay: '0.03s' }}>
