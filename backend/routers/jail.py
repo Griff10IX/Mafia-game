@@ -50,6 +50,17 @@ from routers.objectives import update_objectives_progress
 
 logger = logging.getLogger(__name__)
 
+
+def _safe_int(val, default: int = 0) -> int:
+    """Coerce to int; return default on ValueError/TypeError (e.g. bad DB values)."""
+    if val is None:
+        return default
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return default
+
+
 # Varied success messages when bust succeeds
 JAIL_BUST_SUCCESS_MESSAGES = [
     "Successfully busted out {target_username}!",
@@ -200,18 +211,18 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     if current_user.get("in_jail"):
         return {"success": False, "error": "You cannot attempt a bust while you are in jail.", "error_code": 400}
 
-    total_attempts = int(current_user.get("jail_bust_attempts", 0) or 0)
+    total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
     player_success_rate = _player_bust_success_rate(total_attempts)
 
     npc = await db.jail_npcs.find_one({"username": username_ci}, {"_id": 0})
     if npc:
         success = random.random() < player_success_rate
         rank_points = 25
-        bust_reward_cash = int((npc.get("bust_reward_cash") or 0) or 0)
+        bust_reward_cash = _safe_int(npc.get("bust_reward_cash"), 0)
         if success:
-            new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
-            record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
-            rp_before = int(current_user.get("rank_points") or 0)
+            new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
+            record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
+            rp_before = _safe_int(current_user.get("rank_points"), 0)
             updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_busts_npc": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
             if bust_reward_cash > 0:
                 updates["$inc"]["money"] = bust_reward_cash
@@ -274,8 +285,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             {"id": target["id"]},
             {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None, "snitch_attempted_this_term": False}},
         )
-        reward_cash = int((target.get("bust_reward_cash") or 0) or 0)
-        target_money = int((target.get("money") or 0) or 0)
+        reward_cash = _safe_int(target.get("bust_reward_cash"), 0)
+        target_money = _safe_int(target.get("money"), 0)
         base_pay = min(reward_cash, target_money) if reward_cash > 0 else 0
         cash_to_pay = base_pay
         jail_bust_perk_until = current_user.get("jail_bust_payout_perk_until")
@@ -291,9 +302,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         if base_pay > 0:
             await db.users.update_one({"id": target["id"]}, {"$inc": {"money": -base_pay}})
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash_to_pay}})
-        new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
-        record = max((current_user.get("consecutive_busts_record") or 0), new_consec)
-        rp_before = int(current_user.get("rank_points") or 0)
+        new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
+        record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
+        rp_before = _safe_int(current_user.get("rank_points"), 0)
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
