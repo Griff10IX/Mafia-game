@@ -281,8 +281,6 @@ async def _start_travel_impl(
         user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": user["id"]}, {"_id": 1})
         if user_owns_any_airport:
             airport_price = max(1, round(airport_price * 0.95))
-        from datetime import datetime, timezone
-        now_utc = datetime.now(timezone.utc)
         airport_perk_until = user.get("airport_cost_perk_until")
         if airport_perk_until:
             try:
@@ -321,13 +319,11 @@ async def _start_travel_impl(
     else:
         user_car = await db.user_cars.find_one(
             {"id": travel_method, "user_id": user["id"]},
-            {"_id": 0}
         )
         if not user_car:
             try:
                 user_car = await db.user_cars.find_one(
                     {"_id": ObjectId(travel_method), "user_id": user["id"]},
-                    {"_id": 0}
                 )
             except Exception:
                 user_car = None
@@ -339,8 +335,8 @@ async def _start_travel_impl(
         if car_info:
             travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
             method_name = car_info["name"]
-        # Custom and exclusive cars never take damage (manual or booze)
-        if car_info and car_info.get("rarity") == "exclusive":
+        # Custom, exclusive, and loot_exclusive cars never take damage (manual or booze)
+        if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
             car_to_damage = None
         else:
             car_to_damage = user_car
