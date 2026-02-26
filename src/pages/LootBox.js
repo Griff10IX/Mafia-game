@@ -384,13 +384,16 @@ export default function LootBox() {
           const rRes = await api.get('/loot-box/admin/rarity');
           if (!cancelled && rRes.data) {
             setRarityConfig(rRes.data);
+            const excl = Math.max(0, Math.min(100, Number(rRes.data.exclusive_chance_pct) ?? 2));
             const c = rRes.data.common_pct ?? 0;
             const u = rRes.data.uncommon_pct ?? 0;
             const r = rRes.data.rare_pct ?? 0;
             const sum = c + u + r;
-            const box = sum > 0 ? { common_pct: c, uncommon_pct: u, rare_pct: r } : { common_pct: 55, uncommon_pct: 32, rare_pct: 13 };
+            const box = excl >= 100
+              ? { common_pct: 0, uncommon_pct: 0, rare_pct: 0 }
+              : (sum > 0 ? { common_pct: c, uncommon_pct: u, rare_pct: r } : { common_pct: 55, uncommon_pct: 32, rare_pct: 13 });
             setRarityForm({
-              exclusive_chance_pct: Math.max(0, Math.min(100, Number(rRes.data.exclusive_chance_pct) ?? 2)),
+              exclusive_chance_pct: excl,
               ...box,
             });
           }
@@ -581,7 +584,11 @@ export default function LootBox() {
                         value={rarityForm.exclusive_chance_pct}
                         onChange={(e) => {
                           const v = parseFloat(e.target.value);
-                          setRarityForm((f) => ({ ...f, exclusive_chance_pct: Number.isFinite(v) ? v : f.exclusive_chance_pct }));
+                          setRarityForm((f) => {
+                            const next = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : f.exclusive_chance_pct;
+                            if (next >= 100) return { ...f, exclusive_chance_pct: 100, common_pct: 0, uncommon_pct: 0, rare_pct: 0 };
+                            return { ...f, exclusive_chance_pct: next };
+                          });
                         }}
                         className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
                       />
