@@ -336,9 +336,11 @@ async def open_loot_box(
                 available.append("armour")
             if claimed["property"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_exclusive_property(user_id):
                 available.append("property")
-            # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing
+            # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
             if is_admin_test and exclusive_chance >= 1.0 and not available:
-                available = ["weapon", "car", "armour", "property"]
+                available = ["weapon", "car", "armour"]
+                if not await _user_has_exclusive_property(user_id):
+                    available.append("property")
             if available:
                 typ = random.choice(available)
                 if typ == "weapon":
