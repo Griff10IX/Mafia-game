@@ -384,11 +384,14 @@ export default function LootBox() {
           const rRes = await api.get('/loot-box/admin/rarity');
           if (!cancelled && rRes.data) {
             setRarityConfig(rRes.data);
+            const c = rRes.data.common_pct ?? 0;
+            const u = rRes.data.uncommon_pct ?? 0;
+            const r = rRes.data.rare_pct ?? 0;
+            const sum = c + u + r;
+            const box = sum > 0 ? { common_pct: c, uncommon_pct: u, rare_pct: r } : { common_pct: 55, uncommon_pct: 32, rare_pct: 13 };
             setRarityForm({
-              exclusive_chance_pct: rRes.data.exclusive_chance_pct ?? 2,
-              common_pct: rRes.data.common_pct ?? 55,
-              uncommon_pct: rRes.data.uncommon_pct ?? 32,
-              rare_pct: rRes.data.rare_pct ?? 13,
+              exclusive_chance_pct: Math.max(0, Math.min(100, Number(rRes.data.exclusive_chance_pct) ?? 2)),
+              ...box,
             });
           }
         }
@@ -402,8 +405,30 @@ export default function LootBox() {
   const saveRarity = async () => {
     setRaritySaving(true);
     try {
-      const res = await api.post('/loot-box/admin/rarity', rarityForm);
+      const c = Math.max(0, Math.min(100, rarityForm.common_pct ?? 0));
+      const u = Math.max(0, Math.min(100, rarityForm.uncommon_pct ?? 0));
+      const r = Math.max(0, Math.min(100, rarityForm.rare_pct ?? 0));
+      const sum = c + u + r;
+      const payload = {
+        exclusive_chance_pct: Math.max(0, Math.min(100, Number(rarityForm.exclusive_chance_pct) ?? 2)),
+        common_pct: sum > 0 ? c : 55,
+        uncommon_pct: sum > 0 ? u : 32,
+        rare_pct: sum > 0 ? r : 13,
+      };
+      if (sum > 0 && sum !== 100) {
+        const scale = 100 / sum;
+        payload.common_pct = Math.round(c * scale);
+        payload.uncommon_pct = Math.round(u * scale);
+        payload.rare_pct = 100 - payload.common_pct - payload.uncommon_pct;
+      }
+      const res = await api.post('/loot-box/admin/rarity', payload);
       setRarityConfig(res.data);
+      setRarityForm({
+        exclusive_chance_pct: res.data.exclusive_chance_pct ?? payload.exclusive_chance_pct,
+        common_pct: res.data.common_pct ?? payload.common_pct,
+        uncommon_pct: res.data.uncommon_pct ?? payload.uncommon_pct,
+        rare_pct: res.data.rare_pct ?? payload.rare_pct,
+      });
       toast.success(res.data?.message ?? 'Rarity updated');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save rarity');
@@ -473,10 +498,10 @@ export default function LootBox() {
       <style>{globalStyles}</style>
       <style>{LOOT_BOX_STYLES}</style>
 
-      <div className={`space-y-2 ${styles.pageContent}`} data-testid="lootbox-page">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-4">
+      <div className={`space-y-1.5 ${styles.pageContent}`} data-testid="lootbox-page">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-3">
           {/* ── Main column ── */}
-          <div className="space-y-2 min-w-0">
+          <div className="space-y-1.5 min-w-0">
             {/* Header */}
             <div className="relative lb-fade-in">
               <p className="text-[9px] text-zinc-500 font-heading italic">Earn pieces from <Link to="/missions" className="text-primary underline">the Consigliere's Ledger</Link>. One hundred pieces open a box. Exclusives are scarce.</p>
@@ -485,13 +510,13 @@ export default function LootBox() {
             {/* Chest card */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+              <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
                 <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">The Vault</span>
               </div>
-              <div className="p-4 relative">
+              <div className="p-3 relative">
                 <Embers />
                 <ChestIcon shaking={phase === 'shaking'} exploding={phase === 'exploding'} />
-                <div className="text-center mb-3">
+                <div className="text-center mb-2">
                   <div className="flex items-baseline justify-center gap-1.5">
                     <span className="text-2xl font-heading font-bold text-primary">{pieces}</span>
                     <span className="text-[10px] text-mutedForeground font-heading">/100</span>
@@ -503,7 +528,7 @@ export default function LootBox() {
                   type="button"
                   onClick={handleOpen}
                   disabled={!canOpen}
-                  className={`w-full mt-3 py-2 px-3 rounded font-heading font-bold uppercase tracking-wider text-[10px] border flex items-center justify-center gap-2 transition-all ${
+                  className={`w-full mt-2 py-1.5 px-2.5 rounded font-heading font-bold uppercase tracking-wider text-[10px] border flex items-center justify-center gap-2 transition-all ${
                     canOpen
                       ? 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30'
                       : 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 cursor-not-allowed'
@@ -519,12 +544,12 @@ export default function LootBox() {
             {/* Scarcity card */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in`} style={{ animationDelay: '0.05s' }}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+              <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
                 <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Exclusive Scarcity</span>
               </div>
-              <div className="p-2">
-                <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-2">Each exclusive may only be claimed by {CAP} made men across the family.</p>
-                <ul className="list-none p-0 m-0 flex flex-col gap-1">
+              <div className="p-1.5">
+                <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1">Each exclusive may only be claimed by {CAP} made men across the family.</p>
+                <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
                   <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={CAP} />
                   <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={CAP} />
                   <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={CAP} />
@@ -538,12 +563,12 @@ export default function LootBox() {
             {isAdmin && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/30 border-dashed lb-fade-in`} style={{ animationDelay: '0.06s' }}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                <div className="px-2.5 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-1.5">
+                <div className="px-2 py-1 bg-primary/10 border-b border-primary/20 flex items-center gap-1.5">
                   <Shield size={12} className="text-primary shrink-0" />
                   <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Admin — Rarity %</span>
                 </div>
-                <div className="p-2.5 space-y-2">
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] font-heading">
+                <div className="p-2 space-y-1.5">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-heading">
                     <label className="flex items-center gap-1.5">
                       <span className="text-mutedForeground w-24">Exclusive %</span>
                       <input
@@ -590,12 +615,12 @@ export default function LootBox() {
                       />
                     </label>
                   </div>
-                  <p className="text-[9px] text-mutedForeground italic">Exclusive % = chance per prize (e.g. 2 = 2%). Box quality: set one % and the other two auto-fill to sum to 100.</p>
+                  <p className="text-[8px] text-mutedForeground italic leading-tight">Exclusive % = chance per prize. Box quality: set one, other two auto-fill to 100.</p>
                   <button
                     type="button"
                     onClick={saveRarity}
                     disabled={raritySaving}
-                    className="w-full py-1.5 px-2 rounded border border-primary/40 bg-primary/15 text-primary font-heading text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 hover:bg-primary/25 disabled:opacity-50"
+                    className="w-full py-1 px-1.5 rounded border border-primary/40 bg-primary/15 text-primary font-heading text-[9px] uppercase tracking-wider flex items-center justify-center gap-1 hover:bg-primary/25 disabled:opacity-50"
                   >
                     <Save size={12} />
                     {raritySaving ? 'Saving…' : 'Save rarity'}
@@ -609,12 +634,12 @@ export default function LootBox() {
             {(status?.active_rewards?.length > 0) && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in`} style={{ animationDelay: '0.07s' }}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
                   <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Active rewards</span>
                 </div>
-                <ul className="p-2 list-none m-0 flex flex-col gap-1">
+                <ul className="p-1.5 list-none m-0 flex flex-col gap-0.5">
                   {status.active_rewards.map((ar, i) => (
-                    <li key={i} className="flex items-center gap-2 text-[10px] font-heading text-foreground bg-primary/5 border border-primary/15 rounded px-2 py-1.5">
+                    <li key={i} className="flex items-center gap-1.5 text-[9px] font-heading text-foreground bg-primary/5 border border-primary/15 rounded px-1.5 py-1">
                       <Zap size={12} className="text-primary shrink-0" />
                       <span>
                         {ar.name}
