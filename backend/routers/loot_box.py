@@ -255,7 +255,8 @@ async def set_loot_box_rarity_admin(
         raise HTTPException(status_code=403, detail="Admin only")
     config = await _get_loot_rarity_config()
     if body.exclusive_chance_pct is not None:
-        config["exclusive_chance"] = max(0.0, min(100.0, float(body.exclusive_chance_pct))) / 100.0
+        x = float(body.exclusive_chance_pct)
+        config["exclusive_chance"] = 1.0 if x >= 100 else max(0.0, min(100.0, x)) / 100.0
     if body.common_pct is not None:
         config["common_pct"] = max(0, min(100, int(body.common_pct)))
     if body.uncommon_pct is not None:

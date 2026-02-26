@@ -409,8 +409,10 @@ export default function LootBox() {
       const u = Math.max(0, Math.min(100, rarityForm.uncommon_pct ?? 0));
       const r = Math.max(0, Math.min(100, rarityForm.rare_pct ?? 0));
       const sum = c + u + r;
+      const rawExclusive = Number(rarityForm.exclusive_chance_pct);
+      const exclusivePct = (rawExclusive === rawExclusive) ? Math.max(0, Math.min(100, rawExclusive)) : 2;
       const payload = {
-        exclusive_chance_pct: Math.max(0, Math.min(100, Number(rarityForm.exclusive_chance_pct) ?? 2)),
+        exclusive_chance_pct: exclusivePct,
         common_pct: sum > 0 ? c : 55,
         uncommon_pct: sum > 0 ? u : 32,
         rare_pct: sum > 0 ? r : 13,
@@ -577,7 +579,10 @@ export default function LootBox() {
                         max={100}
                         step={0.1}
                         value={rarityForm.exclusive_chance_pct}
-                        onChange={(e) => setRarityForm((f) => ({ ...f, exclusive_chance_pct: parseFloat(e.target.value) || 0 }))}
+                        onChange={(e) => {
+                          const v = parseFloat(e.target.value);
+                          setRarityForm((f) => ({ ...f, exclusive_chance_pct: Number.isFinite(v) ? v : f.exclusive_chance_pct }));
+                        }}
                         className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
                       />
                     </label>
