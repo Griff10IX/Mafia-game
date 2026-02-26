@@ -101,12 +101,19 @@ async def update_objectives_progress(user_id: str, objective_type: str, amount: 
     weekly_progress = dict(user.get("objectives_weekly_progress") or {})
     monthly_progress = dict(user.get("objectives_monthly_progress") or {})
 
+    def _progress_val(d: dict, k: str) -> int:
+        v = d.get(k, 0)
+        try:
+            return int(v) if v is not None else 0
+        except (TypeError, ValueError):
+            return 0
+
     if daily_date == today_str:
         if objective_type == "crimes_in_city" and city:
             key = f"crimes_in_{city.lower().replace(' ', '_')}"
-            daily_progress[key] = daily_progress.get(key, 0) + amount
+            daily_progress[key] = _progress_val(daily_progress, key) + amount
         else:
-            daily_progress[objective_type] = daily_progress.get(objective_type, 0) + amount
+            daily_progress[objective_type] = _progress_val(daily_progress, objective_type) + amount
         await db.users.update_one(
             {"id": user_id},
             {"$set": {"objectives_daily_progress": daily_progress}}
@@ -114,9 +121,9 @@ async def update_objectives_progress(user_id: str, objective_type: str, amount: 
     if weekly_start == week_start_str:
         if objective_type == "crimes_in_city" and city:
             key = f"crimes_in_{city.lower().replace(' ', '_')}"
-            weekly_progress[key] = weekly_progress.get(key, 0) + amount
+            weekly_progress[key] = _progress_val(weekly_progress, key) + amount
         else:
-            weekly_progress[objective_type] = weekly_progress.get(objective_type, 0) + amount
+            weekly_progress[objective_type] = _progress_val(weekly_progress, objective_type) + amount
         await db.users.update_one(
             {"id": user_id},
             {"$set": {"objectives_weekly_progress": weekly_progress}}
@@ -124,9 +131,9 @@ async def update_objectives_progress(user_id: str, objective_type: str, amount: 
     if monthly_start == month_start_str:
         if objective_type == "crimes_in_city" and city:
             key = f"crimes_in_{city.lower().replace(' ', '_')}"
-            monthly_progress[key] = monthly_progress.get(key, 0) + amount
+            monthly_progress[key] = _progress_val(monthly_progress, key) + amount
         else:
-            monthly_progress[objective_type] = monthly_progress.get(objective_type, 0) + amount
+            monthly_progress[objective_type] = _progress_val(monthly_progress, objective_type) + amount
         await db.users.update_one(
             {"id": user_id},
             {"$set": {"objectives_monthly_progress": monthly_progress}}

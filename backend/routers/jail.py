@@ -243,9 +243,10 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
             return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash}
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
+        next_attempts = total_attempts + 1
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
+            {"$set": {"jail_bust_attempts": next_attempts, "in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
         )
         await _record_bust_event(current_user["id"], False, 0)
         return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
@@ -322,9 +323,10 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=display_name)
         return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay}
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
+    next_attempts = total_attempts + 1
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"jail_bust_attempts": 1}, "$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
+        {"$set": {"jail_bust_attempts": next_attempts, "in_jail": True, "jail_until": jail_until.isoformat(), "current_consecutive_busts": 0, "snitch_attempted_this_term": False}},
     )
     await _record_bust_event(current_user["id"], False, 0)
     return {"success": False, "message": random.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30}
