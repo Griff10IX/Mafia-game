@@ -412,6 +412,19 @@ export default function LootBox() {
     }
   };
 
+  // Auto-fill box quality % so Common + Uncommon + Rare = 100 when one is edited
+  const updateBoxQuality = (field, value) => {
+    const n = Math.max(0, Math.min(100, parseInt(String(value), 10) || 0));
+    setRarityForm((f) => {
+      const rest = 100 - n;
+      const half = Math.floor(rest / 2);
+      if (field === 'common_pct') return { ...f, common_pct: n, uncommon_pct: half, rare_pct: rest - half };
+      if (field === 'uncommon_pct') return { ...f, uncommon_pct: n, common_pct: half, rare_pct: rest - half };
+      if (field === 'rare_pct') return { ...f, rare_pct: n, common_pct: half, uncommon_pct: rest - half };
+      return { ...f, [field]: n };
+    });
+  };
+
   const handleOpen = async () => {
     const pieces = status?.loot_box_pieces ?? 0;
     if (pieces < 100) return;
@@ -550,7 +563,7 @@ export default function LootBox() {
                         min={0}
                         max={100}
                         value={rarityForm.common_pct}
-                        onChange={(e) => setRarityForm((f) => ({ ...f, common_pct: parseInt(e.target.value, 10) || 0 }))}
+                        onChange={(e) => updateBoxQuality('common_pct', e.target.value)}
                         className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
                       />
                     </label>
@@ -561,7 +574,7 @@ export default function LootBox() {
                         min={0}
                         max={100}
                         value={rarityForm.uncommon_pct}
-                        onChange={(e) => setRarityForm((f) => ({ ...f, uncommon_pct: parseInt(e.target.value, 10) || 0 }))}
+                        onChange={(e) => updateBoxQuality('uncommon_pct', e.target.value)}
                         className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
                       />
                     </label>
@@ -572,12 +585,12 @@ export default function LootBox() {
                         min={0}
                         max={100}
                         value={rarityForm.rare_pct}
-                        onChange={(e) => setRarityForm((f) => ({ ...f, rare_pct: parseInt(e.target.value, 10) || 0 }))}
+                        onChange={(e) => updateBoxQuality('rare_pct', e.target.value)}
                         className="w-14 px-1.5 py-0.5 rounded border border-primary/30 bg-background text-foreground text-right"
                       />
                     </label>
                   </div>
-                  <p className="text-[9px] text-mutedForeground italic">Exclusive % = chance per prize (e.g. 2 = 2%). Common/Uncommon/Rare = box quality split (need not sum to 100).</p>
+                  <p className="text-[9px] text-mutedForeground italic">Exclusive % = chance per prize (e.g. 2 = 2%). Box quality: set one % and the other two auto-fill to sum to 100.</p>
                   <button
                     type="button"
                     onClick={saveRarity}
@@ -625,28 +638,28 @@ export default function LootBox() {
             )}
           </div>
 
-          {/* ── Side: Last 10 wins ── */}
+          {/* ── Side: Last 10 wins (compact) ── */}
           <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in h-fit`} style={{ animationDelay: '0.05s' }}>
             <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+            <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
               <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Last 10 wins</span>
             </div>
-            <div className="p-2 max-h-[60vh] overflow-y-auto">
+            <div className="p-1.5 max-h-[50vh] overflow-y-auto">
               {last10.length === 0 ? (
-                <p className="text-[10px] text-mutedForeground font-heading italic">No opens yet.</p>
+                <p className="text-[9px] text-mutedForeground font-heading italic py-0.5">No opens yet.</p>
               ) : (
-                <ul className="list-none p-0 m-0 space-y-2">
+                <ul className="list-none p-0 m-0 space-y-1">
                   {last10.map((win, i) => (
-                    <li key={i} className="text-[9px] font-heading border-b border-primary/10 pb-2 last:border-0 last:pb-0">
-                      <div className="flex items-center justify-between gap-1 text-mutedForeground uppercase tracking-wider">
-                        <span>{win.box_quality ?? '—'} · {win.prizes_count ?? 0} prize{(win.prizes_count ?? 0) !== 1 ? 's' : ''}</span>
+                    <li key={i} className="text-[8px] font-heading border-b border-primary/10 pb-1 last:border-0 last:pb-0 leading-tight">
+                      <div className="flex items-center justify-between gap-0.5 text-mutedForeground uppercase tracking-wider">
+                        <span>{win.box_quality ?? '—'} · {win.prizes_count ?? 0}</span>
                         <span>{win.opened_at ? new Date(win.opened_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}</span>
                       </div>
                       <ul className="mt-0.5 space-y-0.5 text-foreground">
-                        {(win.rewards || []).slice(0, 5).map((r, j) => (
+                        {(win.rewards || []).slice(0, 4).map((r, j) => (
                           <li key={j} className="truncate">{rewardLabel(r)}</li>
                         ))}
-                        {(win.rewards?.length ?? 0) > 5 && <li className="text-mutedForeground">+{(win.rewards?.length ?? 0) - 5} more</li>}
+                        {(win.rewards?.length ?? 0) > 4 && <li className="text-mutedForeground text-[7px]">+{(win.rewards?.length ?? 0) - 4}</li>}
                       </ul>
                     </li>
                   ))}

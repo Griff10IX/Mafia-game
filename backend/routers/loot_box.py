@@ -321,6 +321,7 @@ async def open_loot_box(
     now = datetime.now(timezone.utc)
 
     exclusive_chance = rarity_config.get("exclusive_chance") or EXCLUSIVE_CHANCE
+    chosen_standard_types: set = set()  # diversify: avoid same type twice in one open
     for _ in range(num_prizes):
         claimed = await _get_claimed_counts()
         roll = random.random()
@@ -398,17 +399,21 @@ async def open_loot_box(
                     rewards.append({"type": "property", "name": "Speakeasy", "rarity": "loot_exclusive"})
                     continue
 
-        # Standard reward
-        weights = [w for _, w in STANDARD_REWARD_WEIGHTS]
+        # Standard reward — diversify: prefer types not yet chosen this open
+        available = [(name, w) for name, w in STANDARD_REWARD_WEIGHTS if name not in chosen_standard_types]
+        if not available:
+            available = list(STANDARD_REWARD_WEIGHTS)
+        weights = [w for _, w in available]
         total_w = sum(weights)
         r = random.random() * total_w
         acc = 0
-        chosen = STANDARD_REWARD_WEIGHTS[0][0]
-        for name, w in STANDARD_REWARD_WEIGHTS:
+        chosen = available[0][0]
+        for name, w in available:
             acc += w
             if r <= acc:
                 chosen = name
                 break
+        chosen_standard_types.add(chosen)
 
         if chosen == "points":
             amount = random.choice([10, 30, 50]) if random.random() < 0.6 else random.randint(1, 200)
