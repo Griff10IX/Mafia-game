@@ -63,6 +63,7 @@ const Profile = lazy(() => import("./pages/Profile"));
 const Stats = lazy(() => import("./pages/Stats"));
 const Objectives = lazy(() => import("./pages/Objectives"));
 const Missions = lazy(() => import("./pages/Missions"));
+const LootBox = lazy(() => import("./pages/LootBox"));
 const QuickTrade = lazy(() => import("./pages/QuickTrade"));
 const LockedPage = lazy(() => import("./pages/LockedPage"));
 
@@ -230,6 +231,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Missions />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/loot-box"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <LootBox />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

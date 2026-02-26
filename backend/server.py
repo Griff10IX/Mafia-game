@@ -166,7 +166,7 @@ BANK_INTEREST_OPTIONS = [
 DEFAULT_HEALTH = 100
 MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
-ARMOUR_BASE_BULLETS = {0: 5000, 1: 25000, 2: 45000, 3: 65000, 4: 85000, 5: 100000}  # base before weapon/rank reduction
+ARMOUR_BASE_BULLETS = {0: 5000, 1: 25000, 2: 45000, 3: 65000, 4: 85000, 5: 100000, 6: 120000}  # 6 = loot-exclusive Steel Plate Vest (1922)
 KILL_CASH_PERCENT = 0.25  # killer gets 25% of victim's cash
 DEAD_ALIVE_PERCENT = 0.95  # 5% tax: you receive 95% of dead account's money and points when using Dead > Alive (one-time)
 
@@ -330,6 +330,7 @@ POINT_PACKAGES = {
 
 # Travel times based on car rarity (in seconds)
 TRAVEL_TIMES = {
+    "loot_exclusive": 5,
     "exclusive": 7,
     "legendary": 12,
     "ultra_rare": 18,
@@ -368,7 +369,9 @@ CARS = [
     # Custom (store only) - just below exclusive
     {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 40000, "travel_bonus": 55, "image": None},
     # Exclusive (admin only) - no custom image
-    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 50000, "travel_bonus": 60, "image": "/images/gta/car20.png"}
+    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 50000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
+    # Loot-exclusive (loot box only, cap 3 globally)
+    {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 65000, "travel_bonus": 68, "image": None},
 ]
 
 # Models (UserRegister, UserLogin, PasswordResetRequest, PasswordResetConfirm moved to routers/auth.py)
@@ -418,6 +421,7 @@ class UserResponse(BaseModel):
     account_locked_comment: Optional[str] = None  # user's one-time comment
     can_submit_comment: bool = False  # true when locked and no comment submitted yet
     email_verified: bool = True  # false until user clicks verification link
+    loot_box_pieces: int = 0
 
 class NotificationCreate(BaseModel):
     title: str
@@ -1138,6 +1142,8 @@ armoury.register(api_router)
 objectives.register(api_router)
 from routers import missions
 missions.register(api_router)
+from routers import loot_box
+loot_box.register(api_router)
 attack.register(api_router)
 bank.register(api_router)
 families.register(api_router)
@@ -1351,6 +1357,11 @@ async def init_game_data():
             logging.info("Seeded %d weapons from data/weapons.json", len(weapons))
         else:
             logging.warning("Weapons collection is empty and no seed file; add data/weapons.json or insert via DB.")
+    else:
+        if await db.weapons.find_one({"id": "weapon_loot"}) is None:
+            loot_weapon = {"id": "weapon_loot", "name": "Colt Monitor", "description": "Loot-exclusive LMG. Not sold anywhere.", "damage": 140, "bullets_needed": 40, "rank_required": 11, "price_money": None, "price_points": None, "loot_exclusive": True}
+            await db.weapons.insert_one(loot_weapon)
+            logging.info("Inserted loot-exclusive weapon (weapon_loot) into existing weapons collection")
     properties_count = await db.properties.count_documents({})
     if properties_count == 0:
         properties = _load_seed_json("properties.json")

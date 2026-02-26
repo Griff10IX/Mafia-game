@@ -281,6 +281,18 @@ async def _start_travel_impl(
         user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": user["id"]}, {"_id": 1})
         if user_owns_any_airport:
             airport_price = max(1, round(airport_price * 0.95))
+        from datetime import datetime, timezone
+        now_utc = datetime.now(timezone.utc)
+        airport_perk_until = user.get("airport_cost_perk_until")
+        if airport_perk_until:
+            try:
+                until = datetime.fromisoformat(airport_perk_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    airport_price = max(1, round(airport_price * 0.9))
+            except Exception:
+                pass
         owner_id = airport_doc.get("owner_id")
         if user.get("points", 0) < airport_price:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")

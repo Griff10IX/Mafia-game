@@ -254,15 +254,38 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     success = random.random() < player_success_rate
     if success:
         rank_points = 15
+        from datetime import datetime, timezone
+        now_utc = datetime.now(timezone.utc)
+        rp_perk_until = current_user.get("rp_perk_until")
+        if rp_perk_until:
+            try:
+                until = datetime.fromisoformat(rp_perk_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    rank_points = int(rank_points * 1.1)
+            except Exception:
+                pass
         await db.users.update_one(
             {"id": target["id"]},
             {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None, "snitch_attempted_this_term": False}},
         )
         reward_cash = int((target.get("bust_reward_cash") or 0) or 0)
         target_money = int((target.get("money") or 0) or 0)
-        cash_to_pay = min(reward_cash, target_money) if reward_cash > 0 else 0
-        if cash_to_pay > 0:
-            await db.users.update_one({"id": target["id"]}, {"$inc": {"money": -cash_to_pay}})
+        base_pay = min(reward_cash, target_money) if reward_cash > 0 else 0
+        cash_to_pay = base_pay
+        jail_bust_perk_until = current_user.get("jail_bust_payout_perk_until")
+        if jail_bust_perk_until and base_pay > 0:
+            try:
+                until = datetime.fromisoformat(jail_bust_perk_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    cash_to_pay = int(base_pay * 1.1)
+            except Exception:
+                pass
+        if base_pay > 0:
+            await db.users.update_one({"id": target["id"]}, {"$inc": {"money": -base_pay}})
             await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash_to_pay}})
         new_consec = (current_user.get("current_consecutive_busts") or 0) + 1
         record = max((current_user.get("consecutive_busts_record") or 0), new_consec)

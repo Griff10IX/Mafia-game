@@ -222,7 +222,7 @@ def _bullets_to_kill(
     attacker_weapon_damage: int,
     attacker_rank_id: int,
 ) -> int:
-    arm = min(max(0, int(target_armour_level or 0)), 5)
+    arm = min(max(0, int(target_armour_level or 0)), 6)
     tr = min(max(1, int(target_rank_id or 1)), 11)
     ar = min(max(1, int(attacker_rank_id or 1)), 11)
     dmg = max(5, int(attacker_weapon_damage or 5))
@@ -241,7 +241,7 @@ def _bullets_to_kill_breakdown(
     attacker_weapon_damage: int,
     attacker_rank_id: int,
 ) -> dict:
-    arm = min(max(0, int(target_armour_level or 0)), 5)
+    arm = min(max(0, int(target_armour_level or 0)), 6)
     tr = min(max(1, int(target_rank_id or 1)), 11)
     ar = min(max(1, int(attacker_rank_id or 1)), 11)
     dmg = max(5, int(attacker_weapon_damage or 5))
@@ -740,8 +740,20 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         except Exception as e:
             logging.exception("Rank-up notification (kill): %s", e)
         # Transfer cars to killer; only exclusives get a new id so old view-car links are dead
+        killer_has_loot_car = await db.user_cars.count_documents({"user_id": killer_id, "car_id": "car21"})
         for uc in victim_cars:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+            is_loot_exclusive = car_info and car_info.get("rarity") == "loot_exclusive"
+            if is_loot_exclusive:
+                if killer_has_loot_car >= 1:
+                    await db.user_cars.delete_one({"_id": uc["_id"]})
+                else:
+                    await db.user_cars.update_one(
+                        {"_id": uc["_id"]},
+                        {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
+                    )
+                    killer_has_loot_car = 1
+                continue
             is_exclusive = car_info and car_info.get("rarity") == "exclusive"
             if is_exclusive:
                 await db.user_cars.update_one(
@@ -825,6 +837,50 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 await db.airport_ownership.update_many(
                     {"owner_id": victim_id},
                     {"$set": {"owner_id": None, "owner_username": None}},
+                )
+        # Transfer loot-exclusive weapon: victim loses one; killer gains only if they don't have it
+        victim_uw = await db.user_weapons.find_one({"user_id": victim_id, "weapon_id": "weapon_loot", "quantity": {"$gte": 1}}, {"_id": 0, "quantity": 1})
+        if victim_uw:
+            await db.user_weapons.update_one(
+                {"user_id": victim_id, "weapon_id": "weapon_loot"},
+                {"$inc": {"quantity": -1}},
+            )
+            killer_has_weapon = await db.user_weapons.find_one({"user_id": killer_id, "weapon_id": "weapon_loot"}, {"_id": 1})
+            if not killer_has_weapon:
+                await db.user_weapons.update_one(
+                    {"user_id": killer_id, "weapon_id": "weapon_loot"},
+                    {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+        # Transfer armour level 6: victim drops to 5; killer gets 6 only if they don't have it
+        victim_armour = int(target.get("armour_level") or 0)
+        victim_owned_max = int(target.get("armour_owned_level_max") or 0)
+        if victim_armour >= 6 or victim_owned_max >= 6:
+            await db.users.update_one(
+                {"id": victim_id},
+                {"$set": {"armour_level": 5, "armour_owned_level_max": 5}},
+            )
+            killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "armour_level": 1, "armour_owned_level_max": 1})
+            k_level = int((killer_doc or {}).get("armour_level") or 0)
+            k_owned = int((killer_doc or {}).get("armour_owned_level_max") or 0)
+            if k_level < 6 and k_owned < 6:
+                await db.users.update_one(
+                    {"id": killer_id},
+                    {"$set": {"armour_level": 6, "armour_owned_level_max": 6}},
+                )
+        # Transfer exclusive property (Speakeasy): victim loses; killer gains only if they don't have one
+        victim_ep = await db.exclusive_properties.find_one({"owner_id": victim_id}, {"_id": 1})
+        if victim_ep:
+            killer_ep = await db.exclusive_properties.find_one({"owner_id": killer_id}, {"_id": 1})
+            if killer_ep:
+                await db.exclusive_properties.update_one(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None}},
+                )
+            else:
+                await db.exclusive_properties.update_one(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": killer_id}},
                 )
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
         if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):

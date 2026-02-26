@@ -73,6 +73,8 @@ async def ensure_all_indexes(db):
         # --- Airport / bullet factory ---
         await db.airport_ownership.create_index("owner_id")
         await db.airport_ownership.create_index([("state", 1), ("slot", 1)], unique=True)
+        await db.exclusive_properties.create_index("owner_id")
+        await db.exclusive_properties.create_index("id", unique=True)
         await db.bullet_factory.create_index("owner_id")
         await db.bullet_factory.create_index("state")
 

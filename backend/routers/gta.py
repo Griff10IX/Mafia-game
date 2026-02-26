@@ -284,13 +284,17 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
             for c in CARS
             if c["min_difficulty"] <= option["difficulty"]
             and c["rarity"] != "exclusive"
+            and c.get("rarity") != "loot_exclusive"
         ]
         if not available_cars:
             available_cars = [c for c in CARS if c["min_difficulty"] == 1]
-        # Prestige bonus: weight rarer cars more heavily
+        # Prestige bonus and loot-box GTA rare perk: weight rarer cars more heavily
         from server import get_prestige_bonus
         _gta_prestige_user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "prestige_level": 1})
         _rare_boost = get_prestige_bonus(_gta_prestige_user or {})["gta_rare_boost"]
+        gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
+        if gta_rare_perk > 0:
+            _rare_boost = max(_rare_boost, 1.0)
         if _rare_boost > 0:
             _rarity_weights = {"common": 1.0, "uncommon": 1.0 + _rare_boost * 0.5, "rare": 1.0 + _rare_boost, "ultra_rare": 1.0 + _rare_boost * 1.5, "legendary": 1.0 + _rare_boost * 2.0}
             _weights = [_rarity_weights.get(c.get("rarity", "common"), 1.0) for c in available_cars]
@@ -311,6 +315,20 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         }
         rank_points = rank_points_map.get(car["rarity"], 5)
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
+        now_utc = datetime.now(timezone.utc)
+        rp_perk_until = current_user.get("rp_perk_until")
+        if rp_perk_until:
+            try:
+                until = datetime.fromisoformat(rp_perk_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    rank_points = int(rank_points * 1.1)
+            except Exception:
+                pass
+        gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
+        if gta_rare_perk > 0:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})
         await db.user_cars.insert_one(
             {
                 "id": str(uuid.uuid4()),

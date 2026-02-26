@@ -321,6 +321,17 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         ev = await get_effective_event()
         reward = int(reward * ev.get("kill_cash", 1.0))
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
+        now_utc = datetime.now(timezone.utc)
+        rp_perk_until = current_user.get("rp_perk_until")
+        if rp_perk_until:
+            try:
+                until = datetime.fromisoformat(rp_perk_until.replace("Z", "+00:00"))
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                if now_utc < until:
+                    rank_points = int(rank_points * 1.1)
+            except Exception:
+                pass
         # Prestige bonus: boost crime cash payout
         from server import get_prestige_bonus
         reward = int(reward * get_prestige_bonus(current_user)["crime_mult"])

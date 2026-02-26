@@ -470,9 +470,11 @@ async def start_weapon_production(
     weapon_id = (request.weapon_id or "").strip()
     if not weapon_id:
         raise HTTPException(status_code=400, detail="weapon_id required")
-    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0, "price_money": 1, "price_points": 1, "name": 1})
+    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0, "price_money": 1, "price_points": 1, "name": 1, "loot_exclusive": 1})
     if not weapon:
         raise HTTPException(status_code=404, detail="Weapon not found")
+    if weapon.get("loot_exclusive"):
+        raise HTTPException(status_code=400, detail="Loot-exclusive weapons cannot be produced at the armoury")
     pm = weapon.get("price_money")
     pp = weapon.get("price_points")
     if pm is not None:
@@ -558,9 +560,9 @@ async def start_weapon_production_all(
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
-    weapons = await db.weapons.find({}, {"_id": 0, "id": 1, "price_money": 1, "price_points": 1}).to_list(200)
+    weapons = await db.weapons.find({}, {"_id": 0, "id": 1, "price_money": 1, "price_points": 1, "loot_exclusive": 1}).to_list(200)
     weapon_hours = dict(factory.get("weapon_production_hours") or {})
-    weapons_to_add = [w for w in weapons if w.get("id") and float(weapon_hours.get(w["id"]) or 0) <= 0.01]
+    weapons_to_add = [w for w in weapons if w.get("id") and not w.get("loot_exclusive") and float(weapon_hours.get(w["id"]) or 0) <= 0.01]
     if not weapons_to_add:
         raise HTTPException(status_code=400, detail="Cannot stack. All weapons are still producing. Wait for them to finish, then use Produce all again (1 hr each).")
     total_money = sum((w.get("price_money") or 0) for w in weapons_to_add) * ARMOURY_WEAPON_RATE_PER_HOUR
@@ -957,6 +959,8 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
             weapon_stock = factory.get("weapon_stock") or {}
     result = []
     for weapon in weapons:
+        if weapon.get("loot_exclusive") and weapons_map.get(weapon["id"], 0) < 1:
+            continue
         quantity = weapons_map.get(weapon["id"], 0)
         pm = weapon.get("price_money")
         pp = weapon.get("price_points")
@@ -1030,6 +1034,8 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
     weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0})
     if not weapon:
         raise HTTPException(status_code=404, detail="Weapon not found")
+    if weapon.get("loot_exclusive"):
+        raise HTTPException(status_code=400, detail="This weapon is loot-exclusive and cannot be bought")
     weapon_num = int(weapon_id.replace("weapon", "")) if weapon_id.startswith("weapon") else 0
     if weapon_num > 1:
         prev_weapon_id = f"weapon{weapon_num - 1}"

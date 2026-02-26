@@ -79,6 +79,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/dashboard', label: 'Dashboard' },
         { path: '/objectives', label: 'Objectives' },
         { path: '/missions', label: 'Missions' },
+        { path: '/loot-box', label: 'Loot Box' },
         { path: '/profile', label: 'Profile' },
         { path: '/stats', label: 'Stats' },
         { path: '/dead-alive', label: 'Dead > Alive' },

@@ -156,6 +156,17 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     income = min(hours_passed * prop["income_per_hour"] * user_prop["level"], prop["income_per_hour"] * user_prop["level"] * 24)
     if income < 1:
         raise HTTPException(status_code=400, detail="No income to collect yet")
+    now_utc = datetime.now(timezone.utc)
+    perk_until = current_user.get("property_income_perk_until")
+    if perk_until:
+        try:
+            until = datetime.fromisoformat(perk_until.replace("Z", "+00:00"))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            if now_utc < until:
+                income = income * 1.1
+        except Exception:
+            pass
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": income}}

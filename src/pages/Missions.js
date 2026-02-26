@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   BookOpen, X, Crown, Clock, Lock, CheckCircle, Banknote,
   MapPin, ChevronRight, Skull, Star, AlertCircle, Coins
@@ -463,7 +464,7 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
               {mission.reward_loot_box_pieces > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Loot box pieces</span>
-                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>+{mission.reward_loot_box_pieces} (Loot boxes coming soon)</span>
+                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>+{mission.reward_loot_box_pieces} <Link to="/loot-box" style={{ color: '#a78bfa', textDecoration: 'underline' }}>Loot Box</Link></span>
                 </div>
               )}
               {mission.reward_booze && Object.keys(mission.reward_booze).length > 0 && (
