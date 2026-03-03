@@ -930,7 +930,7 @@ export default function AutoRank() {
     return () => clearInterval(id);
   }, [stats?.jail_until, stats?.auto_rank_next_run_at, stats?.next_oc_at, stats?.next_crime_at, stats?.next_gta_at, stats?.next_booze_arrival_at]);
 
-  // Real-time stats polling when Auto Rank is enabled; poll every 2s when in jail so "Out of jail" updates right away
+  // Live stats: poll every 2s whenever Auto Rank is enabled so status, bust counts, and countdowns update in near real time
   useEffect(() => {
     if (!canEnable || !prefs?.auto_rank_enabled) return;
     const poll = () => {
@@ -970,14 +970,13 @@ export default function AutoRank() {
       }).catch(() => {});
     };
     refetchStatsRef.current = poll;
-    const intervalMs = stats?.in_jail ? 2000 : 6000;
-    const id = setInterval(poll, intervalMs);
+    const id = setInterval(poll, 2000);
     poll();
     return () => {
       refetchStatsRef.current = null;
       clearInterval(id);
     };
-  }, [canEnable, prefs?.auto_rank_enabled, stats?.in_jail]);
+  }, [canEnable, prefs?.auto_rank_enabled]);
 
   // Fetch OC equipment when user has Auto Rank and OC enabled
   useEffect(() => {

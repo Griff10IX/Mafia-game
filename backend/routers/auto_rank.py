@@ -666,6 +666,13 @@ async def run_bust_5sec_once():
     import random
     import server as srv
     db = srv.db
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    # Release anyone whose jail time just expired so they rejoin the buster list this same cycle (no extra delay)
+    await db.users.update_many(
+        {"in_jail": True, "jail_until": {"$lte": now_iso}},
+        {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+    )
     if not await get_auto_rank_enabled(db):
         return
     try:
