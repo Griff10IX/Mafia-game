@@ -408,12 +408,11 @@ const formatLastActivityAt = (iso) => {
   }
 };
 
-const AutoRankSummaryCard = ({ stats, liveCountdown, prefs, lastStatsAt }) => {
+const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   const enabled = prefs?.auto_rank_enabled;
   const interval = stats?.interval_seconds ?? 30;
   const lastLabel = stats?.last_activity ? (LAST_ACTIVITY_LABELS[stats.last_activity] || stats.last_activity) : null;
   const lastAt = formatLastActivityAt(stats?.last_activity_at);
-  const secondsSinceRefresh = lastStatsAt != null ? Math.max(0, Math.floor((Date.now() - lastStatsAt) / 1000)) : null;
   const liveLine = (sec, readyLabel = 'Ready') => {
     if (sec != null && sec > 0) return formatCountdown(sec);
     if (sec === 0) return 'now';
@@ -432,11 +431,6 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs, lastStatsAt }) => {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
               Live
             </span>
-            {secondsSinceRefresh != null && (
-              <span className="text-[9px] sm:text-[10px] font-heading text-zinc-500">
-                Refreshed {secondsSinceRefresh}s ago
-              </span>
-            )}
           </div>
         )}
       </div>
@@ -1149,7 +1143,7 @@ export default function AutoRank() {
       <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} />
       
       {canEnable && (
-        <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} lastStatsAt={lastStatsAt} />
+        <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} />
       )}
       
       <SettingsCard 

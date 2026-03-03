@@ -27,7 +27,7 @@ DEFAULT_INTERVAL_SECONDS = 30  # run each user every 30s for faster crime cycles
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 6  # was 5; 5% slower
 CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 32  # was 30; 5% slower
-LOOP_WAKE_SECONDS = 5  # frequent wake so booze arrivals processed quickly; only delay = travel time
+LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
 OC_LOOP_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
 
