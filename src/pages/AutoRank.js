@@ -440,10 +440,16 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
         </h2>
         {enabled && (
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-heading font-medium text-emerald-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Live
-            </span>
+            {stats?.global_loop_enabled !== false ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-heading font-medium text-emerald-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                Live
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 border border-amber-500/40 px-1.5 py-0.5 text-[9px] font-heading font-medium text-amber-400">
+                Loop stopped
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -467,21 +473,25 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
               <div className="text-[9px] sm:text-[10px] font-heading font-bold text-zinc-500 uppercase tracking-wider">
                 Right now
               </div>
-              {stats?.activity_detail && (
+              {stats?.global_loop_enabled === false ? (
+                <div className="text-xs sm:text-sm font-heading font-medium text-amber-400">
+                  Global loop stopped — no cycles running
+                </div>
+              ) : stats?.activity_detail ? (
                 <div className="text-xs sm:text-sm font-heading font-medium text-foreground">
                   {stats.activity_detail}
                 </div>
-              )}
+              ) : null}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-xs font-heading">
                 <span className="text-zinc-500">Status:</span>
-                <span className={stats?.in_jail ? 'text-amber-400 font-medium' : 'text-emerald-400 font-medium'}>
-                  {stats?.in_jail ? 'In jail — cycles paused' : 'Running'}
+                <span className={stats?.global_loop_enabled === false ? 'text-amber-400 font-medium' : stats?.in_jail ? 'text-amber-400 font-medium' : 'text-emerald-400 font-medium'}>
+                  {stats?.global_loop_enabled === false ? 'Loop stopped' : stats?.in_jail ? 'In jail — cycles paused' : 'Running'}
                 </span>
                 {stats?.in_jail && liveCountdown?.jailSeconds != null && liveCountdown.jailSeconds > 0 && (
                   <span className="text-foreground/90">· Out in {formatCountdown(liveCountdown.jailSeconds)}</span>
                 )}
               </div>
-              {nextUp && !stats?.in_jail && (
+              {nextUp && !stats?.in_jail && stats?.global_loop_enabled !== false && (
                 <div className="text-[10px] sm:text-xs font-heading text-primary/90">
                   Next up: <span className="font-medium text-foreground">{nextUp.label}</span> in {liveLine(nextUp.sec)}
                 </div>
@@ -497,7 +507,7 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                 </div>
               )}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 pt-1 border-t border-zinc-700/30 text-[10px] sm:text-xs font-heading">
-                {!stats?.in_jail && (
+                {!stats?.in_jail && stats?.global_loop_enabled !== false && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">Next cycle</span>
                     <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCycleSeconds, '—')}</span>
@@ -919,6 +929,7 @@ export default function AutoRank() {
         const d = res.data;
         setStats((prev) => ({
           ...prev,
+          global_loop_enabled: d.global_loop_enabled !== false,
           total_busts: d.total_busts ?? prev.total_busts,
           total_crimes: d.total_crimes ?? prev.total_crimes,
           total_gtas: d.total_gtas ?? prev.total_gtas,
@@ -1008,6 +1019,7 @@ export default function AutoRank() {
         }
         if (statsRes?.data) {
           setStats({
+            global_loop_enabled: statsRes.data.global_loop_enabled !== false,
             total_busts: statsRes.data.total_busts ?? 0,
             total_crimes: statsRes.data.total_crimes ?? 0,
             total_gtas: statsRes.data.total_gtas ?? 0,

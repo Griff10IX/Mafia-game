@@ -644,12 +644,15 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
 
     if users:
-        await asyncio.gather(*[run_one(u) for u in users])
         from pymongo import UpdateOne
-        await db.users.bulk_write(
-            [UpdateOne({"id": u["id"]}, {"$set": {"auto_rank_next_run_at": next_run_iso}}) for u in users],
-            ordered=False,
-        )
+        batch_size = 30
+        for i in range(0, len(users), batch_size):
+            batch = users[i : i + batch_size]
+            await asyncio.gather(*[run_one(u) for u in batch])
+            await db.users.bulk_write(
+                [UpdateOne({"id": u["id"]}, {"$set": {"auto_rank_next_run_at": next_run_iso}}) for u in batch],
+                ordered=False,
+            )
 
 
 async def run_bust_5sec_once():
@@ -677,13 +680,15 @@ async def run_bust_5sec_once():
                 if un:
                     targets.append(un)
         bust_target_username = random.choice(targets) if targets else None
+        if not bust_target_username and users:
+            return
         async def run_one(u):
             chat_id = (u.get("telegram_chat_id") or "").strip()
             bot_token = (u.get("telegram_bot_token") or "").strip()
             try:
                 if bust_target_username and bust_target_username != u.get("username"):
                     await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None, bust_target_username=bust_target_username)
-                else:
+                elif bust_target_username:
                     await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
             except Exception as e:
                 logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
@@ -768,7 +773,7 @@ async def run_auto_rank_loop():
     while True:
         config = await get_auto_rank_config(db)
         if not config["enabled"]:
-            await asyncio.sleep(10)
+            await asyncio.sleep(2)
             continue
         try:
             await run_booze_arrivals()
@@ -988,7 +993,9 @@ def register(router):
                 activity_detail = "Running cycle (" + " / ".join(parts) + ")" if parts else "Idle"
         last_activity = (u or {}).get("auto_rank_last_activity")
         last_activity_at = (u or {}).get("auto_rank_last_activity_at")
+        global_loop_enabled = await get_auto_rank_enabled(db)
         return {
+            "global_loop_enabled": global_loop_enabled,
             "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
             "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
             "total_gtas": int((u or {}).get("auto_rank_total_gtas") or 0),
