@@ -830,6 +830,8 @@ _PREFERENCE_DEFAULTS = {"auto_rank_enabled": False, "auto_rank_crimes": True, "a
 
 
 def _extract_preferences(user: dict) -> dict:
+    if not user:
+        return dict(_PREFERENCE_DEFAULTS)
     return {k: user.get(k, _PREFERENCE_DEFAULTS[k]) for k in _PREFERENCE_FIELDS}
 
 
@@ -870,27 +872,47 @@ def register(router):
 
     @router.get("/auto-rank/me")
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
-        chat_id = (current_user.get("telegram_chat_id") or "").strip()
-        prefs = _extract_preferences(current_user)
-        prefs["auto_rank_purchased"] = current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False)
-        prefs["telegram_chat_id_set"] = bool(chat_id)
-        prefs["auto_rank_crime_ids"] = current_user.get("auto_rank_crime_ids") or []
-        prefs["auto_rank_gta_option_ids"] = current_user.get("auto_rank_gta_option_ids") or []
-        return prefs
+        try:
+            user_id = (current_user or {}).get("id", "?")
+            chat_id = (current_user.get("telegram_chat_id") or "").strip()
+            prefs = _extract_preferences(current_user)
+            prefs["auto_rank_purchased"] = current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False)
+            prefs["telegram_chat_id_set"] = bool(chat_id)
+            prefs["auto_rank_crime_ids"] = current_user.get("auto_rank_crime_ids") or []
+            prefs["auto_rank_gta_option_ids"] = current_user.get("auto_rank_gta_option_ids") or []
+            logger.debug("Auto rank GET /me ok user_id=%s", user_id)
+            return prefs
+        except Exception as e:
+            logger.exception("Auto rank GET /me failed: %s", e)
+            raise
 
     @router.get("/auto-rank/settings")
     async def get_settings_options(current_user: dict = Depends(get_current_user)):
         """Return crimes and GTA options for the settings tab, plus current selection."""
-        from routers.gta import GTA_OPTIONS
-        crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).sort("min_rank", 1).to_list(50)
-        gta_options = [{"id": o["id"], "name": o["name"], "min_rank": o["min_rank"]} for o in GTA_OPTIONS]
-        u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1})
-        crime_ids = u.get("auto_rank_crime_ids") if isinstance(u.get("auto_rank_crime_ids"), list) else []
-        gta_ids = u.get("auto_rank_gta_option_ids") if isinstance(u.get("auto_rank_gta_option_ids"), list) else []
-        return {"crimes": crimes, "gta_options": gta_options, "auto_rank_crime_ids": crime_ids, "auto_rank_gta_option_ids": gta_ids}
+        try:
+            from routers.gta import GTA_OPTIONS
+            crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).sort("min_rank", 1).to_list(50)
+            gta_options = [{"id": o.get("id", ""), "name": o.get("name", ""), "min_rank": o.get("min_rank", 0)} for o in (GTA_OPTIONS or [])]
+            u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1})
+            crime_ids = u.get("auto_rank_crime_ids") if isinstance(u.get("auto_rank_crime_ids"), list) else []
+            gta_ids = u.get("auto_rank_gta_option_ids") if isinstance(u.get("auto_rank_gta_option_ids"), list) else []
+            logger.debug("Auto rank GET /settings ok user_id=%s", current_user.get("id", "?"))
+            return {"crimes": crimes or [], "gta_options": gta_options, "auto_rank_crime_ids": crime_ids, "auto_rank_gta_option_ids": gta_ids}
+        except Exception as e:
+            logger.exception("Auto rank GET /settings failed: %s", e)
+            raise
 
     @router.get("/auto-rank/stats")
     async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
+        try:
+            out = await _get_auto_rank_stats_impl(db, current_user)
+            logger.debug("Auto rank GET /stats ok user_id=%s", current_user.get("id", "?"))
+            return out
+        except Exception as e:
+            logger.exception("Auto rank GET /stats failed: %s", e)
+            raise
+
+    async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
             {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_bust_every_5_sec": 1},
@@ -967,7 +989,7 @@ def register(router):
             "total_cash": int((u or {}).get("auto_rank_total_cash") or 0),
             "stats_since": (u or {}).get("auto_rank_stats_since"),
             "running_seconds": max(0, running_seconds),
-            "best_cars": [{"name": c.get("name", "?"), "value": int(c.get("value", 0) or 0)} for c in best_cars],
+            "best_cars": [{"name": c.get("name", "?"), "value": int(c.get("value", 0) or 0)} for c in (best_cars or []) if isinstance(c, dict)],
             "total_booze_runs": int((u or {}).get("auto_rank_total_booze_runs") or 0),
             "total_booze_profit": int((u or {}).get("auto_rank_total_booze_profit") or 0),
             "next_oc_at": next_oc_at,
