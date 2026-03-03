@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 
@@ -54,6 +54,20 @@ const formatNextOcAt = (iso) => {
   } catch {
     return { text: 'Ready', at: null };
   }
+};
+
+/** Format seconds as live countdown: "25s", "2m 10s", "1h 5m 30s" */
+const formatCountdown = (seconds) => {
+  if (seconds == null || seconds < 0) return '—';
+  if (seconds === 0) return '0s';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  const parts = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || parts.length > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -259,10 +273,78 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => (
 );
 
 /* ═══════════════════════════════════════════════════════
+   Summary / Status Card (what Auto Rank is doing)
+   ═══════════════════════════════════════════════════════ */
+const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
+  const enabled = prefs?.auto_rank_enabled;
+  const interval = stats?.interval_seconds ?? 30;
+  return (
+    <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.15s' }}>
+      <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+        <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+          <Activity size={14} className="sm:w-4 sm:h-4" />
+          What Auto Rank is doing
+        </h2>
+      </div>
+      <div className="p-2.5 sm:p-3 space-y-3">
+        {!enabled ? (
+          <p className="text-[10px] sm:text-xs text-zinc-400 font-heading">Auto Rank is off. Enable it above to run crimes, GTA, busts, OC and booze automatically.</p>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                <span className="text-zinc-400">Status:</span>
+                {stats?.in_jail ? (
+                  <span className="text-amber-400 font-medium">
+                    In jail — cycles paused
+                    {liveCountdown?.jailSeconds != null && liveCountdown.jailSeconds > 0 && (
+                      <span className="text-amber-300/90 ml-1">· out in {formatCountdown(liveCountdown.jailSeconds)}</span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-emerald-400 font-medium">
+                    Running
+                    {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds > 0 && (
+                      <span className="text-foreground/90 ml-1">· next cycle in {formatCountdown(liveCountdown.nextCycleSeconds)}</span>
+                    )}
+                    {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds <= 0 && (
+                      <span className="text-primary/90 ml-1">· running cycle now</span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                <Briefcase size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                <span className="text-zinc-400">Next OC:</span>
+                {stats?.next_oc_at && liveCountdown?.nextOcSeconds != null && liveCountdown.nextOcSeconds > 0 ? (
+                  <span className="text-foreground font-medium">{formatCountdown(liveCountdown.nextOcSeconds)}</span>
+                ) : (
+                  <span className="text-emerald-400 font-medium">Ready</span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
+                <Clock size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                <span className="text-zinc-400">Cycles:</span>
+                <span className="text-foreground font-medium">every {interval}s when not in jail</span>
+              </div>
+            </div>
+            <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading leading-relaxed border-t border-zinc-700/30 pt-2">
+              Each cycle commits crimes (off cooldown) → one GTA (if ready) → booze step if enabled. OC runs on its own timer. When in jail, cycles are paused until you’re out.
+            </p>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
    Stats Card
    ═══════════════════════════════════════════════════════ */
-const StatsCard = ({ stats }) => {
+const StatsCard = ({ stats, liveCountdown }) => {
   const { text: ocText, at: ocAt } = formatNextOcAt(stats.next_oc_at);
+  const jailDisplay = stats.in_jail && (liveCountdown?.jailSeconds != null ? liveCountdown.jailSeconds > 0 : stats.jail_seconds_remaining != null);
+  const jailSeconds = liveCountdown?.jailSeconds ?? stats.jail_seconds_remaining;
   
   return (
     <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
@@ -297,8 +379,8 @@ const StatsCard = ({ stats }) => {
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading text-amber-400">
               <Lock size={12} className="sm:w-3.5 sm:h-3.5 shrink-0" />
               <span>In jail — cycles paused</span>
-              {stats.jail_seconds_remaining != null && stats.jail_seconds_remaining > 0 && (
-                <span className="text-amber-300/90">· out in {stats.jail_seconds_remaining}s</span>
+              {jailDisplay && jailSeconds != null && jailSeconds > 0 && (
+                <span className="text-amber-300/90">· out in {formatCountdown(jailSeconds)}</span>
               )}
             </div>
           )}
@@ -312,7 +394,9 @@ const StatsCard = ({ stats }) => {
             <Briefcase size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
             <span className="text-zinc-400">Next OC:</span>
             <span className="text-foreground font-medium">
-              {ocAt ? `in ${ocText} (at ${ocAt})` : ocText}
+              {liveCountdown?.nextOcSeconds != null && liveCountdown.nextOcSeconds > 0
+                ? `${formatCountdown(liveCountdown.nextOcSeconds)} (at ${ocAt || '—'})`
+                : ocAt ? `in ${ocText} (at ${ocAt})` : ocText}
             </span>
           </div>
           
@@ -481,7 +565,43 @@ export default function AutoRank() {
     next_oc_at: null,
     in_jail: false,
     jail_seconds_remaining: null,
+    jail_until: null,
+    auto_rank_next_run_at: null,
+    interval_seconds: 30,
   });
+  const [liveCountdown, setLiveCountdown] = useState({ jailSeconds: null, nextCycleSeconds: null, nextOcSeconds: null });
+
+  // Live countdown ticker: recompute every second from server timestamps
+  useEffect(() => {
+    const jailUntil = stats.jail_until;
+    const nextRunAt = stats.auto_rank_next_run_at;
+    const nextOcAt = stats.next_oc_at;
+    const tick = () => {
+      const now = Date.now();
+      let jailSeconds = null;
+      if (jailUntil) {
+        const t = new Date(jailUntil).getTime();
+        if (!Number.isNaN(t) && t > now) jailSeconds = Math.max(0, Math.floor((t - now) / 1000));
+      }
+      let nextCycleSeconds = null;
+      if (nextRunAt) {
+        const t = new Date(nextRunAt).getTime();
+        if (!Number.isNaN(t) && t > now) nextCycleSeconds = Math.max(0, Math.floor((t - now) / 1000));
+      }
+      let nextOcSeconds = null;
+      if (nextOcAt) {
+        const t = new Date(nextOcAt).getTime();
+        if (!Number.isNaN(t) && t > now) nextOcSeconds = Math.max(0, Math.floor((t - now) / 1000));
+      }
+      setLiveCountdown((prev) => {
+        if (prev.jailSeconds === jailSeconds && prev.nextCycleSeconds === nextCycleSeconds && prev.nextOcSeconds === nextOcSeconds) return prev;
+        return { jailSeconds, nextCycleSeconds, nextOcSeconds };
+      });
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [stats.jail_until, stats.auto_rank_next_run_at, stats.next_oc_at]);
 
   useEffect(() => {
     const run = async () => {
@@ -518,6 +638,9 @@ export default function AutoRank() {
             next_oc_at: statsRes.data.next_oc_at ?? null,
             in_jail: statsRes.data.in_jail === true,
             jail_seconds_remaining: statsRes.data.jail_seconds_remaining ?? null,
+            jail_until: statsRes.data.jail_until ?? null,
+            auto_rank_next_run_at: statsRes.data.auto_rank_next_run_at ?? null,
+            interval_seconds: statsRes.data.interval_seconds ?? 30,
           });
         }
         if (checkRes.data?.is_admin) {
@@ -699,6 +822,10 @@ export default function AutoRank() {
 
       <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} />
       
+      {canEnable && (
+        <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} />
+      )}
+      
       <SettingsCard 
         prefs={prefs}
         canEnable={canEnable}
@@ -706,7 +833,7 @@ export default function AutoRank() {
         onUpdatePref={updatePref}
       />
       
-      {canEnable && <StatsCard stats={stats} />}
+      {canEnable && <StatsCard stats={stats} liveCountdown={liveCountdown} />}
       
       {isAdmin && (
         <AdminGlobalLoopCard

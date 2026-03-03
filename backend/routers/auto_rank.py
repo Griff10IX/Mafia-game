@@ -804,7 +804,7 @@ def register(router):
     async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -822,10 +822,17 @@ def register(router):
                 next_oc_at = oc_until
         in_jail = bool((u or {}).get("in_jail"))
         jail_seconds_remaining = None
+        jail_until_iso = None
         if in_jail:
-            jail_until = _parse_iso((u or {}).get("jail_until"))
-            if jail_until and jail_until > now:
-                jail_seconds_remaining = int((jail_until - now).total_seconds())
+            jail_until_dt = _parse_iso((u or {}).get("jail_until"))
+            if jail_until_dt and jail_until_dt > now:
+                jail_seconds_remaining = int((jail_until_dt - now).total_seconds())
+                jail_until_iso = (u or {}).get("jail_until")
+        next_run_at = None
+        next_run_dt = _parse_iso((u or {}).get("auto_rank_next_run_at"))
+        if next_run_dt and next_run_dt > now:
+            next_run_at = (u or {}).get("auto_rank_next_run_at")
+        interval_seconds = await get_auto_rank_interval_seconds(db)
         return {
             "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
             "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
@@ -839,6 +846,9 @@ def register(router):
             "next_oc_at": next_oc_at,
             "in_jail": in_jail,
             "jail_seconds_remaining": jail_seconds_remaining,
+            "jail_until": jail_until_iso,
+            "auto_rank_next_run_at": next_run_at,
+            "interval_seconds": interval_seconds,
         }
 
     @router.patch("/auto-rank/me")
