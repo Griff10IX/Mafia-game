@@ -26,7 +26,6 @@ MIN_INTERVAL_SECONDS = 5
 DEFAULT_INTERVAL_SECONDS = 30  # run each user every 30s for faster crime cycles (min 5s)
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 6  # was 5; 5% slower
-CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 32  # was 30; 5% slower
 LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
 OC_LOOP_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
@@ -420,7 +419,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 #   cooldown_until from the attempted option's cooldown (one attempt = all options on cooldown).
 # - OC: run_oc_heist_npc_only checks oc_cooldown_until and returns without running if on cooldown.
 # - Booze: uses same buy/sell/travel impls; travel duration and arrival are enforced there.
-# - Jail: no cooldown per bust; success rate only. CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC throttles how often we run crimes+GTA when bust-every-5sec is on.
+# - Jail: no cooldown per bust; success rate only. When bust-every-5-sec is on, only the bust loop runs (no crimes/GTA in main cycle).
 
 
 async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: Optional[str] = None, bot_token: Optional[str] = None, crimes: Optional[list] = None):
@@ -440,25 +439,18 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     token = (bot_token or "").strip() or (user.get("telegram_bot_token") or "").strip()
     bust_every_5 = user.get("auto_rank_bust_every_5_sec", False)
 
-    if bust_every_5:
-        last_at = _parse_iso(user.get("auto_rank_last_crimes_gta_at"))
-        if last_at and (now - last_at).total_seconds() < CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC:
-            return
-        if user.get("in_jail"):
-            return
-    elif user.get("in_jail"):
+    if user.get("in_jail"):
         return
 
     lines = [f"**Auto Rank** — {username}", ""]
     has_success = False
 
     if user.get("in_jail"):
-        if bust_every_5:
-            await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
         return
 
-    run_crimes = user.get("auto_rank_crimes", True) or bust_every_5
-    run_gta = user.get("auto_rank_gta", True) or bust_every_5
+    # When bust-every-5-sec is on, only the separate bust loop runs crimes/GTA are skipped here
+    run_crimes = user.get("auto_rank_crimes", True) and not bust_every_5
+    run_gta = user.get("auto_rank_gta", True) and not bust_every_5
 
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
@@ -515,8 +507,6 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     if not user:
         return
     if user.get("in_jail"):
-        if bust_every_5:
-            await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
         return
 
     # --- GTA: only if global GTA cooldown has passed. Rotate through all unlocked options (by rank), not just the first. ---
@@ -554,9 +544,6 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 except Exception as e:
                     logger.exception("Auto rank GTA for %s: %s", user_id, e)
                     await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", now)
-
-    if bust_every_5:
-        await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
 
     # --- Booze ---
     if user.get("auto_rank_booze", False):

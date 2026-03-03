@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2 } from 'lucide-react';
 import api from '../utils/api';
@@ -247,7 +247,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       <ToggleRow
         icon={Lock}
         label="Jail bust every 5 sec"
-        description="Bust every 5s; when jail empty, runs crimes + GTA instead"
+        description="Bust every 5s; only jail busts (no crimes or GTA)"
         checked={p.auto_rank_enabled ? p.auto_rank_bust_every_5_sec : false}
         disabled={savingPrefs || !p.auto_rank_enabled}
         onToggle={() => onUpdatePref('auto_rank_bust_every_5_sec', !p.auto_rank_bust_every_5_sec)}
@@ -418,6 +418,19 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
     if (sec === 0) return 'now';
     return readyLabel;
   };
+  const activeCrimes = enabled && prefs?.auto_rank_crimes && !prefs?.auto_rank_bust_every_5_sec;
+  const activeGta = enabled && prefs?.auto_rank_gta && !prefs?.auto_rank_bust_every_5_sec;
+  const activeBust5 = enabled && prefs?.auto_rank_bust_every_5_sec;
+  const activeOc = enabled && prefs?.auto_rank_oc;
+  const activeBooze = enabled && prefs?.auto_rank_booze;
+  const items = [];
+  if (!stats?.in_jail && liveCountdown?.nextCycleSeconds != null && (activeCrimes || activeGta)) items.push({ label: 'Cycle', sec: liveCountdown.nextCycleSeconds });
+  if (activeOc && liveCountdown?.nextOcSeconds != null) items.push({ label: 'OC', sec: liveCountdown.nextOcSeconds });
+  if (activeCrimes && liveCountdown?.nextCrimeSeconds != null) items.push({ label: 'Crimes', sec: liveCountdown.nextCrimeSeconds });
+  if (activeGta && liveCountdown?.nextGtaSeconds != null) items.push({ label: 'GTA', sec: liveCountdown.nextGtaSeconds });
+  if (activeBooze && liveCountdown?.nextBoozeSeconds != null) items.push({ label: 'Booze', sec: liveCountdown.nextBoozeSeconds });
+  const nextUp = items.filter((x) => x.sec !== null && x.sec >= 0).sort((a, b) => a.sec - b.sec)[0];
+
   return (
     <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.15s' }}>
       <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
@@ -439,9 +452,20 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
           <p className="text-[10px] sm:text-xs text-zinc-400 font-heading">Auto Rank is off. Enable it above to run crimes, GTA, busts, OC and booze automatically.</p>
         ) : (
           <>
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-[9px] sm:text-[10px] font-heading text-zinc-500 uppercase tracking-wider">Active:</span>
+              {activeCrimes && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Crimes</span>}
+              {activeGta && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">GTA</span>}
+              {activeBust5 && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Bust 5s</span>}
+              {activeOc && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">OC</span>}
+              {activeBooze && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Booze</span>}
+              {!activeCrimes && !activeGta && !activeBust5 && !activeOc && !activeBooze && (
+                <span className="text-zinc-500 text-[9px] font-heading">None (turn on toggles below)</span>
+              )}
+            </div>
             <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/40 p-2.5 sm:p-3 space-y-2.5">
               <div className="text-[9px] sm:text-[10px] font-heading font-bold text-zinc-500 uppercase tracking-wider">
-                Real-time summary
+                Right now
               </div>
               {stats?.activity_detail && (
                 <div className="text-xs sm:text-sm font-heading font-medium text-foreground">
@@ -457,6 +481,11 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   <span className="text-foreground/90">· Out in {formatCountdown(liveCountdown.jailSeconds)}</span>
                 )}
               </div>
+              {nextUp && !stats?.in_jail && (
+                <div className="text-[10px] sm:text-xs font-heading text-primary/90">
+                  Next up: <span className="font-medium text-foreground">{nextUp.label}</span> in {liveLine(nextUp.sec)}
+                </div>
+              )}
               {lastLabel && (
                 <div className="text-[10px] sm:text-xs font-heading text-zinc-400">
                   Last: <span className="text-foreground/90">{lastLabel}{lastAt ? ` at ${lastAt}` : ''}</span>
@@ -478,13 +507,13 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   <span className="text-zinc-500">OC</span>
                   <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextOcSeconds)}</span>
                 </div>
-                {(prefs?.auto_rank_crimes || prefs?.auto_rank_bust_every_5_sec) && (
+                {prefs?.auto_rank_crimes && !prefs?.auto_rank_bust_every_5_sec && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">Crimes</span>
                     <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCrimeSeconds)}</span>
                   </div>
                 )}
-                {(prefs?.auto_rank_gta || prefs?.auto_rank_bust_every_5_sec) && (
+                {prefs?.auto_rank_gta && !prefs?.auto_rank_bust_every_5_sec && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">GTA</span>
                     <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextGtaSeconds)}</span>
@@ -503,10 +532,53 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
               </div>
             </div>
             <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading leading-relaxed ">
-              <strong className="text-zinc-400">Next cycle</strong> uses your interval ({interval}s). Crimes / GTA / OC show <strong className="text-zinc-400">game cooldowns</strong>. Each cycle runs every {interval}s; when in jail, cycles are paused until you’re out.
+              <strong className="text-zinc-400">Cycle order:</strong> busts → crimes → GTA. <strong className="text-zinc-400">OC</strong> and <strong className="text-zinc-400">booze</strong> run on their own timers. Interval: {interval}s; in jail, cycles pause until you’re out.
             </p>
           </>
         )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════
+   OC Equipment Options Card
+   ═══════════════════════════════════════════════════════ */
+const OCOptionsCard = ({ equipment, selectedId, saving, onSelect }) => {
+  const list = Array.isArray(equipment) ? equipment : [];
+  return (
+    <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
+      <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+        <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+          <Briefcase size={14} className="sm:w-4 sm:h-4" />
+          OC equipment (Auto Rank heists)
+        </h2>
+      </div>
+      <div className="p-2.5 sm:p-3 space-y-2">
+        <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
+          Equipment used when Auto Rank runs Organised Crime. Cost is charged per heist when it runs.
+        </p>
+        <div className="space-y-1.5">
+          {list.map((e) => (
+            <label key={e.id} className={`flex items-center gap-2 py-2 px-2 rounded border cursor-pointer transition-colors ${e.id === selectedId ? 'bg-primary/10 border-primary/50' : 'bg-zinc-800/40 border-zinc-700/30 hover:bg-zinc-800/60'}`}>
+              <input
+                type="radio"
+                name="oc-equipment"
+                checked={e.id === selectedId}
+                disabled={saving}
+                onChange={() => onSelect(e.id)}
+                className="text-primary focus:ring-primary/50"
+              />
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] sm:text-xs font-heading font-medium text-foreground">{e.name}</span>
+                <span className="text-[9px] text-zinc-500 font-heading ml-1.5">
+                  ${(e.cost || 0).toLocaleString()}{e.success_bonus != null && e.success_bonus > 0 ? ` · +${Math.round((e.success_bonus || 0) * 100)}%` : ''}
+                </span>
+              </div>
+            </label>
+          ))}
+        </div>
+        {list.length === 0 && <p className="text-[10px] text-zinc-500 font-heading">Loading equipment…</p>}
       </div>
     </div>
   );
@@ -740,6 +812,9 @@ export default function AutoRank() {
   const [selectedCrimeIds, setSelectedCrimeIds] = useState([]);
   const [selectedGtaIds, setSelectedGtaIds] = useState([]);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [ocEquipment, setOcEquipment] = useState([]);
+  const [selectedOcEquipmentId, setSelectedOcEquipmentId] = useState('basic');
+  const [savingOcEquipment, setSavingOcEquipment] = useState(false);
   const [intervalSeconds, setIntervalSeconds] = useState(30);
   const [globalEnabled, setGlobalEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -787,12 +862,16 @@ export default function AutoRank() {
     nextBoozeSeconds: null,
   });
   const [lastStatsAt, setLastStatsAt] = useState(null);
+  const prevJailSecondsRef = useRef(null);
 
   // Derived once per render, before any early return, so useEffects can read them
   const canEnable = Boolean(prefs?.auto_rank_purchased);
   const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
 
-  // Live countdown ticker: recompute every second from server timestamps
+  // Refetch stats (used when jail countdown hits 0 so status updates immediately)
+  const refetchStatsRef = useRef(null);
+
+  // Live countdown ticker: recompute every second from server timestamps; refetch stats when jail expires
   useEffect(() => {
     const s = stats ?? {};
     const jailUntil = s.jail_until;
@@ -814,6 +893,12 @@ export default function AutoRank() {
       const nextCrimeSeconds = sec(nextCrimeAt);
       const nextGtaSeconds = sec(nextGtaAt);
       const nextBoozeSeconds = sec(nextBoozeAt);
+      // When jail countdown just hit 0, refetch so "In jail — cycles paused" updates to "Running" right away
+      const prev = prevJailSecondsRef.current;
+      if (prev != null && prev > 0 && (jailSeconds === null || jailSeconds === 0) && refetchStatsRef.current) {
+        refetchStatsRef.current();
+      }
+      prevJailSecondsRef.current = jailSeconds;
       setLiveCountdown((prev) => {
         if (prev.jailSeconds === jailSeconds && prev.nextCycleSeconds === nextCycleSeconds && prev.nextOcSeconds === nextOcSeconds &&
             prev.nextCrimeSeconds === nextCrimeSeconds && prev.nextGtaSeconds === nextGtaSeconds && prev.nextBoozeSeconds === nextBoozeSeconds) return prev;
@@ -825,7 +910,7 @@ export default function AutoRank() {
     return () => clearInterval(id);
   }, [stats?.jail_until, stats?.auto_rank_next_run_at, stats?.next_oc_at, stats?.next_crime_at, stats?.next_gta_at, stats?.next_booze_arrival_at]);
 
-  // Real-time stats polling when Auto Rank is enabled
+  // Real-time stats polling when Auto Rank is enabled; poll every 2s when in jail so "Out of jail" updates right away
   useEffect(() => {
     if (!canEnable || !prefs?.auto_rank_enabled) return;
     const poll = () => {
@@ -861,10 +946,28 @@ export default function AutoRank() {
         setLastStatsAt(Date.now());
       }).catch(() => {});
     };
-    const id = setInterval(poll, 6000);
+    refetchStatsRef.current = poll;
+    const intervalMs = stats?.in_jail ? 2000 : 6000;
+    const id = setInterval(poll, intervalMs);
     poll();
-    return () => clearInterval(id);
-  }, [canEnable, prefs?.auto_rank_enabled]);
+    return () => {
+      refetchStatsRef.current = null;
+      clearInterval(id);
+    };
+  }, [canEnable, prefs?.auto_rank_enabled, stats?.in_jail]);
+
+  // Fetch OC equipment when user has Auto Rank and OC enabled
+  useEffect(() => {
+    if (!canEnable || !prefs?.auto_rank_oc) return;
+    api.get('/organised-crime/equipment')
+      .then((res) => {
+        const eq = res.data?.equipment ?? [];
+        setOcEquipment(eq);
+        const sel = res.data?.selected_equipment ?? 'basic';
+        setSelectedOcEquipmentId(sel);
+      })
+      .catch(() => setOcEquipment([]));
+  }, [canEnable, prefs?.auto_rank_oc]);
 
   useEffect(() => {
     const run = async () => {
@@ -996,6 +1099,19 @@ export default function AutoRank() {
       toast.error(e.response?.data?.detail ?? 'Failed to save options');
     } finally {
       setSavingSettings(false);
+    }
+  };
+
+  const handleSelectOcEquipment = async (equipmentId) => {
+    setSavingOcEquipment(true);
+    try {
+      await api.post('/organised-crime/equipment/select', { equipment_id: equipmentId });
+      setSelectedOcEquipmentId(equipmentId);
+      toast.success('OC equipment updated');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to set equipment');
+    } finally {
+      setSavingOcEquipment(false);
     }
   };
 
@@ -1171,26 +1287,41 @@ export default function AutoRank() {
           gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
         />
       )}
-      
-      {canEnable && <StatsCard stats={stats} liveCountdown={liveCountdown} />}
-      
-      {isAdmin && (
-        <AdminGlobalLoopCard
-          globalEnabled={globalEnabled}
-          intervalSeconds={intervalSeconds}
-          inputValue={inputValue}
-          setInputValue={setInputValue}
-          saving={saving}
-          toggling={toggling}
-          onStart={handleStartGlobal}
-          onStop={handleStopGlobal}
-          onSave={handleSaveInterval}
+
+      {canEnable && prefs?.auto_rank_oc && (
+        <OCOptionsCard
+          equipment={ocEquipment}
+          selectedId={selectedOcEquipmentId}
+          saving={savingOcEquipment}
+          onSelect={handleSelectOcEquipment}
         />
       )}
+      
+      {canEnable && <StatsCard stats={stats} liveCountdown={liveCountdown} />}
 
-      {/* Admin Users Table */}
+      {/* ─── Admin (all admin controls at bottom) ─── */}
       {isAdmin && (
-        <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.4s' }}>
+        <>
+          <div className="pt-4 sm:pt-6 border-t border-zinc-700/50">
+            <h2 className="text-xs sm:text-sm font-heading font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 mb-3">
+              <Shield size={16} className="text-primary" />
+              Admin
+            </h2>
+          </div>
+          <AdminGlobalLoopCard
+            globalEnabled={globalEnabled}
+            intervalSeconds={intervalSeconds}
+            inputValue={inputValue}
+            setInputValue={setInputValue}
+            saving={saving}
+            toggling={toggling}
+            onStart={handleStartGlobal}
+            onStop={handleStopGlobal}
+            onSave={handleSaveInterval}
+          />
+
+          {/* Admin Users Table */}
+          <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.4s' }}>
           <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
             <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
               <Users size={14} className="sm:w-4 sm:h-4" />
@@ -1412,6 +1543,7 @@ export default function AutoRank() {
             })()}
           </div>
         </div>
+        </>
       )}
     </div>
   );
