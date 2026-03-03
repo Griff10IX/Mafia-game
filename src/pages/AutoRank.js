@@ -796,12 +796,13 @@ export default function AutoRank() {
 
   // Live countdown ticker: recompute every second from server timestamps
   useEffect(() => {
-    const jailUntil = stats.jail_until;
-    const nextRunAt = stats.auto_rank_next_run_at;
-    const nextOcAt = stats.next_oc_at;
-    const nextCrimeAt = stats.next_crime_at;
-    const nextGtaAt = stats.next_gta_at;
-    const nextBoozeAt = stats.next_booze_arrival_at;
+    const s = stats ?? {};
+    const jailUntil = s.jail_until;
+    const nextRunAt = s.auto_rank_next_run_at;
+    const nextOcAt = s.next_oc_at;
+    const nextCrimeAt = s.next_crime_at;
+    const nextGtaAt = s.next_gta_at;
+    const nextBoozeAt = s.next_booze_arrival_at;
     const tick = () => {
       const now = Date.now();
       const sec = (iso) => {
@@ -824,11 +825,11 @@ export default function AutoRank() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [stats.jail_until, stats.auto_rank_next_run_at, stats.next_oc_at, stats.next_crime_at, stats.next_gta_at, stats.next_booze_arrival_at]);
+  }, [stats?.jail_until, stats?.auto_rank_next_run_at, stats?.next_oc_at, stats?.next_crime_at, stats?.next_gta_at, stats?.next_booze_arrival_at]);
 
   // Real-time stats polling when Auto Rank is enabled
   useEffect(() => {
-    if (!canEnable || !prefs.auto_rank_enabled) return;
+    if (!canEnable || !prefs?.auto_rank_enabled) return;
     const poll = () => {
       api.get('/auto-rank/stats').then((res) => {
         if (!res?.data) return;
@@ -865,7 +866,7 @@ export default function AutoRank() {
     const id = setInterval(poll, 6000);
     poll();
     return () => clearInterval(id);
-  }, [canEnable, prefs.auto_rank_enabled]);
+  }, [canEnable, prefs?.auto_rank_enabled]);
 
   useEffect(() => {
     const run = async () => {
@@ -1157,10 +1158,10 @@ export default function AutoRank() {
         onUpdatePref={updatePref}
       />
       
-      {canEnable && (prefs.auto_rank_crimes || prefs.auto_rank_gta) && (
+      {canEnable && (prefs?.auto_rank_crimes || prefs?.auto_rank_gta) && (
         <CrimesGtaSettingsCard
-          crimes={settingsData.crimes}
-          gtaOptions={settingsData.gta_options}
+          crimes={settingsData?.crimes ?? []}
+          gtaOptions={settingsData?.gta_options ?? []}
           selectedCrimeIds={selectedCrimeIds}
           selectedGtaIds={selectedGtaIds}
           onToggleCrime={toggleCrimeId}
@@ -1171,8 +1172,8 @@ export default function AutoRank() {
           onDeselectAllGta={deselectAllGta}
           onSaveSettings={handleSaveSettings}
           savingSettings={savingSettings}
-          crimesDisabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
-          gtaDisabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
+          crimesDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
+          gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
         />
       )}
       
