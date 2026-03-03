@@ -325,6 +325,19 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
         success, user = await _booze_sell_at_city(db, user, user_id, username, telegram_chat_id, bot_token, now, lines)
         if success:
             await _set_last_activity(db, user_id, "booze_sell", now)
+        if not success and user:
+            # At buy city with booze — can't sell here; travel to sell city so we can sell on arrival
+            travel_method = await _get_travel_method(db, user_id)
+            if travel_method:
+                try:
+                    await _start_travel_impl(user, other_city, travel_method, airport_slot=None, booze_run=True)
+                    await _set_last_activity(db, user_id, "booze_travel", now)
+                    lines.append(f"**Booze** — Traveling to {other_city} to sell.")
+                    return True
+                except HTTPException:
+                    pass
+                except Exception as e:
+                    logger.exception("Auto rank booze travel to sell city %s: %s", user_id, e)
         if not success or not user:
             return success
         # Continue cycle: sell then immediately buy+travel (only delay = travel time)
@@ -653,7 +666,8 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
 
 
 async def run_bust_5sec_once():
-    """Single pass: for bust-every-5-sec users, try one jail bust each. Used by cron or loop."""
+    """Single pass: for bust-every-5-sec users, try one jail bust each. Target pool = NPCs + jailed players (random pick so both can be busted)."""
+    import random
     import server as srv
     db = srv.db
     if not await get_auto_rank_enabled(db):
@@ -664,15 +678,18 @@ async def run_bust_5sec_once():
             {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
         )
         users = await cursor.to_list(500)
-        bust_target_username = None
-        npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
-        if npc:
-            bust_target_username = npc.get("username")
-        if not bust_target_username:
-            jailed = await db.users.find_one({"in_jail": True}, {"_id": 0, "username": 1})
-            if jailed:
-                bust_target_username = jailed.get("username")
-
+        buster_user_ids = {u["id"] for u in users}
+        targets = []
+        async for npc in db.jail_npcs.find({}, {"_id": 0, "username": 1}):
+            un = (npc.get("username") or "").strip()
+            if un:
+                targets.append(un)
+        async for jailed in db.users.find({"in_jail": True}, {"_id": 0, "username": 1, "id": 1}):
+            if jailed.get("id") not in buster_user_ids:
+                un = (jailed.get("username") or "").strip()
+                if un:
+                    targets.append(un)
+        bust_target_username = random.choice(targets) if targets else None
         async def run_one(u):
             chat_id = (u.get("telegram_chat_id") or "").strip()
             bot_token = (u.get("telegram_bot_token") or "").strip()
@@ -932,10 +949,7 @@ def register(router):
         failed_busts_today = int((u or {}).get("auto_rank_failed_busts_today") or 0) if (u or {}).get("auto_rank_failed_busts_date") == today else 0
         activity_detail = None
         if in_jail:
-            if (u or {}).get("auto_rank_bust_every_5_sec"):
-                activity_detail = "In jail (bust loop will try to bust you out)"
-            else:
-                activity_detail = "In jail — cycles paused"
+            activity_detail = "In jail — cycles paused"
         elif (u or {}).get("travel_arrives_at") and (u or {}).get("auto_rank_booze"):
             activity_detail = "Travelling (booze)"
         elif (u or {}).get("auto_rank_booze") and (u or {}).get("booze_carrying") and (u or {}).get("current_state"):
