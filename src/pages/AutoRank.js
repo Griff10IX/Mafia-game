@@ -293,6 +293,15 @@ const StatsCard = ({ stats }) => {
         
         {/* Additional stats */}
         <div className="space-y-1.5 pt-2 border-t border-zinc-700/30">
+          {stats.in_jail && (
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading text-amber-400">
+              <Lock size={12} className="sm:w-3.5 sm:h-3.5 shrink-0" />
+              <span>In jail — cycles paused</span>
+              {stats.jail_seconds_remaining != null && stats.jail_seconds_remaining > 0 && (
+                <span className="text-amber-300/90">· out in {stats.jail_seconds_remaining}s</span>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
             <Clock size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
             <span className="text-zinc-400">Running:</span>
@@ -406,7 +415,7 @@ const AdminGlobalLoopCard = ({
           Interval (seconds)
         </label>
         <p className="text-[9px] sm:text-[10px] text-zinc-400 mb-2">
-          Wait time after each cycle. Min: {MIN_INTERVAL}s · Current: {intervalSeconds}s
+          Wait time after each cycle. Lower = more cycles (faster crimes). Min: {MIN_INTERVAL}s · Current: {intervalSeconds}s
         </p>
         <div className="flex gap-2">
           <input
@@ -447,11 +456,11 @@ export default function AutoRank() {
     telegram_chat_id_set: false,
   });
   const [savingPrefs, setSavingPrefs] = useState(false);
-  const [intervalSeconds, setIntervalSeconds] = useState(120);
+  const [intervalSeconds, setIntervalSeconds] = useState(30);
   const [globalEnabled, setGlobalEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [inputValue, setInputValue] = useState('120');
+  const [inputValue, setInputValue] = useState('30');
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
   const [adminUsersFilter, setAdminUsersFilter] = useState('all');
@@ -470,6 +479,8 @@ export default function AutoRank() {
     total_booze_runs: 0,
     total_booze_profit: 0,
     next_oc_at: null,
+    in_jail: false,
+    jail_seconds_remaining: null,
   });
 
   useEffect(() => {
@@ -505,12 +516,14 @@ export default function AutoRank() {
             total_booze_runs: statsRes.data.total_booze_runs ?? 0,
             total_booze_profit: statsRes.data.total_booze_profit ?? 0,
             next_oc_at: statsRes.data.next_oc_at ?? null,
+            in_jail: statsRes.data.in_jail === true,
+            jail_seconds_remaining: statsRes.data.jail_seconds_remaining ?? null,
           });
         }
         if (checkRes.data?.is_admin) {
           if (intervalRes?.data) {
-            setIntervalSeconds(intervalRes.data.interval_seconds ?? 120);
-            setInputValue(String(intervalRes.data.interval_seconds ?? 120));
+            setIntervalSeconds(intervalRes.data.interval_seconds ?? 30);
+            setInputValue(String(intervalRes.data.interval_seconds ?? 30));
             setGlobalEnabled(intervalRes.data.enabled !== false);
           }
           api.get('/admin/auto-rank/users').then((r) => setAdminUsers(r.data?.users ?? [])).catch(() => setAdminUsers([]));
