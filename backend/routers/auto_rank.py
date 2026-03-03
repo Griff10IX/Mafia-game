@@ -534,7 +534,8 @@ async def run_booze_arrivals():
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(200)
-    for u in users:
+
+    async def run_one(u):
         chat_id = (u.get("telegram_chat_id") or "").strip()
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
         lines = [f"**Auto Rank** — {u.get('username', '?')}", ""]
@@ -549,7 +550,9 @@ async def run_booze_arrivals():
             pass
         except Exception as e:
             logger.exception("Auto rank booze arrival for user %s: %s", u.get("id"), e)
-        await asyncio.sleep(0.05)
+
+    if users:
+        await asyncio.gather(*[run_one(u) for u in users])
 
 
 async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
@@ -574,15 +577,17 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
     users = await cursor.to_list(500)
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
     next_run_iso = datetime.fromtimestamp(now.timestamp() + interval, tz=timezone.utc).isoformat()
-    for u in users:
+
+    async def run_one(u):
         chat_id = (u.get("telegram_chat_id") or "").strip()
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
         try:
             await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token, crimes=crimes)
         except Exception as e:
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
-        await asyncio.sleep(0.05)
+
     if users:
+        await asyncio.gather(*[run_one(u) for u in users])
         from pymongo import UpdateOne
         await db.users.bulk_write(
             [UpdateOne({"id": u["id"]}, {"$set": {"auto_rank_next_run_at": next_run_iso}}) for u in users],
@@ -610,7 +615,8 @@ async def run_bust_5sec_once():
             jailed = await db.users.find_one({"in_jail": True}, {"_id": 0, "username": 1})
             if jailed:
                 bust_target_username = jailed.get("username")
-        for u in users:
+
+        async def run_one(u):
             chat_id = (u.get("telegram_chat_id") or "").strip()
             bot_token = (u.get("telegram_bot_token") or "").strip()
             try:
@@ -620,7 +626,9 @@ async def run_bust_5sec_once():
                     await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
             except Exception as e:
                 logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
-            await asyncio.sleep(0.3)
+
+        if users:
+            await asyncio.gather(*[run_one(u) for u in users])
     except Exception as e:
         logger.exception("Bust 5sec cycle failed: %s", e)
 
@@ -654,10 +662,9 @@ async def run_auto_rank_oc_once():
             {"_id": 0, "user_id": 1, "selected_equipment": 1},
         ).to_list(500)
         user_oc_by_id = {doc["user_id"]: doc.get("selected_equipment", "basic") for doc in user_oc_list}
-        for u in users:
-            retry_at = _parse_iso(u.get("auto_rank_oc_retry_at"))
-            if retry_at and now < retry_at:
-                continue
+        to_run = [u for u in users if not ((r := _parse_iso(u.get("auto_rank_oc_retry_at"))) and now < r)]
+
+        async def run_one(u):
             chat_id = (u.get("telegram_chat_id") or "").strip()
             bot_token = (u.get("telegram_bot_token") or "").strip() or None
             selected_equipment = user_oc_by_id.get(u["id"], "basic")
@@ -666,7 +673,7 @@ async def run_auto_rank_oc_once():
                 if result.get("skipped_afford"):
                     retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
                     await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}})
-                    continue
+                    return
                 if chat_id and result.get("ran") is True and result.get("success") is True:
                     msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
                     try:
@@ -677,7 +684,9 @@ async def run_auto_rank_oc_once():
                     await db.users.update_one({"id": u["id"]}, {"$unset": {"auto_rank_oc_retry_at": ""}})
             except Exception as e:
                 logger.exception("Auto rank OC for user %s: %s", u.get("id"), e)
-            await asyncio.sleep(0.5)
+
+        if to_run:
+            await asyncio.gather(*[run_one(u) for u in to_run])
     except Exception as e:
         logger.exception("Auto rank OC cycle failed: %s", e)
 
