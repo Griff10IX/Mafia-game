@@ -322,6 +322,39 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   <span className="text-emerald-400 font-medium">Ready</span>
                 )}
               </div>
+              {(prefs?.auto_rank_crimes || prefs?.auto_rank_bust_every_5_sec) && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                  <Crosshair size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                  <span className="text-zinc-400">Crimes:</span>
+                  {liveCountdown?.nextCrimeSeconds != null && liveCountdown.nextCrimeSeconds > 0 ? (
+                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextCrimeSeconds)}</span>
+                  ) : (
+                    <span className="text-emerald-400 font-medium">Ready</span>
+                  )}
+                </div>
+              )}
+              {(prefs?.auto_rank_gta || prefs?.auto_rank_bust_every_5_sec) && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                  <Car size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                  <span className="text-zinc-400">GTA:</span>
+                  {liveCountdown?.nextGtaSeconds != null && liveCountdown.nextGtaSeconds > 0 ? (
+                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextGtaSeconds)}</span>
+                  ) : (
+                    <span className="text-emerald-400 font-medium">Ready</span>
+                  )}
+                </div>
+              )}
+              {prefs?.auto_rank_booze && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                  <Wine size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                  <span className="text-zinc-400">Booze:</span>
+                  {liveCountdown?.nextBoozeSeconds != null && liveCountdown.nextBoozeSeconds > 0 ? (
+                    <span className="text-foreground font-medium">arrives in {formatCountdown(liveCountdown.nextBoozeSeconds)}</span>
+                  ) : (
+                    <span className="text-emerald-400 font-medium">Ready / idle</span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
                 <Clock size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
                 <span className="text-zinc-400">Cycles:</span>
@@ -582,40 +615,50 @@ export default function AutoRank() {
     jail_until: null,
     auto_rank_next_run_at: null,
     interval_seconds: 30,
+    next_crime_at: null,
+    next_gta_at: null,
+    next_booze_arrival_at: null,
   });
-  const [liveCountdown, setLiveCountdown] = useState({ jailSeconds: null, nextCycleSeconds: null, nextOcSeconds: null });
+  const [liveCountdown, setLiveCountdown] = useState({
+    jailSeconds: null,
+    nextCycleSeconds: null,
+    nextOcSeconds: null,
+    nextCrimeSeconds: null,
+    nextGtaSeconds: null,
+    nextBoozeSeconds: null,
+  });
 
   // Live countdown ticker: recompute every second from server timestamps
   useEffect(() => {
     const jailUntil = stats.jail_until;
     const nextRunAt = stats.auto_rank_next_run_at;
     const nextOcAt = stats.next_oc_at;
+    const nextCrimeAt = stats.next_crime_at;
+    const nextGtaAt = stats.next_gta_at;
+    const nextBoozeAt = stats.next_booze_arrival_at;
     const tick = () => {
       const now = Date.now();
-      let jailSeconds = null;
-      if (jailUntil) {
-        const t = new Date(jailUntil).getTime();
-        if (!Number.isNaN(t) && t > now) jailSeconds = Math.max(0, Math.floor((t - now) / 1000));
-      }
-      let nextCycleSeconds = null;
-      if (nextRunAt) {
-        const t = new Date(nextRunAt).getTime();
-        if (!Number.isNaN(t) && t > now) nextCycleSeconds = Math.max(0, Math.floor((t - now) / 1000));
-      }
-      let nextOcSeconds = null;
-      if (nextOcAt) {
-        const t = new Date(nextOcAt).getTime();
-        if (!Number.isNaN(t) && t > now) nextOcSeconds = Math.max(0, Math.floor((t - now) / 1000));
-      }
+      const sec = (iso) => {
+        if (!iso) return null;
+        const t = new Date(iso).getTime();
+        return (!Number.isNaN(t) && t > now) ? Math.max(0, Math.floor((t - now) / 1000)) : null;
+      };
+      const jailSeconds = sec(jailUntil);
+      const nextCycleSeconds = sec(nextRunAt);
+      const nextOcSeconds = sec(nextOcAt);
+      const nextCrimeSeconds = sec(nextCrimeAt);
+      const nextGtaSeconds = sec(nextGtaAt);
+      const nextBoozeSeconds = sec(nextBoozeAt);
       setLiveCountdown((prev) => {
-        if (prev.jailSeconds === jailSeconds && prev.nextCycleSeconds === nextCycleSeconds && prev.nextOcSeconds === nextOcSeconds) return prev;
-        return { jailSeconds, nextCycleSeconds, nextOcSeconds };
+        if (prev.jailSeconds === jailSeconds && prev.nextCycleSeconds === nextCycleSeconds && prev.nextOcSeconds === nextOcSeconds &&
+            prev.nextCrimeSeconds === nextCrimeSeconds && prev.nextGtaSeconds === nextGtaSeconds && prev.nextBoozeSeconds === nextBoozeSeconds) return prev;
+        return { jailSeconds, nextCycleSeconds, nextOcSeconds, nextCrimeSeconds, nextGtaSeconds, nextBoozeSeconds };
       });
     };
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [stats.jail_until, stats.auto_rank_next_run_at, stats.next_oc_at]);
+  }, [stats.jail_until, stats.auto_rank_next_run_at, stats.next_oc_at, stats.next_crime_at, stats.next_gta_at, stats.next_booze_arrival_at]);
 
   useEffect(() => {
     const run = async () => {
@@ -655,6 +698,9 @@ export default function AutoRank() {
             jail_until: statsRes.data.jail_until ?? null,
             auto_rank_next_run_at: statsRes.data.auto_rank_next_run_at ?? null,
             interval_seconds: statsRes.data.interval_seconds ?? 30,
+            next_crime_at: statsRes.data.next_crime_at ?? null,
+            next_gta_at: statsRes.data.next_gta_at ?? null,
+            next_booze_arrival_at: statsRes.data.next_booze_arrival_at ?? null,
           });
         }
         if (checkRes.data?.is_admin) {

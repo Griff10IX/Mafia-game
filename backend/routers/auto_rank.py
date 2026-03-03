@@ -804,7 +804,7 @@ def register(router):
     async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "travel_arrives_at": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -833,6 +833,27 @@ def register(router):
         if next_run_dt and next_run_dt > now:
             next_run_at = (u or {}).get("auto_rank_next_run_at")
         interval_seconds = await get_auto_rank_interval_seconds(db)
+        user_id = current_user["id"]
+        next_crime_at = None
+        crime_until_list = []
+        async for uc in db.user_crimes.find({"user_id": user_id}, {"_id": 0, "cooldown_until": 1}):
+            until_dt = _parse_iso(uc.get("cooldown_until"))
+            if until_dt and until_dt > now:
+                crime_until_list.append(uc.get("cooldown_until"))
+        if crime_until_list:
+            crime_until_list.sort()
+            next_crime_at = crime_until_list[0]
+        next_gta_at = None
+        gta_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
+        if gta_doc:
+            gta_until = _parse_iso(gta_doc.get("cooldown_until"))
+            if gta_until and gta_until > now:
+                next_gta_at = gta_doc.get("cooldown_until")
+        next_booze_arrival_at = None
+        if (u or {}).get("auto_rank_booze") and (u or {}).get("travel_arrives_at") and not in_jail:
+            arr = _parse_iso((u or {}).get("travel_arrives_at"))
+            if arr and arr > now:
+                next_booze_arrival_at = (u or {}).get("travel_arrives_at")
         return {
             "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
             "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
@@ -849,6 +870,9 @@ def register(router):
             "jail_until": jail_until_iso,
             "auto_rank_next_run_at": next_run_at,
             "interval_seconds": interval_seconds,
+            "next_crime_at": next_crime_at,
+            "next_gta_at": next_gta_at,
+            "next_booze_arrival_at": next_booze_arrival_at,
         }
 
     @router.patch("/auto-rank/me")
