@@ -390,6 +390,20 @@ const StatsCard = ({ stats, liveCountdown }) => {
             <span className="text-foreground font-medium">{formatRunningTime(stats.running_seconds)}</span>
           </div>
           
+          {!stats.in_jail && (
+            <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
+              <Activity size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
+              <span className="text-zinc-400">Next cycle:</span>
+              <span className="text-foreground font-medium">
+                {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds > 0
+                  ? formatCountdown(liveCountdown.nextCycleSeconds)
+                  : liveCountdown?.nextCycleSeconds === 0
+                    ? 'now'
+                    : stats.auto_rank_next_run_at ? '…' : '—'}
+              </span>
+            </div>
+          )}
+          
           <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
             <Briefcase size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
             <span className="text-zinc-400">Next OC:</span>
