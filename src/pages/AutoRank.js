@@ -294,30 +294,39 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
             <div className="space-y-2">
               <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
                 <span className="text-zinc-400">Status:</span>
-                {stats?.in_jail ? (
-                  <span className="text-amber-400 font-medium">
-                    In jail — cycles paused
-                    {liveCountdown?.jailSeconds != null && liveCountdown.jailSeconds > 0 && (
-                      <span className="text-amber-300/90 ml-1">· out in {formatCountdown(liveCountdown.jailSeconds)}</span>
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-emerald-400 font-medium">
-                    Running
-                    {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds > 0 && (
-                      <span className="text-foreground/90 ml-1">· next cycle in {formatCountdown(liveCountdown.nextCycleSeconds)}</span>
-                    )}
-                    {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds <= 0 && (
-                      <span className="text-primary/90 ml-1">· running cycle now</span>
-                    )}
-                  </span>
-                )}
+                <span className={stats?.in_jail ? 'text-amber-400 font-medium' : 'text-emerald-400 font-medium'}>
+                  {stats?.in_jail ? 'In jail — cycles paused' : 'Running'}
+                </span>
               </div>
+              {stats?.in_jail && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                  <Lock size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                  <span className="text-zinc-400">Jail:</span>
+                  {liveCountdown?.jailSeconds != null && liveCountdown.jailSeconds > 0 ? (
+                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.jailSeconds)}</span>
+                  ) : (
+                    <span className="text-emerald-400 font-medium">Ready</span>
+                  )}
+                </div>
+              )}
+              {!stats?.in_jail && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                  <Activity size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                  <span className="text-zinc-400">Next cycle:</span>
+                  {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds > 0 ? (
+                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextCycleSeconds)}</span>
+                  ) : liveCountdown?.nextCycleSeconds === 0 ? (
+                    <span className="text-primary font-medium">now</span>
+                  ) : (
+                    <span className="text-emerald-400 font-medium">Ready</span>
+                  )}
+                </div>
+              )}
               <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
                 <Briefcase size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
                 <span className="text-zinc-400">Next OC:</span>
                 {stats?.next_oc_at && liveCountdown?.nextOcSeconds != null && liveCountdown.nextOcSeconds > 0 ? (
-                  <span className="text-foreground font-medium">{formatCountdown(liveCountdown.nextOcSeconds)}</span>
+                  <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextOcSeconds)}</span>
                 ) : (
                   <span className="text-emerald-400 font-medium">Ready</span>
                 )}
@@ -349,9 +358,9 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   <Wine size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
                   <span className="text-zinc-400">Booze:</span>
                   {liveCountdown?.nextBoozeSeconds != null && liveCountdown.nextBoozeSeconds > 0 ? (
-                    <span className="text-foreground font-medium">arrives in {formatCountdown(liveCountdown.nextBoozeSeconds)}</span>
+                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextBoozeSeconds)}</span>
                   ) : (
-                    <span className="text-emerald-400 font-medium">Ready / idle</span>
+                    <span className="text-emerald-400 font-medium">Ready</span>
                   )}
                 </div>
               )}
