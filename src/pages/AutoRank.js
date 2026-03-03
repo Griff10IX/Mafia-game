@@ -530,7 +530,7 @@ const StatsCard = ({ stats, liveCountdown }) => {
   const totalCrimes = Number(s.total_crimes) || 0;
   const totalGtas = Number(s.total_gtas) || 0;
   const totalCash = Number(s.total_cash) || 0;
-  const bestCars = Array.isArray(s.best_cars) ? s.best_cars : [];
+  const bestCars = (Array.isArray(s.best_cars) ? s.best_cars : []).filter((car) => car && typeof car === 'object');
 
   return (
     <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
@@ -623,8 +623,8 @@ const StatsCard = ({ stats, liveCountdown }) => {
             <div className="space-y-1">
               {bestCars.map((car, i) => (
                 <div key={i} className="flex items-center justify-between text-[10px] sm:text-xs bg-zinc-800/40 rounded px-2 py-1">
-                  <span className="text-foreground font-medium">{car.name}</span>
-                  <span className="text-emerald-400 font-mono font-medium">${(car.value || 0).toLocaleString()}</span>
+                  <span className="text-foreground font-medium">{car?.name ?? '—'}</span>
+                  <span className="text-emerald-400 font-mono font-medium">${(car?.value ?? 0).toLocaleString()}</span>
                 </div>
               ))}
             </div>
@@ -901,8 +901,8 @@ export default function AutoRank() {
             const crimeIds = d.auto_rank_crime_ids ?? [];
             const gtaIds = d.auto_rank_gta_option_ids ?? [];
             setSettingsData({ crimes, gta_options: gtaOptions, auto_rank_crime_ids: crimeIds, auto_rank_gta_option_ids: gtaIds });
-            setSelectedCrimeIds(crimeIds.length === 0 ? crimes.map((c) => c.id) : crimeIds);
-            setSelectedGtaIds(gtaIds.length === 0 ? gtaOptions.map((o) => o.id) : gtaIds);
+            setSelectedCrimeIds(crimeIds.length === 0 ? (crimes || []).map((c) => c?.id).filter(Boolean) : crimeIds);
+            setSelectedGtaIds(gtaIds.length === 0 ? (gtaOptions || []).map((o) => o?.id).filter(Boolean) : gtaIds);
           }).catch(() => {});
         }
         if (statsRes?.data) {
@@ -980,9 +980,9 @@ export default function AutoRank() {
   const toggleGtaId = (id) => {
     setSelectedGtaIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
-  const selectAllCrimes = () => setSelectedCrimeIds(settingsData.crimes.map((c) => c.id));
+  const selectAllCrimes = () => setSelectedCrimeIds((settingsData?.crimes ?? []).map((c) => c?.id).filter(Boolean));
   const deselectAllCrimes = () => setSelectedCrimeIds([]);
-  const selectAllGta = () => setSelectedGtaIds(settingsData.gta_options.map((o) => o.id));
+  const selectAllGta = () => setSelectedGtaIds((settingsData?.gta_options ?? []).map((o) => o?.id).filter(Boolean));
   const deselectAllGta = () => setSelectedGtaIds([]);
   const handleSaveSettings = async () => {
     setSavingSettings(true);

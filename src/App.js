@@ -374,7 +374,9 @@ function App() {
             element={
               isAuthenticated ? (
                 <Layout>
-                  <AutoRank />
+                  <ErrorBoundary>
+                    <AutoRank />
+                  </ErrorBoundary>
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
