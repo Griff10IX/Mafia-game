@@ -902,7 +902,7 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_bust_every_5_sec": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -966,7 +966,26 @@ def register(router):
             if sum(int(v or 0) for v in carrying.values()) > 0:
                 activity_detail = "Selling booze"
         if activity_detail is None:
-            activity_detail = "Running cycle (crimes / GTA / booze)"
+            bust_5 = bool((u or {}).get("auto_rank_bust_every_5_sec"))
+            crimes = bool((u or {}).get("auto_rank_crimes"))
+            gta = bool((u or {}).get("auto_rank_gta"))
+            oc = bool((u or {}).get("auto_rank_oc"))
+            booze = bool((u or {}).get("auto_rank_booze"))
+            if bust_5 and not crimes and not gta and not oc and not booze:
+                activity_detail = "Jail busting every 5s"
+            else:
+                parts = []
+                if bust_5:
+                    parts.append("busts 5s")
+                if crimes:
+                    parts.append("crimes")
+                if gta:
+                    parts.append("GTA")
+                if oc:
+                    parts.append("OC")
+                if booze:
+                    parts.append("booze")
+                activity_detail = "Running cycle (" + " / ".join(parts) + ")" if parts else "Idle"
         last_activity = (u or {}).get("auto_rank_last_activity")
         last_activity_at = (u or {}).get("auto_rank_last_activity_at")
         return {
