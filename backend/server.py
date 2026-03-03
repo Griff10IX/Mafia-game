@@ -1295,7 +1295,7 @@ async def startup_db():
         asyncio.create_task(auto_rank.run_auto_rank_oc_loop())
     else:
         logging.getLogger(__name__).info(
-            "Auto Rank: using cron only (AUTO_RANK_USE_CRON=1). Call POST /api/auto-rank/cron with X-Cron-Secret every ~2 min."
+            "Auto Rank: using cron only (AUTO_RANK_USE_CRON=1). Call POST /api/auto-rank/cron with X-Cron-Secret every 10 seconds."
         )
     from routers import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())

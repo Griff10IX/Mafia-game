@@ -23,7 +23,7 @@ from fastapi import HTTPException, Query
 logger = logging.getLogger(__name__)
 
 MIN_INTERVAL_SECONDS = 5
-DEFAULT_INTERVAL_SECONDS = 10  # run each user every 10s for frequent crimes/GTA/busts
+DEFAULT_INTERVAL_SECONDS = 60  # run each user every 1 min (cron can call every 1 min)
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 6  # was 5; 5% slower
 CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 32  # was 30; 5% slower
