@@ -28,7 +28,7 @@ DEFAULT_INTERVAL_SECONDS = 126  # was 2*60; 5% slower
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 6  # was 5; 5% slower
 CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC = 32  # was 30; 5% slower
-LOOP_WAKE_SECONDS = 32  # was 30; main loop (and booze no-car retry) 5% slower
+LOOP_WAKE_SECONDS = 5  # frequent wake so booze arrivals processed quickly; only delay = travel time
 OC_LOOP_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
 
@@ -191,6 +191,8 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user:
                 return has_success, None
+        except HTTPException:
+            break
         except Exception as e:
             logger.exception("Auto rank booze sell %s: %s", user_id, e)
             break
@@ -279,6 +281,8 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                 await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
                 lines.append(f"**Booze** — Traveling to {city_a} to start run.")
                 return True
+            except HTTPException:
+                pass
             except Exception as e:
                 logger.exception("Auto rank booze travel to buy city %s: %s", user_id, e)
         return False
@@ -290,6 +294,16 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
 
     if carrying_total > 0:
         success, user = await _booze_sell_at_city(db, user, user_id, username, telegram_chat_id, bot_token, now, lines)
+        if not success or not user:
+            return success
+        # Continue cycle: sell then immediately buy+travel (only delay = travel time)
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user or user.get("in_jail"):
+            return success
+        carrying_after = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
+        current_after = (user.get("current_state") or "").strip()
+        if carrying_after == 0 and current_after in (city_a, city_b):
+            return await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current_after, other_city, current_idx, other_idx)
         return success
     else:
         return await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current, other_city, current_idx, other_idx)
@@ -307,6 +321,8 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return
+    if user.get("in_jail"):
+        return
     token = bot_token or (user.get("telegram_bot_token") or "").strip()
     if bust_target_username is None:
         npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
@@ -320,7 +336,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         return
     try:
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
-        if not user:
+        if not user or user.get("in_jail"):
             return
         bust_result = await _attempt_bust_impl(user, bust_target_username)
         if bust_result.get("error") or not bust_result.get("success"):
@@ -331,9 +347,13 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         parts = [f"Busted {bust_target_username}! +{rp} RP"]
         if cash:
             parts.append(f"${cash:,}")
-        if (telegram_chat_id or "").strip():
+        chat_id = (telegram_chat_id or "").strip()
+        if chat_id:
             msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
-            await send_telegram_to_chat(telegram_chat_id, msg, token)
+            try:
+                await send_telegram_to_chat(chat_id, msg, token)
+            except Exception as e:
+                logger.warning("Auto rank bust Telegram send for %s failed (bust completed): %s", user_id, e)
     except Exception as e:
         logger.exception("Auto rank bust-only for %s: %s", user_id, e)
 
@@ -349,8 +369,8 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 # - Jail: no cooldown per bust; success rate only. CRIMES_GTA_MIN_INTERVAL_WHEN_BUST_5SEC throttles how often we run crimes+GTA when bust-every-5sec is on.
 
 
-async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, crimes: Optional[list] = None):
-    """Commit all crimes off cooldown, then one GTA (if off cooldown), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Send summary to Telegram."""
+async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: Optional[str] = None, bot_token: Optional[str] = None, crimes: Optional[list] = None):
+    """Commit all crimes off cooldown, then one GTA (if off cooldown), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Telegram is optional; if not set, actions still run and no notifications are sent."""
     import server as srv
     from routers.crimes import _commit_crime_impl
     from routers.gta import _attempt_gta_impl, GTA_OPTIONS
@@ -362,6 +382,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return
+    chat_id = (telegram_chat_id or "").strip()
     token = (bot_token or "").strip() or (user.get("telegram_bot_token") or "").strip()
     bust_every_5 = user.get("auto_rank_bust_every_5_sec", False)
 
@@ -416,6 +437,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     crime_total_rp += 3
                 else:
                     crime_fail_count += 1
+            except HTTPException:
+                # Normal "can't do that" (e.g. in_jail, cooldown) — act like user, stop crimes
+                break
             except Exception as e:
                 logger.exception("Auto rank crime for %s: %s", user_id, e)
                 crime_fail_count += 1
@@ -456,6 +480,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         car_name = out.car.get("name", "Car") if out.car else "Car"
                         await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now)
                         lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
+                except HTTPException:
+                    # Normal "can't do that" (e.g. in_jail, cooldown, rank) — skip GTA this run
+                    pass
                 except Exception as e:
                     logger.exception("Auto rank GTA for %s: %s", user_id, e)
 
@@ -465,14 +492,19 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     # --- Booze ---
     if user.get("auto_rank_booze", False):
         try:
-            if await _run_booze_for_user(db, user_id, username, telegram_chat_id, bot_token, now, lines):
+            if await _run_booze_for_user(db, user_id, username, chat_id, bot_token, now, lines):
                 has_success = True
+        except HTTPException:
+            pass
         except Exception as e:
             logger.exception("Auto rank booze for %s: %s", user_id, e)
 
-    if has_success and (telegram_chat_id or "").strip():
+    if has_success and chat_id:
         lines.append("")
-        await send_telegram_to_chat(telegram_chat_id, "\n".join(lines), token)
+        try:
+            await send_telegram_to_chat(chat_id, "\n".join(lines), token or None)
+        except Exception as e:
+            logger.warning("Auto rank Telegram send for %s failed (run completed): %s", user_id, e)
 
 
 # ─── Background loops ─────────────────────────────────────────────
@@ -510,10 +542,15 @@ async def run_booze_arrivals():
         try:
             has_success = await _run_booze_for_user(db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines)
             if has_success and len(lines) > 2 and chat_id:
-                await send_telegram_to_chat(chat_id, "\n".join(lines), bot_token)
+                try:
+                    await send_telegram_to_chat(chat_id, "\n".join(lines), bot_token)
+                except Exception as e:
+                    logger.warning("Auto rank booze arrival Telegram send for %s failed: %s", u.get("id"), e)
+        except HTTPException:
+            pass
         except Exception as e:
             logger.exception("Auto rank booze arrival for user %s: %s", u.get("id"), e)
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.05)
 
 
 async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
@@ -526,6 +563,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
         {
             "auto_rank_purchased": True,
             "auto_rank_enabled": True,
+            "in_jail": {"$ne": True},
             "$or": [
                 {"auto_rank_next_run_at": {"$exists": False}},
                 {"auto_rank_next_run_at": None},
@@ -544,7 +582,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
             await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token, crimes=crimes)
         except Exception as e:
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.05)
     if users:
         from pymongo import UpdateOne
         await db.users.bulk_write(
@@ -561,7 +599,7 @@ async def run_bust_5sec_once():
         return
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True},
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
         )
         users = await cursor.to_list(500)
@@ -608,7 +646,7 @@ async def run_auto_rank_oc_once():
     now = datetime.now(timezone.utc)
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True},
+            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_oc_retry_at": 1},
         )
         users = await cursor.to_list(500)
@@ -632,7 +670,10 @@ async def run_auto_rank_oc_once():
                     continue
                 if chat_id and result.get("ran") is True and result.get("success") is True:
                     msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
-                    await send_telegram_to_chat(chat_id, msg, bot_token)
+                    try:
+                        await send_telegram_to_chat(chat_id, msg, bot_token)
+                    except Exception as e:
+                        logger.warning("Auto rank OC Telegram send for %s failed: %s", u.get("id"), e)
                 if result.get("ran"):
                     await db.users.update_one({"id": u["id"]}, {"$unset": {"auto_rank_oc_retry_at": ""}})
             except Exception as e:
