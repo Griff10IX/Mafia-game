@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2 } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 
@@ -273,6 +273,117 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => (
 );
 
 /* ═══════════════════════════════════════════════════════
+   Crimes & GTA options Settings Card
+   ═══════════════════════════════════════════════════════ */
+const OptionCheckbox = ({ id, label, sub, checked, disabled, onChange }) => (
+  <label className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-zinc-800/50 cursor-pointer group">
+    <input
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      onChange={() => onChange(id)}
+      className="rounded border-zinc-600 text-primary focus:ring-primary/50"
+    />
+    <span className="text-[10px] sm:text-xs font-heading text-foreground flex-1">{label}</span>
+    {sub != null && sub !== '' && <span className="text-[9px] text-zinc-500 font-heading">{sub}</span>}
+  </label>
+);
+
+const CrimesGtaSettingsCard = ({
+  crimes,
+  gtaOptions,
+  selectedCrimeIds,
+  selectedGtaIds,
+  onToggleCrime,
+  onToggleGta,
+  onSelectAllCrimes,
+  onDeselectAllCrimes,
+  onSelectAllGta,
+  onDeselectAllGta,
+  onSaveSettings,
+  savingSettings,
+  crimesDisabled,
+  gtaDisabled,
+}) => (
+  <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
+    <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+      <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+        <Settings2 size={14} className="sm:w-4 sm:h-4" />
+        Crimes & GTA options
+      </h2>
+    </div>
+    <div className="p-2.5 sm:p-3 space-y-4">
+      <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
+        Choose which crimes and GTA options to run. Empty = all. Save to apply.
+      </p>
+
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
+            <Crosshair size={12} className="text-primary" />
+            Crimes
+          </span>
+          <div className="flex gap-1">
+            <button type="button" onClick={onSelectAllCrimes} disabled={crimesDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
+            <span className="text-zinc-600">|</span>
+            <button type="button" onClick={onDeselectAllCrimes} disabled={crimesDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
+          </div>
+        </div>
+        <div className="max-h-48 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
+          {(crimes || []).map((c) => (
+            <OptionCheckbox
+              key={c.id}
+              id={c.id}
+              label={c.name}
+              sub={`Rank ${c.min_rank}`}
+              checked={selectedCrimeIds.includes(c.id)}
+              disabled={crimesDisabled}
+              onChange={onToggleCrime}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <span className="text-[10px] sm:text-xs font-heading font-bold text-zinc-300 flex items-center gap-1.5">
+            <Car size={12} className="text-primary" />
+            GTA
+          </span>
+          <div className="flex gap-1">
+            <button type="button" onClick={onSelectAllGta} disabled={gtaDisabled} className="text-[9px] font-heading font-bold text-primary hover:underline disabled:opacity-50">All</button>
+            <span className="text-zinc-600">|</span>
+            <button type="button" onClick={onDeselectAllGta} disabled={gtaDisabled} className="text-[9px] font-heading font-bold text-zinc-400 hover:underline disabled:opacity-50">None</button>
+          </div>
+        </div>
+        <div className="max-h-40 overflow-y-auto rounded bg-zinc-800/40 border border-zinc-700/30 divide-y divide-zinc-700/30">
+          {(gtaOptions || []).map((o) => (
+            <OptionCheckbox
+              key={o.id}
+              id={o.id}
+              label={o.name}
+              sub={`Rank ${o.min_rank}`}
+              checked={selectedGtaIds.includes(o.id)}
+              disabled={gtaDisabled}
+              onChange={onToggleGta}
+            />
+          ))}
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onSaveSettings}
+        disabled={savingSettings}
+        className="w-full py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-[0.99]"
+      >
+        {savingSettings ? 'Saving...' : 'Save options'}
+      </button>
+    </div>
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════
    Summary / Status Card (what Auto Rank is doing)
    ═══════════════════════════════════════════════════════ */
 const LAST_ACTIVITY_LABELS = {
@@ -294,128 +405,108 @@ const formatLastActivityAt = (iso) => {
   }
 };
 
-const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
+const AutoRankSummaryCard = ({ stats, liveCountdown, prefs, lastStatsAt }) => {
   const enabled = prefs?.auto_rank_enabled;
   const interval = stats?.interval_seconds ?? 30;
   const lastLabel = stats?.last_activity ? (LAST_ACTIVITY_LABELS[stats.last_activity] || stats.last_activity) : null;
   const lastAt = formatLastActivityAt(stats?.last_activity_at);
+  const secondsSinceRefresh = lastStatsAt != null ? Math.max(0, Math.floor((Date.now() - lastStatsAt) / 1000)) : null;
+  const liveLine = (sec, readyLabel = 'Ready') => {
+    if (sec != null && sec > 0) return formatCountdown(sec);
+    if (sec === 0) return 'now';
+    return readyLabel;
+  };
   return (
     <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.15s' }}>
-      <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
+      <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
           <Activity size={14} className="sm:w-4 sm:h-4" />
           What Auto Rank is doing
         </h2>
+        {enabled && (
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 px-1.5 py-0.5 text-[9px] font-heading font-medium text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live
+            </span>
+            {secondsSinceRefresh != null && (
+              <span className="text-[9px] sm:text-[10px] font-heading text-zinc-500">
+                Refreshed {secondsSinceRefresh}s ago
+              </span>
+            )}
+          </div>
+        )}
       </div>
       <div className="p-2.5 sm:p-3 space-y-3">
         {!enabled ? (
           <p className="text-[10px] sm:text-xs text-zinc-400 font-heading">Auto Rank is off. Enable it above to run crimes, GTA, busts, OC and booze automatically.</p>
         ) : (
           <>
-            <div className="space-y-2">
+            <div className="rounded-lg border border-zinc-700/50 bg-zinc-800/40 p-2.5 sm:p-3 space-y-2.5">
+              <div className="text-[9px] sm:text-[10px] font-heading font-bold text-zinc-500 uppercase tracking-wider">
+                Real-time summary
+              </div>
               {stats?.activity_detail && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                  <Activity size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                  <span className="text-zinc-400">Activity:</span>
-                  <span className="text-foreground font-medium">{stats.activity_detail}</span>
+                <div className="text-xs sm:text-sm font-heading font-medium text-foreground">
+                  {stats.activity_detail}
                 </div>
               )}
-              {lastLabel && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                  <span className="text-zinc-400">Last:</span>
-                  <span className="text-foreground/90 font-medium">
-                    {lastLabel}{lastAt ? ` at ${lastAt}` : ''}
-                  </span>
-                </div>
-              )}
-              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                <span className="text-zinc-400">Status:</span>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] sm:text-xs font-heading">
+                <span className="text-zinc-500">Status:</span>
                 <span className={stats?.in_jail ? 'text-amber-400 font-medium' : 'text-emerald-400 font-medium'}>
                   {stats?.in_jail ? 'In jail — cycles paused' : 'Running'}
                 </span>
-              </div>
-              {(stats?.failed_crimes_today > 0 || stats?.failed_gtas_today > 0 || stats?.failed_busts_today > 0) && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap text-amber-300/90">
-                  <span className="text-zinc-400">Unsuccessful today:</span>
-                  <span>
-                    {stats.failed_crimes_today ?? 0} crimes, {stats.failed_gtas_today ?? 0} GTAs, {stats.failed_busts_today ?? 0} busts
-                  </span>
-                </div>
-              )}
-              {stats?.in_jail && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                  <Lock size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                  <span className="text-zinc-400">Jail:</span>
-                  {liveCountdown?.jailSeconds != null && liveCountdown.jailSeconds > 0 ? (
-                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.jailSeconds)}</span>
-                  ) : (
-                    <span className="text-emerald-400 font-medium">Ready</span>
-                  )}
-                </div>
-              )}
-              {!stats?.in_jail && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                  <Activity size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                  <span className="text-zinc-400">Next cycle:</span>
-                  {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds > 0 ? (
-                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextCycleSeconds)}</span>
-                  ) : liveCountdown?.nextCycleSeconds === 0 ? (
-                    <span className="text-primary font-medium">now</span>
-                  ) : (
-                    <span className="text-emerald-400 font-medium">Ready</span>
-                  )}
-                </div>
-              )}
-              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                <Briefcase size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                <span className="text-zinc-400">Next OC:</span>
-                {stats?.next_oc_at && liveCountdown?.nextOcSeconds != null && liveCountdown.nextOcSeconds > 0 ? (
-                  <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextOcSeconds)}</span>
-                ) : (
-                  <span className="text-emerald-400 font-medium">Ready</span>
+                {stats?.in_jail && liveCountdown?.jailSeconds != null && liveCountdown.jailSeconds > 0 && (
+                  <span className="text-foreground/90">· Out in {formatCountdown(liveCountdown.jailSeconds)}</span>
                 )}
               </div>
-              {(prefs?.auto_rank_crimes || prefs?.auto_rank_bust_every_5_sec) && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                  <Crosshair size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                  <span className="text-zinc-400">Crimes:</span>
-                  {liveCountdown?.nextCrimeSeconds != null && liveCountdown.nextCrimeSeconds > 0 ? (
-                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextCrimeSeconds)}</span>
-                  ) : (
-                    <span className="text-emerald-400 font-medium">Ready</span>
-                  )}
+              {lastLabel && (
+                <div className="text-[10px] sm:text-xs font-heading text-zinc-400">
+                  Last: <span className="text-foreground/90">{lastLabel}{lastAt ? ` at ${lastAt}` : ''}</span>
                 </div>
               )}
-              {(prefs?.auto_rank_gta || prefs?.auto_rank_bust_every_5_sec) && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                  <Car size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                  <span className="text-zinc-400">GTA:</span>
-                  {liveCountdown?.nextGtaSeconds != null && liveCountdown.nextGtaSeconds > 0 ? (
-                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextGtaSeconds)}</span>
-                  ) : (
-                    <span className="text-emerald-400 font-medium">Ready</span>
-                  )}
+              {(stats?.failed_crimes_today > 0 || stats?.failed_gtas_today > 0 || stats?.failed_busts_today > 0) && (
+                <div className="text-[10px] sm:text-xs font-heading text-amber-300/90">
+                  Unsuccessful today: {stats.failed_crimes_today ?? 0} crimes, {stats.failed_gtas_today ?? 0} GTAs, {stats.failed_busts_today ?? 0} busts
                 </div>
               )}
-              {prefs?.auto_rank_booze && (
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
-                  <Wine size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                  <span className="text-zinc-400">Booze:</span>
-                  {liveCountdown?.nextBoozeSeconds != null && liveCountdown.nextBoozeSeconds > 0 ? (
-                    <span className="text-foreground font-medium">next in {formatCountdown(liveCountdown.nextBoozeSeconds)}</span>
-                  ) : (
-                    <span className="text-emerald-400 font-medium">Ready</span>
-                  )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1.5 pt-1 border-t border-zinc-700/30 text-[10px] sm:text-xs font-heading">
+                {!stats?.in_jail && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-zinc-500">Next cycle</span>
+                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCycleSeconds, '—')}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-2">
+                  <span className="text-zinc-500">OC</span>
+                  <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextOcSeconds)}</span>
                 </div>
-              )}
-              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
-                <Clock size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
-                <span className="text-zinc-400">Cycles:</span>
-                <span className="text-foreground font-medium">every {interval}s when not in jail</span>
+                {(prefs?.auto_rank_crimes || prefs?.auto_rank_bust_every_5_sec) && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-zinc-500">Crimes</span>
+                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCrimeSeconds)}</span>
+                  </div>
+                )}
+                {(prefs?.auto_rank_gta || prefs?.auto_rank_bust_every_5_sec) && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-zinc-500">GTA</span>
+                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextGtaSeconds)}</span>
+                  </div>
+                )}
+                {prefs?.auto_rank_booze && (
+                  <div className="flex justify-between gap-2">
+                    <span className="text-zinc-500">Booze</span>
+                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextBoozeSeconds)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between gap-2 col-span-full sm:col-span-1">
+                  <span className="text-zinc-500">Cycle interval</span>
+                  <span className="text-foreground font-medium">{interval}s</span>
+                </div>
               </div>
             </div>
-            <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading leading-relaxed border-t border-zinc-700/30 pt-2">
-              <strong className="text-zinc-400">Next cycle</strong> uses your interval ({interval}s). Crimes / GTA / OC show <strong className="text-zinc-400">game cooldowns</strong> — when the next attempt is allowed. Each cycle runs every {interval}s and does crimes (if off cooldown) → one GTA (if ready) → booze if enabled. When in jail, cycles are paused until you’re out.
+            <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading leading-relaxed ">
+              <strong className="text-zinc-400">Next cycle</strong> uses your interval ({interval}s). Crimes / GTA / OC show <strong className="text-zinc-400">game cooldowns</strong>. Each cycle runs every {interval}s; when in jail, cycles are paused until you’re out.
             </p>
           </>
         )}
@@ -638,8 +729,14 @@ export default function AutoRank() {
     auto_rank_booze: false,
     auto_rank_purchased: false,
     telegram_chat_id_set: false,
+    auto_rank_crime_ids: [],
+    auto_rank_gta_option_ids: [],
   });
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [settingsData, setSettingsData] = useState({ crimes: [], gta_options: [], auto_rank_crime_ids: [], auto_rank_gta_option_ids: [] });
+  const [selectedCrimeIds, setSelectedCrimeIds] = useState([]);
+  const [selectedGtaIds, setSelectedGtaIds] = useState([]);
+  const [savingSettings, setSavingSettings] = useState(false);
   const [intervalSeconds, setIntervalSeconds] = useState(30);
   const [globalEnabled, setGlobalEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -686,6 +783,7 @@ export default function AutoRank() {
     nextGtaSeconds: null,
     nextBoozeSeconds: null,
   });
+  const [lastStatsAt, setLastStatsAt] = useState(null);
 
   // Live countdown ticker: recompute every second from server timestamps
   useEffect(() => {
@@ -719,6 +817,47 @@ export default function AutoRank() {
     return () => clearInterval(id);
   }, [stats.jail_until, stats.auto_rank_next_run_at, stats.next_oc_at, stats.next_crime_at, stats.next_gta_at, stats.next_booze_arrival_at]);
 
+  // Real-time stats polling when Auto Rank is enabled
+  useEffect(() => {
+    if (!canEnable || !prefs.auto_rank_enabled) return;
+    const poll = () => {
+      api.get('/auto-rank/stats').then((res) => {
+        if (!res?.data) return;
+        const d = res.data;
+        setStats((prev) => ({
+          ...prev,
+          total_busts: d.total_busts ?? prev.total_busts,
+          total_crimes: d.total_crimes ?? prev.total_crimes,
+          total_gtas: d.total_gtas ?? prev.total_gtas,
+          total_cash: d.total_cash ?? prev.total_cash,
+          running_seconds: d.running_seconds ?? prev.running_seconds,
+          best_cars: d.best_cars ?? prev.best_cars,
+          total_booze_runs: d.total_booze_runs ?? prev.total_booze_runs,
+          total_booze_profit: d.total_booze_profit ?? prev.total_booze_profit,
+          next_oc_at: d.next_oc_at ?? null,
+          in_jail: d.in_jail === true,
+          jail_seconds_remaining: d.jail_seconds_remaining ?? null,
+          jail_until: d.jail_until ?? null,
+          auto_rank_next_run_at: d.auto_rank_next_run_at ?? null,
+          interval_seconds: d.interval_seconds ?? prev.interval_seconds,
+          next_crime_at: d.next_crime_at ?? null,
+          next_gta_at: d.next_gta_at ?? null,
+          next_booze_arrival_at: d.next_booze_arrival_at ?? null,
+          activity_detail: d.activity_detail ?? null,
+          last_activity: d.last_activity ?? null,
+          last_activity_at: d.last_activity_at ?? null,
+          failed_crimes_today: d.failed_crimes_today ?? 0,
+          failed_gtas_today: d.failed_gtas_today ?? 0,
+          failed_busts_today: d.failed_busts_today ?? 0,
+        }));
+        setLastStatsAt(Date.now());
+      }).catch(() => {});
+    };
+    const id = setInterval(poll, 6000);
+    poll();
+    return () => clearInterval(id);
+  }, [canEnable, prefs.auto_rank_enabled]);
+
   useEffect(() => {
     const run = async () => {
       try {
@@ -739,7 +878,22 @@ export default function AutoRank() {
             auto_rank_booze: !!meRes.data.auto_rank_booze,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
             telegram_chat_id_set: !!meRes.data.telegram_chat_id_set,
+            auto_rank_crime_ids: meRes.data.auto_rank_crime_ids ?? [],
+            auto_rank_gta_option_ids: meRes.data.auto_rank_gta_option_ids ?? [],
           });
+        }
+        const hasFeature = meRes?.data?.auto_rank_purchased || meRes?.data?.auto_rank_enabled;
+        if (hasFeature) {
+          api.get('/auto-rank/settings').then((res) => {
+            const d = res.data || {};
+            const crimes = d.crimes || [];
+            const gtaOptions = d.gta_options || [];
+            const crimeIds = d.auto_rank_crime_ids ?? [];
+            const gtaIds = d.auto_rank_gta_option_ids ?? [];
+            setSettingsData({ crimes, gta_options: gtaOptions, auto_rank_crime_ids: crimeIds, auto_rank_gta_option_ids: gtaIds });
+            setSelectedCrimeIds(crimeIds.length === 0 ? crimes.map((c) => c.id) : crimeIds);
+            setSelectedGtaIds(gtaIds.length === 0 ? gtaOptions.map((o) => o.id) : gtaIds);
+          }).catch(() => {});
         }
         if (statsRes?.data) {
           setStats({
@@ -767,6 +921,7 @@ export default function AutoRank() {
             failed_gtas_today: statsRes.data.failed_gtas_today ?? 0,
             failed_busts_today: statsRes.data.failed_busts_today ?? 0,
           });
+          setLastStatsAt(Date.now());
         }
         if (checkRes.data?.is_admin) {
           if (intervalRes?.data) {
@@ -798,12 +953,41 @@ export default function AutoRank() {
         auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec ?? p.auto_rank_bust_every_5_sec,
         auto_rank_oc: res.data?.auto_rank_oc ?? p.auto_rank_oc,
         auto_rank_booze: res.data?.auto_rank_booze ?? p.auto_rank_booze,
+        auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? p.auto_rank_crime_ids,
+        auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? p.auto_rank_gta_option_ids,
       }));
       toast.success('Saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save');
     } finally {
       setSavingPrefs(false);
+    }
+  };
+
+  const toggleCrimeId = (id) => {
+    setSelectedCrimeIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+  const toggleGtaId = (id) => {
+    setSelectedGtaIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+  const selectAllCrimes = () => setSelectedCrimeIds(settingsData.crimes.map((c) => c.id));
+  const deselectAllCrimes = () => setSelectedCrimeIds([]);
+  const selectAllGta = () => setSelectedGtaIds(settingsData.gta_options.map((o) => o.id));
+  const deselectAllGta = () => setSelectedGtaIds([]);
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      const crimes = settingsData.crimes || [];
+      const gtaOptions = settingsData.gta_options || [];
+      const crimePayload = selectedCrimeIds.length === crimes.length ? [] : selectedCrimeIds;
+      const gtaPayload = selectedGtaIds.length === gtaOptions.length ? [] : selectedGtaIds;
+      const res = await api.patch('/auto-rank/me', { auto_rank_crime_ids: crimePayload, auto_rank_gta_option_ids: gtaPayload });
+      setPrefs((p) => ({ ...p, auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? [], auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? [] }));
+      toast.success('Options saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save options');
+    } finally {
+      setSavingSettings(false);
     }
   };
 
@@ -948,7 +1132,7 @@ export default function AutoRank() {
       <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} />
       
       {canEnable && (
-        <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} />
+        <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} lastStatsAt={lastStatsAt} />
       )}
       
       <SettingsCard 
@@ -957,6 +1141,25 @@ export default function AutoRank() {
         savingPrefs={savingPrefs}
         onUpdatePref={updatePref}
       />
+      
+      {canEnable && (prefs.auto_rank_crimes || prefs.auto_rank_gta) && (
+        <CrimesGtaSettingsCard
+          crimes={settingsData.crimes}
+          gtaOptions={settingsData.gta_options}
+          selectedCrimeIds={selectedCrimeIds}
+          selectedGtaIds={selectedGtaIds}
+          onToggleCrime={toggleCrimeId}
+          onToggleGta={toggleGtaId}
+          onSelectAllCrimes={selectAllCrimes}
+          onDeselectAllCrimes={deselectAllCrimes}
+          onSelectAllGta={selectAllGta}
+          onDeselectAllGta={deselectAllGta}
+          onSaveSettings={handleSaveSettings}
+          savingSettings={savingSettings}
+          crimesDisabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
+          gtaDisabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
+        />
+      )}
       
       {canEnable && <StatsCard stats={stats} liveCountdown={liveCountdown} />}
       

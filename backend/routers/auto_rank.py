@@ -451,6 +451,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     if run_crimes:
         if crimes is None:
             crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
+        allowed_crime_ids = user.get("auto_rank_crime_ids")
+        if isinstance(allowed_crime_ids, list) and len(allowed_crime_ids) > 0:
+            allowed_set = set(allowed_crime_ids)
+            crimes = [c for c in crimes if c.get("id") in allowed_set]
         crime_success_count = 0
         crime_fail_count = 0
         crime_total_cash = 0
@@ -509,6 +513,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if not (until and until > now):
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
             unlocked = [opt for opt in GTA_OPTIONS if rank_id >= opt["min_rank"]]
+            allowed_gta_ids = user.get("auto_rank_gta_option_ids")
+            if isinstance(allowed_gta_ids, list) and len(allowed_gta_ids) > 0:
+                allowed_set = set(allowed_gta_ids)
+                unlocked = [opt for opt in unlocked if opt.get("id") in allowed_set]
             if unlocked:
                 next_index = int(user.get("auto_rank_next_gta_option_index") or 0) % max(1, len(unlocked))
                 opt = unlocked[next_index]
@@ -840,6 +848,8 @@ def register(router):
         auto_rank_bust_every_5_sec: Optional[bool] = None
         auto_rank_oc: Optional[bool] = None
         auto_rank_booze: Optional[bool] = None
+        auto_rank_crime_ids: Optional[list] = None
+        auto_rank_gta_option_ids: Optional[list] = None
 
     @router.get("/auto-rank/me")
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
@@ -847,7 +857,20 @@ def register(router):
         prefs = _extract_preferences(current_user)
         prefs["auto_rank_purchased"] = current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False)
         prefs["telegram_chat_id_set"] = bool(chat_id)
+        prefs["auto_rank_crime_ids"] = current_user.get("auto_rank_crime_ids") or []
+        prefs["auto_rank_gta_option_ids"] = current_user.get("auto_rank_gta_option_ids") or []
         return prefs
+
+    @router.get("/auto-rank/settings")
+    async def get_settings_options(current_user: dict = Depends(get_current_user)):
+        """Return crimes and GTA options for the settings tab, plus current selection."""
+        from routers.gta import GTA_OPTIONS
+        crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).sort("min_rank", 1).to_list(50)
+        gta_options = [{"id": o["id"], "name": o["name"], "min_rank": o["min_rank"]} for o in GTA_OPTIONS]
+        u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1})
+        crime_ids = u.get("auto_rank_crime_ids") if isinstance(u.get("auto_rank_crime_ids"), list) else []
+        gta_ids = u.get("auto_rank_gta_option_ids") if isinstance(u.get("auto_rank_gta_option_ids"), list) else []
+        return {"crimes": crimes, "gta_options": gta_options, "auto_rank_crime_ids": crime_ids, "auto_rank_gta_option_ids": gta_ids}
 
     @router.get("/auto-rank/stats")
     async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
@@ -967,14 +990,24 @@ def register(router):
             val = getattr(body, field, None)
             if val is not None:
                 updates[field] = val
+        if body.auto_rank_crime_ids is not None:
+            updates["auto_rank_crime_ids"] = [str(x) for x in body.auto_rank_crime_ids] if body.auto_rank_crime_ids else []
+        if body.auto_rank_gta_option_ids is not None:
+            updates["auto_rank_gta_option_ids"] = [str(x) for x in body.auto_rank_gta_option_ids] if body.auto_rank_gta_option_ids else []
         if not updates:
             return {"message": "No changes", **_extract_preferences(current_user)}
         op = {"$set": updates}
         if updates.get("auto_rank_enabled") is False:
             op["$unset"] = {"auto_rank_stats_since": ""}
         await db.users.update_one({"id": user_id}, op)
-        updated = await db.users.find_one({"id": user_id}, {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}})
-        return {"message": "Preferences saved", **_extract_preferences(updated)}
+        updated = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1},
+        )
+        out = {"message": "Preferences saved", **_extract_preferences(updated)}
+        out["auto_rank_crime_ids"] = updated.get("auto_rank_crime_ids") if isinstance(updated.get("auto_rank_crime_ids"), list) else []
+        out["auto_rank_gta_option_ids"] = updated.get("auto_rank_gta_option_ids") if isinstance(updated.get("auto_rank_gta_option_ids"), list) else []
+        return out
 
     @router.get("/auto-rank/interval")
     async def get_interval(current_user: dict = Depends(get_current_user)):
