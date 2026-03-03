@@ -794,6 +794,10 @@ export default function AutoRank() {
   });
   const [lastStatsAt, setLastStatsAt] = useState(null);
 
+  // Derived once per render, before any early return, so useEffects can read them
+  const canEnable = Boolean(prefs?.auto_rank_purchased);
+  const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
+
   // Live countdown ticker: recompute every second from server timestamps
   useEffect(() => {
     const s = stats ?? {};
@@ -1124,9 +1128,6 @@ export default function AutoRank() {
       </div>
     );
   }
-
-  const canEnable = Boolean(prefs?.auto_rank_purchased);
-  const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
 
   return (
     <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 bg-zinc-900 text-zinc-100">
