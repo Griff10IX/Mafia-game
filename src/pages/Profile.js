@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car } from 'lucide-react';
+import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -336,6 +336,41 @@ const RARITY_BADGE_CLASSES = {
   exclusive: 'border-rose-400/70 text-rose-400',
 };
 
+/** Extract YouTube video ID from watch URL, youtu.be, or embed URL. */
+function getYoutubeVideoId(url) {
+  if (!url || typeof url !== 'string') return null;
+  const s = url.trim();
+  const m1 = s.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m1 ? m1[1] : null;
+}
+
+const YouTubeCard = ({ youtubeUrl }) => {
+  const videoId = getYoutubeVideoId(youtubeUrl);
+  if (!videoId) return null;
+  const embedSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
+        <Youtube size={12} className="md:w-3.5 md:h-3.5 text-primary" />
+        <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+          Video
+        </h3>
+      </div>
+      <div className="p-2.5 aspect-video w-full max-w-lg mx-auto">
+        <iframe
+          title="Profile video"
+          src={embedSrc}
+          className="w-full h-full rounded-md border-0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        />
+      </div>
+      <div className="prof-art-line text-primary mx-3" />
+    </div>
+  );
+};
+
 const TopCarsCard = ({ topCars, showCars }) => {
   if (showCars === false || !topCars?.length) return null;
   return (
@@ -612,6 +647,8 @@ export default function Profile() {
   const [carsFeaturedId, setCarsFeaturedId] = useState('');
   const [myCarsList, setMyCarsList] = useState([]);
   const [savingCars, setSavingCars] = useState(false);
+  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [savingYoutube, setSavingYoutube] = useState(false);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
 
@@ -702,8 +739,9 @@ export default function Profile() {
       fetchTelegram();
       fetchCarsPrefs();
       fetchMyCars();
+      setYoutubeUrl(profile?.youtube_url ?? '');
     }
-  }, [settingsOpen, isMe]);
+  }, [settingsOpen, isMe, profile?.youtube_url]);
 
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
@@ -745,6 +783,20 @@ export default function Profile() {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
       setSavingCars(false);
+    }
+  };
+
+  const saveYoutube = async () => {
+    setSavingYoutube(true);
+    try {
+      await api.patch('/profile/youtube', { youtube_url: youtubeUrl.trim() || null });
+      toast.success('Profile video updated');
+      const res = await api.get(`/users/${encodeURIComponent(me?.username)}/profile`);
+      setProfile(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setSavingYoutube(false);
     }
   };
 
@@ -904,6 +956,10 @@ export default function Profile() {
             onPickFile={onPickFile}
             onUpload={onUpload}
           />
+        )}
+
+        {profile.youtube_url && (
+          <YouTubeCard youtubeUrl={profile.youtube_url} />
         )}
 
         {isMe && hasAdminEmail && (
@@ -1089,6 +1145,27 @@ export default function Profile() {
                     className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {savingCars ? 'Saving…' : 'Save cars preferences'}
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-border pt-4">
+                <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Profile video (YouTube)</h3>
+                <p className="text-xs text-mutedForeground mb-2">Paste a YouTube link to show a video on your profile. It will auto-play when visitors open your profile.</p>
+                <div className="space-y-2">
+                  <input
+                    type="url"
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={youtubeUrl}
+                    onChange={(e) => setYoutubeUrl(e.target.value)}
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveYoutube}
+                    disabled={savingYoutube}
+                    className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {savingYoutube ? 'Saving…' : 'Save video'}
                   </button>
                 </div>
               </div>

@@ -247,6 +247,7 @@ def register(router):
             "messages_received": messages_received,
             "top_cars": top_cars or [],
             "show_cars_on_profile": user.get("profile_show_cars", False),
+            "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
         }
         if current_user.get("email") in ADMIN_EMAILS:
             today_utc = datetime.now(timezone.utc).date().isoformat()
@@ -357,6 +358,22 @@ def register(router):
         await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
         doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "telegram_chat_id": 1, "telegram_bot_token": 1})
         return {"message": "Telegram settings updated", "telegram_chat_id": doc.get("telegram_chat_id"), "telegram_bot_token": doc.get("telegram_bot_token")}
+
+    @router.get("/profile/youtube")
+    async def get_profile_youtube(current_user: dict = Depends(get_current_user)):
+        """Get profile YouTube URL for embed."""
+        return {"youtube_url": (current_user.get("profile_youtube_url") or "").strip() or None}
+
+    @router.patch("/profile/youtube")
+    async def update_profile_youtube(
+        current_user: dict = Depends(get_current_user),
+        youtube_url: Optional[str] = Body(None, embed=True),
+    ):
+        """Set or clear the YouTube video URL shown on your profile (auto-plays when present)."""
+        uid = current_user["id"]
+        val = (youtube_url or "").strip() or None
+        await db.users.update_one({"id": uid}, {"$set": {"profile_youtube_url": val}})
+        return {"message": "YouTube URL updated", "youtube_url": val}
 
     @router.get("/profile/cars-preferences")
     async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):
