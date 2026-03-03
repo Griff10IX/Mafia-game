@@ -491,6 +491,16 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   <span className="text-foreground/90">· Out in {formatCountdown(liveCountdown.jailSeconds)}</span>
                 )}
               </div>
+              {activeBust5 && stats?.global_loop_enabled !== false && (
+                <div className="space-y-0.5 text-[10px] sm:text-xs font-heading">
+                  <div className="text-foreground/90">
+                    Attempted to bust: <span className="font-medium text-foreground">{stats?.attempted_busts_today ?? 0}</span> today
+                  </div>
+                  <div className="text-foreground/90">
+                    Successfully busted: <span className="font-medium text-emerald-400">{stats?.successful_busts_today ?? 0}</span> today
+                  </div>
+                </div>
+              )}
               {nextUp && !stats?.in_jail && stats?.global_loop_enabled !== false && (
                 <div className="text-[10px] sm:text-xs font-heading text-primary/90">
                   Next up: <span className="font-medium text-foreground">{nextUp.label}</span> in {liveLine(nextUp.sec)}
@@ -930,6 +940,8 @@ export default function AutoRank() {
         setStats((prev) => ({
           ...prev,
           global_loop_enabled: d.global_loop_enabled !== false,
+          successful_busts_today: d.successful_busts_today ?? prev.successful_busts_today,
+          attempted_busts_today: d.attempted_busts_today ?? prev.attempted_busts_today,
           total_busts: d.total_busts ?? prev.total_busts,
           total_crimes: d.total_crimes ?? prev.total_crimes,
           total_gtas: d.total_gtas ?? prev.total_gtas,
@@ -1043,6 +1055,8 @@ export default function AutoRank() {
             failed_crimes_today: statsRes.data.failed_crimes_today ?? 0,
             failed_gtas_today: statsRes.data.failed_gtas_today ?? 0,
             failed_busts_today: statsRes.data.failed_busts_today ?? 0,
+            successful_busts_today: statsRes.data.successful_busts_today ?? 0,
+            attempted_busts_today: statsRes.data.attempted_busts_today ?? 0,
           });
           setLastStatsAt(Date.now());
         }

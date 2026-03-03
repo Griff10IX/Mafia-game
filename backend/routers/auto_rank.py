@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 MIN_INTERVAL_SECONDS = 5
 DEFAULT_INTERVAL_SECONDS = 30  # run each user every 30s for faster crime cycles (min 5s)
 GAME_CONFIG_ID = "auto_rank"
-BUST_EVERY_5SEC_INTERVAL = 6  # was 5; 5% slower
+BUST_EVERY_5SEC_INTERVAL = 5
 LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
 OC_LOOP_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
@@ -124,6 +124,7 @@ async def _ensure_stats_since(db, user_id: str, now: datetime):
 async def _update_auto_rank_stats_bust(db, user_id: str, cash: int, now: datetime):
     await _ensure_stats_since(db, user_id, now)
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_busts": 1, "auto_rank_total_cash": cash}})
+    await _inc_successful_busts_today(db, user_id, now, 1)
 
 
 async def _update_auto_rank_stats_crimes(db, user_id: str, count: int, cash: int, now: datetime):
@@ -165,6 +166,11 @@ async def _inc_failed_today(db, user_id: str, field: str, date_field: str, now: 
         )
     else:
         await db.users.update_one({"id": user_id}, {"$inc": {field: count}})
+
+
+async def _inc_successful_busts_today(db, user_id: str, now: datetime, count: int = 1):
+    """Increment today's successful bust count; reset if date changed."""
+    await _inc_failed_today(db, user_id, "auto_rank_successful_busts_today", "auto_rank_successful_busts_date", now, count)
 
 
 async def _set_last_activity(db, user_id: str, activity: str, now: datetime):
@@ -701,7 +707,7 @@ async def run_bust_5sec_once():
 
 async def run_bust_5sec_loop():
     """Background loop: every 5 sec, for bust-every-5-sec users, try one jail bust."""
-    await asyncio.sleep(15)
+    await asyncio.sleep(5)
     while True:
         await run_bust_5sec_once()
         await asyncio.sleep(BUST_EVERY_5SEC_INTERVAL)
@@ -907,7 +913,7 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -961,6 +967,8 @@ def register(router):
         failed_crimes_today = int((u or {}).get("auto_rank_failed_crimes_today") or 0) if (u or {}).get("auto_rank_failed_crimes_date") == today else 0
         failed_gtas_today = int((u or {}).get("auto_rank_failed_gtas_today") or 0) if (u or {}).get("auto_rank_failed_gtas_date") == today else 0
         failed_busts_today = int((u or {}).get("auto_rank_failed_busts_today") or 0) if (u or {}).get("auto_rank_failed_busts_date") == today else 0
+        successful_busts_today = int((u or {}).get("auto_rank_successful_busts_today") or 0) if (u or {}).get("auto_rank_successful_busts_date") == today else 0
+        attempted_busts_today = successful_busts_today + failed_busts_today
         activity_detail = None
         if in_jail:
             activity_detail = "In jail — cycles paused"
@@ -1020,6 +1028,8 @@ def register(router):
             "failed_crimes_today": failed_crimes_today,
             "failed_gtas_today": failed_gtas_today,
             "failed_busts_today": failed_busts_today,
+            "successful_busts_today": successful_busts_today,
+            "attempted_busts_today": attempted_busts_today,
         }
 
     @router.patch("/auto-rank/me")
@@ -1210,6 +1220,7 @@ def register(router):
         "auto_rank_failed_crimes_today", "auto_rank_failed_crimes_date",
         "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date",
         "auto_rank_failed_busts_today", "auto_rank_failed_busts_date",
+        "auto_rank_successful_busts_today", "auto_rank_successful_busts_date",
     ]
 
     @router.post("/admin/auto-rank/wipe-stats")
