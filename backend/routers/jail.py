@@ -89,33 +89,41 @@ JAIL_BUST_FAIL_MESSAGES = [
 ]
 
 
-# Jail busts a bit harder: raw rates multiplied by this (0.9 = 10% less success)
-JAIL_BUST_DIFFICULTY_MULT = 0.9
+# Jail bust difficulty: raw rates multiplied by this (1.0 = no penalty; was 0.9, raised slightly to make busting easier)
+JAIL_BUST_DIFFICULTY_MULT = 0.95
+# Rate can go down with failures but not below this floor
+JAIL_BUST_RATE_FLOOR = 0.04  # 4% minimum
+# Failure penalty: 0.1% per failure, capped so it doesn't drop by much
+JAIL_BUST_FAILURE_PENALTY_PER = 0.001  # 0.1% per failed attempt
+JAIL_BUST_MAX_FAILURE_PENALTY = 0.08   # cap total penalty at 8%
 
 
-def _player_bust_success_rate(total_attempts: int) -> float:
-    """Calculate player bust success rate based on experience (total attempts, not just successes). Softer curve: higher base rates, lower thresholds for max 90%. Then multiplied by JAIL_BUST_DIFFICULTY_MULT."""
+def _player_bust_success_rate(total_attempts: int, total_successes: int = 0) -> float:
+    """Bust success rate from experience (attempts) and a small penalty for failures. Never goes below JAIL_BUST_RATE_FLOOR."""
     if total_attempts < 150:
-        raw = 0.06  # 6% - Everyone starts here
+        raw = 0.08  # 8% - New buster
     elif total_attempts < 350:
-        raw = 0.12
+        raw = 0.14
     elif total_attempts < 700:
-        raw = 0.20
+        raw = 0.22
     elif total_attempts < 1500:
-        raw = 0.28
+        raw = 0.30
     elif total_attempts < 3000:
-        raw = 0.38
+        raw = 0.40
     elif total_attempts < 5500:
-        raw = 0.50
+        raw = 0.52
     elif total_attempts < 9500:
-        raw = 0.62
+        raw = 0.64
     elif total_attempts < 14500:
-        raw = 0.72
+        raw = 0.74
     elif total_attempts < 20000:
-        raw = 0.82
+        raw = 0.84
     else:
         raw = 0.90  # Master buster
-    return raw * JAIL_BUST_DIFFICULTY_MULT
+    base = raw * JAIL_BUST_DIFFICULTY_MULT
+    failures = max(0, total_attempts - total_successes)
+    penalty = min(failures * JAIL_BUST_FAILURE_PENALTY_PER, JAIL_BUST_MAX_FAILURE_PENALTY)
+    return max(JAIL_BUST_RATE_FLOOR, base - penalty)
 
 
 # Cache for jail NPCs list (invalidated when spawn adds or bust removes an NPC)
@@ -212,7 +220,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         return {"success": False, "error": "You cannot attempt a bust while you are in jail.", "error_code": 400}
 
     total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
-    player_success_rate = _player_bust_success_rate(total_attempts)
+    total_successes = _safe_int(current_user.get("jail_busts"), 0)
+    player_success_rate = _player_bust_success_rate(total_attempts, total_successes)
 
     npc = await db.jail_npcs.find_one({"username": username_ci}, {"_id": 0})
     if npc:
