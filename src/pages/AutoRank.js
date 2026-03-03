@@ -74,10 +74,10 @@ const formatCountdown = (seconds) => {
    Loading Spinner
    ═══════════════════════════════════════════════════════ */
 const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-    <Bot size={28} className="text-primary/40 animate-pulse" />
+  <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-zinc-300">
+    <Bot size={28} className="text-primary/60 animate-pulse" />
     <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[9px] sm:text-[10px] font-heading uppercase tracking-[0.3em]">Loading…</span>
+    <span className="text-[9px] sm:text-[10px] font-heading uppercase tracking-[0.3em]">Loading…</span>
   </div>
 );
 
@@ -200,7 +200,9 @@ const SetupCard = ({ canEnable, hasTelegram }) => (
 /* ═══════════════════════════════════════════════════════
    Settings Card
    ═══════════════════════════════════════════════════════ */
-const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => (
+const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
+  const p = prefs || {};
+  return (
   <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.1s' }}>
     <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">
@@ -213,9 +215,9 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => (
         icon={Bot}
         label="Enable Auto Rank"
         description="Master switch. Sends Telegram notifications on success (when configured)"
-        checked={prefs.auto_rank_enabled}
-        disabled={savingPrefs || (prefs.auto_rank_enabled ? false : !canEnable)}
-        onToggle={() => onUpdatePref('auto_rank_enabled', !prefs.auto_rank_enabled)}
+        checked={p.auto_rank_enabled}
+        disabled={savingPrefs || (p.auto_rank_enabled ? false : !canEnable)}
+        onToggle={() => onUpdatePref('auto_rank_enabled', !p.auto_rank_enabled)}
       />
       
       <div className="py-1.5 px-0">
@@ -228,49 +230,50 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => (
         icon={Crosshair}
         label="Run crimes"
         description="Auto-commit crimes per cycle"
-        checked={prefs.auto_rank_enabled ? prefs.auto_rank_crimes : false}
-        disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
-        onToggle={() => onUpdatePref('auto_rank_crimes', !prefs.auto_rank_crimes)}
+        checked={p.auto_rank_enabled ? p.auto_rank_crimes : false}
+        disabled={savingPrefs || !p.auto_rank_enabled || p.auto_rank_bust_every_5_sec}
+        onToggle={() => onUpdatePref('auto_rank_crimes', !p.auto_rank_crimes)}
       />
       
       <ToggleRow
         icon={Car}
         label="Run GTA"
         description="One theft per cycle when cooldown ready"
-        checked={prefs.auto_rank_enabled ? prefs.auto_rank_gta : false}
-        disabled={savingPrefs || !prefs.auto_rank_enabled || prefs.auto_rank_bust_every_5_sec}
-        onToggle={() => onUpdatePref('auto_rank_gta', !prefs.auto_rank_gta)}
+        checked={p.auto_rank_enabled ? p.auto_rank_gta : false}
+        disabled={savingPrefs || !p.auto_rank_enabled || p.auto_rank_bust_every_5_sec}
+        onToggle={() => onUpdatePref('auto_rank_gta', !p.auto_rank_gta)}
       />
       
       <ToggleRow
         icon={Lock}
         label="Jail bust every 5 sec"
         description="Bust every 5s; when jail empty, runs crimes + GTA instead"
-        checked={prefs.auto_rank_enabled ? prefs.auto_rank_bust_every_5_sec : false}
-        disabled={savingPrefs || !prefs.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_bust_every_5_sec', !prefs.auto_rank_bust_every_5_sec)}
+        checked={p.auto_rank_enabled ? p.auto_rank_bust_every_5_sec : false}
+        disabled={savingPrefs || !p.auto_rank_enabled}
+        onToggle={() => onUpdatePref('auto_rank_bust_every_5_sec', !p.auto_rank_bust_every_5_sec)}
       />
       
       <ToggleRow
         icon={Briefcase}
         label="Run Organised Crime (NPC)"
         description="Heist with you + 3 NPCs when OC cooldown ready"
-        checked={prefs.auto_rank_enabled ? prefs.auto_rank_oc : false}
-        disabled={savingPrefs || !prefs.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_oc', !prefs.auto_rank_oc)}
+        checked={p.auto_rank_enabled ? p.auto_rank_oc : false}
+        disabled={savingPrefs || !p.auto_rank_enabled}
+        onToggle={() => onUpdatePref('auto_rank_oc', !p.auto_rank_oc)}
       />
       
       <ToggleRow
         icon={Wine}
         label="Run booze running"
         description="Buy, travel, sell on round-trip route"
-        checked={prefs.auto_rank_enabled ? prefs.auto_rank_booze : false}
-        disabled={savingPrefs || !prefs.auto_rank_enabled}
-        onToggle={() => onUpdatePref('auto_rank_booze', !prefs.auto_rank_booze)}
+        checked={p.auto_rank_enabled ? p.auto_rank_booze : false}
+        disabled={savingPrefs || !p.auto_rank_enabled}
+        onToggle={() => onUpdatePref('auto_rank_booze', !p.auto_rank_booze)}
       />
     </div>
   </div>
-);
+  );
+};
 
 /* ═══════════════════════════════════════════════════════
    Crimes & GTA options Settings Card
@@ -519,10 +522,16 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs, lastStatsAt }) => {
    Stats Card
    ═══════════════════════════════════════════════════════ */
 const StatsCard = ({ stats, liveCountdown }) => {
-  const { text: ocText, at: ocAt } = formatNextOcAt(stats.next_oc_at);
-  const jailDisplay = stats.in_jail && (liveCountdown?.jailSeconds != null ? liveCountdown.jailSeconds > 0 : stats.jail_seconds_remaining != null);
-  const jailSeconds = liveCountdown?.jailSeconds ?? stats.jail_seconds_remaining;
-  
+  const s = stats || {};
+  const { text: ocText, at: ocAt } = formatNextOcAt(s.next_oc_at);
+  const jailDisplay = s.in_jail && (liveCountdown?.jailSeconds != null ? liveCountdown.jailSeconds > 0 : s.jail_seconds_remaining != null);
+  const jailSeconds = liveCountdown?.jailSeconds ?? s.jail_seconds_remaining;
+  const totalBusts = Number(s.total_busts) || 0;
+  const totalCrimes = Number(s.total_crimes) || 0;
+  const totalGtas = Number(s.total_gtas) || 0;
+  const totalCash = Number(s.total_cash) || 0;
+  const bestCars = Array.isArray(s.best_cars) ? s.best_cars : [];
+
   return (
     <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.2s' }}>
       <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
@@ -539,12 +548,12 @@ const StatsCard = ({ stats, liveCountdown }) => {
         
         {/* Main stats grid */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <StatCard label="Busts" value={stats.total_busts.toLocaleString()} icon={Lock} />
-          <StatCard label="Crimes" value={stats.total_crimes.toLocaleString()} icon={Crosshair} />
-          <StatCard label="GTAs" value={stats.total_gtas.toLocaleString()} icon={Car} />
+          <StatCard label="Busts" value={totalBusts.toLocaleString()} icon={Lock} />
+          <StatCard label="Crimes" value={totalCrimes.toLocaleString()} icon={Crosshair} />
+          <StatCard label="GTAs" value={totalGtas.toLocaleString()} icon={Car} />
           <StatCard 
             label="Cash Made" 
-            value={`$${stats.total_cash.toLocaleString()}`} 
+            value={`$${totalCash.toLocaleString()}`} 
             valueColor="text-emerald-400"
             icon={DollarSign}
           />
@@ -552,7 +561,7 @@ const StatsCard = ({ stats, liveCountdown }) => {
         
         {/* Additional stats */}
         <div className="space-y-1.5 pt-2 border-t border-zinc-700/30">
-          {stats.in_jail && (
+          {s.in_jail && (
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading text-amber-400">
               <Lock size={12} className="sm:w-3.5 sm:h-3.5 shrink-0" />
               <span>In jail — cycles paused</span>
@@ -564,10 +573,10 @@ const StatsCard = ({ stats, liveCountdown }) => {
           <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
             <Clock size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
             <span className="text-zinc-400">Running:</span>
-            <span className="text-foreground font-medium">{formatRunningTime(stats.running_seconds)}</span>
+            <span className="text-foreground font-medium">{formatRunningTime(s.running_seconds)}</span>
           </div>
           
-          {!stats.in_jail && (
+          {!s.in_jail && (
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
               <Activity size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
               <span className="text-zinc-400">Next cycle:</span>
@@ -576,7 +585,7 @@ const StatsCard = ({ stats, liveCountdown }) => {
                   ? formatCountdown(liveCountdown.nextCycleSeconds)
                   : liveCountdown?.nextCycleSeconds === 0
                     ? 'now'
-                    : stats.auto_rank_next_run_at ? '…' : '—'}
+                    : s.auto_rank_next_run_at ? '…' : '—'}
               </span>
             </div>
           )}
@@ -591,19 +600,19 @@ const StatsCard = ({ stats, liveCountdown }) => {
             </span>
           </div>
           
-          {(stats.total_booze_runs > 0 || stats.total_booze_profit > 0) && (
+          {((Number(s.total_booze_runs) || 0) > 0 || (Number(s.total_booze_profit) || 0) > 0) && (
             <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading">
               <Wine size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
               <span className="text-zinc-400">Booze:</span>
-              <span className="text-foreground font-medium">{stats.total_booze_runs.toLocaleString()} runs</span>
+              <span className="text-foreground font-medium">{(Number(s.total_booze_runs) || 0).toLocaleString()} runs</span>
               <span className="text-zinc-600">·</span>
-              <span className="text-emerald-400 font-medium">${(stats.total_booze_profit ?? 0).toLocaleString()}</span>
+              <span className="text-emerald-400 font-medium">${(Number(s.total_booze_profit) || 0).toLocaleString()}</span>
             </div>
           )}
         </div>
         
         {/* Best cars */}
-        {stats.best_cars && stats.best_cars.length > 0 && (
+        {bestCars.length > 0 && (
           <div className="pt-2 border-t border-zinc-700/30">
             <div className="flex items-center gap-1.5 mb-1.5">
               <TrendingUp size={12} className="text-primary sm:w-3.5 sm:h-3.5" />
@@ -612,7 +621,7 @@ const StatsCard = ({ stats, liveCountdown }) => {
               </span>
             </div>
             <div className="space-y-1">
-              {stats.best_cars.map((car, i) => (
+              {bestCars.map((car, i) => (
                 <div key={i} className="flex items-center justify-between text-[10px] sm:text-xs bg-zinc-800/40 rounded px-2 py-1">
                   <span className="text-foreground font-medium">{car.name}</span>
                   <span className="text-emerald-400 font-mono font-medium">${(car.value || 0).toLocaleString()}</span>
@@ -1108,18 +1117,18 @@ export default function AutoRank() {
 
   if (loading) {
     return (
-      <div className="px-3 sm:px-4 max-w-4xl mx-auto">
+      <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto bg-background text-foreground">
         <style>{AR_STYLES}</style>
         <LoadingSpinner />
       </div>
     );
   }
 
-  const canEnable = prefs.auto_rank_purchased;
-  const hasTelegram = prefs.telegram_chat_id_set;
+  const canEnable = Boolean(prefs?.auto_rank_purchased);
+  const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
 
   return (
-    <div className="px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4">
+    <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 bg-background text-foreground">
       <style>{AR_STYLES}</style>
       
       {/* Page intro */}
