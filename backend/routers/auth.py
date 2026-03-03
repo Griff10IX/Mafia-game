@@ -578,6 +578,7 @@ def register(router):
                 can_submit_comment=bool(u.get("account_locked", False)) and not u.get("account_locked_comment"),
                 email_verified=bool(u.get("email_verified", True)),
                 loot_box_pieces=_safe_int(u.get("loot_box_pieces"), 0),
+                profile_autoplay_video=bool(u.get("profile_autoplay_video", True)),
             )
         except HTTPException:
             raise

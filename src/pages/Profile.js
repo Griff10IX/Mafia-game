@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -344,10 +344,10 @@ function getYoutubeVideoId(url) {
   return m1 ? m1[1] : null;
 }
 
-const YouTubeCard = ({ youtubeUrl }) => {
+const YouTubeCard = ({ youtubeUrl, autoplay = true }) => {
   const videoId = getYoutubeVideoId(youtubeUrl);
   if (!videoId) return null;
-  const embedSrc = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1`;
+  const embedSrc = `https://www.youtube.com/embed/${videoId}${autoplay ? '?autoplay=1&mute=1' : ''}`;
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -628,6 +628,8 @@ const AvatarCard = ({
 export default function Profile() {
   const { username: usernameParam } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const viewPublic = searchParams.get('view') === 'public';
   const [me, setMe] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -649,8 +651,12 @@ export default function Profile() {
   const [savingCars, setSavingCars] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [savingYoutube, setSavingYoutube] = useState(false);
+  const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
+  const [savingAutoplay, setSavingAutoplay] = useState(false);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
+  /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
+  const isPublicView = isMe && viewPublic;
 
   const refetchMe = async () => {
     try {
@@ -740,8 +746,9 @@ export default function Profile() {
       fetchCarsPrefs();
       fetchMyCars();
       setYoutubeUrl(profile?.youtube_url ?? '');
+      setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
     }
-  }, [settingsOpen, isMe, profile?.youtube_url]);
+  }, [settingsOpen, isMe, profile?.youtube_url, me?.profile_autoplay_video]);
 
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
@@ -797,6 +804,20 @@ export default function Profile() {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
       setSavingYoutube(false);
+    }
+  };
+
+  const saveVideoAutoplay = async () => {
+    setSavingAutoplay(true);
+    try {
+      await api.patch('/profile/video-autoplay', { profile_autoplay_video: profileAutoplayVideo });
+      toast.success('Autoplay preference saved');
+      const meRes = await api.get('/auth/me');
+      setMe(meRes.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setSavingAutoplay(false);
     }
   };
 
@@ -937,17 +958,37 @@ export default function Profile() {
 
       <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, crew, honours and property.</p>
 
+      {isMe && (
+        <div className="max-w-3xl mx-auto flex justify-center gap-2 mb-2">
+          {!isPublicView ? (
+            <Link
+              to={`/profile/${encodeURIComponent(profile.username)}?view=public`}
+              className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-wider hover:underline"
+            >
+              View profile
+            </Link>
+          ) : (
+            <Link
+              to="/profile"
+              className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-wider hover:underline"
+            >
+              ← Back to edit
+            </Link>
+          )}
+        </div>
+      )}
+
       <div className="max-w-3xl mx-auto space-y-3 md:space-y-4">
         <ProfileInfoCard 
           profile={profile} 
-          isMe={isMe} 
+          isMe={isMe && !isPublicView} 
           onAddToSearch={addToAttackSearches}
           onSendMessage={profile.id ? () => navigate(`/inbox/chat/${profile.id}`) : undefined}
           onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
-          onOpenSettings={isMe ? openSettings : undefined}
+          onOpenSettings={isMe && !isPublicView ? openSettings : undefined}
         />
 
-        {isMe && (
+        {isMe && !isPublicView && (
           <AvatarCard
             avatarSrc={avatarSrc}
             isMe={isMe}
@@ -1149,8 +1190,33 @@ export default function Profile() {
                 </div>
               </div>
               <div className="border-t border-border pt-4">
+                <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Autoplay videos on profiles</h3>
+                <p className="text-xs text-mutedForeground mb-2">When you visit someone else&apos;s profile, their video will autoplay (muted) if this is on. Turn off to stop autoplay on all profiles.</p>
+                <div className="flex items-center justify-between gap-3 py-1">
+                  <span className="text-sm text-foreground">Autoplay profile videos</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={profileAutoplayVideo}
+                    disabled={savingAutoplay}
+                    onClick={() => setProfileAutoplayVideo((v) => !v)}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${profileAutoplayVideo ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingAutoplay ? 'opacity-60' : ''}`}
+                  >
+                    <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${profileAutoplayVideo ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveVideoAutoplay}
+                  disabled={savingAutoplay}
+                  className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingAutoplay ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+              <div className="border-t border-border pt-4">
                 <h3 className="text-sm font-heading font-bold text-foreground uppercase tracking-wider mb-3">Profile video (YouTube)</h3>
-                <p className="text-xs text-mutedForeground mb-2">Paste a YouTube link to show a video on your profile. It will auto-play when visitors open your profile.</p>
+                <p className="text-xs text-mutedForeground mb-2">Paste a YouTube link to show a video on your profile. It will auto-play (if the viewer has autoplay on) when they open your profile.</p>
                 <div className="space-y-2">
                   <input
                     type="url"

@@ -422,6 +422,7 @@ class UserResponse(BaseModel):
     can_submit_comment: bool = False  # true when locked and no comment submitted yet
     email_verified: bool = True  # false until user clicks verification link
     loot_box_pieces: int = 0
+    profile_autoplay_video: bool = True  # when viewing someone's profile, autoplay their YouTube video (can turn off in profile settings)
 
 class NotificationCreate(BaseModel):
     title: str

@@ -375,6 +375,22 @@ def register(router):
         await db.users.update_one({"id": uid}, {"$set": {"profile_youtube_url": val}})
         return {"message": "YouTube URL updated", "youtube_url": val}
 
+    @router.get("/profile/video-autoplay")
+    async def get_profile_video_autoplay(current_user: dict = Depends(get_current_user)):
+        """Get whether the current user wants profile videos to autoplay when viewing others' profiles."""
+        return {"profile_autoplay_video": bool(current_user.get("profile_autoplay_video", True))}
+
+    @router.patch("/profile/video-autoplay")
+    async def update_profile_video_autoplay(
+        current_user: dict = Depends(get_current_user),
+        profile_autoplay_video: Optional[bool] = Body(None, embed=True),
+    ):
+        """Turn autoplay on/off for profile videos (when you view someone else's profile)."""
+        if profile_autoplay_video is None:
+            return {"message": "No change", "profile_autoplay_video": bool(current_user.get("profile_autoplay_video", True))}
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"profile_autoplay_video": profile_autoplay_video}})
+        return {"message": "Autoplay preference updated", "profile_autoplay_video": profile_autoplay_video}
+
     @router.get("/profile/cars-preferences")
     async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):
         """Get profile cars preferences: show on profile and featured car id."""
