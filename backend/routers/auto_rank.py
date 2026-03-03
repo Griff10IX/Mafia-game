@@ -934,6 +934,13 @@ def register(router):
             if jail_until_dt and jail_until_dt > now:
                 jail_seconds_remaining = int((jail_until_dt - now).total_seconds())
                 jail_until_iso = (u or {}).get("jail_until")
+            else:
+                # Jail time expired; clear in_jail so Auto Rank (and UI) updates without visiting jail page
+                await db.users.update_one(
+                    {"id": current_user["id"]},
+                    {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+                )
+                in_jail = False
         next_run_at = None
         next_run_dt = _parse_iso((u or {}).get("auto_rank_next_run_at"))
         if next_run_dt and next_run_dt > now:
