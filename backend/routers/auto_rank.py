@@ -707,7 +707,6 @@ async def run_bust_5sec_once():
 
 async def run_bust_5sec_loop():
     """Background loop: every 5 sec, for bust-every-5-sec users, try one jail bust."""
-    await asyncio.sleep(5)
     while True:
         await run_bust_5sec_once()
         await asyncio.sleep(BUST_EVERY_5SEC_INTERVAL)
@@ -765,7 +764,6 @@ async def run_auto_rank_oc_once():
 
 async def run_auto_rank_oc_loop():
     """Background loop: for OC users, run OC with NPC only when timer is ready."""
-    await asyncio.sleep(90)
     while True:
         await run_auto_rank_oc_once()
         await asyncio.sleep(OC_LOOP_INTERVAL_SECONDS)
@@ -775,7 +773,6 @@ async def run_auto_rank_loop():
     """Main background loop: process due users and booze arrivals."""
     import server as srv
     db = srv.db
-    await asyncio.sleep(60)
     while True:
         config = await get_auto_rank_config(db)
         if not config["enabled"]:
