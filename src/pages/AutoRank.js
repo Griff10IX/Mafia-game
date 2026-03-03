@@ -1117,7 +1117,7 @@ export default function AutoRank() {
 
   if (loading) {
     return (
-      <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto bg-background text-foreground">
+      <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto bg-zinc-900 text-zinc-100">
         <style>{AR_STYLES}</style>
         <LoadingSpinner />
       </div>
@@ -1128,12 +1128,18 @@ export default function AutoRank() {
   const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
 
   return (
-    <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 bg-background text-foreground">
+    <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 bg-zinc-900 text-zinc-100">
       <style>{AR_STYLES}</style>
+      
+      {/* Page title - always visible so page is clearly present */}
+      <div className="flex items-center gap-2 border-b border-zinc-700/50 pb-2">
+        <Bot size={20} className="text-amber-500 shrink-0" />
+        <h1 className="text-sm sm:text-base font-heading font-bold text-zinc-100">Auto Rank</h1>
+      </div>
       
       {/* Page intro */}
       <div className="relative ar-fade-in">
-        <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading italic">
+        <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading italic">
           Automate crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.
         </p>
       </div>
