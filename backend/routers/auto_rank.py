@@ -151,6 +151,31 @@ async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit:
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": int(profit)}})
 
 
+def _today_utc(now: datetime) -> str:
+    return now.strftime("%Y-%m-%d")
+
+
+async def _inc_failed_today(db, user_id: str, field: str, date_field: str, now: datetime, count: int = 1):
+    """Increment today's fail count by count; reset if date changed."""
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, date_field: 1, field: 1})
+    today = _today_utc(now)
+    if not u or u.get(date_field) != today:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {field: count, date_field: today}},
+        )
+    else:
+        await db.users.update_one({"id": user_id}, {"$inc": {field: count}})
+
+
+async def _set_last_activity(db, user_id: str, activity: str, now: datetime):
+    """Record last auto-rank activity for UI (e.g. crimes, gta, bust, booze_sell, booze_travel)."""
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"auto_rank_last_activity": activity, "auto_rank_last_activity_at": now.isoformat()}},
+    )
+
+
 # ─── Telegram helper ──────────────────────────────────────────────
 
 async def _send_jail_notification(telegram_chat_id: str, username: str, reason: str, jail_seconds: int = 30, bot_token: Optional[str] = None):
@@ -282,6 +307,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
         if travel_method:
             try:
                 await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
+                await _set_last_activity(db, user_id, "booze_travel", now)
                 lines.append(f"**Booze** — Traveling to {city_a} to start run.")
                 return True
             except HTTPException:
@@ -297,6 +323,8 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
 
     if carrying_total > 0:
         success, user = await _booze_sell_at_city(db, user, user_id, username, telegram_chat_id, bot_token, now, lines)
+        if success:
+            await _set_last_activity(db, user_id, "booze_sell", now)
         if not success or not user:
             return success
         # Continue cycle: sell then immediately buy+travel (only delay = travel time)
@@ -306,10 +334,16 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
         carrying_after = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
         current_after = (user.get("current_state") or "").strip()
         if carrying_after == 0 and current_after in (city_a, city_b):
-            return await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current_after, other_city, current_idx, other_idx)
+            did_buy = await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current_after, other_city, current_idx, other_idx)
+            if did_buy:
+                await _set_last_activity(db, user_id, "booze_travel", now)
+            return did_buy
         return success
     else:
-        return await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current, other_city, current_idx, other_idx)
+        did_buy = await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current, other_city, current_idx, other_idx)
+        if did_buy:
+            await _set_last_activity(db, user_id, "booze_travel", now)
+        return did_buy
 
 
 # ─── Bust-only (5-sec loop) ──────────────────────────────────────
@@ -343,10 +377,14 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
             return
         bust_result = await _attempt_bust_impl(user, bust_target_username)
         if bust_result.get("error") or not bust_result.get("success"):
+            now = datetime.now(timezone.utc)
+            await _inc_failed_today(db, user_id, "auto_rank_failed_busts_today", "auto_rank_failed_busts_date", now)
             return
+        now = datetime.now(timezone.utc)
         rp = bust_result.get("rank_points_earned") or 0
         cash = bust_result.get("cash_reward") or 0
-        await _update_auto_rank_stats_bust(db, user_id, cash, datetime.now(timezone.utc))
+        await _update_auto_rank_stats_bust(db, user_id, cash, now)
+        await _set_last_activity(db, user_id, "bust", now)
         parts = [f"Busted {bust_target_username}! +{rp} RP"]
         if cash:
             parts.append(f"${cash:,}")
@@ -450,7 +488,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if crime_success_count > 0:
             has_success = True
             await _update_auto_rank_stats_crimes(db, user_id, crime_success_count, crime_total_cash, now)
+            await _set_last_activity(db, user_id, "crimes", now)
             lines.append(f"**Crimes** — Committed {crime_success_count} crime(s). earned ${crime_total_cash:,} and {crime_total_rp} RP.")
+        if crime_fail_count > 0:
+            await _inc_failed_today(db, user_id, "auto_rank_failed_crimes_today", "auto_rank_failed_crimes_date", now, crime_fail_count)
 
     # --- GTA ---
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
@@ -482,12 +523,16 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         has_success = True
                         car_name = out.car.get("name", "Car") if out.car else "Car"
                         await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now)
+                        await _set_last_activity(db, user_id, "gta", now)
                         lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
+                    else:
+                        await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", now)
                 except HTTPException:
                     # Normal "can't do that" (e.g. in_jail, cooldown, rank) — skip GTA this run
                     pass
                 except Exception as e:
                     logger.exception("Auto rank GTA for %s: %s", user_id, e)
+                    await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", now)
 
     if bust_every_5:
         await db.users.update_one({"id": user_id}, {"$set": {"auto_rank_last_crimes_gta_at": now.isoformat()}})
@@ -808,7 +853,7 @@ def register(router):
     async def get_auto_rank_stats(current_user: dict = Depends(get_current_user)):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "travel_arrives_at": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_bust_every_5_sec": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -858,6 +903,26 @@ def register(router):
             arr = _parse_iso((u or {}).get("travel_arrives_at"))
             if arr and arr > now:
                 next_booze_arrival_at = (u or {}).get("travel_arrives_at")
+        today = _today_utc(now)
+        failed_crimes_today = int((u or {}).get("auto_rank_failed_crimes_today") or 0) if (u or {}).get("auto_rank_failed_crimes_date") == today else 0
+        failed_gtas_today = int((u or {}).get("auto_rank_failed_gtas_today") or 0) if (u or {}).get("auto_rank_failed_gtas_date") == today else 0
+        failed_busts_today = int((u or {}).get("auto_rank_failed_busts_today") or 0) if (u or {}).get("auto_rank_failed_busts_date") == today else 0
+        activity_detail = None
+        if in_jail:
+            if (u or {}).get("auto_rank_bust_every_5_sec"):
+                activity_detail = "In jail (bust loop will try to bust you out)"
+            else:
+                activity_detail = "In jail — cycles paused"
+        elif (u or {}).get("travel_arrives_at") and (u or {}).get("auto_rank_booze"):
+            activity_detail = "Travelling (booze)"
+        elif (u or {}).get("auto_rank_booze") and (u or {}).get("booze_carrying") and (u or {}).get("current_state"):
+            carrying = (u or {}).get("booze_carrying") or {}
+            if sum(int(v or 0) for v in carrying.values()) > 0:
+                activity_detail = "Selling booze"
+        if activity_detail is None:
+            activity_detail = "Running cycle (crimes / GTA / booze)"
+        last_activity = (u or {}).get("auto_rank_last_activity")
+        last_activity_at = (u or {}).get("auto_rank_last_activity_at")
         return {
             "total_busts": int((u or {}).get("auto_rank_total_busts") or 0),
             "total_crimes": int((u or {}).get("auto_rank_total_crimes") or 0),
@@ -877,6 +942,12 @@ def register(router):
             "next_crime_at": next_crime_at,
             "next_gta_at": next_gta_at,
             "next_booze_arrival_at": next_booze_arrival_at,
+            "activity_detail": activity_detail,
+            "last_activity": last_activity,
+            "last_activity_at": last_activity_at,
+            "failed_crimes_today": failed_crimes_today,
+            "failed_gtas_today": failed_gtas_today,
+            "failed_busts_today": failed_busts_today,
         }
 
     @router.patch("/auto-rank/me")
@@ -1053,6 +1124,10 @@ def register(router):
         "auto_rank_stats_since", "auto_rank_total_busts", "auto_rank_total_crimes",
         "auto_rank_total_gtas", "auto_rank_total_cash", "auto_rank_best_cars",
         "auto_rank_total_booze_runs", "auto_rank_total_booze_profit",
+        "auto_rank_last_activity", "auto_rank_last_activity_at",
+        "auto_rank_failed_crimes_today", "auto_rank_failed_crimes_date",
+        "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date",
+        "auto_rank_failed_busts_today", "auto_rank_failed_busts_date",
     ]
 
     @router.post("/admin/auto-rank/wipe-stats")

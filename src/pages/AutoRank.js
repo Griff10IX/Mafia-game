@@ -275,9 +275,30 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => (
 /* ═══════════════════════════════════════════════════════
    Summary / Status Card (what Auto Rank is doing)
    ═══════════════════════════════════════════════════════ */
+const LAST_ACTIVITY_LABELS = {
+  crimes: 'Committing crimes',
+  gta: 'GTA',
+  bust: 'Busting from jail',
+  booze_sell: 'Sold booze',
+  booze_travel: 'Travelling (booze)',
+};
+
+const formatLastActivityAt = (iso) => {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return '';
+  }
+};
+
 const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   const enabled = prefs?.auto_rank_enabled;
   const interval = stats?.interval_seconds ?? 30;
+  const lastLabel = stats?.last_activity ? (LAST_ACTIVITY_LABELS[stats.last_activity] || stats.last_activity) : null;
+  const lastAt = formatLastActivityAt(stats?.last_activity_at);
   return (
     <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in" style={{ animationDelay: '0.15s' }}>
       <div className="px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
@@ -292,12 +313,35 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
         ) : (
           <>
             <div className="space-y-2">
+              {stats?.activity_detail && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                  <Activity size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
+                  <span className="text-zinc-400">Activity:</span>
+                  <span className="text-foreground font-medium">{stats.activity_detail}</span>
+                </div>
+              )}
+              {lastLabel && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
+                  <span className="text-zinc-400">Last:</span>
+                  <span className="text-foreground/90 font-medium">
+                    {lastLabel}{lastAt ? ` at ${lastAt}` : ''}
+                  </span>
+                </div>
+              )}
               <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
                 <span className="text-zinc-400">Status:</span>
                 <span className={stats?.in_jail ? 'text-amber-400 font-medium' : 'text-emerald-400 font-medium'}>
                   {stats?.in_jail ? 'In jail — cycles paused' : 'Running'}
                 </span>
               </div>
+              {(stats?.failed_crimes_today > 0 || stats?.failed_gtas_today > 0 || stats?.failed_busts_today > 0) && (
+                <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap text-amber-300/90">
+                  <span className="text-zinc-400">Unsuccessful today:</span>
+                  <span>
+                    {stats.failed_crimes_today ?? 0} crimes, {stats.failed_gtas_today ?? 0} GTAs, {stats.failed_busts_today ?? 0} busts
+                  </span>
+                </div>
+              )}
               {stats?.in_jail && (
                 <div className="flex items-center gap-1.5 text-[10px] sm:text-xs font-heading flex-wrap">
                   <Lock size={12} className="text-primary sm:w-3.5 sm:h-3.5 shrink-0" />
@@ -627,6 +671,12 @@ export default function AutoRank() {
     next_crime_at: null,
     next_gta_at: null,
     next_booze_arrival_at: null,
+    activity_detail: null,
+    last_activity: null,
+    last_activity_at: null,
+    failed_crimes_today: 0,
+    failed_gtas_today: 0,
+    failed_busts_today: 0,
   });
   const [liveCountdown, setLiveCountdown] = useState({
     jailSeconds: null,
@@ -710,6 +760,12 @@ export default function AutoRank() {
             next_crime_at: statsRes.data.next_crime_at ?? null,
             next_gta_at: statsRes.data.next_gta_at ?? null,
             next_booze_arrival_at: statsRes.data.next_booze_arrival_at ?? null,
+            activity_detail: statsRes.data.activity_detail ?? null,
+            last_activity: statsRes.data.last_activity ?? null,
+            last_activity_at: statsRes.data.last_activity_at ?? null,
+            failed_crimes_today: statsRes.data.failed_crimes_today ?? 0,
+            failed_gtas_today: statsRes.data.failed_gtas_today ?? 0,
+            failed_busts_today: statsRes.data.failed_busts_today ?? 0,
           });
         }
         if (checkRes.data?.is_admin) {
