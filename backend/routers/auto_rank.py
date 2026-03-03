@@ -146,8 +146,9 @@ async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime
 
 
 async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit: int = 0):
+    """Record one booze run and its profit. Profit is already (sell revenue - buy cost) from booze_run sell impl."""
     await _ensure_stats_since(db, user_id, now)
-    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": max(0, int(profit))}})
+    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": int(profit)}})
 
 
 # ─── Telegram helper ──────────────────────────────────────────────
@@ -163,13 +164,14 @@ async def _send_jail_notification(telegram_chat_id: str, username: str, reason: 
 # ─── Booze running ────────────────────────────────────────────────
 
 async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list):
-    """Sell all carried booze that wasn't bought at the current city. Returns (has_success, user)."""
+    """Sell all carried booze that wasn't bought at the current city. Returns (has_success, user). One full sell (this arrival) = 1 run = 1 cycle for auto_rank_total_booze_runs."""
     from routers.booze_run import _booze_sell_impl
 
     carrying = dict(user.get("booze_carrying") or {})
     buy_locations = dict((user.get("booze_buy_location") or {}).items())
     current = (user.get("current_state") or "").strip()
     has_success = False
+    total_profit = 0
 
     for bid, amt in list(carrying.items()):
         amt = int(amt or 0)
@@ -183,19 +185,21 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
                 await _send_jail_notification(telegram_chat_id, username, "booze sell bust", 20, bot_token)
                 return False, None
             profit = out.get("profit") or 0
-            if out.get("is_run") and profit:
+            if out.get("is_run"):
+                total_profit += profit
                 lines.append(f"**Booze** — Sold {amt} for ${profit:,} profit.")
-                await _update_auto_rank_stats_booze(db, user_id, now, profit)
                 has_success = True
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user:
-                return has_success, None
+                break
         except HTTPException:
             break
         except Exception as e:
             logger.exception("Auto rank booze sell %s: %s", user_id, e)
             break
 
+    if has_success:
+        await _update_auto_rank_stats_booze(db, user_id, now, total_profit)
     return has_success, user
 
 

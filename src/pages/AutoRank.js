@@ -371,7 +371,7 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
               </div>
             </div>
             <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading leading-relaxed border-t border-zinc-700/30 pt-2">
-              Each cycle commits crimes (off cooldown) → one GTA (if ready) → booze step if enabled. OC runs on its own timer. When in jail, cycles are paused until you’re out.
+              <strong className="text-zinc-400">Next cycle</strong> uses your interval ({interval}s). Crimes / GTA / OC show <strong className="text-zinc-400">game cooldowns</strong> — when the next attempt is allowed. Each cycle runs every {interval}s and does crimes (if off cooldown) → one GTA (if ready) → booze if enabled. When in jail, cycles are paused until you’re out.
             </p>
           </>
         )}
