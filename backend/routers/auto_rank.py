@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 MIN_INTERVAL_SECONDS = 5
 DEFAULT_INTERVAL_SECONDS = 30  # run each user every 30s for faster crime cycles (min 5s)
 GAME_CONFIG_ID = "auto_rank"
-BUST_EVERY_5SEC_INTERVAL = 5
+BUST_EVERY_5SEC_INTERVAL = 5  # jail bust loop: run every 5 seconds (do not change without updating UI labels)
 LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
 OC_LOOP_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
@@ -855,9 +855,18 @@ def register(router):
 
     @router.post("/auto-rank/cron")
     async def cron_auto_rank(_: None = Depends(verify_cron_secret)):
-        """Cron endpoint: run one Auto Rank cycle (booze arrivals + due users). Call e.g. every 2 min when AUTO_RANK_USE_CRON=1. Header: X-Cron-Secret: <CRON_SECRET>."""
+        """Cron endpoint: run one Auto Rank cycle (booze arrivals + due users + OC). Call e.g. every 60s when AUTO_RANK_USE_CRON=1. Header: X-Cron-Secret: <CRON_SECRET>."""
         result = await run_auto_rank_cron_cycle()
         return result
+
+    @router.post("/auto-rank/cron-bust")
+    async def cron_auto_rank_bust(_: None = Depends(verify_cron_secret)):
+        """Cron endpoint: run only the jail bust pass. Call every 5 seconds when AUTO_RANK_USE_CRON=1 so bust-every-5-sec users get a bust every 5s. Use with main /auto-rank/cron at 60s. Header: X-Cron-Secret: <CRON_SECRET>."""
+        try:
+            await run_bust_5sec_once()
+        except Exception as e:
+            logger.exception("Auto rank cron-bust failed: %s", e)
+        return {"ok": True}
 
     class IntervalBody(BaseModel):
         interval_seconds: Optional[int] = None
