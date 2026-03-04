@@ -115,11 +115,13 @@ def register(router):
                     status_code=400,
                     detail="Registration from proxy or VPN is not allowed.",
                 )
-            # Block if an alive account already exists on this IP
+            # Block if a non-admin alive account already exists on this IP (admins may have multiple alive accounts on same IP)
             if client_ip:
+                admin_emails_list = list(ADMIN_EMAILS) if ADMIN_EMAILS else []
                 alive_same_ip = await db.users.find_one(
                     {
                         "is_dead": {"$ne": True},
+                        "email": {"$nin": admin_emails_list},
                         "$or": [
                             {"registration_ip": client_ip},
                             {"login_ips": client_ip},
