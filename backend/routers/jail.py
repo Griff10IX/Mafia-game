@@ -39,6 +39,7 @@ class SnitchRequest(BaseModel):
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     get_rank_info,
     maybe_process_rank_up,
     send_notification,
@@ -341,7 +342,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
 
 
 async def bust_out_of_jail(
-    request: BustOutRequest, current_user: dict = Depends(get_current_user)
+    request: BustOutRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     try:
         result = await _attempt_bust_impl(current_user, request.target_username or "")
@@ -433,7 +434,7 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
     }
 
 
-async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict = Depends(get_current_user)):
+async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict = Depends(get_current_user_verified)):
     """Set the $ reward offered to whoever busts you out. 0 to clear."""
     amount = max(0, int(request.amount))
     await db.users.update_one(
@@ -443,7 +444,7 @@ async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict 
     return {"message": f"Bust reward set to ${amount:,}" if amount else "Bust reward cleared.", "bust_reward_cash": amount}
 
 
-async def leave_jail(current_user: dict = Depends(get_current_user)):
+async def leave_jail(current_user: dict = Depends(get_current_user_verified)):
     """Pay 3 points to leave jail immediately."""
     if not current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You are not in jail")

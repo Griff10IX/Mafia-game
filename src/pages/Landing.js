@@ -61,6 +61,10 @@ export default function Landing({ setIsAuthenticated }) {
 
       const response = await api.post(endpoint, payload);
       if (response.data.verify_required) {
+        if (response.data.token) {
+          localStorage.setItem('token', response.data.token);
+          setIsAuthenticated(true);
+        }
         toast.success(response.data.message || 'Check your email to verify your account.');
         setVerifySentForEmail(formData.email);
         return;

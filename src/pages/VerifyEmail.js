@@ -1,43 +1,85 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import api from '../utils/api';
+import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
 export default function VerifyEmail({ setIsAuthenticated }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [status, setStatus] = useState('loading'); // 'loading' | 'success' | 'error'
+  const [status, setStatus] = useState('loading'); // 'loading' | 'success' | 'error' | 'unverified'
   const [message, setMessage] = useState('');
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
   const ran = useRef(false);
+
+  useEffect(() => {
+    if (resendCooldownSeconds <= 0) return;
+    const t = setInterval(() => setResendCooldownSeconds((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldownSeconds]);
 
   useEffect(() => {
     if (ran.current) return;
     const token = searchParams.get('token');
-    if (!token) {
-      setStatus('error');
-      setMessage('Missing verification link. Check your email or request a new link.');
+    if (token) {
+      ran.current = true;
+      api.post('/auth/verify-email', { token })
+        .then((response) => {
+          if (response.data.token) {
+            localStorage.setItem('token', response.data.token);
+            if (setIsAuthenticated) setIsAuthenticated(true);
+            setStatus('success');
+            setMessage('Email verified!');
+            setTimeout(() => navigate('/verify-complete', { replace: true }), 800);
+          } else {
+            setStatus('error');
+            setMessage(response.data.detail || 'Verification failed.');
+          }
+        })
+        .catch((err) => {
+          setStatus('error');
+          const detail = err.response?.data?.detail;
+          setMessage(typeof detail === 'string' ? detail : 'Verification link invalid or expired. Request a new one.');
+        });
       return;
     }
     ran.current = true;
-    api.post('/auth/verify-email', { token })
+    api.get('/auth/me')
       .then((response) => {
-        if (response.data.token) {
-          localStorage.setItem('token', response.data.token);
-          if (setIsAuthenticated) setIsAuthenticated(true);
-          setStatus('success');
-          setMessage('Email verified!');
-          setTimeout(() => navigate('/verify-complete', { replace: true }), 800);
+        const data = response.data;
+        if (data && data.email_verified === false) {
+          setStatus('unverified');
+          setUnverifiedEmail(data.email || '');
+          setMessage('');
         } else {
           setStatus('error');
-          setMessage(response.data.detail || 'Verification failed.');
+          setMessage('Missing verification link. Check your email or request a new link.');
         }
       })
-      .catch((err) => {
+      .catch(() => {
         setStatus('error');
-        const detail = err.response?.data?.detail;
-        setMessage(typeof detail === 'string' ? detail : 'Verification link invalid or expired. Request a new one.');
+        setMessage('Missing verification link. Check your email or request a new link.');
       });
   }, [searchParams, navigate, setIsAuthenticated]);
+
+  const handleResend = async () => {
+    const email = unverifiedEmail?.trim();
+    if (!email || resendCooldownSeconds > 0) return;
+    setResendLoading(true);
+    try {
+      const response = await api.post('/auth/resend-verification', { email });
+      toast.success(response.data.message || 'If an account exists with that email, a new verification link has been sent.');
+      setResendCooldownSeconds(120);
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to resend.');
+      if (err.response?.status === 429) setResendCooldownSeconds(120);
+    } finally {
+      setResendLoading(false);
+    }
+  };
 
   return (
     <div
@@ -59,6 +101,35 @@ export default function VerifyEmail({ setIsAuthenticated }) {
           )}
           {status === 'success' && (
             <p className="text-sm" style={{ color: 'var(--noir-primary)' }}>{message}</p>
+          )}
+          {status === 'unverified' && (
+            <>
+              <p className="text-sm mb-3" style={{ color: 'var(--noir-muted)' }}>
+                Until verified you cannot do crimes, GTA, organised crime, or other locked features.
+              </p>
+              <p className="text-sm mb-4" style={{ color: 'var(--noir-foreground)' }}>
+                Check your inbox for the verification link, or request a new one below.
+              </p>
+              <div className="flex flex-col gap-2 mb-4">
+                <input
+                  type="email"
+                  value={unverifiedEmail}
+                  onChange={(e) => setUnverifiedEmail(e.target.value)}
+                  placeholder="Your email"
+                  className={`${styles.input} w-full px-3 py-2 rounded-sm font-heading text-sm`}
+                  style={{ color: 'var(--noir-foreground)', backgroundColor: 'var(--noir-surface)' }}
+                />
+                <button
+                  type="button"
+                  onClick={handleResend}
+                  disabled={resendLoading || resendCooldownSeconds > 0}
+                  className={`${styles.btnPrimary} w-full px-6 py-2 rounded-sm font-heading font-bold uppercase tracking-wider disabled:opacity-50`}
+                >
+                  {resendLoading ? 'Sending…' : resendCooldownSeconds > 0 ? `Resend in ${resendCooldownSeconds}s` : 'Resend verification email'}
+                </button>
+              </div>
+              <Link to="/dashboard" className="text-sm font-heading underline" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
+            </>
           )}
           {status === 'error' && (
             <>

@@ -15,7 +15,7 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
-from server import db, get_current_user, get_rank_info, maybe_process_rank_up
+from server import db, get_current_user, get_current_user_verified, get_rank_info, maybe_process_rank_up
 
 # Equipment tiers for Organised Crime
 EQUIPMENT_TIERS = [
@@ -207,7 +207,7 @@ async def get_equipment(current_user: dict = Depends(get_current_user)):
 
 async def select_equipment(
     request: BuyEquipmentRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_verified)
 ):
     """Select equipment for next heist (equipment is consumed per heist)."""
     equipment = next((e for e in EQUIPMENT_TIERS if e["id"] == request.equipment_id), None)
@@ -267,7 +267,7 @@ async def get_heist_jobs(current_user: dict = Depends(get_current_user)):
 
 async def run_heist(
     request: RunHeistRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user_verified)
 ):
     """Run an organised crime heist."""
     if current_user.get("in_jail"):

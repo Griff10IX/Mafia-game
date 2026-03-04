@@ -18,6 +18,7 @@ if _backend not in sys.path:
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     RANKS,
     STATES,
     CARS,
@@ -270,7 +271,7 @@ def _bullets_to_kill_breakdown(
 # Route handlers
 # ---------------------------------------------------------------------------
 
-async def search_target(request: AttackSearchRequest, current_user: dict = Depends(get_current_user)):
+async def search_target(request: AttackSearchRequest, current_user: dict = Depends(get_current_user_verified)):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     await db.attacks.delete_many({"attacker_id": current_user["id"], "search_started": {"$lte": cutoff.isoformat()}})
     user_filter = _find_user_by_username_case_insensitive(request.target_username)
@@ -468,7 +469,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
         items.append(item)
     return {"attacks": items}
 
-async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user)):
+async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):
     ids = [x for x in (request.attack_ids or []) if isinstance(x, str) and x.strip()]
     ids = list(dict.fromkeys(ids))
     if not ids:
@@ -476,7 +477,7 @@ async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depe
     res = await db.attacks.delete_many({"attacker_id": current_user["id"], "id": {"$in": ids}})
     return {"message": f"Deleted {res.deleted_count} search(es)", "deleted": res.deleted_count}
 
-async def travel_to_target(request: AttackIdRequest, current_user: dict = Depends(get_current_user)):
+async def travel_to_target(request: AttackIdRequest, current_user: dict = Depends(get_current_user_verified)):
     attack = await db.attacks.find_one(
         {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
         {"_id": 0}
@@ -489,7 +490,7 @@ async def travel_to_target(request: AttackIdRequest, current_user: dict = Depend
     )
     return {"message": f"Traveled to {attack['location_state']}"}
 
-async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(get_current_user)):
+async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(get_current_user_verified)):
     user_filter = _find_user_by_username_case_insensitive(request.target_username)
     if not user_filter:
         raise HTTPException(status_code=400, detail="Target username required")
@@ -526,7 +527,7 @@ async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
     inflation = await _apply_kill_inflation_decay(current_user["id"])
     return {"inflation": inflation, "inflation_pct": int(round(inflation * 100))}
 
-async def execute_attack(request: AttackExecuteRequest, current_user: dict = Depends(get_current_user)):
+async def execute_attack(request: AttackExecuteRequest, current_user: dict = Depends(get_current_user_verified)):
     attack = await db.attacks.find_one(
         {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
         {"_id": 0}

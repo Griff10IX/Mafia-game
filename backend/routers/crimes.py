@@ -164,6 +164,7 @@ if _backend not in sys.path:
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     get_rank_info,
     get_effective_event,
     log_activity,
@@ -229,7 +230,7 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
     return result
 
 
-async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_user)):
+async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_user_verified)):
     try:
         return await _commit_crime_impl(crime_id, current_user)
     except HTTPException:

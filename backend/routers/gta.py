@@ -72,6 +72,7 @@ class GTAAttemptResponse(BaseModel):
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     get_rank_info,
     get_effective_event,
     maybe_process_rank_up,
@@ -393,7 +394,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
 
 
 async def attempt_gta(
-    request: GTAAttemptRequest, current_user: dict = Depends(get_current_user)
+    request: GTAAttemptRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     if current_user.get("in_jail"):
         jail_time = datetime.fromisoformat(current_user["jail_until"])
@@ -562,7 +563,7 @@ def _parse_melt_cooldown(iso_str):
 
 
 async def melt_cars(
-    request: GTAMeltRequest, current_user: dict = Depends(get_current_user)
+    request: GTAMeltRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     if not request.car_ids:
         raise HTTPException(status_code=400, detail="No cars selected")
@@ -765,7 +766,7 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
 
 
 async def buy_car(
-    request: GTABuyCarRequest, current_user: dict = Depends(get_current_user)
+    request: GTABuyCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     """Purchase one car from the dealer for cash. Removes one from dealer stock."""
     car_info = next((c for c in CARS if c.get("id") == request.car_id), None)
@@ -840,7 +841,7 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
 
 
 async def list_car(
-    request: GTAListCarRequest, current_user: dict = Depends(get_current_user)
+    request: GTAListCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     """List one of your cars for sale on the marketplace (other players can buy for cash)."""
     if request.price <= 0:
@@ -875,7 +876,7 @@ async def list_car(
 
 
 async def delist_car(
-    request: GTADelistCarRequest, current_user: dict = Depends(get_current_user)
+    request: GTADelistCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     """Remove your car from the marketplace."""
     user_car = await db.user_cars.find_one(
@@ -901,7 +902,7 @@ async def delist_car(
 
 
 async def buy_listed_car(
-    request: GTABuyListedCarRequest, current_user: dict = Depends(get_current_user)
+    request: GTABuyListedCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     """Buy a car listed by another player (pay cash to seller)."""
     buyer_id = current_user["id"]
@@ -957,7 +958,7 @@ REPAIR_COST_FRACTION = 0.2
 
 
 async def repair_car(
-    request: GTARepairCarRequest, current_user: dict = Depends(get_current_user)
+    request: GTARepairCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     """Repair a car in the garage (pay cash to set damage to 0)."""
     user_car = await db.user_cars.find_one(

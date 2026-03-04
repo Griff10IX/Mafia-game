@@ -571,6 +571,17 @@ async def get_current_user(
             pass
     return user
 
+
+async def get_current_user_verified(current_user: dict = Depends(get_current_user)):
+    """Same as get_current_user but requires email_verified. Use for crimes, GTA, OC, attack, etc."""
+    if current_user.get("email_verified") is False:
+        raise HTTPException(
+            status_code=403,
+            detail="Verify your email to use this feature.",
+        )
+    return current_user
+
+
 async def send_notification(user_id: str, title: str, message: str, notification_type: str, category: Optional[str] = None, **extra):
     """Send a notification to user's inbox. If category is set, user's notification_preferences can mute it."""
     if category:
