@@ -930,7 +930,7 @@ def register(router):
         if not isinstance(admin_online_color, str) or not admin_online_color.strip():
             admin_online_color = "#a78bfa"
         req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
-        require_email_verification = bool(req_doc.get("value") if req_doc else False)
+        require_email_verification = bool(req_doc.get("value") if req_doc else True)  # default True when missing
         sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
         stock_market_max_points = int(sm_doc["value"]) if sm_doc and sm_doc.get("value") is not None else 3000
         try:
@@ -972,7 +972,7 @@ def register(router):
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
         req_doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
-        require_email_verification = bool(req_doc.get("value") if req_doc else False)
+        require_email_verification = bool(req_doc.get("value") if req_doc else True)  # default True when missing
         sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
         stock_market_max_points = int(sm_doc["value"]) if sm_doc and sm_doc.get("value") is not None else 3000
         stock_market_max_points = max(1, stock_market_max_points)

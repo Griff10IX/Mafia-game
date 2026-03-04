@@ -97,7 +97,10 @@ def register(router):
 
     async def _require_email_verification():
         doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
-        return bool(doc.get("value") if doc else False)
+        # Default True when missing: email verification required unless explicitly disabled in admin
+        if doc is None:
+            return True
+        return bool(doc.get("value"))
 
     @router.post("/auth/register")
     async def register_user(user_data: UserRegister, request: Request):
