@@ -371,7 +371,7 @@ CARS = [
     # Exclusive (admin only) - no custom image
     {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 50000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
     # Loot-exclusive (loot box only, cap 3 globally)
-    {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 65000, "travel_bonus": 68, "image": None},
+    {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 65000, "travel_bonus": 68, "image": "/images/gta/car21.png"},
 ]
 
 # Models (UserRegister, UserLogin, PasswordResetRequest, PasswordResetConfirm moved to routers/auth.py)

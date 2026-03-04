@@ -120,6 +120,15 @@ const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
 const NOTIFICATION_BALL_POSITION_KEY = 'notification_ball_position';
 const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
+const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
+
+function loadSidebarShowDividers() {
+  try {
+    const v = localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY);
+    if (v === 'false') return false;
+  } catch (_) {}
+  return true;
+}
 
 function loadMobileStatsDisplay() {
   try {
@@ -178,6 +187,7 @@ export default function Layout({ children }) {
   const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
   const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
   const [mobileStatsDisplay, setMobileStatsDisplay] = useState(loadMobileStatsDisplay);
+  const [showSidebarDividers, setShowSidebarDividers] = useState(loadSidebarShowDividers);
   const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -236,11 +246,14 @@ export default function Layout({ children }) {
       setTopBarSize(loadTopBarSize());
     };
     const onMobileStatsDisplay = () => setMobileStatsDisplay(loadMobileStatsDisplay());
+    const onSidebarDividers = () => setShowSidebarDividers(loadSidebarShowDividers());
     window.addEventListener('topbar-prefs-changed', onTopBarPrefs);
     window.addEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
+    window.addEventListener('sidebar-dividers-changed', onSidebarDividers);
     return () => {
       window.removeEventListener('topbar-prefs-changed', onTopBarPrefs);
       window.removeEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
+      window.removeEventListener('sidebar-dividers-changed', onSidebarDividers);
     };
   }, []);
 
@@ -760,7 +773,7 @@ export default function Layout({ children }) {
               {navItems.map((item, index) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
-                const navDivider = index > 0 ? (
+                const navDivider = showSidebarDividers && index > 0 ? (
                   <div key={`div-${item.path}`} className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                 ) : null;
 
@@ -816,7 +829,7 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/gta"
                             onClick={() => setSidebarOpen(false)}
@@ -837,7 +850,7 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/jail"
                             onClick={() => setSidebarOpen(false)}
@@ -858,7 +871,7 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/organised-crime"
                             onClick={() => setSidebarOpen(false)}
@@ -921,7 +934,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Dice</span>
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/casino/rlt"
                             onClick={() => setSidebarOpen(false)}
@@ -933,7 +946,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Roulette</span>
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/casino/blackjack"
                             onClick={() => setSidebarOpen(false)}
@@ -945,7 +958,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Blackjack</span>
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/casino/horseracing"
                             onClick={() => setSidebarOpen(false)}
@@ -957,7 +970,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span>
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/casino/slots"
                             onClick={() => setSidebarOpen(false)}
@@ -969,7 +982,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Slots</span>
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/casino/videopoker"
                             onClick={() => setSidebarOpen(false)}
@@ -981,7 +994,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Video Poker</span>
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/casino/mdg"
                             onClick={() => setSidebarOpen(false)}
@@ -993,7 +1006,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">MDG</span>
                           </Link>
-                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                          {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
                           <Link
                             to="/sports-betting"
                             onClick={() => setSidebarOpen(false)}
@@ -1046,7 +1059,7 @@ export default function Layout({ children }) {
               })}
 
               {/* Prestige — always visible */}
-              <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+              {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
               <Link
                 to="/prestige"
                 data-testid="nav-prestige"
@@ -1065,7 +1078,7 @@ export default function Layout({ children }) {
 
               {/* Admin Section */}
               {adminNavItems.length > 0 && (
-                <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                {showSidebarDividers && <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />}
               )}
               {adminNavItems.map((item) => {
                 const Icon = item.icon;

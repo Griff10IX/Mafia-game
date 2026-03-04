@@ -96,9 +96,11 @@ export default function ThemePicker({ open, onClose }) {
   const TOPBAR_GAP_KEY = 'topbar_gap';
   const TOPBAR_SIZE_KEY = 'topbar_size';
   const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
+  const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
   const topBarGap = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_GAP_KEY)) || 'normal';
   const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
   const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
+  const sidebarShowDividers = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY)) !== 'false';
 
   const setTopBarGap = (v) => {
     try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
@@ -112,12 +114,17 @@ export default function ThemePicker({ open, onClose }) {
     try { localStorage.setItem(MOBILE_STATS_DISPLAY_KEY, v); } catch (_) {}
     window.dispatchEvent(new Event('mobile-stats-display-changed'));
   };
+  const setSidebarShowDividers = (v) => {
+    try { localStorage.setItem(SIDEBAR_SHOW_DIVIDERS_KEY, v ? 'true' : 'false'); } catch (_) {}
+    window.dispatchEvent(new Event('sidebar-dividers-changed'));
+  };
 
   const tabs = [
     { id: 'presets', label: 'Presets', icon: Sparkles },
     { id: 'colours', label: 'Colours', icon: Palette },
     { id: 'text', label: 'Text', icon: Type },
     { id: 'buttons', label: 'Buttons', icon: Box },
+    { id: 'layout', label: 'Layout', icon: PanelLeft },
     { id: 'mobile', label: 'Mobile layout', icon: Smartphone },
     { id: 'topbar', label: 'Top bar', icon: LayoutDashboard },
   ];
@@ -647,6 +654,41 @@ export default function ThemePicker({ open, onClose }) {
                         <span className="text-[9px] sm:text-[10px] font-heading text-mutedForeground truncate w-full text-center px-0.5">{t.name}</span>
                       </button>
                     ))}
+                  </div>
+                </div>
+              </>
+            )}
+            {activeTab === 'layout' && (
+              <>
+                <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <PanelLeft className="w-3.5 h-3.5" />
+                  Layout
+                </p>
+                <p className="text-[9px] text-mutedForeground mb-3">Sidebar and menu appearance.</p>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Sidebar</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">Show gold dividers between menu items (Dashboard, Loot Box, Attack, Theme, etc.).</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setSidebarShowDividers(true)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          sidebarShowDividers ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        On
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSidebarShowDividers(false)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          !sidebarShowDividers ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        Off
+                      </button>
+                    </div>
                   </div>
                 </div>
               </>
