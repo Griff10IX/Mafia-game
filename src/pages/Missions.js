@@ -619,12 +619,24 @@ function TributeBanner({
   tributeDepositDailyAt,
   nextTributeDepositAt,
   dailyCashBase = 500,
+  dailyLootBase = 1,
+  hasMission1Bonus = false,
+  dailyCashMission1 = 0,
+  dailyBulletsMission1 = 0,
+  dailyRespectMission1 = 0,
+  hasMission2Bonus = false,
   dailyCashMission2 = 0,
   dailyBulletsMission2 = 0,
-  hasMission2Bonus = false,
-  dailyCashMission4 = 0,
-  dailyRespectMission4 = 0,
+  dailyRespectMission2 = 0,
+  dailyLootMission2 = 0,
+  hasMission3Bonus = false,
+  dailyCashMission3 = 0,
+  dailyBulletsMission3 = 0,
+  dailyRespectMission3 = 0,
   hasMission4Bonus = false,
+  dailyCashMission4 = 0,
+  dailyBulletsMission4 = 0,
+  dailyRespectMission4 = 0,
 }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -637,7 +649,16 @@ function TributeBanner({
   const hasLootPieces = (tributeLootBoxPieces || 0) > 0;
   const hasAny = hasBank || hasBullets || hasLootPieces;
   const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
-  const dailyTotalCash = dailyCashBase + (hasMission2Bonus ? dailyCashMission2 : 0) + (hasMission4Bonus ? dailyCashMission4 : 0);
+  const dailyTotalCash = dailyCashBase + (hasMission1Bonus ? dailyCashMission1 : 0) + (hasMission2Bonus ? dailyCashMission2 : 0) + (hasMission3Bonus ? dailyCashMission3 : 0) + (hasMission4Bonus ? dailyCashMission4 : 0);
+  const dailyTotalBullets = (hasMission1Bonus ? dailyBulletsMission1 : 0) + (hasMission2Bonus ? dailyBulletsMission2 : 0) + (hasMission3Bonus ? dailyBulletsMission3 : 0) + (hasMission4Bonus ? dailyBulletsMission4 : 0);
+  const dailyTotalRespect = (hasMission1Bonus ? dailyRespectMission1 : 0) + (hasMission2Bonus ? dailyRespectMission2 : 0) + (hasMission3Bonus ? dailyRespectMission3 : 0) + (hasMission4Bonus ? dailyRespectMission4 : 0);
+  const dailyTotalLoot = dailyLootBase + (hasMission2Bonus ? dailyLootMission2 : 0);
+  const missionHints = [
+    { n: 1, has: hasMission1Bonus, cash: dailyCashMission1, bullets: dailyBulletsMission1, respect: dailyRespectMission1 },
+    { n: 2, has: hasMission2Bonus, cash: dailyCashMission2, bullets: dailyBulletsMission2, respect: dailyRespectMission2, loot: dailyLootMission2 },
+    { n: 3, has: hasMission3Bonus, cash: dailyCashMission3, bullets: dailyBulletsMission3, respect: dailyRespectMission3 },
+    { n: 4, has: hasMission4Bonus, cash: dailyCashMission4, bullets: dailyBulletsMission4, respect: dailyRespectMission4 },
+  ].filter((m) => !m.has && (m.cash > 0 || m.bullets > 0 || m.respect > 0 || (m.loot || 0) > 0));
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasAny ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -662,20 +683,25 @@ function TributeBanner({
               </div>
             )}
             <div className="text-[9px] text-mutedForeground mt-0.5">
-              Daily: <span className="text-foreground font-semibold">{fmt(dailyTotalCash)}</span> cash
-              {hasMission2Bonus && dailyBulletsMission2 > 0 && (
-                <span> · <span className="text-foreground font-semibold">{dailyBulletsMission2}</span> bullets</span>
-              )}
-              {hasMission4Bonus && dailyRespectMission4 > 0 && (
-                <span> · <span className="text-foreground font-semibold">{dailyRespectMission4}</span> respect</span>
-              )}
-              {!hasMission2Bonus && (dailyCashMission2 > 0 || dailyBulletsMission2 > 0) && (
-                <span className="text-mutedForeground"> · Complete Mission 2 for +{fmt(dailyCashMission2)} +{dailyBulletsMission2} bullets/day</span>
-              )}
-              {!hasMission4Bonus && (dailyCashMission4 > 0 || dailyRespectMission4 > 0) && (
-                <span className="text-mutedForeground"> · Complete Mission 4 for +{fmt(dailyCashMission4)} +{dailyRespectMission4} respect/day</span>
-              )}
+              <span className="text-mutedForeground">Daily: </span>
+              <span className="text-foreground font-semibold">{fmt(dailyTotalCash)}</span> cash
+              {dailyTotalBullets > 0 && <><span className="text-mutedForeground"> · </span><span className="text-foreground font-semibold">{dailyTotalBullets}</span> bullets</>}
+              {dailyTotalRespect > 0 && <><span className="text-mutedForeground"> · </span><span className="text-foreground font-semibold">{dailyTotalRespect}</span> respect</>}
+              {dailyTotalLoot > 0 && <><span className="text-mutedForeground"> · </span><span className="text-foreground font-semibold">{dailyTotalLoot}</span> loot</>}
             </div>
+            <div className="text-[8px] text-mutedForeground mt-0.5 italic">Cash and bullets stack daily until you collect.</div>
+            {missionHints.length > 0 && (
+              <div className="text-[9px] text-mutedForeground mt-1 space-y-0.5">
+                {missionHints.map((m) => {
+                  const parts = [];
+                  if (m.cash > 0) parts.push(`+${fmt(m.cash)}`);
+                  if (m.bullets > 0) parts.push(`+${m.bullets} bullets`);
+                  if (m.respect > 0) parts.push(`+${m.respect} respect`);
+                  if ((m.loot || 0) > 0) parts.push(`+${m.loot} loot`);
+                  return <div key={m.n}>Complete Mission {m.n} for {parts.join(' ')}/day</div>;
+                })}
+              </div>
+            )}
             {nextIn && (
               <div className="text-[9px] text-primary/80 mt-0.5">Next deposit: {nextIn}</div>
             )}
@@ -873,12 +899,24 @@ export default function Missions() {
         tributeDepositDailyAt={data?.tribute_deposit_daily_at}
         nextTributeDepositAt={data?.next_tribute_deposit_at}
         dailyCashBase={data?.daily_tribute_cash_base ?? 500}
+        dailyLootBase={data?.daily_tribute_loot_box_pieces_base ?? 1}
+        hasMission1Bonus={!!data?.has_mission_1_bonus}
+        dailyCashMission1={data?.daily_tribute_cash_mission1 ?? 0}
+        dailyBulletsMission1={data?.daily_tribute_bullets_mission1 ?? 0}
+        dailyRespectMission1={data?.daily_respect_mission1 ?? 0}
+        hasMission2Bonus={!!data?.has_mission_2_bonus}
         dailyCashMission2={data?.daily_tribute_cash_mission2 ?? 0}
         dailyBulletsMission2={data?.daily_tribute_bullets_mission2 ?? 0}
-        hasMission2Bonus={!!data?.has_mission_2_bonus}
-        dailyCashMission4={data?.daily_tribute_cash_mission4 ?? 0}
-        dailyRespectMission4={data?.daily_tribute_respect_mission4 ?? 0}
+        dailyRespectMission2={data?.daily_respect_mission2 ?? 0}
+        dailyLootMission2={data?.daily_tribute_loot_box_pieces_mission2 ?? 0}
+        hasMission3Bonus={!!data?.has_mission_3_bonus}
+        dailyCashMission3={data?.daily_tribute_cash_mission3 ?? 0}
+        dailyBulletsMission3={data?.daily_tribute_bullets_mission3 ?? 0}
+        dailyRespectMission3={data?.daily_respect_mission3 ?? 0}
         hasMission4Bonus={!!data?.has_mission_4_bonus}
+        dailyCashMission4={data?.daily_tribute_cash_mission4 ?? 0}
+        dailyBulletsMission4={data?.daily_tribute_bullets_mission4 ?? 0}
+        dailyRespectMission4={data?.daily_respect_mission4 ?? 0}
       />
 
       {/* City tabs */}

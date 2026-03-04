@@ -117,21 +117,22 @@ RANKS = [
 CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo owners have 3h grace then auto-relinquish
 
 # Prestige: 5 levels unlocked after reaching Godfather. Each level harder to rank through.
+# mission_reward_mult: mission payouts/rewards scale 0.5x (P1) .. 2.5x (P5) when redoing missions after prestige.
 PRESTIGE_CONFIGS = {
-    1: {"threshold_mult": 1.0,  "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 400_000},
-    2: {"threshold_mult": 1.5,  "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "godfather_req": 600_000},
-    3: {"threshold_mult": 2.25, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "godfather_req": 900_000},
-    4: {"threshold_mult": 3.5,  "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "godfather_req": 1_400_000},
-    5: {"threshold_mult": 5.0,  "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "godfather_req": 2_000_000},
+    1: {"threshold_mult": 1.0,  "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 400_000, "mission_reward_mult": 0.5},
+    2: {"threshold_mult": 1.5,  "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "godfather_req": 600_000, "mission_reward_mult": 1.0},
+    3: {"threshold_mult": 2.25, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "godfather_req": 900_000, "mission_reward_mult": 1.5},
+    4: {"threshold_mult": 3.5,  "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "godfather_req": 1_400_000, "mission_reward_mult": 2.0},
+    5: {"threshold_mult": 5.0,  "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "godfather_req": 2_000_000, "mission_reward_mult": 2.5},
 }
 
 def get_prestige_bonus(user: dict) -> dict:
     """Return stacking benefit multipliers for a user based on their prestige_level."""
     level = min(int(user.get("prestige_level") or 0), 5)
     if level == 0:
-        return {"crime_mult": 1.0, "oc_mult": 1.0, "gta_rare_boost": 0.0, "npc_mult": 1.0}
+        return {"crime_mult": 1.0, "oc_mult": 1.0, "gta_rare_boost": 0.0, "npc_mult": 1.0, "mission_reward_mult": 1.0}
     cfg = PRESTIGE_CONFIGS[level]
-    return {k: cfg[k] for k in ("crime_mult", "oc_mult", "gta_rare_boost", "npc_mult")}
+    return {**{k: cfg[k] for k in ("crime_mult", "oc_mult", "gta_rare_boost", "npc_mult")}, "mission_reward_mult": cfg["mission_reward_mult"]}
 
 # Wealth ranks: based on cash on hand (ordered by min_money ascending)
 WEALTH_RANKS = [

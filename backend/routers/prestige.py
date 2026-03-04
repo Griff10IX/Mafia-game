@@ -45,6 +45,7 @@ def register(router):
                 "oc_mult": cfg["oc_mult"],
                 "gta_rare_boost": cfg["gta_rare_boost"],
                 "npc_mult": cfg["npc_mult"],
+                "mission_reward_mult": cfg.get("mission_reward_mult", 1.0),
             })
 
         return {
@@ -84,14 +85,33 @@ def register(router):
         new_cfg = PRESTIGE_CONFIGS[new_level]
         new_mult = new_cfg["threshold_mult"]
 
+        # Reset missions so they can be redone; payouts scale by prestige (mission_reward_mult).
+        mission_reset_unset = {
+            "mission_1_crimes_baseline": "",
+            "mission_2_crimes_baseline": "",
+            "mission_2_jail_busts_baseline": "",
+            "mission_3_crimes_baseline": "",
+            "mission_3_jail_busts_baseline": "",
+            "mission_3_gta_baseline": "",
+            "mission_3_booze_sells_baseline": "",
+            "mission_3_bullets_melted_baseline": "",
+            "mission_3_bullets_purchased_armoury_baseline": "",
+            "mission_3_uncommon_cars_scrapped_baseline": "",
+            "first_mission_notification_sent": "",
+        }
+
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {
-                "prestige_level": new_level,
-                "prestige_rank_multiplier": new_mult,
-                "rank_points": 0,
-                "rank": 1,
-            }}
+            {
+                "$set": {
+                    "prestige_level": new_level,
+                    "prestige_rank_multiplier": new_mult,
+                    "rank_points": 0,
+                    "rank": 1,
+                    "mission_completions": [],
+                },
+                "$unset": mission_reset_unset,
+            },
         )
 
         await srv.send_notification(
