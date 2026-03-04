@@ -794,7 +794,6 @@ export default function Layout({ children }) {
               )}
               <div className="flex-1 min-w-0 h-px" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
             </div>
-            <p className={`text-[10px] mt-0.5 font-heading tracking-wider text-center ${styles.sidebarHeaderSub}`}>Chicago, 1927</p>
           </div>
 
           {/* Navigation – compact list */}

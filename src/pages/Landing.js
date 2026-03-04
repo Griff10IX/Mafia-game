@@ -140,7 +140,6 @@ export default function Landing({ setIsAuthenticated }) {
               </h1>
               <div className="h-px flex-1 max-w-[60px] md:max-w-[100px]" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
             </div>
-            <p className="text-xs font-heading tracking-[0.35em] uppercase" style={{ color: 'var(--noir-muted)' }}>Chicago, 1927</p>
           </div>
 
           {/* Auth Form – same panel/inputs as other pages */}
