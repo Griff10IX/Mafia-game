@@ -525,6 +525,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             lines.append(f"**Crimes** — Committed {crime_success_count} crime(s). earned ${crime_total_cash:,} and {crime_total_rp} RP.")
         if crime_fail_count > 0:
             await _inc_failed_today(db, user_id, "auto_rank_failed_crimes_today", "auto_rank_failed_crimes_date", now, crime_fail_count)
+        if run_crimes and crime_success_count == 0 and crime_fail_count == 0:
+            logger.debug("Auto rank user %s: 0 crimes this cycle (all on cooldown or none available)", user_id)
 
     # --- GTA ---
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
@@ -690,10 +692,10 @@ async def run_bust_5sec_once():
     db = srv.db
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
-    # Release anyone whose jail time just expired so they rejoin the buster list this same cycle (no extra delay)
+    # Release anyone whose jail time just expired; clear next_run_at so they're immediately due for crimes/GTA
     await db.users.update_many(
         {"in_jail": True, "jail_until": {"$lte": now_iso}},
-        {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+        {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
     )
     if not await get_auto_rank_enabled(db):
         return
@@ -980,10 +982,10 @@ def register(router):
                 jail_seconds_remaining = int((jail_until_dt - now).total_seconds())
                 jail_until_iso = (u or {}).get("jail_until")
             else:
-                # Jail time expired; clear in_jail so Auto Rank (and UI) updates without visiting jail page
+                # Jail time expired; clear in_jail and next_run_at so Auto Rank runs immediately
                 await db.users.update_one(
                     {"id": current_user["id"]},
-                    {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+                    {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
                 )
                 in_jail = False
         next_run_at = None

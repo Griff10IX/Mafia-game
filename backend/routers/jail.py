@@ -157,7 +157,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         if not jail_until_iso:
             await db.users.update_one(
                 {"id": p["id"]},
-                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
             )
             continue
         try:
@@ -169,7 +169,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         if jail_until <= now:
             await db.users.update_one(
                 {"id": p["id"]},
-                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
             )
             continue
         real_players.append(p)
@@ -316,7 +316,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 pass
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None, "snitch_attempted_this_term": False}},
+            {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
         )
         reward_cash = _safe_int(target.get("bust_reward_cash"), 0)
         target_money = _safe_int(target.get("money"), 0)
@@ -448,7 +448,7 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
     if jail_until <= now:
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}},
+            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
         )
         return {"in_jail": False, **base}
     seconds_remaining = int((jail_until - now).total_seconds())
@@ -482,6 +482,7 @@ async def leave_jail(current_user: dict = Depends(get_current_user_verified)):
         {
             "$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False},
             "$inc": {"points": -3},
+            "$unset": {"auto_rank_next_run_at": ""},
         },
     )
     return {

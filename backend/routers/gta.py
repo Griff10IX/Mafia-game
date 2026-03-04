@@ -407,7 +407,7 @@ async def attempt_gta(
             raise HTTPException(status_code=400, detail="You are in jail!")
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"in_jail": False, "jail_until": None}},
+            {"$set": {"in_jail": False, "jail_until": None}, "$unset": {"auto_rank_next_run_at": ""}},
         )
     option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
     if not option:
