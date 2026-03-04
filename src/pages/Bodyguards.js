@@ -30,6 +30,7 @@ export default function Bodyguards() {
   const [user, setUser] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
+  const [nextHireInflationPct, setNextHireInflationPct] = useState(0);
   const [loading, setLoading] = useState(true);
   const [expandedSlot, setExpandedSlot] = useState(null);
 
@@ -39,15 +40,17 @@ export default function Bodyguards() {
 
   const fetchData = async () => {
     try {
-      const [bodyguardsRes, userRes, eventsRes] = await Promise.all([
+      const [bodyguardsRes, userRes, eventsRes, inflationRes] = await Promise.all([
         api.get('/bodyguards'),
         api.get('/auth/me'),
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } }))
+        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        api.get('/bodyguards/inflation').catch(() => ({ data: { next_hire_inflation_pct: 0 } }))
       ]);
       setBodyguards(bodyguardsRes.data);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
+      setNextHireInflationPct(inflationRes.data?.next_hire_inflation_pct ?? 0);
     } catch (error) {
       toast.error('Failed to load bodyguards', { duration: 10000 });
     } finally {
@@ -77,10 +80,11 @@ export default function Bodyguards() {
     }
   };
 
-  const getHireCost = (slotNumber, isRobot) => {
-    const base = BODYGUARD_SLOT_COSTS[slotNumber - 1] * (isRobot ? 1.5 : 1);
+  const getHireCost = (slotNumber) => {
+    const base = BODYGUARD_SLOT_COSTS[slotNumber - 1];
     const mult = event?.bodyguard_cost ?? 1;
-    return Math.round(base * mult);
+    const inflationMult = 1 + (nextHireInflationPct ?? 0) / 100;
+    return Math.round(base * mult * inflationMult);
   };
 
   if (loading) {
@@ -248,7 +252,7 @@ export default function Bodyguards() {
                         data-testid={`hire-robot-${bg.slot_number}`}
                         className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading"
                       >
-                        🤖 Hire ({getHireCost(bg.slot_number, true)} pts)
+                        🤖 Hire ({getHireCost(bg.slot_number)} pts{nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})
                       </button>
                     )}
                   </div>

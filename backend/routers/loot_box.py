@@ -304,12 +304,41 @@ async def open_loot_box(
         res = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "loot_box_pieces": 1})
         new_pieces = int(res.get("loot_box_pieces") or 0) if res else 0
     else:
-        res = await db.users.find_one_and_update(
-            {"id": user_id, "loot_box_pieces": {"$gte": cost}},
-            {"$inc": {"loot_box_pieces": -cost}},
-            projection={"_id": 0, "id": 1, "loot_box_pieces": 1},
-            return_document=True,
-        )
+        # Type-safe: match even when loot_box_pieces is stored as string (e.g. "1000001"); normalize and deduct atomically
+        try:
+            res = await db.users.find_one_and_update(
+                {
+                    "id": user_id,
+                    "$expr": {
+                        "$gte": [
+                            {"$convert": {"input": "$loot_box_pieces", "to": "long", "onError": 0, "onNull": 0}},
+                            cost,
+                        ]
+                    },
+                },
+                [
+                    {
+                        "$set": {
+                            "loot_box_pieces": {
+                                "$max": [
+                                    0,
+                                    {
+                                        "$subtract": [
+                                            {"$convert": {"input": "$loot_box_pieces", "to": "long", "onError": 0, "onNull": 0}},
+                                            cost,
+                                        ]
+                                    },
+                                ]
+                            }
+                        }
+                    }
+                ],
+                projection={"_id": 0, "id": 1, "loot_box_pieces": 1},
+                return_document=True,
+            )
+        except Exception as e:
+            logger.exception("Loot box open (find_one_and_update): %s", e)
+            raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
         if not res:
             raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
         new_pieces = int(res.get("loot_box_pieces") or 0)
@@ -438,20 +467,26 @@ async def open_loot_box(
             pool = [c for c in CARS if c.get("rarity") in STANDARD_CAR_RARITIES]
             if not pool:
                 pool = [c for c in CARS if c.get("id") != LOOT_EXCLUSIVE_CAR_ID and c.get("rarity") != "loot_exclusive"]
-            count = random.randint(2, 5)
-            items = []
-            for _ in range(count):
-                car = random.choice(pool)
-                await db.user_cars.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "car_id": car["id"],
-                    "car_name": car.get("name", car["id"]),
-                    "acquired_at": now.isoformat(),
-                    "damage_percent": random.randint(0, 30),
-                })
-                items.append({"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common")})
-            rewards.append({"type": "cars", "count": count, "items": items, "rarity": "standard"})
+            if not pool:
+                # No cars available (e.g. CARS empty); give cash instead
+                amount = random.randint(100_000, 25_000_000)
+                merged_inc["money"] = merged_inc.get("money", 0) + amount
+                rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
+            else:
+                count = random.randint(2, 5)
+                items = []
+                for _ in range(count):
+                    car = random.choice(pool)
+                    await db.user_cars.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "car_id": car["id"],
+                        "car_name": car.get("name", car["id"]),
+                        "acquired_at": now.isoformat(),
+                        "damage_percent": random.randint(0, 30),
+                    })
+                    items.append({"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common")})
+                rewards.append({"type": "cars", "count": count, "items": items, "rarity": "standard"})
         elif chosen == "bullets":
             amount = random.randint(50, 10_000)
             merged_inc["bullets"] = merged_inc.get("bullets", 0) + amount

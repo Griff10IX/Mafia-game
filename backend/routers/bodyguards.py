@@ -34,12 +34,29 @@ BODYGUARD_INFLATION_EXTRA_PER_LEVEL = 0.05  # after level 4
 
 
 def _bodyguard_inflation_percent_for_level(level: int) -> float:
-    """Return inflation as decimal (e.g. 0.12 for 12%) for level >= 1. No cap; keeps increasing past 12%."""
+    """Return inflation as decimal (e.g. 0.12 for 12%) for level >= 1. Level 0 = 0%. No cap; keeps increasing past 12%."""
     if level < 1:
         return 0.0
     if level <= len(BODYGUARD_INFLATION_PERCENTS_FIRST):
         return BODYGUARD_INFLATION_PERCENTS_FIRST[level - 1]
     return BODYGUARD_INFLATION_PERCENTS_FIRST[-1] + (level - len(BODYGUARD_INFLATION_PERCENTS_FIRST)) * BODYGUARD_INFLATION_EXTRA_PER_LEVEL
+
+
+def _bodyguard_inflation_level_now(user: dict) -> int:
+    """Return current inflation level (0 = first hire in window, 1 = second within 3h, ...). Resets when window expires."""
+    until_iso = user.get("bodyguard_inflation_until")
+    if not until_iso:
+        return 0
+    try:
+        until = datetime.fromisoformat(until_iso.replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) > until:
+            return 0
+    except Exception:
+        return 0
+    return int(user.get("bodyguard_inflation_level") or 0)
+
 
 # Per-user cache for GET /bodyguards
 _bodyguards_cache: dict = {}
@@ -168,6 +185,17 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
 
 
 # ----- Routes -----
+async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current_user)):
+    """Return current robot hire inflation % (0, 2, 5, 7, 12, ...) so the frontend can show accurate cost. Resets after 3h with no hire."""
+    user = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
+    )
+    level = _bodyguard_inflation_level_now(user or {})
+    pct = round(_bodyguard_inflation_percent_for_level(level) * 100)
+    return {"next_hire_inflation_pct": pct}
+
+
 async def get_bodyguards(current_user: dict = Depends(get_current_user)):
     global _bodyguards_cache
     uid = current_user["id"]
@@ -281,10 +309,29 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         raise HTTPException(status_code=400, detail="Slot already occupied")
     ev = await get_effective_event()
     base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
-    cost = int(base_cost * ev.get("bodyguard_cost", 1.0))
+    # Bodyguard inflation: each hire within 3h adds % (0%, 2%, 5%, 7%, 12%, 17%, ...)
+    user_inflation = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1}
+    )
+    user_for_inflation = user_inflation or {}
+    inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
+    inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
+    cost = int(base_cost * ev.get("bodyguard_cost", 1.0) * inflation_mult)
     if current_user["points"] < cost:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -cost}})
+    now = datetime.now(timezone.utc)
+    window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {
+            "$inc": {"points": -cost},
+            "$set": {
+                "bodyguard_inflation_until": window_end.isoformat(),
+                "bodyguard_inflation_level": inflation_level + 1,
+            },
+        },
+    )
     robot_name = None
     robot_user_id = None
     if is_robot:
@@ -506,6 +553,7 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
 
 
 def register(router):
+    router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"])
     router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"], response_model=List[BodyguardResponse])
     router.add_api_route("/bodyguards/armour/upgrade", upgrade_bodyguard_armour, methods=["POST"])
     router.add_api_route("/bodyguards/slot/buy", buy_bodyguard_slot, methods=["POST"])
