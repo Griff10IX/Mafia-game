@@ -486,7 +486,12 @@ def register(router):
             raise HTTPException(status_code=400, detail="User not found.")
         token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0), "email": user.get("email") or ""})
         user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
-        return {"token": token, "user": user_response}
+        return {
+            "token": token,
+            "user": user_response,
+            "reward_bullets": 2000,
+            "reward_respect_points": 500,
+        }
 
     @router.post("/auth/resend-verification")
     async def resend_verification(body: ResendVerificationBody):

@@ -1,7 +1,12 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import styles from '../styles/noir.module.css';
 
 export default function VerifyComplete() {
+  const location = useLocation();
+  const state = location.state || {};
+  const bullets = state.reward_bullets ?? 2000;
+  const respectPoints = state.reward_respect_points ?? 500;
+
   return (
     <div
       className={`relative min-h-screen ${styles.page} ${styles.themeGangsterModern}`}
@@ -17,8 +22,11 @@ export default function VerifyComplete() {
           <h1 className="text-xl font-heading font-bold uppercase tracking-wider mb-4" style={{ color: 'var(--noir-foreground)' }}>
             Email verified
           </h1>
-          <p className="text-sm mb-6" style={{ color: 'var(--noir-muted)' }}>
+          <p className="text-sm mb-3" style={{ color: 'var(--noir-muted)' }}>
             You&apos;ve verified your email. Your account is ready — you can log in anytime with your email or username.
+          </p>
+          <p className="text-sm mb-6 font-heading" style={{ color: 'var(--noir-primary)' }}>
+            You received {bullets.toLocaleString()} bullets and {respectPoints.toLocaleString()} Respect Points as a thank you.
           </p>
           <Link
             to="/dashboard"

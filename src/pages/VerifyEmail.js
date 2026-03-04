@@ -31,8 +31,12 @@ export default function VerifyEmail({ setIsAuthenticated }) {
             localStorage.setItem('token', response.data.token);
             if (setIsAuthenticated) setIsAuthenticated(true);
             setStatus('success');
-            setMessage('Email verified!');
-            setTimeout(() => navigate('/verify-complete', { replace: true }), 800);
+            const bullets = response.data.reward_bullets ?? 2000;
+            const respect = response.data.reward_respect_points ?? 500;
+            setMessage(`Email verified! You received ${bullets.toLocaleString()} bullets and ${respect.toLocaleString()} Respect Points.`);
+            toast.success(`You received ${bullets.toLocaleString()} bullets and ${respect.toLocaleString()} Respect Points!`);
+            window.dispatchEvent(new CustomEvent('app:refresh-user'));
+            setTimeout(() => navigate('/verify-complete', { replace: true, state: { reward_bullets: bullets, reward_respect_points: respect } }), 800);
           } else {
             setStatus('error');
             setMessage(response.data.detail || 'Verification failed.');

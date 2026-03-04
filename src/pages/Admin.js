@@ -1294,6 +1294,7 @@ export default function Admin() {
                     <tr className="border-b border-zinc-700/50">
                       <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Username</th>
                       <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Email</th>
+                      <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Verified</th>
                       <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Dead</th>
                       <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">NPC</th>
                       <th className="py-1.5 pr-2 font-bold text-mutedForeground uppercase">Created</th>
@@ -1305,6 +1306,7 @@ export default function Admin() {
                       <tr key={u.id || u.username} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
                         <td className="py-1.5 pr-2 text-foreground font-medium">{u.username ?? '—'}</td>
                         <td className="py-1.5 pr-2 text-mutedForeground truncate max-w-[180px]">{u.email ?? '—'}</td>
+                        <td className="py-1.5 pr-2">{u.email_verified === false ? <span className="text-amber-400">No</span> : <span className="text-emerald-400">Yes</span>}</td>
                         <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
                         <td className="py-1.5 pr-2">{u.is_bodyguard ? <span className="text-amber-400">Yes</span> : 'No'}</td>
                         <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
