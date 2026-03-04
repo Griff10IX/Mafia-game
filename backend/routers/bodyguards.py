@@ -1,6 +1,7 @@
 # Bodyguards: list, armour upgrade, slot buy, hire, invite/accept/decline; admin clear/generate
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+import asyncio
 import logging
 import time
 import uuid
@@ -303,8 +304,19 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                 payload["bodyguard_for"] = {"owner_id": owner["id"], "owner_username": owner.get("username") or "?"}
             else:
                 payload["bodyguard_for"] = {"owner_id": as_guard["user_id"], "owner_username": "?"}
+            # Total profit from being a bodyguard (all-time payouts received)
+            profit_cursor = db.bodyguard_payouts.aggregate([
+                {"$match": {"guard_id": uid}},
+                {"$group": {"_id": None, "points": {"$sum": "$payment_points"}, "money": {"$sum": "$payment_money"}}},
+            ])
+            profit_list = await profit_cursor.to_list(length=1)
+            if profit_list:
+                payload["bodyguard_profit"] = {"points": int(profit_list[0].get("points") or 0), "money": float(profit_list[0].get("money") or 0)}
+            else:
+                payload["bodyguard_profit"] = {"points": 0, "money": 0.0}
         else:
             payload["bodyguard_for"] = None
+            payload["bodyguard_profit"] = None
         _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
         logger.info("get_bodyguards success uid=%s slots=%d", uid, len(result))
         return payload
@@ -393,6 +405,11 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
 
 
 async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
+    if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot hire bodyguards while you're working as one. Ask your client to drop you first.",
+        )
     if current_user["bodyguard_slots"] >= 4:
         raise HTTPException(status_code=400, detail="All bodyguard slots already purchased")
     ev = await get_effective_event()
@@ -410,6 +427,11 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
 async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
     slot = request.slot
     is_robot = request.is_robot
+    if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot hire bodyguards while you're working as one. Ask your client to drop you first.",
+        )
     if not is_robot:
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
     if slot < 1 or slot > 4:
@@ -467,12 +489,12 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
         "hire_cost": cost,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
-    await send_notification(
+    asyncio.create_task(send_notification(
         current_user["id"],
         "🛡️ Bodyguard Hired",
         f"You've hired {robot_name if is_robot else 'a human bodyguard slot'} for {cost} points.",
         "bodyguard"
-    )
+    ))
     _invalidate_bodyguards_cache(current_user["id"])
     return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {cost} points", "bodyguard_name": robot_name}
 
@@ -482,6 +504,11 @@ def _weekday_name(weekday: int) -> str:
 
 
 async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict = Depends(get_current_user)):
+    if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot hire bodyguards while you're working as one. Ask your client to drop you first.",
+        )
     username_pattern = _username_pattern((request.target_username or "").strip())
     if not username_pattern:
         raise HTTPException(status_code=400, detail="Target username required")
@@ -855,31 +882,33 @@ async def run_bodyguard_weekly_payout(database):
             updates_guard["$inc"]["money"] = pay_money
         if updates_guard["$inc"]:
             await database.users.update_one({"id": guard_id}, updates_guard)
-        await database.bodyguards.update_one(
-            {"user_id": owner_id, "slot_number": slot_number},
-            {"$set": {"last_payout_date": today_str}},
-        )
-        # Persist payout record so we never double-pay and have an audit trail
-        await database.bodyguard_payouts.insert_one({
-            "id": str(uuid.uuid4()),
-            "owner_id": owner_id,
-            "slot_number": slot_number,
-            "guard_id": guard_id,
-            "payout_date": today_str,
-            "payment_points": pay_pts,
-            "payment_money": pay_money,
-            "created_at": now.isoformat(),
-        })
-        _invalidate_bodyguards_cache(owner_id)
-        _invalidate_bodyguards_cache(guard_id)
         paid += 1
-        if pay_pts or pay_money:
-            await send_notification(
-                guard_id,
-                "🛡️ Bodyguard Pay",
-                f"Weekly bodyguard pay: {pay_pts} pts, ${pay_money:,.0f}" if pay_pts and pay_money else (f"{pay_pts} pts" if pay_pts else f"${pay_money:,.0f}"),
-                "bodyguard",
+        try:
+            await database.bodyguards.update_one(
+                {"user_id": owner_id, "slot_number": slot_number},
+                {"$set": {"last_payout_date": today_str}},
             )
+            await database.bodyguard_payouts.insert_one({
+                "id": str(uuid.uuid4()),
+                "owner_id": owner_id,
+                "slot_number": slot_number,
+                "guard_id": guard_id,
+                "payout_date": today_str,
+                "payment_points": pay_pts,
+                "payment_money": pay_money,
+                "created_at": now.isoformat(),
+            })
+            _invalidate_bodyguards_cache(owner_id)
+            _invalidate_bodyguards_cache(guard_id)
+            if pay_pts or pay_money:
+                await send_notification(
+                    guard_id,
+                    "🛡️ Bodyguard Pay",
+                    f"Weekly bodyguard pay: {pay_pts} pts, ${pay_money:,.0f}" if pay_pts and pay_money else (f"{pay_pts} pts" if pay_pts else f"${pay_money:,.0f}"),
+                    "bodyguard",
+                )
+        except Exception as e:
+            log.warning("Bodyguard payout transfer succeeded but record/notify failed for owner=%s slot=%s: %s", owner_id, slot_number, e)
     if paid:
         log.info("Bodyguard weekly payout: %d paid (weekday=%s)", paid, weekday)
     return paid

@@ -71,6 +71,7 @@ export default function Bodyguards() {
   const [upgradingSlot, setUpgradingSlot] = useState(null);
   const [bgStats, setBgStats] = useState(null);
   const [bodyguardFor, setBodyguardFor] = useState(null);
+  const [bodyguardProfit, setBodyguardProfit] = useState(null);
   const [invites, setInvites] = useState({ sent: [], received: [] });
   const [inviteUsername, setInviteUsername] = useState('');
   const [invitePaymentPoints, setInvitePaymentPoints] = useState(0);
@@ -148,6 +149,7 @@ export default function Bodyguards() {
       const bgData = bodyguardsRes.data;
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
+      setBodyguardProfit(bgData?.bodyguard_profit ?? null);
       setBodyguardLastDropAt(bgData?.bodyguard_last_drop_at ?? null);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
@@ -493,10 +495,16 @@ export default function Bodyguards() {
         <p className="text-[10px] text-zinc-500 font-heading italic">Hire robots or invite humans (4 bodyguards max total). Armour and who&apos;s watching your back.</p>
         {bodyguardFor?.owner_username && (
           <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-heading">
-            <span className="text-mutedForeground">You&apos;re a Bodyguard for: </span>
+            <span className="text-mutedForeground">You&apos;re bodyguarding for: </span>
             <Link to={`/profile/${encodeURIComponent(bodyguardFor.owner_username)}`} className="text-emerald-400 font-bold hover:underline">
               {bodyguardFor.owner_username}
             </Link>
+            {bodyguardProfit != null && (
+              <span className="text-emerald-400/90 block mt-1">
+                Total profit from being a bodyguard: {(bodyguardProfit.points || 0).toLocaleString()} pts, ${(bodyguardProfit.money || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+              </span>
+            )}
+            <span className="text-mutedForeground block mt-1">You cannot hire bodyguards while under contract.</span>
           </div>
         )}
       </div>
@@ -595,7 +603,7 @@ export default function Bodyguards() {
             <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Robots</h4>
             <div className="space-y-1">
               {robotBodyguards.map((bg) => renderBodyguardCard(bg))}
-              {activeCount < 4 && nextEmptySlot && (
+              {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
                 <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-2 flex items-center justify-between gap-3">
                   <span className="text-[10px] text-mutedForeground">Empty slot · hire a robot</span>
                   <button
@@ -615,7 +623,7 @@ export default function Bodyguards() {
             <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Humans</h4>
             <div className="space-y-1">
               {humanBodyguards.map((bg) => renderBodyguardCard(bg))}
-              {activeCount < 4 && nextEmptySlot && (
+              {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
                 <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-3 space-y-2">
                   <div className="text-[10px] text-mutedForeground mb-1">
                     One-time hire cost when they accept: <strong className="text-foreground">{Math.floor(getHireCost(nextEmptySlot) * 0.75)} pts</strong> (25% off robot price).
