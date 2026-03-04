@@ -31,11 +31,13 @@ function formatInflationCountdown(isoEnd) {
     const end = new Date(isoEnd.replace('Z', ''));
     const now = new Date();
     const ms = Math.max(0, end - now);
-    const totalMins = Math.floor(ms / 60000);
-    const hours = Math.floor(totalMins / 60);
-    const mins = totalMins % 60;
-    if (hours > 0) return `${hours}h ${mins}m`;
-    if (mins > 0) return `${mins}m`;
+    const totalSecs = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSecs / 3600);
+    const mins = Math.floor((totalSecs % 3600) / 60);
+    const secs = totalSecs % 60;
+    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    if (secs > 0) return `${secs}s`;
     return 'soon';
   } catch {
     return null;
@@ -66,7 +68,7 @@ export default function Bodyguards() {
     }
     const tick = () => setInflationCountdown(formatInflationCountdown(inflationWindowEndsAt));
     tick();
-    const id = setInterval(tick, 60_000);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [inflationWindowEndsAt]);
 
@@ -95,11 +97,12 @@ export default function Bodyguards() {
     setHiringSlot(slot);
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
-      toast.success(response.data.message, { duration: 10000 });
-      refreshUser().catch(() => {});
-      fetchData().catch(() => {});
+      toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
+      await Promise.all([refreshUser(), fetchData()]);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to hire bodyguard', { duration: 10000 });
+      const detail = error.response?.data?.detail || 'Failed to hire bodyguard';
+      toast.error(detail, { duration: 10000 });
+      await Promise.all([refreshUser(), fetchData()]);
     } finally {
       setHiringSlot(null);
     }
