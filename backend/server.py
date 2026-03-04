@@ -1216,7 +1216,7 @@ class OPTIONSResponder(BaseHTTPMiddleware):
 # Import security middleware
 try:
     from security_middleware import SecurityMiddleware
-    app.add_middleware(SecurityMiddleware, db=db)
+    app.add_middleware(SecurityMiddleware, db=db, admin_emails=ADMIN_EMAILS)
 except ImportError:
     print("Warning: security_middleware.py not found - rate limiting disabled")
 
@@ -1320,6 +1320,16 @@ async def startup_db():
                 logging.exception("Daily tribute deposit ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(tribute_deposit_ticker())
+    # Bodyguard weekly payout: run once per day (check every 60s), pay human bodyguards on their payout_weekday
+    from routers import bodyguards as bodyguards_router
+    async def bodyguard_payout_ticker():
+        while True:
+            try:
+                await bodyguards_router.run_bodyguard_weekly_payout(db)
+            except Exception as e:
+                logging.exception("Bodyguard weekly payout ticker: %s", e)
+            await asyncio.sleep(60)
+    asyncio.create_task(bodyguard_payout_ticker())
 
 @app.on_event("shutdown")
 async def shutdown_db_client():

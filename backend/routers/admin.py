@@ -324,26 +324,28 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         return {
             "rate_limits": security_module.RATE_LIMIT_CONFIG,
+            "global_enabled": getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", True),
             "note": "Min seconds between clicks per endpoint. Rate limits are in-memory; changes apply immediately."
         }
 
     @router.post("/admin/security/rate-limits/toggle")
     async def admin_toggle_rate_limit(
         endpoint: str,
-        enabled: bool,
+        enabled: str = "true",
         current_user: dict = Depends(get_current_user)
     ):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        enabled_bool = str(enabled).lower() in ("true", "1", "yes")
         if endpoint not in security_module.RATE_LIMIT_CONFIG:
             raise HTTPException(status_code=404, detail=f"Endpoint '{endpoint}' not found in rate limit config")
         interval, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
-        security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, enabled)
+        security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, enabled_bool)
         return {
-            "message": f"Rate limit for '{endpoint}' {'enabled' if enabled else 'disabled'}",
+            "message": f"Rate limit for '{endpoint}' {'enabled' if enabled_bool else 'disabled'}",
             "endpoint": endpoint,
             "min_interval_sec": interval,
-            "enabled": enabled
+            "enabled": enabled_bool
         }
 
     @router.post("/admin/security/rate-limits/update")

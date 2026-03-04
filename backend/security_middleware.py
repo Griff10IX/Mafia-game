@@ -17,9 +17,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
     Does NOT limit legitimate gameplay - only detects bot-like spam patterns.
     """
     
-    def __init__(self, app, db):
+    def __init__(self, app, db, admin_emails=None):
         super().__init__(app)
         self.db = db
+        self.admin_emails = set((e or "").strip().lower() for e in (admin_emails or []) if e)
         # Import here to avoid circular dependency
         from security import check_endpoint_rate_limit, check_request_spam, check_duplicate_request
         self.check_endpoint_rate_limit = check_endpoint_rate_limit
@@ -101,8 +102,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
                 user_id = payload.get("sub")
                 username = payload.get("username", "Unknown")
+                email = (payload.get("email") or "").strip().lower()
                 if user_id:
-                    current_user = {"id": user_id, "username": username}
+                    current_user = {"id": user_id, "username": username, "email": email}
         except (JWTError, Exception):
             pass  # If token invalid, just skip security checks
         
@@ -114,18 +116,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         username = current_user.get("username", "Unknown")
         
         try:
-            # 1. Check for request spam (10+ req/sec)
-            if await self.check_request_spam(user_id, username, self.db):
+            is_admin = bool(current_user.get("email") and current_user["email"] in self.admin_emails)
+            # 1. Check for request spam (10+ req/sec) — admins are exempt
+            if not is_admin and await self.check_request_spam(user_id, username, self.db):
                 logger.warning(f"SPAM BLOCKED: {username} - {path}")
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many requests. Please slow down."}
                 )
-            
-            # 2. Check endpoint-specific rate limits (if enabled for this endpoint)
+            # 2. Check endpoint-specific rate limits (if enabled for this endpoint) — admins are exempt
             # Only for state-changing methods so GETs (e.g. dice config/ownership) can load in parallel.
-            # When blocked: client gets 429 and this detail; user is also flagged in security_flags.
-            if request.method not in ("GET", "HEAD", "OPTIONS") and await self.check_endpoint_rate_limit(path, user_id, username, self.db):
+            if not is_admin and request.method not in ("GET", "HEAD", "OPTIONS") and await self.check_endpoint_rate_limit(path, user_id, username, self.db):
                 logger.warning(f"RATE LIMIT: {username} - {path}")
                 return JSONResponse(
                     status_code=429,

@@ -215,7 +215,7 @@ def register(router):
             await db.users.insert_one(user_doc.copy())
 
             if not require_verification:
-                token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0)})
+                token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0), "email": user_doc.get("email") or ""})
                 user_response = {
                     "id": user_doc["id"],
                     "email": user_doc["email"],
@@ -376,7 +376,7 @@ def register(router):
             ips = doc.get("login_ips") or []
             if len(ips) > 20:
                 await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": ips[-20:]}})
-        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0)})
+        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0), "email": user.get("email") or ""})
         user_safe = _login_response_user(user)
         return {"token": token, "user": user_safe}
 
@@ -460,7 +460,7 @@ def register(router):
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=400, detail="User not found.")
-        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0)})
+        token = create_access_token({"sub": user["id"], "v": user.get("token_version", 0), "email": user.get("email") or ""})
         user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
         return {"token": token, "user": user_response}
 

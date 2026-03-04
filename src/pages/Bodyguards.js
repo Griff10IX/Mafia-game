@@ -72,7 +72,20 @@ export default function Bodyguards() {
   const [bgStats, setBgStats] = useState(null);
   const [invites, setInvites] = useState({ sent: [], received: [] });
   const [inviteUsername, setInviteUsername] = useState('');
+  const [invitePaymentPoints, setInvitePaymentPoints] = useState(0);
+  const [invitePaymentMoney, setInvitePaymentMoney] = useState(0);
+  const [invitePayoutWeekday, setInvitePayoutWeekday] = useState(0);
   const [inviting, setInviting] = useState(false);
+
+  const WEEKDAY_OPTIONS = [
+    { value: 0, label: 'Monday' },
+    { value: 1, label: 'Tuesday' },
+    { value: 2, label: 'Wednesday' },
+    { value: 3, label: 'Thursday' },
+    { value: 4, label: 'Friday' },
+    { value: 5, label: 'Saturday' },
+    { value: 6, label: 'Sunday' },
+  ];
 
   useEffect(() => {
     fetchData();
@@ -175,9 +188,6 @@ export default function Bodyguards() {
     return Math.round(base * mult * inflationMult);
   };
 
-  /** Human bodyguards are 25% cheaper than robots (invite cost). */
-  const getHumanCost = (slotNumber) => Math.floor(getHireCost(slotNumber) * 0.75);
-
   const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username)?.slot_number;
   const robotBodyguards = bodyguards.filter((b) => b.is_robot && b.bodyguard_username);
   const humanBodyguards = bodyguards.filter((b) => !b.is_robot && b.bodyguard_username);
@@ -188,6 +198,12 @@ export default function Bodyguards() {
       toast.error('Enter a username');
       return;
     }
+    const pts = Math.max(0, parseInt(invitePaymentPoints, 10) || 0);
+    const money = Math.max(0, parseInt(invitePaymentMoney, 10) || 0);
+    if (pts === 0 && money === 0) {
+      toast.error('Enter points and/or money per week for the bodyguard');
+      return;
+    }
     if (activeCount >= 4 || !nextEmptySlot) {
       toast.error('No bodyguard slots available');
       return;
@@ -196,12 +212,15 @@ export default function Bodyguards() {
     try {
       await api.post('/bodyguards/invite', {
         target_username: username,
-        payment_amount: getHumanCost(nextEmptySlot),
-        payment_type: 'points',
-        duration_hours: 24,
+        payment_points: pts,
+        payment_money: money,
+        payout_weekday: invitePayoutWeekday,
+        duration_hours: 168,
       });
       toast.success('Bodyguard invite sent');
       setInviteUsername('');
+      setInvitePaymentPoints(0);
+      setInvitePaymentMoney(0);
       fetchData().catch(() => {});
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to send invite', { duration: 10000 });
@@ -301,6 +320,15 @@ export default function Bodyguards() {
                   {bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>
+              {!bg.is_robot && (bg.payment_points > 0 || bg.payment_money > 0) && (
+                <div className="bg-zinc-900/50 rounded p-2 col-span-2">
+                  <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Pay (per week, auto on day)</div>
+                  <div className="text-foreground font-bold">
+                    {[bg.payment_points > 0 && `${bg.payment_points} pts`, bg.payment_money > 0 && `$${Number(bg.payment_money).toLocaleString()}`].filter(Boolean).join(' + ')}
+                    {bg.payout_weekday != null && ` · ${WEEKDAY_OPTIONS[bg.payout_weekday]?.label || 'Weekly'}s`}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -399,24 +427,51 @@ export default function Bodyguards() {
             <div className="space-y-1">
               {humanBodyguards.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && (
-                <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-2 flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="Username"
-                    value={inviteUsername}
-                    onChange={(e) => setInviteUsername(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendInvite()}
-                    className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-32 placeholder:text-zinc-500"
-                  />
-                  <button
-                    onClick={sendInvite}
-                    disabled={inviting}
-                    data-testid="invite-human-next"
-                    className="bg-emerald-500/20 text-emerald-400 rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-emerald-500/40 hover:bg-emerald-500/30 font-heading disabled:opacity-60"
-                  >
-                    {inviting ? '…' : `👤 Invite (${getHumanCost(nextEmptySlot)} pts)`}
-                  </button>
-                  <span className="text-[10px] text-mutedForeground">25% cheaper than robot</span>
+                <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-3 space-y-2">
+                  <div className="text-[10px] text-mutedForeground mb-1.5">Offer (per week, paid on chosen day):</div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Username"
+                      value={inviteUsername}
+                      onChange={(e) => setInviteUsername(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendInvite()}
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-28 placeholder:text-zinc-500"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Pts/week"
+                      value={invitePaymentPoints || ''}
+                      onChange={(e) => setInvitePaymentPoints(e.target.value ? Number(e.target.value) : 0)}
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-20 placeholder:text-zinc-500"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="$ /week"
+                      value={invitePaymentMoney || ''}
+                      onChange={(e) => setInvitePaymentMoney(e.target.value ? Number(e.target.value) : 0)}
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-24 placeholder:text-zinc-500"
+                    />
+                    <select
+                      value={invitePayoutWeekday}
+                      onChange={(e) => setInvitePayoutWeekday(Number(e.target.value))}
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground"
+                    >
+                      {WEEKDAY_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>Pay {opt.label}s</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={sendInvite}
+                      disabled={inviting}
+                      data-testid="invite-human-next"
+                      className="bg-emerald-500/20 text-emerald-400 rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-emerald-500/40 hover:bg-emerald-500/30 font-heading disabled:opacity-60"
+                    >
+                      {inviting ? '…' : '👤 Invite'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -487,7 +542,7 @@ export default function Bodyguards() {
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
-              <span>Humans: invite a player; cost 25% less than robot for that slot</span>
+              <span>Humans: invite a player; set points and/or $ per week and a payout day (paid automatically that day each week)</span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>

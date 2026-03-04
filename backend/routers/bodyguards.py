@@ -77,13 +77,17 @@ class BodyguardResponse(BaseModel):
     bodyguard_rank_name: Optional[str] = None
     armour_level: int = 0
     hired_at: Optional[str]
+    payment_points: int = 0
+    payment_money: int = 0
+    payout_weekday: Optional[int] = None  # 0=Monday, 6=Sunday
 
 
 class BodyguardInviteRequest(BaseModel):
     target_username: str
-    payment_amount: int
-    payment_type: str  # points or money
-    duration_hours: int
+    payment_points: int = 0  # points per week to bodyguard
+    payment_money: int = 0   # money per week to bodyguard (in-game $)
+    payout_weekday: int = 0  # 0=Monday, 6=Sunday; pay runs on this day each week (UTC)
+    duration_hours: int = 168  # contract length (default 1 week); 0 = indefinite
 
 
 class BodyguardHireRequest(BaseModel):
@@ -248,7 +252,10 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                 bodyguard_username=username,
                 bodyguard_rank_name=rank_name,
                 armour_level=int(bg.get("armour_level", 0) or 0),
-                hired_at=bg["hired_at"]
+                hired_at=bg["hired_at"],
+                payment_points=int(bg.get("payment_points") or 0),
+                payment_money=int(bg.get("payment_money") or 0),
+                payout_weekday=bg.get("payout_weekday"),
             ))
         else:
             result.append(BodyguardResponse(
@@ -257,7 +264,10 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                 bodyguard_username=None,
                 bodyguard_rank_name=None,
                 armour_level=0,
-                hired_at=None
+                hired_at=None,
+                payment_points=0,
+                payment_money=0,
+                payout_weekday=None,
             ))
     if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
         oldest = next(iter(_bodyguards_cache))
@@ -426,10 +436,21 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
     return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {cost} points", "bodyguard_name": robot_name}
 
 
+def _weekday_name(weekday: int) -> str:
+    return ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][weekday % 7]
+
+
 async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict = Depends(get_current_user)):
     username_pattern = _username_pattern((request.target_username or "").strip())
     if not username_pattern:
         raise HTTPException(status_code=400, detail="Target username required")
+    if (request.payment_points or 0) < 0 or (request.payment_money or 0) < 0:
+        raise HTTPException(status_code=400, detail="Payment amounts cannot be negative")
+    if (request.payment_points or 0) == 0 and (request.payment_money or 0) == 0:
+        raise HTTPException(status_code=400, detail="Enter at least one of payment_points or payment_money per week")
+    payout_weekday = int(request.payout_weekday or 0)
+    if payout_weekday < 0 or payout_weekday > 6:
+        raise HTTPException(status_code=400, detail="payout_weekday must be 0 (Monday) to 6 (Sunday)")
     target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
@@ -447,22 +468,29 @@ async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict =
     if existing:
         raise HTTPException(status_code=400, detail="Already have pending invite to this user")
     invite_id = str(uuid.uuid4())
+    pay_parts = []
+    if request.payment_points:
+        pay_parts.append(f"{request.payment_points} pts")
+    if request.payment_money:
+        pay_parts.append(f"${request.payment_money:,}")
+    pay_str = " + ".join(pay_parts) + f"/week (paid {_weekday_name(payout_weekday)}s)"
     await db.bodyguard_invites.insert_one({
         "id": invite_id,
         "inviter_id": current_user["id"],
         "inviter_username": current_user["username"],
         "invitee_id": target["id"],
         "invitee_username": target["username"],
-        "payment_amount": request.payment_amount,
-        "payment_type": request.payment_type,
-        "duration_hours": request.duration_hours,
+        "payment_points": int(request.payment_points or 0),
+        "payment_money": int(request.payment_money or 0),
+        "payout_weekday": payout_weekday,
+        "duration_hours": int(request.duration_hours or 168),
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat()
     })
     await send_notification(
         target["id"],
         "🛡️ Bodyguard Offer",
-        f"{current_user['username']} wants to hire you as a bodyguard for {request.payment_amount} {request.payment_type}/hour for {request.duration_hours} hours.",
+        f"{current_user['username']} wants to hire you as a bodyguard: {pay_str}.",
         "bodyguard"
     )
     return {"message": f"Bodyguard invite sent to {target['username']}"}
@@ -496,18 +524,30 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
             break
     if not empty_slot:
         raise HTTPException(status_code=400, detail="Inviter has no available slots")
-    end_time = datetime.now(timezone.utc) + timedelta(hours=invite["duration_hours"])
+    now = datetime.now(timezone.utc)
+    duration_hours = int(invite.get("duration_hours") or 168)
+    end_time = now + timedelta(hours=duration_hours) if duration_hours > 0 else None
+    pay_pts = int(invite.get("payment_points") or 0)
+    pay_money = int(invite.get("payment_money") or 0)
+    if pay_pts == 0 and pay_money == 0 and invite.get("payment_amount"):
+        if invite.get("payment_type") == "points":
+            pay_pts = int(invite["payment_amount"])
+        else:
+            pay_money = int(invite["payment_amount"])
+    set_doc = {
+        "bodyguard_user_id": current_user["id"],
+        "is_robot": False,
+        "payment_points": pay_pts,
+        "payment_money": pay_money,
+        "payout_weekday": int(invite.get("payout_weekday", 0)),
+        "last_payout_date": None,
+        "hired_at": now.isoformat(),
+    }
+    if end_time:
+        set_doc["contract_end"] = end_time.isoformat()
     await db.bodyguards.update_one(
         {"user_id": inviter["id"], "slot_number": empty_slot},
-        {"$set": {
-            "bodyguard_user_id": current_user["id"],
-            "is_robot": False,
-            "payment_amount": invite["payment_amount"],
-            "payment_type": invite["payment_type"],
-            "payment_due": datetime.now(timezone.utc).isoformat(),
-            "contract_end": end_time.isoformat(),
-            "hired_at": datetime.now(timezone.utc).isoformat()
-        }},
+        {"$set": set_doc},
         upsert=True
     )
     await db.bodyguard_invites.update_one(
@@ -616,6 +656,84 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
         created += 1
     _invalidate_bodyguards_cache(target["id"])
     return {"message": f"Generated {created} robot bodyguard(s) for {target_username}", "created": created, "count_requested": count}
+
+
+# ----- Weekly payout (human bodyguards) -----
+async def run_bodyguard_weekly_payout(database):
+    """Run once per day; on each bodyguard's payout_weekday, pay them and set last_payout_date."""
+    import logging
+    log = logging.getLogger(__name__)
+    now = datetime.now(timezone.utc)
+    today_str = now.date().isoformat()
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    cursor = database.bodyguards.find({
+        "is_robot": False,
+        "bodyguard_user_id": {"$exists": True, "$ne": None},
+        "payout_weekday": weekday,
+    })
+    paid = 0
+    async for bg in cursor:
+        last = bg.get("last_payout_date")
+        if last == today_str:
+            continue
+        contract_end = bg.get("contract_end")
+        if contract_end:
+            try:
+                end = datetime.fromisoformat(contract_end.replace("Z", "+00:00"))
+                if end.tzinfo is None:
+                    end = end.replace(tzinfo=timezone.utc)
+                if now >= end:
+                    continue
+            except Exception:
+                pass
+        owner_id = bg["user_id"]
+        guard_id = bg["bodyguard_user_id"]
+        pay_pts = int(bg.get("payment_points") or 0)
+        pay_money = float(bg.get("payment_money") or 0)
+        if pay_pts <= 0 and pay_money <= 0:
+            await database.bodyguards.update_one(
+                {"user_id": owner_id, "slot_number": bg["slot_number"]},
+                {"$set": {"last_payout_date": today_str}},
+            )
+            continue
+        owner = await database.users.find_one({"id": owner_id}, {"_id": 0, "points": 1, "money": 1})
+        if not owner:
+            continue
+        pts = int(owner.get("points") or 0)
+        money = float(owner.get("money") or 0)
+        if (pay_pts and pts < pay_pts) or (pay_money and money < pay_money):
+            log.warning("Bodyguard weekly payout skipped: owner %s insufficient balance (need %s pts, %s $)", owner_id, pay_pts, pay_money)
+            continue
+        updates_owner = {"$inc": {}}
+        if pay_pts:
+            updates_owner["$inc"]["points"] = -pay_pts
+        if pay_money:
+            updates_owner["$inc"]["money"] = -pay_money
+        if updates_owner["$inc"]:
+            await database.users.update_one({"id": owner_id}, updates_owner)
+        updates_guard = {"$inc": {}}
+        if pay_pts:
+            updates_guard["$inc"]["points"] = pay_pts
+        if pay_money:
+            updates_guard["$inc"]["money"] = pay_money
+        if updates_guard["$inc"]:
+            await database.users.update_one({"id": guard_id}, updates_guard)
+        await database.bodyguards.update_one(
+            {"user_id": owner_id, "slot_number": bg["slot_number"]},
+            {"$set": {"last_payout_date": today_str}},
+        )
+        _invalidate_bodyguards_cache(owner_id)
+        _invalidate_bodyguards_cache(guard_id)
+        paid += 1
+        if pay_pts or pay_money:
+            await send_notification(
+                guard_id,
+                "🛡️ Bodyguard Pay",
+                f"Weekly bodyguard pay: {pay_pts} pts, ${pay_money:,.0f}" if pay_pts and pay_money else (f"{pay_pts} pts" if pay_pts else f"${pay_money:,.0f}"),
+                "bodyguard",
+            )
+    if paid:
+        log.info("Bodyguard weekly payout: %d paid (weekday=%s)", paid, weekday)
 
 
 def register(router):

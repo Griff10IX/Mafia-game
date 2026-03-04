@@ -1079,12 +1079,13 @@ export default function Admin() {
   };
 
   const handleUpdateRateLimit = async (endpoint, newLimit) => {
-    if (!newLimit || newLimit < 1 || newLimit > 1000) {
-      toast.error('Limit must be between 1 and 1000');
+    const num = Number(newLimit);
+    if (Number.isNaN(num) || num < 0.1 || num > 60) {
+      toast.error('Limit must be between 0.1 and 60 seconds');
       return;
     }
     try {
-      const response = await api.post(`/admin/security/rate-limits/update?endpoint=${encodeURIComponent(endpoint)}&min_interval_sec=${Number(newLimit)}`);
+      const response = await api.post(`/admin/security/rate-limits/update?endpoint=${encodeURIComponent(endpoint)}&min_interval_sec=${num}`);
       toast.success(response.data.message);
       // Refresh the rate limits
       await handleViewRateLimits();
