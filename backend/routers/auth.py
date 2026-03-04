@@ -255,8 +255,26 @@ def register(router):
                     logging.warning("Background verification email failed: %s", e)
 
             threading.Thread(target=_send_in_background, daemon=True).start()
+            # Log them in so they can browse; features are gated until verified
+            token = create_access_token({"sub": user_id, "v": user_doc.get("token_version", 0), "email": user_doc.get("email") or ""})
+            user_response = {
+                "id": user_doc["id"],
+                "email": user_doc["email"],
+                "username": user_doc["username"],
+                "rank": user_doc["rank"],
+                "money": user_doc["money"],
+                "points": user_doc["points"],
+                "bodyguard_slots": user_doc["bodyguard_slots"],
+                "current_state": user_doc["current_state"],
+                "total_kills": user_doc["total_kills"],
+                "total_deaths": user_doc["total_deaths"],
+                "created_at": user_doc["created_at"],
+                "email_verified": False,
+            }
             return {
-                "message": "Please check your email to verify your account. Then you can log in.",
+                "token": token,
+                "user": user_response,
+                "message": "Please check your email to verify your account. You can browse until then.",
                 "verify_required": True,
             }
         except HTTPException:
@@ -360,12 +378,7 @@ def register(router):
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
             )
         await db.login_lockouts.delete_one({"email": email_clean})
-        require_verification = await _require_email_verification()
-        if require_verification and user.get("email_verified") is False:
-            raise HTTPException(
-                status_code=403,
-                detail="Please verify your email first. Check your inbox or request a new verification link.",
-            )
+        # Allow login when unverified so user can browse; features are gated by require_email_verified
         if user.get("is_dead"):
             raise HTTPException(
                 status_code=403,
@@ -463,7 +476,10 @@ def register(router):
         if datetime.now(timezone.utc) > expires_at:
             await db.email_verifications.delete_one({"token": body.token})
             raise HTTPException(status_code=400, detail="Verification link has expired. Request a new one.")
-        await db.users.update_one({"id": record["user_id"]}, {"$set": {"email_verified": True}})
+        await db.users.update_one(
+            {"id": record["user_id"]},
+            {"$set": {"email_verified": True}, "$inc": {"bullets": 2000, "respect_points": 500}},
+        )
         await db.email_verifications.delete_one({"token": body.token})
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
         if not user:

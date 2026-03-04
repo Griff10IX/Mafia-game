@@ -11,16 +11,56 @@ When you use **AUTO_RANK_USE_CRON=1**, the server does **not** run Auto Rank its
 
 ---
 
+## Fixing 403 / "X-Cron-Secret mismatch"
+
+The backend reads **`CRON_SECRET`** from **`backend/.env`** (or from the environment when you start uvicorn, e.g. `EnvironmentFile=/opt/mafia-app/backend/.env`). The value you send in the **`X-Cron-Secret`** header must be **exactly** that value.
+
+**Do this:**
+
+1. **Single source of truth**  
+   In `backend/.env` set:
+   ```bash
+   CRON_SECRET=your-long-random-secret-here
+   ```
+   No spaces around `=`. If you change it, restart the backend so it picks up the new value.
+
+2. **Use the same value when calling the API**
+   - **Python tickers** (`cron-cycle-ticker.py`, `cron-bust-ticker.py`): they load `backend/.env` automatically. As long as the backend is also started with that same `.env` (e.g. systemd `EnvironmentFile` pointing at `backend/.env`), they will match.
+   - **Crontab with curl:** either:
+     - **Option A (recommended):** use the wrapper script so the secret always comes from `.env` (no copy-paste):
+       ```bash
+       * * * * * /opt/mafia-app/scripts/cron-curl.sh main
+       ```
+       (Replace `/opt/mafia-app` with your project root. Script: `scripts/cron-curl.sh`.)
+     - **Option B:** copy the **exact** value from `backend/.env` into the crontab line (replace `YOUR_CRON_SECRET` below). One wrong character or extra space causes 403.
+
+3. **Check both sides**
+   - Backend: `grep CRON_SECRET /path/to/backend/.env`
+   - Crontab: `crontab -l`
+   - If using a script, ensure it reads from the same `.env` the backend uses.
+
+---
+
 ## Main cron via crontab (Option B) — crimes every minute
 
 Call the main Auto Rank endpoint once per minute with system cron.
+
+**Option A — Use wrapper script (secret from .env, no mismatch):**
+
+1. Make the script runnable: `chmod +x scripts/cron-curl.sh`
+2. `crontab -e` and add (replace `/path/to/Game-files-mafia` with your project root):
+   ```bash
+   * * * * * /path/to/Game-files-mafia/scripts/cron-curl.sh main
+   ```
+
+**Option B — Put the secret in crontab:**
 
 1. **On the server**, open crontab:
    ```bash
    crontab -e
    ```
 
-2. **Add one line** (run every minute). Replace `YOUR_CRON_SECRET` and the URL with your real values:
+2. **Add one line** (run every minute). Replace `YOUR_CRON_SECRET` with the **exact** value from `backend/.env` (same as the backend uses):
    ```bash
    * * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" https://your-domain.com/api/auto-rank/cron
    ```
