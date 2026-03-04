@@ -6,7 +6,12 @@
 #   main = /api/auto-rank/cron  (default)
 #   bust = /api/auto-rank/cron-bust
 #
-# Crontab examples (run from project root):
+# IMPORTANT: Crontab only runs at most once per minute (* * * * * = every 60s).
+# So if you set "interval" to 5s in admin, it will still only run every 60s when
+# using crontab. For a 5s (or 10s) interval, run the ticker instead:
+#   python scripts/cron-cycle-ticker.py   # calls main cron every 5s (set CRON_CYCLE_INTERVAL to match admin)
+#
+# Crontab examples (run from project root) — effective interval = 60s:
 #   * * * * * /path/to/Game-files-mafia/scripts/cron-curl.sh main
 #   * * * * * /path/to/Game-files-mafia/scripts/cron-curl.sh bust
 

@@ -1186,7 +1186,11 @@ def register(router):
         interval = max(MIN_INTERVAL_SECONDS, val)
         await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": {"interval_seconds": interval}}, upsert=True)
         _invalidate_auto_rank_config_cache()
-        return {"interval_seconds": interval, "message": f"Auto Rank will run every {interval} seconds after each cycle."}
+        use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+        msg = f"Auto Rank will run every {interval} seconds after each cycle."
+        if use_cron:
+            msg += " When using cron, call POST /api/auto-rank/cron at least this often (e.g. scripts/cron-cycle-ticker.py). Crontab runs only every 60s."
+        return {"interval_seconds": interval, "message": msg}
 
     class AdminUserUpdateBody(BaseModel):
         telegram_chat_id: Optional[str] = None

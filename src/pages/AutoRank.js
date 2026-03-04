@@ -812,6 +812,9 @@ const AdminGlobalLoopCard = ({
         <p className="text-[9px] sm:text-[10px] text-zinc-400 mb-2">
           Wait time after each cycle. Lower = more cycles (faster crimes). Min: {MIN_INTERVAL}s · Current: {intervalSeconds}s
         </p>
+        <p className="text-[9px] text-amber-200/90 mb-2">
+          If using cron (AUTO_RANK_USE_CRON=1): call POST /api/auto-rank/cron at least this often. Crontab runs only every 60s — use <code className="bg-zinc-800 px-1 rounded">scripts/cron-cycle-ticker.py</code> for 5s.
+        </p>
         <div className="flex gap-2">
           <input
             type="number"
