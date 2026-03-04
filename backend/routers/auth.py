@@ -246,7 +246,7 @@ def register(router):
             })
             # Send verification email in background so registration responds immediately (avoids timeout when SMTP is slow/blocked)
             import threading
-            from email_sender import send_verification_email, verification_link
+            from email_sender import send_verification_email
 
             def _send_in_background():
                 try:
@@ -255,12 +255,10 @@ def register(router):
                     logging.warning("Background verification email failed: %s", e)
 
             threading.Thread(target=_send_in_background, daemon=True).start()
-            out = {
+            return {
                 "message": "Please check your email to verify your account. Then you can log in.",
                 "verify_required": True,
-                "verification_link": verification_link(verification_token),
             }
-            return out
         except HTTPException:
             raise
         except Exception as e:
@@ -408,11 +406,14 @@ def register(router):
             "used": False
         })
 
-        try:
-            from email_sender import send_password_reset_email
-            send_password_reset_email(user["email"], user["username"], reset_token)
-        except Exception as e:
-            logging.warning("Failed to send password reset email: %s", e)
+        import threading
+        from email_sender import send_password_reset_email
+        def _send_reset_in_background():
+            try:
+                send_password_reset_email(user["email"], user["username"], reset_token)
+            except Exception as e:
+                logging.warning("Background password reset email failed: %s", e)
+        threading.Thread(target=_send_reset_in_background, daemon=True).start()
 
         return {
             "message": "If an account exists with that email, a password reset link has been sent.",
@@ -491,7 +492,7 @@ def register(router):
             "expires_at": expires_at.isoformat(),
         })
         import threading
-        from email_sender import send_verification_email, verification_link
+        from email_sender import send_verification_email
         def _resend_in_background():
             try:
                 send_verification_email(user["email"], user["username"], verification_token)
@@ -500,7 +501,6 @@ def register(router):
         threading.Thread(target=_resend_in_background, daemon=True).start()
         return {
             "message": "If an account exists with that email, a new verification link has been sent.",
-            "verification_link": verification_link(verification_token),
         }
 
     def _safe_int(val, default=0):

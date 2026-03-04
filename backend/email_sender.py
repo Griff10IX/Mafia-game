@@ -76,10 +76,12 @@ def verification_link(token: str) -> str:
 def send_email(to: str, subject: str, html: str) -> bool:
     """Send one email. Prefer SMTP if configured, else Resend. Returns True if sent, False if skipped or failed."""
     if SMTP_HOST and SMTP_USER and SMTP_PASSWORD:
+        logger.info("Using SMTP (host=%s). To use Resend instead, remove SMTP_* from .env", SMTP_HOST)
         return _send_via_smtp(to, subject, html)
     if RESEND_API_KEY:
+        logger.info("Using Resend for to=%s subject=%s", to, subject)
         return _send_via_resend(to, subject, html)
-    logger.info("Email not sent (no SMTP or RESEND_API_KEY): to=%s subject=%s", to, subject)
+    logger.warning("Email not sent: no SMTP or RESEND_API_KEY. to=%s subject=%s", to, subject)
     return False
 
 

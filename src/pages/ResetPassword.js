@@ -91,28 +91,21 @@ export default function ResetPassword() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {!token && (
+              {!token ? (
                 <div className={`${styles.panel} rounded-sm p-3 bg-red-500/10 border border-red-500/30`}>
                   <p className="text-xs text-red-400 font-heading text-center">
-                    ⚠️ No reset token found. Please use the link from your email.
+                    No reset link found. Please use the link from your email, or request a new password reset from the login page.
                   </p>
+                  <div className="text-center mt-2">
+                    <Link to="/forgot-password" className="text-xs text-primary/70 hover:text-primary font-heading uppercase tracking-wider">
+                      Request new reset link
+                    </Link>
+                  </div>
                 </div>
-              )}
+              ) : null}
 
-              <div>
-                <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider mb-1.5">
-                  Reset Token
-                </label>
-                <input
-                  type="text"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                  placeholder="Paste your reset token"
-                  required
-                />
-              </div>
-
+              {token ? (
+                <>
               <div>
                 <label className="block text-xs font-heading font-bold text-primary/80 uppercase tracking-wider mb-1.5">
                   New Password
@@ -160,6 +153,8 @@ export default function ResetPassword() {
                   ← Back to Login
                 </Link>
               </div>
+                </>
+              ) : null}
             </form>
           </div>
         </div>

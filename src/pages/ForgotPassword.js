@@ -8,7 +8,6 @@ export default function ForgotPassword() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
-  const [resetToken, setResetToken] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,12 +16,6 @@ export default function ForgotPassword() {
     try {
       const response = await api.post('/auth/password-reset/request', { email });
       setSubmitted(true);
-      
-      // For development: show the token (remove in production)
-      if (response.data.token) {
-        setResetToken(response.data.token);
-      }
-      
       toast.success(response.data.message || 'If an account exists with that email, a reset link has been sent.');
     } catch (error) {
       const msg = error.response?.data?.detail || 'Failed to send reset email';
@@ -105,30 +98,9 @@ export default function ForgotPassword() {
               <div className="p-6 space-y-4">
                 <div className={`${styles.panel} rounded-sm p-4 bg-primary/5 border border-primary/30`}>
                   <p className="text-xs text-foreground font-heading text-center">
-                    ✉️ If an account exists with <span className="text-primary font-bold">{email}</span>, you will receive a password reset email shortly.
+                    ✉️ If an account exists with <span className="text-primary font-bold">{email}</span>, you will receive a password reset email shortly. Check your inbox and spam folder.
                   </p>
                 </div>
-
-                {/* Development only: Show token */}
-                {resetToken && (
-                  <div className={`${styles.panel} rounded-sm p-4 bg-amber-500/10 border border-amber-500/30`}>
-                    <p className="text-[10px] text-amber-200/80 font-heading uppercase tracking-wider mb-2">
-                      ⚠️ Development Mode
-                    </p>
-                    <p className="text-xs text-mutedForeground font-heading mb-2">
-                      Your reset token (remove this in production):
-                    </p>
-                    <code className="block text-[10px] text-primary bg-zinc-900/50 p-2 rounded break-all">
-                      {resetToken}
-                    </code>
-                    <Link
-                      to={`/reset-password?token=${resetToken}`}
-                      className="mt-3 block text-center text-xs text-primary hover:text-primary/80 font-heading uppercase tracking-wider"
-                    >
-                      Click here to reset password →
-                    </Link>
-                  </div>
-                )}
 
                 <div className="text-center pt-2">
                   <Link to="/" className="text-xs text-primary/70 hover:text-primary font-heading uppercase tracking-wider">
