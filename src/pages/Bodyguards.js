@@ -280,7 +280,9 @@ export default function Bodyguards() {
       toast.success('Invite accepted. You are now their bodyguard.');
       await fetchData();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to accept invite', { duration: 8000 });
+      const detail = err.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : Array.isArray(detail) ? detail.map((d) => d.msg || d.message).filter(Boolean).join(', ') || 'Failed to accept invite' : 'Failed to accept invite';
+      toast.error(msg, { duration: 8000 });
     } finally {
       setActingInviteId(null);
     }
@@ -750,6 +752,10 @@ export default function Bodyguards() {
               <li className="flex items-start gap-1.5">
                 <span className="text-primary shrink-0">•</span>
                 <span><strong className="text-foreground">Bodyguards hired:</strong> {bgStats.total_hired ?? 0}</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-primary shrink-0">•</span>
+                <span><strong className="text-foreground">Human bodyguards hired:</strong> {bgStats.human_hired ?? 0}</span>
               </li>
               <li className="flex items-start gap-1.5">
                 <span className="text-primary shrink-0">•</span>

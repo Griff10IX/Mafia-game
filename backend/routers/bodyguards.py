@@ -331,6 +331,7 @@ async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
     """Return lifetime bodyguard stats and longest surviving (of current guards)."""
     uid = current_user["id"]
     total_hired = int(current_user.get("bodyguard_lifetime_hires") or 0)
+    human_hired = await db.bodyguard_invites.count_documents({"inviter_id": uid, "status": "accepted"})
     total_spent_hires = int(current_user.get("bodyguard_lifetime_spent_hires") or 0)
     total_spent_upgrades = int(current_user.get("bodyguard_lifetime_spent_upgrades") or 0)
     bodyguards = await db.bodyguards.find(
@@ -366,6 +367,7 @@ async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
             continue
     return {
         "total_hired": total_hired,
+        "human_hired": human_hired,
         "total_spent_hires": total_spent_hires,
         "total_spent_upgrades": total_spent_upgrades,
         "longest_surviving_seconds": longest_surviving_seconds,
@@ -577,6 +579,16 @@ async def get_bodyguard_invites(current_user: dict = Depends(get_current_user)):
 
 
 async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
+    try:
+        return await _do_accept_bodyguard_invite(invite_id, current_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("accept_bodyguard_invite error: %s", e)
+        raise HTTPException(status_code=400, detail=f"Accept failed: {str(e)}")
+
+
+async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
     invite = await db.bodyguard_invites.find_one({"id": invite_id, "invitee_id": current_user["id"], "status": "pending"}, {"_id": 0})
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
@@ -650,11 +662,14 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
             pay_pts = int(invite["payment_amount"])
         else:
             pay_money = int(invite["payment_amount"])
+    pay_money_val = float(invite.get("payment_money") or pay_money or 0)
     set_doc = {
+        "id": str(uuid.uuid4()),
+        "owner_username": inviter.get("username"),
         "bodyguard_user_id": current_user["id"],
         "is_robot": False,
         "payment_points": pay_pts,
-        "payment_money": pay_money,
+        "payment_money": pay_money_val,
         "payout_weekday": int(invite.get("payout_weekday", 0)),
         "last_payout_date": None,
         "hired_at": now.isoformat(),
@@ -665,15 +680,15 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
     # First week's pay: pay the bodyguard now; set last_payout_date so next auto-pay is in one week
     today_str = now.date().isoformat()
     set_doc["last_payout_date"] = today_str
-    if pay_pts > 0 or pay_money > 0:
+    if pay_pts > 0 or pay_money_val > 0:
         first_pay = await db.users.update_one(
-            {"id": inviter["id"], "points": {"$gte": pay_pts}, "money": {"$gte": pay_money}},
+            {"id": inviter["id"], "points": {"$gte": pay_pts}, "money": {"$gte": pay_money_val}},
             {"$inc": {"points": -pay_pts, "money": -pay_money}},
         )
         if first_pay.modified_count == 1:
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": {"points": pay_pts, "money": pay_money}},
+                {"$inc": {"points": pay_pts, "money": pay_money_val}},
             )
             await db.bodyguard_payouts.insert_one({
                 "id": str(uuid.uuid4()),
@@ -682,14 +697,14 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
                 "guard_id": current_user["id"],
                 "payout_date": today_str,
                 "payment_points": pay_pts,
-                "payment_money": pay_money,
+                "payment_money": pay_money_val,
                 "created_at": now.isoformat(),
             })
             pay_msg = []
             if pay_pts:
                 pay_msg.append(f"{pay_pts} pts")
-            if pay_money:
-                pay_msg.append(f"${pay_money:,.0f}")
+            if pay_money_val:
+                pay_msg.append(f"${pay_money_val:,.0f}")
             if pay_msg:
                 await send_notification(
                     current_user["id"],
@@ -701,6 +716,10 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
         {"user_id": inviter["id"], "slot_number": empty_slot},
         {"$set": set_doc, "$unset": {"armour_level": ""}},
         upsert=True
+    )
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"is_bodyguard": True, "bodyguard_owner_id": inviter["id"]}},
     )
     await db.bodyguard_invites.update_one(
         {"id": invite_id},
@@ -988,6 +1007,10 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
             },
             "$unset": {"contract_end": "", "hired_at": "", "hire_cost": ""},
         },
+    )
+    await db.users.update_one(
+        {"id": guard_id},
+        {"$unset": {"is_bodyguard": "", "bodyguard_owner_id": ""}},
     )
     await send_notification(
         guard_id,
