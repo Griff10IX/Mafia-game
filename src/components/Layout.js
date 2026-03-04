@@ -1552,13 +1552,13 @@ export default function Layout({ children }) {
             );
           })()}
           <nav
-            className="flex items-center justify-between gap-0 overflow-x-auto overflow-y-hidden py-1.5 px-1 safe-area-pb scrollbar-thin"
+            className="flex items-center justify-between gap-1 overflow-x-auto overflow-y-hidden py-1 px-1 safe-area-pb scrollbar-thin"
             style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}
             aria-label="Mobile navigation"
           >
             {hasCasinoOrProperty && typeof user?.casino_profit === 'number' && (
               <div
-                className="shrink-0 flex items-center px-2 py-1 rounded-md border font-heading text-[10px] font-bold tabular-nums"
+                className="shrink-0 flex items-center px-1.5 py-0.5 rounded border font-heading text-[9px] font-bold tabular-nums"
                 style={{
                   borderColor: 'var(--noir-border-mid)',
                   backgroundColor: 'var(--noir-surface)',
@@ -1571,6 +1571,9 @@ export default function Layout({ children }) {
             )}
             {mobileBottomNavItems.map((item) => {
               const Icon = item.icon;
+              const boxBase = 'flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[32px] rounded border transition-colors';
+              const boxInactive = { borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' };
+              const boxActive = { borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', color: 'var(--noir-primary)' };
               if (item.type === 'link') {
                 const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
                 const isInbox = item.path === '/inbox';
@@ -1579,22 +1582,20 @@ export default function Layout({ children }) {
                     key={item.path}
                     to={item.path}
                     onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
-                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[40px] rounded-lg transition-colors ${
-                      isActive ? 'bg-primary/25 border border-primary/50' : ''
-                    }`}
-                    style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
+                    className={boxBase}
+                    style={isActive ? boxActive : boxInactive}
                     aria-current={isActive ? 'page' : undefined}
                     title={item.label}
                   >
-                    <span className="relative inline-flex">
-                      <Icon size={15} strokeWidth={2} />
+                    <span className="relative inline-flex leading-none">
+                      <Icon size={13} strokeWidth={2} />
                       {isInbox && unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-1.5 min-w-[12px] h-[12px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">
+                        <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">
                           {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                       )}
                     </span>
-                    <span className="text-[8px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
+                    <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
                   </Link>
                 );
               }
@@ -1610,23 +1611,21 @@ export default function Layout({ children }) {
                     key={item.id}
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
-                    className={`flex flex-1 flex-col items-center justify-center gap-0.5 min-w-0 min-h-[40px] rounded-lg transition-colors ${
-                      isOpen || isActive ? 'bg-primary/25 border border-primary/50' : ''
-                    }`}
-                    style={isOpen || isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
+                    className={boxBase}
+                    style={isOpen || isActive ? boxActive : boxInactive}
                     aria-expanded={isOpen}
                     aria-haspopup="true"
                     title={item.label}
                   >
-                    <span className="relative inline-flex">
-                      <Icon size={15} strokeWidth={2} />
+                    <span className="relative inline-flex leading-none">
+                      <Icon size={13} strokeWidth={2} />
                       {showInboxBadge && (
-                        <span className="absolute -top-0.5 -right-1.5 min-w-[12px] h-[12px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">
+                        <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">
                           {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                       )}
                     </span>
-                    <span className="text-[8px] font-heading uppercase tracking-wider truncate max-w-[52px]">{item.label}</span>
+                    <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
                   </button>
                 );
               }
