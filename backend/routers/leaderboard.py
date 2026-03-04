@@ -153,13 +153,19 @@ async def get_top_leaderboards(
             _top_by_field_weekly("bust_events", "user_id", "at", False, user_id, limit, dead),
         )
     else:
-        kills, crimes, gta, jail_busts = await asyncio.gather(
+        kills, crimes, gta, jail_busts, points_spent = await asyncio.gather(
             _top_by_field("total_kills", user_id, limit, dead=dead),
             _top_by_field("total_crimes", user_id, limit, dead=dead),
             _top_by_field("total_gta", user_id, limit, dead=dead),
             _top_by_field("jail_busts", user_id, limit, dead=dead),
+            _top_by_field("lifetime_points_spent", user_id, limit, dead=dead),
         )
-    return {"kills": kills, "crimes": crimes, "gta": gta, "jail_busts": jail_busts}
+    result = {"kills": kills, "crimes": crimes, "gta": gta, "jail_busts": jail_busts}
+    if (period or "").lower() != "weekly":
+        result["points_spent"] = points_spent
+    else:
+        result["points_spent"] = []
+    return result
 
 
 def register(router):

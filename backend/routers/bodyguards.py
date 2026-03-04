@@ -304,19 +304,18 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                 payload["bodyguard_for"] = {"owner_id": owner["id"], "owner_username": owner.get("username") or "?"}
             else:
                 payload["bodyguard_for"] = {"owner_id": as_guard["user_id"], "owner_username": "?"}
-            # Total profit from being a bodyguard (all-time payouts received)
-            profit_cursor = db.bodyguard_payouts.aggregate([
-                {"$match": {"guard_id": uid}},
-                {"$group": {"_id": None, "points": {"$sum": "$payment_points"}, "money": {"$sum": "$payment_money"}}},
-            ])
-            profit_list = await profit_cursor.to_list(length=1)
-            if profit_list:
-                payload["bodyguard_profit"] = {"points": int(profit_list[0].get("points") or 0), "money": float(profit_list[0].get("money") or 0)}
-            else:
-                payload["bodyguard_profit"] = {"points": 0, "money": 0.0}
         else:
             payload["bodyguard_for"] = None
-            payload["bodyguard_profit"] = None
+        # Total profit from being a bodyguard (all-time payouts received), shown whether or not currently under contract
+        profit_cursor = db.bodyguard_payouts.aggregate([
+            {"$match": {"guard_id": uid}},
+            {"$group": {"_id": None, "points": {"$sum": "$payment_points"}, "money": {"$sum": "$payment_money"}}},
+        ])
+        profit_list = await profit_cursor.to_list(length=1)
+        if profit_list:
+            payload["bodyguard_profit"] = {"points": int(profit_list[0].get("points") or 0), "money": float(profit_list[0].get("money") or 0)}
+        else:
+            payload["bodyguard_profit"] = {"points": 0, "money": 0.0}
         _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
         logger.info("get_bodyguards success uid=%s slots=%d", uid, len(result))
         return payload
@@ -395,7 +394,7 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     new_level = cur_level + 1
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bodyguard_lifetime_spent_upgrades": cost}},
+        {"$inc": {"points": -cost, "bodyguard_lifetime_spent_upgrades": cost, "lifetime_points_spent": cost}},
     )
     await db.bodyguards.update_one(
         {"user_id": current_user["id"], "slot_number": slot},
@@ -420,7 +419,7 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bodyguard_slots": 1}}
+        {"$inc": {"points": -cost, "bodyguard_slots": 1, "lifetime_points_spent": cost}}
     )
     _invalidate_bodyguards_cache(current_user["id"])
     return {"message": f"Bodyguard slot purchased for {cost} points"}
@@ -466,6 +465,7 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
                 "points": -cost,
                 "bodyguard_lifetime_hires": 1,
                 "bodyguard_lifetime_spent_hires": cost,
+                "lifetime_points_spent": cost,
             },
             "$set": {
                 "bodyguard_inflation_until": window_end.isoformat(),
@@ -641,6 +641,7 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
                 "points": -human_hire_cost,
                 "bodyguard_lifetime_hires": 1,
                 "bodyguard_lifetime_spent_hires": human_hire_cost,
+                "lifetime_points_spent": human_hire_cost,
             },
             "$set": {
                 "bodyguard_inflation_until": window_end.isoformat(),
@@ -690,16 +691,27 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
                 {"id": current_user["id"]},
                 {"$inc": {"points": pay_pts, "money": pay_money_val}},
             )
-            await db.bodyguard_payouts.insert_one({
-                "id": str(uuid.uuid4()),
-                "owner_id": inviter["id"],
-                "slot_number": empty_slot,
-                "guard_id": current_user["id"],
-                "payout_date": today_str,
-                "payment_points": pay_pts,
-                "payment_money": pay_money_val,
-                "created_at": now.isoformat(),
-            })
+            # Avoid duplicate key: (owner_id, slot_number, payout_date) is unique. After admin clear, an old record may exist for this slot+date.
+            existing_payout = await db.bodyguard_payouts.find_one(
+                {"owner_id": inviter["id"], "slot_number": empty_slot, "payout_date": today_str},
+                {"_id": 1},
+            )
+            if existing_payout:
+                await db.bodyguard_payouts.update_one(
+                    {"owner_id": inviter["id"], "slot_number": empty_slot, "payout_date": today_str},
+                    {"$set": {"guard_id": current_user["id"], "payment_points": pay_pts, "payment_money": pay_money_val}},
+                )
+            else:
+                await db.bodyguard_payouts.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "owner_id": inviter["id"],
+                    "slot_number": empty_slot,
+                    "guard_id": current_user["id"],
+                    "payout_date": today_str,
+                    "payment_points": pay_pts,
+                    "payment_money": pay_money_val,
+                    "created_at": now.isoformat(),
+                })
             pay_msg = []
             if pay_pts:
                 pay_msg.append(f"{pay_pts} pts")

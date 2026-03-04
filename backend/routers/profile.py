@@ -19,7 +19,7 @@ async def ensure_profile_indexes(db):
         await db.users.create_index("username")
         await db.users.create_index("id", unique=True)
         # users: rank counts use filter is_dead, is_bodyguard + range on one field
-        for field in ("total_kills", "total_crimes", "total_gta", "jail_busts", "rank_points"):
+        for field in ("total_kills", "total_crimes", "total_gta", "jail_busts", "rank_points", "lifetime_points_spent"):
             await db.users.create_index([
                 ("is_dead", 1),
                 ("is_bodyguard", 1),
@@ -179,6 +179,7 @@ def register(router):
             gta_rank,
             jail_rank,
             rank_points_rank,
+            points_spent_rank,
             dice_casinos,
             roulette_casinos,
             blackjack_casinos,
@@ -194,6 +195,7 @@ def register(router):
             _rank_for_field("total_gta", int(user.get("total_gta") or 0)),
             _rank_for_field("jail_busts", int(user.get("jail_busts") or 0)),
             _rank_for_field("rank_points", int(user.get("rank_points") or 0)),
+            _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0)),
             _casinos_for_type("dice", db.dice_ownership),
             _casinos_for_type("roulette", db.roulette_ownership),
             _casinos_for_type("blackjack", db.blackjack_ownership),
@@ -212,6 +214,7 @@ def register(router):
             {"rank": crimes_rank, "label": "Most Crimes Committed"},
             {"rank": gta_rank, "label": "Most GTAs Committed"},
             {"rank": jail_rank, "label": "Most Jail Busts"},
+            {"rank": points_spent_rank, "label": "Most Points Spent"},
         ]
         owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos
 

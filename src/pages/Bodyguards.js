@@ -527,6 +527,14 @@ export default function Bodyguards() {
             <span className="text-mutedForeground block mt-1">You cannot hire bodyguards while under contract.</span>
           </div>
         )}
+        {!bodyguardFor?.owner_username && bodyguardProfit != null && ((bodyguardProfit.points || 0) > 0 || (bodyguardProfit.money || 0) > 0) && (
+          <div className="mt-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs font-heading">
+            <span className="text-mutedForeground">Total profit from being a bodyguard (all time): </span>
+            <span className="text-primary font-medium">
+              {(bodyguardProfit.points || 0).toLocaleString()} pts, ${(bodyguardProfit.money || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+            </span>
+          </div>
+        )}
       </div>
       
       {/* Stats row */}

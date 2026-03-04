@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History } from 'lucide-react';
+import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -91,7 +91,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
 
 export default function Leaderboard() {
   const [period, setPeriod] = useState('weekly'); // 'weekly' | 'alltime'
-  const [boards, setBoards] = useState({ kills: [], crimes: [], gta: [], jail_busts: [] });
+  const [boards, setBoards] = useState({ kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [] });
   const [loading, setLoading] = useState(true);
   const [topLimit, setTopLimit] = useState(10);
   const [viewMode, setViewMode] = useState('alive'); // 'alive' | 'dead'
@@ -102,7 +102,7 @@ export default function Leaderboard() {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead: viewMode === 'dead', period },
       });
-      setBoards(response.data || { kills: [], crimes: [], gta: [], jail_busts: [] });
+      setBoards(response.data || { kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [] });
     } catch (error) {
       toast.error('Failed to load leaderboard');
     } finally {
@@ -247,6 +247,15 @@ export default function Leaderboard() {
           valueLabel="busts"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
         />
+        {period === 'alltime' && (
+          <StatBoard
+            title={viewMode === 'dead' ? 'Top dead · Points Spent' : 'Most Points Spent'}
+            icon={DollarSign}
+            entries={boards.points_spent || []}
+            valueLabel="pts"
+            topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+          />
+        )}
       </div>
 
       {/* Weekly Rewards (alive only) */}

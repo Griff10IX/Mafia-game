@@ -652,6 +652,7 @@ export default function Layout({ children }) {
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
     { path: '/objectives', icon: ListChecks, label: 'Objectives' },
     { path: '/missions', icon: Map, label: 'Missions' },
+    { path: '/loot-box', icon: Gift, label: 'Loot Box' },
     { path: '/profile', icon: User, label: 'Profile' },
     { path: '/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/bank', icon: Landmark, label: 'Bank' },

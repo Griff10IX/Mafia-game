@@ -45,7 +45,7 @@ async def buy_premium_rank_bar(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Insufficient points")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -cost}, "$set": {"premium_rank_bar": True}}
+        {"$inc": {"points": -cost, "lifetime_points_spent": cost}, "$set": {"premium_rank_bar": True}}
     )
     return {"message": "Premium rank bar purchased!", "cost": cost}
 
@@ -60,7 +60,7 @@ async def buy_silencer(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="You need at least one weapon to use a silencer")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -SILENCER_COST_POINTS}, "$set": {"has_silencer": True}}
+        {"$inc": {"points": -SILENCER_COST_POINTS, "lifetime_points_spent": SILENCER_COST_POINTS}, "$set": {"has_silencer": True}}
     )
     return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": SILENCER_COST_POINTS}
 
@@ -73,7 +73,7 @@ async def buy_anti_snitch(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {ANTI_SNITCH_COST_POINTS})")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -ANTI_SNITCH_COST_POINTS}, "$set": {"anti_snitch": True}},
+        {"$inc": {"points": -ANTI_SNITCH_COST_POINTS, "lifetime_points_spent": ANTI_SNITCH_COST_POINTS}, "$set": {"anti_snitch": True}},
     )
     return {"message": "Anti Snitch purchased! You cannot be snitched on.", "cost": ANTI_SNITCH_COST_POINTS}
 
@@ -85,7 +85,7 @@ async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}}
+        {"$inc": {"points": -OC_TIMER_COST_POINTS, "lifetime_points_spent": OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}}
     )
     return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
 
@@ -98,7 +98,7 @@ async def buy_crew_oc_timer(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {CREW_OC_TIMER_COST_POINTS})")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -CREW_OC_TIMER_COST_POINTS}, "$set": {"crew_oc_timer_reduced": True}}
+        {"$inc": {"points": -CREW_OC_TIMER_COST_POINTS, "lifetime_points_spent": CREW_OC_TIMER_COST_POINTS}, "$set": {"crew_oc_timer_reduced": True}}
     )
     return {"message": "Crew OC timer purchased! When you commit, family Crew OC cooldown is 6h instead of 8h.", "cost": CREW_OC_TIMER_COST_POINTS}
 
@@ -112,7 +112,7 @@ async def upgrade_garage_batch_limit(current_user: dict = Depends(get_current_us
     new_limit = min(GARAGE_BATCH_LIMIT_MAX, current_limit + GARAGE_BATCH_UPGRADE_INCREMENT)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -GARAGE_BATCH_UPGRADE_COST}, "$set": {"garage_batch_limit": new_limit}}
+        {"$inc": {"points": -GARAGE_BATCH_UPGRADE_COST, "lifetime_points_spent": GARAGE_BATCH_UPGRADE_COST}, "$set": {"garage_batch_limit": new_limit}}
     )
     return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": GARAGE_BATCH_UPGRADE_COST}
 
@@ -126,7 +126,7 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": add_bonus}}
+        {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": add_bonus, "lifetime_points_spent": BOOZE_CAPACITY_UPGRADE_COST}}
     )
     new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
     return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
@@ -140,7 +140,7 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost}, have {current_user['points']}")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bullets": bullets}}
+        {"$inc": {"points": -cost, "bullets": bullets, "lifetime_points_spent": cost}}
     )
     return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
 
@@ -153,7 +153,7 @@ async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {AUTO_RANK_COST_POINTS})")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_purchased": True}}
+        {"$inc": {"points": -AUTO_RANK_COST_POINTS, "lifetime_points_spent": AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_purchased": True}}
     )
     return {
         "message": "Auto Rank purchased! Go to Auto Rank to enable it and choose which activities to run.",
@@ -170,7 +170,7 @@ async def buy_health(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="You already have full health")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -BUY_HEALTH_COST_POINTS}, "$set": {"health": FULL_HEALTH}}
+        {"$inc": {"points": -BUY_HEALTH_COST_POINTS, "lifetime_points_spent": BUY_HEALTH_COST_POINTS}, "$set": {"health": FULL_HEALTH}}
     )
     return {"message": "Full health restored!", "health": FULL_HEALTH, "cost": BUY_HEALTH_COST_POINTS}
 
@@ -182,7 +182,7 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
         raise HTTPException(status_code=400, detail="Car name must be 2-30 characters")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -CUSTOM_CAR_COST}}
+        {"$inc": {"points": -CUSTOM_CAR_COST, "lifetime_points_spent": CUSTOM_CAR_COST}}
     )
     await db.users.update_one(
         {"id": current_user["id"]},
