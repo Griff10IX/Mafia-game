@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Call POST /api/auto-rank/cron-bust every 5 seconds. Run this when using
-AUTO_RANK_USE_CRON=1 so jail busts run every 5s (main cron can stay at 60s).
+Call POST /api/auto-rank/cron-bust every N seconds. Run this when using
+AUTO_RANK_USE_CRON=1 so jail busts run at the configured interval (main cron can be different).
 
 Usage:
   Set CRON_SECRET and BASE_URL, then run from project root or backend:
@@ -10,9 +10,10 @@ Usage:
   Or from backend dir (loads backend/.env):
     python ../scripts/cron-bust-ticker.py
 
-Env (in .env or export):
-  CRON_SECRET  - same secret as your main Auto Rank cron (required)
-  BASE_URL     - e.g. http://localhost:8000 (default) or https://your-domain.com
+Env (in backend/.env or export):
+  CRON_SECRET         - same secret as your main Auto Rank cron (required)
+  BASE_URL            - e.g. http://localhost:8000 (default) or https://your-domain.com
+  CRON_BUST_INTERVAL  - seconds between bust-endpoint calls (default 5)
 """
 import os
 import sys
@@ -44,13 +45,14 @@ except Exception:
 
 CRON_SECRET = (os.environ.get("CRON_SECRET") or "").strip()
 BASE_URL = (os.environ.get("BASE_URL") or "http://localhost:8000").rstrip("/")
+INTERVAL = max(1, int(os.environ.get("CRON_BUST_INTERVAL") or "5"))
 
 def main():
     if not CRON_SECRET:
         print("Error: set CRON_SECRET in .env or environment", file=sys.stderr)
         sys.exit(1)
     url = f"{BASE_URL}/api/auto-rank/cron-bust"
-    print(f"Calling {url} every 5 seconds (Ctrl+C to stop)")
+    print(f"Calling {url} every {INTERVAL} seconds (Ctrl+C to stop)")
     while True:
         try:
             req = urllib.request.Request(url, method="POST")
@@ -62,7 +64,7 @@ def main():
             print(f"HTTP {e.code}: {e.reason}", file=sys.stderr)
         except Exception as e:
             print(f"Request failed: {e}", file=sys.stderr)
-        time.sleep(5)
+        time.sleep(INTERVAL)
 
 if __name__ == "__main__":
     main()

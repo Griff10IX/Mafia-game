@@ -5,6 +5,8 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 
 const MIN_INTERVAL = 5;
+const MIN_BUST_INTERVAL = 1;
+const MIN_OC_INTERVAL = 10;
 
 const AR_STYLES = `
   @keyframes ar-fade-in { 
@@ -752,8 +754,14 @@ const StatsCard = ({ stats, liveCountdown }) => {
 const AdminGlobalLoopCard = ({
   globalEnabled,
   intervalSeconds,
+  intervalBustSeconds,
+  intervalOcSeconds,
   inputValue,
+  inputValueBust,
+  inputValueOc,
   setInputValue,
+  setInputValueBust,
+  setInputValueOc,
   saving,
   toggling,
   onStart,
@@ -770,7 +778,7 @@ const AdminGlobalLoopCard = ({
     
     <div className="p-2.5 sm:p-3 md:p-4 space-y-3 sm:space-y-4">
       <p className="text-[10px] sm:text-xs text-zinc-400 font-heading leading-relaxed">
-        The server runs one cycle for all users with Auto Rank enabled, then waits this interval before repeating. Start/Stop controls the loop.
+        Separate loop intervals: main (crimes/GTA/booze), jail busts, and OC. Start/Stop controls the main loop.
       </p>
       
       {/* Status & Controls */}
@@ -803,17 +811,17 @@ const AdminGlobalLoopCard = ({
         </div>
       </div>
       
-      {/* Interval Control */}
+      {/* Main interval (crimes / GTA / booze) */}
       <div>
         <label className="text-[9px] sm:text-[10px] font-heading font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
           <Clock size={12} className="sm:w-3.5 sm:h-3.5" />
-          Interval (seconds)
+          Main (crimes / GTA / booze) — seconds
         </label>
         <p className="text-[9px] sm:text-[10px] text-zinc-400 mb-2">
-          Wait time after each cycle. Lower = more cycles (faster crimes). Min: {MIN_INTERVAL}s · Current: {intervalSeconds}s
+          Wait after each user cycle. Min: {MIN_INTERVAL}s · Current: {intervalSeconds}s
         </p>
         <p className="text-[9px] text-amber-200/90 mb-2">
-          If using cron (AUTO_RANK_USE_CRON=1): call POST /api/auto-rank/cron at least this often. Crontab runs only every 60s — use <code className="bg-zinc-800 px-1 rounded">scripts/cron-cycle-ticker.py</code> for 5s.
+          Cron: call <code className="bg-zinc-800 px-1 rounded">cron-cycle-ticker.py</code> at least this often (CRON_CYCLE_INTERVAL).
         </p>
         <div className="flex gap-2">
           <input
@@ -823,15 +831,59 @@ const AdminGlobalLoopCard = ({
             onChange={(e) => setInputValue(e.target.value)}
             className="flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded bg-zinc-800/80 border border-zinc-700/50 text-foreground font-heading text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
           />
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-95"
-          >
-            {saving ? 'Saving...' : 'Save'}
-          </button>
         </div>
+      </div>
+
+      {/* Bust interval (jail busts) */}
+      <div>
+        <label className="text-[9px] sm:text-[10px] font-heading font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+          Bust (jail) — seconds
+        </label>
+        <p className="text-[9px] sm:text-[10px] text-zinc-400 mb-2">
+          How often to run jail bust pass. Min: {MIN_BUST_INTERVAL}s · Current: {intervalBustSeconds}s
+        </p>
+        <p className="text-[9px] text-amber-200/90 mb-2">
+          Cron: call <code className="bg-zinc-800 px-1 rounded">cron-bust-ticker.py</code> at this interval (CRON_BUST_INTERVAL).
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min={MIN_BUST_INTERVAL}
+            value={inputValueBust}
+            onChange={(e) => setInputValueBust(e.target.value)}
+            className="flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded bg-zinc-800/80 border border-zinc-700/50 text-foreground font-heading text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+          />
+        </div>
+      </div>
+
+      {/* OC interval */}
+      <div>
+        <label className="text-[9px] sm:text-[10px] font-heading font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+          OC — seconds
+        </label>
+        <p className="text-[9px] sm:text-[10px] text-zinc-400 mb-2">
+          How often to run OC pass. Min: {MIN_OC_INTERVAL}s · Current: {intervalOcSeconds}s
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min={MIN_OC_INTERVAL}
+            value={inputValueOc}
+            onChange={(e) => setInputValueOc(e.target.value)}
+            className="flex-1 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded bg-zinc-800/80 border border-zinc-700/50 text-foreground font-heading text-[10px] sm:text-xs focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary/50"
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="px-3 sm:px-4 py-1.5 sm:py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-95"
+        >
+          {saving ? 'Saving...' : 'Save intervals'}
+        </button>
       </div>
     </div>
   </div>
@@ -864,10 +916,14 @@ export default function AutoRank() {
   const [selectedOcEquipmentId, setSelectedOcEquipmentId] = useState('basic');
   const [savingOcEquipment, setSavingOcEquipment] = useState(false);
   const [intervalSeconds, setIntervalSeconds] = useState(30);
+  const [intervalBustSeconds, setIntervalBustSeconds] = useState(5);
+  const [intervalOcSeconds, setIntervalOcSeconds] = useState(63);
   const [globalEnabled, setGlobalEnabled] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [inputValue, setInputValue] = useState('30');
+  const [inputValueBust, setInputValueBust] = useState('5');
+  const [inputValueOc, setInputValueOc] = useState('63');
   const [adminUsers, setAdminUsers] = useState([]);
   const [adminUsersLoading, setAdminUsersLoading] = useState(false);
   const [adminUsersFilter, setAdminUsersFilter] = useState('all');
@@ -1099,6 +1155,10 @@ export default function AutoRank() {
           if (intervalRes?.data) {
             setIntervalSeconds(intervalRes.data.interval_seconds ?? 30);
             setInputValue(String(intervalRes.data.interval_seconds ?? 30));
+            setIntervalBustSeconds(intervalRes.data.interval_bust_seconds ?? 5);
+            setInputValueBust(String(intervalRes.data.interval_bust_seconds ?? 5));
+            setIntervalOcSeconds(intervalRes.data.interval_oc_seconds ?? 63);
+            setInputValueOc(String(intervalRes.data.interval_oc_seconds ?? 63));
             setGlobalEnabled(intervalRes.data.enabled !== false);
           }
           api.get('/admin/auto-rank/users').then((r) => setAdminUsers(r.data?.users ?? [])).catch(() => setAdminUsers([]));
@@ -1177,16 +1237,34 @@ export default function AutoRank() {
   };
 
   const handleSaveInterval = async () => {
-    const val = parseInt(inputValue, 10);
-    if (Number.isNaN(val) || val < MIN_INTERVAL) {
-      toast.error(`Interval must be at least ${MIN_INTERVAL} seconds`);
+    const mainVal = parseInt(inputValue, 10);
+    const bustVal = parseInt(inputValueBust, 10);
+    const ocVal = parseInt(inputValueOc, 10);
+    if (Number.isNaN(mainVal) || mainVal < MIN_INTERVAL) {
+      toast.error(`Main interval must be at least ${MIN_INTERVAL}s`);
+      return;
+    }
+    if (Number.isNaN(bustVal) || bustVal < MIN_BUST_INTERVAL) {
+      toast.error(`Bust interval must be at least ${MIN_BUST_INTERVAL}s`);
+      return;
+    }
+    if (Number.isNaN(ocVal) || ocVal < MIN_OC_INTERVAL) {
+      toast.error(`OC interval must be at least ${MIN_OC_INTERVAL}s`);
       return;
     }
     setSaving(true);
     try {
-      const res = await api.patch('/auto-rank/interval', { interval_seconds: val });
+      const res = await api.patch('/auto-rank/interval', {
+        interval_seconds: mainVal,
+        interval_bust_seconds: bustVal,
+        interval_oc_seconds: ocVal,
+      });
       setIntervalSeconds(res.data.interval_seconds);
       setInputValue(String(res.data.interval_seconds));
+      setIntervalBustSeconds(res.data.interval_bust_seconds);
+      setInputValueBust(String(res.data.interval_bust_seconds));
+      setIntervalOcSeconds(res.data.interval_oc_seconds);
+      setInputValueOc(String(res.data.interval_oc_seconds));
       toast.success(res.data?.message ?? 'Saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save');
@@ -1372,8 +1450,14 @@ export default function AutoRank() {
           <AdminGlobalLoopCard
             globalEnabled={globalEnabled}
             intervalSeconds={intervalSeconds}
+            intervalBustSeconds={intervalBustSeconds}
+            intervalOcSeconds={intervalOcSeconds}
             inputValue={inputValue}
+            inputValueBust={inputValueBust}
+            inputValueOc={inputValueOc}
             setInputValue={setInputValue}
+            setInputValueBust={setInputValueBust}
+            setInputValueOc={setInputValueOc}
             saving={saving}
             toggling={toggling}
             onStart={handleStartGlobal}

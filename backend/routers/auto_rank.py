@@ -25,9 +25,13 @@ logger = logging.getLogger(__name__)
 MIN_INTERVAL_SECONDS = 5
 DEFAULT_INTERVAL_SECONDS = 5  # run each user every 5s (same as jail busts; min 5s)
 GAME_CONFIG_ID = "auto_rank"
-BUST_EVERY_5SEC_INTERVAL = 5  # jail bust loop: run every 5 seconds (do not change without updating UI labels)
+MIN_BUST_INTERVAL_SECONDS = 1
+DEFAULT_BUST_INTERVAL_SECONDS = 5  # jail bust loop: run every 5 seconds
+BUST_EVERY_5SEC_INTERVAL = 5  # fallback when config not used (do not change without updating UI labels)
 LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
-OC_LOOP_INTERVAL_SECONDS = 63  # was 60; 5% slower
+MIN_OC_INTERVAL_SECONDS = 10
+DEFAULT_OC_INTERVAL_SECONDS = 63  # was 60; 5% slower
+OC_LOOP_INTERVAL_SECONDS = 63  # fallback when config not used
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
 
 
@@ -44,15 +48,36 @@ async def get_auto_rank_config(db) -> dict:
     now = datetime.now(timezone.utc)
     if _auto_rank_config_cache is not None and _auto_rank_config_cache_until is not None and now < _auto_rank_config_cache_until:
         return _auto_rank_config_cache
-    doc = await db.game_config.find_one({"id": GAME_CONFIG_ID}, {"_id": 0, "enabled": 1, "interval_seconds": 1})
+    doc = await db.game_config.find_one(
+        {"id": GAME_CONFIG_ID},
+        {"_id": 0, "enabled": 1, "interval_seconds": 1, "interval_bust_seconds": 1, "interval_oc_seconds": 1},
+    )
     if doc is None:
-        config = {"enabled": True, "interval_seconds": DEFAULT_INTERVAL_SECONDS}
+        config = {
+            "enabled": True,
+            "interval_seconds": DEFAULT_INTERVAL_SECONDS,
+            "interval_bust_seconds": DEFAULT_BUST_INTERVAL_SECONDS,
+            "interval_oc_seconds": DEFAULT_OC_INTERVAL_SECONDS,
+        }
     else:
         try:
             interval = int(doc.get("interval_seconds")) if doc.get("interval_seconds") is not None else DEFAULT_INTERVAL_SECONDS
         except (TypeError, ValueError):
             interval = DEFAULT_INTERVAL_SECONDS
-        config = {"enabled": doc.get("enabled", True), "interval_seconds": max(MIN_INTERVAL_SECONDS, interval)}
+        try:
+            bust = int(doc.get("interval_bust_seconds")) if doc.get("interval_bust_seconds") is not None else DEFAULT_BUST_INTERVAL_SECONDS
+        except (TypeError, ValueError):
+            bust = DEFAULT_BUST_INTERVAL_SECONDS
+        try:
+            oc = int(doc.get("interval_oc_seconds")) if doc.get("interval_oc_seconds") is not None else DEFAULT_OC_INTERVAL_SECONDS
+        except (TypeError, ValueError):
+            oc = DEFAULT_OC_INTERVAL_SECONDS
+        config = {
+            "enabled": doc.get("enabled", True),
+            "interval_seconds": max(MIN_INTERVAL_SECONDS, interval),
+            "interval_bust_seconds": max(MIN_BUST_INTERVAL_SECONDS, bust),
+            "interval_oc_seconds": max(MIN_OC_INTERVAL_SECONDS, oc),
+        }
     _auto_rank_config_cache = config
     _auto_rank_config_cache_until = now + timedelta(seconds=AUTO_RANK_CONFIG_CACHE_SECONDS)
     return config
@@ -764,10 +789,14 @@ async def run_bust_5sec_once():
 
 
 async def run_bust_5sec_loop():
-    """Background loop: every 5 sec, for bust-every-5-sec users, try one jail bust."""
+    """Background loop: every N sec (config interval_bust_seconds), for bust-every-5-sec users, try one jail bust."""
+    import server as srv
+    db = srv.db
     while True:
         await run_bust_5sec_once()
-        await asyncio.sleep(BUST_EVERY_5SEC_INTERVAL)
+        config = await get_auto_rank_config(db)
+        interval = config.get("interval_bust_seconds") or BUST_EVERY_5SEC_INTERVAL
+        await asyncio.sleep(max(1, interval))
 
 
 async def run_auto_rank_oc_once():
@@ -822,9 +851,13 @@ async def run_auto_rank_oc_once():
 
 async def run_auto_rank_oc_loop():
     """Background loop: for OC users, run OC with NPC only when timer is ready."""
+    import server as srv
+    db = srv.db
     while True:
         await run_auto_rank_oc_once()
-        await asyncio.sleep(OC_LOOP_INTERVAL_SECONDS)
+        config = await get_auto_rank_config(db)
+        interval = config.get("interval_oc_seconds") or OC_LOOP_INTERVAL_SECONDS
+        await asyncio.sleep(max(1, interval))
 
 
 async def run_auto_rank_loop():
@@ -930,6 +963,8 @@ def register(router):
 
     class IntervalBody(BaseModel):
         interval_seconds: Optional[int] = None
+        interval_bust_seconds: Optional[int] = None
+        interval_oc_seconds: Optional[int] = None
 
     class MePreferencesBody(BaseModel):
         auto_rank_enabled: Optional[bool] = None
@@ -1021,7 +1056,10 @@ def register(router):
         next_run_dt = _parse_iso((u or {}).get("auto_rank_next_run_at"))
         if next_run_dt and next_run_dt > now:
             next_run_at = (u or {}).get("auto_rank_next_run_at")
-        interval_seconds = await get_auto_rank_interval_seconds(db)
+        config = await get_auto_rank_config(db)
+        interval_seconds = config["interval_seconds"]
+        interval_bust_seconds = config.get("interval_bust_seconds") or DEFAULT_BUST_INTERVAL_SECONDS
+        interval_oc_seconds = config.get("interval_oc_seconds") or DEFAULT_OC_INTERVAL_SECONDS
         user_id = current_user["id"]
         next_crime_at = None
         crime_until_list = []
@@ -1101,6 +1139,8 @@ def register(router):
             "jail_until": jail_until_iso,
             "auto_rank_next_run_at": next_run_at,
             "interval_seconds": interval_seconds,
+            "interval_bust_seconds": interval_bust_seconds,
+            "interval_oc_seconds": interval_oc_seconds,
             "next_crime_at": next_crime_at,
             "next_gta_at": next_gta_at,
             "next_booze_arrival_at": next_booze_arrival_at,
@@ -1157,7 +1197,15 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         config = await get_auto_rank_config(db)
-        return {"interval_seconds": config["interval_seconds"], "min_interval_seconds": MIN_INTERVAL_SECONDS, "enabled": config["enabled"]}
+        return {
+            "interval_seconds": config["interval_seconds"],
+            "interval_bust_seconds": config.get("interval_bust_seconds") or DEFAULT_BUST_INTERVAL_SECONDS,
+            "interval_oc_seconds": config.get("interval_oc_seconds") or DEFAULT_OC_INTERVAL_SECONDS,
+            "min_interval_seconds": MIN_INTERVAL_SECONDS,
+            "min_bust_interval_seconds": MIN_BUST_INTERVAL_SECONDS,
+            "min_oc_interval_seconds": MIN_OC_INTERVAL_SECONDS,
+            "enabled": config["enabled"],
+        }
 
     @router.post("/auto-rank/start")
     async def start_auto_rank(current_user: dict = Depends(get_current_user)):
@@ -1179,18 +1227,49 @@ def register(router):
     async def set_interval(body: IntervalBody, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
-        try:
-            val = int(body.interval_seconds) if body.interval_seconds is not None else DEFAULT_INTERVAL_SECONDS
-        except (TypeError, ValueError):
-            val = DEFAULT_INTERVAL_SECONDS
-        interval = max(MIN_INTERVAL_SECONDS, val)
-        await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": {"interval_seconds": interval}}, upsert=True)
+        updates = {}
+        if body.interval_seconds is not None:
+            try:
+                val = int(body.interval_seconds)
+            except (TypeError, ValueError):
+                val = DEFAULT_INTERVAL_SECONDS
+            updates["interval_seconds"] = max(MIN_INTERVAL_SECONDS, val)
+        if body.interval_bust_seconds is not None:
+            try:
+                val = int(body.interval_bust_seconds)
+            except (TypeError, ValueError):
+                val = DEFAULT_BUST_INTERVAL_SECONDS
+            updates["interval_bust_seconds"] = max(MIN_BUST_INTERVAL_SECONDS, val)
+        if body.interval_oc_seconds is not None:
+            try:
+                val = int(body.interval_oc_seconds)
+            except (TypeError, ValueError):
+                val = DEFAULT_OC_INTERVAL_SECONDS
+            updates["interval_oc_seconds"] = max(MIN_OC_INTERVAL_SECONDS, val)
+        if not updates:
+            config = await get_auto_rank_config(db)
+            return {
+                "interval_seconds": config["interval_seconds"],
+                "interval_bust_seconds": config.get("interval_bust_seconds") or DEFAULT_BUST_INTERVAL_SECONDS,
+                "interval_oc_seconds": config.get("interval_oc_seconds") or DEFAULT_OC_INTERVAL_SECONDS,
+                "message": "No changes (send interval_seconds, interval_bust_seconds, and/or interval_oc_seconds).",
+            }
+        await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": updates}, upsert=True)
         _invalidate_auto_rank_config_cache()
+        config = await get_auto_rank_config(db)
+        main_s = config["interval_seconds"]
+        bust_s = config.get("interval_bust_seconds") or DEFAULT_BUST_INTERVAL_SECONDS
+        oc_s = config.get("interval_oc_seconds") or DEFAULT_OC_INTERVAL_SECONDS
         use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
-        msg = f"Auto Rank will run every {interval} seconds after each cycle."
+        msg = f"Intervals: main {main_s}s, bust {bust_s}s, OC {oc_s}s."
         if use_cron:
-            msg += " When using cron, call POST /api/auto-rank/cron at least this often (e.g. scripts/cron-cycle-ticker.py). Crontab runs only every 60s."
-        return {"interval_seconds": interval, "message": msg}
+            msg += " With cron: call POST /api/auto-rank/cron every main interval (cron-cycle-ticker.py) and POST /api/auto-rank/cron-bust every bust interval (cron-bust-ticker.py)."
+        return {
+            "interval_seconds": main_s,
+            "interval_bust_seconds": bust_s,
+            "interval_oc_seconds": oc_s,
+            "message": msg,
+        }
 
     class AdminUserUpdateBody(BaseModel):
         telegram_chat_id: Optional[str] = None
