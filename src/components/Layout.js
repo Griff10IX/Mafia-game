@@ -890,6 +890,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Dice</span>
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/casino/rlt"
                             onClick={() => setSidebarOpen(false)}
@@ -901,6 +902,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Roulette</span>
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/casino/blackjack"
                             onClick={() => setSidebarOpen(false)}
@@ -912,6 +914,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Blackjack</span>
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/casino/horseracing"
                             onClick={() => setSidebarOpen(false)}
@@ -923,6 +926,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span>
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/casino/slots"
                             onClick={() => setSidebarOpen(false)}
@@ -934,6 +938,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Slots</span>
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/casino/videopoker"
                             onClick={() => setSidebarOpen(false)}
@@ -945,6 +950,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Video Poker</span>
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/casino/mdg"
                             onClick={() => setSidebarOpen(false)}
@@ -956,6 +962,7 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">MDG</span>
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/sports-betting"
                             onClick={() => setSidebarOpen(false)}
