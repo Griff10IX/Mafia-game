@@ -79,6 +79,7 @@ export default function Bodyguards() {
   const [invitePayoutWeekday, setInvitePayoutWeekday] = useState(0);
   const [inviting, setInviting] = useState(false);
   const [actingInviteId, setActingInviteId] = useState(null);
+  const [cancellingInviteId, setCancellingInviteId] = useState(null);
   const [droppingSlot, setDroppingSlot] = useState(null);
   const [bodyguardLastDropAt, setBodyguardLastDropAt] = useState(null);
 
@@ -296,6 +297,23 @@ export default function Bodyguards() {
       toast.error(err.response?.data?.detail || 'Failed to decline invite', { duration: 8000 });
     } finally {
       setActingInviteId(null);
+    }
+  };
+
+  const cancelInvite = async (inviteId) => {
+    setCancellingInviteId(inviteId);
+    try {
+      await api.post(`/bodyguards/invites/${inviteId}/cancel`);
+      toast.success('Invite cancelled');
+      setInvites((prev) => ({
+        ...prev,
+        sent: (prev.sent || []).filter((inv) => inv.id !== inviteId),
+      }));
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to cancel invite', { duration: 8000 });
+    } finally {
+      setCancellingInviteId(null);
+      fetchData().catch(() => {});
     }
   };
 
@@ -550,10 +568,48 @@ export default function Bodyguards() {
         </div>
 
         <div className="p-2 space-y-4">
+          {/* Sent invitations */}
+          {invites.sent?.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Your invites (sent)</h4>
+              <div className="space-y-1.5">
+                {invites.sent.map((inv) => {
+                  const payParts = [];
+                  if (inv.payment_points) payParts.push(`${inv.payment_points} pts`);
+                  if (inv.payment_money) payParts.push(`$${Number(inv.payment_money).toLocaleString()}`);
+                  const payStr = payParts.length ? payParts.join(' + ') + '/week' : '—';
+                  const weekdayLabel = WEEKDAY_OPTIONS.find((o) => o.value === inv.payout_weekday)?.label ?? '—';
+                  const isCancelling = cancellingInviteId === inv.id;
+                  return (
+                    <div
+                      key={inv.id}
+                      className="bg-row rounded-lg bg-zinc-800/30 border border-primary/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <div className="text-[11px] text-foreground font-heading min-w-0">
+                        <span className="text-mutedForeground">Invite to </span>
+                        <span className="font-bold">{inv.invitee_username ?? '?'}</span>
+                        <span className="text-mutedForeground">: {payStr}</span>
+                        {weekdayLabel !== '—' && <span className="text-mutedForeground"> (paid {weekdayLabel}s)</span>}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => cancelInvite(inv.id)}
+                        disabled={isCancelling}
+                        className="bg-amber-500/20 text-amber-400 rounded px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide border border-amber-500/40 hover:bg-amber-500/30 font-heading disabled:opacity-60"
+                      >
+                        {isCancelling ? '…' : 'Cancel'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Received invitations */}
           {invites.received?.length > 0 && (
             <div>
-              <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Invitations</h4>
+              <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Invitations (received)</h4>
               <div className="space-y-1.5">
                 {invites.received.map((inv) => {
                   const payParts = [];

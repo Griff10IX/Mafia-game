@@ -675,6 +675,16 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
                 {"id": current_user["id"]},
                 {"$inc": {"points": pay_pts, "money": pay_money}},
             )
+            await db.bodyguard_payouts.insert_one({
+                "id": str(uuid.uuid4()),
+                "owner_id": inviter["id"],
+                "slot_number": empty_slot,
+                "guard_id": current_user["id"],
+                "payout_date": today_str,
+                "payment_points": pay_pts,
+                "payment_money": pay_money,
+                "created_at": now.isoformat(),
+            })
             pay_msg = []
             if pay_pts:
                 pay_msg.append(f"{pay_pts} pts")
@@ -715,6 +725,17 @@ async def decline_bodyguard_invite(invite_id: str, current_user: dict = Depends(
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Invite not found")
     return {"message": "Invite declined"}
+
+
+async def cancel_bodyguard_invite(invite_id: str, current_user: dict = Depends(get_current_user)):
+    """Inviter cancels a pending invite they sent."""
+    result = await db.bodyguard_invites.update_one(
+        {"id": invite_id, "inviter_id": current_user["id"], "status": "pending"},
+        {"$set": {"status": "cancelled"}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    return {"message": "Invite cancelled"}
 
 
 # ----- Admin -----
@@ -1000,6 +1021,7 @@ def register(router):
     router.add_api_route("/bodyguards/invites", get_bodyguard_invites, methods=["GET"])
     router.add_api_route("/bodyguards/invites/{invite_id}/accept", accept_bodyguard_invite, methods=["POST"])
     router.add_api_route("/bodyguards/invites/{invite_id}/decline", decline_bodyguard_invite, methods=["POST"])
+    router.add_api_route("/bodyguards/invites/{invite_id}/cancel", cancel_bodyguard_invite, methods=["POST"])
     router.add_api_route("/bodyguards/drop", drop_bodyguard, methods=["POST"])
     router.add_api_route("/admin/bodyguards/clear", admin_clear_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/test-payout", admin_test_bodyguard_payout, methods=["POST"])
