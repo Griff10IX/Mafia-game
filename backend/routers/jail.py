@@ -211,9 +211,17 @@ async def _record_bust_event(user_id: str, success: bool, profit: int):
         logger.exception("Record bust event: %s", e)
 
 
-# One-time respect_points rewards when total busts cross milestones
-BUST_MILESTONES = [100, 500, 1000, 2000, 5000]
-BUST_MILESTONE_REWARDS = {100: 10, 500: 25, 1000: 50, 2000: 100, 5000: 250}
+# One-time respect_points rewards when total busts cross milestones (no limit; extended to 5M+)
+BUST_MILESTONES = [
+    100, 500, 1000, 2000, 5000,
+    10_000, 25_000, 50_000, 100_000, 250_000,
+    500_000, 1_000_000, 2_000_000, 5_000_000,
+]
+BUST_MILESTONE_REWARDS = {
+    100: 10, 500: 25, 1000: 50, 2000: 100, 5000: 250,
+    10_000: 500, 25_000: 1000, 50_000: 2000, 100_000: 4000, 250_000: 8000,
+    500_000: 15_000, 1_000_000: 30_000, 2_000_000: 60_000, 5_000_000: 150_000,
+}
 
 
 async def _award_bust_milestones(user_id: str, new_total_busts: int, claimed: list) -> None:

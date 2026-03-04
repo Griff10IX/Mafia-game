@@ -86,6 +86,34 @@ from server import (
 from routers.objectives import update_objectives_progress
 
 
+# One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
+GTA_MILESTONES = [
+    100, 500, 1000, 2000, 5000,
+    10_000, 25_000, 50_000, 100_000, 250_000,
+    500_000, 1_000_000, 2_000_000, 5_000_000,
+]
+GTA_MILESTONE_REWARDS = {
+    100: 10, 500: 25, 1000: 50, 2000: 100, 5000: 250,
+    10_000: 500, 25_000: 1000, 50_000: 2000, 100_000: 4000, 250_000: 8000,
+    500_000: 15_000, 1_000_000: 30_000, 2_000_000: 60_000, 5_000_000: 150_000,
+}
+
+
+async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list) -> None:
+    """If new_total_gta crosses any unclaimed milestone, award respect_points and mark claimed."""
+    new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
+    if not new_claimed:
+        return
+    total_reward = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
+    try:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_gta_milestones_claimed": {"$each": new_claimed}}},
+        )
+    except Exception as e:
+        logger.exception("Award GTA milestones: %s", e)
+
+
 # Progress bar: 25-92%. Start higher, gain more on success, lose less on fail (similar to crimes)
 GTA_PROGRESS_MIN = 25
 GTA_PROGRESS_MAX = 92
@@ -350,6 +378,9 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
             {"id": current_user["id"]},
             {"$inc": gta_inc},
         )
+        new_total_gta = (current_user.get("total_gta") or 0) + 1
+        claimed = current_user.get("respect_points_gta_milestones_claimed") or []
+        await _award_gta_milestones(current_user["id"], new_total_gta, claimed)
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
         except Exception as e:

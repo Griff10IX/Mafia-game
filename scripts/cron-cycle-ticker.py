@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Call POST /api/auto-rank/cron every 60 seconds. This is the main Auto Rank cycle:
-crimes, GTA, booze, bust pass, OC. Run this when using AUTO_RANK_USE_CRON=1 so
-crimes and the rest of Auto Rank actually run (cron-bust-ticker.py only does jail busts every 5s).
+Call POST /api/auto-rank/cron every 5 seconds. This is the main Auto Rank cycle:
+crimes, GTA, booze, bust pass, OC. Run this when using AUTO_RANK_USE_CRON=1 (same interval as jail busts).
 
 Usage:
   Set CRON_SECRET and BASE_URL, then run from project root or backend:
@@ -14,7 +13,7 @@ Usage:
 Env (in .env or export):
   CRON_SECRET  - same secret as your cron-bust ticker (required)
   BASE_URL     - e.g. http://localhost:8000 (default) or https://your-domain.com
-  CRON_CYCLE_INTERVAL - seconds between calls (default 60)
+  CRON_CYCLE_INTERVAL - seconds between calls (default 5)
 """
 import os
 import sys
@@ -46,7 +45,7 @@ except Exception:
 
 CRON_SECRET = (os.environ.get("CRON_SECRET") or "").strip()
 BASE_URL = (os.environ.get("BASE_URL") or "http://localhost:8000").rstrip("/")
-INTERVAL = max(1, int(os.environ.get("CRON_CYCLE_INTERVAL") or "60"))
+INTERVAL = max(1, int(os.environ.get("CRON_CYCLE_INTERVAL") or "5"))
 
 def main():
     if not CRON_SECRET:

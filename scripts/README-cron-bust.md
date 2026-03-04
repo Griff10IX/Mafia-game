@@ -2,12 +2,12 @@
 
 When you use **AUTO_RANK_USE_CRON=1**, the server does **not** run Auto Rank itself. You must call the API from outside.
 
-**If you see `cron-bust` every 5s in logs but no `POST /api/auto-rank/cron` and no "running cycle for N due user(s)" after 60s:**  
-The **main** 60s cron is not running. Start it with one of: **systemd** (see "Main cron ticker" below — use `cron-cycle-ticker.service.example`), **crontab** (`* * * * * .../cron-curl.sh main`), or by hand: `python scripts/cron-cycle-ticker.py`.
+**If you see `cron-bust` every 5s in logs but no `POST /api/auto-rank/cron` and no "running cycle for N due user(s)" after 5s:**  
+The **main** cycle cron is not running. Start it with **systemd** (see "Main cron ticker" below — use `cron-cycle-ticker.service.example`) or by hand: `python scripts/cron-cycle-ticker.py` (runs every 5s like jail busts).
 
 | What runs | Endpoint | How often | Script |
 |-----------|----------|------------|--------|
-| **Crimes, GTA, booze, OC** (main cycle) | `POST /api/auto-rank/cron` | Every **60s** | `scripts/cron-cycle-ticker.py` |
+| **Crimes, GTA, booze, OC** (main cycle) | `POST /api/auto-rank/cron` | Every **5s** | `scripts/cron-cycle-ticker.py` |
 | **Jail bust every 5 sec** only | `POST /api/auto-rank/cron-bust` | Every **5s** | `scripts/cron-bust-ticker.py` |
 
 **If you only run the cron-bust ticker, crimes will never run.** You must also run the main cron (script or crontab below).
@@ -44,7 +44,7 @@ The backend reads **`CRON_SECRET`** from **`backend/.env`** (or from the environ
 
 ---
 
-## Main cron via crontab (Option B) — crimes every minute
+## Main cron via crontab (Option B) — crimes every minute (cron can't do 5s; for 5s use the ticker)
 
 Call the main Auto Rank endpoint once per minute with system cron.
 
@@ -185,4 +185,4 @@ nohup python3 scripts/cron-bust-ticker.py >> /var/log/cron-bust-ticker.log 2>&1 
 It won’t start on reboot; use systemd for that.
 
 - Use the same `CRON_SECRET` as your main cron.
-- **You must run the main Auto Rank cron** for crimes/GTA/booze/OC: either `python scripts/cron-cycle-ticker.py` (calls `POST /api/auto-rank/cron` every 60s) or a system crontab entry like `* * * * * curl -X POST -H "X-Cron-Secret: YOUR_SECRET" https://your-domain.com/api/auto-rank/cron`.
+- **You must run the main Auto Rank cron** for crimes/GTA/booze/OC: either `python scripts/cron-cycle-ticker.py` (calls `POST /api/auto-rank/cron` every 5s) or a system crontab entry like `* * * * * curl -X POST -H "X-Cron-Secret: YOUR_SECRET" https://your-domain.com/api/auto-rank/cron` (every minute; for 5s use the ticker).

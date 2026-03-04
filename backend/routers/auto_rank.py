@@ -23,7 +23,7 @@ from fastapi import HTTPException, Query
 logger = logging.getLogger(__name__)
 
 MIN_INTERVAL_SECONDS = 5
-DEFAULT_INTERVAL_SECONDS = 30  # run each user every 30s for faster crime cycles (min 5s)
+DEFAULT_INTERVAL_SECONDS = 5  # run each user every 5s (same as jail busts; min 5s)
 GAME_CONFIG_ID = "auto_rank"
 BUST_EVERY_5SEC_INTERVAL = 5  # jail bust loop: run every 5 seconds (do not change without updating UI labels)
 LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
@@ -234,11 +234,11 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
 
 
 async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list, buy_city: str, sell_city: str, buy_idx: int, sell_idx: int):
-    """Buy optimal booze at buy_city and travel to sell_city. Booze only uses cars (no airport). If no car, skip and retry next cycle (every 30s)."""
+    """Buy optimal booze at buy_city and travel to sell_city. Booze only uses cars (no airport). If no car, skip and retry next cycle (every 5s)."""
     from routers.booze_run import BOOZE_TYPES, _booze_prices_for_rotation, _booze_user_capacity, _booze_buy_impl
     from routers.airport import _start_travel_impl
 
-    # Only use cars for booze; if no car, don't buy — will retry next loop (every 30s)
+    # Only use cars for booze; if no car, don't buy — will retry next loop (every 5s)
     travel_method = await _get_travel_method(db, user_id)
     if not travel_method:
         return False
@@ -886,13 +886,13 @@ def register(router):
 
     @router.post("/auto-rank/cron")
     async def cron_auto_rank(_: None = Depends(verify_cron_secret)):
-        """Cron endpoint: run one Auto Rank cycle (booze arrivals + due users + OC). Call e.g. every 60s when AUTO_RANK_USE_CRON=1. Header: X-Cron-Secret: <CRON_SECRET>."""
+        """Cron endpoint: run one Auto Rank cycle (booze arrivals + due users + OC). Call every 5s when AUTO_RANK_USE_CRON=1 (same as jail busts). Header: X-Cron-Secret: <CRON_SECRET>."""
         result = await run_auto_rank_cron_cycle()
         return result
 
     @router.post("/auto-rank/cron-bust")
     async def cron_auto_rank_bust(_: None = Depends(verify_cron_secret)):
-        """Cron endpoint: run only the jail bust pass. Call every 5 seconds when AUTO_RANK_USE_CRON=1 so bust-every-5-sec users get a bust every 5s. Use with main /auto-rank/cron at 60s. Header: X-Cron-Secret: <CRON_SECRET>."""
+        """Cron endpoint: run only the jail bust pass. Call every 5 seconds when AUTO_RANK_USE_CRON=1 so bust-every-5-sec users get a bust every 5s. Use with main /auto-rank/cron at 5s. Header: X-Cron-Secret: <CRON_SECRET>."""
         try:
             await run_bust_5sec_once()
         except Exception as e:

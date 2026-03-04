@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run this ON THE SERVER to create cron-bust + main-cycle ticker scripts and systemd units.
-# You need BOTH: cron-bust every 5s (jail busts) and main cycle every 60s (crimes, GTA, booze, OC).
+# You need BOTH: cron-bust every 5s (jail busts) and main cycle every 5s (crimes, GTA, booze, OC).
 # (Or copy the blocks below and run by hand.)
 #
 # Usage (from project root /opt/mafia-app):
@@ -92,12 +92,12 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-# 3. Create the main cycle ticker script (60s — crimes, GTA, booze, OC)
+# 3. Create the main cycle ticker script (5s — crimes, GTA, booze, OC, same as jail busts)
 cat > "$PROJECT/scripts/cron-cycle-ticker.py" << 'CYCLEPYEOF'
 #!/usr/bin/env python3
 """
-Call POST /api/auto-rank/cron every 60 seconds. Main Auto Rank cycle: crimes, GTA, booze, OC.
-Run when AUTO_RANK_USE_CRON=1. Reads CRON_SECRET and BASE_URL from backend/.env.
+Call POST /api/auto-rank/cron every 5 seconds. Main Auto Rank cycle: crimes, GTA, booze, OC.
+Run when AUTO_RANK_USE_CRON=1 (same interval as jail busts). Reads CRON_SECRET and BASE_URL from backend/.env.
 """
 import os
 import sys
@@ -128,7 +128,7 @@ except Exception:
 
 CRON_SECRET = (os.environ.get("CRON_SECRET") or "").strip()
 BASE_URL = (os.environ.get("BASE_URL") or "http://localhost:8000").rstrip("/")
-INTERVAL = max(1, int(os.environ.get("CRON_CYCLE_INTERVAL") or "60"))
+INTERVAL = max(1, int(os.environ.get("CRON_CYCLE_INTERVAL") or "5"))
 
 def main():
     if not CRON_SECRET:
@@ -155,10 +155,10 @@ CYCLEPYEOF
 
 chmod +x "$PROJECT/scripts/cron-cycle-ticker.py"
 
-# 4. Create systemd unit for main cycle (60s)
+# 4. Create systemd unit for main cycle (5s)
 cat > /etc/systemd/system/cron-cycle-ticker.service << EOF
 [Unit]
-Description=Auto Rank main cycle ticker (crimes/GTA/booze/OC every 60s)
+Description=Auto Rank main cycle ticker (crimes/GTA/booze/OC every 5s)
 After=network.target
 
 [Service]
@@ -179,7 +179,7 @@ systemctl start cron-bust-ticker cron-cycle-ticker
 echo ""
 echo "Done. Both tickers installed and started:"
 echo "  - cron-bust-ticker (every 5s) — jail busts"
-echo "  - cron-cycle-ticker (every 60s) — crimes, GTA, booze, OC"
+echo "  - cron-cycle-ticker (every 5s) — crimes, GTA, booze, OC"
 echo ""
 systemctl status cron-bust-ticker --no-pager
 echo ""

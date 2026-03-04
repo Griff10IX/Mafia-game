@@ -1,10 +1,10 @@
 # Auto Rank main cycle (crimes, GTA, booze, OC)
 #
-# Option A — Every 60 seconds via ticker script (run in background or systemd):
+# Option A — Every 5 seconds via ticker script (recommended; same as jail busts):
 #   python scripts/cron-cycle-ticker.py
-#   (Default 60s; set CRON_CYCLE_INTERVAL in env to change.)
+#   (Default 5s; set CRON_CYCLE_INTERVAL in env to change.)
 #
-# Option B — Every minute via crontab: use ONE of the lines below.
+# Option B — Every minute via crontab (cron can't run more than once per minute):
 #   Replace YOUR_CRON_SECRET with the value from backend/.env (CRON_SECRET).
 
 # Same host (backend on port 8000), every minute:

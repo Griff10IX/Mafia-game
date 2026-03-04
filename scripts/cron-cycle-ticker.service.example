@@ -1,6 +1,6 @@
-# systemd unit for cron-cycle-ticker.py (main Auto Rank: crimes, GTA, booze, OC every 60s when AUTO_RANK_USE_CRON=1)
+# systemd unit for cron-cycle-ticker.py (main Auto Rank: crimes, GTA, booze, OC every 5s when AUTO_RANK_USE_CRON=1)
 #
-# You need BOTH this service AND cron-bust-ticker (every 5s) for full Auto Rank. Without this, crimes never run.
+# You need BOTH this service AND cron-bust-ticker (both every 5s) for full Auto Rank. Without this, crimes never run.
 #
 # Install:
 #   1. Copy to systemd:
@@ -17,7 +17,7 @@
 # Logs: journalctl -u cron-cycle-ticker -f
 
 [Unit]
-Description=Auto Rank main cycle ticker (crimes/GTA/booze/OC every 60s)
+Description=Auto Rank main cycle ticker (crimes/GTA/booze/OC every 5s)
 After=network.target
 
 [Service]
