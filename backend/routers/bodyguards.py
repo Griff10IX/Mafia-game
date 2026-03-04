@@ -826,18 +826,21 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
 # Unique index on (owner_id, slot_number, payout_date) prevents double-pay; we check it before paying.
 
 
-async def run_bodyguard_weekly_payout(database):
-    """Run once per day; on each bodyguard's payout_weekday, pay them and record in bodyguard_payouts."""
+async def run_bodyguard_weekly_payout(database, test_run: bool = False):
+    """Run once per day; on each bodyguard's payout_weekday, pay them and record in bodyguard_payouts.
+    If test_run=True (admin test), pay all eligible human bodyguards regardless of payout_weekday."""
     import logging
     log = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
     today_str = now.date().isoformat()
     weekday = now.weekday()  # 0=Monday, 6=Sunday
-    cursor = database.bodyguards.find({
+    query = {
         "is_robot": False,
         "bodyguard_user_id": {"$exists": True, "$ne": None},
-        "payout_weekday": weekday,
-    })
+    }
+    if not test_run:
+        query["payout_weekday"] = weekday
+    cursor = database.bodyguards.find(query)
     paid = 0
     async for bg in cursor:
         owner_id = bg["user_id"]
@@ -1003,10 +1006,10 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
 
 
 async def admin_test_bodyguard_payout(current_user: dict = Depends(get_current_user)):
-    """Admin-only: run the weekly bodyguard payout job once (for testing). Returns how many were paid."""
+    """Admin-only: run the weekly bodyguard payout job once (for testing). Pays all eligible human bodyguards regardless of payout day. Returns how many were paid."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
-    paid = await run_bodyguard_weekly_payout(db)
+    paid = await run_bodyguard_weekly_payout(db, test_run=True)
     return {"message": f"Test payout run: {paid} bodyguard(s) paid", "paid_count": paid}
 
 
