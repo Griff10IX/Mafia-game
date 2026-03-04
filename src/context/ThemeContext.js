@@ -14,6 +14,7 @@ const STORAGE_KEY_TOAST_TEXT = 'app_theme_toast_text_colour';
 const STORAGE_KEY_TEXT_STYLE = 'app_theme_text_style';
 const STORAGE_KEY_CUSTOM_THEMES = 'app_theme_custom_themes';
 const STORAGE_KEY_MOBILE_NAV = 'app_theme_mobile_nav';
+const STORAGE_KEY_BUTTON_SHAPE = 'app_theme_button_shape';
 
 /** Convert saved custom theme to colour shape used by applyColourToDocument */
 function customToColour(custom) {
@@ -317,6 +318,13 @@ export function ThemeProvider({ children }) {
       return 'sidebar';
     }
   });
+  const [buttonShapeId, setButtonShapeIdState] = useState(() => {
+    try {
+      const v = localStorage.getItem(STORAGE_KEY_BUTTON_SHAPE);
+      if (v === 'sharp' || v === 'rounded' || v === 'pill') return v;
+    } catch (_) {}
+    return 'rounded';
+  });
   useEffect(() => {
     const colour = getResolvedColour(colourId, customThemes);
     applyColourToDocument(colour);
@@ -336,6 +344,10 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     document.documentElement.setAttribute('data-button-style', buttonStyleId || 'original');
   }, [buttonStyleId]);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-button-shape', buttonShapeId || 'rounded');
+  }, [buttonShapeId]);
 
   useEffect(() => {
     const w = getThemeWritingColour(writingColourId);
@@ -499,6 +511,14 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  const setButtonShape = useCallback((id) => {
+    const v = id === 'sharp' || id === 'pill' ? id : 'rounded';
+    setButtonShapeIdState(v);
+    try {
+      localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, v);
+    } catch (_) {}
+  }, []);
+
   const setWritingColour = useCallback((id) => {
     setWritingColourIdState(id);
     try {
@@ -568,6 +588,7 @@ export function ThemeProvider({ children }) {
     texture: getThemeTexture(textureId),
     font: getThemeFont(fontId),
     buttonStyle: getThemeButtonStyle(buttonStyleId),
+    buttonShapeId,
     writingColour: getThemeWritingColour(writingColourId),
     mutedWritingColour: mutedWritingColourId ? getThemeWritingColour(mutedWritingColourId) : null,
     toastTextColour: toastTextColourId ? getThemeWritingColour(toastTextColourId) : null,

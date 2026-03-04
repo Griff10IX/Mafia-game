@@ -301,6 +301,27 @@ export const THEME_BUTTON_STYLES = [
   { id: 'outline', name: 'Outline' },
 ];
 
+/** Divider style: sidebar/menu divider line appearance (when dividers are on). */
+export const THEME_DIVIDER_STYLES = [
+  { id: 'solid', name: 'Solid' },
+  { id: 'dotted', name: 'Dotted' },
+  { id: 'dashed', name: 'Dashed' },
+];
+
+/** Button shape: corner radius of primary buttons. */
+export const THEME_BUTTON_SHAPES = [
+  { id: 'sharp', name: 'Sharp' },
+  { id: 'rounded', name: 'Rounded' },
+  { id: 'pill', name: 'Pill' },
+];
+
+/** Sidebar spacing: vertical density of menu items. */
+export const THEME_SIDEBAR_SPACING = [
+  { id: 'compact', name: 'Compact' },
+  { id: 'normal', name: 'Normal' },
+  { id: 'relaxed', name: 'Relaxed' },
+];
+
 /** Writing (text) colour: main body and muted text. { id, name, foreground, muted } hex. */
 export const THEME_WRITING_COLOURS = [
   /* Default & light */

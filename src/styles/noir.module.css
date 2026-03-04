@@ -522,3 +522,17 @@
 .themeGangsterModern .gmStatGold {
   color: var(--gm-gold);
 }
+
+/* Button shape (theme option): overrides border-radius from button style */
+[data-button-shape="sharp"] .btnPrimary,
+[data-button-shape="sharp"] .btnGoldDarkText {
+  border-radius: 2px !important;
+}
+[data-button-shape="rounded"] .btnPrimary,
+[data-button-shape="rounded"] .btnGoldDarkText {
+  border-radius: 8px !important;
+}
+[data-button-shape="pill"] .btnPrimary,
+[data-button-shape="pill"] .btnGoldDarkText {
+  border-radius: 9999px !important;
+}

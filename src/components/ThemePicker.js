@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box, PanelLeft, LayoutDashboard, Smartphone } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
-import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_WRITING_COLOURS, THEME_TEXT_STYLES, THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, getThemeColour } from '../constants/themes';
+import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES, THEME_SIDEBAR_SPACING, THEME_WRITING_COLOURS, THEME_TEXT_STYLES, THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
 function customToColourEntry(c) {
@@ -18,7 +18,7 @@ function customToColourEntry(c) {
 }
 
 export default function ThemePicker({ open, onClose }) {
-  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, mobileNavStyle, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setWritingColour, setMutedWritingColour, setToastTextColour, setTextStyle, setMobileNavStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
+  const { colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, buttonShapeId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, mobileNavStyle, setColour, setTexture, setButtonColour, setAccentLineColour, setFont, setButtonStyle, setButtonShape, setWritingColour, setMutedWritingColour, setToastTextColour, setTextStyle, setMobileNavStyle, resetButtonToDefault, resetAccentLineToDefault, customThemes, addCustomTheme, removeCustomTheme } = useTheme();
 
   const applyPreset = (preset) => {
     setColour(preset.colourId);
@@ -101,6 +101,10 @@ export default function ThemePicker({ open, onClose }) {
   const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
   const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
   const sidebarShowDividers = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY)) !== 'false';
+  const SIDEBAR_DIVIDER_STYLE_KEY = 'sidebar_divider_style';
+  const SIDEBAR_SPACING_KEY = 'sidebar_spacing';
+  const sidebarDividerStyle = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_DIVIDER_STYLE_KEY)) || 'solid';
+  const sidebarSpacing = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SPACING_KEY)) || 'normal';
 
   const setTopBarGap = (v) => {
     try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
@@ -117,6 +121,14 @@ export default function ThemePicker({ open, onClose }) {
   const setSidebarShowDividers = (v) => {
     try { localStorage.setItem(SIDEBAR_SHOW_DIVIDERS_KEY, v ? 'true' : 'false'); } catch (_) {}
     window.dispatchEvent(new Event('sidebar-dividers-changed'));
+  };
+  const setSidebarDividerStyle = (v) => {
+    try { localStorage.setItem(SIDEBAR_DIVIDER_STYLE_KEY, v); } catch (_) {}
+    window.dispatchEvent(new Event('sidebar-layout-changed'));
+  };
+  const setSidebarSpacing = (v) => {
+    try { localStorage.setItem(SIDEBAR_SPACING_KEY, v); } catch (_) {}
+    window.dispatchEvent(new Event('sidebar-layout-changed'));
   };
 
   const tabs = [
@@ -328,6 +340,30 @@ export default function ThemePicker({ open, onClose }) {
             {activeTab === 'colours' && (
               <div className="space-y-4">
                 <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Main colour (accent, headers, highlights)</p>
+                <div>
+                  <p className="text-[10px] text-mutedForeground/80 mb-1.5">Quick two-tone</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['tone-2-sunset', 'tone-2-ocean', 'tone-2-forest', 'tone-2-berry', 'tone-2-teal-orange', 'tone-2-cyan-amber', 'tone-2-dark-teal-amber', 'tone-2-slate-orange'].map((id) => {
+                      const c = colourById[id];
+                      if (!c) return null;
+                      const stops = c.stops && c.stops.length >= 2 ? c.stops : null;
+                      const swatchStyle = stops ? { background: `linear-gradient(135deg, ${stops.join(', ')})` } : { backgroundColor: c.primary };
+                      return (
+                        <button
+                          key={id}
+                          type="button"
+                          onClick={() => setColour(id)}
+                          className={`flex flex-col items-center gap-1 rounded-lg border-2 transition-all px-2 py-1.5 min-w-[72px] bg-zinc-800/80 ${colourId === id ? 'border-primary ring-2 ring-primary/30' : 'border-transparent hover:border-primary/50'}`}
+                          title={c.name}
+                          aria-label={c.name}
+                        >
+                          <span className="w-10 h-6 rounded shrink-0 block border border-white/20" style={swatchStyle} />
+                          <span className="text-[9px] text-mutedForeground truncate w-full text-center font-heading">{c.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 {customThemes.length > 0 && (
                   <div>
                     <p className="text-[10px] text-mutedForeground/80 mb-1.5">Custom</p>
@@ -637,6 +673,24 @@ export default function ThemePicker({ open, onClose }) {
                   </div>
                 </div>
                 <div className="pt-4">
+                  <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Button shape</p>
+                  <p className="text-[9px] text-mutedForeground mb-1.5">Corner radius of primary buttons.</p>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {THEME_BUTTON_SHAPES.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setButtonShape(s.id)}
+                        className={`px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          (buttonShapeId || 'rounded') === s.id ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        {s.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="pt-4">
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Background texture</p>
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                     {THEME_TEXTURES.map((t) => (
@@ -665,9 +719,9 @@ export default function ThemePicker({ open, onClose }) {
                   Layout
                 </p>
                 <p className="text-[9px] text-mutedForeground mb-3">Sidebar and menu appearance.</p>
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div>
-                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Sidebar</p>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Sidebar dividers</p>
                     <p className="text-[9px] text-mutedForeground mb-1.5">Show gold dividers between menu items (Dashboard, Loot Box, Attack, Theme, etc.).</p>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       <button
@@ -688,6 +742,44 @@ export default function ThemePicker({ open, onClose }) {
                       >
                         Off
                       </button>
+                    </div>
+                  </div>
+                  {sidebarShowDividers && (
+                    <div>
+                      <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Divider style</p>
+                      <p className="text-[9px] text-mutedForeground mb-1.5">Line appearance when dividers are on.</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {THEME_DIVIDER_STYLES.map((d) => (
+                          <button
+                            key={d.id}
+                            type="button"
+                            onClick={() => setSidebarDividerStyle(d.id)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                              sidebarDividerStyle === d.id ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                            }`}
+                          >
+                            {d.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Sidebar spacing</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">Gap between menu items.</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {THEME_SIDEBAR_SPACING.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => setSidebarSpacing(s.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                            sidebarSpacing === s.id ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                          }`}
+                        >
+                          {s.name}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>

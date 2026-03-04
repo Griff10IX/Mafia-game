@@ -258,6 +258,26 @@ a.from-primary {
   border-color: var(--noir-button-border, var(--noir-button-gradient-1)) !important;
 }
 
+/* Button shape (theme option): overrides border-radius */
+[data-button-shape="sharp"] button.bg-primary,
+[data-button-shape="sharp"] button.from-primary,
+[data-button-shape="sharp"] a.bg-primary,
+[data-button-shape="sharp"] a.from-primary {
+  border-radius: 2px !important;
+}
+[data-button-shape="rounded"] button.bg-primary,
+[data-button-shape="rounded"] button.from-primary,
+[data-button-shape="rounded"] a.bg-primary,
+[data-button-shape="rounded"] a.from-primary {
+  border-radius: 8px !important;
+}
+[data-button-shape="pill"] button.bg-primary,
+[data-button-shape="pill"] button.from-primary,
+[data-button-shape="pill"] a.bg-primary,
+[data-button-shape="pill"] a.from-primary {
+  border-radius: 9999px !important;
+}
+
 /* Glitch / chromatic aberration text effect for buttons (add class .btn-glitch-text) */
 .btn-glitch-text {
   text-shadow:
