@@ -3,7 +3,10 @@
 # You need BOTH: cron-bust every 5s (jail busts) and main cycle every 60s (crimes, GTA, booze, OC).
 # (Or copy the blocks below and run by hand.)
 #
-# Usage: PROJECT=/opt/mafia-app ./scripts/install-cron-bust-on-server.sh
+# Usage (from project root /opt/mafia-app):
+#   PROJECT=/opt/mafia-app ./scripts/install-cron-bust-on-server.sh
+# If "Permission denied", run with bash:
+#   PROJECT=/opt/mafia-app bash /opt/mafia-app/scripts/install-cron-bust-on-server.sh
 # Default PROJECT=/opt/mafia-app if not set.
 
 set -e
