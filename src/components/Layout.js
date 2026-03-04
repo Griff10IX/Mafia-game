@@ -127,9 +127,9 @@ const SIDEBAR_SPACING_KEY = 'sidebar_spacing';
 function loadSidebarShowDividers() {
   try {
     const v = localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY);
-    if (v === 'false') return false;
+    if (v === 'true') return true;
   } catch (_) {}
-  return true;
+  return false;
 }
 
 function loadSidebarDividerStyle() {

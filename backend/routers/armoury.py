@@ -245,7 +245,7 @@ async def get_bullet_factory(
         user = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
         owner_username = user.get("username") if user else "?"
     accumulated = _accumulated_bullets(factory)
-    is_owner = current_user["id"] == owner_id
+    is_owner = str(current_user.get("id") or "") == str(owner_id or "")
     price = factory.get("price_per_bullet")
     unowned_price = factory.get("unowned_price")
     if unowned_price is None:

@@ -100,7 +100,7 @@ export default function ThemePicker({ open, onClose }) {
   const topBarGap = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_GAP_KEY)) || 'normal';
   const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
   const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
-  const sidebarShowDividers = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY)) !== 'false';
+  const sidebarShowDividers = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY)) === 'true';
   const SIDEBAR_DIVIDER_STYLE_KEY = 'sidebar_divider_style';
   const SIDEBAR_SPACING_KEY = 'sidebar_spacing';
   const sidebarDividerStyle = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_DIVIDER_STYLE_KEY)) || 'solid';
