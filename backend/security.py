@@ -155,6 +155,39 @@ async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[
         return False
 
 
+# Auto Rank Telegram menu: shown when user taps / in chat with the bot
+TELEGRAM_BOT_COMMANDS = [
+    {"command": "autorank", "description": "Auto Rank summary (stats & toggles)"},
+    {"command": "summary", "description": "Auto Rank summary"},
+    {"command": "enable", "description": "Enable: all, crimes, gta, bust, oc, booze"},
+    {"command": "disable", "description": "Disable: all, crimes, gta, bust, oc, booze"},
+]
+
+
+async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
+    """Register bot command menu with Telegram (setMyCommands) so /commands appear in the app menu. Uses TELEGRAM_BOT_TOKEN if bot_token not provided."""
+    token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
+    if not token:
+        return False
+    if not HTTPX_AVAILABLE:
+        logger.warning("httpx not installed - cannot set Telegram bot commands")
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.post(
+                "https://api.telegram.org/bot{}/setMyCommands".format(token),
+                json={"commands": TELEGRAM_BOT_COMMANDS},
+            )
+        if r.status_code != 200:
+            logger.warning("Telegram setMyCommands failed: %s %s", r.status_code, r.text)
+            return False
+        logger.info("Telegram bot commands menu set successfully")
+        return True
+    except Exception as e:
+        logger.exception("Failed to set Telegram bot commands: %s", e)
+        return False
+
+
 async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, reason: str, details: Dict = None):
     """Flag a user for suspicious activity. Stores in db.security_flags."""
     try:

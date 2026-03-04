@@ -1365,6 +1365,12 @@ async def startup_db():
                 logging.exception("Bodyguard weekly payout ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(bodyguard_payout_ticker())
+    # Telegram: set bot command menu so /autorank, /summary, /enable, /disable appear in the app
+    if getattr(security_module, "TELEGRAM_BOT_TOKEN", ""):
+        try:
+            await security_module.set_telegram_bot_commands()
+        except Exception as e:
+            logging.getLogger(__name__).warning("Telegram setMyCommands (bot menu) failed: %s", e)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
