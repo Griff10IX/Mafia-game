@@ -20,6 +20,7 @@ export default function Landing({ setIsAuthenticated }) {
     email: '',
     username: '',
     password: '',
+    confirmPassword: '',
   });
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -53,11 +54,17 @@ export default function Landing({ setIsAuthenticated }) {
     setLoading(true);
     setVerifySentForEmail(null);
 
+    if (!isLogin && formData.password !== formData.confirmPassword) {
+      toast.error('Passwords do not match.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const endpoint = isLogin ? '/auth/login' : '/auth/register';
       const payload = isLogin
         ? { email: formData.email, password: formData.password }
-        : formData;
+        : { email: formData.email, username: formData.username, password: formData.password };
 
       const response = await api.post(endpoint, payload);
       if (response.data.verify_required) {
@@ -179,17 +186,19 @@ export default function Landing({ setIsAuthenticated }) {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">
               <div>
-                <label htmlFor="landing-email" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Email or username</label>
+                <label htmlFor="landing-email" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>
+                  {isLogin ? 'Email or username' : 'Email'}
+                </label>
                 <input
                   id="landing-email"
                   name="email"
-                  type="text"
+                  type={isLogin ? 'text' : 'email'}
                   autoComplete="username"
                   data-testid="email-input"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                  placeholder="Enter your email or username"
+                  placeholder={isLogin ? 'Enter your email or username' : 'Enter your email'}
                   required
                 />
               </div>
@@ -207,7 +216,7 @@ export default function Landing({ setIsAuthenticated }) {
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
                     placeholder="Choose a username"
-                    required={!isLogin}
+                    required
                   />
                 </div>
               )}
@@ -239,6 +248,24 @@ export default function Landing({ setIsAuthenticated }) {
                   required
                 />
               </div>
+
+              {!isLogin && (
+                <div>
+                  <label htmlFor="landing-confirm-password" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Confirm Password</label>
+                  <input
+                    id="landing-confirm-password"
+                    name="confirmPassword"
+                    type="password"
+                    autoComplete="new-password"
+                    data-testid="confirm-password-input"
+                    value={formData.confirmPassword}
+                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                    className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                    placeholder="Confirm your password"
+                    required
+                  />
+                </div>
+              )}
 
               <button
                 type="submit"
