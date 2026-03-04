@@ -474,16 +474,33 @@ def register(router):
 
     @router.post("/auth/resend-verification")
     async def resend_verification(body: ResendVerificationBody):
-        """Send a new verification email if the account exists and is not verified. Accepts email or username."""
+        """Send a new verification email if the account exists and is not verified. Accepts email or username. 2min cooldown."""
         raw = (body.email or "").strip()
         if not raw:
             return {"message": "If an account exists with that email, a new verification link has been sent."}
         pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
-        user = await db.users.find_one({"$or": [{"email": pattern}, {"username": pattern}]}, {"_id": 0, "id": 1, "email": 1, "username": 1, "email_verified": 1})
+        user = await db.users.find_one(
+            {"$or": [{"email": pattern}, {"username": pattern}]},
+            {"_id": 0, "id": 1, "email": 1, "username": 1, "email_verified": 1, "last_verification_email_sent_at": 1},
+        )
         if not user:
             return {"message": "If an account exists with that email, a new verification link has been sent."}
         if user.get("email_verified") is True:
             return {"message": "That account is already verified. You can log in."}
+        # 2-minute cooldown per account
+        now_utc = datetime.now(timezone.utc)
+        last_sent = user.get("last_verification_email_sent_at")
+        if last_sent:
+            if isinstance(last_sent, str):
+                try:
+                    last_sent = datetime.fromisoformat(last_sent.replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    last_sent = None
+            if last_sent and (now_utc - last_sent) < timedelta(minutes=2):
+                raise HTTPException(
+                    status_code=429,
+                    detail="Please wait 2 minutes before requesting another verification email.",
+                )
         # Delete any old verification for this user
         await db.email_verifications.delete_many({"user_id": user["id"]})
         verification_token = str(uuid.uuid4())
@@ -504,6 +521,7 @@ def register(router):
             except Exception as e:
                 logging.warning("Background resend verification email failed: %s", e)
         threading.Thread(target=_resend_in_background, daemon=True).start()
+        await db.users.update_one({"id": user["id"]}, {"$set": {"last_verification_email_sent_at": now_utc}})
         return {
             "message": "If an account exists with that email, a new verification link has been sent.",
         }

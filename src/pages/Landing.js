@@ -23,16 +23,26 @@ export default function Landing({ setIsAuthenticated }) {
   });
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+  const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (resendCooldownSeconds <= 0) return;
+    const t = setInterval(() => setResendCooldownSeconds((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldownSeconds]);
 
   const handleResendVerification = async () => {
     const email = verifySentForEmail || formData.email;
-    if (!email) return;
+    if (!email || resendCooldownSeconds > 0) return;
     setResendLoading(true);
     try {
       const response = await api.post('/auth/resend-verification', { email });
       toast.success(response.data.message || 'If an account exists with that email, a new verification link has been sent.');
+      setResendCooldownSeconds(120);
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to resend.');
+      const detail = err.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Failed to resend.');
+      if (err.response?.status === 429) setResendCooldownSeconds(120);
     } finally {
       setResendLoading(false);
     }
@@ -242,11 +252,15 @@ export default function Landing({ setIsAuthenticated }) {
                   </p>
                   <button
                     type="button"
-                    disabled={resendLoading}
+                    disabled={resendLoading || resendCooldownSeconds > 0}
                     onClick={handleResendVerification}
                     className={`w-full ${styles.btnPrimary} opacity-80 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2 text-xs transition-smooth disabled:opacity-50`}
                   >
-                    {resendLoading ? 'Sending...' : 'Resend verification email'}
+                    {resendLoading
+                      ? 'Sending...'
+                      : resendCooldownSeconds > 0
+                        ? `Request another in ${Math.floor(resendCooldownSeconds / 60)}:${String(resendCooldownSeconds % 60).padStart(2, '0')}`
+                        : 'Resend verification email'}
                   </button>
                 </div>
               )}
