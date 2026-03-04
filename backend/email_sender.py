@@ -35,11 +35,14 @@ def _send_via_smtp(to: str, subject: str, html: str) -> bool:
         msg["From"] = MAIL_FROM
         msg["To"] = to
         msg.attach(MIMEText(html, "html", "utf-8"))
+        # Envelope sender must match login for many providers (e.g. IONOS)
+        envelope_from = SMTP_USER
+        logger.info("Attempting SMTP to %s (host=%s port=%s)", to, SMTP_HOST, SMTP_PORT)
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
             if SMTP_USE_TLS:
                 server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(MAIL_FROM, [to], msg.as_string())
+            server.sendmail(envelope_from, [to], msg.as_string())
         logger.info("Email sent via SMTP: to=%s subject=%s", to, subject)
         return True
     except Exception as e:

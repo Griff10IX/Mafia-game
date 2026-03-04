@@ -95,6 +95,31 @@ If you run it some other way, stop the process and start it again so it rereads 
 
 ---
 
+## Not getting verification emails?
+
+1. **Check backend logs on the server** – SMTP errors show up here:
+   ```
+   sudo journalctl -u mafia-backend -n 200 --no-pager
+   ```
+   Look for: `Attempting SMTP to...` (means it tried), `Email sent via SMTP` (success), or `SMTP failed` (error and reason).
+
+2. **Confirm .env on the server** – SSH in and check that `/opt/mafia-app/backend/.env` has the right values (no typos, no extra spaces):
+   - `SMTP_HOST=smtp.ionos.co.uk`
+   - `SMTP_PORT=587`
+   - `SMTP_USER=admin@mafiawars.co.uk` (full email)
+   - `SMTP_PASSWORD=` your real mailbox password
+   - `MAIL_FROM="Mafia Wars <admin@mafiawars.co.uk>"`
+   - `FRONTEND_URL=https://mafiawars.co.uk`
+   Restart after editing: `sudo systemctl restart mafia-backend`
+
+3. **Check spam** – Verification emails sometimes land in spam or “Promotions”. Add `admin@mafiawars.co.uk` to contacts or mark one as “Not spam”.
+
+4. **DigitalOcean and SMTP** – Some hosts block outbound SMTP (port 587). If logs show “Connection refused” or “timed out” to `smtp.ionos.co.uk`, the server may be blocking it. Options: use a different host that allows SMTP, or use Resend (set `RESEND_API_KEY` in .env and remove or leave SMTP vars empty).
+
+5. **IONOS password** – Use the password for the **mailbox** `admin@mafiawars.co.uk`, not your IONOS control panel login.
+
+---
+
 ## Quick reference
 
 | Step            | Command / action |
