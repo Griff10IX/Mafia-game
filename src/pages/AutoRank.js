@@ -413,6 +413,12 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   const interval = stats?.interval_seconds ?? 30;
   const lastLabel = stats?.last_activity ? (LAST_ACTIVITY_LABELS[stats.last_activity] || stats.last_activity) : null;
   const lastAt = formatLastActivityAt(stats?.last_activity_at);
+  const nextCycleAt = (() => {
+    const iso = stats?.auto_rank_next_run_at;
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  })();
   const liveLine = (sec, readyLabel = 'Ready') => {
     if (sec != null && sec > 0) return formatCountdown(sec);
     if (sec === 0) return 'now';
@@ -511,6 +517,9 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   Last: <span className="text-foreground/90">{lastLabel}{lastAt ? ` at ${lastAt}` : ''}</span>
                 </div>
               )}
+              <div className="text-[10px] sm:text-xs font-heading text-emerald-400/90">
+                Successful today: {stats.successful_crimes_today ?? 0} crimes, {stats.successful_gtas_today ?? 0} GTAs, {stats.successful_busts_today ?? 0} busts
+              </div>
               {(stats?.failed_crimes_today > 0 || stats?.failed_gtas_today > 0 || stats?.failed_busts_today > 0) && (
                 <div className="text-[10px] sm:text-xs font-heading text-amber-300/90">
                   Unsuccessful today: {stats.failed_crimes_today ?? 0} crimes, {stats.failed_gtas_today ?? 0} GTAs, {stats.failed_busts_today ?? 0} busts
@@ -520,7 +529,15 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                 {!stats?.in_jail && stats?.global_loop_enabled !== false && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">Next cycle</span>
-                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCycleSeconds, '—')}</span>
+                    <span className="text-foreground font-medium tabular-nums text-right">
+                      {liveCountdown?.nextCycleSeconds != null
+                        ? liveCountdown.nextCycleSeconds > 0
+                          ? `${liveLine(liveCountdown.nextCycleSeconds)}${nextCycleAt ? ` (at ${nextCycleAt})` : ''}`
+                          : 'now'
+                        : nextCycleAt
+                          ? `at ${nextCycleAt}`
+                          : '—'}
+                    </span>
                   </div>
                 )}
                 <div className="flex justify-between gap-2">
@@ -610,6 +627,12 @@ const OCOptionsCard = ({ equipment, selectedId, saving, onSelect }) => {
 const StatsCard = ({ stats, liveCountdown }) => {
   const s = stats || {};
   const { text: ocText, at: ocAt } = formatNextOcAt(s.next_oc_at);
+  const nextCycleAt = (() => {
+    const iso = s.auto_rank_next_run_at;
+    if (!iso) return null;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  })();
   const jailDisplay = s.in_jail && (liveCountdown?.jailSeconds != null ? liveCountdown.jailSeconds > 0 : s.jail_seconds_remaining != null);
   const jailSeconds = liveCountdown?.jailSeconds ?? s.jail_seconds_remaining;
   const totalBusts = Number(s.total_busts) || 0;
@@ -668,10 +691,12 @@ const StatsCard = ({ stats, liveCountdown }) => {
               <span className="text-zinc-400">Next cycle:</span>
               <span className="text-foreground font-medium">
                 {liveCountdown?.nextCycleSeconds != null && liveCountdown.nextCycleSeconds > 0
-                  ? formatCountdown(liveCountdown.nextCycleSeconds)
+                  ? `${formatCountdown(liveCountdown.nextCycleSeconds)}${nextCycleAt ? ` (at ${nextCycleAt})` : ''}`
                   : liveCountdown?.nextCycleSeconds === 0
                     ? 'now'
-                    : s.auto_rank_next_run_at ? '…' : '—'}
+                    : nextCycleAt
+                      ? `at ${nextCycleAt}`
+                      : s.auto_rank_next_run_at ? '…' : '—'}
               </span>
             </div>
           )}
@@ -872,6 +897,9 @@ export default function AutoRank() {
     failed_crimes_today: 0,
     failed_gtas_today: 0,
     failed_busts_today: 0,
+    successful_crimes_today: 0,
+    successful_gtas_today: 0,
+    successful_busts_today: 0,
   });
   const [liveCountdown, setLiveCountdown] = useState({
     jailSeconds: null,
@@ -965,6 +993,9 @@ export default function AutoRank() {
           failed_crimes_today: d.failed_crimes_today ?? 0,
           failed_gtas_today: d.failed_gtas_today ?? 0,
           failed_busts_today: d.failed_busts_today ?? 0,
+          successful_crimes_today: d.successful_crimes_today ?? 0,
+          successful_gtas_today: d.successful_gtas_today ?? 0,
+          successful_busts_today: d.successful_busts_today ?? 0,
         }));
         setLastStatsAt(Date.now());
       }).catch(() => {});
@@ -1054,6 +1085,8 @@ export default function AutoRank() {
             failed_crimes_today: statsRes.data.failed_crimes_today ?? 0,
             failed_gtas_today: statsRes.data.failed_gtas_today ?? 0,
             failed_busts_today: statsRes.data.failed_busts_today ?? 0,
+            successful_crimes_today: statsRes.data.successful_crimes_today ?? 0,
+            successful_gtas_today: statsRes.data.successful_gtas_today ?? 0,
             successful_busts_today: statsRes.data.successful_busts_today ?? 0,
             attempted_busts_today: statsRes.data.attempted_busts_today ?? 0,
           });

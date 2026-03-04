@@ -173,6 +173,7 @@ def register(router):
                 "bullets_purchased_from_armoury": 0,
                 "uncommon_cars_scrapped": 0,
                 "tribute_bullets": 0,
+                "tribute_loot_box_pieces": 0,
                 "loot_box_pieces": 0,
                 "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
                 "total_crimes": 0,

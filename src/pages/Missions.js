@@ -126,7 +126,7 @@ function StatusChip({ completed, requirementsMet, isBoss, unlocked }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, isCurrent }) {
-  const { completed, requirements_met, is_boss, progress, difficulty, title, type, reward_money, reward_points, unlocked, previous_mission_title } = mission;
+  const { completed, requirements_met, is_boss, progress, difficulty, title, type, reward_money, reward_points, reward_respect, reward_tribute, unlocked, previous_mission_title } = mission;
 
   const borderCls = completed
     ? 'border-green-500/30'
@@ -208,6 +208,16 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
           {reward_points > 0 && (
             <span className="inline-flex items-center gap-1 text-primary">
               <Star size={10} /> {reward_points} RP
+            </span>
+          )}
+          {(reward_respect > 0) && (
+            <span className="inline-flex items-center gap-1 text-fuchsia-400">
+              +{reward_respect} resp
+            </span>
+          )}
+          {(reward_tribute > 0) && (
+            <span className="inline-flex items-center gap-1 text-green-500/90">
+              +{fmt(reward_tribute)} tribute
             </span>
           )}
           {mission.unlocks_city && (
@@ -441,6 +451,20 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                   <span style={{ color: '#eab308', fontWeight: 700 }}>+{mission.reward_points} RP</span>
                 </div>
               )}
+              {(mission.reward_respect > 0) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a' }}>Respect</span>
+                  <span style={{ color: '#c084fc', fontWeight: 700 }}>+{mission.reward_respect}</span>
+                </div>
+              )}
+              {(mission.reward_tribute > 0) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Banknote size={12} /> Tribute (on complete)
+                  </span>
+                  <span style={{ color: '#4ade80', fontWeight: 700 }}>{fmt(mission.reward_tribute)}</span>
+                </div>
+              )}
               {mission.reward_bullets > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Ammo</span>
@@ -577,6 +601,7 @@ function formatTimeUntil(isoString) {
 function TributeBanner({
   bank,
   tributeBullets = 0,
+  tributeLootBoxPieces = 0,
   onCollect,
   collecting,
   tributeDepositDailyAt,
@@ -594,7 +619,8 @@ function TributeBanner({
   }, [nextTributeDepositAt]);
   const hasBank = bank > 0;
   const hasBullets = (tributeBullets || 0) > 0;
-  const hasAny = hasBank || hasBullets;
+  const hasLootPieces = (tributeLootBoxPieces || 0) > 0;
+  const hasAny = hasBank || hasBullets || hasLootPieces;
   const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
   const dailyTotalCash = dailyCashBase + (hasMission2Bonus ? dailyCashMission2 : 0);
   return (
@@ -609,6 +635,9 @@ function TributeBanner({
               <span className="text-sm font-heading font-bold text-foreground">{fmt(bank)}</span>
               {(tributeBullets || 0) > 0 && (
                 <span className="text-[10px] font-heading font-bold text-foreground">· {(tributeBullets || 0).toLocaleString()} bullets</span>
+              )}
+              {(tributeLootBoxPieces || 0) > 0 && (
+                <span className="text-[10px] font-heading font-bold text-foreground">· {tributeLootBoxPieces} loot piece(s)</span>
               )}
             </div>
             {tributeDepositDailyAt && (
@@ -682,9 +711,11 @@ export default function Missions() {
       const res = await api.post('/missions/complete', { mission_id: missionId });
       if (res.data?.completed) {
         const parts = [];
-        if (res.data.reward_money > 0) parts.push(`+${fmt(res.data.reward_money)} tribute`);
+        const tributeTotal = (res.data.reward_money || 0) + (res.data.reward_tribute || 0);
+        if (tributeTotal > 0) parts.push(`+${fmt(tributeTotal)} tribute`);
         if (res.data.reward_cash_immediate > 0) parts.push(`+${fmt(res.data.reward_cash_immediate)} cash`);
         if (res.data.reward_points > 0) parts.push(`+${res.data.reward_points} RP`);
+        if (res.data.reward_respect > 0) parts.push(`+${res.data.reward_respect} respect`);
         if (res.data.reward_bullets > 0) parts.push(`+${res.data.reward_bullets} bullets`);
         if (res.data.reward_car_id) parts.push('1 car');
         if (res.data.reward_car_ids?.length) parts.push(`${res.data.reward_car_ids.length} cars`);
@@ -711,16 +742,19 @@ export default function Missions() {
   const handleCollect = async () => {
     const bank = data?.tribute_bank ?? 0;
     const bullets = data?.tribute_bullets ?? 0;
-    if (bank <= 0 && bullets <= 0) return;
+    const lootPieces = data?.tribute_loot_box_pieces ?? 0;
+    if (bank <= 0 && bullets <= 0 && lootPieces <= 0) return;
     setCollecting(true);
     try {
       const res = await api.post('/missions/collect-tribute');
       const collectedCash = res.data?.collected ?? 0;
       const collectedBullets = res.data?.collected_bullets ?? 0;
-      if (collectedCash > 0 || collectedBullets > 0) {
+      const collectedLoot = res.data?.collected_loot_box_pieces ?? 0;
+      if (collectedCash > 0 || collectedBullets > 0 || collectedLoot > 0) {
         const parts = [];
         if (collectedCash > 0) parts.push(`${fmt(collectedCash)} cash`);
         if (collectedBullets > 0) parts.push(`${collectedBullets.toLocaleString()} bullets`);
+        if (collectedLoot > 0) parts.push(`${collectedLoot} loot piece(s)`);
         toast.success(`Collected ${parts.join(' and ')}`);
         refreshUser();
         const mapRes = await api.get('/missions/map');
@@ -812,6 +846,7 @@ export default function Missions() {
       <TributeBanner
         bank={tributeBank}
         tributeBullets={data?.tribute_bullets ?? 0}
+        tributeLootBoxPieces={data?.tribute_loot_box_pieces ?? 0}
         onCollect={handleCollect}
         collecting={collecting}
         tributeDepositDailyAt={data?.tribute_deposit_daily_at}

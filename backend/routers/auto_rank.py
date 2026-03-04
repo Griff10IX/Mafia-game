@@ -132,6 +132,8 @@ async def _update_auto_rank_stats_crimes(db, user_id: str, count: int, cash: int
         return
     await _ensure_stats_since(db, user_id, now)
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_crimes": count, "auto_rank_total_cash": cash}})
+    if count > 0:
+        await _inc_successful_crimes_today(db, user_id, now, count)
 
 
 async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime):
@@ -143,6 +145,7 @@ async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime
     best.append({"name": car_name, "value": car_value})
     best.sort(key=lambda x: x.get("value", 0), reverse=True)
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_gtas": 1}, "$set": {"auto_rank_best_cars": best[:3]}})
+    await _inc_successful_gtas_today(db, user_id, now, 1)
 
 
 async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit: int = 0):
@@ -171,6 +174,16 @@ async def _inc_failed_today(db, user_id: str, field: str, date_field: str, now: 
 async def _inc_successful_busts_today(db, user_id: str, now: datetime, count: int = 1):
     """Increment today's successful bust count; reset if date changed."""
     await _inc_failed_today(db, user_id, "auto_rank_successful_busts_today", "auto_rank_successful_busts_date", now, count)
+
+
+async def _inc_successful_crimes_today(db, user_id: str, now: datetime, count: int = 1):
+    """Increment today's successful crime count; reset if date changed."""
+    await _inc_failed_today(db, user_id, "auto_rank_successful_crimes_today", "auto_rank_successful_crimes_date", now, count)
+
+
+async def _inc_successful_gtas_today(db, user_id: str, now: datetime, count: int = 1):
+    """Increment today's successful GTA count; reset if date changed."""
+    await _inc_failed_today(db, user_id, "auto_rank_successful_gtas_today", "auto_rank_successful_gtas_date", now, count)
 
 
 async def _set_last_activity(db, user_id: str, activity: str, now: datetime):
@@ -966,7 +979,7 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -1028,6 +1041,8 @@ def register(router):
         failed_gtas_today = int((u or {}).get("auto_rank_failed_gtas_today") or 0) if (u or {}).get("auto_rank_failed_gtas_date") == today else 0
         failed_busts_today = int((u or {}).get("auto_rank_failed_busts_today") or 0) if (u or {}).get("auto_rank_failed_busts_date") == today else 0
         successful_busts_today = int((u or {}).get("auto_rank_successful_busts_today") or 0) if (u or {}).get("auto_rank_successful_busts_date") == today else 0
+        successful_crimes_today = int((u or {}).get("auto_rank_successful_crimes_today") or 0) if (u or {}).get("auto_rank_successful_crimes_date") == today else 0
+        successful_gtas_today = int((u or {}).get("auto_rank_successful_gtas_today") or 0) if (u or {}).get("auto_rank_successful_gtas_date") == today else 0
         attempted_busts_today = successful_busts_today + failed_busts_today
         activity_detail = None
         if in_jail:
@@ -1088,6 +1103,8 @@ def register(router):
             "failed_crimes_today": failed_crimes_today,
             "failed_gtas_today": failed_gtas_today,
             "failed_busts_today": failed_busts_today,
+            "successful_crimes_today": successful_crimes_today,
+            "successful_gtas_today": successful_gtas_today,
             "successful_busts_today": successful_busts_today,
             "attempted_busts_today": attempted_busts_today,
         }
