@@ -64,33 +64,14 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
       {children}
       {owned ? (
         <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">Owned</div>
-      ) : respectPrice != null ? (
-        <div className="flex gap-1.5 mt-1">
-          <button
-            type="button"
-            onClick={() => onBuy(false)}
-            disabled={loading || disabled || (user && (user.points ?? 0) < price)}
-            className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
-          >
-            {loading ? '...' : `${price} pts`}
-          </button>
-          <button
-            type="button"
-            onClick={() => onBuy(true)}
-            disabled={loading || disabled || (user && (user.respect_points ?? 0) < respectPrice)}
-            className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-50"
-          >
-            {loading ? '...' : `${respectPrice} resp`}
-          </button>
-        </div>
       ) : (
         <button
           type="button"
-          onClick={() => onBuy(false)}
-          disabled={loading || disabled}
-          className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+          onClick={() => onBuy()}
+          disabled={loading || disabled || (user && respectPrice != null && (user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)}
+          className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 mt-1"
         >
-          {loading ? '...' : `${price} pts`}
+          {loading ? '...' : respectPrice != null ? `${price} pts or ${respectPrice} resp` : `${price} pts`}
         </button>
       )}
     </div>
@@ -190,12 +171,11 @@ export default function Store() {
     setCheckingPayment(false);
   };
 
-  const apiBuy = async (path, body, successMsg, useRespectPoints = false) => {
+  const apiBuy = async (path, body, successMsg) => {
     const isBodyguard = typeof path === 'string' && path.includes('bodyguards');
     const duration = isBodyguard ? 10000 : undefined;
-    const url = useRespectPoints ? (path + (path.includes('?') ? '&' : '?') + 'use_respect_points=true') : path;
     try {
-      await api.post(url, body || {});
+      await api.post(path, body || {});
       toast.success(successMsg || 'Done', duration != null ? { duration } : undefined);
       refreshUser();
       fetchData();
@@ -444,7 +424,7 @@ export default function Store() {
                 loading={loading}
                 disabled={disabled}
                 user={user}
-                onBuy={(useRespect) => apiBuy(u.path, {}, 'Purchased', useRespect)}
+                onBuy={() => apiBuy(u.path, {}, 'Purchased')}
               >
                 {extra && (
                   <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
@@ -481,26 +461,12 @@ export default function Store() {
                           toast.error('Name 2+ characters');
                           return;
                         }
-                        apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased', false).then(() => setCustomCarName(''));
+                        apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
                       }}
-                      disabled={!user || (user.points ?? 0) < 500 || !customCarName.trim()}
-                      className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                      disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < 2500) || !customCarName.trim()}
+                      className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
                     >
-                      500 pts
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!customCarName.trim() || customCarName.trim().length < 2) {
-                          toast.error('Name 2+ characters');
-                          return;
-                        }
-                        apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased', true).then(() => setCustomCarName(''));
-                      }}
-                      disabled={!user || (user.respect_points ?? 0) < 2500 || !customCarName.trim()}
-                      className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-50"
-                    >
-                      2500 resp
+                      500 pts or 2500 resp
                     </button>
                   </div>
                 </>
@@ -524,24 +490,14 @@ export default function Store() {
                 </div>
                 <div className="p-2.5 text-center">
                   <p className="text-[10px] text-zinc-500 font-heading mb-2">{pack.cost} pts or {respectCost} resp</p>
-                  <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`, false)}
-                      disabled={!user || (user.points ?? 0) < pack.cost}
-                      className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
-                    >
-                      {pack.cost} pts
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`, true)}
-                      disabled={!user || (user.respect_points ?? 0) < respectCost}
-                      className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-50"
-                    >
-                      {respectCost} resp
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
+                    disabled={!user || ((user.points ?? 0) < pack.cost && (user.respect_points ?? 0) < respectCost)}
+                    className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                  >
+                    Buy
+                  </button>
                 </div>
                 <div className="store-art-line text-primary mx-3" />
               </div>
