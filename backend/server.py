@@ -1365,8 +1365,23 @@ async def startup_db():
                 logging.exception("Bodyguard weekly payout ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(bodyguard_payout_ticker())
-    # Telegram: set bot command menu so /autorank, /summary, /enable, /disable appear in the app
-    if getattr(security_module, "TELEGRAM_BOT_TOKEN", ""):
+    # Telegram: register webhook (so bot receives /autorank etc.) and set command menu
+    _tg_token = getattr(security_module, "TELEGRAM_BOT_TOKEN", "") or ""
+    if _tg_token:
+        _webhook_base = (os.environ.get("TELEGRAM_WEBHOOK_BASE_URL") or os.environ.get("BASE_URL") or "").strip().rstrip("/")
+        if _webhook_base:
+            try:
+                _webhook_url = _webhook_base + "/api/auto-rank/telegram-webhook"
+                await security_module.set_telegram_webhook(
+                    _webhook_url,
+                    secret_token=os.environ.get("TELEGRAM_WEBHOOK_SECRET") or None,
+                )
+            except Exception as e:
+                logging.getLogger(__name__).warning("Telegram setWebhook failed: %s", e)
+        else:
+            logging.getLogger(__name__).info(
+                "TELEGRAM_BOT_TOKEN set but TELEGRAM_WEBHOOK_BASE_URL/BASE_URL unset — set one so the bot receives commands (e.g. /autorank)."
+            )
         try:
             await security_module.set_telegram_bot_commands()
         except Exception as e:

@@ -164,6 +164,36 @@ TELEGRAM_BOT_COMMANDS = [
 ]
 
 
+async def set_telegram_webhook(webhook_url: str, secret_token: Optional[str] = None, bot_token: Optional[str] = None) -> bool:
+    """Register webhook URL with Telegram so the bot receives updates (messages, /commands). Uses TELEGRAM_BOT_TOKEN if bot_token not provided."""
+    url = (webhook_url or "").strip().rstrip("/")
+    if not url:
+        return False
+    token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
+    if not token:
+        return False
+    if not HTTPX_AVAILABLE:
+        logger.warning("httpx not installed - cannot set Telegram webhook")
+        return False
+    try:
+        payload = {"url": url}
+        if secret_token:
+            payload["secret_token"] = (secret_token or "").strip()[:256]
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post(
+                "https://api.telegram.org/bot{}/setWebhook".format(token),
+                json=payload,
+            )
+        if r.status_code != 200:
+            logger.warning("Telegram setWebhook failed: %s %s", r.status_code, r.text)
+            return False
+        logger.info("Telegram webhook set to %s", url)
+        return True
+    except Exception as e:
+        logger.exception("Failed to set Telegram webhook: %s", e)
+        return False
+
+
 async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
     """Register bot command menu with Telegram (setMyCommands) so /commands appear in the app menu. Uses TELEGRAM_BOT_TOKEN if bot_token not provided."""
     token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
