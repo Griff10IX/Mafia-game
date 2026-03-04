@@ -304,7 +304,7 @@ export default function Bodyguards() {
                         data-testid={`hire-robot-${bg.slot_number}`}
                         className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        {hiringSlot === bg.slot_number ? 'Hiring…' : `🤖 Hire (${getHireCost(bg.slot_number)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
+                        {`🤖 Hire (${getHireCost(bg.slot_number)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
                       </button>
                     )}
                   </div>
