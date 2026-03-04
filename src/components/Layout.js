@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
@@ -708,7 +708,7 @@ export default function Layout({ children }) {
       >
         <div className="flex flex-col h-full">
           {/* Logo – compact header */}
-          <div className={`px-2.5 py-2 border-b ${styles.borderGoldLight} shrink-0`}>
+          <div className={`px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0`}>
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-px shrink-0" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
               <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
@@ -732,11 +732,14 @@ export default function Layout({ children }) {
           </div>
 
           {/* Navigation – compact list */}
-          <nav className={`flex-1 overflow-y-auto px-2 py-1.5 ${styles.sidebarNav} min-h-0`}>
-            <div className="space-y-0.5">
-              {navItems.map((item) => {
+          <nav className={`flex-1 overflow-y-auto px-2 py-1 ${styles.sidebarNav} min-h-0`}>
+            <div className="space-y-0">
+              {navItems.map((item, index) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
+                const navDivider = index > 0 ? (
+                  <div key={`div-${item.path}`} className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+                ) : null;
 
                 // Ranking dropdown group
                 if (item.path === '/ranking') {
@@ -749,29 +752,31 @@ export default function Layout({ children }) {
                     location.pathname === '/prestige';
 
                   return (
-                    <div key="nav-ranking-group" className="space-y-0.5">
+                    <Fragment key="nav-ranking-group">
+                      {navDivider}
+                      <div className="space-y-0.5">
                       <button
                         type="button"
                         data-testid="nav-ranking-group"
                         onClick={() => setRankingOpen((v) => !v)}
-                        className={`w-full flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth ${
+                        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
                           isAnyRankingActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                         style={isAnyRankingActive ? sidebarActiveGroupStyle : undefined}
                       >
-                        <Icon size={14} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
+                        <Icon size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
                         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
-                        {rankingOpen ? <ChevronDown size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+                        {rankingOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
                       </button>
 
                       {rankingOpen && (
-                        <div className={`ml-3 pl-1.5 space-y-0.5 ${styles.sidebarSubmenuBorder}`}>
+                        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
                           <Link
                             to="/crimes"
                             onClick={() => setSidebarOpen(false)}
                             onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
                             onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/crimes' ? sidebarActiveStyle : undefined}
@@ -788,11 +793,11 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/gta"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/gta' ? sidebarActiveStyle : undefined}
@@ -809,11 +814,11 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/jail"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/jail' ? sidebarActiveStyle : undefined}
@@ -830,11 +835,11 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/organised-crime"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined}
@@ -844,7 +849,8 @@ export default function Layout({ children }) {
                           </Link>
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </Fragment>
                   );
                 }
 
@@ -862,27 +868,29 @@ export default function Layout({ children }) {
                     location.pathname === '/sports-betting';
 
                   return (
-                    <div key="nav-casino-group" className="space-y-0.5">
+                    <Fragment key="nav-casino-group">
+                      {navDivider}
+                      <div className="space-y-0.5">
                       <button
                         type="button"
                         data-testid="nav-casino-group"
                         onClick={() => setCasinoOpen((v) => !v)}
-                        className={`w-full flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth ${
+                        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
                           isAnyCasinoActive ? styles.navItemActive : styles.sidebarNavLink
                         }`}
                         style={isAnyCasinoActive ? sidebarActiveGroupStyle : undefined}
                       >
-                        <Icon size={14} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
+                        <Icon size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
                         <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
-                        {casinoOpen ? <ChevronDown size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={12} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+                        {casinoOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
                       </button>
 
                       {casinoOpen && (
-                        <div className={`ml-4 pl-2 space-y-0.5 ${styles.sidebarSubmenuBorder}`}>
+                        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
                           <Link
                             to="/casino/dice"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/dice' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/dice' ? sidebarActiveStyle : undefined}
@@ -890,11 +898,11 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Dice</span>
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/casino/rlt"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/rlt' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/rlt' ? sidebarActiveStyle : undefined}
@@ -902,11 +910,11 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Roulette</span>
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/casino/blackjack"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/blackjack' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/blackjack' ? sidebarActiveStyle : undefined}
@@ -914,11 +922,11 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Blackjack</span>
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/casino/horseracing"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/horseracing' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/horseracing' ? sidebarActiveStyle : undefined}
@@ -926,11 +934,11 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span>
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/casino/slots"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/slots' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/slots' ? sidebarActiveStyle : undefined}
@@ -938,11 +946,11 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Slots</span>
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/casino/videopoker"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/videopoker' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/videopoker' ? sidebarActiveStyle : undefined}
@@ -950,11 +958,11 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">Video Poker</span>
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/casino/mdg"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/casino/mdg' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/casino/mdg' ? sidebarActiveStyle : undefined}
@@ -962,11 +970,11 @@ export default function Layout({ children }) {
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">MDG</span>
                           </Link>
-                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
+                          <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
                           <Link
                             to="/sports-betting"
                             onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1.5 px-2 py-1 min-h-[28px] rounded-sm transition-smooth text-[10px] ${
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
                               location.pathname === '/sports-betting' ? styles.navItemActivePage : styles.sidebarNavLink
                             }`}
                             style={location.pathname === '/sports-betting' ? sidebarActiveStyle : undefined}
@@ -976,18 +984,20 @@ export default function Layout({ children }) {
                           </Link>
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </Fragment>
                   );
                 }
 
                 const isFamiliesAtWar = item.path === '/families' && atWar;
                 return (
+                  <Fragment key={item.path}>
+                    {navDivider}
                   <Link
-                    key={item.path}
                     to={item.path}
                     data-testid={`nav-${item.label.toLowerCase()}`}
                     data-at-war={atWar && item.path === '/families' ? 'true' : undefined}
-                    className={`flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth ${
+                    className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
                       isFamiliesAtWar
                         ? isActive
                           ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500'
@@ -999,7 +1009,7 @@ export default function Layout({ children }) {
                     style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={14} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
+                    <Icon size={13} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
                     <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
                     {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
                     {item.badge > 0 && (
@@ -1008,20 +1018,22 @@ export default function Layout({ children }) {
                       </span>
                     )}
                   </Link>
+                  </Fragment>
                 );
               })}
 
               {/* Prestige — always visible */}
+              <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
               <Link
                 to="/prestige"
                 data-testid="nav-prestige"
-                className={`flex items-center gap-1.5 px-2 py-1.5 min-h-[32px] rounded-sm transition-smooth mt-0.5 ${
+                className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
                   location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink
                 }`}
-                style={location.pathname === '/prestige' ? sidebarActiveStyle : { borderTop: '1px solid rgba(var(--noir-primary-rgb),0.12)', marginTop: 4, paddingTop: 8 }}
+                style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
                 onClick={() => setSidebarOpen(false)}
               >
-                <Trophy size={14} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                 <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
                 {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && (
                   <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />
@@ -1029,6 +1041,9 @@ export default function Layout({ children }) {
               </Link>
 
               {/* Admin Section */}
+              {adminNavItems.length > 0 && (
+                <div className="my-1 mx-1 h-px shrink-0" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }} aria-hidden="true" />
+              )}
               {adminNavItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = location.pathname === item.path;
@@ -1037,14 +1052,14 @@ export default function Layout({ children }) {
                     key={item.path}
                     to={item.path}
                     data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-sm transition-smooth border-t border-primary/20 mt-1.5 pt-1.5 ${
+                    className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${
                       isActive
                         ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
                         : 'text-red-400 hover:bg-red-500/10'
                     }`}
                     onClick={() => setSidebarOpen(false)}
                   >
-                    <Icon size={16} />
+                    <Icon size={14} />
                     <span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
                   </Link>
                 );
@@ -1052,10 +1067,10 @@ export default function Layout({ children }) {
               {hasAdminEmail && !isAdmin && (
                 <button
                   type="button"
-                  onClick={() => { promoteToAdmin(); setSidebarOpen(false); }}
-                  className="flex items-center gap-1.5 px-2 py-1.5 rounded-sm transition-smooth border-t border-primary/20 mt-1.5 pt-1.5 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]"
+                onClick={() => { promoteToAdmin(); setSidebarOpen(false); }}
+                className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]"
                 >
-                  <Shield size={16} />
+                  <Shield size={14} />
                   <span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
                 </button>
               )}
@@ -1064,11 +1079,11 @@ export default function Layout({ children }) {
 
           {/* Theme & Logout – compact */}
           {user && (
-            <div className={`px-2 py-1.5 border-t ${styles.borderGoldLight} shrink-0 space-y-1`}>
+            <div className={`px-2 py-1 border-t ${styles.borderGoldLight} shrink-0 space-y-0.5`}>
               <button
                 type="button"
                 onClick={() => setThemePickerOpen(true)}
-                className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-sm transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
+                className="w-full flex items-center justify-center gap-1 px-2 py-1 rounded-sm transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
                 data-testid="theme-picker-button"
               >
                 <Palette size={12} />
@@ -1077,7 +1092,7 @@ export default function Layout({ children }) {
               <button
                 onClick={handleLogout}
                 data-testid="logout-button"
-                className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold"
+                className="w-full flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold"
               >
                 <LogOut size={12} />
                 Logout
