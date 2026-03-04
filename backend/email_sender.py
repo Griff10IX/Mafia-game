@@ -38,7 +38,7 @@ def _send_via_smtp(to: str, subject: str, html: str) -> bool:
         # Envelope sender must match login for many providers (e.g. IONOS)
         envelope_from = SMTP_USER
         logger.info("Attempting SMTP to %s (host=%s port=%s)", to, SMTP_HOST, SMTP_PORT)
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
             if SMTP_USE_TLS:
                 server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)

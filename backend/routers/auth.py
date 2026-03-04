@@ -244,20 +244,22 @@ def register(router):
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "expires_at": expires_at.isoformat(),
             })
-            email_sent = False
-            try:
-                from email_sender import send_verification_email, verification_link
-                email_sent = send_verification_email(user_doc["email"], user_doc["username"], verification_token)
-            except Exception as e:
-                logging.warning("Failed to send verification email: %s", e)
+            # Send verification email in background so registration responds immediately (avoids timeout when SMTP is slow/blocked)
+            import threading
+            from email_sender import send_verification_email, verification_link
+
+            def _send_in_background():
+                try:
+                    send_verification_email(user_doc["email"], user_doc["username"], verification_token)
+                except Exception as e:
+                    logging.warning("Background verification email failed: %s", e)
+
+            threading.Thread(target=_send_in_background, daemon=True).start()
             out = {
-                "message": "Please check your email to verify your account. Then you can log in." if email_sent
-                else "Verification email could not be sent (RESEND_API_KEY not set or mail failed). Use the link below to verify.",
+                "message": "Please check your email to verify your account. Then you can log in.",
                 "verify_required": True,
+                "verification_link": verification_link(verification_token),
             }
-            if not email_sent:
-                from email_sender import verification_link
-                out["verification_link"] = verification_link(verification_token)
             return out
         except HTTPException:
             raise
@@ -488,18 +490,18 @@ def register(router):
             "created_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": expires_at.isoformat(),
         })
-        email_sent = False
-        try:
-            from email_sender import send_verification_email, verification_link
-            email_sent = send_verification_email(user["email"], user["username"], verification_token)
-        except Exception as e:
-            logging.warning("Failed to send verification email: %s", e)
-        out = {"message": "If an account exists with that email, a new verification link has been sent." if email_sent
-            else "Verification email could not be sent. Use the link below to verify."}
-        if not email_sent:
-            from email_sender import verification_link
-            out["verification_link"] = verification_link(verification_token)
-        return out
+        import threading
+        from email_sender import send_verification_email, verification_link
+        def _resend_in_background():
+            try:
+                send_verification_email(user["email"], user["username"], verification_token)
+            except Exception as e:
+                logging.warning("Background resend verification email failed: %s", e)
+        threading.Thread(target=_resend_in_background, daemon=True).start()
+        return {
+            "message": "If an account exists with that email, a new verification link has been sent.",
+            "verification_link": verification_link(verification_token),
+        }
 
     def _safe_int(val, default=0):
         if val is None:
