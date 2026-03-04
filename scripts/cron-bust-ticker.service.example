@@ -1,21 +1,12 @@
-# systemd unit for cron-bust-ticker.py (jail bust every 5s when AUTO_RANK_USE_CRON=1)
+# systemd unit for cron-bust-ticker.py (jail bust; interval from Admin)
+# Run BOTH this and cron-cycle-ticker for full Auto Rank. See scripts/README-cron-bust.md
 #
-# Install:
-#   1. Copy to systemd user or system dir:
-#        cp scripts/cron-bust-ticker.service.example /etc/systemd/system/cron-bust-ticker.service
-#   2. Edit and set the correct path for your project (replace /path/to/Game-files-mafia):
-#        WorkingDirectory= and ExecStart=
-#   3. Ensure backend/.env has CRON_SECRET and BASE_URL (or set in the [Service] block with Environment=).
-#   4. Reload and enable:
-#        sudo systemctl daemon-reload
-#        sudo systemctl enable cron-bust-ticker
-#        sudo systemctl start cron-bust-ticker
-#   5. Check status: sudo systemctl status cron-bust-ticker
-#
+# Install: replace /path/to/Game-files-mafia, then:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now cron-bust-ticker
 # Logs: journalctl -u cron-bust-ticker -f
 
 [Unit]
-Description=Auto Rank jail bust ticker (every 5s)
+Description=Auto Rank jail bust ticker
 After=network.target
 
 [Service]

@@ -1,23 +1,15 @@
-# systemd unit for cron-cycle-ticker.py (main Auto Rank: crimes, GTA, booze, OC every 5s when AUTO_RANK_USE_CRON=1)
+# systemd unit for cron-cycle-ticker.py (main Auto Rank: crimes, GTA, booze, OC)
+# Interval is read from Admin (API); run BOTH this and cron-bust-ticker for full Auto Rank.
 #
-# You need BOTH this service AND cron-bust-ticker (both every 5s) for full Auto Rank. Without this, crimes never run.
-#
-# Install:
-#   1. Copy to systemd:
-#        sudo cp scripts/cron-cycle-ticker.service.example /etc/systemd/system/cron-cycle-ticker.service
-#   2. Edit and set the correct path (replace /path/to/Game-files-mafia with your project root):
-#        WorkingDirectory= and ExecStart=
-#   3. Ensure backend/.env has CRON_SECRET and BASE_URL (or set in [Service] with Environment=).
-#   4. Reload, enable, start:
-#        sudo systemctl daemon-reload
-#        sudo systemctl enable cron-cycle-ticker
-#        sudo systemctl start cron-cycle-ticker
-#   5. Check: sudo systemctl status cron-cycle-ticker
-#
+# Install: see scripts/README-cron-bust.md "Run both tickers on the server"
+#   1. sudo cp scripts/cron-cycle-ticker.service.example /etc/systemd/system/cron-cycle-ticker.service
+#   2. Replace /path/to/Game-files-mafia with your project root in WorkingDirectory and ExecStart
+#   3. backend/.env must have CRON_SECRET and BASE_URL
+#   4. sudo systemctl daemon-reload && sudo systemctl enable --now cron-cycle-ticker
 # Logs: journalctl -u cron-cycle-ticker -f
 
 [Unit]
-Description=Auto Rank main cycle ticker (crimes/GTA/booze/OC every 5s)
+Description=Auto Rank main cycle ticker (crimes/GTA/booze/OC)
 After=network.target
 
 [Service]

@@ -82,6 +82,50 @@ The **Auto Rank "Jail bust every 5 sec"** option is driven by this ticker: it ca
 
 ---
 
+## Run both tickers on the server (systemd)
+
+Do this on the Linux server where the app runs. Intervals are read from **Admin → Auto Rank** (no env vars needed for interval).
+
+1. **Env on the server**  
+   In `backend/.env` set:
+   - `AUTO_RANK_USE_CRON=1`
+   - `CRON_SECRET=your-secret` (same as backend)
+   - `BASE_URL=https://your-domain.com` or `http://127.0.0.1:8000` if same host
+
+2. **Set intervals in Admin**  
+   In the game: Auto Rank → Admin — set Main (e.g. 10s), Bust (e.g. 10s), OC (e.g. 63s) → **Save intervals**. The tickers read these from the API.
+
+3. **Install both systemd services**  
+   From project root (replace `YOUR_PROJECT_ROOT` with the real path, e.g. `/opt/mafia-app` or `/home/you/Game-files-mafia`):
+   ```bash
+   sudo cp scripts/cron-cycle-ticker.service.example /etc/systemd/system/cron-cycle-ticker.service
+   sudo cp scripts/cron-bust-ticker.service.example /etc/systemd/system/cron-bust-ticker.service
+   sudo sed -i 's|/path/to/Game-files-mafia|YOUR_PROJECT_ROOT|g' /etc/systemd/system/cron-cycle-ticker.service
+   sudo sed -i 's|/path/to/Game-files-mafia|YOUR_PROJECT_ROOT|g' /etc/systemd/system/cron-bust-ticker.service
+   ```
+
+4. **Enable and start both**  
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable cron-cycle-ticker cron-bust-ticker
+   sudo systemctl start cron-cycle-ticker cron-bust-ticker
+   ```
+
+5. **Verify**  
+   ```bash
+   sudo systemctl status cron-cycle-ticker cron-bust-ticker
+   ```
+   Both should be `active (running)`. Logs:
+   - Main: `journalctl -u cron-cycle-ticker -f`
+   - Bust: `journalctl -u cron-bust-ticker -f`
+
+**Useful commands**
+- Restart both: `sudo systemctl restart cron-cycle-ticker cron-bust-ticker`
+- Stop both: `sudo systemctl stop cron-cycle-ticker cron-bust-ticker`
+- Disable on boot: `sudo systemctl disable cron-cycle-ticker cron-bust-ticker`
+
+---
+
 ## Setup (Linux server)
 
 Do this on the machine where the app (or at least the cron) runs.
@@ -119,7 +163,7 @@ Do this on the machine where the app (or at least the cron) runs.
 
 ---
 
-## Main cron ticker (crimes / GTA / booze / OC) — every 60s
+## Main cron ticker (crimes / GTA / booze / OC)
 
 Run this so Auto Rank actually runs crimes and the rest of the cycle:
 
@@ -127,7 +171,7 @@ Run this so Auto Rank actually runs crimes and the rest of the cycle:
 python scripts/cron-cycle-ticker.py
 ```
 
-Uses the same `CRON_SECRET` and `BASE_URL` as the bust ticker. Optional: `CRON_CYCLE_INTERVAL=60` (default 60 seconds).
+Uses the same `CRON_SECRET` and `BASE_URL` as the bust ticker. **Interval is read from Admin** (GET /api/auto-rank/cron-intervals); fallback env: `CRON_CYCLE_INTERVAL` (default 5).
 
 ---
 

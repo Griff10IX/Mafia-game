@@ -431,11 +431,11 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   const activeBust5 = enabled && prefs?.auto_rank_bust_every_5_sec;
   const activeOc = enabled && prefs?.auto_rank_oc;
   const activeBooze = enabled && prefs?.auto_rank_booze;
+  // "Next up" = only Cycle, OC, Booze (when the server actually runs). Don't use Crimes/GTA cooldowns —
+  // those are per-action; the cycle runs on next_run_at, so "Next up" must match "Next cycle" countdown.
   const items = [];
   if (!stats?.in_jail && liveCountdown?.nextCycleSeconds != null && (activeCrimes || activeGta)) items.push({ label: 'Cycle', sec: liveCountdown.nextCycleSeconds });
   if (activeOc && liveCountdown?.nextOcSeconds != null) items.push({ label: 'OC', sec: liveCountdown.nextOcSeconds });
-  if (activeCrimes && liveCountdown?.nextCrimeSeconds != null) items.push({ label: 'Crimes', sec: liveCountdown.nextCrimeSeconds });
-  if (activeGta && liveCountdown?.nextGtaSeconds != null) items.push({ label: 'GTA', sec: liveCountdown.nextGtaSeconds });
   if (activeBooze && liveCountdown?.nextBoozeSeconds != null) items.push({ label: 'Booze', sec: liveCountdown.nextBoozeSeconds });
   const nextUp = items.filter((x) => x.sec !== null && x.sec >= 0).sort((a, b) => a.sec - b.sec)[0];
 
