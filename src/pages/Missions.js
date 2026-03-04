@@ -220,6 +220,12 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
               +{fmt(reward_tribute)} tribute
             </span>
           )}
+          {(mission.reward_tribute_daily > 0) && (
+            <span className="inline-flex items-center gap-1 text-green-400/90">{fmt(mission.reward_tribute_daily)}/day</span>
+          )}
+          {(mission.reward_respect_daily > 0) && (
+            <span className="inline-flex items-center gap-1 text-fuchsia-400/90">+{mission.reward_respect_daily} resp/day</span>
+          )}
           {mission.unlocks_city && (
             <span className="inline-flex items-center gap-1 text-violet-400">
               <MapPin size={10} /> Unlocks {mission.unlocks_city}
@@ -443,6 +449,12 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                   <span style={{ color: '#4ade80', fontWeight: 700 }}>{fmt(mission.reward_tribute_daily)}/day</span>
                 </div>
               )}
+              {(mission.reward_respect_daily > 0) && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a' }}>Respect (daily)</span>
+                  <span style={{ color: '#c084fc', fontWeight: 700 }}>+{mission.reward_respect_daily}/day</span>
+                </div>
+              )}
               {mission.reward_points > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -610,6 +622,9 @@ function TributeBanner({
   dailyCashMission2 = 0,
   dailyBulletsMission2 = 0,
   hasMission2Bonus = false,
+  dailyCashMission4 = 0,
+  dailyRespectMission4 = 0,
+  hasMission4Bonus = false,
 }) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -622,7 +637,7 @@ function TributeBanner({
   const hasLootPieces = (tributeLootBoxPieces || 0) > 0;
   const hasAny = hasBank || hasBullets || hasLootPieces;
   const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
-  const dailyTotalCash = dailyCashBase + (hasMission2Bonus ? dailyCashMission2 : 0);
+  const dailyTotalCash = dailyCashBase + (hasMission2Bonus ? dailyCashMission2 : 0) + (hasMission4Bonus ? dailyCashMission4 : 0);
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasAny ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -651,8 +666,14 @@ function TributeBanner({
               {hasMission2Bonus && dailyBulletsMission2 > 0 && (
                 <span> · <span className="text-foreground font-semibold">{dailyBulletsMission2}</span> bullets</span>
               )}
+              {hasMission4Bonus && dailyRespectMission4 > 0 && (
+                <span> · <span className="text-foreground font-semibold">{dailyRespectMission4}</span> respect</span>
+              )}
               {!hasMission2Bonus && (dailyCashMission2 > 0 || dailyBulletsMission2 > 0) && (
                 <span className="text-mutedForeground"> · Complete Mission 2 for +{fmt(dailyCashMission2)} +{dailyBulletsMission2} bullets/day</span>
+              )}
+              {!hasMission4Bonus && (dailyCashMission4 > 0 || dailyRespectMission4 > 0) && (
+                <span className="text-mutedForeground"> · Complete Mission 4 for +{fmt(dailyCashMission4)} +{dailyRespectMission4} respect/day</span>
               )}
             </div>
             {nextIn && (
@@ -855,6 +876,9 @@ export default function Missions() {
         dailyCashMission2={data?.daily_tribute_cash_mission2 ?? 0}
         dailyBulletsMission2={data?.daily_tribute_bullets_mission2 ?? 0}
         hasMission2Bonus={!!data?.has_mission_2_bonus}
+        dailyCashMission4={data?.daily_tribute_cash_mission4 ?? 0}
+        dailyRespectMission4={data?.daily_tribute_respect_mission4 ?? 0}
+        hasMission4Bonus={!!data?.has_mission_4_bonus}
       />
 
       {/* City tabs */}

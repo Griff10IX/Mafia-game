@@ -536,7 +536,7 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                           : 'now'
                         : nextCycleAt
                           ? `at ${nextCycleAt}`
-                          : '—'}
+                          : `within ${interval}s`}
                     </span>
                   </div>
                 )}
@@ -696,7 +696,7 @@ const StatsCard = ({ stats, liveCountdown }) => {
                     ? 'now'
                     : nextCycleAt
                       ? `at ${nextCycleAt}`
-                      : s.auto_rank_next_run_at ? '…' : '—'}
+                      : `within ${s.interval_seconds ?? 30}s`}
               </span>
             </div>
           )}

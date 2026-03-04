@@ -25,6 +25,7 @@ from routers.booze_run import BOOZE_TYPES
 FIRST_MISSION_ID = "m_first"
 SECOND_MISSION_ID = "m_second"
 THIRD_MISSION_ID = "m_third"
+FOURTH_MISSION_ID = "m_fourth"
 COMMON_CAR_REWARD_ID = "car1"
 CITY_ORDER = ["Start"]  # single "city" for list/map compatibility
 
@@ -129,6 +130,34 @@ MISSIONS = [
         "character_id": None,
         "is_boss": False,
     },
+    {
+        "id": FOURTH_MISSION_ID,
+        "city": "Start",
+        "area": "—",
+        "order": 3,
+        "type": "special",
+        "requirements": {
+            "uncommon_cars_stolen": 5,
+            "hitlist_npc_kills": 7,
+            "jail_busts": 15,
+            "bullets_purchased_armoury": 500,
+            "bullets_melted": 5000,
+            "deposit_interest": 1_000_000,
+        },
+        "title": "Big League",
+        "description": "Steal 5 uncommon cars. Kill 7 hitlist NPCs. Bust 15 from jail (NPC or player). Buy 500 bullets from the armoury. Melt 5,000 bullets. Add $1,000,000 to the interest bank.",
+        "reward_money": 0,
+        "reward_cash_immediate": 0,
+        "reward_points": 0,
+        "reward_respect": 10,
+        "reward_tribute": 5_000,
+        "reward_tribute_daily": 500_000,
+        "reward_respect_daily": 50,
+        "difficulty": 4,
+        "unlocks_city": None,
+        "character_id": None,
+        "is_boss": False,
+    },
 ]  # end MISSIONS list
 
 # Lookup mission id -> title
@@ -211,6 +240,10 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
         return int(user.get("bullets_purchased_from_armoury") or 0)
     if req_key == "uncommon_cars_scrapped":
         return int(user.get("uncommon_cars_scrapped") or 0)
+    if req_key == "uncommon_cars_stolen":
+        return int(user.get("uncommon_cars_stolen") or 0)
+    if req_key == "deposit_interest":
+        return int(user.get("total_interest_deposited") or 0)
     return 0
 
 
@@ -334,6 +367,10 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
             parts.append(f"{current}/{target} bullets from armoury")
         elif key == "uncommon_cars_scrapped":
             parts.append(f"{current}/{target} uncommon cars scrapped")
+        elif key == "uncommon_cars_stolen":
+            parts.append(f"{current}/{target} uncommon cars stolen")
+        elif key == "deposit_interest":
+            parts.append(f"${current:,} / ${target:,} to interest bank")
         else:
             parts.append(f"{current}/{target}")
     progress = {"current": met_count, "target": len(req), "description": " · ".join(parts)}
@@ -397,6 +434,7 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "reward_money": m.get("reward_money", 0),
             "reward_cash_immediate": m.get("reward_cash_immediate", 0),
             "reward_tribute_daily": m.get("reward_tribute_daily", 0),
+            "reward_respect_daily": m.get("reward_respect_daily", 0),
             "reward_points": m.get("reward_points", 0),
             "reward_respect": m.get("reward_respect", 0),
             "reward_tribute": m.get("reward_tribute", 0),
@@ -488,6 +526,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "reward_money": m.get("reward_money", 0),
             "reward_cash_immediate": m.get("reward_cash_immediate", 0),
             "reward_tribute_daily": m.get("reward_tribute_daily", 0),
+            "reward_respect_daily": m.get("reward_respect_daily", 0),
             "reward_points": m.get("reward_points", 0),
             "reward_respect": m.get("reward_respect", 0),
             "reward_tribute": m.get("reward_tribute", 0),
@@ -517,6 +556,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     tribute_loot_box_pieces = int(current_user.get("tribute_loot_box_pieces") or 0)
     next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc()
     has_mission_2 = SECOND_MISSION_ID in completed_ids
+    has_mission_4 = FOURTH_MISSION_ID in completed_ids
     return {
         "current_city": current_city,
         "unlocked_cities": unlocked,
@@ -533,6 +573,9 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
         "daily_tribute_loot_box_pieces_mission2": MISSION_2_DAILY_LOOT_BOX_PIECES,
         "has_mission_2_bonus": has_mission_2,
+        "daily_tribute_cash_mission4": MISSION_4_DAILY_CASH,
+        "daily_tribute_respect_mission4": MISSION_4_DAILY_RESPECT,
+        "has_mission_4_bonus": has_mission_4,
     }
 
 
@@ -733,6 +776,8 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
 
 MISSION_2_DAILY_CASH = 100_000
 MISSION_2_DAILY_BULLETS = 100
+MISSION_4_DAILY_CASH = 500_000
+MISSION_4_DAILY_RESPECT = 50
 # Loot box pieces in daily tribute: base for all users, extra for mission 2 completers
 DAILY_TRIBUTE_LOOT_BOX_PIECES = int(os.environ.get("DAILY_TRIBUTE_LOOT_BOX_PIECES", "1"))
 MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_PIECES", "1"))
@@ -765,13 +810,22 @@ async def run_daily_tribute_deposit():
             },
         },
     )
+    result4 = await db.users.update_many(
+        {"mission_completions": {"$elemMatch": {"mission_id": FOURTH_MISSION_ID}}},
+        {
+            "$inc": {
+                "tribute_bank": MISSION_4_DAILY_CASH,
+                "respect_points": MISSION_4_DAILY_RESPECT,
+            },
+        },
+    )
     await db.game_config.update_one(
         {"id": TRIBUTE_DEPOSIT_CONFIG_ID},
         {"$set": {"last_run_utc_date": today}},
         upsert=True,
     )
     logging.getLogger(__name__).info(
-        "Daily tribute deposit: %s cash + %s loot box pieces to %d users; mission 2 bonus (%s cash + %s bullets + %s pieces) to %d users at %s UTC",
+        "Daily tribute deposit: %s cash + %s loot box pieces to %d users; mission 2 bonus (%s cash + %s bullets + %s pieces) to %d users; mission 4 bonus (%s cash + %s respect) to %d users at %s UTC",
         DAILY_TRIBUTE_AMOUNT,
         DAILY_TRIBUTE_LOOT_BOX_PIECES,
         result.modified_count,
@@ -779,6 +833,9 @@ async def run_daily_tribute_deposit():
         MISSION_2_DAILY_BULLETS,
         MISSION_2_DAILY_LOOT_BOX_PIECES,
         result2.modified_count,
+        MISSION_4_DAILY_CASH,
+        MISSION_4_DAILY_RESPECT,
+        result4.modified_count,
         today,
     )
 

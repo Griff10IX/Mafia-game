@@ -372,6 +372,8 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         )
         rp_before = int(current_user.get("rank_points") or 0)
         gta_inc = {"money": car["value"], "rank_points": rank_points, "total_gta": 1}
+        if (car.get("rarity") or "").strip().lower() == "uncommon":
+            gta_inc["uncommon_cars_stolen"] = 1
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
             gta_inc["respect_points"] = respect_drop

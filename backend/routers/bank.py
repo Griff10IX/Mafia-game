@@ -160,7 +160,10 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     interest = int(round(amount * rate))
 
     deposit_id = str(uuid.uuid4())
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -amount}})
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"money": -amount, "total_interest_deposited": int(amount)}},
+    )
     await db.bank_deposits.insert_one({
         "id": deposit_id,
         "user_id": current_user["id"],

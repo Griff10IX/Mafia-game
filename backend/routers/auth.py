@@ -172,6 +172,8 @@ def register(router):
                 "cars_melted": 0,
                 "bullets_purchased_from_armoury": 0,
                 "uncommon_cars_scrapped": 0,
+                "uncommon_cars_stolen": 0,
+                "total_interest_deposited": 0,
                 "tribute_bullets": 0,
                 "tribute_loot_box_pieces": 0,
                 "loot_box_pieces": 0,
