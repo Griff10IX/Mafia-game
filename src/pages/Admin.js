@@ -147,6 +147,7 @@ export default function Admin() {
   const [giveAllMoney, setGiveAllMoney] = useState(10000);
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
+  const [testPayoutLoading, setTestPayoutLoading] = useState(false);
   const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
@@ -777,6 +778,18 @@ export default function Admin() {
       toast.success(res.data?.message || 'Dropped', { duration: 10000 });
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed', { duration: 10000 }); }
     finally { setDropHumanBgLoading(false); }
+  };
+
+  const handleTestBodyguardPayout = async () => {
+    setTestPayoutLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/test-payout');
+      toast.success(res.data?.message ?? `Test payout: ${res.data?.paid_count ?? 0} paid`, { duration: 8000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
+    } finally {
+      setTestPayoutLoading(false);
+    }
   };
 
   const handleGenerateBodyguards = async () => {
@@ -1811,6 +1824,12 @@ export default function Admin() {
               <BtnDanger onClick={handleDropAllHumanBodyguards} disabled={dropHumanBgLoading}>
                 {dropHumanBgLoading ? '...' : 'Drop All'}
               </BtnDanger>
+            </ActionRow>
+
+            <ActionRow icon={Shield} label="Test bodyguard payout" description="Run weekly payout job once (human BGs only)">
+              <BtnPrimary onClick={handleTestBodyguardPayout} disabled={testPayoutLoading}>
+                {testPayoutLoading ? '...' : 'Run test payout'}
+              </BtnPrimary>
             </ActionRow>
           </div>
         )}

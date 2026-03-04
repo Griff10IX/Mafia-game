@@ -29,6 +29,8 @@ BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 
 # Human bodyguard one-time hire cost is 25% cheaper than robot (deducted from inviter when invite is accepted)
 BODYGUARD_HUMAN_HIRE_DISCOUNT = 0.75  # 75% of robot price
+# Cooldown between dropping human bodyguards (owner can only drop once per period)
+BODYGUARD_DROP_COOLDOWN_HOURS = 3
 
 # Bodyguard inflation: each purchase starts/resets a 3h timer; buying again before it expires adds % (2, 5, 7, 12, 17, 22, ...)
 BODYGUARD_INFLATION_HOURS = 3
@@ -279,6 +281,9 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
         oldest = next(iter(_bodyguards_cache))
         _bodyguards_cache.pop(oldest, None)
     payload = {"bodyguards": result}
+    # Cooldown for dropping human bodyguards (so frontend can show "drop available in X min")
+    user_doc = await db.users.find_one({"id": uid}, {"_id": 0, "bodyguard_last_drop_at": 1})
+    payload["bodyguard_last_drop_at"] = user_doc.get("bodyguard_last_drop_at") if user_doc else None
     # If current user is acting as a bodyguard for someone, show who they guard for
     as_guard = await db.bodyguards.find_one(
         {"bodyguard_user_id": uid, "is_robot": False},
@@ -534,6 +539,16 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
     invite = await db.bodyguard_invites.find_one({"id": invite_id, "invitee_id": current_user["id"], "status": "pending"}, {"_id": 0})
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
+    # You can only be a bodyguard for one person at a time
+    already_guard = await db.bodyguards.find_one(
+        {"bodyguard_user_id": current_user["id"], "is_robot": False},
+        {"_id": 1},
+    )
+    if already_guard:
+        raise HTTPException(
+            status_code=400,
+            detail="You can only be a bodyguard for one person at a time. Ask your current client to drop you first.",
+        )
     inviter = await db.users.find_one({"id": invite["inviter_id"]}, {"_id": 0})
     if not inviter:
         raise HTTPException(status_code=400, detail="Inviter no longer exists")
@@ -853,12 +868,88 @@ async def run_bodyguard_weekly_payout(database):
             )
     if paid:
         log.info("Bodyguard weekly payout: %d paid (weekday=%s)", paid, weekday)
+    return paid
+
+
+async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_user)):
+    """Owner drops a human bodyguard from a slot. Payments stop; the slot becomes empty. Once every 3 hours."""
+    if slot < 1 or slot > 4:
+        raise HTTPException(status_code=400, detail="Invalid slot")
+    # Cooldown: only one drop per BODYGUARD_DROP_COOLDOWN_HOURS
+    owner_doc = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "bodyguard_last_drop_at": 1},
+    )
+    if owner_doc and owner_doc.get("bodyguard_last_drop_at"):
+        try:
+            last_drop = datetime.fromisoformat(owner_doc["bodyguard_last_drop_at"].replace("Z", "+00:00"))
+            if last_drop.tzinfo is None:
+                last_drop = last_drop.replace(tzinfo=timezone.utc)
+            elapsed = (datetime.now(timezone.utc) - last_drop).total_seconds()
+            if elapsed < BODYGUARD_DROP_COOLDOWN_HOURS * 3600:
+                mins_left = int((BODYGUARD_DROP_COOLDOWN_HOURS * 3600 - elapsed) / 60)
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"You can only drop a bodyguard once every {BODYGUARD_DROP_COOLDOWN_HOURS} hours. Try again in {mins_left} minutes.",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    bg = await db.bodyguards.find_one(
+        {"user_id": current_user["id"], "slot_number": slot},
+        {"_id": 0, "bodyguard_user_id": 1, "is_robot": 1},
+    )
+    if not bg:
+        raise HTTPException(status_code=404, detail="No bodyguard in that slot")
+    if bg.get("is_robot"):
+        raise HTTPException(status_code=400, detail="Cannot drop a robot; use admin clear if needed")
+    guard_id = bg.get("bodyguard_user_id")
+    if not guard_id:
+        raise HTTPException(status_code=400, detail="Slot is already empty")
+    guard_user = await db.users.find_one({"id": guard_id}, {"_id": 0, "username": 1})
+    guard_name = guard_user.get("username", "?") if guard_user else "?"
+    await db.bodyguards.update_one(
+        {"user_id": current_user["id"], "slot_number": slot},
+        {
+            "$set": {
+                "bodyguard_user_id": None,
+                "payment_points": 0,
+                "payment_money": 0,
+                "payout_weekday": None,
+                "last_payout_date": None,
+            },
+            "$unset": {"contract_end": "", "hired_at": "", "hire_cost": ""},
+        },
+    )
+    await send_notification(
+        guard_id,
+        "🛡️ Bodyguard Dropped",
+        f"{current_user.get('username', '?')} has dropped you as their bodyguard. You are no longer under contract.",
+        "bodyguard",
+    )
+    now = datetime.now(timezone.utc)
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"bodyguard_last_drop_at": now.isoformat()}},
+    )
+    _invalidate_bodyguards_cache(current_user["id"])
+    _invalidate_bodyguards_cache(guard_id)
+    return {"message": f"Dropped {guard_name} from slot {slot}. Payments cancelled. You can drop again in {BODYGUARD_DROP_COOLDOWN_HOURS} hours."}
+
+
+async def admin_test_bodyguard_payout(current_user: dict = Depends(get_current_user)):
+    """Admin-only: run the weekly bodyguard payout job once (for testing). Returns how many were paid."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    paid = await run_bodyguard_weekly_payout(db)
+    return {"message": f"Test payout run: {paid} bodyguard(s) paid", "paid_count": paid}
 
 
 def register(router):
     router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"])
     router.add_api_route("/bodyguards/stats", get_bodyguards_stats, methods=["GET"])
-    router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"], response_model=List[BodyguardResponse])
+    router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"])
     router.add_api_route("/bodyguards/armour/upgrade", upgrade_bodyguard_armour, methods=["POST"])
     router.add_api_route("/bodyguards/slot/buy", buy_bodyguard_slot, methods=["POST"])
     router.add_api_route("/bodyguards/hire", hire_bodyguard, methods=["POST"])
@@ -866,7 +957,9 @@ def register(router):
     router.add_api_route("/bodyguards/invites", get_bodyguard_invites, methods=["GET"])
     router.add_api_route("/bodyguards/invites/{invite_id}/accept", accept_bodyguard_invite, methods=["POST"])
     router.add_api_route("/bodyguards/invites/{invite_id}/decline", decline_bodyguard_invite, methods=["POST"])
+    router.add_api_route("/bodyguards/drop", drop_bodyguard, methods=["POST"])
     router.add_api_route("/admin/bodyguards/clear", admin_clear_bodyguards, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/test-payout", admin_test_bodyguard_payout, methods=["POST"])
     router.add_api_route("/admin/bodyguards/drop-all-human", admin_drop_all_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/drop-all", admin_drop_all_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/generate", admin_generate_bodyguards, methods=["POST"])

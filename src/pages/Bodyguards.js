@@ -78,6 +78,10 @@ export default function Bodyguards() {
   const [invitePayoutWeekday, setInvitePayoutWeekday] = useState(0);
   const [inviting, setInviting] = useState(false);
   const [actingInviteId, setActingInviteId] = useState(null);
+  const [droppingSlot, setDroppingSlot] = useState(null);
+  const [bodyguardLastDropAt, setBodyguardLastDropAt] = useState(null);
+
+  const DROP_COOLDOWN_HOURS = 3;
 
   const WEEKDAY_OPTIONS = [
     { value: 0, label: 'Monday' },
@@ -118,6 +122,7 @@ export default function Bodyguards() {
       const bgData = bodyguardsRes.data;
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
+      setBodyguardLastDropAt(bgData?.bodyguard_last_drop_at ?? null);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
@@ -261,9 +266,47 @@ export default function Bodyguards() {
     }
   };
 
+  const dropBodyguard = async (slot) => {
+    if (droppingSlot) return;
+    setDroppingSlot(slot);
+    try {
+      await api.post(`/bodyguards/drop?slot=${slot}`);
+      toast.success('Bodyguard dropped. Payments cancelled.');
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to drop bodyguard', { duration: 8000 });
+    } finally {
+      setDroppingSlot(null);
+    }
+  };
+
+  const getDropCooldownMinsLeft = (lastDropIso) => {
+    if (!lastDropIso) return 0;
+    try {
+      const last = new Date(lastDropIso.replace('Z', '')).getTime();
+      const end = last + DROP_COOLDOWN_HOURS * 60 * 60 * 1000;
+      return Math.max(0, Math.ceil((end - Date.now()) / 60000));
+    } catch {
+      return 0;
+    }
+  };
+
+  const [dropCooldownMins, setDropCooldownMins] = useState(0);
+  useEffect(() => {
+    if (!bodyguardLastDropAt) {
+      setDropCooldownMins(0);
+      return;
+    }
+    const tick = () => setDropCooldownMins(getDropCooldownMinsLeft(bodyguardLastDropAt));
+    tick();
+    const id = setInterval(tick, 60000);
+    return () => clearInterval(id);
+  }, [bodyguardLastDropAt]);
+
   const renderBodyguardCard = (bg) => {
     const hasGuard = !!bg.bodyguard_username;
     const isExpanded = expandedSlot === bg.slot_number;
+    const dropOnCooldown = dropCooldownMins > 0;
     return (
       <div
         key={bg.slot_number}
@@ -365,6 +408,18 @@ export default function Bodyguards() {
                   </div>
                 </div>
               )}
+              {!bg.is_robot && hasGuard && (
+                <div className="col-span-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); dropBodyguard(bg.slot_number); }}
+                    disabled={!!droppingSlot || dropOnCooldown}
+                    className="text-[10px] font-heading uppercase tracking-wide text-red-400 hover:text-red-300 border border-red-500/40 rounded px-2 py-1.5 bg-red-500/10 disabled:opacity-50"
+                  >
+                    {droppingSlot === bg.slot_number ? '…' : dropOnCooldown ? `Drop (in ${dropCooldownMins}m)` : 'Drop bodyguard'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -396,7 +451,7 @@ export default function Bodyguards() {
         <p className="text-[10px] text-zinc-500 font-heading italic">Hire robots or invite humans (4 bodyguards max total). Armour and who&apos;s watching your back.</p>
         {bodyguardFor?.owner_username && (
           <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-heading">
-            <span className="text-mutedForeground">You&apos;re bodyguarding for: </span>
+            <span className="text-mutedForeground">You&apos;re a Bodyguard for: </span>
             <Link to={`/profile/${encodeURIComponent(bodyguardFor.owner_username)}`} className="text-emerald-400 font-bold hover:underline">
               {bodyguardFor.owner_username}
             </Link>
