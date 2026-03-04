@@ -627,6 +627,7 @@ def register(router):
                 account_locked_comment=u.get("account_locked_comment"),
                 can_submit_comment=bool(u.get("account_locked", False)) and not u.get("account_locked_comment"),
                 email_verified=bool(u.get("email_verified", True)),
+                respect_points=_safe_int(u.get("respect_points"), 0),
                 loot_box_pieces=_safe_int(u.get("loot_box_pieces"), 0),
                 profile_autoplay_video=bool(u.get("profile_autoplay_video", True)),
             )

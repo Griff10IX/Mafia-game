@@ -516,6 +516,7 @@ const AdminStatsCard = ({ adminStats }) => (
       {[
         { label: 'Cash', value: `$${Number(adminStats.money ?? 0).toLocaleString()}` },
         { label: 'Points', value: Number(adminStats.points ?? 0).toLocaleString() },
+        { label: 'Respect', value: Number(adminStats.respect_points ?? 0).toLocaleString() },
         { label: 'Bullets', value: Number(adminStats.bullets ?? 0).toLocaleString() },
         { label: 'Booze Today', value: `$${Number(adminStats.booze_profit_today ?? 0).toLocaleString()}` },
         { label: 'Booze Total', value: `$${Number(adminStats.booze_profit_total ?? 0).toLocaleString()}` },

@@ -76,6 +76,7 @@ from server import (
     get_rank_info,
     get_effective_event,
     maybe_process_rank_up,
+    maybe_respect_points_drop,
     log_activity,
     RANKS,
     CARS,
@@ -341,9 +342,13 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
             }
         )
         rp_before = int(current_user.get("rank_points") or 0)
+        gta_inc = {"money": car["value"], "rank_points": rank_points, "total_gta": 1}
+        respect_drop = maybe_respect_points_drop()
+        if respect_drop:
+            gta_inc["respect_points"] = respect_drop
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"money": car["value"], "rank_points": rank_points, "total_gta": 1}},
+            {"$inc": gta_inc},
         )
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))

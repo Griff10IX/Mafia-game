@@ -114,8 +114,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
 }
 
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
-const DEFAULT_STAT_ORDER = ['rank', 'health', 'bullets', 'kills', 'money', 'points', 'property', 'notifications'];
-const TOPBAR_STAT_LABELS = { rank: 'Rank', health: 'Health', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', property: 'Casino & Property', notifications: 'Notifications' };
+const DEFAULT_STAT_ORDER = ['rank', 'health', 'bullets', 'kills', 'money', 'points', 'respect_points', 'property', 'notifications'];
+const TOPBAR_STAT_LABELS = { rank: 'Rank', health: 'Health', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', respect_points: 'Respect', property: 'Casino & Property', notifications: 'Notifications' };
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
 const NOTIFICATION_BALL_POSITION_KEY = 'notification_ball_position';
@@ -1359,6 +1359,18 @@ export default function Layout({ children }) {
                 </div>
               );
             }
+            if (statId === 'respect_points') {
+              const respectFull = formatInt(user.respect_points ?? 0);
+              const respectCompact = formatCompact(user.respect_points ?? 0);
+              const useCompactDesktop = respectFull.length > 12;
+              return (
+                <div className={`${chipClass} min-w-0`} title={`Respect: ${respectFull}`}>
+                  <Trophy size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
+                  <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-respect">{respectFull}</span>
+                  <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-respect-full">{useCompactDesktop ? `${respectCompact} resp` : respectFull}</span>
+                </div>
+              );
+            }
             if (statId === 'property') {
               const casinoNum = Number(casinoProfit);
               const propertyNum = Number(propertyProfit);
@@ -1895,6 +1907,10 @@ export default function Layout({ children }) {
                   <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
                     <Zap size={18} className="shrink-0" style={{ color: 'var(--noir-foreground)' }} />
                     <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.points)} pts</span>
+                  </div>
+                  <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
+                    <Trophy size={18} className="shrink-0" style={{ color: 'var(--noir-foreground)' }} />
+                    <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.respect_points ?? 0)} respect</span>
                   </div>
                   <div className="flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
                     <Crosshair size={18} className="shrink-0 text-red-400" />

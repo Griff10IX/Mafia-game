@@ -15,7 +15,7 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 
-from server import db, get_current_user, get_current_user_verified, get_rank_info, maybe_process_rank_up
+from server import db, get_current_user, get_current_user_verified, get_rank_info, maybe_process_rank_up, maybe_respect_points_drop
 
 # Equipment tiers for Organised Crime
 EQUIPMENT_TIERS = [
@@ -327,16 +327,18 @@ async def run_heist(
         # Success - award money and rank points
         rp_before = int(current_user.get("rank_points") or 0)
         rp_added = int(job.get("rank_points") or 0)
+        oc_inc = {
+            "money": job["reward"],
+            "rank_points": rp_added,
+            "total_heists": 1,
+            "successful_heists": 1
+        }
+        respect_drop = maybe_respect_points_drop()
+        if respect_drop:
+            oc_inc["respect_points"] = respect_drop
         await db.users.update_one(
             {"id": current_user["id"]},
-            {
-                "$inc": {
-                    "money": job["reward"],
-                    "rank_points": rp_added,
-                    "total_heists": 1,
-                    "successful_heists": 1
-                }
-            }
+            {"$inc": oc_inc}
         )
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rp_added, current_user.get("username", ""))

@@ -52,7 +52,7 @@ const Tab = ({ active, onClick, children }) => (
   </button>
 );
 
-const StoreCard = ({ title, Icon, desc, price, owned, onBuy, loading, disabled, children }) => (
+const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, children }) => (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
@@ -64,10 +64,29 @@ const StoreCard = ({ title, Icon, desc, price, owned, onBuy, loading, disabled, 
       {children}
       {owned ? (
         <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">Owned</div>
+      ) : respectPrice != null ? (
+        <div className="flex gap-1.5 mt-1">
+          <button
+            type="button"
+            onClick={() => onBuy(false)}
+            disabled={loading || disabled || (user && (user.points ?? 0) < price)}
+            className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+          >
+            {loading ? '...' : `${price} pts`}
+          </button>
+          <button
+            type="button"
+            onClick={() => onBuy(true)}
+            disabled={loading || disabled || (user && (user.respect_points ?? 0) < respectPrice)}
+            className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-50"
+          >
+            {loading ? '...' : `${respectPrice} resp`}
+          </button>
+        </div>
       ) : (
         <button
           type="button"
-          onClick={onBuy}
+          onClick={() => onBuy(false)}
           disabled={loading || disabled}
           className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
         >
@@ -171,11 +190,12 @@ export default function Store() {
     setCheckingPayment(false);
   };
 
-  const apiBuy = async (path, body, successMsg) => {
+  const apiBuy = async (path, body, successMsg, useRespectPoints = false) => {
     const isBodyguard = typeof path === 'string' && path.includes('bodyguards');
     const duration = isBodyguard ? 10000 : undefined;
+    const url = useRespectPoints ? (path + (path.includes('?') ? '&' : '?') + 'use_respect_points=true') : path;
     try {
-      await api.post(path, body || {});
+      await api.post(url, body || {});
       toast.success(successMsg || 'Done', duration != null ? { duration } : undefined);
       refreshUser();
       fetchData();
@@ -215,7 +235,10 @@ export default function Store() {
           <p className="text-[10px] text-zinc-500 font-heading italic">Points, upgrades, bullets & bodyguards</p>
         </div>
         {user != null && (
-          <span className="text-sm font-heading font-bold text-primary">{Number(user.points ?? 0).toLocaleString()} pts</span>
+          <span className="text-sm font-heading font-bold text-primary">
+            {Number(user.points ?? 0).toLocaleString()} pts
+            <span className="text-mutedForeground font-normal ml-2">· Respect: {Number(user.respect_points ?? 0).toLocaleString()}</span>
+          </span>
         )}
       </div>
 
@@ -416,10 +439,12 @@ export default function Store() {
                 Icon={u.Icon}
                 desc={u.desc}
                 price={u.price}
+                respectPrice={u.price * 5}
                 owned={owned}
                 loading={loading}
                 disabled={disabled}
-                onBuy={() => apiBuy(u.path, {}, 'Purchased')}
+                user={user}
+                onBuy={(useRespect) => apiBuy(u.path, {}, 'Purchased', useRespect)}
               >
                 {extra && (
                   <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
@@ -448,20 +473,36 @@ export default function Store() {
                     maxLength={30}
                     className="w-full px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
                   />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!customCarName.trim() || customCarName.trim().length < 2) {
-                        toast.error('Name 2+ characters');
-                        return;
-                      }
-                      apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
-                    }}
-                    disabled={!user || user.points < 500 || !customCarName.trim()}
-                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
-                  >
-                    500 pts
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!customCarName.trim() || customCarName.trim().length < 2) {
+                          toast.error('Name 2+ characters');
+                          return;
+                        }
+                        apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased', false).then(() => setCustomCarName(''));
+                      }}
+                      disabled={!user || (user.points ?? 0) < 500 || !customCarName.trim()}
+                      className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                    >
+                      500 pts
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!customCarName.trim() || customCarName.trim().length < 2) {
+                          toast.error('Name 2+ characters');
+                          return;
+                        }
+                        apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased', true).then(() => setCustomCarName(''));
+                      }}
+                      disabled={!user || (user.respect_points ?? 0) < 2500 || !customCarName.trim()}
+                      className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-50"
+                    >
+                      2500 resp
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -472,27 +513,40 @@ export default function Store() {
 
       {activeTab === 'bullets' && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {BULLET_PACKS.map((pack) => (
-            <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
-              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
-                <Crosshair size={14} className="text-primary shrink-0" />
-                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{(pack.bullets / 1000).toFixed(0)}k bullets</span>
+          {BULLET_PACKS.map((pack) => {
+            const respectCost = pack.cost * 5;
+            return (
+              <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
+                  <Crosshair size={14} className="text-primary shrink-0" />
+                  <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{(pack.bullets / 1000).toFixed(0)}k bullets</span>
+                </div>
+                <div className="p-2.5 text-center">
+                  <p className="text-[10px] text-zinc-500 font-heading mb-2">{pack.cost} pts or {respectCost} resp</p>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`, false)}
+                      disabled={!user || (user.points ?? 0) < pack.cost}
+                      className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                    >
+                      {pack.cost} pts
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`, true)}
+                      disabled={!user || (user.respect_points ?? 0) < respectCost}
+                      className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 disabled:opacity-50"
+                    >
+                      {respectCost} resp
+                    </button>
+                  </div>
+                </div>
+                <div className="store-art-line text-primary mx-3" />
               </div>
-              <div className="p-2.5 text-center">
-                <p className="text-[10px] text-zinc-500 font-heading mb-2">{pack.cost} pts</p>
-                <button
-                  type="button"
-                  onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
-                  disabled={!user || user.points < pack.cost}
-                  className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
-                >
-                  Buy
-                </button>
-              </div>
-              <div className="store-art-line text-primary mx-3" />
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -33,6 +33,7 @@ from server import (
     send_notification,
     send_notification_to_family,
     maybe_process_rank_up,
+    maybe_respect_points_drop,
     _find_user_by_username_case_insensitive,
     _apply_kill_inflation_decay,
     _increase_kill_inflation_on_kill,
@@ -621,6 +622,9 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 rewards = hitlist_entry.get("npc_rewards") or {}
                 rp_added = int(rewards.get("rank_points", 0) or 0)
                 inc = {"money": int(rewards.get("cash", 0) or 0), "points": int(rewards.get("points", 0) or 0), "rank_points": rp_added, "bullets": int(rewards.get("bullets", 0) or 0), "total_kills": 1, "hitlist_npc_kills": 1}
+                respect_drop = maybe_respect_points_drop()
+                if respect_drop:
+                    inc["respect_points"] = respect_drop
                 booze = rewards.get("booze")
                 if isinstance(booze, dict) and booze:
                     booze_ids = [b["id"] for b in BOOZE_TYPES]
@@ -657,6 +661,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 if inc.get("points"): reward_parts.append(f"{inc['points']} pts")
                 if inc.get("rank_points"): reward_parts.append(f"{inc['rank_points']} RP")
                 if inc.get("bullets"): reward_parts.append(f"{inc['bullets']} bullets")
+                if inc.get("respect_points"): reward_parts.append(f"{inc['respect_points']} respect")
                 if car_id: reward_parts.append("a car")
                 if isinstance(booze, dict) and booze: reward_parts.append("booze")
                 success_message = f"You killed {target_name}! (NPC) You got: " + ", ".join(reward_parts) + "."

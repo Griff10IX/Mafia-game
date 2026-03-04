@@ -258,6 +258,7 @@ def register(router):
             out["admin_stats"] = {
                 "money": int(user.get("money") or 0),
                 "points": int(user.get("points") or 0),
+                "respect_points": int(user.get("respect_points") or 0),
                 "bullets": int(user.get("bullets") or 0),
                 "booze_profit_today": booze_today,
                 "booze_profit_total": int(user.get("booze_profit_total") or 0),

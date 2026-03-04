@@ -169,6 +169,7 @@ from server import (
     get_effective_event,
     log_activity,
     maybe_process_rank_up,
+    maybe_respect_points_drop,
     RANKS,
 )
 from routers.objectives import update_objectives_progress
@@ -337,16 +338,18 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         from server import get_prestige_bonus
         reward = int(reward * get_prestige_bonus(current_user)["crime_mult"])
         rp_before = int(current_user.get("rank_points") or 0)
+        inc = {
+            "money": reward,
+            "rank_points": rank_points,
+            "total_crimes": 1,
+            "crime_profit": reward,
+        }
+        respect_drop = maybe_respect_points_drop()
+        if respect_drop:
+            inc["respect_points"] = respect_drop
         await db.users.update_one(
             {"id": current_user["id"]},
-            {
-                "$inc": {
-                    "money": reward,
-                    "rank_points": rank_points,
-                    "total_crimes": 1,
-                    "crime_profit": reward,
-                }
-            },
+            {"$inc": inc},
         )
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))

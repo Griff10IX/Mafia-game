@@ -19,41 +19,41 @@ from server import (
 
 # Objective types and their progress keys (daily: slightly more to do, slightly higher rewards)
 OBJECTIVE_TYPES_DAILY = [
-    {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes", "target_range": (8, 22), "reward_rank_points": (5, 14), "reward_cash": (800, 3200)},
-    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs", "target_range": (2, 7), "reward_rank_points": (8, 22), "reward_cash": (500, 1800)},
-    {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs out of jail", "target_range": (2, 6), "reward_rank_points": (8, 18), "reward_cash": (400, 1200)},
-    {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze run(s) (sell delivery)", "target_range": (2, 6), "reward_rank_points": (4, 10), "reward_cash": (600, 2000)},
-    {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city}", "target_range": (4, 14), "reward_rank_points": (6, 16), "reward_cash": (500, 2400), "needs_city": True},
-    {"id": "deposit_interest", "progress_key": "deposit_interest", "label": "Deposit ${target:,} into interest", "target_range": (80000, 450000), "reward_rank_points": (4, 10), "reward_points": (10, 35)},
-    {"id": "hitlist_npc_kills", "progress_key": "hitlist_npc_kills", "label": "Kill {target} hitlist NPC(s)", "target_range": (1, 6), "reward_rank_points": (12, 38), "reward_cash": (1600, 6500)},
+    {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes", "target_range": (8, 22), "reward_rank_points": (5, 14), "reward_cash": (800, 3200), "reward_respect_points": (1, 4)},
+    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs", "target_range": (2, 7), "reward_rank_points": (8, 22), "reward_cash": (500, 1800), "reward_respect_points": (1, 4)},
+    {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs out of jail", "target_range": (2, 6), "reward_rank_points": (8, 18), "reward_cash": (400, 1200), "reward_respect_points": (1, 4)},
+    {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze run(s) (sell delivery)", "target_range": (2, 6), "reward_rank_points": (4, 10), "reward_cash": (600, 2000), "reward_respect_points": (1, 3)},
+    {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city}", "target_range": (4, 14), "reward_rank_points": (6, 16), "reward_cash": (500, 2400), "reward_respect_points": (1, 4), "needs_city": True},
+    {"id": "deposit_interest", "progress_key": "deposit_interest", "label": "Deposit ${target:,} into interest", "target_range": (80000, 450000), "reward_rank_points": (4, 10), "reward_points": (10, 35), "reward_respect_points": (1, 3)},
+    {"id": "hitlist_npc_kills", "progress_key": "hitlist_npc_kills", "label": "Kill {target} hitlist NPC(s)", "target_range": (1, 6), "reward_rank_points": (12, 38), "reward_cash": (1600, 6500), "reward_respect_points": (2, 5)},
 ]
 
 # Weekly: more objectives and much higher targets/rewards
 OBJECTIVE_TYPES_WEEKLY = [
-    {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes this week", "target_range": (100, 220), "reward_rank_points": (50, 120), "reward_cash": (12000, 35000)},
-    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs this week", "target_range": (20, 45), "reward_rank_points": (80, 180), "reward_cash": (8000, 22000)},
-    {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs this week", "target_range": (15, 35), "reward_rank_points": (60, 140), "reward_cash": (5000, 16000)},
-    {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze runs this week", "target_range": (25, 55), "reward_rank_points": (45, 100), "reward_cash": (8000, 22000)},
-    {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city} this week", "target_range": (30, 80), "reward_rank_points": (40, 90), "reward_cash": (4000, 12000), "needs_city": True},
-    {"id": "deposit_interest", "progress_key": "deposit_interest", "label": "Deposit ${target:,} into interest this week", "target_range": (1500000, 6000000), "reward_rank_points": (35, 85), "reward_points": (150, 400)},
-    {"id": "hitlist_npc_kills", "progress_key": "hitlist_npc_kills", "label": "Kill {target} hitlist NPC(s) this week", "target_range": (12, 28), "reward_rank_points": (100, 220), "reward_cash": (18000, 45000)},
+    {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes this week", "target_range": (100, 220), "reward_rank_points": (50, 120), "reward_cash": (12000, 35000), "reward_respect_points": (5, 12)},
+    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs this week", "target_range": (20, 45), "reward_rank_points": (80, 180), "reward_cash": (8000, 22000), "reward_respect_points": (5, 12)},
+    {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs this week", "target_range": (15, 35), "reward_rank_points": (60, 140), "reward_cash": (5000, 16000), "reward_respect_points": (5, 12)},
+    {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze runs this week", "target_range": (25, 55), "reward_rank_points": (45, 100), "reward_cash": (8000, 22000), "reward_respect_points": (4, 10)},
+    {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city} this week", "target_range": (30, 80), "reward_rank_points": (40, 90), "reward_cash": (4000, 12000), "reward_respect_points": (5, 12), "needs_city": True},
+    {"id": "deposit_interest", "progress_key": "deposit_interest", "label": "Deposit ${target:,} into interest this week", "target_range": (1500000, 6000000), "reward_rank_points": (35, 85), "reward_points": (150, 400), "reward_respect_points": (4, 10)},
+    {"id": "hitlist_npc_kills", "progress_key": "hitlist_npc_kills", "label": "Kill {target} hitlist NPC(s) this week", "target_range": (12, 28), "reward_rank_points": (100, 220), "reward_cash": (18000, 45000), "reward_respect_points": (6, 14)},
 ]
 
 # Monthly: big targets, big rewards
 OBJECTIVE_TYPES_MONTHLY = [
-    {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes this month", "target_range": (400, 900), "reward_rank_points": (200, 450), "reward_cash": (50000, 140000)},
-    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs this month", "target_range": (80, 180), "reward_rank_points": (320, 700), "reward_cash": (35000, 90000)},
-    {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs this month", "target_range": (60, 140), "reward_rank_points": (250, 550), "reward_cash": (22000, 65000)},
-    {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze runs this month", "target_range": (100, 220), "reward_rank_points": (180, 400), "reward_cash": (35000, 90000)},
-    {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city} this month", "target_range": (120, 320), "reward_rank_points": (160, 360), "reward_cash": (18000, 50000), "needs_city": True},
-    {"id": "deposit_interest", "progress_key": "deposit_interest", "label": "Deposit ${target:,} into interest this month", "target_range": (6000000, 25000000), "reward_rank_points": (140, 340), "reward_points": (600, 1600)},
-    {"id": "hitlist_npc_kills", "progress_key": "hitlist_npc_kills", "label": "Kill {target} hitlist NPC(s) this month", "target_range": (50, 120), "reward_rank_points": (400, 900), "reward_cash": (75000, 180000)},
+    {"id": "crimes", "progress_key": "crimes", "label": "Commit {target} crimes this month", "target_range": (400, 900), "reward_rank_points": (200, 450), "reward_cash": (50000, 140000), "reward_respect_points": (15, 40)},
+    {"id": "gta", "progress_key": "gta", "label": "Complete {target} GTAs this month", "target_range": (80, 180), "reward_rank_points": (320, 700), "reward_cash": (35000, 90000), "reward_respect_points": (15, 40)},
+    {"id": "busts", "progress_key": "busts", "label": "Bust {target} players/NPCs this month", "target_range": (60, 140), "reward_rank_points": (250, 550), "reward_cash": (22000, 65000), "reward_respect_points": (15, 40)},
+    {"id": "booze_runs", "progress_key": "booze_runs", "label": "Complete {target} booze runs this month", "target_range": (100, 220), "reward_rank_points": (180, 400), "reward_cash": (35000, 90000), "reward_respect_points": (12, 35)},
+    {"id": "crimes_in_city", "progress_key": "crimes_in_city", "label": "Commit {target} crimes in {city} this month", "target_range": (120, 320), "reward_rank_points": (160, 360), "reward_cash": (18000, 50000), "reward_respect_points": (15, 40), "needs_city": True},
+    {"id": "deposit_interest", "progress_key": "deposit_interest", "label": "Deposit ${target:,} into interest this month", "target_range": (6000000, 25000000), "reward_rank_points": (140, 340), "reward_points": (600, 1600), "reward_respect_points": (12, 35)},
+    {"id": "hitlist_npc_kills", "progress_key": "hitlist_npc_kills", "label": "Kill {target} hitlist NPC(s) this month", "target_range": (50, 120), "reward_rank_points": (400, 900), "reward_cash": (75000, 180000), "reward_respect_points": (20, 50)},
 ]
 
 # Completion bonus when ALL daily / weekly / monthly are done (on top of per-objective rewards)
-DAILY_COMPLETION_BONUS = {"rank_points": 25, "money": 3500, "points": 18}
-WEEKLY_COMPLETION_BONUS = {"rank_points": 180, "money": 40000, "points": 180}
-MONTHLY_COMPLETION_BONUS = {"rank_points": 600, "money": 120000, "points": 500}
+DAILY_COMPLETION_BONUS = {"rank_points": 25, "money": 3500, "points": 18, "respect_points": 5}
+WEEKLY_COMPLETION_BONUS = {"rank_points": 180, "money": 40000, "points": 180, "respect_points": 15}
+MONTHLY_COMPLETION_BONUS = {"rank_points": 600, "money": 120000, "points": 500, "respect_points": 50}
 # Weekly and monthly rewards are multiplied so they feel like "x5" and "x15" vs daily
 WEEKLY_REWARD_MULTIPLIER = 5
 MONTHLY_REWARD_MULTIPLIER = 15
@@ -163,6 +163,9 @@ def _generate_daily_objectives(date_str: str) -> list:
         if "reward_points" in t:
             p_lo, p_hi = t["reward_points"]
             reward["points"] = rng.randint(p_lo, p_hi)
+        if "reward_respect_points" in t:
+            rp_lo, rp_hi = t["reward_respect_points"]
+            reward["respect_points"] = rng.randint(rp_lo, rp_hi)
         city = rng.choice(STATES) if t.get("needs_city") else None
         label = t["label"].format(target=target, city=city or "")
         out.append({
@@ -199,6 +202,9 @@ def _generate_weekly_objectives(week_start_str: str) -> list:
         if "reward_points" in t:
             p_lo, p_hi = t["reward_points"]
             reward["points"] = rng.randint(p_lo, p_hi)
+        if "reward_respect_points" in t:
+            rp_lo, rp_hi = t["reward_respect_points"]
+            reward["respect_points"] = rng.randint(rp_lo, rp_hi)
         city = rng.choice(STATES) if t.get("needs_city") else None
         label = t["label"].format(target=target, city=city or "")
         out.append({
@@ -235,6 +241,9 @@ def _generate_monthly_objectives(month_start_str: str) -> list:
         if "reward_points" in t:
             p_lo, p_hi = t["reward_points"]
             reward["points"] = rng.randint(p_lo, p_hi)
+        if "reward_respect_points" in t:
+            rp_lo, rp_hi = t["reward_respect_points"]
+            reward["respect_points"] = rng.randint(rp_lo, rp_hi)
         city = rng.choice(STATES) if t.get("needs_city") else None
         label = t["label"].format(target=target, city=city or "")
         out.append({
@@ -266,7 +275,7 @@ def _progress_key_for_city(city: str) -> str:
 def _build_objective_list(objectives: list, progress: dict, current_state: str):
     result = []
     all_done = True
-    total_rewards = {"rank_points": 0, "money": 0, "points": 0}
+    total_rewards = {"rank_points": 0, "money": 0, "points": 0, "respect_points": 0}
     for obj in objectives:
         if obj["progress_key"] == "crimes_in_city":
             current = _get_progress_for_objective(progress, obj, current_state)
@@ -361,6 +370,7 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
         daily_claim_reward["rank_points"] = daily_claim_reward.get("rank_points", 0) + DAILY_COMPLETION_BONUS.get("rank_points", 0)
         daily_claim_reward["money"] = daily_claim_reward.get("money", 0) + DAILY_COMPLETION_BONUS.get("money", 0)
         daily_claim_reward["points"] = daily_claim_reward.get("points", 0) + DAILY_COMPLETION_BONUS.get("points", 0)
+        daily_claim_reward["respect_points"] = daily_claim_reward.get("respect_points", 0) + DAILY_COMPLETION_BONUS.get("respect_points", 0)
         if user.get("objectives_daily_claim_notified") != today_str:
             await send_notification(user_id, "Objectives", "Your daily objectives are complete! Claim your rewards on the Objectives page.", "reward", category="system")
             await db.users.update_one({"id": user_id}, {"$set": {"objectives_daily_claim_notified": today_str}})
@@ -371,6 +381,7 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
         weekly_claim_reward["rank_points"] = (weekly_claim_reward.get("rank_points", 0) + WEEKLY_COMPLETION_BONUS.get("rank_points", 0)) * WEEKLY_REWARD_MULTIPLIER
         weekly_claim_reward["money"] = (weekly_claim_reward.get("money", 0) + WEEKLY_COMPLETION_BONUS.get("money", 0)) * WEEKLY_REWARD_MULTIPLIER
         weekly_claim_reward["points"] = (weekly_claim_reward.get("points", 0) + WEEKLY_COMPLETION_BONUS.get("points", 0)) * WEEKLY_REWARD_MULTIPLIER
+        weekly_claim_reward["respect_points"] = (weekly_claim_reward.get("respect_points", 0) + WEEKLY_COMPLETION_BONUS.get("respect_points", 0)) * WEEKLY_REWARD_MULTIPLIER
         if user.get("objectives_weekly_claim_notified") != week_start_str:
             await send_notification(user_id, "Objectives", "Your weekly objectives are complete! Claim your rewards on the Objectives page.", "reward", category="system")
             await db.users.update_one({"id": user_id}, {"$set": {"objectives_weekly_claim_notified": week_start_str}})
@@ -381,6 +392,7 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
         monthly_claim_reward["rank_points"] = (monthly_claim_reward.get("rank_points", 0) + MONTHLY_COMPLETION_BONUS.get("rank_points", 0)) * MONTHLY_REWARD_MULTIPLIER
         monthly_claim_reward["money"] = (monthly_claim_reward.get("money", 0) + MONTHLY_COMPLETION_BONUS.get("money", 0)) * MONTHLY_REWARD_MULTIPLIER
         monthly_claim_reward["points"] = (monthly_claim_reward.get("points", 0) + MONTHLY_COMPLETION_BONUS.get("points", 0)) * MONTHLY_REWARD_MULTIPLIER
+        monthly_claim_reward["respect_points"] = (monthly_claim_reward.get("respect_points", 0) + MONTHLY_COMPLETION_BONUS.get("respect_points", 0)) * MONTHLY_REWARD_MULTIPLIER
         if user.get("objectives_monthly_claim_notified") != month_start_str:
             await send_notification(user_id, "Objectives", "Your monthly objectives are complete! Claim your rewards on the Objectives page.", "reward", category="system")
             await db.users.update_one({"id": user_id}, {"$set": {"objectives_monthly_claim_notified": month_start_str}})
@@ -452,7 +464,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["rank_points"] = reward.get("rank_points", 0) + DAILY_COMPLETION_BONUS.get("rank_points", 0)
         reward["money"] = reward.get("money", 0) + DAILY_COMPLETION_BONUS.get("money", 0)
         reward["points"] = reward.get("points", 0) + DAILY_COMPLETION_BONUS.get("points", 0)
-        inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
+        reward["respect_points"] = reward.get("respect_points", 0) + DAILY_COMPLETION_BONUS.get("respect_points", 0)
+        inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_daily_claimed": True}, "$inc": inc})
@@ -477,7 +490,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["rank_points"] = (reward.get("rank_points", 0) + WEEKLY_COMPLETION_BONUS.get("rank_points", 0)) * WEEKLY_REWARD_MULTIPLIER
         reward["money"] = (reward.get("money", 0) + WEEKLY_COMPLETION_BONUS.get("money", 0)) * WEEKLY_REWARD_MULTIPLIER
         reward["points"] = (reward.get("points", 0) + WEEKLY_COMPLETION_BONUS.get("points", 0)) * WEEKLY_REWARD_MULTIPLIER
-        inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
+        reward["respect_points"] = (reward.get("respect_points", 0) + WEEKLY_COMPLETION_BONUS.get("respect_points", 0)) * WEEKLY_REWARD_MULTIPLIER
+        inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_weekly_claimed": True}, "$inc": inc})
@@ -502,7 +516,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["rank_points"] = (reward.get("rank_points", 0) + MONTHLY_COMPLETION_BONUS.get("rank_points", 0)) * MONTHLY_REWARD_MULTIPLIER
         reward["money"] = (reward.get("money", 0) + MONTHLY_COMPLETION_BONUS.get("money", 0)) * MONTHLY_REWARD_MULTIPLIER
         reward["points"] = (reward.get("points", 0) + MONTHLY_COMPLETION_BONUS.get("points", 0)) * MONTHLY_REWARD_MULTIPLIER
-        inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points")}
+        reward["respect_points"] = (reward.get("respect_points", 0) + MONTHLY_COMPLETION_BONUS.get("respect_points", 0)) * MONTHLY_REWARD_MULTIPLIER
+        inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
         rp_added = int(inc.get("rank_points") or 0)
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_monthly_claimed": True}, "$inc": inc})

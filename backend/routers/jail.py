@@ -211,6 +211,26 @@ async def _record_bust_event(user_id: str, success: bool, profit: int):
         logger.exception("Record bust event: %s", e)
 
 
+# One-time respect_points rewards when total busts cross milestones
+BUST_MILESTONES = [100, 500, 1000, 2000, 5000]
+BUST_MILESTONE_REWARDS = {100: 10, 500: 25, 1000: 50, 2000: 100, 5000: 250}
+
+
+async def _award_bust_milestones(user_id: str, new_total_busts: int, claimed: list) -> None:
+    """If new_total_busts crosses any unclaimed milestone, award respect_points and mark claimed."""
+    new_claimed = [m for m in BUST_MILESTONES if m <= new_total_busts and m not in claimed]
+    if not new_claimed:
+        return
+    total_reward = sum(BUST_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
+    try:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$inc": {"respect_points": total_reward}, "$addToSet": {"respect_points_bust_milestones_claimed": {"$each": new_claimed}}},
+        )
+    except Exception as e:
+        logger.exception("Award bust milestones: %s", e)
+
+
 async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     """Attempt to bust target (NPC or player) out of jail. Returns dict with success, message, optional rank_points_earned, cash_reward, jail_time. On validation failure returns {success: False, error: str, error_code: int}."""
     target_name = (target_username or "").strip()
@@ -250,6 +270,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             except Exception:
                 pass
             await _record_bust_event(current_user["id"], True, bust_reward_cash)
+            new_total = total_successes + 1
+            claimed = current_user.get("respect_points_bust_milestones_claimed") or []
+            await _award_bust_milestones(current_user["id"], new_total, claimed)
             msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
             return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash}
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
@@ -328,6 +351,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         except Exception:
             pass
         await _record_bust_event(current_user["id"], True, cash_to_pay)
+        new_total = total_successes + 1
+        claimed = current_user.get("respect_points_bust_milestones_claimed") or []
+        await _award_bust_milestones(current_user["id"], new_total, claimed)
         display_name = target.get("username") or target_username or "Unknown"
         msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=display_name)
         return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay}

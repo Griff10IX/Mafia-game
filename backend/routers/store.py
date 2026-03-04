@@ -5,6 +5,18 @@ from pydantic import BaseModel, field_validator
 
 from fastapi import Depends, HTTPException, Query
 
+
+def _store_cost_inc(current_user: dict, points_cost: int, use_respect_points: bool):
+    """Return (cost_used, $inc dict) for a store purchase. Raises if insufficient balance."""
+    if use_respect_points:
+        cost_respect = points_cost * 5
+        if (current_user.get("respect_points") or 0) < cost_respect:
+            raise HTTPException(status_code=400, detail=f"Insufficient respect points (need {cost_respect})")
+        return cost_respect, {"respect_points": -cost_respect, "lifetime_respect_points_spent": cost_respect}
+    if (current_user.get("points") or 0) < points_cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (need {points_cost})")
+    return points_cost, {"points": -points_cost, "lifetime_points_spent": points_cost}
+
 from server import (
     db,
     get_current_user,
@@ -52,152 +64,178 @@ class SendPointsRequest(BaseModel):
         return v
 
 
-async def buy_premium_rank_bar(current_user: dict = Depends(get_current_user)):
+async def buy_premium_rank_bar(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     if current_user.get("premium_rank_bar", False):
         raise HTTPException(status_code=400, detail="You already own the premium rank bar")
     cost = 50
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail="Insufficient points")
+    cost_used, inc = _store_cost_inc(current_user, cost, use_respect_points)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "lifetime_points_spent": cost}, "$set": {"premium_rank_bar": True}}
+        {"$inc": inc, "$set": {"premium_rank_bar": True}}
     )
-    return {"message": "Premium rank bar purchased!", "cost": cost}
+    return {"message": "Premium rank bar purchased!", "cost": cost_used}
 
 
-async def buy_silencer(current_user: dict = Depends(get_current_user)):
+async def buy_silencer(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     if current_user.get("has_silencer", False):
         raise HTTPException(status_code=400, detail="You already own a silencer")
-    if (current_user.get("points") or 0) < SILENCER_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {SILENCER_COST_POINTS})")
+    cost_used, inc = _store_cost_inc(current_user, SILENCER_COST_POINTS, use_respect_points)
     owned = await db.user_weapons.find_one({"user_id": current_user["id"], "quantity": {"$gt": 0}}, {"_id": 0})
     if not owned:
         raise HTTPException(status_code=400, detail="You need at least one weapon to use a silencer")
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -SILENCER_COST_POINTS, "lifetime_points_spent": SILENCER_COST_POINTS}, "$set": {"has_silencer": True}}
+        {"$inc": inc, "$set": {"has_silencer": True}}
     )
-    return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": SILENCER_COST_POINTS}
+    return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": cost_used}
 
 
-async def buy_anti_snitch(current_user: dict = Depends(get_current_user)):
+async def buy_anti_snitch(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     """Purchase Anti Snitch: you cannot be snitched on by other players in jail."""
     if current_user.get("anti_snitch", False):
         raise HTTPException(status_code=400, detail="You already have Anti Snitch")
-    if (current_user.get("points") or 0) < ANTI_SNITCH_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {ANTI_SNITCH_COST_POINTS})")
+    cost_used, inc = _store_cost_inc(current_user, ANTI_SNITCH_COST_POINTS, use_respect_points)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -ANTI_SNITCH_COST_POINTS, "lifetime_points_spent": ANTI_SNITCH_COST_POINTS}, "$set": {"anti_snitch": True}},
+        {"$inc": inc, "$set": {"anti_snitch": True}},
     )
-    return {"message": "Anti Snitch purchased! You cannot be snitched on.", "cost": ANTI_SNITCH_COST_POINTS}
+    return {"message": "Anti Snitch purchased! You cannot be snitched on.", "cost": cost_used}
 
 
-async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
+async def buy_oc_timer(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     if current_user.get("oc_timer_reduced", False):
         raise HTTPException(status_code=400, detail="You already have the reduced OC timer (4h)")
-    if (current_user.get("points") or 0) < OC_TIMER_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
+    cost_used, inc = _store_cost_inc(current_user, OC_TIMER_COST_POINTS, use_respect_points)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -OC_TIMER_COST_POINTS, "lifetime_points_spent": OC_TIMER_COST_POINTS}, "$set": {"oc_timer_reduced": True}}
+        {"$inc": inc, "$set": {"oc_timer_reduced": True}}
     )
-    return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
+    return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": cost_used}
 
 
-async def buy_crew_oc_timer(current_user: dict = Depends(get_current_user)):
+async def buy_crew_oc_timer(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     """Crew OC (family): when you commit, cooldown is 6h instead of 8h."""
     if current_user.get("crew_oc_timer_reduced", False):
         raise HTTPException(status_code=400, detail="You already have the Crew OC timer (6h)")
-    if (current_user.get("points") or 0) < CREW_OC_TIMER_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {CREW_OC_TIMER_COST_POINTS})")
+    cost_used, inc = _store_cost_inc(current_user, CREW_OC_TIMER_COST_POINTS, use_respect_points)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -CREW_OC_TIMER_COST_POINTS, "lifetime_points_spent": CREW_OC_TIMER_COST_POINTS}, "$set": {"crew_oc_timer_reduced": True}}
+        {"$inc": inc, "$set": {"crew_oc_timer_reduced": True}}
     )
-    return {"message": "Crew OC timer purchased! When you commit, family Crew OC cooldown is 6h instead of 8h.", "cost": CREW_OC_TIMER_COST_POINTS}
+    return {"message": "Crew OC timer purchased! When you commit, family Crew OC cooldown is 6h instead of 8h.", "cost": cost_used}
 
 
-async def upgrade_garage_batch_limit(current_user: dict = Depends(get_current_user)):
+async def upgrade_garage_batch_limit(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     current_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
     if current_limit >= GARAGE_BATCH_LIMIT_MAX:
         raise HTTPException(status_code=400, detail="Garage batch limit already maxed")
-    if current_user["points"] < GARAGE_BATCH_UPGRADE_COST:
-        raise HTTPException(status_code=400, detail="Insufficient points")
+    cost_used, inc = _store_cost_inc(current_user, GARAGE_BATCH_UPGRADE_COST, use_respect_points)
     new_limit = min(GARAGE_BATCH_LIMIT_MAX, current_limit + GARAGE_BATCH_UPGRADE_INCREMENT)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -GARAGE_BATCH_UPGRADE_COST, "lifetime_points_spent": GARAGE_BATCH_UPGRADE_COST}, "$set": {"garage_batch_limit": new_limit}}
+        {"$inc": inc, "$set": {"garage_batch_limit": new_limit}}
     )
-    return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": GARAGE_BATCH_UPGRADE_COST}
+    return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": cost_used}
 
 
-async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
-    if current_user["points"] < BOOZE_CAPACITY_UPGRADE_COST:
-        raise HTTPException(status_code=400, detail="Insufficient points")
+async def buy_booze_capacity(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
+    cost_used, inc = _store_cost_inc(current_user, BOOZE_CAPACITY_UPGRADE_COST, use_respect_points)
     current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
         raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
     add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
+    inc["booze_capacity_bonus"] = add_bonus
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -BOOZE_CAPACITY_UPGRADE_COST, "booze_capacity_bonus": add_bonus, "lifetime_points_spent": BOOZE_CAPACITY_UPGRADE_COST}}
+        {"$inc": inc}
     )
     new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
-    return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
+    return {"message": f"+{add_bonus} booze capacity for {cost_used} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 
 
-async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
+async def store_buy_bullets(
+    bullets: int,
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     cost = BULLET_PACKS.get(bullets)
     if cost is None:
         raise HTTPException(status_code=400, detail=f"Invalid bullet pack. Choose from: {', '.join(str(k) for k in BULLET_PACKS)}")
-    if current_user["points"] < cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost}, have {current_user['points']}")
+    cost_used, inc = _store_cost_inc(current_user, cost, use_respect_points)
+    inc["bullets"] = bullets
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -cost, "bullets": bullets, "lifetime_points_spent": cost}}
+        {"$inc": inc}
     )
-    return {"message": f"Bought {bullets:,} bullets for {cost} points", "bullets": bullets, "cost": cost}
+    return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 
 
-async def buy_auto_rank(current_user: dict = Depends(get_current_user)):
+async def buy_auto_rank(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     """Purchase Auto Rank; user enables it themselves on the Auto Rank page. Telegram is optional (for notifications)."""
     if current_user.get("auto_rank_purchased", False):
         raise HTTPException(status_code=400, detail="You already purchased Auto Rank")
-    if (current_user.get("points") or 0) < AUTO_RANK_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {AUTO_RANK_COST_POINTS})")
+    cost_used, inc = _store_cost_inc(current_user, AUTO_RANK_COST_POINTS, use_respect_points)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -AUTO_RANK_COST_POINTS, "lifetime_points_spent": AUTO_RANK_COST_POINTS}, "$set": {"auto_rank_purchased": True}}
+        {"$inc": inc, "$set": {"auto_rank_purchased": True}}
     )
     return {
         "message": "Auto Rank purchased! Go to Auto Rank to enable it and choose which activities to run.",
-        "cost": AUTO_RANK_COST_POINTS,
+        "cost": cost_used,
     }
 
 
-async def buy_health(current_user: dict = Depends(get_current_user)):
-    """Restore health to 100% for 15 points."""
-    if (current_user.get("points") or 0) < BUY_HEALTH_COST_POINTS:
-        raise HTTPException(status_code=400, detail=f"Insufficient points (need {BUY_HEALTH_COST_POINTS})")
+async def buy_health(
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
+    """Restore health to 100% for 15 points (or 75 respect points)."""
     current_health = float(current_user.get("health", FULL_HEALTH))
     if current_health >= FULL_HEALTH:
         raise HTTPException(status_code=400, detail="You already have full health")
+    cost_used, inc = _store_cost_inc(current_user, BUY_HEALTH_COST_POINTS, use_respect_points)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -BUY_HEALTH_COST_POINTS, "lifetime_points_spent": BUY_HEALTH_COST_POINTS}, "$set": {"health": FULL_HEALTH}}
+        {"$inc": inc, "$set": {"health": FULL_HEALTH}}
     )
-    return {"message": "Full health restored!", "health": FULL_HEALTH, "cost": BUY_HEALTH_COST_POINTS}
+    return {"message": "Full health restored!", "health": FULL_HEALTH, "cost": cost_used}
 
 
-async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depends(get_current_user)):
-    if current_user["points"] < CUSTOM_CAR_COST:
-        raise HTTPException(status_code=400, detail="Insufficient points")
+async def buy_custom_car(
+    request: CustomCarPurchase,
+    use_respect_points: bool = Query(False),
+    current_user: dict = Depends(get_current_user),
+):
     if not request.car_name or len(request.car_name) < 2 or len(request.car_name) > 30:
         raise HTTPException(status_code=400, detail="Car name must be 2-30 characters")
+    cost_used, inc = _store_cost_inc(current_user, CUSTOM_CAR_COST, use_respect_points)
     await db.users.update_one(
         {"id": current_user["id"]},
-        {"$inc": {"points": -CUSTOM_CAR_COST, "lifetime_points_spent": CUSTOM_CAR_COST}}
+        {"$inc": inc}
     )
     await db.users.update_one(
         {"id": current_user["id"]},
@@ -214,10 +252,10 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
     await send_notification(
         current_user["id"],
         "🚗 Custom Car Purchased",
-        f"You've purchased a custom car named '{request.car_name}' for {CUSTOM_CAR_COST} points!",
+        f"You've purchased a custom car named '{request.car_name}' for {cost_used} points!",
         "reward"
     )
-    return {"message": f"Custom car '{request.car_name}' purchased for {CUSTOM_CAR_COST} points"}
+    return {"message": f"Custom car '{request.car_name}' purchased for {cost_used} points"}
 
 
 async def send_points(request: SendPointsRequest, current_user: dict = Depends(get_current_user_verified)):

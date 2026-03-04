@@ -421,6 +421,7 @@ class UserResponse(BaseModel):
     account_locked_comment: Optional[str] = None  # user's one-time comment
     can_submit_comment: bool = False  # true when locked and no comment submitted yet
     email_verified: bool = True  # false until user clicks verification link
+    respect_points: int = 0  # second currency; earn from activities, spend in store at 5x; not sendable/tradeable
     loot_box_pieces: int = 0
     profile_autoplay_video: bool = True  # when viewing someone's profile, autoplay their YouTube video (can turn off in profile settings)
 
@@ -478,6 +479,14 @@ def get_password_hash(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
+
+
+def maybe_respect_points_drop() -> int:
+    """Rare chance to award 1-2 respect points (e.g. from crimes, GTA, OC). Returns 0 or random 1-2."""
+    if random.random() < 0.12:  # 12% chance
+        return random.randint(1, 2)
+    return 0
+
 
 def create_access_token(data: dict):
     to_encode = data.copy()
