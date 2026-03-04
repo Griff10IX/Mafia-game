@@ -19,7 +19,7 @@ class UserRegister(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str  # email or username (login with either)
     password: str
 
 
@@ -37,7 +37,7 @@ class VerifyEmailBody(BaseModel):
 
 
 class ResendVerificationBody(BaseModel):
-    email: EmailStr
+    email: str  # email or username (same as login)
 
 
 class AccountLockedCommentBody(BaseModel):
@@ -292,29 +292,41 @@ def register(router):
 
     @router.post("/auth/login")
     async def login(user_data: UserLogin, request: Request):
-        email_clean = (user_data.email or "").strip().lower()
+        login_input = (user_data.email or "").strip()
         now = datetime.now(timezone.utc)
         try:
-            return await _do_login(user_data, request, email_clean, now)
+            return await _do_login(user_data, request, login_input, now)
         except HTTPException:
             raise
         except Exception as e:
             logging.exception(
-                "Login 500 for email=%s exception=%s: %s",
-                email_clean or "(empty)",
+                "Login 500 for login=%s exception=%s: %s",
+                login_input or "(empty)",
                 type(e).__name__,
                 e,
             )
             raise HTTPException(status_code=500, detail="Login failed. Please try again or contact support.")
 
-    async def _do_login(user_data: UserLogin, request: Request, email_clean: str, now: datetime):
-        # Require non-empty email and password
-        if not email_clean:
-            raise HTTPException(status_code=422, detail="Email is required.")
+    async def _do_login(user_data: UserLogin, request: Request, login_input: str, now: datetime):
+        # Require non-empty email/username and password
+        if not login_input:
+            raise HTTPException(status_code=422, detail="Email or username is required.")
         if not (user_data.password or "").strip():
             raise HTTPException(status_code=422, detail="Password is required.")
 
-        # Check lockout (too many failed attempts)
+        # Find user by email or username (case-insensitive)
+        pattern = re.compile("^" + re.escape(login_input) + "$", re.IGNORECASE)
+        user = await db.users.find_one({"$or": [{"email": pattern}, {"username": pattern}]}, {"_id": 0})
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="No account found with that email or username. Please register or check your input.",
+            )
+        email_clean = (user.get("email") or "").strip().lower()
+        if not email_clean:
+            raise HTTPException(status_code=401, detail="No account found with that email or username.")
+
+        # Check lockout (by account email)
         lockout = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "locked_until": 1, "failed_count": 1})
         if lockout:
             locked_until = lockout.get("locked_until")
@@ -325,22 +337,14 @@ def register(router):
                 wait_min = (wait_sec + 59) // 60
                 raise HTTPException(
                     status_code=429,
-                    detail=f"Too many failed login attempts. This email is temporarily locked. Try again in {wait_min} minute(s), or use Forgot password.",
+                    detail=f"Too many failed login attempts. This account is temporarily locked. Try again in {wait_min} minute(s), or use Forgot password.",
                 )
 
-        email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
-        user = await db.users.find_one({"email": email_pattern}, {"_id": 0})
-        if not user:
-            raise HTTPException(
-                status_code=401,
-                detail="No account found with that email. Please register or check the email address.",
-            )
         try:
             password_ok = verify_password(user_data.password, user.get("password_hash") or "")
         except Exception:
             password_ok = False
         if not password_ok:
-            # Record failed attempt and optionally lock out
             locked_until = None
             doc = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "failed_count": 1})
             count = (doc.get("failed_count") or 0) + 1
@@ -353,9 +357,8 @@ def register(router):
             )
             raise HTTPException(
                 status_code=401,
-                detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this email is locked for 5 minutes.",
+                detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
             )
-        # Success: clear lockout for this email
         await db.login_lockouts.delete_one({"email": email_clean})
         require_verification = await _require_email_verification()
         if require_verification and user.get("email_verified") is False:
@@ -471,10 +474,12 @@ def register(router):
 
     @router.post("/auth/resend-verification")
     async def resend_verification(body: ResendVerificationBody):
-        """Send a new verification email if the account exists and is not verified."""
-        email_clean = (body.email or "").strip().lower()
-        email_pattern = re.compile("^" + re.escape(email_clean) + "$", re.IGNORECASE)
-        user = await db.users.find_one({"email": email_pattern}, {"_id": 0, "id": 1, "email": 1, "username": 1, "email_verified": 1})
+        """Send a new verification email if the account exists and is not verified. Accepts email or username."""
+        raw = (body.email or "").strip()
+        if not raw:
+            return {"message": "If an account exists with that email, a new verification link has been sent."}
+        pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
+        user = await db.users.find_one({"$or": [{"email": pattern}, {"username": pattern}]}, {"_id": 0, "id": 1, "email": 1, "username": 1, "email_verified": 1})
         if not user:
             return {"message": "If an account exists with that email, a new verification link has been sent."}
         if user.get("email_verified") is True:

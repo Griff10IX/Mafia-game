@@ -5,6 +5,7 @@ import Landing from "./pages/Landing";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import VerifyEmail from "./pages/VerifyEmail";
+import VerifyComplete from "./pages/VerifyComplete";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -119,6 +120,10 @@ function App() {
           <Route
             path="/verify-email"
             element={<VerifyEmail setIsAuthenticated={setIsAuthenticated} />}
+          />
+          <Route
+            path="/verify-complete"
+            element={<VerifyComplete />}
           />
           <Route
             path="/locked"

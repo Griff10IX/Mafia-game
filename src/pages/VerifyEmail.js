@@ -25,8 +25,8 @@ export default function VerifyEmail({ setIsAuthenticated }) {
           localStorage.setItem('token', response.data.token);
           if (setIsAuthenticated) setIsAuthenticated(true);
           setStatus('success');
-          setMessage('Email verified! Redirecting...');
-          setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+          setMessage('Email verified!');
+          setTimeout(() => navigate('/verify-complete', { replace: true }), 800);
         } else {
           setStatus('error');
           setMessage(response.data.detail || 'Verification failed.');

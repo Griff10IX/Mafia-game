@@ -165,17 +165,17 @@ export default function Landing({ setIsAuthenticated }) {
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">
               <div>
-                <label htmlFor="landing-email" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Email</label>
+                <label htmlFor="landing-email" className="block text-xs font-heading font-bold uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-primary)' }}>Email or username</label>
                 <input
                   id="landing-email"
                   name="email"
-                  type="email"
-                  autoComplete="email"
+                  type="text"
+                  autoComplete="username"
                   data-testid="email-input"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                  placeholder="Enter your email"
+                  placeholder="Enter your email or username"
                   required
                 />
               </div>
