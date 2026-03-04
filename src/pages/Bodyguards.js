@@ -463,6 +463,12 @@ export default function Bodyguards() {
                   {bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>
+              {(bg.hire_cost ?? 0) > 0 && (
+                <div className="bg-zinc-900/50 rounded p-2 col-span-2">
+                  <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Upfront cost</div>
+                  <div className="text-foreground font-bold">{bg.hire_cost.toLocaleString()} pts</div>
+                </div>
+              )}
               {!bg.is_robot && (bg.payment_points > 0 || bg.payment_money > 0) && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Pay (per week, auto on day)</div>

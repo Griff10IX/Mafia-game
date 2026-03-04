@@ -86,6 +86,7 @@ class BodyguardResponse(BaseModel):
     bodyguard_rank_name: Optional[str] = None
     armour_level: int = 0
     hired_at: Optional[str]
+    hire_cost: int = 0  # one-time points paid when hired (robot or human)
     payment_points: int = 0
     payment_money: int = 0
     payout_weekday: Optional[int] = None  # 0=Monday, 6=Sunday
@@ -272,6 +273,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                     bodyguard_rank_name=rank_name,
                     armour_level=armour_level,
                     hired_at=bg.get("hired_at") or None,
+                    hire_cost=int(bg.get("hire_cost") or 0),
                     payment_points=int(bg.get("payment_points") or 0),
                     payment_money=int(bg.get("payment_money") or 0),
                     payout_weekday=bg.get("payout_weekday"),
@@ -284,6 +286,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                     bodyguard_rank_name=None,
                     armour_level=0,
                     hired_at=None,
+                    hire_cost=0,
                     payment_points=0,
                     payment_money=0,
                     payout_weekday=None,
@@ -664,6 +667,7 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
         else:
             pay_money = int(invite["payment_amount"])
     pay_money_val = float(invite.get("payment_money") or pay_money or 0)
+    today_str = now.date().isoformat()
     set_doc = {
         "id": str(uuid.uuid4()),
         "owner_username": inviter.get("username"),
@@ -678,9 +682,7 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
     }
     if end_time:
         set_doc["contract_end"] = end_time.isoformat()
-    # First week's pay: pay the bodyguard now; set last_payout_date so next auto-pay is in one week
-    today_str = now.date().isoformat()
-    set_doc["last_payout_date"] = today_str
+    # First week's pay: pay the bodyguard now; set last_payout_date only when we actually pay so weekly/test payout can run if we didn't
     if pay_pts > 0 or pay_money_val > 0:
         first_pay = await db.users.update_one(
             {"id": inviter["id"], "points": {"$gte": pay_pts}, "money": {"$gte": pay_money_val}},
@@ -691,6 +693,7 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
                 {"id": current_user["id"]},
                 {"$inc": {"points": pay_pts, "money": pay_money_val}},
             )
+            set_doc["last_payout_date"] = today_str
             # Avoid duplicate key: (owner_id, slot_number, payout_date) is unique. After admin clear, an old record may exist for this slot+date.
             existing_payout = await db.bodyguard_payouts.find_one(
                 {"owner_id": inviter["id"], "slot_number": empty_slot, "payout_date": today_str},
@@ -742,6 +745,12 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
         "🛡️ Bodyguard Accepted",
         f"{current_user['username']} has accepted your bodyguard offer! {human_hire_cost} pts hire cost deducted (25% off robot price).",
         "bodyguard"
+    )
+    await send_notification(
+        current_user["id"],
+        "🛡️ Bodyguard Accepted",
+        f"You're now {inviter.get('username', '?')}'s bodyguard. They paid {human_hire_cost} pts upfront (25% off robot price).",
+        "bodyguard",
     )
     _invalidate_bodyguards_cache(current_user["id"])
     _invalidate_bodyguards_cache(inviter["id"])
@@ -889,7 +898,8 @@ async def run_bodyguard_weekly_payout(database, test_run: bool = False):
             )
             continue
         last = bg.get("last_payout_date")
-        if last == today_str:
+        # Skip if we already paid today (by date). In test_run, only trust bodyguard_payouts so we can fix docs that had last_payout_date set without actual pay
+        if last == today_str and not test_run:
             continue
         contract_end = bg.get("contract_end")
         if contract_end:
