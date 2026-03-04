@@ -52,7 +52,6 @@ export default function Bodyguards() {
   const [inflationWindowEndsAt, setInflationWindowEndsAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedSlot, setExpandedSlot] = useState(null);
-  const [hiringSlot, setHiringSlot] = useState(null);
   const [upgradingSlot, setUpgradingSlot] = useState(null);
 
   useEffect(() => {
@@ -93,7 +92,6 @@ export default function Bodyguards() {
   };
 
   const hireBodyguard = async (slot, isRobot) => {
-    setHiringSlot(slot);
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
@@ -102,8 +100,6 @@ export default function Bodyguards() {
       const detail = error.response?.data?.detail || 'Failed to hire bodyguard';
       toast.error(detail, { duration: 10000 });
       await Promise.all([refreshUser(), fetchData()]);
-    } finally {
-      setHiringSlot(null);
     }
   };
 
@@ -288,7 +284,7 @@ export default function Bodyguards() {
                           e.stopPropagation();
                           upgradeArmour(bg.slot_number);
                         }}
-                        disabled={(bg.armour_level || 0) >= 5 || upgradingSlot !== null}
+                        disabled={(bg.armour_level || 0) >= 5}
                         className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
                         data-testid={`upgrade-armour-${bg.slot_number}`}
                       >
@@ -300,7 +296,6 @@ export default function Bodyguards() {
                           e.stopPropagation();
                           hireBodyguard(bg.slot_number, true);
                         }}
-                        disabled={hiringSlot !== null}
                         data-testid={`hire-robot-${bg.slot_number}`}
                         className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading disabled:opacity-60 disabled:cursor-not-allowed"
                       >
