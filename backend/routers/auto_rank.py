@@ -687,11 +687,6 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
     if not crimes:
         logger.warning("Auto rank: crimes collection empty; each user will try to load crimes in-run")
-    # Schedule next run from cycle start so interval is accurate even if booze/other work ran first
-    base = cycle_start if cycle_start is not None else now
-    if base.tzinfo is None:
-        base = base.replace(tzinfo=timezone.utc)
-    next_run_iso = datetime.fromtimestamp(base.timestamp() + interval, tz=timezone.utc).isoformat()
 
     async def run_one(u):
         chat_id = (u.get("telegram_chat_id") or "").strip()
@@ -706,7 +701,11 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
         batch_size = 30
         for i in range(0, len(users), batch_size):
             batch = users[i : i + batch_size]
+            # Use start of this batch for next_run_at so interval is accurate per batch
+            batch_start = datetime.now(timezone.utc)
             await asyncio.gather(*[run_one(u) for u in batch])
+            next_run_dt = batch_start + timedelta(seconds=interval)
+            next_run_iso = next_run_dt.isoformat()
             await db.users.bulk_write(
                 [UpdateOne({"id": u["id"]}, {"$set": {"auto_rank_next_run_at": next_run_iso}}) for u in batch],
                 ordered=False,
@@ -860,12 +859,13 @@ async def run_auto_rank_cron_cycle():
     if not config["enabled"]:
         logger.info("Auto rank cron: skipped (auto_rank disabled in game settings)")
         return {"ok": True, "skipped": "auto_rank disabled"}
+    cycle_start = datetime.now(timezone.utc)
     try:
         await run_booze_arrivals()
     except Exception as e:
         logger.exception("Auto rank cron booze arrivals: %s", e)
     try:
-        await run_auto_rank_due_users(interval_seconds=config["interval_seconds"])
+        await run_auto_rank_due_users(interval_seconds=config["interval_seconds"], cycle_start=cycle_start)
     except Exception as e:
         logger.exception("Auto rank cron due-users: %s", e)
     try:
