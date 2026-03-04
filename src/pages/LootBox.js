@@ -5,7 +5,7 @@ import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
-const CAP = 3;
+const CAP = 1;
 
 const LOOT_BOX_STYLES = `
   @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -561,7 +561,7 @@ export default function LootBox() {
                 <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Exclusive Scarcity</span>
               </div>
               <div className="p-1.5">
-                <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1">Each exclusive may only be claimed by {CAP} made men across the family.</p>
+                <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1">Each exclusive may only be claimed by {CAP} made {CAP === 1 ? 'man' : 'men'} across the family.</p>
                 <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
                   <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={CAP} />
                   <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={CAP} />

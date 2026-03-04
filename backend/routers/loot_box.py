@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 LOOT_BOX_PIECES_PER_OPEN = 100
 EXCLUSIVE_CHANCE = 0.02
-EXCLUSIVE_CAP_PER_TYPE = 3
+EXCLUSIVE_CAP_PER_TYPE = 1
 LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"
 LOOT_EXCLUSIVE_CAR_ID = "car21"
 ARMOUR_LEVEL_6_NAME = "Steel Plate Bulletproof Vest (1922)"
@@ -400,26 +400,26 @@ async def open_loot_box(
                         continue
                     if typ == "car":
                         car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
-                        if car_info:
-                            await db.user_cars.insert_one({
-                                "id": str(uuid.uuid4()),
-                                "user_id": user_id,
-                                "car_id": LOOT_EXCLUSIVE_CAR_ID,
-                                "car_name": car_info.get("name", "1930 Cadillac V-16 Armored"),
-                                "acquired_at": now.isoformat(),
-                                "damage_percent": 0,
-                            })
-                            await _increment_claimed_count("car")
-                            new_claimed = await _get_claimed_counts()
-                            if new_claimed["car"] >= EXCLUSIVE_CAP_PER_TYPE:
-                                await send_notification(user_id, "Loot box", f"The last exclusive car ({car_info.get('name')}) has been claimed!", "system")
-                            rewards.append({
-                                "type": "car",
-                                "name": car_info.get("name"),
-                                "id": LOOT_EXCLUSIVE_CAR_ID,
-                                "rarity": "loot_exclusive",
-                            })
-                            continue
+                        car_name = (car_info.get("name") if car_info else None) or "1930 Cadillac Series 452 V-16 Armored Sedan"
+                        await db.user_cars.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "car_id": LOOT_EXCLUSIVE_CAR_ID,
+                            "car_name": car_name,
+                            "acquired_at": now.isoformat(),
+                            "damage_percent": 0,
+                        })
+                        await _increment_claimed_count("car")
+                        new_claimed = await _get_claimed_counts()
+                        if new_claimed["car"] >= EXCLUSIVE_CAP_PER_TYPE:
+                            await send_notification(user_id, "Loot box", f"The last exclusive car ({car_name}) has been claimed!", "system")
+                        rewards.append({
+                            "type": "car",
+                            "name": car_name,
+                            "id": LOOT_EXCLUSIVE_CAR_ID,
+                            "rarity": "loot_exclusive",
+                        })
+                        continue
                     if typ == "armour":
                         await db.users.update_one(
                             {"id": user_id},

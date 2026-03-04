@@ -460,7 +460,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
 
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
-        if crimes is None:
+        if crimes is None or (isinstance(crimes, list) and len(crimes) == 0):
             crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
         allowed_crime_ids = user.get("auto_rank_crime_ids")
         if isinstance(allowed_crime_ids, list) and len(allowed_crime_ids) > 0:
@@ -480,8 +480,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             # Only crimes whose cooldown_until has passed (or never set); _commit_crime_impl will re-check and set next cooldown from crime's cooldown_seconds
             available = [
                 c for c in crimes
-                if c["min_rank"] <= rank_id
-                and (cooldown_by_crime.get(c["id"]) is None or cooldown_by_crime.get(c["id"]) <= now)
+                if (c.get("min_rank") or 1) <= rank_id
+                and (cooldown_by_crime.get(c.get("id")) is None or cooldown_by_crime.get(c.get("id")) <= now)
             ]
             if not available:
                 break
@@ -639,13 +639,15 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
     )
     users = await cursor.to_list(500)
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
+    if not crimes:
+        logger.warning("Auto rank: crimes collection empty; each user will try to load crimes in-run")
     next_run_iso = datetime.fromtimestamp(now.timestamp() + interval, tz=timezone.utc).isoformat()
 
     async def run_one(u):
         chat_id = (u.get("telegram_chat_id") or "").strip()
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
         try:
-            await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token, crimes=crimes)
+            await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token, crimes=crimes if crimes else None)
         except Exception as e:
             logger.exception("Auto rank for user %s: %s", u.get("id"), e)
 
