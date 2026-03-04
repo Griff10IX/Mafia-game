@@ -7,7 +7,7 @@ import uuid
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, send_notification, log_gambling
+from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
@@ -37,7 +37,7 @@ class MDGRollRequest(BaseModel):
 
 def register(router):
     @router.get("/casino/mdg/games")
-    async def mdg_list_games(current_user: dict = Depends(get_current_user)):
+    async def mdg_list_games(current_user: dict = Depends(get_current_user_verified)):
         """List open MDG games (joinable)."""
         cursor = db.mdg_games.find(
             {"status": "open"},
@@ -47,7 +47,7 @@ def register(router):
         return {"games": games}
 
     @router.post("/casino/mdg/create")
-    async def mdg_create(request: MDGCreateRequest, current_user: dict = Depends(get_current_user)):
+    async def mdg_create(request: MDGCreateRequest, current_user: dict = Depends(get_current_user_verified)):
         """Create a new MDG. You are auto-joined. Fee and extra pot can be points, money, or both. Max 3 open games per user."""
         uid = current_user["id"]
         open_count = await db.mdg_games.count_documents({"created_by": uid, "status": "open"})
@@ -116,7 +116,7 @@ def register(router):
         return {"message": "Game created and you are in it", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
     @router.post("/casino/mdg/join")
-    async def mdg_join(request: MDGJoinRequest, current_user: dict = Depends(get_current_user)):
+    async def mdg_join(request: MDGJoinRequest, current_user: dict = Depends(get_current_user_verified)):
         """Join an open game. Pay fee (points/money); if auto_roll_at is reached, roll runs and one winner takes the pot."""
         game = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
         if not game:
@@ -194,7 +194,7 @@ def register(router):
         return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
     @router.post("/casino/mdg/roll")
-    async def mdg_roll(request: MDGRollRequest, current_user: dict = Depends(get_current_user)):
+    async def mdg_roll(request: MDGRollRequest, current_user: dict = Depends(get_current_user_verified)):
         """Manually roll an open game (creator only). One random winner takes the pot. Creator can roll anytime (e.g. 1 player = get pot back)."""
         game = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
         if not game:

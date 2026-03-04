@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     STATES,
     get_rank_info,
     CAPO_RANK_ID,
@@ -232,7 +233,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
 
 def register(router):
     @router.get("/casino/blackjack/config")
-    async def casino_blackjack_config(current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_config(current_user: dict = Depends(get_current_user_verified)):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
         _, doc = await _get_blackjack_ownership_doc(city) if city else (None, None)
@@ -240,7 +241,7 @@ def register(router):
         return {"max_bet": max_bet, "claim_cost": BLACKJACK_CLAIM_COST}
 
     @router.get("/casino/blackjack/current-game")
-    async def casino_blackjack_current_game(current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_current_game(current_user: dict = Depends(get_current_user_verified)):
         """Return in-progress game so the UI can show it; if game is older than timeout, auto-stand and return hasGame: false."""
         game = await db.blackjack_games.find_one({"user_id": current_user["id"]})
         if not game:
@@ -269,7 +270,7 @@ def register(router):
         }
 
     @router.get("/casino/blackjack/ownership")
-    async def casino_blackjack_ownership(current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's blackjack ownership. Expired buy-back offers are auto-REJECTED."""
         user_id = current_user["id"]
         now_ts = time.time()
@@ -346,7 +347,7 @@ def register(router):
         return out
 
     @router.post("/casino/blackjack/claim")
-    async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
@@ -372,7 +373,7 @@ def register(router):
         return {"message": f"You now own the blackjack table in {city}!"}
 
     @router.post("/casino/blackjack/relinquish")
-    async def casino_blackjack_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_blackjack((request.city or "").strip())
         if not city or city not in STATES:
@@ -384,7 +385,7 @@ def register(router):
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/blackjack/set-max-bet")
-    async def casino_blackjack_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_blackjack((request.city or "").strip())
         if not city or city not in STATES:
@@ -397,7 +398,7 @@ def register(router):
         return {"message": f"Max bet set to ${new_max:,}"}
 
     @router.post("/casino/blackjack/set-buy-back-reward")
-    async def casino_blackjack_set_buy_back_reward(request: BlackjackSetBuyBackRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_set_buy_back_reward(request: BlackjackSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         raw = (request.city or current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
@@ -411,7 +412,7 @@ def register(router):
         return {"message": "Buy-back reward updated."}
 
     @router.post("/casino/blackjack/buy-back/accept")
-    async def casino_blackjack_buy_back_accept(request: BlackjackBuyBackAcceptRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_buy_back_accept(request: BlackjackBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
         offer = await db.blackjack_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
         if not offer:
             raise HTTPException(status_code=404, detail="Offer not found")
@@ -443,7 +444,7 @@ def register(router):
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
     @router.post("/casino/blackjack/buy-back/reject")
-    async def casino_blackjack_buy_back_reject(request: BlackjackBuyBackRejectRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_buy_back_reject(request: BlackjackBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
         offer = await db.blackjack_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
         if not offer or offer.get("to_user_id") != current_user["id"]:
             raise HTTPException(status_code=404, detail="Offer not found")
@@ -452,7 +453,7 @@ def register(router):
         return {"message": "Rejected. You keep the casino."}
 
     @router.post("/casino/blackjack/send-to-user")
-    async def casino_blackjack_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_blackjack((request.city or "").strip())
         if not city or city not in STATES:
@@ -472,7 +473,7 @@ def register(router):
         return {"message": "Ownership transferred."}
 
     @router.post("/casino/blackjack/sell-on-trade")
-    async def casino_blackjack_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_blackjack((request.city or "").strip())
         if not city or city not in STATES:
@@ -497,7 +498,7 @@ def register(router):
         return {"message": f"Blackjack table listed for {request.points:,} points on Quick Trade"}
 
     @router.post("/casino/blackjack/start")
-    async def casino_blackjack_start(request: BlackjackStartRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_start(request: BlackjackStartRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         if current_user.get("in_jail"):
             raise HTTPException(status_code=400, detail="You are in jail!")
@@ -678,7 +679,7 @@ def register(router):
         }
 
     @router.post("/casino/blackjack/hit")
-    async def casino_blackjack_hit(current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_hit(current_user: dict = Depends(get_current_user_verified)):
         game = await db.blackjack_games.find_one({"user_id": current_user["id"]})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
@@ -740,7 +741,7 @@ def register(router):
         }
 
     @router.post("/casino/blackjack/stand")
-    async def casino_blackjack_stand(current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_stand(current_user: dict = Depends(get_current_user_verified)):
         game = await db.blackjack_games.find_one({"user_id": current_user["id"]})
         if not game:
             raise HTTPException(status_code=400, detail="No active game")
@@ -849,7 +850,7 @@ def register(router):
         }
 
     @router.get("/casino/blackjack/history")
-    async def casino_blackjack_history(current_user: dict = Depends(get_current_user)):
+    async def casino_blackjack_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "blackjack_history": 1})
         history = (user.get("blackjack_history") or [])[:BLACKJACK_HISTORY_MAX]
         return {"history": history}

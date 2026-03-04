@@ -1,14 +1,17 @@
-# Store endpoints: rank bar, silencer, OC timer, garage batch, booze capacity, bullets, custom car
+# Store endpoints: rank bar, silencer, OC timer, garage batch, booze capacity, bullets, custom car, send points
 from datetime import datetime, timezone
 import uuid
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     send_notification,
+    _username_pattern,
+    _is_admin,
     DEFAULT_GARAGE_BATCH_LIMIT,
     GARAGE_BATCH_UPGRADE_COST,
     GARAGE_BATCH_UPGRADE_INCREMENT,
@@ -35,6 +38,18 @@ FULL_HEALTH = 100
 
 class CustomCarPurchase(BaseModel):
     car_name: str
+
+
+class SendPointsRequest(BaseModel):
+    to_username: str
+    amount: int
+
+    @field_validator("amount")
+    @classmethod
+    def amount_positive(cls, v):
+        if v is None or v < 1:
+            raise ValueError("Amount must be at least 1")
+        return v
 
 
 async def buy_premium_rank_bar(current_user: dict = Depends(get_current_user)):
@@ -205,6 +220,79 @@ async def buy_custom_car(request: CustomCarPurchase, current_user: dict = Depend
     return {"message": f"Custom car '{request.car_name}' purchased for {CUSTOM_CAR_COST} points"}
 
 
+async def send_points(request: SendPointsRequest, current_user: dict = Depends(get_current_user_verified)):
+    """Send points to another player. Logged in points_transfers (last 10 visible to user, 500 to admin)."""
+    to_username = (request.to_username or "").strip()
+    if not to_username or len(to_username) < 2:
+        raise HTTPException(status_code=400, detail="Enter a valid username")
+    amount = int(request.amount)
+    if amount < 1:
+        raise HTTPException(status_code=400, detail="Amount must be at least 1")
+    sender_id = current_user["id"]
+    sender_username = (current_user.get("username") or "").strip() or "?"
+    my_points = int(current_user.get("points") or 0)
+    if my_points < amount:
+        raise HTTPException(status_code=400, detail=f"Insufficient points (have {my_points:,})")
+    pattern = _username_pattern(to_username)
+    recipient = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+    if not recipient:
+        raise HTTPException(status_code=404, detail="User not found")
+    if recipient["id"] == sender_id:
+        raise HTTPException(status_code=400, detail="You cannot send points to yourself")
+    recipient_username = (recipient.get("username") or "").strip() or "?"
+    now = datetime.now(timezone.utc).isoformat()
+    transfer_id = str(uuid.uuid4())
+    await db.points_transfers.insert_one({
+        "id": transfer_id,
+        "from_user_id": sender_id,
+        "from_username": sender_username,
+        "to_user_id": recipient["id"],
+        "to_username": recipient_username,
+        "amount": amount,
+        "created_at": now,
+    })
+    await db.users.update_one({"id": sender_id}, {"$inc": {"points": -amount}})
+    await db.users.update_one({"id": recipient["id"]}, {"$inc": {"points": amount}})
+    await send_notification(
+        recipient["id"],
+        "Points received",
+        f"{sender_username} sent you {amount:,} points.",
+        "reward",
+    )
+    return {
+        "message": f"Sent {amount:,} points to {recipient_username}",
+        "transfer_id": transfer_id,
+        "amount": amount,
+        "to_username": recipient_username,
+    }
+
+
+async def get_my_points_transfers(current_user: dict = Depends(get_current_user)):
+    """Last 10 points transfers where current user is sender or recipient."""
+    uid = current_user["id"]
+    cursor = db.points_transfers.find(
+        {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]},
+        {"_id": 0, "id": 1, "from_user_id": 1, "from_username": 1, "to_user_id": 1, "to_username": 1, "amount": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(10)
+    items = await cursor.to_list(10)
+    return {"transfers": items}
+
+
+async def admin_points_transfers(
+    limit: int = Query(500, ge=1, le=1000),
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin: last N points transfers (default 500)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    cursor = db.points_transfers.find(
+        {},
+        {"_id": 0, "id": 1, "from_user_id": 1, "from_username": 1, "to_user_id": 1, "to_username": 1, "amount": 1, "created_at": 1},
+    ).sort("created_at", -1).limit(limit)
+    items = await cursor.to_list(limit)
+    return {"transfers": items, "count": len(items)}
+
+
 def register(router):
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
@@ -217,3 +305,6 @@ def register(router):
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
     router.add_api_route("/store/buy-health", buy_health, methods=["POST"])
     router.add_api_route("/store/buy-custom-car", buy_custom_car, methods=["POST"])
+    router.add_api_route("/store/send-points", send_points, methods=["POST"])
+    router.add_api_route("/store/points-transfers", get_my_points_transfers, methods=["GET"])
+    router.add_api_route("/store/points-transfers/admin", admin_points_transfers, methods=["GET"])

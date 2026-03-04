@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 import httpx
 
-from server import db, get_current_user, log_gambling, _is_admin
+from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin
 
 # ----- Models -----
 class SportsBetPlaceRequest(BaseModel):
@@ -579,7 +579,7 @@ async def _sports_ensure_seed_events():
 
 
 # ----- Public routes -----
-async def sports_betting_events(current_user: dict = Depends(get_current_user)):
+async def sports_betting_events(current_user: dict = Depends(get_current_user_verified)):
     await _sports_ensure_seed_events()
     now = datetime.now(timezone.utc)
     cursor = db.sports_events.find(
@@ -617,7 +617,7 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user)):
     return {"events": result}
 
 
-async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dict = Depends(get_current_user)):
+async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dict = Depends(get_current_user_verified)):
     event_id = (request.event_id or "").strip()
     option_id = (request.option_id or "").strip()
     stake = int(request.stake or 0)
@@ -661,7 +661,7 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
     return {"message": f"Bet placed: ${stake:,} on {opt.get('name')}", "bet_id": bet_id}
 
 
-async def sports_betting_my_bets(current_user: dict = Depends(get_current_user)):
+async def sports_betting_my_bets(current_user: dict = Depends(get_current_user_verified)):
     open_bets = await db.sports_bets.find(
         {"user_id": current_user["id"], "status": "open"},
         {"_id": 0},
@@ -676,7 +676,7 @@ async def sports_betting_my_bets(current_user: dict = Depends(get_current_user))
     }
 
 
-async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_user: dict = Depends(get_current_user)):
+async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_user: dict = Depends(get_current_user_verified)):
     bet_id = (request.bet_id or "").strip()
     if not bet_id:
         raise HTTPException(status_code=400, detail="bet_id required")
@@ -691,7 +691,7 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
     return {"message": f"Bet cancelled. ${stake:,} refunded.", "refunded": stake}
 
 
-async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_current_user)):
+async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_current_user_verified)):
     cursor = db.sports_bets.find({"user_id": current_user["id"], "status": "open"}, {"_id": 0, "id": 1, "stake": 1})
     bets = await cursor.to_list(100)
     if not bets:
@@ -707,7 +707,7 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     return {"message": f"All {len(bets)} bet(s) cancelled. ${total_refund:,} refunded.", "refunded": total_refund, "cancelled_count": len(bets)}
 
 
-async def sports_betting_stats(current_user: dict = Depends(get_current_user)):
+async def sports_betting_stats(current_user: dict = Depends(get_current_user_verified)):
     pipeline = [
         {"$match": {"user_id": current_user["id"], "status": {"$in": ["won", "lost"]}}},
         {"$group": {"_id": None, "total_stake": {"$sum": "$stake"}, "won_count": {"$sum": {"$cond": [{"$eq": ["$status", "won"]}, 1, 0]}}, "lost_count": {"$sum": {"$cond": [{"$eq": ["$status", "lost"]}, 1, 0]}}}},
@@ -740,7 +740,7 @@ async def sports_betting_stats(current_user: dict = Depends(get_current_user)):
     }
 
 
-async def sports_betting_recent_results(current_user: dict = Depends(get_current_user)):
+async def sports_betting_recent_results(current_user: dict = Depends(get_current_user_verified)):
     cursor = db.sports_bets.find(
         {"user_id": current_user["id"], "status": {"$in": ["won", "lost"]}},
         {"_id": 0, "option_name": 1, "odds": 1, "status": 1, "settled_at": 1, "created_at": 1},
@@ -755,7 +755,7 @@ async def sports_betting_recent_results(current_user: dict = Depends(get_current
 
 
 # ----- Admin routes -----
-async def admin_sports_templates(current_user: dict = Depends(get_current_user)):
+async def admin_sports_templates(current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     categories = ["Football", "UFC", "Boxing", "Formula 1"]
@@ -765,7 +765,7 @@ async def admin_sports_templates(current_user: dict = Depends(get_current_user))
     return {"categories": categories, "templates": by_category}
 
 
-async def admin_sports_refresh(current_user: dict = Depends(get_current_user)):
+async def admin_sports_refresh(current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     await _refresh_sports_live_cache(force=True)
@@ -776,7 +776,7 @@ async def admin_sports_refresh(current_user: dict = Depends(get_current_user)):
     return {"categories": categories, "templates": by_category}
 
 
-async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_user: dict = Depends(get_current_user)):
+async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     template_id = (request.template_id or "").strip()
@@ -798,7 +798,7 @@ async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_us
     return {"message": f"Added event: {template['name']}", "event_id": ev["id"]}
 
 
-async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventRequest, current_user: dict = Depends(get_current_user)):
+async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventRequest, current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     name = (request.name or "").strip()
@@ -838,7 +838,7 @@ async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventReques
     return {"message": f"Added custom event: {name}", "event_id": ev["id"]}
 
 
-async def admin_sports_settle(request: SportsSettleEventRequest, current_user: dict = Depends(get_current_user)):
+async def admin_sports_settle(request: SportsSettleEventRequest, current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()
@@ -870,7 +870,7 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
     return {"message": f"Event {event_id} settled. Winning option: {winning_option_id}. Winners paid out."}
 
 
-async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_user: dict = Depends(get_current_user)):
+async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()

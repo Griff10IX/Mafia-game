@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     STATES,
     get_rank_info,
     CAPO_RANK_ID,
@@ -278,7 +279,7 @@ def _slots_payout(reels: tuple, bet: int) -> int:
 
 def register(router):
     @router.get("/casino/slots/config")
-    async def casino_slots_config(current_user: dict = Depends(get_current_user)):
+    async def casino_slots_config(current_user: dict = Depends(get_current_user_verified)):
         """Slots config: max_bet (owner or default), symbols, current_state, states. May be state-owned or player-owned."""
         # Log so we can confirm this endpoint is hit (check server console or backend/logs/server.log)
         logging.getLogger().info("Slots config requested - running draw check for all states")
@@ -314,7 +315,7 @@ def register(router):
         }
 
     @router.get("/casino/slots/ownership")
-    async def casino_slots_ownership(current_user: dict = Depends(get_current_user)):
+    async def casino_slots_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current state's slots: owner (if any), is_owner, max_bet, buy_back_reward, expires_at, can_enter, entries count."""
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")
@@ -368,7 +369,7 @@ def register(router):
         }
 
     @router.post("/casino/slots/enter")
-    async def casino_slots_enter(request: SlotsEnterRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_slots_enter(request: SlotsEnterRequest, current_user: dict = Depends(get_current_user_verified)):
         """Enter the lottery to possibly own slots in this state for 3 hours. One random entrant wins when current ownership ends."""
         _invalidate_slots_ownership_cache(current_user["id"])
         state = _normalize_state((request.state or "").strip())
@@ -396,7 +397,7 @@ def register(router):
         return {"message": "You have entered the draw. A random winner is chosen when the current owner's 3 hours end."}
 
     @router.post("/casino/slots/relinquish")
-    async def casino_slots_relinquish(request: SlotsEnterRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_slots_relinquish(request: SlotsEnterRequest, current_user: dict = Depends(get_current_user_verified)):
         """Give up ownership early. You will be on cooldown and cannot enter the next draw."""
         _invalidate_slots_ownership_cache(current_user["id"])
         state = _normalize_state((request.state or "").strip())
@@ -414,7 +415,7 @@ def register(router):
         return {"message": "You have relinquished the slots. You cannot enter the next draw for 3 hours."}
 
     @router.post("/casino/slots/set-max-bet")
-    async def casino_slots_set_max_bet(request: SlotsSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_slots_set_max_bet(request: SlotsSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set max bet for your slots (owner only)."""
         _invalidate_slots_ownership_cache(current_user["id"])
         state = _normalize_state((request.state or "").strip())
@@ -428,7 +429,7 @@ def register(router):
         return {"message": f"Max bet set to ${new_max:,}"}
 
     @router.post("/casino/slots/set-buy-back-reward")
-    async def casino_slots_set_buy_back_reward(request: SlotsSetBuyBackRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_slots_set_buy_back_reward(request: SlotsSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set buy-back reward (points) when you cannot pay a win (owner only)."""
         _invalidate_slots_ownership_cache(current_user["id"])
         state = _normalize_state((request.state or "").strip())
@@ -442,7 +443,7 @@ def register(router):
         return {"message": "Buy-back reward updated."}
 
     @router.post("/casino/slots/buy-back/accept")
-    async def casino_slots_buy_back_accept(request: SlotsBuyBackAcceptRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_slots_buy_back_accept(request: SlotsBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
         """Accept buy-back: receive points and return ownership to previous owner."""
         offer = await db.slots_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
         if not offer:
@@ -479,7 +480,7 @@ def register(router):
         return {"message": "Accepted. You received the points and the slots were returned to the previous owner."}
 
     @router.post("/casino/slots/buy-back/reject")
-    async def casino_slots_buy_back_reject(request: SlotsBuyBackRejectRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_slots_buy_back_reject(request: SlotsBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
         """Reject buy-back: keep ownership."""
         offer = await db.slots_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
         if not offer or offer.get("to_user_id") != current_user["id"]:
@@ -489,7 +490,7 @@ def register(router):
         return {"message": "Rejected. You keep the slots."}
 
     @router.post("/casino/slots/spin")
-    async def casino_slots_spin(request: SlotsSpinRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_slots_spin(request: SlotsSpinRequest, current_user: dict = Depends(get_current_user_verified)):
         """Spin the slots. State-owned = house pays. Owner-owned = owner pays wins (or loses ownership if can't pay; buy-back offer)."""
         _invalidate_slots_ownership_cache(current_user["id"])
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
@@ -690,7 +691,7 @@ def register(router):
         }
 
     @router.get("/casino/slots/history")
-    async def casino_slots_history(current_user: dict = Depends(get_current_user)):
+    async def casino_slots_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "slots_history": 1})
         history = (user.get("slots_history") or [])[:SLOTS_HISTORY_MAX]
         return {"history": list(reversed(history))}

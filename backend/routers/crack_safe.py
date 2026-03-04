@@ -6,7 +6,7 @@ from typing import List
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, _is_admin, log_activity
+from server import db, get_current_user, get_current_user_verified, _is_admin, log_activity
 
 SAFE_ENTRY_COST = 5_000_000
 SAFE_JACKPOT_SEED = 5_000_000
@@ -79,7 +79,7 @@ def _generate_clues(combo: list, total_attempts: int) -> list:
 
 def register(router):
     @router.get("/crack-safe/info")
-    async def crack_safe_info(user: dict = Depends(get_current_user)):
+    async def crack_safe_info(user: dict = Depends(get_current_user_verified)):
         safe = await _get_or_create_safe()
         combo = safe["combination"]
         total_attempts = safe.get("total_attempts", 0)
@@ -133,7 +133,7 @@ def register(router):
         }
 
     @router.post("/crack-safe/guess")
-    async def crack_safe_guess(req: SafeGuessRequest, user: dict = Depends(get_current_user)):
+    async def crack_safe_guess(req: SafeGuessRequest, user: dict = Depends(get_current_user_verified)):
         safe = await _get_or_create_safe()
         combo = safe["combination"]
         now = datetime.now(timezone.utc)
@@ -236,7 +236,7 @@ def register(router):
         }
 
     @router.post("/crack-safe/buy-attempts")
-    async def crack_safe_buy_attempts(user: dict = Depends(get_current_user)):
+    async def crack_safe_buy_attempts(user: dict = Depends(get_current_user_verified)):
         if _is_admin(user):
             raise HTTPException(status_code=400, detail="Admins have unlimited attempts.")
 

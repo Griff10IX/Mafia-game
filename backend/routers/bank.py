@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user
+from server import db, get_current_user, get_current_user_verified
 
 # Set from server in register() (server keeps constants for UserProfile / new-user / auth/me)
 SWISS_BANK_LIMIT_START = None
@@ -73,7 +73,7 @@ def _invalidate_overview_cache(user_id: str):
     _overview_cache.pop(user_id, None)
 
 
-async def bank_meta(current_user: dict = Depends(get_current_user)):
+async def bank_meta(current_user: dict = Depends(get_current_user_verified)):
     global _bank_meta_cache
     if _bank_meta_cache is not None:
         return _bank_meta_cache
@@ -84,7 +84,7 @@ async def bank_meta(current_user: dict = Depends(get_current_user)):
     return _bank_meta_cache
 
 
-async def bank_overview(current_user: dict = Depends(get_current_user)):
+async def bank_overview(current_user: dict = Depends(get_current_user_verified)):
     uid = current_user["id"]
     now_ts = time.monotonic()
     entry = _overview_cache.get(uid)
@@ -125,7 +125,7 @@ async def bank_overview(current_user: dict = Depends(get_current_user)):
     return payload
 
 
-async def bank_interest_deposit(request: BankInterestDepositRequest, current_user: dict = Depends(get_current_user)):
+async def bank_interest_deposit(request: BankInterestDepositRequest, current_user: dict = Depends(get_current_user_verified)):
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
@@ -181,7 +181,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     return {"message": f"Deposited ${amount:,} for {hours}h", "deposit_id": deposit_id, "interest": interest, "matures_at": matures.isoformat()}
 
 
-async def bank_interest_claim(request: BankDepositClaimRequest, current_user: dict = Depends(get_current_user)):
+async def bank_interest_claim(request: BankDepositClaimRequest, current_user: dict = Depends(get_current_user_verified)):
     """Claim a matured interest deposit. Early withdrawal is not allowed."""
     dep = await db.bank_deposits.find_one({"id": request.deposit_id, "user_id": current_user["id"]}, {"_id": 0})
     if not dep:
@@ -206,7 +206,7 @@ async def bank_interest_claim(request: BankDepositClaimRequest, current_user: di
     return {"message": f"Claimed ${total:,} (${principal:,} + ${interest:,} interest)", "total": total}
 
 
-async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict = Depends(get_current_user)):
+async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict = Depends(get_current_user_verified)):
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
@@ -227,7 +227,7 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
     return {"message": f"Deposited ${amount:,} into Swiss Bank"}
 
 
-async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict = Depends(get_current_user)):
+async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict = Depends(get_current_user_verified)):
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
@@ -243,7 +243,7 @@ async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict 
     return {"message": f"Withdrew ${amount:,} from Swiss Bank"}
 
 
-async def bank_transfer(request: MoneyTransferRequest, req: Request, current_user: dict = Depends(get_current_user)):
+async def bank_transfer(request: MoneyTransferRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     if check_rate_limit:
         try:
             allowed, error_msg = check_rate_limit(current_user["id"], "money_transfers")

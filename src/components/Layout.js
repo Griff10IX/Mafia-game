@@ -1567,7 +1567,7 @@ export default function Layout({ children }) {
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
             <span className="text-sm font-heading" style={{ color: 'var(--noir-foreground)' }}>
-              Verify your email to use crimes, GTA, OC, and other features.
+              Verify your email to use crimes, GTA, OC, bank, gambling, dead-alive, and other features.
             </span>
             <Link to="/verify-email" className="text-sm font-heading font-bold uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-primary)' }}>Verify email</Link>
           </div>

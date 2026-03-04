@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     STATES,
     log_gambling,
     get_wealth_rank,
@@ -109,7 +110,7 @@ async def _get_dice_ownership_doc(city: str):
 
 def register(router):
     @router.get("/casino/dice/config")
-    async def casino_dice_config(current_user: dict = Depends(get_current_user)):
+    async def casino_dice_config(current_user: dict = Depends(get_current_user_verified)):
         """Dice game config: sides range and default max bet."""
         return {
             "sides_min": DICE_SIDES_MIN,
@@ -118,7 +119,7 @@ def register(router):
         }
 
     @router.get("/casino/dice/ownership")
-    async def casino_dice_ownership(current_user: dict = Depends(get_current_user)):
+    async def casino_dice_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's dice ownership and effective max_bet (owner's or default).
         Expired buy-back offers are auto-REJECTED (winner keeps ownership).
         """
@@ -190,7 +191,7 @@ def register(router):
         return out
 
     @router.post("/casino/dice/play")
-    async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_play(request: DicePlayRequest, current_user: dict = Depends(get_current_user_verified)):
         """Place a dice bet. Win if roll == chosen_number; payout = stake * sides * (1 - house_edge)."""
         _invalidate_ownership_cache(current_user["id"])
         raw_city = (current_user.get("current_state") or STATES[0] if STATES else "").strip()
@@ -287,7 +288,7 @@ def register(router):
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer}
 
     @router.post("/casino/dice/claim")
-    async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         """Claim ownership of the dice table in a city (cost in points). Max 1 casino per player. Requires Capo or higher."""
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
@@ -318,7 +319,7 @@ def register(router):
         return {"message": "You now own the dice table here."}
 
     @router.post("/casino/dice/relinquish")
-    async def casino_dice_relinquish(request: DiceClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_relinquish(request: DiceClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         """Relinquish ownership of the dice table in a city."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_dice((request.city or "").strip())
@@ -331,7 +332,7 @@ def register(router):
         return {"message": "You have relinquished the dice table."}
 
     @router.post("/casino/dice/set-max-bet")
-    async def casino_dice_set_max_bet(request: DiceSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_set_max_bet(request: DiceSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set max bet for your dice table (owner only)."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_dice((request.city or "").strip())
@@ -345,7 +346,7 @@ def register(router):
         return {"message": "Max bet updated."}
 
     @router.post("/casino/dice/set-buy-back-reward")
-    async def casino_dice_set_buy_back_reward(request: DiceSetBuyBackRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_set_buy_back_reward(request: DiceSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set buy-back reward (points) offered when you cannot pay a win (owner only)."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_dice((request.city or "").strip())
@@ -359,7 +360,7 @@ def register(router):
         return {"message": "Buy-back reward updated."}
 
     @router.post("/casino/dice/reset-profit")
-    async def casino_dice_reset_profit(request: DiceClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_reset_profit(request: DiceClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         """Reset profit/loss for your dice table to zero (owner only)."""
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
@@ -371,7 +372,7 @@ def register(router):
         return {"message": "Profit reset to zero."}
 
     @router.post("/casino/dice/sell-on-trade")
-    async def casino_dice_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
         """List your dice table for sale on Quick Trade (points only)."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_dice((request.city or "").strip())
@@ -397,7 +398,7 @@ def register(router):
         return {"message": f"Dice table listed for {request.points:,} points on Quick Trade"}
 
     @router.post("/casino/dice/buy-back/accept")
-    async def casino_dice_buy_back_accept(request: DiceBuyBackAcceptRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_buy_back_accept(request: DiceBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
         """Accept a buy-back offer: receive points and transfer ownership back to previous owner."""
         offer = await db.dice_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0})
         if not offer:
@@ -429,7 +430,7 @@ def register(router):
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
     @router.post("/casino/dice/buy-back/reject")
-    async def casino_dice_buy_back_reject(request: DiceBuyBackRejectRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_buy_back_reject(request: DiceBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
         """Reject a buy-back offer: keep ownership."""
         offer = await db.dice_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
         if not offer or offer.get("to_user_id") != current_user["id"]:
@@ -439,7 +440,7 @@ def register(router):
         return {"message": "Rejected. You keep the casino."}
 
     @router.post("/casino/dice/send-to-user")
-    async def casino_dice_send_to_user(request: DiceSendToUserRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_dice_send_to_user(request: DiceSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
         """Transfer dice table ownership to another user (owner only)."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_dice((request.city or "").strip())

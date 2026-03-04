@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     STATES,
     log_gambling,
     get_rank_info,
@@ -135,7 +136,7 @@ def _roulette_get_multiplier(bet_type: str) -> int:
 
 def register(router):
     @router.get("/casino/roulette/config")
-    async def casino_roulette_config(current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_config(current_user: dict = Depends(get_current_user_verified)):
         """Return roulette configuration (max bet)."""
         return {
             "max_bet": ROULETTE_MAX_BET,
@@ -144,7 +145,7 @@ def register(router):
         }
 
     @router.get("/casino/roulette/ownership")
-    async def casino_roulette_ownership(current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Get roulette ownership for player's current city."""
         user_id = current_user["id"]
         now_ts = time.time()
@@ -197,7 +198,7 @@ def register(router):
         return out
 
     @router.post("/casino/roulette/claim")
-    async def casino_roulette_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         """Claim ownership of an unclaimed roulette table. Max 1 casino per player. Requires Capo or higher."""
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
@@ -224,7 +225,7 @@ def register(router):
         return {"message": f"You now own the roulette table in {city}!"}
 
     @router.post("/casino/roulette/relinquish")
-    async def casino_roulette_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         """Give up ownership of a roulette table."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_roulette((request.city or "").strip())
@@ -237,7 +238,7 @@ def register(router):
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/roulette/set-max-bet")
-    async def casino_roulette_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         """Set the max bet for your roulette table."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_roulette((request.city or "").strip())
@@ -251,7 +252,7 @@ def register(router):
         return {"message": f"Max bet set to ${new_max:,}"}
 
     @router.post("/casino/roulette/send-to-user")
-    async def casino_roulette_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
         """Transfer roulette table ownership to another user."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_roulette((request.city or "").strip())
@@ -272,7 +273,7 @@ def register(router):
         return {"message": "Ownership transferred."}
 
     @router.post("/casino/roulette/sell-on-trade")
-    async def casino_roulette_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
         """List your roulette table for sale on Quick Trade (points only)."""
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_roulette((request.city or "").strip())
@@ -298,7 +299,7 @@ def register(router):
         return {"message": f"Roulette table listed for {request.points:,} points on Quick Trade"}
 
     @router.post("/casino/roulette/spin")
-    async def casino_roulette_spin(request: RouletteSpinRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_roulette_spin(request: RouletteSpinRequest, current_user: dict = Depends(get_current_user_verified)):
         """Spin the roulette wheel with the provided bets."""
         _invalidate_ownership_cache(current_user["id"])
         bets = request.bets or []

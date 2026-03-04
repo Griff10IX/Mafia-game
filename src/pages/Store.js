@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart } from 'lucide-react';
+import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -89,22 +89,49 @@ export default function Store() {
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [customCarName, setCustomCarName] = useState('');
   const [activeTab, setActiveTab] = useState('upgrades');
+  const [pointsTransfers, setPointsTransfers] = useState([]);
+  const [adminTransfers, setAdminTransfers] = useState([]);
+  const [adminTransfersOpen, setAdminTransfersOpen] = useState(false);
+  const [sendToUsername, setSendToUsername] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, bgRes, boozeRes, eventsRes] = await Promise.all([
+      const [userRes, bgRes, boozeRes, eventsRes, adminRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/bodyguards'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
       ]);
       setUser(userRes.data);
       setBodyguards(bgRes.data || []);
       setBoozeConfig(boozeRes?.data || null);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
+      setIsAdmin(!!adminRes.data?.is_admin);
     } catch {
       toast.error('Failed to load data');
+    }
+  }, []);
+
+  const fetchPointsTransfers = useCallback(async () => {
+    try {
+      const res = await api.get('/store/points-transfers');
+      setPointsTransfers(res.data?.transfers || []);
+    } catch {
+      setPointsTransfers([]);
+    }
+  }, []);
+
+  const fetchAdminTransfers = useCallback(async () => {
+    try {
+      const res = await api.get('/store/points-transfers/admin', { params: { limit: 500 } });
+      setAdminTransfers(res.data?.transfers || []);
+    } catch {
+      toast.error('Failed to load admin log');
+      setAdminTransfers([]);
     }
   }, []);
 
@@ -113,6 +140,10 @@ export default function Store() {
     const sessionId = new URLSearchParams(window.location.search).get('session_id');
     if (sessionId) checkPaymentStatus(sessionId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (activeTab === 'sendpts') fetchPointsTransfers();
+  }, [activeTab, fetchPointsTransfers]);
 
   const checkPaymentStatus = async (sessionId, attempt = 0) => {
     if (attempt >= 5) {
@@ -202,6 +233,7 @@ export default function Store() {
       <div className="relative flex gap-1 p-1 rounded-lg overflow-x-auto store-fade-in border border-primary/20 bg-primary/5">
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
         <Tab active={activeTab === 'points'} onClick={() => setActiveTab('points')}>Points</Tab>
+        <Tab active={activeTab === 'sendpts'} onClick={() => setActiveTab('sendpts')}>Send pts</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => setActiveTab('bullets')}>Bullets</Tab>
         <Tab active={activeTab === 'bodyguards'} onClick={() => setActiveTab('bodyguards')}>Bodyguards</Tab>
@@ -242,6 +274,132 @@ export default function Store() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'sendpts' && (
+        <div className="space-y-4 store-fade-in">
+          <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+              <Send size={14} className="text-primary shrink-0" />
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Send points to player</span>
+            </div>
+            <div className="p-3 space-y-2">
+              <input
+                type="text"
+                placeholder="Recipient username"
+                value={sendToUsername}
+                onChange={(e) => setSendToUsername(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none"
+              />
+              <input
+                type="number"
+                min="1"
+                placeholder="Amount"
+                value={sendAmount}
+                onChange={(e) => setSendAmount(e.target.value)}
+                className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const to = sendToUsername.trim();
+                  const amt = parseInt(sendAmount, 10);
+                  if (!to || !Number.isFinite(amt) || amt < 1) {
+                    toast.error('Enter username and amount (min 1)');
+                    return;
+                  }
+                  setLoading(true);
+                  try {
+                    await api.post('/store/send-points', { to_username: to, amount: amt });
+                    toast.success(`Sent ${amt.toLocaleString()} points`);
+                    setSendToUsername('');
+                    setSendAmount('');
+                    refreshUser();
+                    fetchData();
+                    fetchPointsTransfers();
+                  } catch (e) {
+                    toast.error(e.response?.data?.detail || 'Failed to send');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                disabled={loading || !user || (user?.points ?? 0) < 1}
+                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+              >
+                {loading ? '...' : 'Send'}
+              </button>
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
+
+          <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+              <ArrowRightLeft size={14} className="text-primary shrink-0" />
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Last 10 points transactions</span>
+            </div>
+            <div className="p-3">
+              {pointsTransfers.length === 0 ? (
+                <p className="text-[10px] text-zinc-500 font-heading italic">No transfers yet.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {pointsTransfers.map((t) => (
+                    <li key={t.id} className="text-[10px] font-heading flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1 border-b border-zinc-800/50 last:border-0">
+                      <span className="text-mutedForeground truncate min-w-0">{t.from_username} → {t.to_username}</span>
+                      <span className="text-primary shrink-0">{Number(t.amount).toLocaleString()} pts</span>
+                      {t.created_at && (
+                        <span className="text-[9px] text-zinc-600 w-full shrink-0">
+                          {new Date(t.created_at).toLocaleString()}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
+
+          {isAdmin && (
+            <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!adminTransfersOpen && adminTransfers.length === 0) fetchAdminTransfers();
+                  setAdminTransfersOpen((v) => !v);
+                }}
+                className="w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2"
+              >
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Admin: last 500 transfers</span>
+                {adminTransfersOpen ? <ChevronUp size={14} className="text-primary shrink-0" /> : <ChevronDown size={14} className="text-primary shrink-0" />}
+              </button>
+              {adminTransfersOpen && (
+                <div className="p-3 max-h-80 overflow-y-auto">
+                  {adminTransfers.length === 0 ? (
+                    <p className="text-[10px] text-zinc-500 font-heading italic">Loading…</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {adminTransfers.map((t) => (
+                        <li key={t.id} className="text-[10px] font-heading flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-0.5 border-b border-zinc-800/50 last:border-0">
+                          <span className="text-mutedForeground truncate min-w-0">{t.from_username} → {t.to_username}</span>
+                          <span className="text-primary shrink-0">{Number(t.amount).toLocaleString()} pts</span>
+                          {t.created_at && (
+                            <span className="text-[9px] text-zinc-600 w-full shrink-0">{new Date(t.created_at).toLocaleString()}</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {adminTransfers.length > 0 && (
+                    <p className="text-[9px] text-zinc-600 font-heading italic mt-2">{adminTransfers.length} transfers (most recent first).</p>
+                  )}
+                </div>
+              )}
+              <div className="store-art-line text-primary mx-3" />
+            </div>
+          )}
         </div>
       )}
 

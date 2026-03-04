@@ -105,7 +105,7 @@ export default function VerifyEmail({ setIsAuthenticated }) {
           {status === 'unverified' && (
             <>
               <p className="text-sm mb-3" style={{ color: 'var(--noir-muted)' }}>
-                Until verified you cannot do crimes, GTA, organised crime, or other locked features.
+                Until verified you cannot do crimes, GTA, organised crime, bank, gambling, dead-alive, or other locked features.
               </p>
               <p className="text-sm mb-4" style={{ color: 'var(--noir-foreground)' }}>
                 Check your inbox for the verification link, or request a new one below.

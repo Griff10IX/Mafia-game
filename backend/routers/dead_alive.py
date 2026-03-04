@@ -7,7 +7,7 @@ def register(router):
     import server as srv
 
     db = srv.db
-    get_current_user = srv.get_current_user
+    get_current_user_verified = srv.get_current_user_verified
     get_head_family_id_for_state = srv.get_head_family_id_for_state
     _username_pattern = srv._username_pattern
     verify_password = srv.verify_password
@@ -15,7 +15,7 @@ def register(router):
     DEAD_ALIVE_PERCENT = srv.DEAD_ALIVE_PERCENT
 
     @router.post("/dead-alive/retrieve")
-    async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user)):
+    async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user_verified)):
         """Transfer 95% of a dead account's money and points into your current account (5% tax). One-time per dead account."""
         username_pattern = _username_pattern(request.dead_username)
         dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})

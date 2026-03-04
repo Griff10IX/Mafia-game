@@ -13,6 +13,7 @@ from fastapi import Depends, HTTPException
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     STATES,
     get_rank_info,
     CAPO_RANK_ID,
@@ -185,7 +186,7 @@ async def _settle_and_save_history(user_id: str, username: str, city: str, bet: 
 
 def register(router):
     @router.get("/casino/videopoker/config")
-    async def casino_videopoker_config(current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_config(current_user: dict = Depends(get_current_user_verified)):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "")
         _, doc = await _get_ownership_doc(city) if city else (None, None)
@@ -198,7 +199,7 @@ def register(router):
         }
 
     @router.get("/casino/videopoker/ownership")
-    async def casino_videopoker_ownership(current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_ownership(current_user: dict = Depends(get_current_user_verified)):
         user_id = current_user["id"]
         now_ts = time.time()
         entry = _ownership_cache.get(user_id)
@@ -246,7 +247,7 @@ def register(router):
         return out
 
     @router.post("/casino/videopoker/claim")
-    async def casino_videopoker_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
@@ -272,7 +273,7 @@ def register(router):
         return {"message": f"You now own the video poker table in {city}!"}
 
     @router.post("/casino/videopoker/relinquish")
-    async def casino_videopoker_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
@@ -284,7 +285,7 @@ def register(router):
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/videopoker/set-max-bet")
-    async def casino_videopoker_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
@@ -297,7 +298,7 @@ def register(router):
         return {"message": f"Max bet set to ${new_max:,}"}
 
     @router.post("/casino/videopoker/send-to-user")
-    async def casino_videopoker_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
@@ -317,7 +318,7 @@ def register(router):
         return {"message": "Ownership transferred."}
 
     @router.post("/casino/videopoker/sell-on-trade")
-    async def casino_videopoker_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city((request.city or "").strip())
         if not city or city not in STATES:
@@ -342,7 +343,7 @@ def register(router):
         return {"message": f"Video Poker table listed for {request.points:,} points on Quick Trade"}
 
     @router.get("/casino/videopoker/game")
-    async def casino_videopoker_game(current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_game(current_user: dict = Depends(get_current_user_verified)):
         """Get the current active game (if any) for page refresh."""
         game = await db.videopoker_games.find_one({"user_id": current_user["id"]}, {"_id": 0, "deck": 0})
         if not game:
@@ -350,7 +351,7 @@ def register(router):
         return {"active": True, "bet": game.get("bet"), "hand": game.get("hand"), "status": game.get("status", "deal")}
 
     @router.post("/casino/videopoker/deal")
-    async def casino_videopoker_deal(request: VideoPokerDealRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_deal(request: VideoPokerDealRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         if current_user.get("in_jail"):
             raise HTTPException(status_code=400, detail="You are in jail!")
@@ -391,7 +392,7 @@ def register(router):
         return {"status": "deal", "bet": bet, "hand": hand}
 
     @router.post("/casino/videopoker/draw")
-    async def casino_videopoker_draw(request: VideoPokerDrawRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_draw(request: VideoPokerDrawRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         game = await db.videopoker_games.find_one({"user_id": current_user["id"]})
         if not game:
@@ -471,7 +472,7 @@ def register(router):
         }
 
     @router.get("/casino/videopoker/history")
-    async def casino_videopoker_history(current_user: dict = Depends(get_current_user)):
+    async def casino_videopoker_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "videopoker_history": 1})
         history = (user.get("videopoker_history") or [])[:VIDEO_POKER_HISTORY_MAX]
         return {"history": history}

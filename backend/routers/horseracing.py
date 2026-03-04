@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     STATES,
     get_rank_info,
     CAPO_RANK_ID,
@@ -140,7 +141,7 @@ def _horseracing_finish_order(winner_id: int):
 
 def register(router):
     @router.get("/casino/horseracing/config")
-    async def casino_horseracing_config(current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_config(current_user: dict = Depends(get_current_user_verified)):
         """Horse racing config: horses, max_bet (from ownership or default), claim_cost, house_edge."""
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "")
@@ -154,7 +155,7 @@ def register(router):
         }
 
     @router.get("/casino/horseracing/ownership")
-    async def casino_horseracing_ownership(current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's track ownership: owner, is_owner, claim_cost, max_bet."""
         user_id = current_user["id"]
         now_ts = time.time()
@@ -203,7 +204,7 @@ def register(router):
         return out
 
     @router.post("/casino/horseracing/claim")
-    async def casino_horseracing_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
@@ -229,7 +230,7 @@ def register(router):
         return {"message": f"You now own the race track in {city}!"}
 
     @router.post("/casino/horseracing/relinquish")
-    async def casino_horseracing_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_relinquish(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
@@ -241,7 +242,7 @@ def register(router):
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/horseracing/set-max-bet")
-    async def casino_horseracing_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_set_max_bet(request: RouletteSetMaxBetRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
@@ -254,7 +255,7 @@ def register(router):
         return {"message": f"Max bet set to ${new_max:,}"}
 
     @router.post("/casino/horseracing/send-to-user")
-    async def casino_horseracing_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_send_to_user(request: RouletteSendToUserRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
@@ -274,7 +275,7 @@ def register(router):
         return {"message": f"Track ownership transferred to {target.get('username', '?')}."}
 
     @router.post("/casino/horseracing/sell-on-trade")
-    async def casino_horseracing_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_sell_on_trade(request: DiceSellOnTradeRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         city = _normalize_city_for_horseracing((request.city or "").strip())
         if not city or city not in STATES:
@@ -299,7 +300,7 @@ def register(router):
         return {"message": f"Horse racing track listed for {request.points:,} points on Quick Trade"}
 
     @router.post("/casino/horseracing/race")
-    async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_race(request: HorseRacingBetRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "")
@@ -415,7 +416,7 @@ def register(router):
         }
 
     @router.get("/casino/horseracing/history")
-    async def casino_horseracing_history(current_user: dict = Depends(get_current_user)):
+    async def casino_horseracing_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "horseracing_history": 1})
         history = (user.get("horseracing_history") or [])[:HORSERACING_HISTORY_MAX]
         return {"history": list(reversed(history))}
