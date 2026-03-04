@@ -114,11 +114,37 @@ export default function Bodyguards() {
       const [bodyguardsRes, userRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
         api.get('/bodyguards'),
         api.get('/auth/me'),
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/bodyguards/inflation').catch(() => ({ data: { next_hire_inflation_pct: 0 } })),
-        api.get('/bodyguards/stats').catch(() => ({ data: null })),
-        api.get('/bodyguards/invites').catch(() => ({ data: { sent: [], received: [] } }))
+        api.get('/events/active').catch((e) => {
+          console.warn('[Bodyguards] events/active failed', e?.response?.status, e?.response?.data);
+          return { data: { event: null, events_enabled: false } };
+        }),
+        api.get('/bodyguards/inflation').catch((e) => {
+          console.warn('[Bodyguards] inflation failed', e?.response?.status, e?.response?.data);
+          return { data: { next_hire_inflation_pct: 0 } };
+        }),
+        api.get('/bodyguards/stats').catch((e) => {
+          console.warn('[Bodyguards] stats failed', e?.response?.status, e?.response?.data);
+          return { data: null };
+        }),
+        api.get('/bodyguards/invites').catch((e) => {
+          console.warn('[Bodyguards] invites failed', e?.response?.status, e?.response?.data);
+          return { data: { sent: [], received: [] } };
+        })
       ]);
+      if (bodyguardsRes.status >= 400) {
+        const msg = bodyguardsRes.data?.detail ?? bodyguardsRes.statusText ?? 'Bodyguards request failed';
+        console.error('[Bodyguards] /bodyguards bad status', bodyguardsRes.status, bodyguardsRes.data);
+        toast.error(`Bodyguards: ${msg}`, { duration: 12000 });
+        setLoading(false);
+        return;
+      }
+      if (userRes.status >= 400) {
+        const msg = userRes.data?.detail ?? userRes.statusText ?? 'Auth failed';
+        console.error('[Bodyguards] /auth/me bad status', userRes.status, userRes.data);
+        toast.error(`Auth: ${msg}`, { duration: 12000 });
+        setLoading(false);
+        return;
+      }
       const bgData = bodyguardsRes.data;
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
@@ -131,7 +157,12 @@ export default function Bodyguards() {
       setBgStats(statsRes.data ?? null);
       setInvites(invitesRes.data ?? { sent: [], received: [] });
     } catch (error) {
-      toast.error('Failed to load bodyguards', { duration: 10000 });
+      const status = error.response?.status;
+      const detail = error.response?.data?.detail ?? error.response?.data?.message ?? error.message;
+      const which = error.config?.url?.includes('bodyguards') ? 'bodyguards' : error.config?.url?.includes('auth') ? 'auth' : 'request';
+      console.error('[Bodyguards] fetchData failed', { which, status, detail, url: error.config?.url, data: error.response?.data });
+      const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
+      toast.error(`Failed to load ${which}: ${msg || status || 'Network error'}`, { duration: 12000 });
     } finally {
       setLoading(false);
     }
@@ -272,7 +303,14 @@ export default function Bodyguards() {
     try {
       await api.post(`/bodyguards/drop?slot=${slot}`);
       toast.success('Bodyguard dropped. Payments cancelled.');
-      await fetchData();
+      setBodyguards((prev) =>
+        prev.map((b) =>
+          b.slot_number === slot
+            ? { ...b, bodyguard_username: null, bodyguard_rank_name: null, armour_level: 0, hired_at: null, payment_points: 0, payment_money: 0, payout_weekday: null }
+            : b
+        )
+      );
+      fetchData().catch(() => {});
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to drop bodyguard', { duration: 8000 });
     } finally {
@@ -347,7 +385,9 @@ export default function Bodyguards() {
             </div>
           </div>
           <div className="shrink-0 w-12 text-center">
-            <span className="text-xs font-bold text-primary">{bg.armour_level || 0}/5</span>
+            <span className="text-xs font-bold text-primary">
+              {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5` : 'None')}
+            </span>
           </div>
           <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
             {bg.is_robot ? (
@@ -391,7 +431,9 @@ export default function Bodyguards() {
               )}
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Armour</div>
-                <div className="text-primary font-bold">{bg.armour_level || 0}/5{bg.is_robot ? '' : ' (their armour)'}</div>
+                <div className="text-primary font-bold">
+                  {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5 (their armour)` : 'None (their armour)')}
+                </div>
               </div>
               <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Hired</div>

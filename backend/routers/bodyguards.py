@@ -1,12 +1,15 @@
 # Bodyguards: list, armour upgrade, slot buy, hire, invite/accept/decline; admin clear/generate
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+import logging
 import time
 import uuid
 import random
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 
 from server import (
     db,
@@ -220,85 +223,96 @@ async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current
 
 async def get_bodyguards(current_user: dict = Depends(get_current_user)):
     global _bodyguards_cache
-    uid = current_user["id"]
-    now = time.monotonic()
-    if uid in _bodyguards_cache:
-        payload, expires = _bodyguards_cache[uid]
-        if now <= expires:
-            return payload
-    bodyguards = await db.bodyguards.find({"user_id": uid}, {"_id": 0}).to_list(10)
-    result = []
-    for i in range(4):
-        bg = next((b for b in bodyguards if b["slot_number"] == i + 1), None)
-        if bg:
-            username = None
-            rank_name = None
-            if not bg["is_robot"] and bg.get("bodyguard_user_id"):
-                bg_user = await db.users.find_one(
-                    {"id": bg["bodyguard_user_id"]},
-                    {"_id": 0, "username": 1, "rank_points": 1, "armour_level": 1}
-                )
-                username = bg_user["username"] if bg_user else "Unknown"
-                if bg_user:
-                    _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
-                # Human bodyguards use their own armour (from their user doc), not an upgradeable slot armour
-                armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
-            elif bg["is_robot"]:
-                if bg.get("bodyguard_user_id"):
+    uid = current_user.get("id")
+    username = current_user.get("username", "?")
+    logger.info("get_bodyguards start uid=%s username=%s", uid, username)
+    try:
+        now = time.monotonic()
+        if uid in _bodyguards_cache:
+            payload, expires = _bodyguards_cache[uid]
+            if now <= expires:
+                logger.debug("get_bodyguards cache hit uid=%s", uid)
+                return payload
+        bodyguards = await db.bodyguards.find({"user_id": uid}, {"_id": 0}).to_list(10)
+        logger.debug("get_bodyguards found %d raw slots for uid=%s", len(bodyguards), uid)
+        result = []
+        for i in range(4):
+            bg = next((b for b in bodyguards if b.get("slot_number") == i + 1), None)
+            if bg and (bg.get("bodyguard_user_id") or bg.get("is_robot")):
+                username_bg = None
+                rank_name = None
+                is_robot = bg.get("is_robot", False)
+                if not is_robot and bg.get("bodyguard_user_id"):
+                    # Human: armour is always the guard's actual user armour (never from the slot doc)
+                    guard_id = bg["bodyguard_user_id"]
                     bg_user = await db.users.find_one(
-                        {"id": bg["bodyguard_user_id"]},
-                        {"_id": 0, "username": 1, "rank_points": 1}
+                        {"id": guard_id},
+                        {"_id": 0, "username": 1, "rank_points": 1, "armour_level": 1}
                     )
-                    username = bg_user["username"] if bg_user else None
+                    username_bg = bg_user["username"] if bg_user else "Unknown"
                     if bg_user:
                         _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
-                username = username or bg.get("robot_name") or f"Robot Guard #{i + 1}"
-                armour_level = int(bg.get("armour_level", 0) or 0)
-            result.append(BodyguardResponse(
-                slot_number=i + 1,
-                is_robot=bg["is_robot"],
-                bodyguard_username=username,
-                bodyguard_rank_name=rank_name,
-                armour_level=armour_level,
-                hired_at=bg["hired_at"],
-                payment_points=int(bg.get("payment_points") or 0),
-                payment_money=int(bg.get("payment_money") or 0),
-                payout_weekday=bg.get("payout_weekday"),
-            ))
+                    armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
+                else:
+                    if bg.get("bodyguard_user_id"):
+                        bg_user = await db.users.find_one(
+                            {"id": bg["bodyguard_user_id"]},
+                            {"_id": 0, "username": 1, "rank_points": 1}
+                        )
+                        username_bg = bg_user["username"] if bg_user else None
+                        if bg_user:
+                            _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
+                    username_bg = username_bg or bg.get("robot_name") or f"Robot Guard #{i + 1}"
+                    armour_level = int(bg.get("armour_level", 0) or 0)
+                result.append(BodyguardResponse(
+                    slot_number=i + 1,
+                    is_robot=is_robot,
+                    bodyguard_username=username_bg,
+                    bodyguard_rank_name=rank_name,
+                    armour_level=armour_level,
+                    hired_at=bg.get("hired_at") or None,
+                    payment_points=int(bg.get("payment_points") or 0),
+                    payment_money=int(bg.get("payment_money") or 0),
+                    payout_weekday=bg.get("payout_weekday"),
+                ))
+            else:
+                result.append(BodyguardResponse(
+                    slot_number=i + 1,
+                    is_robot=False,
+                    bodyguard_username=None,
+                    bodyguard_rank_name=None,
+                    armour_level=0,
+                    hired_at=None,
+                    payment_points=0,
+                    payment_money=0,
+                    payout_weekday=None,
+                ))
+        if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
+            oldest = next(iter(_bodyguards_cache))
+            _bodyguards_cache.pop(oldest, None)
+        payload = {"bodyguards": result}
+        user_doc = await db.users.find_one({"id": uid}, {"_id": 0, "bodyguard_last_drop_at": 1})
+        payload["bodyguard_last_drop_at"] = user_doc.get("bodyguard_last_drop_at") if user_doc else None
+        as_guard = await db.bodyguards.find_one(
+            {"bodyguard_user_id": uid, "is_robot": False},
+            {"_id": 0, "user_id": 1},
+        )
+        if as_guard:
+            owner = await db.users.find_one({"id": as_guard["user_id"]}, {"_id": 0, "id": 1, "username": 1})
+            if owner:
+                payload["bodyguard_for"] = {"owner_id": owner["id"], "owner_username": owner.get("username") or "?"}
+            else:
+                payload["bodyguard_for"] = {"owner_id": as_guard["user_id"], "owner_username": "?"}
         else:
-            result.append(BodyguardResponse(
-                slot_number=i + 1,
-                is_robot=False,
-                bodyguard_username=None,
-                bodyguard_rank_name=None,
-                armour_level=0,
-                hired_at=None,
-                payment_points=0,
-                payment_money=0,
-                payout_weekday=None,
-            ))
-    if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
-        oldest = next(iter(_bodyguards_cache))
-        _bodyguards_cache.pop(oldest, None)
-    payload = {"bodyguards": result}
-    # Cooldown for dropping human bodyguards (so frontend can show "drop available in X min")
-    user_doc = await db.users.find_one({"id": uid}, {"_id": 0, "bodyguard_last_drop_at": 1})
-    payload["bodyguard_last_drop_at"] = user_doc.get("bodyguard_last_drop_at") if user_doc else None
-    # If current user is acting as a bodyguard for someone, show who they guard for
-    as_guard = await db.bodyguards.find_one(
-        {"bodyguard_user_id": uid, "is_robot": False},
-        {"_id": 0, "user_id": 1},
-    )
-    if as_guard:
-        owner = await db.users.find_one({"id": as_guard["user_id"]}, {"_id": 0, "id": 1, "username": 1})
-        if owner:
-            payload["bodyguard_for"] = {"owner_id": owner["id"], "owner_username": owner.get("username") or "?"}
-        else:
-            payload["bodyguard_for"] = {"owner_id": as_guard["user_id"], "owner_username": "?"}
-    else:
-        payload["bodyguard_for"] = None
-    _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
-    return payload
+            payload["bodyguard_for"] = None
+        _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
+        logger.info("get_bodyguards success uid=%s slots=%d", uid, len(result))
+        return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("get_bodyguards error uid=%s: %s", uid, e)
+        raise HTTPException(status_code=500, detail=f"Bodyguards load failed: {type(e).__name__}: {str(e)}")
 
 
 async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
@@ -648,7 +662,7 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
                 )
     await db.bodyguards.update_one(
         {"user_id": inviter["id"], "slot_number": empty_slot},
-        {"$set": set_doc},
+        {"$set": set_doc, "$unset": {"armour_level": ""}},
         upsert=True
     )
     await db.bodyguard_invites.update_one(
