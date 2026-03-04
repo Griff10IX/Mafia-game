@@ -367,12 +367,14 @@ endpoint_user_last_request = defaultdict(dict)
 
 def get_rate_limit_for_path(path: str) -> tuple[float, bool, str]:
     """Get (min_interval_seconds, enabled, storage_key) for a given path. Storage key is the pattern so e.g. all /api/crimes/* share one limit."""
+    # Normalize: config uses /api/ prefix; some proxies or mounts may expose path without it
+    path_to_match = path if path.startswith("/api") else ("/api" + path if path.startswith("/") else "/api/" + path)
     for pattern, (interval, enabled) in RATE_LIMIT_CONFIG.items():
         if pattern.endswith("/"):
-            if path.startswith(pattern):
+            if path_to_match.startswith(pattern):
                 return (interval, enabled, pattern)
         else:
-            if path == pattern:
+            if path_to_match == pattern:
                 return (interval, enabled, pattern)
     return (1.0, False, path)
 
@@ -381,18 +383,59 @@ async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) 
     """
     Check if user is clicking too fast (min interval between clicks).
     Returns True if request should be blocked (clicked too soon).
+    Uses DB when available so rate limits apply across workers and restarts.
     """
     if not GLOBAL_RATE_LIMITS_ENABLED:
         return False
-    
+
     min_interval_sec, enabled, key = get_rate_limit_for_path(path)
-    
+
     if not enabled or min_interval_sec <= 0:
         return False
-    
+
     now = datetime.now(timezone.utc)
+
+    # Database-backed rate limit: atomic check-and-set so it works across workers
+    if db is not None:
+        try:
+            cutoff = now - timedelta(seconds=min_interval_sec)
+            result = await db.rate_limit_clicks.update_one(
+                {
+                    "user_id": user_id,
+                    "endpoint_key": key,
+                    "$or": [
+                        {"last_at": {"$exists": False}},
+                        {"last_at": None},
+                        {"last_at": {"$lte": cutoff}},
+                    ],
+                },
+                {"$set": {"user_id": user_id, "endpoint_key": key, "last_at": now}},
+                upsert=True,
+            )
+            if result.modified_count == 1 or result.upserted_count == 1:
+                return False  # allowed
+            # Too soon: block and flag
+            await flag_user_suspicious(
+                db, user_id, username,
+                "endpoint_rate_limit",
+                f"Too many clicks on {path}: need {min_interval_sec}s between requests",
+                {"path": path, "min_interval_sec": min_interval_sec},
+            )
+            return True
+        except Exception as e:
+            if getattr(e, "code", None) == 11000:
+                # Duplicate key: another worker just inserted; treat as too soon
+                await flag_user_suspicious(
+                    db, user_id, username,
+                    "endpoint_rate_limit",
+                    f"Too many clicks on {path}: need {min_interval_sec}s between requests",
+                    {"path": path, "min_interval_sec": min_interval_sec},
+                )
+                return True
+            logger.warning("Rate limit DB check failed, falling back to in-memory: %s", e)
+
+    # In-memory fallback (single worker only)
     last = endpoint_user_last_request.get(key, {}).get(user_id)
-    
     if last is not None:
         elapsed = (now - last).total_seconds()
         if elapsed < min_interval_sec:
@@ -400,10 +443,10 @@ async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) 
                 db, user_id, username,
                 "endpoint_rate_limit",
                 f"Too many clicks on {path}: need {min_interval_sec}s between requests (got {elapsed:.2f}s)",
-                {"path": path, "min_interval_sec": min_interval_sec, "elapsed_sec": round(elapsed, 2)}
+                {"path": path, "min_interval_sec": min_interval_sec, "elapsed_sec": round(elapsed, 2)},
             )
             return True
-    
+
     endpoint_user_last_request.setdefault(key, {})[user_id] = now
     return False
 

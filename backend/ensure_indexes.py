@@ -185,6 +185,8 @@ async def ensure_all_indexes(db):
         await db.ip_bans.create_index([("active", 1), ("created_at", -1)])
         await db.security_flags.create_index([("user_id", 1), ("created_at", -1)])
         await db.security_flags.create_index([("created_at", 1)])
+        await db.rate_limit_clicks.create_index([("user_id", 1), ("endpoint_key", 1)], unique=True)
+        await db.rate_limit_clicks.create_index("last_at", expireAfterSeconds=86400)  # TTL: remove 24h after last use
         await db.security_logs.create_index([("created_at", -1)])
         await db.activity_log.create_index([("created_at", -1)])
         await db.activity_log.create_index([("username", 1), ("created_at", -1)])

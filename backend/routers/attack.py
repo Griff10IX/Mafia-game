@@ -893,6 +893,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 bodyguard_owner_username = owner_doc.get("username")
             bg_hire_cost = int(bg.get("hire_cost") or 0)
             delete_criteria = {"user_id": owner_id, "bodyguard_user_id": victim_id}
+            # Remove bodyguard slot — human weekly payments are cancelled (no further payouts)
             if bg.get("id"):
                 await db.bodyguards.delete_one({"id": bg["id"]})
             else:

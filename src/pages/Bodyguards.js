@@ -70,6 +70,7 @@ export default function Bodyguards() {
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [upgradingSlot, setUpgradingSlot] = useState(null);
   const [bgStats, setBgStats] = useState(null);
+  const [bodyguardFor, setBodyguardFor] = useState(null);
   const [invites, setInvites] = useState({ sent: [], received: [] });
   const [inviteUsername, setInviteUsername] = useState('');
   const [invitePaymentPoints, setInvitePaymentPoints] = useState(0);
@@ -114,7 +115,9 @@ export default function Bodyguards() {
         api.get('/bodyguards/stats').catch(() => ({ data: null })),
         api.get('/bodyguards/invites').catch(() => ({ data: { sent: [], received: [] } }))
       ]);
-      setBodyguards(bodyguardsRes.data);
+      const bgData = bodyguardsRes.data;
+      setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
+      setBodyguardFor(bgData?.bodyguard_for ?? null);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
@@ -304,14 +307,18 @@ export default function Bodyguards() {
             <span className="text-xs font-bold text-primary">{bg.armour_level || 0}/5</span>
           </div>
           <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={() => upgradeArmour(bg.slot_number)}
-              disabled={(bg.armour_level || 0) >= 5}
-              className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
-              data-testid={`upgrade-armour-${bg.slot_number}`}
-            >
-              {upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
-            </button>
+            {bg.is_robot ? (
+              <button
+                onClick={() => upgradeArmour(bg.slot_number)}
+                disabled={(bg.armour_level || 0) >= 5}
+                className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
+                data-testid={`upgrade-armour-${bg.slot_number}`}
+              >
+                {upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
+              </button>
+            ) : (
+              <span className="text-[10px] text-mutedForeground italic">Your armour</span>
+            )}
           </div>
         </div>
         {isExpanded && (
@@ -341,7 +348,7 @@ export default function Bodyguards() {
               )}
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Armour</div>
-                <div className="text-primary font-bold">{bg.armour_level || 0}/5</div>
+                <div className="text-primary font-bold">{bg.armour_level || 0}/5{bg.is_robot ? '' : ' (their armour)'}</div>
               </div>
               <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Hired</div>
@@ -387,6 +394,14 @@ export default function Bodyguards() {
       {/* Page header */}
       <div className="relative bg-fade-in">
         <p className="text-[10px] text-zinc-500 font-heading italic">Hire robots or invite humans (4 bodyguards max total). Armour and who&apos;s watching your back.</p>
+        {bodyguardFor?.owner_username && (
+          <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-heading">
+            <span className="text-mutedForeground">You&apos;re bodyguarding for: </span>
+            <Link to={`/profile/${encodeURIComponent(bodyguardFor.owner_username)}`} className="text-emerald-400 font-bold hover:underline">
+              {bodyguardFor.owner_username}
+            </Link>
+          </div>
+        )}
       </div>
       
       {/* Stats row */}

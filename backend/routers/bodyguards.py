@@ -234,11 +234,13 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
             if not bg["is_robot"] and bg.get("bodyguard_user_id"):
                 bg_user = await db.users.find_one(
                     {"id": bg["bodyguard_user_id"]},
-                    {"_id": 0, "username": 1, "rank_points": 1}
+                    {"_id": 0, "username": 1, "rank_points": 1, "armour_level": 1}
                 )
                 username = bg_user["username"] if bg_user else "Unknown"
                 if bg_user:
                     _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
+                # Human bodyguards use their own armour (from their user doc), not an upgradeable slot armour
+                armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
             elif bg["is_robot"]:
                 if bg.get("bodyguard_user_id"):
                     bg_user = await db.users.find_one(
@@ -249,12 +251,13 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                     if bg_user:
                         _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
                 username = username or bg.get("robot_name") or f"Robot Guard #{i + 1}"
+                armour_level = int(bg.get("armour_level", 0) or 0)
             result.append(BodyguardResponse(
                 slot_number=i + 1,
                 is_robot=bg["is_robot"],
                 bodyguard_username=username,
                 bodyguard_rank_name=rank_name,
-                armour_level=int(bg.get("armour_level", 0) or 0),
+                armour_level=armour_level,
                 hired_at=bg["hired_at"],
                 payment_points=int(bg.get("payment_points") or 0),
                 payment_money=int(bg.get("payment_money") or 0),
@@ -275,8 +278,22 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
     if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
         oldest = next(iter(_bodyguards_cache))
         _bodyguards_cache.pop(oldest, None)
-    _bodyguards_cache[uid] = (result, now + _BODYGUARDS_CACHE_TTL_SEC)
-    return result
+    payload = {"bodyguards": result}
+    # If current user is acting as a bodyguard for someone, show who they guard for
+    as_guard = await db.bodyguards.find_one(
+        {"bodyguard_user_id": uid, "is_robot": False},
+        {"_id": 0, "user_id": 1},
+    )
+    if as_guard:
+        owner = await db.users.find_one({"id": as_guard["user_id"]}, {"_id": 0, "id": 1, "username": 1})
+        if owner:
+            payload["bodyguard_for"] = {"owner_id": owner["id"], "owner_username": owner.get("username") or "?"}
+        else:
+            payload["bodyguard_for"] = {"owner_id": as_guard["user_id"], "owner_username": "?"}
+    else:
+        payload["bodyguard_for"] = None
+    _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
+    return payload
 
 
 async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
@@ -331,6 +348,8 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     bg = await db.bodyguards.find_one({"user_id": current_user["id"], "slot_number": slot}, {"_id": 0})
     if not bg or not bg.get("bodyguard_user_id"):
         raise HTTPException(status_code=404, detail="No bodyguard in that slot")
+    if not bg.get("is_robot"):
+        raise HTTPException(status_code=400, detail="Human bodyguards use their own armour; it cannot be upgraded")
     cur_level = int(bg.get("armour_level", 0) or 0)
     if cur_level >= 5:
         raise HTTPException(status_code=400, detail="Bodyguard armour is already maxed")
@@ -587,6 +606,31 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
     }
     if end_time:
         set_doc["contract_end"] = end_time.isoformat()
+    # First week's pay: pay the bodyguard now; set last_payout_date so next auto-pay is in one week
+    today_str = now.date().isoformat()
+    set_doc["last_payout_date"] = today_str
+    if pay_pts > 0 or pay_money > 0:
+        first_pay = await db.users.update_one(
+            {"id": inviter["id"], "points": {"$gte": pay_pts}, "money": {"$gte": pay_money}},
+            {"$inc": {"points": -pay_pts, "money": -pay_money}},
+        )
+        if first_pay.modified_count == 1:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$inc": {"points": pay_pts, "money": pay_money}},
+            )
+            pay_msg = []
+            if pay_pts:
+                pay_msg.append(f"{pay_pts} pts")
+            if pay_money:
+                pay_msg.append(f"${pay_money:,.0f}")
+            if pay_msg:
+                await send_notification(
+                    current_user["id"],
+                    "🛡️ First week pay",
+                    f"First week bodyguard pay from {inviter.get('username', '?')}: " + " + ".join(pay_msg),
+                    "bodyguard",
+                )
     await db.bodyguards.update_one(
         {"user_id": inviter["id"], "slot_number": empty_slot},
         {"$set": set_doc},
@@ -747,6 +791,10 @@ async def run_bodyguard_weekly_payout(database):
             except Exception:
                 pass
         guard_id = bg["bodyguard_user_id"]
+        # If the human bodyguard was killed, payments are cancelled — don't pay dead users
+        guard_user = await database.users.find_one({"id": guard_id}, {"_id": 0, "is_dead": 1})
+        if guard_user and guard_user.get("is_dead"):
+            continue
         pay_pts = int(bg.get("payment_points") or 0)
         pay_money = float(bg.get("payment_money") or 0)
         if pay_pts <= 0 and pay_money <= 0:
