@@ -37,8 +37,7 @@ function formatInflationCountdown(isoEnd) {
     const secs = totalSecs % 60;
     if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
     if (mins > 0) return `${mins}m ${secs}s`;
-    if (secs > 0) return `${secs}s`;
-    return 'soon';
+    return `${secs}s`;
   } catch {
     return null;
   }
