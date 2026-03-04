@@ -808,6 +808,7 @@ export default function Layout({ children }) {
                               </span>
                             )}
                           </Link>
+                          <div className="my-1.5 mx-1 h-px shrink-0" style={{ backgroundColor: 'var(--noir-border)', opacity: 0.6 }} aria-hidden="true" />
                           <Link
                             to="/jail"
                             onClick={() => setSidebarOpen(false)}

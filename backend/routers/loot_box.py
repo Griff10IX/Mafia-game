@@ -103,12 +103,11 @@ async def _get_claimed_counts():
 
 
 async def _increment_claimed_count(typ: str):
+    # Only $inc the subpath; do not $setOnInsert "value" in the same update (MongoDB path conflict).
+    # On upsert, the new doc gets key from filter and value.{typ} from $inc (missing keys treated as 0).
     await db.game_settings.update_one(
         {"key": GAME_SETTINGS_LOOT_COUNTS_KEY},
-        {
-            "$inc": {f"value.{typ}": 1},
-            "$setOnInsert": {"value": {"weapon": 0, "car": 0, "armour": 0, "property": 0}},
-        },
+        {"$inc": {f"value.{typ}": 1}},
         upsert=True,
     )
 
