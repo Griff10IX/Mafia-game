@@ -27,6 +27,9 @@ from server import (
 BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
 BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 
+# Human bodyguard one-time hire cost is 25% cheaper than robot (deducted from inviter when invite is accepted)
+BODYGUARD_HUMAN_HIRE_DISCOUNT = 0.75  # 75% of robot price
+
 # Bodyguard inflation: each purchase starts/resets a 3h timer; buying again before it expires adds % (2, 5, 7, 12, 17, 22, ...)
 BODYGUARD_INFLATION_HOURS = 3
 # First 4 levels: 2%, 5%, 7%, 12%; then +5% per level (17%, 22%, 27%, ...)
@@ -524,7 +527,45 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
             break
     if not empty_slot:
         raise HTTPException(status_code=400, detail="Inviter has no available slots")
+    # One-time hire cost (25% cheaper than robot), deducted from inviter when bodyguard accepts
+    ev = await get_effective_event()
+    base_cost = BODYGUARD_SLOT_COSTS[empty_slot - 1]
+    inviter_inflation = await db.users.find_one(
+        {"id": inviter["id"]},
+        {"_id": 0, "points": 1, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
+    )
+    inviter_for_cost = inviter_inflation or {}
+    inflation_level = _bodyguard_inflation_level_now(inviter_for_cost)
+    inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
+    robot_cost = int(base_cost * ev.get("bodyguard_cost", 1.0) * inflation_mult)
+    human_hire_cost = max(1, int(robot_cost * BODYGUARD_HUMAN_HIRE_DISCOUNT))
+    if (inviter_for_cost.get("points") or 0) < human_hire_cost:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Inviter does not have enough points for the hire cost ({human_hire_cost} pts, 25% off robot price)",
+        )
     now = datetime.now(timezone.utc)
+    window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
+    # Deduct from inviter and advance their inflation (same as hiring a robot)
+    inviter_update_result = await db.users.update_one(
+        {"id": inviter["id"], "points": {"$gte": human_hire_cost}},
+        {
+            "$inc": {
+                "points": -human_hire_cost,
+                "bodyguard_lifetime_hires": 1,
+                "bodyguard_lifetime_spent_hires": human_hire_cost,
+            },
+            "$set": {
+                "bodyguard_inflation_until": window_end.isoformat(),
+                "bodyguard_inflation_level": inflation_level + 1,
+            },
+        },
+    )
+    if inviter_update_result.modified_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Inviter does not have enough points for the hire cost ({human_hire_cost} pts, 25% off robot price)",
+        )
     duration_hours = int(invite.get("duration_hours") or 168)
     end_time = now + timedelta(hours=duration_hours) if duration_hours > 0 else None
     pay_pts = int(invite.get("payment_points") or 0)
@@ -542,6 +583,7 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
         "payout_weekday": int(invite.get("payout_weekday", 0)),
         "last_payout_date": None,
         "hired_at": now.isoformat(),
+        "hire_cost": human_hire_cost,
     }
     if end_time:
         set_doc["contract_end"] = end_time.isoformat()
@@ -557,7 +599,7 @@ async def accept_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
     await send_notification(
         inviter["id"],
         "🛡️ Bodyguard Accepted",
-        f"{current_user['username']} has accepted your bodyguard offer!",
+        f"{current_user['username']} has accepted your bodyguard offer! {human_hire_cost} pts hire cost deducted (25% off robot price).",
         "bodyguard"
     )
     _invalidate_bodyguards_cache(current_user["id"])

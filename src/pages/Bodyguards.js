@@ -505,6 +505,9 @@ export default function Bodyguards() {
               {humanBodyguards.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && (
                 <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-3 space-y-2">
+                  <div className="text-[10px] text-mutedForeground mb-1">
+                    One-time hire cost when they accept: <strong className="text-foreground">{Math.floor(getHireCost(nextEmptySlot) * 0.75)} pts</strong> (25% off robot price).
+                  </div>
                   <div className="text-[10px] text-mutedForeground mb-1.5">Offer (per week, paid on chosen day):</div>
                   <div className="flex flex-wrap items-center gap-2">
                     <input
