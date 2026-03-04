@@ -1,6 +1,41 @@
-# Auto Rank cron-bust ticker (every 5 seconds)
+# Auto Rank cron (two tickers when using AUTO_RANK_USE_CRON=1)
 
-When you use **AUTO_RANK_USE_CRON=1**, the server does not run the bust loop itself. The **Auto Rank "Jail bust every 5 sec"** option in the UI is driven by this ticker: it calls `POST /api/auto-rank/cron-bust` every 5s so users with that option get one bust attempt every 5 seconds. Without the ticker (or equivalent), that option does nothing in cron mode.
+When you use **AUTO_RANK_USE_CRON=1**, the server does **not** run Auto Rank itself. You must call the API from outside:
+
+| What runs | Endpoint | How often | Script |
+|-----------|----------|------------|--------|
+| **Crimes, GTA, booze, OC** (main cycle) | `POST /api/auto-rank/cron` | Every **60s** | `scripts/cron-cycle-ticker.py` |
+| **Jail bust every 5 sec** only | `POST /api/auto-rank/cron-bust` | Every **5s** | `scripts/cron-bust-ticker.py` |
+
+**If you only run the cron-bust ticker, crimes will never run.** You must also run the main cron (script or crontab below).
+
+---
+
+## Main cron via crontab (Option B) — crimes every minute
+
+Call the main Auto Rank endpoint once per minute with system cron.
+
+1. **On the server**, open crontab:
+   ```bash
+   crontab -e
+   ```
+
+2. **Add one line** (run every minute). Replace `YOUR_CRON_SECRET` and the URL with your real values:
+   ```bash
+   * * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" https://your-domain.com/api/auto-rank/cron
+   ```
+   If the app is on the same host:
+   ```bash
+   * * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" http://127.0.0.1:8000/api/auto-rank/cron
+   ```
+
+3. **Save and exit.** Cron will run that command every minute. Check server logs for `POST /api/auto-rank/cron` returning 200.
+
+---
+
+## cron-bust ticker (every 5 seconds)
+
+The **Auto Rank "Jail bust every 5 sec"** option is driven by this ticker: it calls `POST /api/auto-rank/cron-bust` every 5s. Without it, that option does nothing in cron mode.
 
 ---
 
@@ -41,7 +76,19 @@ Do this on the machine where the app (or at least the cron) runs.
 
 ---
 
-## Quick start (run by hand)
+## Main cron ticker (crimes / GTA / booze / OC) — every 60s
+
+Run this so Auto Rank actually runs crimes and the rest of the cycle:
+
+```bash
+python scripts/cron-cycle-ticker.py
+```
+
+Uses the same `CRON_SECRET` and `BASE_URL` as the bust ticker. Optional: `CRON_CYCLE_INTERVAL=60` (default 60 seconds).
+
+---
+
+## Quick start (run by hand) — bust ticker
 
 1. In **backend/.env** (or your env) set:
    - `CRON_SECRET` – same value you use for your main Auto Rank cron
@@ -94,5 +141,5 @@ nohup python3 scripts/cron-bust-ticker.py >> /var/log/cron-bust-ticker.log 2>&1 
 ```
 It won’t start on reboot; use systemd for that.
 
-- Use the same `CRON_SECRET` as your main 60s cron job.
-- Keep your main cron for the 60s Auto Rank cycle: `POST /api/auto-rank/cron` every minute.
+- Use the same `CRON_SECRET` as your main cron.
+- **You must run the main Auto Rank cron** for crimes/GTA/booze/OC: either `python scripts/cron-cycle-ticker.py` (calls `POST /api/auto-rank/cron` every 60s) or a system crontab entry like `* * * * * curl -X POST -H "X-Cron-Secret: YOUR_SECRET" https://your-domain.com/api/auto-rank/cron`.

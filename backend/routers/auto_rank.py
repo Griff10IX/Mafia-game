@@ -656,6 +656,8 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1},
     )
     users = await cursor.to_list(500)
+    if users:
+        logger.info("Auto rank: running cycle for %d due user(s) (crimes/GTA/booze)", len(users))
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
     if not crimes:
         logger.warning("Auto rank: crimes collection empty; each user will try to load crimes in-run")
@@ -825,6 +827,7 @@ async def run_auto_rank_cron_cycle():
     db = srv.db
     config = await get_auto_rank_config(db)
     if not config["enabled"]:
+        logger.info("Auto rank cron: skipped (auto_rank disabled in game settings)")
         return {"ok": True, "skipped": "auto_rank disabled"}
     try:
         await run_booze_arrivals()
@@ -870,7 +873,13 @@ def register(router):
     async def verify_cron_secret(x_cron_secret: Optional[str] = Header(None, alias="X-Cron-Secret")):
         if not cron_secret:
             raise HTTPException(status_code=503, detail="Cron not configured (CRON_SECRET unset)")
-        if (x_cron_secret or "") != cron_secret:
+        received = (x_cron_secret or "").strip()
+        if received != cron_secret:
+            logger.warning(
+                "Cron auth failed: X-Cron-Secret mismatch (len received=%s, expected=%s). Check crontab/curl uses same CRON_SECRET as backend .env.",
+                len(received),
+                len(cron_secret),
+            )
             raise HTTPException(status_code=403, detail="Invalid cron secret")
 
     @router.post("/auto-rank/cron")
