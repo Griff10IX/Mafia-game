@@ -660,8 +660,10 @@ async def run_booze_arrivals():
         await asyncio.gather(*[run_one(u) for u in users])
 
 
-async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
-    """Find users whose auto_rank_next_run_at is due, run each once, set next_run_at."""
+async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_start: Optional[datetime] = None):
+    """Find users whose auto_rank_next_run_at is due, run each once, set next_run_at.
+    Use cycle_start (e.g. when the loop iteration began) for scheduling the next run so that
+    delays from run_booze_arrivals() don't stretch the effective interval."""
     import server as srv
     db = srv.db
     now = datetime.now(timezone.utc)
@@ -685,7 +687,11 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None):
     crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
     if not crimes:
         logger.warning("Auto rank: crimes collection empty; each user will try to load crimes in-run")
-    next_run_iso = datetime.fromtimestamp(now.timestamp() + interval, tz=timezone.utc).isoformat()
+    # Schedule next run from cycle start so interval is accurate even if booze/other work ran first
+    base = cycle_start if cycle_start is not None else now
+    if base.tzinfo is None:
+        base = base.replace(tzinfo=timezone.utc)
+    next_run_iso = datetime.fromtimestamp(base.timestamp() + interval, tz=timezone.utc).isoformat()
 
     async def run_one(u):
         chat_id = (u.get("telegram_chat_id") or "").strip()
@@ -831,12 +837,13 @@ async def run_auto_rank_loop():
         if not config["enabled"]:
             await asyncio.sleep(2)
             continue
+        cycle_start = datetime.now(timezone.utc)
         try:
             await run_booze_arrivals()
         except Exception as e:
             logger.exception("Auto rank booze arrivals failed: %s", e)
         try:
-            await run_auto_rank_due_users(interval_seconds=config["interval_seconds"])
+            await run_auto_rank_due_users(interval_seconds=config["interval_seconds"], cycle_start=cycle_start)
         except Exception as e:
             logger.exception("Auto rank due-users run failed: %s", e)
         await asyncio.sleep(LOOP_WAKE_SECONDS)
