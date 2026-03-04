@@ -666,3 +666,33 @@ def register(router):
             "property_profit": int(property_pts) if property_pts is not None else 0,
             "has_casino_or_property": has_casino or has_property,
         }
+
+    @router.get("/auth/ip-info")
+    async def get_ip_info(request: Request, current_user: dict = Depends(get_current_user)):
+        """Return current IP, accounts that have signed in from this IP, and IPs this user has signed in from (for IP rules page)."""
+        current_ip = _client_ip(request) or ""
+        accounts_from_current_ip = []
+        if current_ip:
+            cursor = db.users.find(
+                {"$or": [{"registration_ip": current_ip}, {"login_ips": current_ip}]},
+                {"_id": 0, "username": 1},
+            )
+            seen = set()
+            async for u in cursor:
+                un = (u.get("username") or "").strip()
+                if un and un not in seen:
+                    seen.add(un)
+                    accounts_from_current_ip.append(un)
+        your_ips = []
+        reg_ip = (current_user.get("registration_ip") or "").strip()
+        if reg_ip:
+            your_ips.append(reg_ip)
+        for ip in (current_user.get("login_ips") or []):
+            ip = (ip or "").strip()
+            if ip and ip not in your_ips:
+                your_ips.append(ip)
+        return {
+            "current_ip": current_ip,
+            "accounts_from_current_ip": accounts_from_current_ip,
+            "your_signin_ips": your_ips,
+        }

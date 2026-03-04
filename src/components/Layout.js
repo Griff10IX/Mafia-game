@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -81,6 +81,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/missions', label: 'Missions' },
         { path: '/loot-box', label: 'Loot Box' },
         { path: '/profile', label: 'Profile' },
+        { path: '/ip-rules', label: 'Address & device' },
         { path: '/stats', label: 'Stats' },
         { path: '/dead-alive', label: 'Dead > Alive' },
         { path: '/bank', label: 'Bank' },
@@ -654,6 +655,7 @@ export default function Layout({ children }) {
     { path: '/missions', icon: Map, label: 'Missions' },
     { path: '/loot-box', icon: Gift, label: 'Loot Box' },
     { path: '/profile', icon: User, label: 'Profile' },
+    { path: '/ip-rules', icon: Globe, label: 'Address & device' },
     { path: '/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/bank', icon: Landmark, label: 'Bank' },
     { path: '/stock-market', icon: TrendingUp, label: 'Stock Market' },
