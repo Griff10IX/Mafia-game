@@ -820,8 +820,8 @@ const AdminGlobalLoopCard = ({
         <p className="text-[9px] sm:text-[10px] text-zinc-400 mb-2">
           Wait after each user cycle. Min: {MIN_INTERVAL}s · Current: {intervalSeconds}s
         </p>
-        <p className="text-[9px] text-amber-200/90 mb-2">
-          Cron: call <code className="bg-zinc-800 px-1 rounded">cron-cycle-ticker.py</code> at least this often (CRON_CYCLE_INTERVAL).
+        <p className="text-[9px] text-emerald-200/90 mb-2">
+          Cron: ticker calls <code className="bg-zinc-800 px-1 rounded">cron-cycle-ticker.py</code> — it reads this value from the server, so what you set here is what runs.
         </p>
         <div className="flex gap-2">
           <input
@@ -842,8 +842,8 @@ const AdminGlobalLoopCard = ({
         <p className="text-[9px] sm:text-[10px] text-zinc-400 mb-2">
           How often to run jail bust pass. Min: {MIN_BUST_INTERVAL}s · Current: {intervalBustSeconds}s
         </p>
-        <p className="text-[9px] text-amber-200/90 mb-2">
-          Cron: call <code className="bg-zinc-800 px-1 rounded">cron-bust-ticker.py</code> at this interval (CRON_BUST_INTERVAL).
+        <p className="text-[9px] text-emerald-200/90 mb-2">
+          Cron: ticker calls <code className="bg-zinc-800 px-1 rounded">cron-bust-ticker.py</code> — it reads this value from the server.
         </p>
         <div className="flex gap-2">
           <input

@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
 """
-Call POST /api/auto-rank/cron-bust every N seconds. Run this when using
-AUTO_RANK_USE_CRON=1 so jail busts run at the configured interval (main cron can be different).
+Call POST /api/auto-rank/cron-bust at the interval set in Admin (Bust/jail).
+Uses GET /api/auto-rank/cron-intervals so whatever you set in admin is what runs.
 
 Usage:
-  Set CRON_SECRET and BASE_URL, then run from project root or backend:
+  Set CRON_SECRET and BASE_URL in backend/.env, then run from project root:
     python scripts/cron-bust-ticker.py
 
-  Or from backend dir (loads backend/.env):
-    python ../scripts/cron-bust-ticker.py
-
-Env (in backend/.env or export):
-  CRON_SECRET         - same secret as your main Auto Rank cron (required)
-  BASE_URL            - e.g. http://localhost:8000 (default) or https://your-domain.com
-  CRON_BUST_INTERVAL  - seconds between bust-endpoint calls (default 5)
+Env: CRON_SECRET (required), BASE_URL. Optional fallback: CRON_BUST_INTERVAL if API unreachable.
 """
+import json
 import os
 import sys
 import time
@@ -45,26 +40,42 @@ except Exception:
 
 CRON_SECRET = (os.environ.get("CRON_SECRET") or "").strip()
 BASE_URL = (os.environ.get("BASE_URL") or "http://localhost:8000").rstrip("/")
-INTERVAL = max(1, int(os.environ.get("CRON_BUST_INTERVAL") or "5"))
+FALLBACK_INTERVAL = max(1, int(os.environ.get("CRON_BUST_INTERVAL") or "5"))
+REFETCH_EVERY_LOOPS = 10
+
+def fetch_interval():
+    try:
+        req = urllib.request.Request(f"{BASE_URL}/api/auto-rank/cron-intervals", method="GET")
+        req.add_header("X-Cron-Secret", CRON_SECRET)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read().decode())
+            return max(1, int(data.get("interval_bust_seconds") or FALLBACK_INTERVAL))
+    except Exception:
+        return FALLBACK_INTERVAL
 
 def main():
     if not CRON_SECRET:
         print("Error: set CRON_SECRET in .env or environment", file=sys.stderr)
         sys.exit(1)
     url = f"{BASE_URL}/api/auto-rank/cron-bust"
-    print(f"Calling {url} every {INTERVAL} seconds (Ctrl+C to stop)")
+    interval = fetch_interval()
+    print(f"Calling {url} every {interval}s (from admin). Ctrl+C to stop.")
+    loop_count = 0
     while True:
         try:
             req = urllib.request.Request(url, method="POST")
             req.add_header("X-Cron-Secret", CRON_SECRET)
             req.add_header("Content-Type", "application/json")
             with urllib.request.urlopen(req, timeout=30) as r:
-                pass  # 200 = ok
+                pass
         except urllib.error.HTTPError as e:
             print(f"HTTP {e.code}: {e.reason}", file=sys.stderr)
         except Exception as e:
             print(f"Request failed: {e}", file=sys.stderr)
-        time.sleep(INTERVAL)
+        loop_count += 1
+        if loop_count % REFETCH_EVERY_LOOPS == 0:
+            interval = fetch_interval()
+        time.sleep(interval)
 
 if __name__ == "__main__":
     main()

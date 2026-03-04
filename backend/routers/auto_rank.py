@@ -961,6 +961,16 @@ def register(router):
             logger.exception("Auto rank cron-bust failed: %s", e)
         return {"ok": True}
 
+    @router.get("/auto-rank/cron-intervals")
+    async def get_cron_intervals(_: None = Depends(verify_cron_secret)):
+        """Return admin-configured intervals for cron tickers. Auth: X-Cron-Secret only. Tickers use this so admin settings control call frequency."""
+        config = await get_auto_rank_config(db)
+        return {
+            "interval_seconds": config["interval_seconds"],
+            "interval_bust_seconds": config.get("interval_bust_seconds") or DEFAULT_BUST_INTERVAL_SECONDS,
+            "interval_oc_seconds": config.get("interval_oc_seconds") or DEFAULT_OC_INTERVAL_SECONDS,
+        }
+
     class IntervalBody(BaseModel):
         interval_seconds: Optional[int] = None
         interval_bust_seconds: Optional[int] = None
