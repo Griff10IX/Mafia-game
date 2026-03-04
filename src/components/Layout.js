@@ -119,6 +119,15 @@ const TOPBAR_STAT_LABELS = { rank: 'Rank', health: 'Health', bullets: 'Bullets',
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
 const NOTIFICATION_BALL_POSITION_KEY = 'notification_ball_position';
+const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
+
+function loadMobileStatsDisplay() {
+  try {
+    const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY);
+    if (v === 'top_bar' || v === 'touch_ball') return v;
+  } catch (_) {}
+  return 'top_bar';
+}
 
 function loadNotificationBallPosition() {
   try {
@@ -168,6 +177,7 @@ export default function Layout({ children }) {
   const [statOrder, setStatOrder] = useState(loadStatOrder);
   const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
   const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
+  const [mobileStatsDisplay, setMobileStatsDisplay] = useState(loadMobileStatsDisplay);
   const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -225,8 +235,13 @@ export default function Layout({ children }) {
       setTopBarGap(loadTopBarGap());
       setTopBarSize(loadTopBarSize());
     };
+    const onMobileStatsDisplay = () => setMobileStatsDisplay(loadMobileStatsDisplay());
     window.addEventListener('topbar-prefs-changed', onTopBarPrefs);
-    return () => window.removeEventListener('topbar-prefs-changed', onTopBarPrefs);
+    window.addEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
+    return () => {
+      window.removeEventListener('topbar-prefs-changed', onTopBarPrefs);
+      window.removeEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
+    };
   }, []);
 
   useEffect(() => {
@@ -249,6 +264,14 @@ export default function Layout({ children }) {
       setNotificationBallPosition({ x: window.innerWidth - 72, y: window.innerHeight - 120 });
     }
   }, []);
+
+  // When user switches to touch ball mode, ensure we have a position so the ball appears
+  useEffect(() => {
+    if (typeof window === 'undefined' || mobileStatsDisplay !== 'touch_ball') return;
+    const saved = loadNotificationBallPosition();
+    if (saved) return;
+    setNotificationBallPosition({ x: window.innerWidth - 72, y: window.innerHeight - 120 });
+  }, [mobileStatsDisplay]);
 
   useEffect(() => {
     setMobileBottomMenuOpen(null);
@@ -1409,7 +1432,8 @@ export default function Layout({ children }) {
                   );
                 })()}
               </div>
-              {/* Scrollable right: other stats */}
+              {/* Scrollable right: other stats — on mobile hidden when "Touch ball" is selected */}
+              {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && (
               <div className={`flex items-center ${topBarGapClass} flex-1 min-w-0 justify-end overflow-x-auto overflow-y-hidden scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
                 {statOrder.filter((statId) => statId !== 'rank' && statId !== 'notifications').map((statId) => {
                   const content = renderStat(statId);
@@ -1432,6 +1456,7 @@ export default function Layout({ children }) {
                   </button>
                 )}
               </div>
+              )}
             </div>
             {topBarCustomizeOpen && (
               <>
@@ -1663,7 +1688,7 @@ export default function Layout({ children }) {
       )}
 
       {/* Floating mobile menu ball: all stats, search, notifications; draggable, position persisted */}
-      {user && notificationBallPosition && isMobileViewport && (
+      {user && notificationBallPosition && isMobileViewport && mobileStatsDisplay === 'touch_ball' && (
         <div
           ref={notificationBallRef}
           className="fixed z-50 touch-none"

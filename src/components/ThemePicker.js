@@ -95,8 +95,10 @@ export default function ThemePicker({ open, onClose }) {
 
   const TOPBAR_GAP_KEY = 'topbar_gap';
   const TOPBAR_SIZE_KEY = 'topbar_size';
+  const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
   const topBarGap = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_GAP_KEY)) || 'normal';
   const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
+  const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
 
   const setTopBarGap = (v) => {
     try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
@@ -105,6 +107,10 @@ export default function ThemePicker({ open, onClose }) {
   const setTopBarSize = (v) => {
     try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {}
     window.dispatchEvent(new Event('topbar-prefs-changed'));
+  };
+  const setMobileStatsDisplay = (v) => {
+    try { localStorage.setItem(MOBILE_STATS_DISPLAY_KEY, v); } catch (_) {}
+    window.dispatchEvent(new Event('mobile-stats-display-changed'));
   };
 
   const tabs = [
@@ -134,13 +140,13 @@ export default function ThemePicker({ open, onClose }) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
       <div
-        className={`${styles.panel} rounded-lg border border-primary/20 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}
+        className={`${styles.panel} rounded-lg border border-primary/15 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}
         onClick={(e) => e.stopPropagation()}
         data-testid="theme-picker"
       >
-        <div className="px-4 py-3 bg-primary/10 border-b border-primary/30 flex items-center justify-between gap-2 shrink-0">
+        <div className="px-4 py-3 bg-primary/10 flex items-center justify-between gap-2 shrink-0">
           <div className="flex items-center gap-2">
             <Palette className="w-5 h-5 text-primary" />
             <h2 className="text-base font-heading font-bold text-primary uppercase tracking-wider">Theme</h2>
@@ -169,7 +175,7 @@ export default function ThemePicker({ open, onClose }) {
 
         <div className="flex flex-col min-h-0 flex-1">
           {/* Tab bar */}
-          <div className="flex border-b border-primary/20 bg-zinc-800/50 shrink-0">
+          <div className="flex bg-zinc-800/50 shrink-0">
             {tabs.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -560,7 +566,7 @@ export default function ThemePicker({ open, onClose }) {
                     </div>
                   ))}
                 </div>
-                <div className="space-y-4 pt-4 border-t border-primary/20">
+                <div className="space-y-4 pt-4">
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Minus className="w-3.5 h-3.5" />
                     Lines & progress bars
@@ -603,7 +609,7 @@ export default function ThemePicker({ open, onClose }) {
                     </div>
                   ))}
                 </div>
-                <div className="pt-4 border-t border-primary/20">
+                <div className="pt-4">
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <Square className="w-3.5 h-3.5" />
                     Button style
@@ -623,7 +629,7 @@ export default function ThemePicker({ open, onClose }) {
                     ))}
                   </div>
                 </div>
-                <div className="pt-4 border-t border-primary/20">
+                <div className="pt-4">
                   <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-2">Background texture</p>
                   <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
                     {THEME_TEXTURES.map((t) => (
@@ -680,8 +686,34 @@ export default function ThemePicker({ open, onClose }) {
                     </div>
                   </div>
                   <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Stats on mobile</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">Show health, cash, rank, etc. in the top bar or in a floating touch ball (tap to open).</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setMobileStatsDisplay('top_bar')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          mobileStatsDisplay === 'top_bar' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        <LayoutDashboard className="w-3.5 h-3.5" />
+                        Top bar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMobileStatsDisplay('touch_ball')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          mobileStatsDisplay === 'touch_ball' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                        Touch ball
+                      </button>
+                    </div>
+                  </div>
+                  <div>
                     <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Stats ball & panel</p>
-                    <p className="text-[9px] text-mutedForeground mb-1.5">On mobile, tap the floating ball to open stats and notifications. Drag the ball to move it; position is saved. Use &quot;Customize bar&quot; inside the ball to reorder items and set size.</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">When using the touch ball: tap it to open stats and notifications. Drag to move; position is saved. Use &quot;Customize bar&quot; inside the panel to reorder items and set size.</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Chip size (stats panel)</p>
