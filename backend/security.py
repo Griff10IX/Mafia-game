@@ -155,8 +155,9 @@ async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[
         return False
 
 
-# Auto Rank Telegram menu: shown when user taps / in chat with the bot
+# Auto Rank Telegram menu: shown when user taps / or Menu in chat with the bot
 TELEGRAM_BOT_COMMANDS = [
+    {"command": "start", "description": "Welcome & how to link Auto Rank"},
     {"command": "autorank", "description": "Auto Rank summary (stats & toggles)"},
     {"command": "summary", "description": "Auto Rank summary"},
     {"command": "enable", "description": "Enable: all, crimes, gta, bust, oc, booze"},

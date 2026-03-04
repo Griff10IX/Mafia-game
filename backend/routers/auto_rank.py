@@ -977,7 +977,7 @@ def register(router):
 
     @router.post("/auto-rank/telegram-webhook")
     async def telegram_webhook(request: Request):
-        """Telegram bot webhook: receive commands from users who have Telegram set for Auto Rank. Commands: /autorank or /summary (stats), /enable & /disable (e.g. /enable crimes, /disable bust). Set TELEGRAM_BOT_TOKEN and register this URL with Telegram setWebhook."""
+        """Telegram bot webhook: receive commands from users who have Telegram set for Auto Rank. Commands: /start, /autorank, /summary, /enable, /disable."""
         if telegram_webhook_secret:
             secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
             if (secret or "").strip() != telegram_webhook_secret:
@@ -990,13 +990,32 @@ def register(router):
         chat = message.get("chat") or {}
         chat_id = chat.get("id")
         text = ((message.get("text") or "").strip() or "").lower()
+        chat_id_str = str(chat_id) if chat_id is not None else ""
+        logger.info("Telegram webhook received chat_id=%s text=%s", chat_id_str, (text or "")[:80])
         if chat_id is None or not text:
             return {"ok": True}
-        chat_id_str = str(chat_id)
-        user = await db.users.find_one(
-            {"telegram_chat_id": chat_id_str},
-            {"_id": 0, "id": 1, "username": 1, "auto_rank_purchased": 1, "auto_rank_enabled": 1, **_PREFERENCE_FIELDS, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_stats_since": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "activity_detail": 1},
-        )
+        try:
+            # /start — always reply so user sees the bot is alive and knows what to do
+            if text in ("/start", "start"):
+                start_user = await db.users.find_one(
+                    {"telegram_chat_id": chat_id_str},
+                    {"_id": 0, "username": 1, "auto_rank_purchased": 1, "auto_rank_enabled": 1},
+                )
+                if start_user and (start_user.get("auto_rank_purchased") or start_user.get("auto_rank_enabled")):
+                    reply = f"Hi {start_user.get('username', 'there')}! Use /autorank for your Auto Rank summary. Commands: /autorank /summary /enable /disable."
+                else:
+                    reply = "Welcome! Link your Chat ID in the game (Profile → Telegram). Get your ID from @userinfobot. Then use /autorank for your Auto Rank summary."
+                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
+                return {"ok": True}
+        except Exception as e:
+            logger.exception("Telegram /start handler: %s", e)
+            return {"ok": True}
+
+        try:
+            user = await db.users.find_one(
+                {"telegram_chat_id": chat_id_str},
+                {"_id": 0, "id": 1, "username": 1, "auto_rank_purchased": 1, "auto_rank_enabled": 1, **_PREFERENCE_FIELDS, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_stats_since": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "activity_detail": 1},
+            )
         if not user:
             reply = "Link your Telegram first: set your Chat ID in Profile → Telegram (Auto Rank). Get your Chat ID from @userinfobot. Then message this bot again."
             await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
@@ -1058,9 +1077,12 @@ def register(router):
             else:
                 reply = "Commands: /autorank or /summary — stats. /enable or /disable plus: all, crimes, gta, bust, oc, booze. Example: /disable bust"
 
-        if reply:
-            await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
-        return {"ok": True}
+            if reply:
+                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
+            return {"ok": True}
+        except Exception as e:
+            logger.exception("Telegram webhook handler: %s", e)
+            return {"ok": True}
 
     class IntervalBody(BaseModel):
         interval_seconds: Optional[int] = None
