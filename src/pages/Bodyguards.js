@@ -24,6 +24,8 @@ const BG_STYLES = `
 
 // Match backend bodyguards.py: BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
 const BODYGUARD_SLOT_COSTS = [75, 150, 300, 450];
+// Match backend: BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
+const BODYGUARD_ARMOUR_UPGRADE_COSTS = { 0: 50, 1: 100, 2: 200, 3: 400, 4: 800 };
 
 function formatDuration(totalSeconds) {
   if (totalSeconds == null || totalSeconds < 0) return '—';
@@ -112,6 +114,14 @@ export default function Bodyguards() {
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
+      const name = response?.data?.bodyguard_name || 'Robot';
+      setBodyguards((prev) =>
+        prev.map((b) =>
+          b.slot_number === slot
+            ? { ...b, bodyguard_username: name, is_robot: true, armour_level: 0, hired_at: new Date().toISOString(), bodyguard_rank_name: null }
+            : b
+        )
+      );
       refreshUser().catch(() => {});
       fetchData().catch(() => {});
     } catch (error) {
@@ -134,6 +144,12 @@ export default function Bodyguards() {
     } finally {
       setUpgradingSlot(null);
     }
+  };
+
+  const getUpgradeCost = (armourLevel) => {
+    const base = BODYGUARD_ARMOUR_UPGRADE_COSTS[armourLevel ?? 0] ?? 0;
+    const mult = event?.bodyguard_cost ?? 1;
+    return Math.floor(base * mult);
   };
 
   const getHireCost = (slotNumber) => {
@@ -307,7 +323,7 @@ export default function Bodyguards() {
                         className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
                         data-testid={`upgrade-armour-${bg.slot_number}`}
                       >
-                        {upgradingSlot === bg.slot_number ? '…' : '🛡️ Upgrade'}
+                        {upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
                       </button>
                     ) : (
                       <button
@@ -429,6 +445,10 @@ export default function Bodyguards() {
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
               <span>Slot hire: 75, 150, 300, 450 pts{nextHireInflationPct > 0 ? ` (next +${nextHireInflationPct}%)` : ''} · resets 3h after last hire</span>
+            </li>
+            <li className="flex items-start gap-1.5">
+              <span className="text-primary shrink-0">•</span>
+              <span>Armour upgrade: 50, 100, 200, 400, 800 pts (levels 1→5)</span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>

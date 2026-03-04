@@ -518,6 +518,8 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
         "daily_tribute_cash_mission2": MISSION_2_DAILY_CASH,
         "daily_tribute_bullets_mission2": MISSION_2_DAILY_BULLETS,
+        "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
+        "daily_tribute_loot_box_pieces_mission2": MISSION_2_DAILY_LOOT_BOX_PIECES,
         "has_mission_2_bonus": has_mission_2,
     }
 
@@ -693,6 +695,9 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
 
 MISSION_2_DAILY_CASH = 100_000
 MISSION_2_DAILY_BULLETS = 100
+# Loot box pieces in daily tribute: base for all users, extra for mission 2 completers
+DAILY_TRIBUTE_LOOT_BOX_PIECES = int(os.environ.get("DAILY_TRIBUTE_LOOT_BOX_PIECES", "1"))
+MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_PIECES", "1"))
 
 
 async def run_daily_tribute_deposit():
@@ -708,10 +713,19 @@ async def run_daily_tribute_deposit():
     doc = await db.game_config.find_one({"id": TRIBUTE_DEPOSIT_CONFIG_ID}, {"_id": 0, "last_run_utc_date": 1})
     if doc and doc.get("last_run_utc_date") == today:
         return
-    result = await db.users.update_many({}, {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT}})
+    result = await db.users.update_many(
+        {},
+        {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT, "loot_box_pieces": DAILY_TRIBUTE_LOOT_BOX_PIECES}},
+    )
     result2 = await db.users.update_many(
         {"mission_completions": {"$elemMatch": {"mission_id": "m_second"}}},
-        {"$inc": {"tribute_bank": MISSION_2_DAILY_CASH, "tribute_bullets": MISSION_2_DAILY_BULLETS}},
+        {
+            "$inc": {
+                "tribute_bank": MISSION_2_DAILY_CASH,
+                "tribute_bullets": MISSION_2_DAILY_BULLETS,
+                "loot_box_pieces": MISSION_2_DAILY_LOOT_BOX_PIECES,
+            },
+        },
     )
     await db.game_config.update_one(
         {"id": TRIBUTE_DEPOSIT_CONFIG_ID},
@@ -719,11 +733,13 @@ async def run_daily_tribute_deposit():
         upsert=True,
     )
     logging.getLogger(__name__).info(
-        "Daily tribute deposit: %s cash to %d users; mission 2 bonus (%s cash + %s bullets) to %d users at %s UTC",
+        "Daily tribute deposit: %s cash + %s loot box pieces to %d users; mission 2 bonus (%s cash + %s bullets + %s pieces) to %d users at %s UTC",
         DAILY_TRIBUTE_AMOUNT,
+        DAILY_TRIBUTE_LOOT_BOX_PIECES,
         result.modified_count,
         MISSION_2_DAILY_CASH,
         MISSION_2_DAILY_BULLETS,
+        MISSION_2_DAILY_LOOT_BOX_PIECES,
         result2.modified_count,
         today,
     )
