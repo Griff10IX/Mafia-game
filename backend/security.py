@@ -326,8 +326,8 @@ RATE_LIMIT_CONFIG = {
     "/api/properties/": (1.5, False),
     "/api/racket/": (1.5, False),
     
-    # Bodyguards (allow all 4 robot hires in ~0.3s)
-    "/api/bodyguards/": (0.08, True),
+    # Bodyguards (no delay between hires)
+    "/api/bodyguards/": (0, True),
     
     # Casino/gambling (prevent rapid betting exploits)
     "/api/casino/dice/": (1.2, True),
