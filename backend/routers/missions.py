@@ -70,6 +70,9 @@ MISSIONS = [
         "reward_points": 50,
         "reward_respect": 2,
         "reward_tribute": 1_000,
+        "reward_tribute_daily": 5_000,
+        "reward_respect_daily": 1,
+        "reward_tribute_bullets_daily": 25,
         "reward_car_id": COMMON_CAR_REWARD_ID,
         "difficulty": 1,
         "unlocks_city": None,
@@ -93,6 +96,7 @@ MISSIONS = [
         "reward_cash_immediate": 50_000,
         "reward_tribute_daily": 100_000,
         "reward_respect": 3,
+        "reward_respect_daily": 5,
         "reward_tribute": 2_000,
         "reward_car_ids": ["car7", "car2"],
         "reward_bullets": 2_500,
@@ -125,6 +129,9 @@ MISSIONS = [
         "reward_points": 0,
         "reward_respect": 5,
         "reward_tribute": 3_000,
+        "reward_tribute_daily": 50_000,
+        "reward_respect_daily": 10,
+        "reward_tribute_bullets_daily": 150,
         "difficulty": 3,
         "unlocks_city": None,
         "character_id": None,
@@ -153,6 +160,7 @@ MISSIONS = [
         "reward_tribute": 5_000,
         "reward_tribute_daily": 500_000,
         "reward_respect_daily": 50,
+        "reward_tribute_bullets_daily": 500,
         "difficulty": 4,
         "unlocks_city": None,
         "character_id": None,
@@ -774,10 +782,13 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
     return {"characters": out}
 
 
-MISSION_2_DAILY_CASH = 100_000
-MISSION_2_DAILY_BULLETS = 100
-MISSION_4_DAILY_CASH = 500_000
-MISSION_4_DAILY_RESPECT = 50
+# Derived from MISSIONS for map/tribute info (single source of truth)
+_def_m2 = next((m for m in MISSIONS if m.get("id") == "m_second"), {})
+_def_m4 = next((m for m in MISSIONS if m.get("id") == FOURTH_MISSION_ID), {})
+MISSION_2_DAILY_CASH = int(_def_m2.get("reward_tribute_daily") or 0)
+MISSION_2_DAILY_BULLETS = int(_def_m2.get("reward_tribute_bullets_daily") or 0)
+MISSION_4_DAILY_CASH = int(_def_m4.get("reward_tribute_daily") or 0)
+MISSION_4_DAILY_RESPECT = int(_def_m4.get("reward_respect_daily") or 0)
 # Loot box pieces in daily tribute: base for all users, extra for mission 2 completers
 DAILY_TRIBUTE_LOOT_BOX_PIECES = int(os.environ.get("DAILY_TRIBUTE_LOOT_BOX_PIECES", "1"))
 MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_PIECES", "1"))
@@ -786,8 +797,9 @@ MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_P
 async def run_daily_tribute_deposit():
     """
     Credit DAILY_TRIBUTE_AMOUNT to every user's tribute_bank once per day at TRIBUTE_DEPOSIT_UTC_HOUR (UTC).
-    Users who completed mission 2 (m_second) also get MISSION_2_DAILY_CASH to tribute_bank and MISSION_2_DAILY_BULLETS to tribute_bullets.
-    Idempotent: uses game_config last_run_utc_date so we only run once per calendar day.
+    For each mission, users who completed it get that mission's reward_tribute_daily, reward_respect_daily,
+    and reward_tribute_bullets_daily (all go to tribute_bank / respect_points / tribute_bullets).
+    Mission 2 also gets extra loot_box_pieces. Idempotent: uses game_config last_run_utc_date.
     """
     now = datetime.now(timezone.utc)
     if now.hour != TRIBUTE_DEPOSIT_UTC_HOUR:
@@ -800,42 +812,39 @@ async def run_daily_tribute_deposit():
         {},
         {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT, "loot_box_pieces": DAILY_TRIBUTE_LOOT_BOX_PIECES}},
     )
-    result2 = await db.users.update_many(
-        {"mission_completions": {"$elemMatch": {"mission_id": "m_second"}}},
-        {
-            "$inc": {
-                "tribute_bank": MISSION_2_DAILY_CASH,
-                "tribute_bullets": MISSION_2_DAILY_BULLETS,
-                "loot_box_pieces": MISSION_2_DAILY_LOOT_BOX_PIECES,
-            },
-        },
-    )
-    result4 = await db.users.update_many(
-        {"mission_completions": {"$elemMatch": {"mission_id": FOURTH_MISSION_ID}}},
-        {
-            "$inc": {
-                "tribute_bank": MISSION_4_DAILY_CASH,
-                "respect_points": MISSION_4_DAILY_RESPECT,
-            },
-        },
-    )
+    counts = {}
+    for m in MISSIONS:
+        mid = m.get("id")
+        cash = int(m.get("reward_tribute_daily") or 0)
+        respect = int(m.get("reward_respect_daily") or 0)
+        bullets = int(m.get("reward_tribute_bullets_daily") or 0)
+        inc = {}
+        if cash:
+            inc["tribute_bank"] = cash
+        if respect:
+            inc["respect_points"] = respect
+        if bullets:
+            inc["tribute_bullets"] = bullets
+        if mid == "m_second":
+            inc["loot_box_pieces"] = MISSION_2_DAILY_LOOT_BOX_PIECES
+        if not inc:
+            continue
+        r = await db.users.update_many(
+            {"mission_completions": {"$elemMatch": {"mission_id": mid}}},
+            {"$inc": inc},
+        )
+        counts[mid] = r.modified_count
     await db.game_config.update_one(
         {"id": TRIBUTE_DEPOSIT_CONFIG_ID},
         {"$set": {"last_run_utc_date": today}},
         upsert=True,
     )
     logging.getLogger(__name__).info(
-        "Daily tribute deposit: %s cash + %s loot box pieces to %d users; mission 2 bonus (%s cash + %s bullets + %s pieces) to %d users; mission 4 bonus (%s cash + %s respect) to %d users at %s UTC",
+        "Daily tribute deposit: %s cash + %s loot to %d users; per-mission bonuses %s at %s UTC",
         DAILY_TRIBUTE_AMOUNT,
         DAILY_TRIBUTE_LOOT_BOX_PIECES,
         result.modified_count,
-        MISSION_2_DAILY_CASH,
-        MISSION_2_DAILY_BULLETS,
-        MISSION_2_DAILY_LOOT_BOX_PIECES,
-        result2.modified_count,
-        MISSION_4_DAILY_CASH,
-        MISSION_4_DAILY_RESPECT,
-        result4.modified_count,
+        counts,
         today,
     )
 
