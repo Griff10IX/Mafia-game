@@ -861,30 +861,44 @@ def get_wealth_rank_range(money: int | float) -> str:
 
 # Bullet reward per rank up (flat 5000 bullets each time you rank up)
 RANK_UP_BULLET_REWARD = 5000
+# Respect points per rank up (random 5–25 per rank tier)
+RANK_UP_RESPECT_MIN = 5
+RANK_UP_RESPECT_MAX = 25
 
 async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, username: str = ""):
-    """Process rank up: give bullets, send inbox notification."""
+    """Process rank up: give bullets and respect, send inbox notification."""
     if new_rank > old_rank:
-        total_bullets = RANK_UP_BULLET_REWARD * (new_rank - old_rank)
-        
-        if total_bullets > 0:
+        num_ranks = new_rank - old_rank
+        total_bullets = RANK_UP_BULLET_REWARD * num_ranks
+        total_respect = sum(random.randint(RANK_UP_RESPECT_MIN, RANK_UP_RESPECT_MAX) for _ in range(num_ranks))
+
+        inc = {"bullets": total_bullets}
+        if total_respect > 0:
+            inc["respect_points"] = total_respect
+        if inc:
             await db.users.update_one(
                 {"id": user_id},
-                {"$inc": {"bullets": total_bullets}}
+                {"$inc": inc}
             )
-        
+
         # Get new rank name
         new_rank_name = RANKS[new_rank - 1]["name"] if new_rank <= len(RANKS) else "Unknown"
-        
+
+        # Build reward message
+        reward_parts = [f"{total_bullets} bullets"]
+        if total_respect > 0:
+            reward_parts.append(f"{total_respect} respect")
+        reward_text = " and ".join(reward_parts)
+
         # Send notification
         await send_notification(
             user_id,
             f"🎉 Ranked Up to {new_rank_name}!",
-            f"Congratulations! You've reached {new_rank_name} (Rank {new_rank}). You've been rewarded with {total_bullets} bullets!",
+            f"Congratulations! You've reached {new_rank_name} (Rank {new_rank}). You've been rewarded with {reward_text}!",
             "rank_up",
             category="system",
         )
-        
+
         return total_bullets
     return 0
 

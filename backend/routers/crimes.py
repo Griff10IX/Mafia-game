@@ -35,6 +35,9 @@ CRIME_SUCCESS_MESSAGES = [
     "Score. ${reward:,} and {rank_points} rank points.",
     "The take is yours. ${reward:,} and {rank_points} rank points.",
 ]
+# 75% harder to earn respect from crimes (award 25% of base/milestone)
+RESPECT_FROM_CRIMES_MULT = 0.25
+
 # One-time respect_points rewards when total_crimes crosses milestones (same progression as busts)
 CRIME_MILESTONES = [
     100, 500, 1000, 2000, 5000,
@@ -54,6 +57,10 @@ async def _award_crime_milestones(user_id: str, new_total_crimes: int, claimed: 
     if not new_claimed:
         return
     total_reward = sum(CRIME_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
+    total_reward = int(total_reward * RESPECT_FROM_CRIMES_MULT)
+    if total_reward <= 0:
+        await db.users.update_one({"id": user_id}, {"$addToSet": {"respect_points_crime_milestones_claimed": {"$each": new_claimed}}})
+        return
     try:
         await db.users.update_one(
             {"id": user_id},
@@ -375,7 +382,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         }
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
-            inc["respect_points"] = respect_drop
+            inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT))
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": inc},
@@ -385,7 +392,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         new_claimed = [m for m in CRIME_MILESTONES if m <= new_total_crimes and m not in claimed]
         milestone_respect = sum(CRIME_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
         await _award_crime_milestones(current_user["id"], new_total_crimes, claimed)
-        respect_earned = (respect_drop or 0) + milestone_respect
+        respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_CRIMES_MULT)) + max(0, int(milestone_respect * RESPECT_FROM_CRIMES_MULT))
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
         except Exception as e:

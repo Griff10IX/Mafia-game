@@ -87,6 +87,9 @@ from server import (
 from routers.objectives import update_objectives_progress
 
 
+# 75% harder to earn respect from GTAs (award 25% of base/milestone)
+RESPECT_FROM_GTA_MULT = 0.25
+
 # One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
 GTA_MILESTONES = [
     100, 500, 1000, 2000, 5000,
@@ -106,6 +109,10 @@ async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list)
     if not new_claimed:
         return
     total_reward = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
+    total_reward = int(total_reward * RESPECT_FROM_GTA_MULT)
+    if total_reward <= 0:
+        await db.users.update_one({"id": user_id}, {"$addToSet": {"respect_points_gta_milestones_claimed": {"$each": new_claimed}}})
+        return
     try:
         await db.users.update_one(
             {"id": user_id},
@@ -376,7 +383,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
             gta_inc["uncommon_cars_stolen"] = 1
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
-            gta_inc["respect_points"] = respect_drop
+            gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT))
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": gta_inc},
@@ -386,7 +393,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
         milestone_respect = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
         await _award_gta_milestones(current_user["id"], new_total_gta, claimed)
-        respect_earned = (respect_drop or 0) + milestone_respect
+        respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT)) + max(0, int(milestone_respect * RESPECT_FROM_GTA_MULT))
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
         except Exception as e:
