@@ -6,7 +6,13 @@ from pydantic import BaseModel
 
 from fastapi import Depends, Query
 
-from server import db, get_current_user
+from server import db, get_current_user, ADMIN_EMAILS
+
+# Exclude admin accounts from leaderboards (same emails as _is_admin)
+def _leaderboard_user_filter() -> dict:
+    if not ADMIN_EMAILS:
+        return {}
+    return {"email": {"$nin": list(ADMIN_EMAILS)}}
 
 
 def _week_start(dt: datetime) -> datetime:
@@ -41,6 +47,7 @@ async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool
         query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     else:
         query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    query.update(_leaderboard_user_filter())
     users = await db.users.find(
         query,
         {"_id": 0, "username": 1, "id": 1, field: 1}
@@ -87,8 +94,10 @@ async def _top_by_field_weekly(
     if not docs:
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
+    q = {"id": {"$in": user_ids}}
+    q.update(_leaderboard_user_filter())
     users_map = await db.users.find(
-        {"id": {"$in": user_ids}},
+        q,
         {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
     ).to_list(len(user_ids) + 1)
     users_by_id = {u["id"]: u for u in users_map}
@@ -118,8 +127,10 @@ async def _top_by_field_weekly(
 
 
 async def get_leaderboard(current_user: dict = Depends(get_current_user)):
+    query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    query.update(_leaderboard_user_filter())
     users = await db.users.find(
-        {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}},
+        query,
         {"_id": 0, "username": 1, "money": 1, "total_kills": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "id": 1}
     ).sort("money", -1).limit(10).to_list(10)
     result = []

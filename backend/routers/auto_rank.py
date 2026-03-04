@@ -477,12 +477,30 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(100)
             cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
-            # Only crimes whose cooldown_until has passed (or never set); _commit_crime_impl will re-check and set next cooldown from crime's cooldown_seconds
-            available = [
-                c for c in crimes
-                if (c.get("min_rank") or 1) <= rank_id
-                and (cooldown_by_crime.get(c.get("id")) is None or cooldown_by_crime.get(c.get("id")) <= now)
-            ]
+            # Only crimes whose cooldown_until has passed (or never set); _commit_crime_impl will re-check and set next cooldown
+            available = []
+            for c in crimes:
+                try:
+                    min_rank = int(c.get("min_rank") or 1)
+                except (TypeError, ValueError):
+                    min_rank = 1
+                cid = c.get("id")
+                if not cid:
+                    continue
+                if min_rank > rank_id:
+                    continue
+                until = cooldown_by_crime.get(cid)
+                if until is not None and until > now:
+                    continue
+                available.append(c)
+            # Prefer lower-rank crimes first (e.g. Pickpocket before Mug)
+            def _crime_sort_key(x):
+                try:
+                    r = int(x.get("min_rank") or 1)
+                except (TypeError, ValueError):
+                    r = 1
+                return (r, x.get("id") or "")
+            available.sort(key=_crime_sort_key)
             if not available:
                 break
             try:
