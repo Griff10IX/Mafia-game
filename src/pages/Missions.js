@@ -574,7 +574,18 @@ function formatTimeUntil(isoString) {
   return 'in <1m';
 }
 
-function TributeBanner({ bank, tributeBullets = 0, onCollect, collecting, tributeDepositDailyAt, nextTributeDepositAt }) {
+function TributeBanner({
+  bank,
+  tributeBullets = 0,
+  onCollect,
+  collecting,
+  tributeDepositDailyAt,
+  nextTributeDepositAt,
+  dailyCashBase = 500,
+  dailyCashMission2 = 0,
+  dailyBulletsMission2 = 0,
+  hasMission2Bonus = false,
+}) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (!nextTributeDepositAt) return;
@@ -585,6 +596,7 @@ function TributeBanner({ bank, tributeBullets = 0, onCollect, collecting, tribut
   const hasBullets = (tributeBullets || 0) > 0;
   const hasAny = hasBank || hasBullets;
   const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
+  const dailyTotalCash = dailyCashBase + (hasMission2Bonus ? dailyCashMission2 : 0);
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border m-fade-in ${hasAny ? 'border-green-500/30' : 'border-primary/20'}`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -605,6 +617,15 @@ function TributeBanner({ bank, tributeBullets = 0, onCollect, collecting, tribut
                 <span>Deposits daily at {tributeDepositDailyAt}</span>
               </div>
             )}
+            <div className="text-[9px] text-mutedForeground mt-0.5">
+              Daily: <span className="text-foreground font-semibold">{fmt(dailyTotalCash)}</span> cash
+              {hasMission2Bonus && dailyBulletsMission2 > 0 && (
+                <span> · <span className="text-foreground font-semibold">{dailyBulletsMission2}</span> bullets</span>
+              )}
+              {!hasMission2Bonus && (dailyCashMission2 > 0 || dailyBulletsMission2 > 0) && (
+                <span className="text-mutedForeground"> · Complete Mission 2 for +{fmt(dailyCashMission2)} +{dailyBulletsMission2} bullets/day</span>
+              )}
+            </div>
             {nextIn && (
               <div className="text-[9px] text-primary/80 mt-0.5">Next deposit: {nextIn}</div>
             )}
@@ -795,6 +816,10 @@ export default function Missions() {
         collecting={collecting}
         tributeDepositDailyAt={data?.tribute_deposit_daily_at}
         nextTributeDepositAt={data?.next_tribute_deposit_at}
+        dailyCashBase={data?.daily_tribute_cash_base ?? 500}
+        dailyCashMission2={data?.daily_tribute_cash_mission2 ?? 0}
+        dailyBulletsMission2={data?.daily_tribute_bullets_mission2 ?? 0}
+        hasMission2Bonus={!!data?.has_mission_2_bonus}
       />
 
       {/* City tabs */}

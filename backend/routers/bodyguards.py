@@ -186,14 +186,26 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
 
 # ----- Routes -----
 async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current_user)):
-    """Return current robot hire inflation % (0, 2, 5, 7, 12, ...) so the frontend can show accurate cost. Resets after 3h with no hire."""
+    """Return current robot hire inflation % and when the 3h window resets, so the frontend can show cost and countdown."""
     user = await db.users.find_one(
         {"id": current_user["id"]},
         {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
     )
-    level = _bodyguard_inflation_level_now(user or {})
+    user = user or {}
+    level = _bodyguard_inflation_level_now(user)
     pct = round(_bodyguard_inflation_percent_for_level(level) * 100)
-    return {"next_hire_inflation_pct": pct}
+    until_iso = user.get("bodyguard_inflation_until")
+    window_ends_at = None
+    if until_iso:
+        try:
+            until = datetime.fromisoformat(until_iso.replace("Z", "+00:00"))
+            if until.tzinfo is None:
+                until = until.replace(tzinfo=timezone.utc)
+            if until > datetime.now(timezone.utc):
+                window_ends_at = until_iso
+        except Exception:
+            pass
+    return {"next_hire_inflation_pct": pct, "inflation_window_ends_at": window_ends_at}
 
 
 async def get_bodyguards(current_user: dict = Depends(get_current_user)):

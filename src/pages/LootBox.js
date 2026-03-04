@@ -475,7 +475,14 @@ export default function LootBox() {
       toast.success('The don smiles upon you.');
     } catch (e) {
       setPhase('idle');
-      toast.error(e.response?.data?.detail || 'Failed to open loot box');
+      const detail = e.response?.data?.detail ?? e.message ?? 'Failed to open loot box';
+      console.error('[Loot box open failed]', {
+        detail,
+        status: e.response?.status,
+        data: e.response?.data,
+        error: e,
+      });
+      toast.error(detail);
     }
   };
 

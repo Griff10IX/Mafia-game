@@ -25,18 +25,50 @@ const BG_STYLES = `
 // Match backend bodyguards.py: BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
 const BODYGUARD_SLOT_COSTS = [75, 150, 300, 450];
 
+function formatInflationCountdown(isoEnd) {
+  if (!isoEnd) return null;
+  try {
+    const end = new Date(isoEnd.replace('Z', ''));
+    const now = new Date();
+    const ms = Math.max(0, end - now);
+    const totalMins = Math.floor(ms / 60000);
+    const hours = Math.floor(totalMins / 60);
+    const mins = totalMins % 60;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    if (mins > 0) return `${mins}m`;
+    return 'soon';
+  } catch {
+    return null;
+  }
+}
+
 export default function Bodyguards() {
   const [bodyguards, setBodyguards] = useState([]);
   const [user, setUser] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [nextHireInflationPct, setNextHireInflationPct] = useState(0);
+  const [inflationWindowEndsAt, setInflationWindowEndsAt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedSlot, setExpandedSlot] = useState(null);
+  const [hiringSlot, setHiringSlot] = useState(null);
+  const [upgradingSlot, setUpgradingSlot] = useState(null);
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  const [inflationCountdown, setInflationCountdown] = useState(null);
+  useEffect(() => {
+    if (!inflationWindowEndsAt) {
+      setInflationCountdown(null);
+      return;
+    }
+    const tick = () => setInflationCountdown(formatInflationCountdown(inflationWindowEndsAt));
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [inflationWindowEndsAt]);
 
   const fetchData = async () => {
     try {
@@ -51,6 +83,7 @@ export default function Bodyguards() {
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
       setNextHireInflationPct(inflationRes.data?.next_hire_inflation_pct ?? 0);
+      setInflationWindowEndsAt(inflationRes.data?.inflation_window_ends_at ?? null);
     } catch (error) {
       toast.error('Failed to load bodyguards', { duration: 10000 });
     } finally {
@@ -59,24 +92,30 @@ export default function Bodyguards() {
   };
 
   const hireBodyguard = async (slot, isRobot) => {
+    setHiringSlot(slot);
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response.data.message, { duration: 10000 });
-      refreshUser();
-      fetchData();
+      refreshUser().catch(() => {});
+      fetchData().catch(() => {});
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to hire bodyguard', { duration: 10000 });
+    } finally {
+      setHiringSlot(null);
     }
   };
 
   const upgradeArmour = async (slot) => {
+    setUpgradingSlot(slot);
     try {
       const res = await api.post(`/bodyguards/armour/upgrade?slot=${slot}`);
       toast.success(res.data?.message || 'Armour upgraded', { duration: 10000 });
-      refreshUser();
-      fetchData();
+      refreshUser().catch(() => {});
+      fetchData().catch(() => {});
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to upgrade armour', { duration: 10000 });
+    } finally {
+      setUpgradingSlot(null);
     }
   };
 
@@ -114,6 +153,16 @@ export default function Bodyguards() {
       {/* Stats row */}
       <div className="flex flex-wrap items-center justify-end gap-4 bg-fade-in" style={{ animationDelay: '0.05s' }}>
         <div className="flex items-center gap-3 text-xs font-heading">
+          {(nextHireInflationPct > 0 || inflationCountdown) && (
+            <div className="flex items-center gap-1.5 text-amber-400/90">
+              {nextHireInflationPct > 0 && (
+                <span>Next hire: <strong>+{nextHireInflationPct}%</strong></span>
+              )}
+              {inflationCountdown && (
+                <span className="text-mutedForeground">· Resets in {inflationCountdown}</span>
+              )}
+            </div>
+          )}
           <div className="flex items-center gap-1.5">
             <span className="text-mutedForeground">Active:</span>
             <span className="text-emerald-400 font-bold" data-testid="bodyguard-active">{activeCount}/4</span>
@@ -237,11 +286,11 @@ export default function Bodyguards() {
                           e.stopPropagation();
                           upgradeArmour(bg.slot_number);
                         }}
-                        disabled={(bg.armour_level || 0) >= 5}
+                        disabled={(bg.armour_level || 0) >= 5 || upgradingSlot !== null}
                         className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
                         data-testid={`upgrade-armour-${bg.slot_number}`}
                       >
-                        🛡️ Upgrade
+                        {upgradingSlot === bg.slot_number ? '…' : '🛡️ Upgrade'}
                       </button>
                     ) : (
                       <button
@@ -249,10 +298,11 @@ export default function Bodyguards() {
                           e.stopPropagation();
                           hireBodyguard(bg.slot_number, true);
                         }}
+                        disabled={hiringSlot !== null}
                         data-testid={`hire-robot-${bg.slot_number}`}
-                        className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading"
+                        className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        🤖 Hire ({getHireCost(bg.slot_number)} pts{nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})
+                        {hiringSlot === bg.slot_number ? 'Hiring…' : `🤖 Hire (${getHireCost(bg.slot_number)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
                       </button>
                     )}
                   </div>
@@ -324,7 +374,7 @@ export default function Bodyguards() {
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>
-              <span>Slot hire: 75, 150, 300, 450 pts</span>
+              <span>Slot hire: 75, 150, 300, 450 pts{nextHireInflationPct > 0 ? ` (next +${nextHireInflationPct}%)` : ''} · resets 3h after last hire</span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-primary shrink-0">•</span>

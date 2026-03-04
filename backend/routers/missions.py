@@ -505,6 +505,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     tribute_bank = int(current_user.get("tribute_bank") or 0)
     tribute_bullets = int(current_user.get("tribute_bullets") or 0)
     next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc()
+    has_mission_2 = SECOND_MISSION_ID in completed_ids
     return {
         "current_city": current_city,
         "unlocked_cities": unlocked,
@@ -514,6 +515,10 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "tribute_bullets": tribute_bullets,
         "tribute_deposit_daily_at": deposit_time_label,
         "next_tribute_deposit_at": next_deposit_iso,
+        "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
+        "daily_tribute_cash_mission2": MISSION_2_DAILY_CASH,
+        "daily_tribute_bullets_mission2": MISSION_2_DAILY_BULLETS,
+        "has_mission_2_bonus": has_mission_2,
     }
 
 

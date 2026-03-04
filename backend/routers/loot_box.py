@@ -299,6 +299,13 @@ async def open_loot_box(
 ):
     cost = LOOT_BOX_PIECES_PER_OPEN
     user_id = current_user["id"]
+    raw_pieces = current_user.get("loot_box_pieces")
+    logger.info(
+        "Loot box open attempt user_id=%s loot_box_pieces=%s (type=%s)",
+        user_id,
+        raw_pieces,
+        type(raw_pieces).__name__,
+    )
     is_admin_test = _is_admin(current_user)
     if is_admin_test:
         res = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "loot_box_pieces": 1})
@@ -337,205 +344,218 @@ async def open_loot_box(
                 return_document=True,
             )
         except Exception as e:
-            logger.exception("Loot box open (find_one_and_update): %s", e)
-            raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
+            logger.exception("Loot box open (find_one_and_update) user_id=%s: %s", user_id, e)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough loot box pieces (need 100) or deduct failed: {type(e).__name__}: {e!s}",
+            )
         if not res:
+            logger.warning("Loot box open: no document updated for user_id=%s (pieces may be < 100 or wrong type)", user_id)
             raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
         new_pieces = int(res.get("loot_box_pieces") or 0)
 
-    rarity_config = await _get_loot_rarity_config()
-    box_quality, num_prizes = _roll_box_quality_from_config(rarity_config)
-    rewards: List[Dict[str, Any]] = []
-    merged_inc: Dict[str, int] = {}
-    merged_set: Dict[str, Any] = {}
-    now = datetime.now(timezone.utc)
+    try:
+        rarity_config = await _get_loot_rarity_config()
+        box_quality, num_prizes = _roll_box_quality_from_config(rarity_config)
+        rewards: List[Dict[str, Any]] = []
+        merged_inc: Dict[str, int] = {}
+        merged_set: Dict[str, Any] = {}
+        now = datetime.now(timezone.utc)
 
-    exclusive_chance = rarity_config.get("exclusive_chance") or EXCLUSIVE_CHANCE
-    chosen_standard_types: set = set()  # diversify: avoid same type twice in one open
-    for _ in range(num_prizes):
-        claimed = await _get_claimed_counts()
-        roll = random.random()
-        if roll < exclusive_chance:
-            available = []
-            if claimed["weapon"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_loot_exclusive_weapon(user_id):
-                available.append("weapon")
-            if claimed["car"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_loot_exclusive_car(user_id):
-                available.append("car")
-            if claimed["armour"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_armour_6(user_id):
-                available.append("armour")
-            if claimed["property"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_exclusive_property(user_id):
-                available.append("property")
-            # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
-            if is_admin_test and exclusive_chance >= 1.0 and not available:
-                available = ["weapon", "car", "armour"]
-                if not await _user_has_exclusive_property(user_id):
+        exclusive_chance = rarity_config.get("exclusive_chance") or EXCLUSIVE_CHANCE
+        chosen_standard_types: set = set()  # diversify: avoid same type twice in one open
+        for _ in range(num_prizes):
+            claimed = await _get_claimed_counts()
+            roll = random.random()
+            if roll < exclusive_chance:
+                available = []
+                if claimed["weapon"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_loot_exclusive_weapon(user_id):
+                    available.append("weapon")
+                if claimed["car"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_loot_exclusive_car(user_id):
+                    available.append("car")
+                if claimed["armour"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_armour_6(user_id):
+                    available.append("armour")
+                if claimed["property"] < EXCLUSIVE_CAP_PER_TYPE and not await _user_has_exclusive_property(user_id):
                     available.append("property")
-            if available:
-                typ = random.choice(available)
-                if typ == "weapon":
-                    await db.user_weapons.update_one(
-                        {"user_id": user_id, "weapon_id": LOOT_EXCLUSIVE_WEAPON_ID},
-                        {"$inc": {"quantity": 1}, "$set": {"acquired_at": now.isoformat()}},
-                        upsert=True,
-                    )
-                    await _increment_claimed_count("weapon")
-                    _invalidate_weapons_cache(user_id)
-                    w = await db.weapons.find_one({"id": LOOT_EXCLUSIVE_WEAPON_ID}, {"_id": 0, "name": 1})
-                    name = (w or {}).get("name") or "Colt Monitor"
-                    new_claimed = await _get_claimed_counts()
-                    if new_claimed["weapon"] >= EXCLUSIVE_CAP_PER_TYPE:
-                        await send_notification(user_id, "Loot box", f"The last exclusive weapon ({name}) has been claimed!", "system")
-                    rewards.append({"type": "weapon", "name": name, "id": LOOT_EXCLUSIVE_WEAPON_ID, "rarity": "loot_exclusive"})
-                    continue
-                if typ == "car":
-                    car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
-                    if car_info:
-                        await db.user_cars.insert_one({
-                            "id": str(uuid.uuid4()),
-                            "user_id": user_id,
-                            "car_id": LOOT_EXCLUSIVE_CAR_ID,
-                            "car_name": car_info.get("name", "1930 Cadillac V-16 Armored"),
-                            "acquired_at": now.isoformat(),
-                            "damage_percent": 0,
-                        })
-                        await _increment_claimed_count("car")
+                # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
+                if is_admin_test and exclusive_chance >= 1.0 and not available:
+                    available = ["weapon", "car", "armour"]
+                    if not await _user_has_exclusive_property(user_id):
+                        available.append("property")
+                if available:
+                    typ = random.choice(available)
+                    if typ == "weapon":
+                        await db.user_weapons.update_one(
+                            {"user_id": user_id, "weapon_id": LOOT_EXCLUSIVE_WEAPON_ID},
+                            {"$inc": {"quantity": 1}, "$set": {"acquired_at": now.isoformat()}},
+                            upsert=True,
+                        )
+                        await _increment_claimed_count("weapon")
+                        _invalidate_weapons_cache(user_id)
+                        w = await db.weapons.find_one({"id": LOOT_EXCLUSIVE_WEAPON_ID}, {"_id": 0, "name": 1})
+                        name = (w or {}).get("name") or "Colt Monitor"
                         new_claimed = await _get_claimed_counts()
-                        if new_claimed["car"] >= EXCLUSIVE_CAP_PER_TYPE:
-                            await send_notification(user_id, "Loot box", f"The last exclusive car ({car_info.get('name')}) has been claimed!", "system")
-                        rewards.append({
-                            "type": "car",
-                            "name": car_info.get("name"),
-                            "id": LOOT_EXCLUSIVE_CAR_ID,
-                            "rarity": "loot_exclusive",
-                        })
+                        if new_claimed["weapon"] >= EXCLUSIVE_CAP_PER_TYPE:
+                            await send_notification(user_id, "Loot box", f"The last exclusive weapon ({name}) has been claimed!", "system")
+                        rewards.append({"type": "weapon", "name": name, "id": LOOT_EXCLUSIVE_WEAPON_ID, "rarity": "loot_exclusive"})
                         continue
-                if typ == "armour":
-                    await db.users.update_one(
-                        {"id": user_id},
-                        {"$set": {"armour_level": 6, "armour_owned_level_max": 6}},
-                    )
-                    await _increment_claimed_count("armour")
-                    new_claimed = await _get_claimed_counts()
-                    if new_claimed["armour"] >= EXCLUSIVE_CAP_PER_TYPE:
-                        await send_notification(user_id, "Loot box", f"The last exclusive armour ({ARMOUR_LEVEL_6_NAME}) has been claimed!", "system")
-                    rewards.append({"type": "armour", "name": ARMOUR_LEVEL_6_NAME, "level": 6, "rarity": "loot_exclusive"})
-                    continue
-                if typ == "property":
-                    await db.exclusive_properties.insert_one({
-                        "id": str(uuid.uuid4()),
-                        "type": "speakeasy",
-                        "owner_id": user_id,
-                        "claimed_at": now.isoformat(),
-                    })
-                    await _increment_claimed_count("property")
-                    new_claimed = await _get_claimed_counts()
-                    if new_claimed["property"] >= EXCLUSIVE_CAP_PER_TYPE:
-                        await send_notification(user_id, "Loot box", "The last Speakeasy has been claimed!", "system")
-                    rewards.append({"type": "property", "name": "Speakeasy", "rarity": "loot_exclusive"})
-                    continue
+                    if typ == "car":
+                        car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
+                        if car_info:
+                            await db.user_cars.insert_one({
+                                "id": str(uuid.uuid4()),
+                                "user_id": user_id,
+                                "car_id": LOOT_EXCLUSIVE_CAR_ID,
+                                "car_name": car_info.get("name", "1930 Cadillac V-16 Armored"),
+                                "acquired_at": now.isoformat(),
+                                "damage_percent": 0,
+                            })
+                            await _increment_claimed_count("car")
+                            new_claimed = await _get_claimed_counts()
+                            if new_claimed["car"] >= EXCLUSIVE_CAP_PER_TYPE:
+                                await send_notification(user_id, "Loot box", f"The last exclusive car ({car_info.get('name')}) has been claimed!", "system")
+                            rewards.append({
+                                "type": "car",
+                                "name": car_info.get("name"),
+                                "id": LOOT_EXCLUSIVE_CAR_ID,
+                                "rarity": "loot_exclusive",
+                            })
+                            continue
+                    if typ == "armour":
+                        await db.users.update_one(
+                            {"id": user_id},
+                            {"$set": {"armour_level": 6, "armour_owned_level_max": 6}},
+                        )
+                        await _increment_claimed_count("armour")
+                        new_claimed = await _get_claimed_counts()
+                        if new_claimed["armour"] >= EXCLUSIVE_CAP_PER_TYPE:
+                            await send_notification(user_id, "Loot box", f"The last exclusive armour ({ARMOUR_LEVEL_6_NAME}) has been claimed!", "system")
+                        rewards.append({"type": "armour", "name": ARMOUR_LEVEL_6_NAME, "level": 6, "rarity": "loot_exclusive"})
+                        continue
+                    if typ == "property":
+                        await db.exclusive_properties.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "type": "speakeasy",
+                            "owner_id": user_id,
+                            "claimed_at": now.isoformat(),
+                        })
+                        await _increment_claimed_count("property")
+                        new_claimed = await _get_claimed_counts()
+                        if new_claimed["property"] >= EXCLUSIVE_CAP_PER_TYPE:
+                            await send_notification(user_id, "Loot box", "The last Speakeasy has been claimed!", "system")
+                        rewards.append({"type": "property", "name": "Speakeasy", "rarity": "loot_exclusive"})
+                        continue
 
-        # Standard reward — diversify: prefer types not yet chosen this open
-        available = [(name, w) for name, w in STANDARD_REWARD_WEIGHTS if name not in chosen_standard_types]
-        if not available:
-            available = list(STANDARD_REWARD_WEIGHTS)
-        weights = [w for _, w in available]
-        total_w = sum(weights)
-        r = random.random() * total_w
-        acc = 0
-        chosen = available[0][0]
-        for name, w in available:
-            acc += w
-            if r <= acc:
-                chosen = name
-                break
-        chosen_standard_types.add(chosen)
+            # Standard reward — diversify: prefer types not yet chosen this open
+            available = [(name, w) for name, w in STANDARD_REWARD_WEIGHTS if name not in chosen_standard_types]
+            if not available:
+                available = list(STANDARD_REWARD_WEIGHTS)
+            weights = [w for _, w in available]
+            total_w = sum(weights)
+            r = random.random() * total_w
+            acc = 0
+            chosen = available[0][0]
+            for name, w in available:
+                acc += w
+                if r <= acc:
+                    chosen = name
+                    break
+            chosen_standard_types.add(chosen)
 
-        if chosen == "points":
-            amount = random.choice([10, 30, 50]) if random.random() < 0.6 else random.randint(1, 200)
-            amount = min(200, amount)
-            merged_inc["points"] = merged_inc.get("points", 0) + amount
-            rewards.append({"type": "points", "amount": amount, "rarity": "standard"})
-        elif chosen == "rank_points":
-            amount = random.randint(100, 5000)
-            merged_inc["rank_points"] = merged_inc.get("rank_points", 0) + amount
-            rewards.append({"type": "rank_points", "amount": amount, "rarity": "standard"})
-        elif chosen == "cash":
-            amount = random.randint(100_000, 25_000_000)
-            merged_inc["money"] = merged_inc.get("money", 0) + amount
-            rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
-        elif chosen == "cars":
-            pool = [c for c in CARS if c.get("rarity") in STANDARD_CAR_RARITIES]
-            if not pool:
-                pool = [c for c in CARS if c.get("id") != LOOT_EXCLUSIVE_CAR_ID and c.get("rarity") != "loot_exclusive"]
-            if not pool:
-                # No cars available (e.g. CARS empty); give cash instead
+            if chosen == "points":
+                amount = random.choice([10, 30, 50]) if random.random() < 0.6 else random.randint(1, 200)
+                amount = min(200, amount)
+                merged_inc["points"] = merged_inc.get("points", 0) + amount
+                rewards.append({"type": "points", "amount": amount, "rarity": "standard"})
+            elif chosen == "rank_points":
+                amount = random.randint(100, 5000)
+                merged_inc["rank_points"] = merged_inc.get("rank_points", 0) + amount
+                rewards.append({"type": "rank_points", "amount": amount, "rarity": "standard"})
+            elif chosen == "cash":
                 amount = random.randint(100_000, 25_000_000)
                 merged_inc["money"] = merged_inc.get("money", 0) + amount
                 rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
+            elif chosen == "cars":
+                pool = [c for c in CARS if c.get("rarity") in STANDARD_CAR_RARITIES]
+                if not pool:
+                    pool = [c for c in CARS if c.get("id") != LOOT_EXCLUSIVE_CAR_ID and c.get("rarity") != "loot_exclusive"]
+                if not pool:
+                    # No cars available (e.g. CARS empty); give cash instead
+                    amount = random.randint(100_000, 25_000_000)
+                    merged_inc["money"] = merged_inc.get("money", 0) + amount
+                    rewards.append({"type": "cash", "amount": amount, "rarity": "standard"})
+                else:
+                    count = random.randint(2, 5)
+                    items = []
+                    for _ in range(count):
+                        car = random.choice(pool)
+                        await db.user_cars.insert_one({
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "car_id": car["id"],
+                            "car_name": car.get("name", car["id"]),
+                            "acquired_at": now.isoformat(),
+                            "damage_percent": random.randint(0, 30),
+                        })
+                        items.append({"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common")})
+                    rewards.append({"type": "cars", "count": count, "items": items, "rarity": "standard"})
+            elif chosen == "bullets":
+                amount = random.randint(50, 10_000)
+                merged_inc["bullets"] = merged_inc.get("bullets", 0) + amount
+                rewards.append({"type": "bullets", "amount": amount, "rarity": "standard"})
             else:
-                count = random.randint(2, 5)
-                items = []
-                for _ in range(count):
-                    car = random.choice(pool)
-                    await db.user_cars.insert_one({
-                        "id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "car_id": car["id"],
-                        "car_name": car.get("name", car["id"]),
-                        "acquired_at": now.isoformat(),
-                        "damage_percent": random.randint(0, 30),
-                    })
-                    items.append({"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common")})
-                rewards.append({"type": "cars", "count": count, "items": items, "rarity": "standard"})
-        elif chosen == "bullets":
-            amount = random.randint(50, 10_000)
-            merged_inc["bullets"] = merged_inc.get("bullets", 0) + amount
-            rewards.append({"type": "bullets", "amount": amount, "rarity": "standard"})
-        else:
-            perk = random.choice(PERK_TYPES)
-            if perk == "property_income_10":
-                merged_set["property_income_perk_until"] = _stacked_perk_until(merged_set, current_user, "property_income_perk_until", now)
-            elif perk == "rp_10":
-                merged_set["rp_perk_until"] = _stacked_perk_until(merged_set, current_user, "rp_perk_until", now)
-            elif perk == "jail_bust_10":
-                merged_set["jail_bust_payout_perk_until"] = _stacked_perk_until(merged_set, current_user, "jail_bust_payout_perk_until", now)
-            elif perk == "airport_cost":
-                merged_set["airport_cost_perk_until"] = _stacked_perk_until(merged_set, current_user, "airport_cost_perk_until", now)
-            else:
-                merged_inc["gta_rare_drop_perk_attempts_remaining"] = merged_inc.get("gta_rare_drop_perk_attempts_remaining", 0) + GTA_RARE_DROP_PERK_ATTEMPTS
-            rewards.append({
-                "type": "perk",
-                "name": PERK_LABELS.get(perk, perk),
-                "rarity": "standard",
-            })
+                perk = random.choice(PERK_TYPES)
+                if perk == "property_income_10":
+                    merged_set["property_income_perk_until"] = _stacked_perk_until(merged_set, current_user, "property_income_perk_until", now)
+                elif perk == "rp_10":
+                    merged_set["rp_perk_until"] = _stacked_perk_until(merged_set, current_user, "rp_perk_until", now)
+                elif perk == "jail_bust_10":
+                    merged_set["jail_bust_payout_perk_until"] = _stacked_perk_until(merged_set, current_user, "jail_bust_payout_perk_until", now)
+                elif perk == "airport_cost":
+                    merged_set["airport_cost_perk_until"] = _stacked_perk_until(merged_set, current_user, "airport_cost_perk_until", now)
+                else:
+                    merged_inc["gta_rare_drop_perk_attempts_remaining"] = merged_inc.get("gta_rare_drop_perk_attempts_remaining", 0) + GTA_RARE_DROP_PERK_ATTEMPTS
+                rewards.append({
+                    "type": "perk",
+                    "name": PERK_LABELS.get(perk, perk),
+                    "rarity": "standard",
+                })
 
-    if merged_inc or merged_set:
-        update = {}
-        if merged_inc:
-            update["$inc"] = merged_inc
-        if merged_set:
-            update["$set"] = merged_set
-        await db.users.update_one({"id": user_id}, update)
+        if merged_inc or merged_set:
+            update = {}
+            if merged_inc:
+                update["$inc"] = merged_inc
+            if merged_set:
+                update["$set"] = merged_set
+            await db.users.update_one({"id": user_id}, update)
 
-    # Append to last-10 wins (newest at end; frontend can reverse for display)
-    win_entry = {
-        "opened_at": now.isoformat(),
-        "box_quality": box_quality,
-        "prizes_count": len(rewards),
-        "rewards": rewards,
-    }
-    await db.users.update_one(
-        {"id": user_id},
-        {"$push": {"loot_box_recent": {"$each": [win_entry], "$slice": -10}}},
-    )
+        # Append to last-10 wins (newest at end; frontend can reverse for display)
+        win_entry = {
+            "opened_at": now.isoformat(),
+            "box_quality": box_quality,
+            "prizes_count": len(rewards),
+            "rewards": rewards,
+        }
+        await db.users.update_one(
+            {"id": user_id},
+            {"$push": {"loot_box_recent": {"$each": [win_entry], "$slice": -10}}},
+        )
 
-    return {
-        "rewards": rewards,
-        "box_quality": box_quality,
-        "prizes_count": len(rewards),
-        "new_pieces": new_pieces,
-        "claimed_counts": await _get_claimed_counts(),
-    }
+        return {
+            "rewards": rewards,
+            "box_quality": box_quality,
+            "prizes_count": len(rewards),
+            "new_pieces": new_pieces,
+            "claimed_counts": await _get_claimed_counts(),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Loot box open (rewards) user_id=%s: %s", user_id, e)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Loot box open failed: {type(e).__name__}: {e!s}",
+        )
 
 
 SPEAKEASY_DAILY_CASH = 100_000
