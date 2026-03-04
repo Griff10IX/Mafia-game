@@ -118,10 +118,10 @@ def register(router):
                     status_code=400,
                     detail="Registration from proxy or VPN is not allowed.",
                 )
-            # Block if a non-admin alive account already exists on this IP (admins may have multiple alive accounts on same IP)
+            # Allow up to 2 accounts per device/network (e.g. family); block only if 2 already exist (admins exempt)
             if client_ip:
                 admin_emails_list = list(ADMIN_EMAILS) if ADMIN_EMAILS else []
-                alive_same_ip = await db.users.find_one(
+                alive_same_ip_count = await db.users.count_documents(
                     {
                         "is_dead": {"$ne": True},
                         "email": {"$nin": admin_emails_list},
@@ -130,12 +130,11 @@ def register(router):
                             {"login_ips": client_ip},
                         ],
                     },
-                    {"_id": 0, "username": 1},
                 )
-                if alive_same_ip:
+                if alive_same_ip_count >= 2:
                     raise HTTPException(
                         status_code=400,
-                        detail="An account from this device or network is already registered. Log in to that account.",
+                        detail="Maximum 2 accounts per device or network. Log in to one of your existing accounts.",
                     )
 
             email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
