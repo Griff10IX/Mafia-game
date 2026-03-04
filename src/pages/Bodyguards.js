@@ -76,6 +76,7 @@ export default function Bodyguards() {
   const [invitePaymentMoney, setInvitePaymentMoney] = useState(0);
   const [invitePayoutWeekday, setInvitePayoutWeekday] = useState(0);
   const [inviting, setInviting] = useState(false);
+  const [actingInviteId, setActingInviteId] = useState(null);
 
   const WEEKDAY_OPTIONS = [
     { value: 0, label: 'Monday' },
@@ -226,6 +227,34 @@ export default function Bodyguards() {
       toast.error(err.response?.data?.detail || 'Failed to send invite', { duration: 10000 });
     } finally {
       setInviting(false);
+    }
+  };
+
+  const acceptInvite = async (inviteId) => {
+    if (actingInviteId) return;
+    setActingInviteId(inviteId);
+    try {
+      await api.post(`/bodyguards/invites/${inviteId}/accept`);
+      toast.success('Invite accepted. You are now their bodyguard.');
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to accept invite', { duration: 8000 });
+    } finally {
+      setActingInviteId(null);
+    }
+  };
+
+  const rejectInvite = async (inviteId) => {
+    if (actingInviteId) return;
+    setActingInviteId(inviteId);
+    try {
+      await api.post(`/bodyguards/invites/${inviteId}/decline`);
+      toast.success('Invite declined.');
+      await fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to decline invite', { duration: 8000 });
+    } finally {
+      setActingInviteId(null);
     }
   };
 
@@ -401,6 +430,54 @@ export default function Bodyguards() {
         </div>
 
         <div className="p-2 space-y-4">
+          {/* Received invitations */}
+          {invites.received?.length > 0 && (
+            <div>
+              <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Invitations</h4>
+              <div className="space-y-1.5">
+                {invites.received.map((inv) => {
+                  const payParts = [];
+                  if (inv.payment_points) payParts.push(`${inv.payment_points} pts`);
+                  if (inv.payment_money) payParts.push(`$${Number(inv.payment_money).toLocaleString()}`);
+                  const payStr = payParts.length ? payParts.join(' + ') + '/week' : '—';
+                  const weekdayLabel = WEEKDAY_OPTIONS.find((o) => o.value === inv.payout_weekday)?.label ?? '—';
+                  const isActing = actingInviteId === inv.id;
+                  return (
+                    <div
+                      key={inv.id}
+                      className="bg-row rounded-lg bg-zinc-800/30 border border-primary/20 px-3 py-2 flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <div className="text-[11px] text-foreground font-heading min-w-0">
+                        <span className="font-bold">{inv.inviter_username ?? 'Someone'}</span>
+                        <span className="text-mutedForeground"> wants you as bodyguard: </span>
+                        <span>{payStr}</span>
+                        {weekdayLabel !== '—' && <span className="text-mutedForeground"> (paid {weekdayLabel}s)</span>}
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => acceptInvite(inv.id)}
+                          disabled={isActing}
+                          className="bg-emerald-500/20 text-emerald-400 rounded px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide border border-emerald-500/40 hover:bg-emerald-500/30 font-heading disabled:opacity-60"
+                        >
+                          {isActing ? '…' : 'Accept'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => rejectInvite(inv.id)}
+                          disabled={isActing}
+                          className="bg-red-500/20 text-red-400 rounded px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide border border-red-500/40 hover:bg-red-500/30 font-heading disabled:opacity-60"
+                        >
+                          {isActing ? '…' : 'Reject'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Robots */}
           <div>
             <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider px-1 mb-1.5">Robots</h4>

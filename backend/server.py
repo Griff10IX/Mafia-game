@@ -1216,7 +1216,7 @@ class OPTIONSResponder(BaseHTTPMiddleware):
 # Import security middleware
 try:
     from security_middleware import SecurityMiddleware
-    app.add_middleware(SecurityMiddleware, db=db, admin_emails=ADMIN_EMAILS)
+    app.add_middleware(SecurityMiddleware, db=db)
 except ImportError:
     print("Warning: security_middleware.py not found - rate limiting disabled")
 

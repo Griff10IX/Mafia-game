@@ -120,6 +120,11 @@ async def ensure_all_indexes(db):
         await db.bodyguards.create_index("user_id")
         await db.bodyguards.create_index("bodyguard_user_id")
         await db.bodyguards.create_index([("user_id", 1), ("slot_number", 1)])
+        await db.bodyguard_payouts.create_index(
+            [("owner_id", 1), ("slot_number", 1), ("payout_date", 1)],
+            unique=True,
+        )
+        await db.bodyguard_payouts.create_index("payout_date")
         await db.hitlist.create_index("target_id")
         await db.hitlist.create_index([("target_id", 1), ("target_type", 1)])
         await db.hitlist.create_index([("reward_amount", -1), ("created_at", -1)])

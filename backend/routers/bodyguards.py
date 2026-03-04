@@ -659,8 +659,12 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
 
 
 # ----- Weekly payout (human bodyguards) -----
+# bodyguard_payouts: one doc per (owner_id, slot_number, payout_date) for audit and crash safety.
+# Unique index on (owner_id, slot_number, payout_date) prevents double-pay; we check it before paying.
+
+
 async def run_bodyguard_weekly_payout(database):
-    """Run once per day; on each bodyguard's payout_weekday, pay them and set last_payout_date."""
+    """Run once per day; on each bodyguard's payout_weekday, pay them and record in bodyguard_payouts."""
     import logging
     log = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
@@ -673,6 +677,20 @@ async def run_bodyguard_weekly_payout(database):
     })
     paid = 0
     async for bg in cursor:
+        owner_id = bg["user_id"]
+        slot_number = bg["slot_number"]
+        # Skip if we already have a payout record for this slot+date (idempotent; survives server restart)
+        existing = await database.bodyguard_payouts.find_one(
+            {"owner_id": owner_id, "slot_number": slot_number, "payout_date": today_str},
+            {"_id": 1},
+        )
+        if existing:
+            # Ensure bodyguard doc has last_payout_date in case it was missed after a crash
+            await database.bodyguards.update_one(
+                {"user_id": owner_id, "slot_number": slot_number},
+                {"$set": {"last_payout_date": today_str}},
+            )
+            continue
         last = bg.get("last_payout_date")
         if last == today_str:
             continue
@@ -686,13 +704,12 @@ async def run_bodyguard_weekly_payout(database):
                     continue
             except Exception:
                 pass
-        owner_id = bg["user_id"]
         guard_id = bg["bodyguard_user_id"]
         pay_pts = int(bg.get("payment_points") or 0)
         pay_money = float(bg.get("payment_money") or 0)
         if pay_pts <= 0 and pay_money <= 0:
             await database.bodyguards.update_one(
-                {"user_id": owner_id, "slot_number": bg["slot_number"]},
+                {"user_id": owner_id, "slot_number": slot_number},
                 {"$set": {"last_payout_date": today_str}},
             )
             continue
@@ -704,6 +721,7 @@ async def run_bodyguard_weekly_payout(database):
         if (pay_pts and pts < pay_pts) or (pay_money and money < pay_money):
             log.warning("Bodyguard weekly payout skipped: owner %s insufficient balance (need %s pts, %s $)", owner_id, pay_pts, pay_money)
             continue
+        # Do the transfer
         updates_owner = {"$inc": {}}
         if pay_pts:
             updates_owner["$inc"]["points"] = -pay_pts
@@ -719,9 +737,20 @@ async def run_bodyguard_weekly_payout(database):
         if updates_guard["$inc"]:
             await database.users.update_one({"id": guard_id}, updates_guard)
         await database.bodyguards.update_one(
-            {"user_id": owner_id, "slot_number": bg["slot_number"]},
+            {"user_id": owner_id, "slot_number": slot_number},
             {"$set": {"last_payout_date": today_str}},
         )
+        # Persist payout record so we never double-pay and have an audit trail
+        await database.bodyguard_payouts.insert_one({
+            "id": str(uuid.uuid4()),
+            "owner_id": owner_id,
+            "slot_number": slot_number,
+            "guard_id": guard_id,
+            "payout_date": today_str,
+            "payment_points": pay_pts,
+            "payment_money": pay_money,
+            "created_at": now.isoformat(),
+        })
         _invalidate_bodyguards_cache(owner_id)
         _invalidate_bodyguards_cache(guard_id)
         paid += 1
