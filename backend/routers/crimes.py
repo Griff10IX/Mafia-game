@@ -133,6 +133,7 @@ class CommitCrimeResponse(BaseModel):
     reward: Optional[int]
     next_available: str
     progress_after: Optional[int] = None
+    respect_points: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +382,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         )
         new_total_crimes = (current_user.get("total_crimes") or 0) + 1
         claimed = current_user.get("respect_points_crime_milestones_claimed") or []
+        new_claimed = [m for m in CRIME_MILESTONES if m <= new_total_crimes and m not in claimed]
+        milestone_respect = sum(CRIME_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
         await _award_crime_milestones(current_user["id"], new_total_crimes, claimed)
+        respect_earned = (respect_drop or 0) + milestone_respect
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
         except Exception as e:
@@ -400,6 +404,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     else:
         reward = None
         message = random.choice(CRIME_FAIL_MESSAGES)
+        respect_earned = 0
     cooldown_min = crime.get("cooldown_minutes", 5)
     cooldown_seconds = crime.get("cooldown_seconds")
     if cooldown_seconds is None:
@@ -438,6 +443,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         reward=reward,
         next_available=cooldown_until,
         progress_after=progress_after,
+        respect_points=respect_earned if success else 0,
     )
 
 

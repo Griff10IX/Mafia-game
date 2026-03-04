@@ -280,9 +280,11 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             await _record_bust_event(current_user["id"], True, bust_reward_cash)
             new_total = total_successes + 1
             claimed = current_user.get("respect_points_bust_milestones_claimed") or []
+            new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
+            respect_earned = sum(BUST_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
             await _award_bust_milestones(current_user["id"], new_total, claimed)
             msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
-            return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash}
+            return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash, "respect_points": respect_earned}
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         next_attempts = total_attempts + 1
         await db.users.update_one(
@@ -361,10 +363,12 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         await _record_bust_event(current_user["id"], True, cash_to_pay)
         new_total = total_successes + 1
         claimed = current_user.get("respect_points_bust_milestones_claimed") or []
+        new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
+        respect_earned = sum(BUST_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
         await _award_bust_milestones(current_user["id"], new_total, claimed)
         display_name = target.get("username") or target_username or "Unknown"
         msg = random.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=display_name)
-        return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay}
+        return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay, "respect_points": respect_earned}
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     next_attempts = total_attempts + 1
     await db.users.update_one(

@@ -63,6 +63,7 @@ class GTAAttemptResponse(BaseModel):
     jail_until: Optional[str]
     rank_points_earned: int
     progress_after: Optional[int] = None
+    respect_points: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -380,7 +381,10 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         )
         new_total_gta = (current_user.get("total_gta") or 0) + 1
         claimed = current_user.get("respect_points_gta_milestones_claimed") or []
+        new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
+        milestone_respect = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
         await _award_gta_milestones(current_user["id"], new_total_gta, claimed)
+        respect_earned = (respect_drop or 0) + milestone_respect
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
         except Exception as e:
@@ -398,6 +402,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
             jail_until=None,
             rank_points_earned=rank_points,
             progress_after=progress_after,
+            respect_points=respect_earned,
         )
     # Failure: sometimes caught (jail), sometimes get away (no car, no jail)
     caught = random.random() < GTA_CAUGHT_CHANCE
@@ -416,6 +421,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
             jail_until=jail_until.isoformat(),
             rank_points_earned=0,
             progress_after=progress_after,
+            respect_points=0,
         )
     fail_msg = random.choice(GTA_FAIL_ESCAPED_MESSAGES)
     return GTAAttemptResponse(
@@ -426,6 +432,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
         jail_until=None,
         rank_points_earned=0,
         progress_after=progress_after,
+        respect_points=0,
     )
 
 

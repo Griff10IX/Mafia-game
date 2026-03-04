@@ -477,6 +477,9 @@ export default function GTA() {
                 {typeof response.data.rank_points_earned === 'number' ? (
                   <div className="mt-0.5">Rank Points: +{response.data.rank_points_earned}</div>
                 ) : null}
+                {typeof response.data.respect_points === 'number' && response.data.respect_points > 0 ? (
+                  <div className="mt-0.5">Respect: +{response.data.respect_points}</div>
+                ) : null}
               </div>
             </div>
           ) : undefined,

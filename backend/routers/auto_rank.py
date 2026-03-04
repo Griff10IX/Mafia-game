@@ -401,11 +401,14 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         now = datetime.now(timezone.utc)
         rp = bust_result.get("rank_points_earned") or 0
         cash = bust_result.get("cash_reward") or 0
+        respect = bust_result.get("respect_points") or 0
         await _update_auto_rank_stats_bust(db, user_id, cash, now)
         await _set_last_activity(db, user_id, "bust", now)
         parts = [f"Busted {bust_target_username}! +{rp} RP"]
         if cash:
             parts.append(f"${cash:,}")
+        if respect:
+            parts.append(f"+{respect} respect")
         chat_id = (telegram_chat_id or "").strip()
         if chat_id:
             msg = f"**Auto Rank** — {username}\n\n**Bust** — " + ". ".join(parts) + "."
@@ -450,6 +453,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
 
     lines = [f"**Auto Rank** — {username}", ""]
     has_success = False
+    respect_before = int(user.get("respect_points") or 0)
 
     if user.get("in_jail"):
         return
@@ -582,6 +586,11 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             logger.exception("Auto rank booze for %s: %s", user_id, e)
 
     if has_success and chat_id:
+        user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "respect_points": 1})
+        respect_after = int((user_after or {}).get("respect_points") or 0)
+        respect_gained = max(0, respect_after - respect_before)
+        if respect_gained > 0:
+            lines.append(f"**Respect** — +{respect_gained} respect points.")
         lines.append("")
         try:
             await send_telegram_to_chat(chat_id, "\n".join(lines), token or None)

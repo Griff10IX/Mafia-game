@@ -380,6 +380,9 @@ export default function Jail() {
         if (response.data.cash_reward > 0) {
           msg += ` +$${Number(response.data.cash_reward).toLocaleString()}`;
         }
+        if (response.data.respect_points > 0) {
+          msg += ` +${response.data.respect_points} respect`;
+        }
         toast.success(msg);
         refreshUser();
       } else {

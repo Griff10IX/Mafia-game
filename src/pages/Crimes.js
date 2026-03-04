@@ -370,7 +370,10 @@ export default function Crimes() {
       const progressAfter = response.data?.progress_after;
 
       if (response.data.success) {
-        toast.success(response.data.message);
+        const msg = response.data.respect_points
+          ? `${response.data.message}${response.data.message.trim().endsWith('.') ? '' : '.'} +${response.data.respect_points} respect`
+          : response.data.message;
+        toast.success(msg);
         refreshUser();
       } else {
         toast.error(response.data.message);
@@ -435,6 +438,7 @@ export default function Crimes() {
     let failed = 0;
     let totalCash = 0;
     let totalRankPoints = 0;
+    let totalRespect = 0;
 
     try {
       const results = await Promise.allSettled(
@@ -453,6 +457,7 @@ export default function Crimes() {
             const rpMatch = msg.match(/(\d+)\s*(?:RP|rank points?)/i);
             if (cashMatch) totalCash += parseInt(cashMatch[1].replace(/,/g, ''), 10) || 0;
             if (rpMatch) totalRankPoints += parseInt(rpMatch[1], 10) || 0;
+            if (typeof response.data?.respect_points === 'number') totalRespect += response.data.respect_points;
           } else {
             failed += 1;
             toast.error(response.data?.message || `${crime.name} failed`);
@@ -467,10 +472,11 @@ export default function Crimes() {
       if (committed > 0) {
         refreshUser();
         const parts = [`Committed ${committed} crime${committed !== 1 ? 's' : ''}`];
-        if (totalCash > 0 || totalRankPoints > 0) {
+        if (totalCash > 0 || totalRankPoints > 0 || totalRespect > 0) {
           const rewards = [];
           if (totalCash > 0) rewards.push(`$${totalCash.toLocaleString()}`);
           if (totalRankPoints > 0) rewards.push(`${totalRankPoints.toLocaleString()} RP`);
+          if (totalRespect > 0) rewards.push(`${totalRespect.toLocaleString()} respect`);
           parts.push(`earned ${rewards.join(' + ')}`);
         }
         toast.success(parts.join(' and '));
