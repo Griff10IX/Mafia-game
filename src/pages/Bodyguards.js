@@ -25,6 +25,20 @@ const BG_STYLES = `
 // Match backend bodyguards.py: BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
 const BODYGUARD_SLOT_COSTS = [75, 150, 300, 450];
 
+function formatDuration(totalSeconds) {
+  if (totalSeconds == null || totalSeconds < 0) return '—';
+  const d = Math.floor(totalSeconds / 86400);
+  const h = Math.floor((totalSeconds % 86400) / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0) parts.push(`${m}m`);
+  if (s > 0 || parts.length === 0) parts.push(`${s}s`);
+  return parts.join(' ');
+}
+
 function formatInflationCountdown(isoEnd) {
   if (!isoEnd) return null;
   try {
@@ -53,6 +67,7 @@ export default function Bodyguards() {
   const [loading, setLoading] = useState(true);
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [upgradingSlot, setUpgradingSlot] = useState(null);
+  const [bgStats, setBgStats] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -72,11 +87,12 @@ export default function Bodyguards() {
 
   const fetchData = async () => {
     try {
-      const [bodyguardsRes, userRes, eventsRes, inflationRes] = await Promise.all([
+      const [bodyguardsRes, userRes, eventsRes, inflationRes, statsRes] = await Promise.all([
         api.get('/bodyguards'),
         api.get('/auth/me'),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/bodyguards/inflation').catch(() => ({ data: { next_hire_inflation_pct: 0 } }))
+        api.get('/bodyguards/inflation').catch(() => ({ data: { next_hire_inflation_pct: 0 } })),
+        api.get('/bodyguards/stats').catch(() => ({ data: null }))
       ]);
       setBodyguards(bodyguardsRes.data);
       setUser(userRes.data);
@@ -84,6 +100,7 @@ export default function Bodyguards() {
       setEventsEnabled(!!eventsRes.data?.events_enabled);
       setNextHireInflationPct(inflationRes.data?.next_hire_inflation_pct ?? 0);
       setInflationWindowEndsAt(inflationRes.data?.inflation_window_ends_at ?? null);
+      setBgStats(statsRes.data ?? null);
     } catch (error) {
       toast.error('Failed to load bodyguards', { duration: 10000 });
     } finally {
@@ -95,11 +112,13 @@ export default function Bodyguards() {
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
-      await Promise.all([refreshUser(), fetchData()]);
+      refreshUser().catch(() => {});
+      fetchData().catch(() => {});
     } catch (error) {
       const detail = error.response?.data?.detail || 'Failed to hire bodyguard';
       toast.error(detail, { duration: 10000 });
-      await Promise.all([refreshUser(), fetchData()]);
+      refreshUser().catch(() => {});
+      fetchData().catch(() => {});
     }
   };
 
@@ -354,6 +373,44 @@ export default function Bodyguards() {
         </div>
         <div className="bg-art-line text-primary mx-4" />
       </div>
+
+      {/* Bodyguard stats */}
+      {bgStats && (
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-fade-in`} style={{ animationDelay: '0.08s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+              📊 Bodyguard Stats
+            </h3>
+          </div>
+          <div className="p-3">
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-[11px] text-mutedForeground font-heading">
+              <li className="flex items-start gap-1.5">
+                <span className="text-primary shrink-0">•</span>
+                <span><strong className="text-foreground">Bodyguards hired:</strong> {bgStats.total_hired ?? 0}</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-primary shrink-0">•</span>
+                <span><strong className="text-foreground">Points spent on hires:</strong> {(bgStats.total_spent_hires ?? 0).toLocaleString()}</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-primary shrink-0">•</span>
+                <span><strong className="text-foreground">Spent on upgrades:</strong> {(bgStats.total_spent_upgrades ?? 0).toLocaleString()}</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span className="text-primary shrink-0">•</span>
+                <span>
+                  <strong className="text-foreground">Longest surviving:</strong>{' '}
+                  {bgStats.longest_surviving_seconds != null && bgStats.longest_surviving_name
+                    ? `${formatDuration(bgStats.longest_surviving_seconds)} (${bgStats.longest_surviving_name})`
+                    : '—'}
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div className="bg-art-line text-primary mx-4" />
+        </div>
+      )}
 
       {/* Info */}
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-fade-in`} style={{ animationDelay: '0.1s' }}>

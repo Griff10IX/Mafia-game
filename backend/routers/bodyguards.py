@@ -266,6 +266,52 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
     return result
 
 
+async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
+    """Return lifetime bodyguard stats and longest surviving (of current guards)."""
+    uid = current_user["id"]
+    total_hired = int(current_user.get("bodyguard_lifetime_hires") or 0)
+    total_spent_hires = int(current_user.get("bodyguard_lifetime_spent_hires") or 0)
+    total_spent_upgrades = int(current_user.get("bodyguard_lifetime_spent_upgrades") or 0)
+    bodyguards = await db.bodyguards.find(
+        {"user_id": uid},
+        {"_id": 0, "slot_number": 1, "hired_at": 1, "bodyguard_user_id": 1, "is_robot": 1, "robot_name": 1},
+    ).to_list(10)
+    longest_surviving_seconds = None
+    longest_surviving_name = None
+    now = datetime.now(timezone.utc)
+    for bg in bodyguards:
+        if not bg.get("hired_at") or not (bg.get("bodyguard_user_id") or bg.get("is_robot")):
+            continue
+        try:
+            hired_at = datetime.fromisoformat(bg["hired_at"].replace("Z", "+00:00"))
+            if hired_at.tzinfo is None:
+                hired_at = hired_at.replace(tzinfo=timezone.utc)
+            secs = int((now - hired_at).total_seconds())
+            if secs < 0:
+                secs = 0
+            if longest_surviving_seconds is None or secs > longest_surviving_seconds:
+                longest_surviving_seconds = secs
+                if bg.get("is_robot") and bg.get("robot_name"):
+                    longest_surviving_name = bg["robot_name"]
+                elif bg.get("bodyguard_user_id"):
+                    u = await db.users.find_one(
+                        {"id": bg["bodyguard_user_id"]},
+                        {"_id": 0, "username": 1},
+                    )
+                    longest_surviving_name = u["username"] if u else "Unknown"
+                else:
+                    longest_surviving_name = "Bodyguard"
+        except Exception:
+            continue
+    return {
+        "total_hired": total_hired,
+        "total_spent_hires": total_spent_hires,
+        "total_spent_upgrades": total_spent_upgrades,
+        "longest_surviving_seconds": longest_surviving_seconds,
+        "longest_surviving_name": longest_surviving_name,
+    }
+
+
 async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_current_user)):
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid slot")
@@ -282,7 +328,10 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     if int(current_user.get("points", 0) or 0) < cost:
         raise HTTPException(status_code=400, detail="Insufficient points")
     new_level = cur_level + 1
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -cost}})
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"points": -cost, "bodyguard_lifetime_spent_upgrades": cost}},
+    )
     await db.bodyguards.update_one(
         {"user_id": current_user["id"], "slot_number": slot},
         {"$set": {"armour_level": new_level}}
@@ -338,7 +387,11 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
     await db.users.update_one(
         {"id": current_user["id"]},
         {
-            "$inc": {"points": -cost},
+            "$inc": {
+                "points": -cost,
+                "bodyguard_lifetime_hires": 1,
+                "bodyguard_lifetime_spent_hires": cost,
+            },
             "$set": {
                 "bodyguard_inflation_until": window_end.isoformat(),
                 "bodyguard_inflation_level": inflation_level + 1,
@@ -567,6 +620,7 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
 
 def register(router):
     router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"])
+    router.add_api_route("/bodyguards/stats", get_bodyguards_stats, methods=["GET"])
     router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"], response_model=List[BodyguardResponse])
     router.add_api_route("/bodyguards/armour/upgrade", upgrade_bodyguard_armour, methods=["POST"])
     router.add_api_route("/bodyguards/slot/buy", buy_bodyguard_slot, methods=["POST"])
