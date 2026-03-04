@@ -124,7 +124,8 @@ def _player_bust_success_rate(total_attempts: int, total_successes: int = 0) -> 
     base = raw * JAIL_BUST_DIFFICULTY_MULT
     failures = max(0, total_attempts - total_successes)
     penalty = min(failures * JAIL_BUST_FAILURE_PENALTY_PER, JAIL_BUST_MAX_FAILURE_PENALTY)
-    return max(JAIL_BUST_RATE_FLOOR, base - penalty)
+    rate = max(JAIL_BUST_RATE_FLOOR, base - penalty)
+    return min(1.0, rate + 0.05)  # 5% easier: +5 pp success chance
 
 
 # Cache for jail NPCs list (invalidated when spawn adds or bust removes an NPC)

@@ -695,7 +695,7 @@ export default function Inbox() {
         {/* Inbox Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-5">
           {/* Message List */}
-          <div className="lg:col-span-2 border-r border-primary/20 bg-secondary/20 max-h-[480px] overflow-y-auto">
+          <div className={`lg:col-span-2 border-r border-primary/20 bg-secondary/20 overflow-y-auto ${selectedNotification ? 'max-h-[40vh] lg:max-h-[480px]' : 'max-h-[480px]'}`}>
             {filteredNotifications.length === 0 ? (
               <div className="p-4 text-center">
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
@@ -721,7 +721,7 @@ export default function Inbox() {
             )}
           </div>
 
-          {/* Message Detail */}
+          {/* Message Detail: desktop side panel; mobile inline below list */}
           <div className="lg:col-span-3 hidden lg:block">
             <MessageDetail
               notification={selectedNotification}
@@ -734,22 +734,19 @@ export default function Inbox() {
             />
           </div>
         </div>
-      </div>
 
-      {/* Mobile: Selected message fullscreen */}
-      {selectedNotification && (
-        <div className="lg:hidden fixed inset-0 z-40 bg-background">
-          <div className="flex flex-col h-full">
-            <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+        {/* Mobile: selected message inline below list (no fullscreen) */}
+        {selectedNotification && (
+          <div className="lg:hidden border-t border-primary/20 bg-secondary/30 overflow-y-auto max-h-[55vh] rounded-b-md">
+            <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
+              <h2 className="text-[11px] font-heading font-bold text-primary uppercase">Message</h2>
               <button
                 onClick={() => setSelectedNotification(null)}
                 className="p-1 hover:bg-secondary rounded transition-colors"
+                aria-label="Close message"
               >
                 <X size={16} className="text-foreground" />
               </button>
-              <h2 className="text-[11px] font-heading font-bold text-primary uppercase">
-                Message
-              </h2>
             </div>
             <MessageDetail
               notification={selectedNotification}
@@ -761,8 +758,8 @@ export default function Inbox() {
               isSent={filter === 'sent'}
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
