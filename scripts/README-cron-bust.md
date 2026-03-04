@@ -1,6 +1,9 @@
 # Auto Rank cron (two tickers when using AUTO_RANK_USE_CRON=1)
 
-When you use **AUTO_RANK_USE_CRON=1**, the server does **not** run Auto Rank itself. You must call the API from outside:
+When you use **AUTO_RANK_USE_CRON=1**, the server does **not** run Auto Rank itself. You must call the API from outside.
+
+**If you see `cron-bust` every 5s in logs but no `POST /api/auto-rank/cron` and no "running cycle for N due user(s)" after 60s:**  
+The **main** 60s cron is not running. Start it with one of: **systemd** (see "Main cron ticker" below — use `cron-cycle-ticker.service.example`), **crontab** (`* * * * * .../cron-curl.sh main`), or by hand: `python scripts/cron-cycle-ticker.py`.
 
 | What runs | Endpoint | How often | Script |
 |-----------|----------|------------|--------|
