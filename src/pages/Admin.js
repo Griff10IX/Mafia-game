@@ -1350,59 +1350,148 @@ export default function Admin() {
       </div>
 
       {/* User detail modal */}
-      {userDetailData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setUserDetailData(null)}>
-          <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-            <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between">
-              <h3 className="text-sm font-heading font-bold text-primary">User details: {userDetailData.user?.username ?? '—'}</h3>
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={() => setTargetFromSearch(userDetailData.user?.username)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
-                <button type="button" onClick={() => setUserDetailData(null)} className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"><X size={14} /></button>
+      {userDetailData && (() => {
+        const u = userDetailData.user || {};
+        const fmtDate = (v) => (v ? new Date(v).toLocaleString() : '—');
+        const fmtNum = (v) => {
+          if (v == null || v === '') return '—';
+          const n = Number(v);
+          return Number.isFinite(n) ? n.toLocaleString() : '—';
+        };
+        const Section = ({ title, children }) => (
+          <div className="space-y-1.5">
+            <div className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-zinc-700/50 pb-0.5">{title}</div>
+            {children}
+          </div>
+        );
+        const Row = ({ label, value, fullWidth }) => {
+          if (value == null || value === '' || (typeof value === 'string' && value === '—')) value = '—';
+          return (
+            <div className={fullWidth ? 'col-span-2' : ''}>
+              <span className="text-mutedForeground">{label}:</span>{' '}
+              <span className="text-foreground">{value}</span>
+            </div>
+          );
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setUserDetailData(null)}>
+            <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-3xl w-full max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between shrink-0">
+                <h3 className="text-sm font-heading font-bold text-primary">User details: {u.username ?? '—'}</h3>
+                <div className="flex items-center gap-2">
+                  <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
+                  <button type="button" onClick={() => setUserDetailData(null)} className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"><X size={14} /></button>
+                </div>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1 text-[10px] font-heading space-y-4">
+                <Section title="Identity">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Username" value={u.username} />
+                    <Row label="Email" value={u.email} />
+                    <Row label="User ID" value={u.id} fullWidth />
+                    <Row label="Created" value={fmtDate(u.created_at)} />
+                    <Row label="Email verified" value={u.email_verified === false ? 'No' : 'Yes'} />
+                    <Row label="Dead" value={u.is_dead ? 'Yes' : 'No'} />
+                    <Row label="NPC" value={u.is_npc ? 'Yes' : 'No'} />
+                    <Row label="Bodyguard" value={u.is_bodyguard ? 'Yes' : 'No'} />
+                  </div>
+                </Section>
+                <Section title="Device & IPs">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Device (last login)" value={u.last_device_type} />
+                    <Row label="Registration IP" value={u.registration_ip} />
+                    <Row label="Last login IP" value={u.last_login_ip} />
+                    <Row label="User-Agent (last login)" value={u.last_user_agent ? <span className="font-mono text-[9px] break-all text-mutedForeground">{u.last_user_agent}</span> : '—'} fullWidth />
+                    <Row label="Login IPs" value={Array.isArray(u.login_ips) && u.login_ips.length ? u.login_ips.join(', ') : '—'} fullWidth />
+                  </div>
+                </Section>
+                <Section title="Wealth & resources">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Money" value={fmtNum(u.money)} />
+                    <Row label="Points" value={fmtNum(u.points)} />
+                    <Row label="Rank points" value={fmtNum(u.rank_points)} />
+                    <Row label="Prestige" value={u.prestige_level != null ? `P${u.prestige_level}` : '—'} />
+                    <Row label="Bullets" value={fmtNum(u.bullets)} />
+                    <Row label="Health" value={fmtNum(u.health)} />
+                    <Row label="Armour level" value={fmtNum(u.armour_level)} />
+                    <Row label="Respect points" value={fmtNum(u.respect_points)} />
+                    <Row label="Loot box pieces" value={fmtNum(u.loot_box_pieces)} />
+                    <Row label="Swiss balance" value={fmtNum(u.swiss_balance)} />
+                    <Row label="Swiss limit" value={fmtNum(u.swiss_limit)} />
+                  </div>
+                </Section>
+                <Section title="Combat & activity">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Total kills" value={fmtNum(u.total_kills)} />
+                    <Row label="Total deaths" value={fmtNum(u.total_deaths)} />
+                    <Row label="Total crimes" value={fmtNum(u.total_crimes)} />
+                    <Row label="Crime profit" value={fmtNum(u.crime_profit)} />
+                    <Row label="Jail busts" value={fmtNum(u.jail_busts)} />
+                    <Row label="Total GTA" value={fmtNum(u.total_gta)} />
+                    <Row label="Bodyguard slots" value={fmtNum(u.bodyguard_slots)} />
+                  </div>
+                </Section>
+                <Section title="Location & state">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Current state (city)" value={u.current_state} />
+                    <Row label="In jail" value={u.in_jail ? 'Yes' : 'No'} />
+                    <Row label="Jail until" value={fmtDate(u.jail_until)} />
+                    <Row label="Last seen" value={fmtDate(u.last_seen)} />
+                    <Row label="Forced online until" value={fmtDate(u.forced_online_until)} />
+                    <Row label="Travels this hour" value={fmtNum(u.travels_this_hour)} />
+                    <Row label="Extra airmiles" value={fmtNum(u.extra_airmiles)} />
+                    <Row label="Garage batch limit" value={fmtNum(u.garage_batch_limit)} />
+                  </div>
+                </Section>
+                <Section title="Family & social">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Family ID" value={u.family_id} />
+                    <Row label="Family role" value={u.family_role} />
+                    <Row label="Telegram chat ID" value={u.telegram_chat_id ? 'Set' : '—'} />
+                    <Row label="Auto Rank enabled" value={u.auto_rank_enabled ? 'Yes' : 'No'} />
+                  </div>
+                </Section>
+                <Section title="Tribute & missions">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Mission 1 bonus" value={u.has_mission_1_bonus ? 'Yes' : 'No'} />
+                    <Row label="Mission 2 bonus" value={u.has_mission_2_bonus ? 'Yes' : 'No'} />
+                    <Row label="Mission 3 bonus" value={u.has_mission_3_bonus ? 'Yes' : 'No'} />
+                    <Row label="Mission 4 bonus" value={u.has_mission_4_bonus ? 'Yes' : 'No'} />
+                  </div>
+                </Section>
+                <Section title="Moderation & lock">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Account locked" value={u.account_locked_at ? `Yes (${fmtDate(u.account_locked_at)})` : 'No'} />
+                    <Row label="Lock until" value={fmtDate(u.account_locked_until)} />
+                    {u.account_locked_comment && <Row label="Lock comment (user)" value={u.account_locked_comment} fullWidth />}
+                    {u.account_locked_admin_message && <Row label="Lock message (admin)" value={u.account_locked_admin_message} fullWidth />}
+                    {u.account_locked_user_reply && <Row label="Lock reply (user)" value={u.account_locked_user_reply} fullWidth />}
+                  </div>
+                </Section>
+                <Section title="Other">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Token version" value={fmtNum(u.token_version)} />
+                    <Row label="Premium rank bar" value={u.premium_rank_bar ? 'Yes' : 'No'} />
+                    <Row label="Has silencer" value={u.has_silencer ? 'Yes' : 'No'} />
+                    <Row label="OC timer reduced" value={u.oc_timer_reduced ? 'Yes' : 'No'} />
+                    <Row label="Crew OC timer reduced" value={u.crew_oc_timer_reduced ? 'Yes' : 'No'} />
+                    <Row label="Casino profit" value={fmtNum(u.casino_profit)} />
+                    <Row label="Property profit" value={fmtNum(u.property_profit)} />
+                    <Row label="Booze profit today" value={fmtNum(u.booze_profit_today)} />
+                    <Row label="Booze profit total" value={fmtNum(u.booze_profit_total)} />
+                    <Row label="Lifetime points spent" value={fmtNum(u.lifetime_points_spent)} />
+                  </div>
+                </Section>
+                {userDetailData.dice_owned?.length > 0 && (
+                  <Section title="Dice owned">
+                    <ul className="list-disc list-inside text-foreground space-y-0.5">{userDetailData.dice_owned.map((d, i) => <li key={i}>{d.game_type || d.id || JSON.stringify(d)}</li>)}</ul>
+                  </Section>
+                )}
               </div>
             </div>
-            <div className="p-4 overflow-y-auto flex-1 text-[11px] font-heading space-y-4">
-              {(() => {
-                const u = userDetailData.user || {};
-                const rows = [
-                  { label: 'Username', value: u.username ?? '—' },
-                  { label: 'Email', value: u.email ?? '—' },
-                  { label: 'User ID', value: u.id ?? '—' },
-                  { label: 'Created', value: u.created_at ? new Date(u.created_at).toLocaleString() : '—' },
-                  { label: 'Email verified', value: u.email_verified === false ? 'No' : 'Yes' },
-                  { label: 'Dead', value: u.is_dead ? 'Yes' : 'No' },
-                  { label: 'Device (last login)', value: u.last_device_type ?? '—' },
-                  { label: 'User-Agent (last login)', value: u.last_user_agent ? <span className="font-mono text-[10px] break-all text-mutedForeground">{u.last_user_agent}</span> : '—' },
-                  { label: 'Registration IP', value: u.registration_ip ?? '—' },
-                  { label: 'Last login IP', value: u.last_login_ip ?? '—' },
-                  { label: 'Login IPs', value: Array.isArray(u.login_ips) && u.login_ips.length ? u.login_ips.join(', ') : '—' },
-                  { label: 'Rank points', value: u.rank_points != null ? String(u.rank_points) : '—' },
-                  { label: 'Money', value: u.money != null ? String(u.money) : '—' },
-                  { label: 'Prestige', value: u.prestige_level != null ? `P${u.prestige_level}` : '—' },
-                  { label: 'Account locked', value: u.account_locked_at ? `Yes (${new Date(u.account_locked_at).toLocaleString()})` : 'No' },
-                ];
-                return (
-                  <>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                      {rows.map((r) => (
-                        <div key={r.label} className={r.label === 'User-Agent (last login)' || r.label === 'Login IPs' ? 'col-span-2' : ''}>
-                          <span className="text-mutedForeground">{r.label}:</span>{' '}
-                          <span className="text-foreground">{r.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                    {userDetailData.dice_owned?.length > 0 && (
-                      <div>
-                        <span className="text-mutedForeground">Dice owned:</span>
-                        <ul className="mt-1 list-disc list-inside text-foreground">{userDetailData.dice_owned.map((d, i) => <li key={i}>{d.game_type || d.id || JSON.stringify(d)}</li>)}</ul>
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ─── Game World ─── */}
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
