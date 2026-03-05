@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { ShoppingBag, Zap, Check, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -18,7 +18,6 @@ const PACKAGES = [
   { id: 'platinum', name: '50,000 pts', points: 50000, price: 55.99, popular: false },
 ];
 
-const BODYGUARD_SLOT_COSTS = [100, 200, 300, 400];
 const BULLET_PACKS = [
   { bullets: 5000, cost: 500 },
   { bullets: 10000, cost: 1000 },
@@ -42,7 +41,7 @@ const Tab = ({ active, onClick, children }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`flex-1 min-w-0 py-2 px-3 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all border ${
+    className={`flex-1 min-w-0 min-h-[44px] py-2.5 px-3 rounded-md text-[10px] sm:text-[9px] font-heading font-bold uppercase tracking-wider transition-all border touch-manipulation ${
       active
         ? 'text-primary bg-primary/10 border-primary/20'
         : 'text-zinc-500 hover:text-zinc-300 border-transparent'
@@ -69,7 +68,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
           type="button"
           onClick={() => onBuy()}
           disabled={loading || disabled || (user && respectPrice != null && (user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)}
-          className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 mt-1"
+          className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 mt-1 touch-manipulation"
         >
           {loading ? '...' : respectPrice != null ? `${price} pts or ${respectPrice} resp` : `${price} pts`}
         </button>
@@ -83,7 +82,6 @@ export default function Store() {
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
-  const [bodyguards, setBodyguards] = useState([]);
   const [boozeConfig, setBoozeConfig] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
@@ -98,15 +96,13 @@ export default function Store() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, bgRes, boozeRes, eventsRes, adminRes] = await Promise.all([
+      const [userRes, boozeRes, eventsRes, adminRes] = await Promise.all([
         api.get('/auth/me'),
-        api.get('/bodyguards'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
       ]);
       setUser(userRes.data);
-      setBodyguards(bgRes.data || []);
       setBoozeConfig(boozeRes?.data || null);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
@@ -172,15 +168,13 @@ export default function Store() {
   };
 
   const apiBuy = async (path, body, successMsg) => {
-    const isBodyguard = typeof path === 'string' && path.includes('bodyguards');
-    const duration = isBodyguard ? 10000 : undefined;
     try {
       await api.post(path, body || {});
-      toast.success(successMsg || 'Done', duration != null ? { duration } : undefined);
+      toast.success(successMsg || 'Done');
       refreshUser();
       fetchData();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed', duration != null ? { duration } : undefined);
+      toast.error(e.response?.data?.detail || 'Failed');
     }
   };
 
@@ -195,8 +189,6 @@ export default function Store() {
     }
   };
 
-  const getHireCost = (n, robot) => Math.round((BODYGUARD_SLOT_COSTS[n - 1] || 0) * (robot ? 1.5 : 1) * (event?.bodyguard_cost ?? 1));
-
   if (checkingPayment) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
@@ -208,11 +200,11 @@ export default function Store() {
   }
 
   return (
-    <div className={`space-y-6 ${styles.pageContent}`} data-testid="store-page">
+    <div className={`space-y-4 sm:space-y-6 ${styles.pageContent} px-3 sm:px-4 pb-6`} data-testid="store-page">
       <style>{STORE_STYLES}</style>
       <div className="relative store-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-[10px] text-zinc-500 font-heading italic">Points, upgrades, bullets & bodyguards</p>
+          <p className="text-[10px] text-zinc-500 font-heading italic">Points, upgrades & bullets</p>
         </div>
         {user != null && (
           <span className="text-sm font-heading font-bold text-primary">
@@ -233,18 +225,17 @@ export default function Store() {
         </div>
       )}
 
-      <div className="relative flex gap-1 p-1 rounded-lg overflow-x-auto store-fade-in border border-primary/20 bg-primary/5">
+      <div className="relative flex gap-1 p-1.5 sm:p-1 rounded-lg overflow-x-auto store-fade-in border border-primary/20 bg-primary/5 scrollbar-thin">
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
         <Tab active={activeTab === 'points'} onClick={() => setActiveTab('points')}>Points</Tab>
         <Tab active={activeTab === 'sendpts'} onClick={() => setActiveTab('sendpts')}>Send pts</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => setActiveTab('bullets')}>Bullets</Tab>
-        <Tab active={activeTab === 'bodyguards'} onClick={() => setActiveTab('bodyguards')}>Bodyguards</Tab>
       </div>
 
       {activeTab === 'points' && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
             {PACKAGES.map((pkg) => (
               <div
                 key={pkg.id}
@@ -268,7 +259,7 @@ export default function Store() {
                     onClick={() => handlePurchase(pkg.id)}
                     data-testid={`buy-package-${pkg.id}`}
                     disabled={loading}
-                    className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                    className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                   >
                     {loading ? '...' : 'Buy'}
                   </button>
@@ -284,17 +275,17 @@ export default function Store() {
         <div className="space-y-4 store-fade-in">
           <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+            <div className="px-3 sm:px-4 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Send size={14} className="text-primary shrink-0" />
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Send points to player</span>
             </div>
-            <div className="p-3 space-y-2">
+            <div className="p-3 sm:p-4 space-y-3">
               <input
                 type="text"
                 placeholder="Recipient username"
                 value={sendToUsername}
                 onChange={(e) => setSendToUsername(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none"
+                className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] sm:min-h-0"
               />
               <input
                 type="number"
@@ -302,7 +293,7 @@ export default function Store() {
                 placeholder="Amount"
                 value={sendAmount}
                 onChange={(e) => setSendAmount(e.target.value)}
-                className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none"
+                className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] sm:min-h-0"
               />
               <button
                 type="button"
@@ -329,7 +320,7 @@ export default function Store() {
                   }
                 }}
                 disabled={loading || !user || (user?.points ?? 0) < 1}
-                className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                className="w-full min-h-[44px] py-3 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
               >
                 {loading ? '...' : 'Send'}
               </button>
@@ -407,7 +398,7 @@ export default function Store() {
       )}
 
       {activeTab === 'upgrades' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.map((u) => {
             const owned = u.ownedKey && user?.[u.ownedKey];
             const extra = u.extra?.(user, boozeConfig);
@@ -464,7 +455,7 @@ export default function Store() {
                         apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
                       }}
                       disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < 2500) || !customCarName.trim()}
-                      className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                      className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                     >
                       500 pts or 2500 resp
                     </button>
@@ -478,7 +469,7 @@ export default function Store() {
       )}
 
       {activeTab === 'bullets' && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-2">
           {BULLET_PACKS.map((pack) => {
             const respectCost = pack.cost * 5;
             return (
@@ -494,7 +485,7 @@ export default function Store() {
                     type="button"
                     onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
                     disabled={!user || ((user.points ?? 0) < pack.cost && (user.respect_points ?? 0) < respectCost)}
-                    className="w-full py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                    className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                   >
                     Buy
                   </button>
@@ -506,46 +497,12 @@ export default function Store() {
         </div>
       )}
 
-      {activeTab === 'bodyguards' && user && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {bodyguards.map((bg) => (
-              <div key={bg.slot_number} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
-                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-                  <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Slot {bg.slot_number}</span>
-                  <Shield size={14} className="text-primary shrink-0" />
-                </div>
-                <div className="p-2.5">
-                  {bg.bodyguard_username ? (
-                    <div className="text-xs font-heading text-mutedForeground">
-                      {bg.is_robot ? 'Robot' : 'Human'} · {new Date(bg.hired_at).toLocaleDateString()}
-                    </div>
-                  ) : (
-                    <div className="flex gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => apiBuy('/bodyguards/hire', { slot: bg.slot_number, is_robot: true }, 'Hired')}
-                        className="flex-1 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30"
-                      >
-                        Robot ({getHireCost(bg.slot_number, true)} pts)
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="store-art-line text-primary mx-3" />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="relative rounded-lg border border-primary/20 overflow-hidden">
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+        <div className="px-3 sm:px-4 py-2.5 bg-primary/8 border-b border-primary/20">
           <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Payments</p>
         </div>
-        <div className="px-4 py-3">
+        <div className="px-3 sm:px-4 py-3">
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Payments via Stripe. Points added after purchase.
           </p>
