@@ -582,12 +582,11 @@ export default function SlotsPage() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <label className="text-[10px] text-mutedForeground font-heading">Buy-back (points)</label>
-                <input
-                  type="text"
+                <FormattedNumberInput
                   value={ownerBuyBack}
-                  onChange={(e) => setOwnerBuyBack(e.target.value)}
+                  onChange={setOwnerBuyBack}
                   placeholder="0"
-                  className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-heading"
+                  className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none"
                 />
                 <button type="button" onClick={setBuyBackReward} disabled={ownerActionLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">Set</button>
               </div>

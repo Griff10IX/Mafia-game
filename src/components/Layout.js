@@ -1290,7 +1290,7 @@ export default function Layout({ children }) {
           const propertyProfit = user.property_profit ?? 0;
           const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-3 md:gap-4' : 'gap-2 md:gap-2';
           const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
-          const topBarIconSizeEffective = isMobileViewport ? Math.max(16, topBarIconSize) : topBarIconSize;
+          const topBarIconSizeEffective = isMobileViewport ? Math.min(14, topBarIconSize) : topBarIconSize;
           const topBarChipPadding = topBarSize === 'small' ? 'px-2 py-1.5 md:px-1.5 md:py-0.5' : topBarSize === 'large' ? 'px-2.5 py-1.5 md:px-2.5 md:py-1.5' : 'px-2 py-1.5 md:px-2 md:py-1';
           const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
           const renderStat = (statId) => {

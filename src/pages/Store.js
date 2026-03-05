@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const STORE_STYLES = `
@@ -287,19 +288,17 @@ export default function Store() {
                 onChange={(e) => setSendToUsername(e.target.value)}
                 className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] sm:min-h-0"
               />
-              <input
-                type="number"
-                min="1"
-                placeholder="Amount"
+              <FormattedNumberInput
                 value={sendAmount}
-                onChange={(e) => setSendAmount(e.target.value)}
-                className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] sm:min-h-0"
+                onChange={setSendAmount}
+                placeholder="Amount"
+                className="w-full px-3 py-2.5 sm:py-2 text-sm sm:text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none min-h-[44px] sm:min-h-0 text-foreground font-heading"
               />
               <button
                 type="button"
                 onClick={async () => {
                   const to = sendToUsername.trim();
-                  const amt = parseInt(sendAmount, 10);
+                  const amt = parseInt(String(sendAmount).replace(/\D/g, ''), 10);
                   if (!to || !Number.isFinite(amt) || amt < 1) {
                     toast.error('Enter username and amount (min 1)');
                     return;

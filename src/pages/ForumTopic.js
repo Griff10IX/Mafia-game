@@ -5,6 +5,7 @@ import api from '../utils/api';
 import GifPicker from '../components/GifPicker';
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../utils/forumContent';
+import { FormattedNumberInput } from '../components/FormattedNumberInput';
 import styles from '../styles/noir.module.css';
 
 const EMOJI_STRIP = ['😀', '😂', '👍', '❤️', '🔥', '😎', '👋', '🎉', '💀', '😢', '💰', '💎', '🔫', '👑', '🏆', '✨'];
@@ -62,8 +63,8 @@ export default function ForumTopic() {
   const [createGameType, setCreateGameType] = useState('dice');
   const [createGameMaxPlayers, setCreateGameMaxPlayers] = useState(10);
   const [createGameManualRoll, setCreateGameManualRoll] = useState(true);
-  const [createGamePot, setCreateGamePot] = useState(0);
-  const [createGameJoinFee, setCreateGameJoinFee] = useState(0);
+  const [createGamePot, setCreateGamePot] = useState('0');
+  const [createGameJoinFee, setCreateGameJoinFee] = useState('0');
   const [createGameSubmitting, setCreateGameSubmitting] = useState(false);
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
   const [user, setUser] = useState(null);
@@ -197,8 +198,8 @@ export default function ForumTopic() {
       await api.post('/forum/entertainer/games', {
         game_type: createGameType,
         max_players: Math.max(1, Math.min(10, parseInt(createGameMaxPlayers, 10) || 10)),
-        join_fee: Math.max(0, parseInt(createGameJoinFee, 10) || 0),
-        pot: Math.max(0, parseInt(createGamePot, 10) || 0),
+        join_fee: Math.max(0, parseInt(String(createGameJoinFee).replace(/\D/g, ''), 10) || 0),
+        pot: Math.max(0, parseInt(String(createGamePot).replace(/\D/g, ''), 10) || 0),
         manual_roll: createGameManualRoll,
         topic_id: topicId || undefined,
       });
@@ -500,11 +501,11 @@ export default function ForumTopic() {
               </div>
               <div>
                 <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Pot ($ you put in)</label>
-                <input type="number" min={0} value={createGamePot} onChange={(e) => setCreateGamePot(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+                <FormattedNumberInput value={createGamePot} onChange={setCreateGamePot} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
               </div>
               <div>
                 <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Entry fee ($ per player to join)</label>
-                <input type="number" min={0} value={createGameJoinFee} onChange={(e) => setCreateGameJoinFee(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+                <FormattedNumberInput value={createGameJoinFee} onChange={setCreateGameJoinFee} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
               </div>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={createGameManualRoll} onChange={(e) => setCreateGameManualRoll(e.target.checked)} className="w-4 h-4 accent-primary" />
