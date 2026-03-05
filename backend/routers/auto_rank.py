@@ -1014,7 +1014,7 @@ def register(router):
         try:
             user = await db.users.find_one(
                 {"telegram_chat_id": chat_id_str},
-                {"_id": 0, "id": 1, "username": 1, "auto_rank_purchased": 1, "auto_rank_enabled": 1, **_PREFERENCE_FIELDS, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_stats_since": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "activity_detail": 1},
+                {"_id": 0, "id": 1, "username": 1, "auto_rank_purchased": 1, "auto_rank_enabled": 1, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_stats_since": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "activity_detail": 1},
             )
             if not user:
                 reply = "Link your Telegram first: set your Chat ID in Profile → Telegram (Auto Rank). Get your Chat ID from @userinfobot. Then message this bot again."
