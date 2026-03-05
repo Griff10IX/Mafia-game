@@ -149,7 +149,7 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
 
   return (
     <div
-      className={`m-fade-in m-row relative rounded-md border px-2 py-1.5 transition-all ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`m-fade-in m-row relative rounded-md border px-2 py-1.5 transition-all min-w-0 ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ animationDelay: `${delay}s` }}
       onClick={() => unlocked && onClick(mission)}
     >
@@ -269,7 +269,7 @@ function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea
           </span>
         )}
       </div>
-      <div className="p-1.5 space-y-1">
+      <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
         {sorted.map((m, i) => {
           const info = missionIdToIndex?.[m.id] ?? {};
           return (
@@ -863,7 +863,7 @@ export default function Missions() {
   // Completed missions view (separate screen to keep main list short)
   if (showCompleted) {
     return (
-      <div className={`space-y-3 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 700, margin: '0 auto' }}>
+      <div className={`space-y-3 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
         <style>{MISSIONS_STYLES}</style>
         <button
           type="button"
@@ -881,7 +881,7 @@ export default function Missions() {
               Completed missions ({completedMissions.length})
             </span>
           </div>
-          <div className="p-1.5 space-y-1 max-h-[70vh] overflow-y-auto">
+          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 max-h-[70vh] overflow-y-auto">
             {completedMissions.map((m) => (
               <div
                 key={m.id}
@@ -911,7 +911,7 @@ export default function Missions() {
   }
 
   return (
-    <div className={`space-y-2 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 700, margin: '0 auto' }}>
+    <div className={`space-y-2 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
       <style>{MISSIONS_STYLES}</style>
 
       {/* Page header */}
@@ -1056,7 +1056,7 @@ export default function Missions() {
             <Skull size={12} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">Final Jobs</span>
           </div>
-          <div className="p-1.5 space-y-1">
+          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
             {activeBoss.map((m, i) => {
               const info = missionIdToIndex[m.id] ?? {};
               return (

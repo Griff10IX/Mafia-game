@@ -123,6 +123,7 @@ const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
 const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
 const SIDEBAR_DIVIDER_STYLE_KEY = 'sidebar_divider_style';
 const SIDEBAR_SPACING_KEY = 'sidebar_spacing';
+const BOTTOM_NAV_SHOW_DIVIDERS_KEY = 'bottom_nav_show_dividers';
 
 function loadSidebarShowDividers() {
   try {
@@ -146,6 +147,14 @@ function loadSidebarSpacing() {
     if (v === 'compact' || v === 'normal' || v === 'relaxed') return v;
   } catch (_) {}
   return 'normal';
+}
+
+function loadBottomNavShowDividers() {
+  try {
+    const v = localStorage.getItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY);
+    if (v === 'true') return true;
+  } catch (_) {}
+  return false;
 }
 
 function loadMobileStatsDisplay() {
@@ -208,6 +217,7 @@ export default function Layout({ children }) {
   const [showSidebarDividers, setShowSidebarDividers] = useState(loadSidebarShowDividers);
   const [sidebarDividerStyle, setSidebarDividerStyle] = useState(loadSidebarDividerStyle);
   const [sidebarSpacing, setSidebarSpacing] = useState(loadSidebarSpacing);
+  const [showBottomNavDividers, setShowBottomNavDividers] = useState(loadBottomNavShowDividers);
   const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rankingOpen, setRankingOpen] = useState(false);
@@ -271,15 +281,18 @@ export default function Layout({ children }) {
       setSidebarDividerStyle(loadSidebarDividerStyle());
       setSidebarSpacing(loadSidebarSpacing());
     };
+    const onBottomNavDividers = () => setShowBottomNavDividers(loadBottomNavShowDividers());
     window.addEventListener('topbar-prefs-changed', onTopBarPrefs);
     window.addEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
     window.addEventListener('sidebar-dividers-changed', onSidebarDividers);
     window.addEventListener('sidebar-layout-changed', onSidebarLayout);
+    window.addEventListener('bottom-nav-dividers-changed', onBottomNavDividers);
     return () => {
       window.removeEventListener('topbar-prefs-changed', onTopBarPrefs);
       window.removeEventListener('mobile-stats-display-changed', onMobileStatsDisplay);
       window.removeEventListener('sidebar-dividers-changed', onSidebarDividers);
       window.removeEventListener('sidebar-layout-changed', onSidebarLayout);
+      window.removeEventListener('bottom-nav-dividers-changed', onBottomNavDividers);
     };
   }, []);
 
@@ -1688,12 +1701,25 @@ export default function Layout({ children }) {
                 {user.casino_profit >= 0 ? '+' : ''}{formatMoney(user.casino_profit)}
               </div>
             )}
-            {mobileBottomNavItems.map((item) => {
+            {mobileBottomNavItems.map((item, index) => {
               const Icon = item.icon;
               const boxBase = 'flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[32px] rounded border transition-colors';
               const boxInactive = { borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' };
               const boxActive = { borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', color: 'var(--noir-primary)' };
-              if (item.type === 'link') {
+              const bottomNavDividerStyle = {
+                width: 1,
+                minWidth: 1,
+                alignSelf: 'stretch',
+                borderLeft: sidebarDividerStyle === 'solid'
+                  ? '1px solid rgba(var(--noir-primary-rgb), 0.35)'
+                  : `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)`,
+              };
+              return (
+                <Fragment key={item.path || item.id}>
+                  {index > 0 && showBottomNavDividers && (
+                    <div className="shrink-0 min-h-[24px]" style={bottomNavDividerStyle} aria-hidden="true" />
+                  )}
+                  {item.type === 'link' && (() => {
                 const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path + '/'));
                 const isInbox = item.path === '/inbox';
                 return (
@@ -1717,8 +1743,8 @@ export default function Layout({ children }) {
                     <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
                   </Link>
                 );
-              }
-              if (item.type === 'group') {
+              })()}
+              {item.type === 'group' && (() => {
                 const isOpen = mobileBottomMenuOpen === item.id;
                 const isActive = item.items.some((sub) => {
                   if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
@@ -1747,8 +1773,9 @@ export default function Layout({ children }) {
                     <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.label}</span>
                   </button>
                 );
-              }
-              return null;
+              })()}
+                </Fragment>
+              );
             })}
           </nav>
         </div>

@@ -97,10 +97,12 @@ export default function ThemePicker({ open, onClose }) {
   const TOPBAR_SIZE_KEY = 'topbar_size';
   const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
   const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
+  const BOTTOM_NAV_SHOW_DIVIDERS_KEY = 'bottom_nav_show_dividers';
   const topBarGap = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_GAP_KEY)) || 'normal';
   const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
   const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
   const sidebarShowDividers = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY)) === 'true';
+  const bottomNavShowDividers = (typeof window !== 'undefined' && localStorage.getItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY)) === 'true';
   const SIDEBAR_DIVIDER_STYLE_KEY = 'sidebar_divider_style';
   const SIDEBAR_SPACING_KEY = 'sidebar_spacing';
   const sidebarDividerStyle = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_DIVIDER_STYLE_KEY)) || 'solid';
@@ -129,6 +131,10 @@ export default function ThemePicker({ open, onClose }) {
   const setSidebarSpacing = (v) => {
     try { localStorage.setItem(SIDEBAR_SPACING_KEY, v); } catch (_) {}
     window.dispatchEvent(new Event('sidebar-layout-changed'));
+  };
+  const setBottomNavShowDividers = (v) => {
+    try { localStorage.setItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY, v ? 'true' : 'false'); } catch (_) {}
+    window.dispatchEvent(new Event('bottom-nav-dividers-changed'));
   };
 
   const tabs = [
@@ -764,6 +770,30 @@ export default function ThemePicker({ open, onClose }) {
                       </div>
                     </div>
                   )}
+                  <div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Bottom menu dividers</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">Show dividers between bottom bar items (when using bottom bar on mobile). Uses same style as sidebar dividers.</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setBottomNavShowDividers(true)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          bottomNavShowDividers ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        On
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBottomNavShowDividers(false)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          !bottomNavShowDividers ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        Off
+                      </button>
+                    </div>
+                  </div>
                   <div>
                     <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Sidebar spacing</p>
                     <p className="text-[9px] text-mutedForeground mb-1.5">Gap between menu items.</p>
