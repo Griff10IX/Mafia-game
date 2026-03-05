@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen, X, Crown, Clock, Lock, CheckCircle, Banknote,
-  MapPin, ChevronRight, Skull, Star, AlertCircle, Coins
+  MapPin, ChevronRight, Skull, Star, AlertCircle, Coins, ListChecks, ChevronUp
 } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
@@ -149,7 +149,7 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
 
   return (
     <div
-      className={`m-fade-in m-row relative rounded-md border px-2.5 py-2 transition-all ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
+      className={`m-fade-in m-row relative rounded-md border px-2 py-1.5 transition-all ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
       style={{ animationDelay: `${delay}s` }}
       onClick={() => unlocked && onClick(mission)}
     >
@@ -157,7 +157,7 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
         <div className="absolute left-0 top-0 bottom-0 w-0.5 rounded-l-md bg-gradient-to-b from-primary to-primary/70" />
       )}
       <div className={is_boss ? 'pl-2' : ''}>
-        <div className="flex items-start justify-between gap-2 mb-1.5">
+        <div className="flex items-start justify-between gap-2 mb-1">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               {missionIndex != null && missionTotal != null && (
@@ -188,18 +188,18 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
         </div>
 
         {!completed && progress?.target > 0 && unlocked && (
-          <div className="mb-2">
+          <div className="mb-1.5">
             <ProgressBar current={progress.current} target={progress.target} />
-            <div className="text-[9px] text-mutedForeground mt-1 text-right">{progress.description}</div>
+            <div className="text-[9px] text-mutedForeground mt-0.5 text-right">{progress.description}</div>
           </div>
         )}
         {completed && (
-          <div className="mb-2">
+          <div className="mb-1.5">
             <ProgressBar current={1} target={1} color="#4ade80" />
           </div>
         )}
 
-        <div className="flex items-center gap-2 flex-wrap text-[10px]">
+        <div className="flex items-center gap-2 flex-wrap text-[9px]">
           {reward_money > 0 && (
             <span className="inline-flex items-center gap-1 text-green-400">
               <Coins size={10} /> {fmt(reward_money)}
@@ -269,7 +269,7 @@ function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea
           </span>
         )}
       </div>
-      <div className="p-1.5 space-y-1.5">
+      <div className="p-1.5 space-y-1">
         {sorted.map((m, i) => {
           const info = missionIdToIndex?.[m.id] ?? {};
           return (
@@ -733,6 +733,7 @@ export default function Missions() {
   const [selected,   setSelected]   = useState(null);   // selected mission object
   const [completing, setCompleting] = useState(false);
   const [collecting, setCollecting] = useState(false);
+  const [showCompleted, setShowCompleted] = useState(false); // toggle completed missions view
 
   const load = async () => {
     try {
@@ -837,8 +838,11 @@ export default function Missions() {
 
   const normalMissions = cityMissions.filter(m => !m.is_boss);
   const bossMissions   = cityMissions.filter(m => m.is_boss);
+  const activeNormal   = normalMissions.filter(m => !m.completed);
+  const activeBoss     = bossMissions.filter(m => !m.completed);
+  const completedMissions = cityMissions.filter(m => m.completed).sort((a, b) => (a.completed_at || a.order) - (b.completed_at || b.order));
   const areaMap = {};
-  normalMissions.forEach(m => {
+  activeNormal.forEach(m => {
     if (!areaMap[m.area]) areaMap[m.area] = [];
     areaMap[m.area].push(m);
   });
@@ -855,6 +859,56 @@ export default function Missions() {
   const bossM = bossMissions[0];
   const bossReqCount  = bossM?.progress?.target ?? null;
   const bossDoneCount = bossM?.progress?.current ?? 0;
+
+  // Completed missions view (separate screen to keep main list short)
+  if (showCompleted) {
+    return (
+      <div className={`space-y-3 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 700, margin: '0 auto' }}>
+        <style>{MISSIONS_STYLES}</style>
+        <button
+          type="button"
+          onClick={() => setShowCompleted(false)}
+          className="flex items-center gap-1.5 text-[10px] font-heading text-primary hover:underline"
+        >
+          <ChevronUp size={14} className="rotate-90" />
+          Back to missions
+        </button>
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-green-500/20`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
+          <div className="px-2.5 py-1.5 border-b border-green-500/20 flex items-center gap-2 bg-green-500/8">
+            <CheckCircle size={12} className="text-green-400" />
+            <span className="text-[9px] font-heading font-bold text-green-400 uppercase tracking-[0.1em]">
+              Completed missions ({completedMissions.length})
+            </span>
+          </div>
+          <div className="p-1.5 space-y-1 max-h-[70vh] overflow-y-auto">
+            {completedMissions.map((m) => (
+              <div
+                key={m.id}
+                className="flex items-center justify-between gap-2 py-1.5 px-2 rounded border border-green-500/20 bg-green-500/5 cursor-pointer hover:bg-green-500/10 transition-colors"
+                onClick={() => { setSelected(m); setShowCompleted(false); }}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-[11px] font-heading font-bold text-green-400 truncate">{m.title}</div>
+                  <div className="text-[9px] text-mutedForeground">{m.area}{m.is_boss ? ' · Final Job' : ''}</div>
+                </div>
+                <ChevronRight size={12} className="text-green-400/70 shrink-0" />
+              </div>
+            ))}
+          </div>
+          <div className="m-art-line text-primary mx-2.5" />
+        </div>
+        {selected && (
+          <MissionModal
+            mission={selected}
+            onClose={() => setSelected(null)}
+            onComplete={handleComplete}
+            completing={completing}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={`space-y-2 ${styles.pageContent}`} style={{ padding: '12px 14px', maxWidth: 700, margin: '0 auto' }}>
@@ -955,6 +1009,19 @@ export default function Missions() {
         <div className="m-art-line text-primary mx-2.5" />
       </div>
 
+      {/* Completed missions link */}
+      {completedMissions.length > 0 && !showCompleted && (
+        <button
+          type="button"
+          onClick={() => setShowCompleted(true)}
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-md border border-zinc-600/60 bg-zinc-800/30 text-mutedForeground hover:bg-zinc-800/50 hover:text-foreground text-[10px] font-heading transition-colors"
+        >
+          <ListChecks size={14} />
+          <span>Completed missions ({completedMissions.length})</span>
+          <ChevronRight size={12} />
+        </button>
+      )}
+
       {/* Boss progress hint */}
       {bossM && !bossM.completed && bossReqCount !== null && (
         <div className={`relative p-2 ${styles.panel} border rounded-md m-fade-in ${bossM.requirements_met ? 'border-primary/40 bg-primary/8' : 'border-primary/20'}`}>
@@ -981,16 +1048,16 @@ export default function Missions() {
         />
       ))}
 
-      {/* Boss section */}
-      {bossMissions.length > 0 && (
+      {/* Boss section (only incomplete) */}
+      {activeBoss.length > 0 && (
         <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
             <Skull size={12} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">Final Jobs</span>
           </div>
-          <div className="p-1.5 space-y-1.5">
-            {bossMissions.map((m, i) => {
+          <div className="p-1.5 space-y-1">
+            {activeBoss.map((m, i) => {
               const info = missionIdToIndex[m.id] ?? {};
               return (
                 <MissionCard
