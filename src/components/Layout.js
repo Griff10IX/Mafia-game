@@ -1416,7 +1416,8 @@ export default function Layout({ children }) {
           };
           return (
             <>
-            <div className={`hidden md:flex items-center ${topBarGapClass} shrink-0 py-1 md:py-0 md:mx-0 md:px-0`}>
+            {/* On mobile: show when "Top bar" is selected; on desktop always show */}
+            <div className={`${isMobileViewport && mobileStatsDisplay === 'touch_ball' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} shrink-0 py-1 md:py-0 md:mx-0 md:px-0`}>
               {/* Search + rank + stats cluster aligned right */}
               <div className="flex items-center shrink-0 gap-1 md:gap-1.5">
                 <div className="relative shrink-0 z-10" ref={userSearchRef}>

@@ -85,14 +85,14 @@ function AnimatedCounter({ target, prefix = '', duration = 1000 }) {
 // ============================================================================
 
 const StatCard = ({ label, value, highlight, icon, accent: accentColor, delay = 0 }) => (
-  <div className={`relative overflow-hidden rounded-lg p-3 fam-stat-card art-deco-corner fam-scale-in ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`} style={{ animationDelay: `${delay}s` }}>
+  <div className={`relative overflow-hidden rounded-lg p-2 sm:p-3 fam-stat-card art-deco-corner fam-scale-in ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`} style={{ animationDelay: `${delay}s` }}>
     {highlight && <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-emerald-500/10 blur-xl" />}
     {!highlight && <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-12 bg-primary/5 rounded-full blur-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />}
-    <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.15em] mb-1.5 font-heading">
+    <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.15em] mb-1 font-heading">
       {icon}
       {label}
     </div>
-    <div className={`text-lg font-heading font-bold ${highlight ? 'text-emerald-400' : accentColor || 'text-foreground'}`}>{value}</div>
+    <div className={`text-base sm:text-lg font-heading font-bold ${highlight ? 'text-emerald-400' : accentColor || 'text-foreground'}`}>{value}</div>
   </div>
 );
 
@@ -102,8 +102,9 @@ const StatCard = ({ label, value, highlight, icon, accent: accentColor, delay = 
 
 const Tab = ({ active, onClick, children, icon }) => (
   <button
+    type="button"
     onClick={onClick}
-    className={`flex items-center gap-1 px-2.5 py-2.5 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap ${
+    className={`flex items-center gap-1 px-2 sm:px-2.5 py-2.5 min-h-[44px] sm:min-h-0 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap touch-manipulation shrink-0 snap-start ${
       active
         ? 'text-primary border-primary bg-primary/5'
         : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
@@ -151,9 +152,9 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
       </>}
       {isMax && <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/60 to-transparent" />}
 
-      <div className="p-3">
+      <div className="p-2.5 sm:p-3">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1.5">
           <h3 className={`font-heading font-bold text-sm tracking-wide ${locked ? 'text-zinc-500' : 'text-foreground'}`}>
             {locked && <Lock size={10} className="inline mr-1 opacity-60" />}
             {racket.name}
@@ -166,7 +167,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
         </div>
 
         {/* Level progress bar */}
-        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-2">
+        <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-1.5">
           <div
             className={`h-full rounded-full transition-all duration-700 ${locked ? 'bg-zinc-600' : isMax ? 'bg-gradient-to-r from-primary via-amber-400 to-primary' : 'bg-gradient-to-r from-primary to-yellow-700'}`}
             style={{ width: `${pct}%`, minWidth: racket.level > 0 ? 4 : 0 }}
@@ -174,7 +175,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
         </div>
 
         {/* Status line */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-1.5">
           <span className={`text-[10px] font-heading font-bold ${
             isReady ? 'text-emerald-400' : locked ? 'text-zinc-600' : onCooldown ? 'text-amber-400' : 'text-zinc-500'
           }`}>
@@ -190,9 +191,10 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
         <div className="flex gap-1.5">
           {racket.level > 0 && (
             <button
+              type="button"
               onClick={() => onCollect(racket.id)}
               disabled={onCooldown}
-              className={`flex-1 px-3 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider border transition-all ${
+              className={`flex-1 px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider border transition-all touch-manipulation ${
                 isReady
                   ? 'bg-gradient-to-b from-emerald-600/30 to-emerald-800/20 border-emerald-500/40 text-emerald-400 hover:from-emerald-600/50 hover:shadow-md hover:shadow-emerald-900/30'
                   : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
@@ -203,16 +205,18 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
           )}
           {canUpgrade && locked && racket.can_unlock && (
             <button
+              type="button"
               onClick={() => onUnlock(racket.id)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-md text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all"
+              className="flex items-center gap-1 px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-md text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all touch-manipulation"
             >
               <Unlock size={10} /> Unlock
             </button>
           )}
           {canUpgrade && !locked && racket.level < maxLevel && (
             <button
+              type="button"
               onClick={() => onUpgrade(racket.id)}
-              className="px-2.5 py-1.5 rounded-md text-[10px] font-heading font-bold border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all"
+              className="px-2.5 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-md text-[10px] font-heading font-bold border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary hover:bg-primary/5 transition-all touch-manipulation"
             >
               <ArrowUpCircle size={12} />
             </button>
@@ -228,9 +232,9 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
 // ============================================================================
 
 const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
-  <div className="space-y-4">
+  <div className="space-y-3">
     {/* Vault display */}
-    <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-8 text-center border border-primary/25 art-deco-corner`}>
+    <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-4 sm:p-6 text-center border border-primary/25 art-deco-corner`}>
       <div className="absolute inset-0 fam-vault-bg pointer-events-none" />
       <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-48 h-24 rounded-full bg-primary/8 blur-3xl pointer-events-none fam-glow" />
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
@@ -244,7 +248,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
     </div>
 
     {/* Deposit */}
-    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3 fam-fade-in" style={{ animationDelay: '0.1s' }}>
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in" style={{ animationDelay: '0.1s' }}>
       <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
         <DollarSign size={10} /> Deposit to Vault
       </p>
@@ -263,7 +267,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
           placeholder="Custom amount"
           className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors"
         />
-        <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all shrink-0">
+        <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 hover:shadow-md hover:shadow-primary/10 transition-all shrink-0 touch-manipulation">
           Deposit
         </button>
       </form>
@@ -271,7 +275,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
 
     {/* Withdraw */}
     {canWithdraw && (
-      <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-3 fam-fade-in" style={{ animationDelay: '0.15s' }}>
+      <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in" style={{ animationDelay: '0.15s' }}>
         <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
           <LogOut size={10} /> Withdraw from Vault
         </p>
@@ -290,7 +294,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
             placeholder="Custom amount"
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-0 transition-colors"
           />
-          <button type="submit" className="px-4 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0">
+          <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0 touch-manipulation">
             Withdraw
           </button>
         </form>
@@ -307,7 +311,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onCollectAll, coll
   const maxLevel = config?.racket_max_level ?? 5;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Event Banner + Collect all */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
@@ -350,7 +354,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onCollectAll, coll
 // ============================================================================
 
 const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
-  <div className="space-y-3">
+  <div className="space-y-2">
     <div className="flex items-center justify-between">
       <div>
         <p className="text-[10px] text-zinc-500 font-heading italic leading-relaxed">Hit their rackets, take 25% of the take. Two hits per rival family every 3 hours.</p>
@@ -367,13 +371,13 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
         <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">The streets are quiet... for now</p>
       </div>
     ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
         {targets.map((t, idx) => {
           const raidsLeft = t.raids_remaining ?? 2;
           const canRaid = raidsLeft > 0;
           return (
             <div key={t.family_id} className={`rounded-lg overflow-hidden fam-target-card fam-fade-in ${canRaid ? 'bg-red-500/5 border fam-blood-pulse' : 'bg-zinc-800/30 border border-zinc-800/30 opacity-40'}`} style={{ animationDelay: `${idx * 0.05}s` }}>
-              <div className="px-3 py-2.5 flex items-center justify-between border-b border-zinc-700/30 bg-zinc-900/30">
+              <div className="px-2.5 sm:px-3 py-2 flex items-center justify-between border-b border-zinc-700/30 bg-zinc-900/30">
                 <div className="flex items-center gap-2 min-w-0">
                   <Crosshair size={12} className={canRaid ? 'text-red-400' : 'text-zinc-600'} />
                   <span className="font-heading font-bold text-foreground text-sm truncate tracking-wide">{t.family_name}</span>
@@ -398,9 +402,10 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
                       <div className="flex items-center gap-2 shrink-0">
                         <span className="text-primary font-heading font-bold">{formatMoney(r.potential_take)}</span>
                         <button 
+                          type="button"
                           onClick={() => onRaid(t.family_id, r.racket_id)} 
                           disabled={isLoading || !canRaid}
-                          className={`px-2.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all ${
+                          className={`px-2.5 py-1.5 min-h-[36px] sm:min-h-0 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
                             canRaid ? 'bg-red-600/80 text-white hover:bg-red-500 hover:shadow-md hover:shadow-red-900/30' : 'bg-zinc-700 text-zinc-500'
                           } disabled:opacity-40`}
                         >
@@ -439,15 +444,15 @@ const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssig
   const sorted = [...members].sort((a, b) => (getRoleConfig(a.role).rank ?? 5) - (getRoleConfig(b.role).rank ?? 5));
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {/* Hierarchy */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-80 overflow-y-auto pr-1">
         {sorted.map((m, idx) => {
           const cfg = getRoleConfig(m.role);
           const isBoss = m.role === 'boss';
           const isHighRank = ['boss', 'underboss', 'consigliere'].includes(m.role);
           return (
-            <div key={m.user_id} className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg fam-member-row fam-fade-in overflow-hidden ${
+            <div key={m.user_id} className={`relative flex items-center justify-between px-2.5 sm:px-3 py-2 rounded-lg fam-member-row fam-fade-in overflow-hidden ${
               isBoss ? 'bg-gradient-to-r from-primary/8 to-primary/3 border-2 border-primary/30' : isHighRank ? 'bg-zinc-800/40 border border-zinc-700/40' : 'bg-zinc-800/30 border border-zinc-700/30'
             }`} style={{ animationDelay: `${idx * 0.03}s` }}>
               {isBoss && <>
@@ -543,7 +548,7 @@ const RosterTab = ({ members, fallen, canManage, myRole, config, onKick, onAssig
 // ============================================================================
 
 const FamiliesTab = ({ families, myFamilyId }) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-80 overflow-y-auto pr-1">
     {families.length === 0 ? (
       <div className="text-center py-10 col-span-2">
         <Building2 size={28} className="mx-auto text-zinc-700 mb-2" />
@@ -554,7 +559,7 @@ const FamiliesTab = ({ families, myFamilyId }) => (
       <Link 
         key={f.id} 
         to={`/families/${encodeURIComponent(f.tag || f.id)}`} 
-        className={`relative flex items-center justify-between px-3 py-2.5 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
+        className={`relative flex items-center justify-between px-2.5 sm:px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden touch-manipulation ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
         style={{ animationDelay: `${idx * 0.03}s` }}
       >
         {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
@@ -596,7 +601,7 @@ const WarHistoryTab = ({ wars, onDetails }) => (
       const isActive = w.status === 'active' || w.status === 'truce_offered';
       const hasWinner = w.status === 'family_a_wins' || w.status === 'family_b_wins';
       return (
-        <div key={w.id} className={`relative px-3 py-3 rounded-lg transition-all fam-fade-in overflow-hidden ${isActive ? 'bg-red-500/8 border fam-blood-pulse' : 'bg-zinc-800/30 border border-zinc-700/30 hover:bg-zinc-800/40'}`} style={{ animationDelay: `${idx * 0.04}s` }}>
+        <div key={w.id} className={`relative px-2.5 sm:px-3 py-2.5 rounded-lg transition-all fam-fade-in overflow-hidden ${isActive ? 'bg-red-500/8 border fam-blood-pulse' : 'bg-zinc-800/30 border border-zinc-700/30 hover:bg-zinc-800/40'}`} style={{ animationDelay: `${idx * 0.04}s` }}>
           {isActive && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-red-500/60" />}
           {hasWinner && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-emerald-500/50" />}
           <div className="flex items-center justify-between gap-2">
@@ -616,8 +621,9 @@ const WarHistoryTab = ({ wars, onDetails }) => (
               {hasWinner && <span className="text-emerald-400 text-[10px] font-heading font-bold flex items-center gap-1"><Trophy size={10} /> {w.winner_family_name}</span>}
               {onDetails && w.id && (
                 <button
+                  type="button"
                   onClick={() => onDetails(w.id)}
-                  className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase tracking-widest border border-primary/25 text-primary/60 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all"
+                  className="px-2 py-1.5 min-h-[36px] sm:min-h-0 rounded text-[9px] font-heading font-bold uppercase tracking-widest border border-primary/25 text-primary/60 hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-all touch-manipulation"
                 >
                   Details
                 </button>
@@ -1173,14 +1179,14 @@ const CrewOCTab = ({
   const accepted = (crewOCApplications || []).filter((a) => a.status === 'accepted');
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <p className="text-[10px] text-zinc-500 font-heading leading-relaxed italic">
         When the Don, Underboss, or Caporegime calls the crew together, every living member and accepted outsiders earn their cut — cash, XP, bullets, points, booze. The family vault takes its share. Once every {cooldownHours}h{committerHasTimer ? ' (you hold the timer)' : ''}.
       </p>
 
       {/* Set join fee & Advertise */}
       {canManageCrewOC && (
-        <div className="space-y-2 p-3 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
+        <div className="space-y-2 p-2.5 sm:p-3 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[10px] text-zinc-500 font-heading">Join fee:</span>
             <span className="text-[10px] font-heading text-primary">{(crewOCJoinFee ?? 0) > 0 ? `Current: ${formatMoney(crewOCJoinFee)}` : 'Free'}</span>
@@ -1209,14 +1215,14 @@ const CrewOCTab = ({
       )}
 
       {/* Cooldown & commit */}
-      <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
+      <div className="flex items-center justify-between px-2.5 sm:px-3 py-2 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
         <span className="text-[10px] text-zinc-500 font-heading flex items-center gap-1"><Clock size={10} /> Next commit</span>
         <span className={`text-xs font-heading font-bold ${onCooldown ? 'text-amber-400' : 'text-emerald-400'}`}>{timeLeft}</span>
       </div>
 
       {canCommit ? (
         <button type="button" onClick={onCommit} disabled={onCooldown || committing}
-          className={`w-full py-3 font-heading font-bold uppercase tracking-wider text-xs rounded-lg border-2 transition-all ${
+          className={`w-full py-2.5 sm:py-3 min-h-[44px] sm:min-h-0 font-heading font-bold uppercase tracking-wider text-xs rounded-lg border-2 transition-all touch-manipulation ${
             onCooldown || committing
               ? 'opacity-40 cursor-not-allowed bg-zinc-800 text-zinc-500 border-zinc-700'
               : 'bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10'
@@ -1275,7 +1281,7 @@ const StateHeadTab = ({ headOfState, stateHeadIncome }) => {
   const income = stateHeadIncome || {};
   const total = STATE_HEAD_INCOME_KEYS.reduce((sum, { key }) => sum + (Number(income[key]) || 0), 0);
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <p className="text-[10px] text-zinc-500 font-heading leading-relaxed">
         Your family is <span className="text-primary font-bold">Head of {headOfState}</span>. All house fees from casinos in that state and 5% of Dead &gt; Alive retrievals there go to the family vault. Breakdown below.
       </p>
@@ -1313,11 +1319,11 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
 
     {/* Establish a Crime Family */}
     <div className={`${styles.panel} rounded-xl overflow-hidden border-2 border-primary/25 fam-fade-in`} style={{ animationDelay: '0.1s' }}>
-      <div className="px-3 py-2 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
+      <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 bg-primary/10 border-b border-primary/20">
         <Building2 size={14} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Establish a Crime Family</span>
       </div>
-      <form onSubmit={onCreate} className="p-3 space-y-2">
+      <form onSubmit={onCreate} className="p-2.5 sm:p-3 space-y-2">
         <p className="text-[10px] text-zinc-500 font-heading">Build your empire: recruit soldiers, run rackets, make your name feared.</p>
         {config?.family_create_cost != null && (
           <p className="text-[10px] font-heading text-primary">Cost: {formatMoney(config.family_create_cost)}</p>
@@ -1328,7 +1334,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
           <input type="text" value={createTag} onChange={(e) => setCreateTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="TAG" maxLength={4}
             className="w-20 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-sm text-foreground font-heading uppercase text-center focus:border-primary/50 focus:outline-none transition-colors" />
         </div>
-        <button type="submit" className="w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all">
+        <button type="submit" className="w-full py-2.5 min-h-[44px] rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all touch-manipulation">
           Found the Family
         </button>
       </form>
@@ -1336,11 +1342,11 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
 
     {/* Swear Allegiance */}
     <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.2s' }}>
-      <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
+      <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
         <Users size={14} className="text-primary" />
         <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Swear Allegiance</span>
       </div>
-      <form onSubmit={onJoin} className="p-3 space-y-2">
+      <form onSubmit={onJoin} className="p-2.5 sm:p-3 space-y-2">
         <p className="text-[10px] text-zinc-500 font-heading">Pledge to a family. Rise from associate to capo — or one day, the Don.</p>
         <div className="flex gap-2">
           <select value={joinId} onChange={(e) => setJoinId(e.target.value)}
@@ -1348,7 +1354,7 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
             <option value="">Select family...</option>
             {families.map((f) => <option key={f.id} value={f.id}>{f.name} [{f.tag}]</option>)}
           </select>
-          <button type="submit" className="px-4 py-2 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all">
+          <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-xs font-heading font-bold uppercase border bg-zinc-800/60 border-zinc-600/40 text-zinc-300 hover:border-primary/40 hover:text-primary transition-all touch-manipulation shrink-0">
             Join
           </button>
         </div>
@@ -1357,18 +1363,18 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
 
     {/* Known Families */}
     <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.3s' }}>
-      <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
+      <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
         <Building2 size={14} className="text-zinc-400" />
         <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">Known Families</span>
       </div>
-      <div className="p-2">
+      <div className="p-2 sm:p-2.5">
         <FamiliesTab families={families} myFamilyId={null} />
       </div>
     </div>
 
     {/* Vendettas */}
     <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in`} style={{ animationDelay: '0.4s' }}>
-      <div className="px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
+      <div className="px-2.5 sm:px-3 py-2 flex items-center gap-2 border-b border-zinc-700/30">
         <Swords size={12} className="text-red-400/70" />
         <span className="text-xs font-heading font-bold text-red-400/70 uppercase tracking-widest">Vendettas</span>
       </div>
@@ -1535,7 +1541,7 @@ export default function FamilyPage() {
   );
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="families-page">
+    <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} px-3 sm:px-4 pb-6`} data-testid="families-page">
       <style>{`
         @keyframes ready-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb), 0); }
@@ -1591,7 +1597,7 @@ export default function FamilyPage() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-primary/3 rounded-full blur-2xl pointer-events-none" />
         </>}
 
-        <div className={`${family ? 'px-4 py-5 sm:px-6' : ''}`}>
+        <div className={`${family ? 'px-3 py-3 sm:px-4 sm:py-4' : 'px-2 sm:px-0'}`}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               {family ? (
@@ -1641,7 +1647,7 @@ export default function FamilyPage() {
       {family ? (
         <>
           {/* ── Stats Row ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
             <StatCard label="The Vault" value={formatMoney(family.treasury)} icon={<DollarSign size={10} />} accent="text-primary" delay={0} />
             <StatCard label="Made Men" value={`${members.length}${fallen.length > 0 ? ` (+${fallen.length}†)` : ''}`} icon={<Users size={10} />} delay={0.05} />
             <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} delay={0.1} />
@@ -1650,7 +1656,7 @@ export default function FamilyPage() {
 
           {/* ── War Banner ── */}
           {activeWars.length > 0 && (
-            <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-500/8 border fam-blood-pulse fam-fade-in relative overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2 sm:px-4 sm:py-3 rounded-lg bg-red-500/8 border fam-blood-pulse fam-fade-in relative overflow-hidden">
               <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500/40" />
               <div className="flex items-center gap-2 flex-wrap">
                 <Swords size={15} className="text-red-400 animate-pulse shrink-0" />
@@ -1670,8 +1676,8 @@ export default function FamilyPage() {
 
           {/* ── Tabbed Content ── */}
           <div className={`${styles.panel} rounded-xl overflow-hidden`}>
-            {/* Tab bar */}
-            <div className="flex overflow-x-auto scrollbar-hide border-b border-zinc-700/40 bg-zinc-900/70">
+            {/* Tab bar — scrollable on mobile */}
+            <div className="flex overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth border-b border-zinc-700/40 bg-zinc-900/70 snap-x snap-mandatory">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
               <Tab active={activeTab === 'crewoc'} onClick={() => setActiveTab('crewoc')} icon={<Crosshair size={10} />}>Crew OC</Tab>
@@ -1685,7 +1691,7 @@ export default function FamilyPage() {
             </div>
 
             {/* Tab content */}
-            <div className="p-4">
+            <div className="p-3 sm:p-4">
               {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onCollectAll={collectAllRackets} collectAllLoading={collectAllRacketsLoading} readyCount={readyRackets} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
               {activeTab === 'crewoc' && (
                 <CrewOCTab
