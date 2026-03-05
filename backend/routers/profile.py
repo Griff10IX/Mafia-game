@@ -224,8 +224,9 @@ def register(router):
 
         is_own_profile = current_user.get("id") == user_id
         is_admin = current_user.get("email") in ADMIN_EMAILS
-        # When viewing another player's profile, don't expose sensitive/exploitable data
-        if not is_own_profile and not is_admin:
+        # When viewing another player's profile, never expose these in the API response
+        # (so they can't be seen via inspect/Network). Admins get full data from admin endpoints.
+        if not is_own_profile:
             last_seen = None
             created_at = None
             owned_casinos = []

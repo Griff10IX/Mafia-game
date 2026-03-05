@@ -249,8 +249,8 @@ async def buy_custom_car(
 
 async def send_points(request: SendPointsRequest, current_user: dict = Depends(get_current_user_verified)):
     """Send points to another player. Logged in points_transfers (last 10 visible to user, 500 to admin)."""
-    to_username = (request.to_username or "").strip()
-    if not to_username or len(to_username) < 2:
+    to_username = (str(request.to_username) if request.to_username is not None else "").strip()
+    if not to_username:
         raise HTTPException(status_code=400, detail="Enter a valid username")
     amount = int(request.amount)
     if amount < 1:
@@ -261,6 +261,8 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
     if my_points < amount:
         raise HTTPException(status_code=400, detail=f"Insufficient points (have {my_points:,})")
     pattern = _username_pattern(to_username)
+    if pattern is None:
+        raise HTTPException(status_code=400, detail="Enter a valid username")
     recipient = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
     if not recipient:
         raise HTTPException(status_code=404, detail="User not found")

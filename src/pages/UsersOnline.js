@@ -76,10 +76,10 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
 
   return (
     <div
-      className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-row uo-card uo-fade-in px-2 py-1`}
+      className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-row uo-card uo-fade-in px-2 py-1 min-h-[28px] flex items-center`}
       data-testid="user-card"
     >
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 min-h-[20px] w-full">
         <HoverCard onOpenChange={(open) => open && ensureProfilePreview(user.username)}>
           <HoverCardTrigger asChild>
             <Link
