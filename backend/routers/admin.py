@@ -1260,7 +1260,10 @@ def register(router):
     async def admin_user_details(user_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "password_hash": 0},
+        )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         dice_owned = await db.dice_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(10)

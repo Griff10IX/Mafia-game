@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -168,6 +168,8 @@ export default function Admin() {
   const [lockedAccountsLoading, setLockedAccountsLoading] = useState(false);
   const [lockedMessageByUser, setLockedMessageByUser] = useState({});
   const [sendingMessageTo, setSendingMessageTo] = useState(null);
+  const [userDetailData, setUserDetailData] = useState(null);
+  const [userDetailLoading, setUserDetailLoading] = useState(false);
 
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
@@ -599,6 +601,21 @@ export default function Admin() {
   const setTargetFromSearch = (username) => {
     setFormData((prev) => ({ ...prev, targetUsername: username || '' }));
     toast.success(`Target set to ${username || ''}`);
+  };
+
+  const openUserDetail = async (u) => {
+    const uid = u?.id || u?.user_id;
+    if (!uid) { toast.error('No user ID'); return; }
+    setUserDetailLoading(true);
+    setUserDetailData(null);
+    try {
+      const res = await api.get(`/admin/user-details/${encodeURIComponent(uid)}`);
+      setUserDetailData(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load user details');
+    } finally {
+      setUserDetailLoading(false);
+    }
   };
 
   const fetchAllUsers = async () => {
@@ -1230,7 +1247,10 @@ export default function Admin() {
                         <td className="py-1.5 pr-2 text-mutedForeground truncate max-w-[180px]">{u.email ?? '—'}</td>
                         <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
                         <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
-                        <td className="py-1.5">
+                        <td className="py-1.5 flex flex-wrap gap-1">
+                          <button type="button" onClick={() => openUserDetail(u)} disabled={userDetailLoading} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-zinc-500/50 bg-zinc-700/40 text-zinc-200 hover:bg-zinc-600/50 disabled:opacity-50 flex items-center gap-0.5" title="View full user details">
+                            <Info size={10} /> Details
+                          </button>
                           <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
                         </td>
                       </tr>
@@ -1310,7 +1330,10 @@ export default function Admin() {
                         <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
                         <td className="py-1.5 pr-2">{u.is_bodyguard ? <span className="text-amber-400">Yes</span> : 'No'}</td>
                         <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
-                        <td className="py-1.5">
+                        <td className="py-1.5 flex flex-wrap gap-1">
+                          <button type="button" onClick={() => openUserDetail(u)} disabled={userDetailLoading} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-zinc-500/50 bg-zinc-700/40 text-zinc-200 hover:bg-zinc-600/50 disabled:opacity-50 flex items-center gap-0.5" title="View full user details">
+                            <Info size={10} /> Details
+                          </button>
                           {!u.is_bodyguard && (
                             <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
                           )}
@@ -1325,6 +1348,61 @@ export default function Admin() {
         </div>
         <div className="admin-art-line text-primary mx-3" />
       </div>
+
+      {/* User detail modal */}
+      {userDetailData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setUserDetailData(null)}>
+          <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between">
+              <h3 className="text-sm font-heading font-bold text-primary">User details: {userDetailData.user?.username ?? '—'}</h3>
+              <div className="flex items-center gap-2">
+                <button type="button" onClick={() => setTargetFromSearch(userDetailData.user?.username)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
+                <button type="button" onClick={() => setUserDetailData(null)} className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"><X size={14} /></button>
+              </div>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 text-[11px] font-heading space-y-4">
+              {(() => {
+                const u = userDetailData.user || {};
+                const rows = [
+                  { label: 'Username', value: u.username ?? '—' },
+                  { label: 'Email', value: u.email ?? '—' },
+                  { label: 'User ID', value: u.id ?? '—' },
+                  { label: 'Created', value: u.created_at ? new Date(u.created_at).toLocaleString() : '—' },
+                  { label: 'Email verified', value: u.email_verified === false ? 'No' : 'Yes' },
+                  { label: 'Dead', value: u.is_dead ? 'Yes' : 'No' },
+                  { label: 'Device (last login)', value: u.last_device_type ?? '—' },
+                  { label: 'User-Agent (last login)', value: u.last_user_agent ? <span className="font-mono text-[10px] break-all text-mutedForeground">{u.last_user_agent}</span> : '—' },
+                  { label: 'Registration IP', value: u.registration_ip ?? '—' },
+                  { label: 'Last login IP', value: u.last_login_ip ?? '—' },
+                  { label: 'Login IPs', value: Array.isArray(u.login_ips) && u.login_ips.length ? u.login_ips.join(', ') : '—' },
+                  { label: 'Rank points', value: u.rank_points != null ? String(u.rank_points) : '—' },
+                  { label: 'Money', value: u.money != null ? String(u.money) : '—' },
+                  { label: 'Prestige', value: u.prestige_level != null ? `P${u.prestige_level}` : '—' },
+                  { label: 'Account locked', value: u.account_locked_at ? `Yes (${new Date(u.account_locked_at).toLocaleString()})` : 'No' },
+                ];
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                      {rows.map((r) => (
+                        <div key={r.label} className={r.label === 'User-Agent (last login)' || r.label === 'Login IPs' ? 'col-span-2' : ''}>
+                          <span className="text-mutedForeground">{r.label}:</span>{' '}
+                          <span className="text-foreground">{r.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {userDetailData.dice_owned?.length > 0 && (
+                      <div>
+                        <span className="text-mutedForeground">Dice owned:</span>
+                        <ul className="mt-1 list-disc list-inside text-foreground">{userDetailData.dice_owned.map((d, i) => <li key={i}>{d.game_type || d.id || JSON.stringify(d)}</li>)}</ul>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── Game World ─── */}
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
