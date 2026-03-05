@@ -265,7 +265,8 @@ def register(router):
             "show_cars_on_profile": user.get("profile_show_cars", False),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
         }
-        if is_admin:
+        # Only include admin_stats when viewing your own profile (never for other users, so it never appears in Network)
+        if is_admin and is_own_profile:
             today_utc = datetime.now(timezone.utc).date().isoformat()
             booze_today = user.get("booze_profit_today", 0) if user.get("booze_profit_today_date") == today_utc else 0
             out["admin_stats"] = {
