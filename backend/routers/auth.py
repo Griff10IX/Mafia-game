@@ -151,18 +151,19 @@ def register(router):
 
             email_pattern = re.compile("^" + re.escape(user_data.email.strip()) + "$", re.IGNORECASE)
             username_pattern = re.compile("^" + re.escape(user_data.username.strip()) + "$", re.IGNORECASE)
-            existing = await db.users.find_one({"$or": [{"email": email_pattern}, {"username": username_pattern}]}, {"_id": 0})
-            if existing:
-                if existing.get("is_dead"):
-                    await db.users.update_one(
-                        {"id": existing["id"]},
-                        {"$set": {
-                            "email": f"dead_{existing['id']}@deleted",
-                            "username": f"dead_{existing['id'][:8]}",
-                        }}
-                    )
-                else:
-                    raise HTTPException(status_code=400, detail="Email or username already registered")
+            # Username cannot be reused by anyone (alive or dead); dead accounts keep their username in the game
+            existing_username = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "is_dead": 1})
+            if existing_username:
+                raise HTTPException(status_code=400, detail="Username already registered.")
+            # Email: block if taken by an alive account; if taken only by a dead account, free it so this registration can use it
+            existing_email = await db.users.find_one({"email": email_pattern}, {"_id": 0, "id": 1, "is_dead": 1})
+            if existing_email:
+                if not existing_email.get("is_dead"):
+                    raise HTTPException(status_code=400, detail="Email already registered.")
+                await db.users.update_one(
+                    {"id": existing_email["id"]},
+                    {"$set": {"email": f"dead_{existing_email['id']}@deleted"}},
+                )
 
             user_id = str(uuid.uuid4())
             user_doc = {
