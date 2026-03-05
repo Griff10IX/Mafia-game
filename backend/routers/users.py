@@ -74,9 +74,10 @@ def register(router):
         q_clean = (q or "").strip()
         if not q_clean:
             return {"users": []}
-        pattern = re.compile(re.escape(q_clean), re.IGNORECASE)
+        # Use string $regex + $options so MongoDB receives a plain pattern (avoids driver serialization issues)
+        pattern_str = re.escape(q_clean)
         cursor = db.users.find(
-            {"username": {"$regex": pattern}},
+            {"username": {"$regex": pattern_str, "$options": "i"}},
             {"_id": 0, "password_hash": 0, "email": 0},
         ).limit(limit)
         users = await cursor.to_list(limit)

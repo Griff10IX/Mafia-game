@@ -96,27 +96,53 @@ export default function ThemePicker({ open, onClose }) {
   const TOPBAR_GAP_KEY = 'topbar_gap';
   const TOPBAR_SIZE_KEY = 'topbar_size';
   const TOPBAR_CHIP_SCALE_KEY = 'topbar_chip_scale';
+  const TOPBAR_CHIP_WIDTH_SCALE_KEY = 'topbar_chip_width_scale';
+  const TOPBAR_CHIP_HEIGHT_SCALE_KEY = 'topbar_chip_height_scale';
+  const CHIP_SCALE_MIN = 20;
+  const CHIP_SCALE_MAX = 100;
   const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
   const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
   const BOTTOM_NAV_SHOW_DIVIDERS_KEY = 'bottom_nav_show_dividers';
   const topBarGap = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_GAP_KEY)) || 'normal';
   const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
-  const loadChipScale = () => {
+  const loadChipWidthScale = () => {
     if (typeof window === 'undefined') return 50;
     try {
-      const v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
-      if (Number.isFinite(v) && v >= 25 && v <= 100) return v;
+      let v = parseInt(localStorage.getItem(TOPBAR_CHIP_WIDTH_SCALE_KEY), 10);
+      if (!Number.isFinite(v) || v < CHIP_SCALE_MIN || v > CHIP_SCALE_MAX)
+        v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
+      if (Number.isFinite(v) && v >= CHIP_SCALE_MIN && v <= CHIP_SCALE_MAX) return v;
     } catch (_) {}
     return 50;
   };
-  const [topBarChipScale, setTopBarChipScale] = useState(50);
+  const loadChipHeightScale = () => {
+    if (typeof window === 'undefined') return 50;
+    try {
+      let v = parseInt(localStorage.getItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY), 10);
+      if (!Number.isFinite(v) || v < CHIP_SCALE_MIN || v > CHIP_SCALE_MAX)
+        v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
+      if (Number.isFinite(v) && v >= CHIP_SCALE_MIN && v <= CHIP_SCALE_MAX) return v;
+    } catch (_) {}
+    return 50;
+  };
+  const [topBarChipWidthScale, setTopBarChipWidthScale] = useState(50);
+  const [topBarChipHeightScale, setTopBarChipHeightScale] = useState(50);
   useEffect(() => {
-    if (open) setTopBarChipScale(loadChipScale());
+    if (open) {
+      setTopBarChipWidthScale(loadChipWidthScale());
+      setTopBarChipHeightScale(loadChipHeightScale());
+    }
   }, [open]);
-  const setTopBarChipScalePersist = (v) => {
-    const n = Math.max(25, Math.min(100, Number(v)));
-    setTopBarChipScale(n);
-    try { localStorage.setItem(TOPBAR_CHIP_SCALE_KEY, String(n)); } catch (_) {}
+  const setTopBarChipWidthScalePersist = (v) => {
+    const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
+    setTopBarChipWidthScale(n);
+    try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {}
+    window.dispatchEvent(new Event('topbar-prefs-changed'));
+  };
+  const setTopBarChipHeightScalePersist = (v) => {
+    const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
+    setTopBarChipHeightScale(n);
+    try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {}
     window.dispatchEvent(new Event('topbar-prefs-changed'));
   };
   const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
@@ -914,18 +940,31 @@ export default function ThemePicker({ open, onClose }) {
                         </button>
                       ))}
                     </div>
-                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip scale</p>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip width</p>
                     <div className="flex items-center gap-3">
                       <input
                         type="range"
-                        min={25}
-                        max={100}
-                        value={topBarChipScale}
-                        onChange={(e) => setTopBarChipScalePersist(Number(e.target.value))}
+                        min={CHIP_SCALE_MIN}
+                        max={CHIP_SCALE_MAX}
+                        value={topBarChipWidthScale}
+                        onChange={(e) => setTopBarChipWidthScalePersist(Number(e.target.value))}
                         className="flex-1 min-w-[100px] h-2 rounded-full accent-primary"
-                        aria-label="Chip scale"
+                        aria-label="Chip width"
                       />
-                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipScale}%</span>
+                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipWidthScale}%</span>
+                    </div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip height</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={CHIP_SCALE_MIN}
+                        max={CHIP_SCALE_MAX}
+                        value={topBarChipHeightScale}
+                        onChange={(e) => setTopBarChipHeightScalePersist(Number(e.target.value))}
+                        className="flex-1 min-w-[100px] h-2 rounded-full accent-primary"
+                        aria-label="Chip height"
+                      />
+                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipHeightScale}%</span>
                     </div>
                   </div>
                   <div>
@@ -989,20 +1028,33 @@ export default function ThemePicker({ open, onClose }) {
                         </button>
                       ))}
                     </div>
-                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip scale (slider)</p>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip width</p>
                     <div className="flex items-center gap-3">
                       <input
                         type="range"
-                        min={25}
-                        max={100}
-                        value={topBarChipScale}
-                        onChange={(e) => setTopBarChipScalePersist(Number(e.target.value))}
+                        min={CHIP_SCALE_MIN}
+                        max={CHIP_SCALE_MAX}
+                        value={topBarChipWidthScale}
+                        onChange={(e) => setTopBarChipWidthScalePersist(Number(e.target.value))}
                         className="flex-1 min-w-[100px] h-2 rounded-full accent-primary"
-                        aria-label="Chip scale"
+                        aria-label="Chip width"
                       />
-                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipScale}%</span>
+                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipWidthScale}%</span>
                     </div>
-                    <p className="text-[9px] text-mutedForeground mt-1">Smaller chips save space; increase for touch.</p>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip height</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={CHIP_SCALE_MIN}
+                        max={CHIP_SCALE_MAX}
+                        value={topBarChipHeightScale}
+                        onChange={(e) => setTopBarChipHeightScalePersist(Number(e.target.value))}
+                        className="flex-1 min-w-[100px] h-2 rounded-full accent-primary"
+                        aria-label="Chip height"
+                      />
+                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipHeightScale}%</span>
+                    </div>
+                    <p className="text-[9px] text-mutedForeground mt-1">Lower = more compact. Rank bar length follows width.</p>
                   </div>
                 </div>
               </>

@@ -119,6 +119,8 @@ const TOPBAR_STAT_LABELS = { rank: 'Rank', health: 'Health', bullets: 'Bullets',
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
 const TOPBAR_CHIP_SCALE_KEY = 'topbar_chip_scale';
+const TOPBAR_CHIP_WIDTH_SCALE_KEY = 'topbar_chip_width_scale';
+const TOPBAR_CHIP_HEIGHT_SCALE_KEY = 'topbar_chip_height_scale';
 const NOTIFICATION_BALL_POSITION_KEY = 'notification_ball_position';
 const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
 const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
@@ -207,10 +209,33 @@ function loadTopBarSize() {
   return 'medium';
 }
 
+const CHIP_SCALE_MIN = 20;
+const CHIP_SCALE_MAX = 100;
+
 function loadTopBarChipScale() {
   try {
     const v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
-    if (Number.isFinite(v) && v >= 25 && v <= 100) return v;
+    if (Number.isFinite(v) && v >= CHIP_SCALE_MIN && v <= CHIP_SCALE_MAX) return v;
+  } catch (_) {}
+  return 50;
+}
+
+function loadTopBarChipWidthScale() {
+  try {
+    const v = parseInt(localStorage.getItem(TOPBAR_CHIP_WIDTH_SCALE_KEY), 10);
+    if (Number.isFinite(v) && v >= CHIP_SCALE_MIN && v <= CHIP_SCALE_MAX) return v;
+    const fallback = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
+    if (Number.isFinite(fallback) && fallback >= CHIP_SCALE_MIN && fallback <= CHIP_SCALE_MAX) return fallback;
+  } catch (_) {}
+  return 50;
+}
+
+function loadTopBarChipHeightScale() {
+  try {
+    const v = parseInt(localStorage.getItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY), 10);
+    if (Number.isFinite(v) && v >= CHIP_SCALE_MIN && v <= CHIP_SCALE_MAX) return v;
+    const fallback = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
+    if (Number.isFinite(fallback) && fallback >= CHIP_SCALE_MIN && fallback <= CHIP_SCALE_MAX) return fallback;
   } catch (_) {}
   return 50;
 }
@@ -223,6 +248,8 @@ export default function Layout({ children }) {
   const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
   const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
   const [topBarChipScale, setTopBarChipScale] = useState(loadTopBarChipScale);
+  const [topBarChipWidthScale, setTopBarChipWidthScale] = useState(loadTopBarChipWidthScale);
+  const [topBarChipHeightScale, setTopBarChipHeightScale] = useState(loadTopBarChipHeightScale);
   const [mobileStatsDisplay, setMobileStatsDisplay] = useState(loadMobileStatsDisplay);
   const [showSidebarDividers, setShowSidebarDividers] = useState(loadSidebarShowDividers);
   const [sidebarDividerStyle, setSidebarDividerStyle] = useState(loadSidebarDividerStyle);
@@ -285,6 +312,8 @@ export default function Layout({ children }) {
       setTopBarGap(loadTopBarGap());
       setTopBarSize(loadTopBarSize());
       setTopBarChipScale(loadTopBarChipScale());
+      setTopBarChipWidthScale(loadTopBarChipWidthScale());
+      setTopBarChipHeightScale(loadTopBarChipHeightScale());
     };
     const onMobileStatsDisplay = () => setMobileStatsDisplay(loadMobileStatsDisplay());
     const onSidebarDividers = () => setShowSidebarDividers(loadSidebarShowDividers());
@@ -389,11 +418,18 @@ export default function Layout({ children }) {
         const res = await api.get('/users/search', { params: { q, limit: 15 } });
         // Only apply results if the query hasn't changed (avoid stale response overwriting "No users found")
         if (userSearchQueryRef.current === q) {
-          setUserSearchResults(res.data?.users || []);
+          const list = res.data?.users;
+          setUserSearchResults(Array.isArray(list) ? list : []);
         }
-      } catch {
+      } catch (err) {
         if (userSearchQueryRef.current === q) {
           setUserSearchResults([]);
+          const msg = getApiErrorMessage(err);
+          if (err?.response?.status === 401 || err?.response?.status === 403) {
+            toast.error(msg || 'Please log in again.');
+          } else {
+            toast.error(msg || 'Search failed.');
+          }
         }
       } finally {
         if (userSearchQueryRef.current === q) {
@@ -1298,25 +1334,47 @@ export default function Layout({ children }) {
             window.dispatchEvent(new Event('topbar-prefs-changed'));
           };
           const setTopBarChipScalePersist = (v) => {
-            const n = Math.max(25, Math.min(100, Number(v)));
-            try { localStorage.setItem(TOPBAR_CHIP_SCALE_KEY, String(n)); } catch (_) {}
+            const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
+            try {
+              localStorage.setItem(TOPBAR_CHIP_SCALE_KEY, String(n));
+              localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n));
+              localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n));
+            } catch (_) {}
             setTopBarChipScale(n);
+            setTopBarChipWidthScale(n);
+            setTopBarChipHeightScale(n);
+            window.dispatchEvent(new Event('topbar-prefs-changed'));
+          };
+          const setTopBarChipWidthScalePersist = (v) => {
+            const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
+            try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {}
+            setTopBarChipWidthScale(n);
+            window.dispatchEvent(new Event('topbar-prefs-changed'));
+          };
+          const setTopBarChipHeightScalePersist = (v) => {
+            const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
+            try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {}
+            setTopBarChipHeightScale(n);
             window.dispatchEvent(new Event('topbar-prefs-changed'));
           };
           const casinoProfit = user.casino_profit ?? 0;
           const propertyProfit = user.property_profit ?? 0;
           const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-3 md:gap-4' : 'gap-2 md:gap-2';
           const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
-          const chipScale = topBarChipScale / 100;
-          const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScale)));
+          const chipWidthScale = topBarChipWidthScale / 100;
+          const chipHeightScale = topBarChipHeightScale / 100;
+          const chipScaleAvg = (chipWidthScale + chipHeightScale) / 2;
+          const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScaleAvg)));
           const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(14, topBarIconSizeEffective) : topBarIconSizeEffective;
           const topBarChipStyle = {
-            paddingTop: Math.round(6 * chipScale),
-            paddingBottom: Math.round(6 * chipScale),
-            paddingLeft: Math.round(8 * chipScale),
-            paddingRight: Math.round(8 * chipScale),
+            paddingTop: Math.round(6 * chipHeightScale),
+            paddingBottom: Math.round(6 * chipHeightScale),
+            paddingLeft: Math.round(8 * chipWidthScale),
+            paddingRight: Math.round(8 * chipWidthScale),
           };
-          const topBarChipMinHeight = isMobileViewport ? Math.max(28, Math.round(40 * chipScale)) : undefined;
+          const topBarChipMinHeight = isMobileViewport ? Math.max(24, Math.round(40 * chipHeightScale)) : undefined;
+          const rankBarWidthPx = Math.max(20, Math.round((isMobileViewport ? 28 : 44) * chipWidthScale));
+          const rankColMinWidthPx = Math.max(36, Math.round(52 * chipWidthScale));
           const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
           const renderStat = (statId) => {
             const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation`;
@@ -1334,15 +1392,15 @@ export default function Layout({ children }) {
               const progressLabel = rankProgress ? (hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0)) : '—';
               const rankName = rankProgress?.current_rank_name ?? 'Rank';
               return (
-                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
+                <div className={`${chipClass} gap-1 sm:gap-1.5 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
                   <TrendingUp size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
-                  <div className="flex flex-col min-w-[5rem] flex-1 sm:flex-initial shrink-0">
+                  <div className="flex flex-col flex-1 sm:flex-initial shrink-0 min-w-0" style={{ minWidth: rankColMinWidthPx }}>
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
-                    <div className="w-10 sm:w-16 shrink-0" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
-                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 4 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
+                    <div className="shrink-0" style={{ width: rankBarWidthPx, position: 'relative', height: Math.max(4, Math.round(6 * chipHeightScale)), backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 2 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
                     </div>
                   </div>
-                  <span className={`${topBarTextClass} text-primary font-heading shrink-0 tabular-nums min-w-[2.5rem] text-right`}>{progressLabel}{rankProgress ? '%' : ''}</span>
+                  <span className={`${topBarTextClass} text-primary font-heading shrink-0 tabular-nums text-right`} style={{ minWidth: Math.round(24 * chipWidthScale) }}>{progressLabel}{rankProgress ? '%' : ''}</span>
                 </div>
               );
             }
@@ -1585,21 +1643,36 @@ export default function Layout({ children }) {
                       </ul>
                     </div>
                     <div>
-                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip size</p>
+                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip width</p>
                       <div className="flex flex-wrap items-center gap-3">
                         <input
                           type="range"
-                          min={25}
-                          max={100}
-                          value={topBarChipScale}
-                          onChange={(e) => setTopBarChipScalePersist(Number(e.target.value))}
+                          min={CHIP_SCALE_MIN}
+                          max={CHIP_SCALE_MAX}
+                          value={topBarChipWidthScale}
+                          onChange={(e) => setTopBarChipWidthScalePersist(Number(e.target.value))}
                           className="flex-1 min-w-[120px] h-2 rounded-full accent-primary"
-                          aria-label="Chip size"
+                          aria-label="Chip width"
                         />
-                        <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipScale}%</span>
+                        <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipWidthScale}%</span>
                       </div>
-                      <p className="text-[9px] font-heading mt-1" style={{ color: 'var(--noir-muted)' }}>Smaller chips save space; increase for touch.</p>
                     </div>
+                    <div>
+                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip height</p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <input
+                          type="range"
+                          min={CHIP_SCALE_MIN}
+                          max={CHIP_SCALE_MAX}
+                          value={topBarChipHeightScale}
+                          onChange={(e) => setTopBarChipHeightScalePersist(Number(e.target.value))}
+                          className="flex-1 min-w-[120px] h-2 rounded-full accent-primary"
+                          aria-label="Chip height"
+                        />
+                        <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipHeightScale}%</span>
+                      </div>
+                    </div>
+                    <p className="text-[9px] font-heading" style={{ color: 'var(--noir-muted)' }}>Lower = more compact. Rank bar shortens with width.</p>
                     <div>
                       <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Base size</p>
                       <div className="flex flex-wrap gap-2">
