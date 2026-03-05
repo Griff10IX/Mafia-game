@@ -226,14 +226,12 @@ def register(router):
         is_admin = current_user.get("email") in ADMIN_EMAILS
         # When viewing another player's profile, never expose these in the API response
         # (so they can't be seen via inspect/Network). Admins get full data from admin endpoints.
+        # Wealth tier/range and crew (family) are shown for all profiles.
         if not is_own_profile:
             last_seen = None
             created_at = None
             owned_casinos = []
             is_bodyguard_visible = False
-            wealth_id = None
-            wealth_name = None
-            wealth_range = None
         else:
             created_at = user.get("created_at")
             is_bodyguard_visible = bool(user.get("is_bodyguard"))

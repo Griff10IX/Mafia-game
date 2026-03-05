@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Clock, MapPin } from 'lucide-react';
+import { Users, User } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
@@ -142,64 +142,6 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                       </div>
                     </div>
                   </div>
-                  
-                  {preview.created_at && (
-                  <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
-                    <Clock size={9} />
-                    Joined {formatDateTime(preview.created_at)}
-                  </div>
-                  )}
-                  
-                  {preview.admin_stats && (
-                    <div className="pt-2 border-t border-border space-y-1">
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[10px] font-heading">
-                        <div className="flex justify-between">
-                          <span className="text-mutedForeground">Cash</span>
-                          <span className="text-primary font-bold">
-                            ${Number(preview.admin_stats.money ?? 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-mutedForeground">Points</span>
-                          <span className="text-primary font-bold">
-                            {Number(preview.admin_stats.points ?? 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-mutedForeground">Bullets</span>
-                          <span className="text-primary font-bold">
-                            {Number(preview.admin_stats.bullets ?? 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between col-span-2">
-                          <span className="text-mutedForeground">Booze (Today)</span>
-                          <span className="text-emerald-400 font-bold">
-                            ${Number(preview.admin_stats.booze_profit_today ?? 0).toLocaleString()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between col-span-2">
-                          <span className="text-mutedForeground">Booze (Total)</span>
-                          <span className="text-emerald-400 font-bold">
-                            ${Number(preview.admin_stats.booze_profit_total ?? 0).toLocaleString()}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {preview.admin_stats.current_state && (
-                        <div className="flex items-center gap-1 text-[10px] font-heading">
-                          <MapPin size={9} className="text-primary" />
-                          <span className="text-mutedForeground">Location:</span>
-                          <span className="text-foreground font-bold">{preview.admin_stats.current_state}</span>
-                        </div>
-                      )}
-                      
-                      {preview.admin_stats.in_jail && (
-                        <div className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 text-[9px] font-heading font-bold text-center border border-red-500/30">
-                          🔒 In Jail
-                        </div>
-                      )}
-                    </div>
-                  )}
                   
                   <div className="pt-2 border-t border-border text-[9px] text-mutedForeground font-heading italic text-center">
                     Click username to view full profile

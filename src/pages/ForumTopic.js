@@ -167,11 +167,21 @@ export default function ForumTopic() {
       const res = await api.post(`/forum/topics/${topicId}/comments`, { content: text });
       setCommentText('');
       const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
-      if (newComment) setComments((prev) => [...prev, newComment]);
+      if (newComment) setComments((prev) => [newComment, ...prev]);
       toast.success('Posted');
       fetchTopic().catch(() => {});
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
+      const status = err.response?.status;
+      const isSuccessStatus = typeof status === 'number' && status >= 200 && status < 300;
+      if (isSuccessStatus) {
+        toast.success('Posted');
+        setCommentText('');
+        fetchTopic().catch(() => {});
+      } else if (!err.response || status === 0) {
+        toast.warning('Post may have gone through. Refresh to check.');
+      } else {
+        toast.error(err.response?.data?.detail || 'Failed');
+      }
     } finally {
       setPosting(false);
     }
@@ -184,11 +194,20 @@ export default function ForumTopic() {
     try {
       const res = await api.post(`/forum/topics/${topicId}/comments`, { content: '', gif_url: gifUrl });
       const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
-      if (newComment) setComments((prev) => [...prev, newComment]);
+      if (newComment) setComments((prev) => [newComment, ...prev]);
       toast.success('GIF posted');
       fetchTopic().catch(() => {});
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
+      const status = err.response?.status;
+      const isSuccessStatus = typeof status === 'number' && status >= 200 && status < 300;
+      if (isSuccessStatus) {
+        toast.success('GIF posted');
+        fetchTopic().catch(() => {});
+      } else if (!err.response || status === 0) {
+        toast.warning('Post may have gone through. Refresh to check.');
+      } else {
+        toast.error(err.response?.data?.detail || 'Failed');
+      }
     } finally {
       setPosting(false);
     }

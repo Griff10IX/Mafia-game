@@ -84,7 +84,7 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         {"$inc": {"views": 1}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
     )
     topic["views"] = topic.get("views", 0) + 1
-    comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).sort("created_at", 1).to_list(200)
+    comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     # Attach like status for current user
     uid = current_user["id"]
     for c in comments:
