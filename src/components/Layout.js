@@ -118,6 +118,7 @@ const DEFAULT_STAT_ORDER = ['rank', 'health', 'bullets', 'kills', 'money', 'poin
 const TOPBAR_STAT_LABELS = { rank: 'Rank', health: 'Health', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', respect_points: 'Respect', property: 'Casino & Property', notifications: 'Notifications' };
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
+const TOPBAR_CHIP_SCALE_KEY = 'topbar_chip_scale';
 const NOTIFICATION_BALL_POSITION_KEY = 'notification_ball_position';
 const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
 const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
@@ -206,6 +207,14 @@ function loadTopBarSize() {
   return 'medium';
 }
 
+function loadTopBarChipScale() {
+  try {
+    const v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
+    if (Number.isFinite(v) && v >= 25 && v <= 100) return v;
+  } catch (_) {}
+  return 50;
+}
+
 export default function Layout({ children }) {
   const [user, setUser] = useState(null);
   const [rankProgress, setRankProgress] = useState(null);
@@ -213,6 +222,7 @@ export default function Layout({ children }) {
   const [statOrder, setStatOrder] = useState(loadStatOrder);
   const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
   const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
+  const [topBarChipScale, setTopBarChipScale] = useState(loadTopBarChipScale);
   const [mobileStatsDisplay, setMobileStatsDisplay] = useState(loadMobileStatsDisplay);
   const [showSidebarDividers, setShowSidebarDividers] = useState(loadSidebarShowDividers);
   const [sidebarDividerStyle, setSidebarDividerStyle] = useState(loadSidebarDividerStyle);
@@ -274,6 +284,7 @@ export default function Layout({ children }) {
     const onTopBarPrefs = () => {
       setTopBarGap(loadTopBarGap());
       setTopBarSize(loadTopBarSize());
+      setTopBarChipScale(loadTopBarChipScale());
     };
     const onMobileStatsDisplay = () => setMobileStatsDisplay(loadMobileStatsDisplay());
     const onSidebarDividers = () => setShowSidebarDividers(loadSidebarShowDividers());
@@ -1286,15 +1297,29 @@ export default function Layout({ children }) {
             try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {}
             window.dispatchEvent(new Event('topbar-prefs-changed'));
           };
+          const setTopBarChipScalePersist = (v) => {
+            const n = Math.max(25, Math.min(100, Number(v)));
+            try { localStorage.setItem(TOPBAR_CHIP_SCALE_KEY, String(n)); } catch (_) {}
+            setTopBarChipScale(n);
+            window.dispatchEvent(new Event('topbar-prefs-changed'));
+          };
           const casinoProfit = user.casino_profit ?? 0;
           const propertyProfit = user.property_profit ?? 0;
           const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-3 md:gap-4' : 'gap-2 md:gap-2';
           const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
-          const topBarIconSizeEffective = isMobileViewport ? Math.min(14, topBarIconSize) : topBarIconSize;
-          const topBarChipPadding = topBarSize === 'small' ? 'px-2 py-1.5 md:px-1.5 md:py-0.5' : topBarSize === 'large' ? 'px-2.5 py-1.5 md:px-2.5 md:py-1.5' : 'px-2 py-1.5 md:px-2 md:py-1';
+          const chipScale = topBarChipScale / 100;
+          const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScale)));
+          const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(14, topBarIconSizeEffective) : topBarIconSizeEffective;
+          const topBarChipStyle = {
+            paddingTop: Math.round(6 * chipScale),
+            paddingBottom: Math.round(6 * chipScale),
+            paddingLeft: Math.round(8 * chipScale),
+            paddingRight: Math.round(8 * chipScale),
+          };
+          const topBarChipMinHeight = isMobileViewport ? Math.max(28, Math.round(40 * chipScale)) : undefined;
           const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
           const renderStat = (statId) => {
-            const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 ${topBarChipPadding} rounded-sm shrink-0 min-h-[40px] md:min-h-0 cursor-grab active:cursor-grabbing touch-manipulation`;
+            const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation`;
             if (statId === 'rank') {
               const pct = rankProgress ? Number(rankProgress.rank_points_progress) : 0;
               const current = rankProgress ? (Number(rankProgress.rank_points_current) || 0) : 0;
@@ -1309,8 +1334,8 @@ export default function Layout({ children }) {
               const progressLabel = rankProgress ? (hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0)) : '—';
               const rankName = rankProgress?.current_rank_name ?? 'Rank';
               return (
-                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
-                  <TrendingUp size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
+                <div className={`${chipClass} gap-1.5 sm:gap-2 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
+                  <TrendingUp size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
                   <div className="flex flex-col min-w-[5rem] flex-1 sm:flex-initial shrink-0">
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
                     <div className="w-10 sm:w-16 shrink-0" style={{ position: 'relative', height: 6, backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
@@ -1327,8 +1352,8 @@ export default function Layout({ children }) {
               const healthNum = parseInt(healthStr, 10) || 100;
               const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
               return (
-                <div className={`${chipClass} hidden md:flex min-w-0`} title={`Health: ${healthStr}%`}>
-                  <Heart size={topBarIconSizeEffective} className={`${healthColor} shrink-0`} aria-hidden />
+                <div className={`${chipClass} hidden md:flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Health: ${healthStr}%`}>
+                  <Heart size={topBarIconSizeEffectiveMobile} className={`${healthColor} shrink-0`} aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[4rem]`} data-testid="topbar-health">{healthStr}%</span>
                 </div>
               );
@@ -1336,8 +1361,8 @@ export default function Layout({ children }) {
             if (statId === 'bullets') {
               const bulletsStr = formatInt(user.bullets);
               return (
-                <div className={`${chipClass} hidden md:flex min-w-0`} title={`Bullets: ${bulletsStr}`}>
-                  <Crosshair size={topBarIconSizeEffective} className="text-red-400 shrink-0" aria-hidden />
+                <div className={`${chipClass} hidden md:flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Bullets: ${bulletsStr}`}>
+                  <Crosshair size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[6rem]`} data-testid="topbar-bullets">{bulletsStr}</span>
                 </div>
               );
@@ -1345,8 +1370,8 @@ export default function Layout({ children }) {
             if (statId === 'kills') {
               const killsStr = formatInt(user.total_kills);
               return (
-                <div className={`${chipClass} hidden md:flex min-w-0`} title={`Kills: ${killsStr}`}>
-                  <Skull size={topBarIconSizeEffective} className="text-red-400 shrink-0" aria-hidden />
+                <div className={`${chipClass} hidden md:flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Kills: ${killsStr}`}>
+                  <Skull size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums min-w-[1.5rem] text-right`} data-testid="topbar-kills">{killsStr}</span>
                 </div>
               );
@@ -1354,8 +1379,8 @@ export default function Layout({ children }) {
             if (statId === 'money') {
               const moneyFull = formatMoney(user.money);
               return (
-                <div className={`${chipClass} min-w-0`} title={`Cash: ${moneyFull}`}>
-                  <DollarSign size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
+                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Cash: ${moneyFull}`}>
+                  <DollarSign size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-primary tabular-nums truncate max-w-[12rem]`} data-testid="topbar-money">{moneyFull}</span>
                 </div>
               );
@@ -1365,8 +1390,8 @@ export default function Layout({ children }) {
               const pointsCompact = formatCompact(user.points);
               const useCompactDesktop = pointsFull.length > 12;
               return (
-                <div className={`${chipClass} min-w-0`} title={`Premium Points: ${pointsFull}`}>
-                  <Zap size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
+                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Premium Points: ${pointsFull}`}>
+                  <Zap size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-points">{pointsFull}</span>
                   <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-points-full">{useCompactDesktop ? `${pointsCompact} pts` : pointsFull}</span>
                 </div>
@@ -1377,8 +1402,8 @@ export default function Layout({ children }) {
               const respectCompact = formatCompact(user.respect_points ?? 0);
               const useCompactDesktop = respectFull.length > 12;
               return (
-                <div className={`${chipClass} min-w-0`} title={`Respect: ${respectFull}`}>
-                  <Trophy size={topBarIconSizeEffective} className="text-primary shrink-0" aria-hidden />
+                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Respect: ${respectFull}`}>
+                  <Trophy size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground md:hidden tabular-nums`} data-testid="topbar-respect">{respectFull}</span>
                   <span className={`font-heading text-xs text-foreground hidden md:inline tabular-nums ${useCompactDesktop ? '' : 'truncate max-w-[6rem]'}`} data-testid="topbar-respect-full">{useCompactDesktop ? `${respectCompact} resp` : respectFull}</span>
                 </div>
@@ -1395,8 +1420,8 @@ export default function Layout({ children }) {
               const propertyColor = (Number.isFinite(propertyNum) ? propertyNum : 0) >= 0 ? 'text-emerald-500' : 'text-red-400';
               const useCompactOnDesktop = casinoStr.length > 11 || propertyStr.length > 14;
               return (
-                <div className={`${chipClass} min-w-0`} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
-                  <Building2 size={topBarIconSizeEffective} className="text-emerald-400 shrink-0" aria-hidden />
+                <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Casino ${casinoStr} · Property ${propertyStr}`}>
+                  <Building2 size={topBarIconSizeEffectiveMobile} className="text-emerald-400 shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground whitespace-nowrap tabular-nums min-w-0 flex items-center gap-0.5`}>
                     <span className="text-mutedForeground md:inline hidden shrink-0">Casino</span>
                     <span className="text-mutedForeground md:hidden shrink-0">C</span>
@@ -1435,11 +1460,12 @@ export default function Layout({ children }) {
                       onMouseDown={(e) => {
                         e.stopPropagation();
                       }}
-                      className={`flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation ${topBarChipPadding}`}
+                      className="flex items-center justify-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm text-primary hover:bg-noir-raised/90 active:scale-95 transition-colors cursor-pointer touch-manipulation"
+                      style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
                       aria-label="Search user"
                       title="Search user"
                     >
-                      <Search size={topBarIconSizeEffective} strokeWidth={2} />
+                      <Search size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
                     </button>
                   ) : (
                     <div className="flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm px-2 py-1.5 min-w-[140px] max-w-[180px] md:min-w-[120px] md:py-0.5 md:px-1.5">
@@ -1520,11 +1546,12 @@ export default function Layout({ children }) {
                   <button
                     type="button"
                     onClick={() => setTopBarCustomizeOpen(true)}
-                    className="shrink-0 flex items-center justify-center gap-1 min-h-[40px] px-2 py-1.5 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
+                    className="shrink-0 flex items-center justify-center gap-1 rounded-sm bg-noir-surface/90 border border-primary/20 text-primary hover:bg-noir-raised/90 transition-colors touch-manipulation"
+                    style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }}
                     aria-label="Customize top bar"
                     title="Reorder, size & spacing"
                   >
-                    <Settings size={topBarIconSizeEffective} strokeWidth={2} />
+                    <Settings size={topBarIconSizeEffectiveMobile} strokeWidth={2} />
                   </button>
                 )}
               </div>
@@ -1559,6 +1586,22 @@ export default function Layout({ children }) {
                     </div>
                     <div>
                       <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Chip size</p>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <input
+                          type="range"
+                          min={25}
+                          max={100}
+                          value={topBarChipScale}
+                          onChange={(e) => setTopBarChipScalePersist(Number(e.target.value))}
+                          className="flex-1 min-w-[120px] h-2 rounded-full accent-primary"
+                          aria-label="Chip size"
+                        />
+                        <span className="text-xs font-heading tabular-nums shrink-0" style={{ color: 'var(--noir-foreground)' }}>{topBarChipScale}%</span>
+                      </div>
+                      <p className="text-[9px] font-heading mt-1" style={{ color: 'var(--noir-muted)' }}>Smaller chips save space; increase for touch.</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-heading uppercase tracking-wider mb-2" style={{ color: 'var(--noir-muted)' }}>Base size</p>
                       <div className="flex flex-wrap gap-2">
                         {['small', 'medium', 'large'].map((v) => (
                           <button key={v} type="button" onClick={() => setTopBarSizePersist(v)} className={`px-4 py-2.5 rounded-lg border-2 text-sm font-heading uppercase tracking-wider transition-colors touch-manipulation ${topBarSize === v ? 'border-primary' : ''}`} style={topBarSize === v ? { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)', color: 'var(--noir-primary)' } : { borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}>

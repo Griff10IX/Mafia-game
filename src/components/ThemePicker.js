@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box, PanelLeft, LayoutDashboard, Smartphone } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES, THEME_SIDEBAR_SPACING, THEME_WRITING_COLOURS, THEME_TEXT_STYLES, THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, getThemeColour } from '../constants/themes';
@@ -95,11 +95,30 @@ export default function ThemePicker({ open, onClose }) {
 
   const TOPBAR_GAP_KEY = 'topbar_gap';
   const TOPBAR_SIZE_KEY = 'topbar_size';
+  const TOPBAR_CHIP_SCALE_KEY = 'topbar_chip_scale';
   const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
   const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
   const BOTTOM_NAV_SHOW_DIVIDERS_KEY = 'bottom_nav_show_dividers';
   const topBarGap = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_GAP_KEY)) || 'normal';
   const topBarSize = (typeof window !== 'undefined' && localStorage.getItem(TOPBAR_SIZE_KEY)) || 'medium';
+  const loadChipScale = () => {
+    if (typeof window === 'undefined') return 50;
+    try {
+      const v = parseInt(localStorage.getItem(TOPBAR_CHIP_SCALE_KEY), 10);
+      if (Number.isFinite(v) && v >= 25 && v <= 100) return v;
+    } catch (_) {}
+    return 50;
+  };
+  const [topBarChipScale, setTopBarChipScale] = useState(50);
+  useEffect(() => {
+    if (open) setTopBarChipScale(loadChipScale());
+  }, [open]);
+  const setTopBarChipScalePersist = (v) => {
+    const n = Math.max(25, Math.min(100, Number(v)));
+    setTopBarChipScale(n);
+    try { localStorage.setItem(TOPBAR_CHIP_SCALE_KEY, String(n)); } catch (_) {}
+    window.dispatchEvent(new Event('topbar-prefs-changed'));
+  };
   const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
   const sidebarShowDividers = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY)) === 'true';
   const bottomNavShowDividers = (typeof window !== 'undefined' && localStorage.getItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY)) === 'true';
@@ -895,6 +914,19 @@ export default function ThemePicker({ open, onClose }) {
                         </button>
                       ))}
                     </div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip scale</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={25}
+                        max={100}
+                        value={topBarChipScale}
+                        onChange={(e) => setTopBarChipScalePersist(Number(e.target.value))}
+                        className="flex-1 min-w-[100px] h-2 rounded-full accent-primary"
+                        aria-label="Chip scale"
+                      />
+                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipScale}%</span>
+                    </div>
                   </div>
                   <div>
                     <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Spacing between chips</p>
@@ -957,6 +989,20 @@ export default function ThemePicker({ open, onClose }) {
                         </button>
                       ))}
                     </div>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mt-2 mb-1">Chip scale (slider)</p>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min={25}
+                        max={100}
+                        value={topBarChipScale}
+                        onChange={(e) => setTopBarChipScalePersist(Number(e.target.value))}
+                        className="flex-1 min-w-[100px] h-2 rounded-full accent-primary"
+                        aria-label="Chip scale"
+                      />
+                      <span className="text-xs font-heading tabular-nums shrink-0 text-foreground">{topBarChipScale}%</span>
+                    </div>
+                    <p className="text-[9px] text-mutedForeground mt-1">Smaller chips save space; increase for touch.</p>
                   </div>
                 </div>
               </>
