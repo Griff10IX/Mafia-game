@@ -95,6 +95,18 @@ def register(router):
             return request.client.host or ""
         return ""
 
+    def _device_type_from_user_agent(ua: str) -> str:
+        """Parse User-Agent to a simple device type: Mobile, Tablet, or Desktop."""
+        if not (ua or "").strip():
+            return "Unknown"
+        u = (ua or "").strip()
+        u_lower = u.lower()
+        if "ipad" in u_lower or ("android" in u_lower and "mobile" not in u_lower) or "tablet" in u_lower or "playbook" in u_lower:
+            return "Tablet"
+        if "mobile" in u_lower or "android" in u_lower or "iphone" in u_lower or "ipod" in u_lower or "webos" in u_lower or "blackberry" in u_lower or "windows phone" in u_lower:
+            return "Mobile"
+        return "Desktop"
+
     async def _require_email_verification():
         doc = await db.game_settings.find_one({"key": "require_email_verification"}, {"_id": 0, "value": 1})
         # Default True when missing: email verification required unless explicitly disabled in admin
@@ -388,11 +400,21 @@ def register(router):
                 detail="This account is dead and cannot log in. Create a new account and use Dead > Alive to receive 95% (5% tax) of this account’s money and points.",
             )
         ip = _client_ip(request)
+        ua = (request.headers.get("User-Agent") or "").strip()[:500]
+        device_type = _device_type_from_user_agent(request.headers.get("User-Agent") or "")
+        set_fields = {}
         if ip:
-            await db.users.update_one(
-                {"id": user["id"]},
-                {"$set": {"last_login_ip": ip}, "$addToSet": {"login_ips": ip}},
-            )
+            set_fields["last_login_ip"] = ip
+        if ua:
+            set_fields["last_user_agent"] = ua
+        if device_type:
+            set_fields["last_device_type"] = device_type
+        if set_fields:
+            update_op = {"$set": set_fields}
+            if ip:
+                update_op["$addToSet"] = {"login_ips": ip}
+            await db.users.update_one({"id": user["id"]}, update_op)
+        if ip:
             doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "login_ips": 1})
             ips = doc.get("login_ips") or []
             if len(ips) > 20:

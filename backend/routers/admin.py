@@ -1250,6 +1250,8 @@ def register(router):
             "user_id": user.get("id"),
             "has_id": has_id,
             "id_type": id_type,
+            "last_device_type": user.get("last_device_type"),
+            "last_user_agent": user.get("last_user_agent"),
             "keys": sorted(keys),
             "value_types": value_types,
         }

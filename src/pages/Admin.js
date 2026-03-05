@@ -1603,6 +1603,10 @@ export default function Admin() {
                       <div><span className="text-mutedForeground">User ID:</span> {userInspectResult.user_id ?? '—'}</div>
                       <div><span className="text-mutedForeground">has_id:</span> <span className={userInspectResult.has_id ? 'text-emerald-400' : 'text-red-400'}>{String(userInspectResult.has_id)}</span></div>
                       <div><span className="text-mutedForeground">id_type:</span> {userInspectResult.id_type ?? '—'}</div>
+                      <div><span className="text-mutedForeground">Device:</span> {userInspectResult.last_device_type ?? '—'}</div>
+                      {userInspectResult.last_user_agent && (
+                        <div className="col-span-2"><span className="text-mutedForeground">User-Agent:</span> <span className="font-mono text-[9px] break-all">{userInspectResult.last_user_agent}</span></div>
+                      )}
                     </div>
                     <div><span className="text-mutedForeground">Keys ({userInspectResult.keys?.length ?? 0}):</span> <span className="text-foreground font-mono">{userInspectResult.keys?.join(', ') ?? '—'}</span></div>
                     <div>
