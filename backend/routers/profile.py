@@ -231,6 +231,9 @@ def register(router):
             created_at = None
             owned_casinos = []
             is_bodyguard_visible = False
+            wealth_id = None
+            wealth_name = None
+            wealth_range = None
         else:
             created_at = user.get("created_at")
             is_bodyguard_visible = bool(user.get("is_bodyguard"))
@@ -280,12 +283,13 @@ def register(router):
                 "current_state": user.get("current_state") or "—",
                 "in_jail": bool(user.get("in_jail")),
             }
-        # Admin display colour for styling "Admin" rank (profile and Users Online)
-        admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
-        admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
-        if not isinstance(admin_online_color, str) or not admin_online_color.strip():
-            admin_online_color = "#a78bfa"
-        out["admin_online_color"] = admin_online_color.strip()
+        # Only include admin_online_color when viewing own profile (frontend uses auth/me when viewing others)
+        if is_own_profile:
+            admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+            admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
+            if not isinstance(admin_online_color, str) or not admin_online_color.strip():
+                admin_online_color = "#a78bfa"
+            out["admin_online_color"] = admin_online_color.strip()
         return out
 
     @router.post("/profile/avatar")

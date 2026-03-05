@@ -606,6 +606,11 @@ def register(router):
             wealth_range = get_wealth_rank_range(money_val)
             # Casino/property loaded separately via GET /user/casino-property to keep auth/me fast
             u = current_user
+            admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+            admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
+            if not isinstance(admin_online_color, str) or not admin_online_color.strip():
+                admin_online_color = "#a78bfa"
+            admin_online_color = admin_online_color.strip()
             return UserResponse(
                 id=str(u["id"]),
                 email=str(u.get("email") or ""),
@@ -655,6 +660,7 @@ def register(router):
                 respect_points=_safe_int(u.get("respect_points"), 0),
                 loot_box_pieces=_safe_int(u.get("loot_box_pieces"), 0),
                 profile_autoplay_video=bool(u.get("profile_autoplay_video", True)),
+                admin_online_color=admin_online_color,
             )
         except HTTPException:
             raise

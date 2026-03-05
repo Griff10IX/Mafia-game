@@ -201,6 +201,12 @@ export default function Bodyguards() {
     setUpgradingSlot(slot);
     try {
       const res = await api.post(`/bodyguards/armour/upgrade?slot=${slot}`);
+      const newLevel = res.data?.armour_level;
+      if (typeof newLevel === 'number') {
+        setBodyguards((prev) =>
+          prev.map((b) => (b.slot_number === slot ? { ...b, armour_level: newLevel } : b))
+        );
+      }
       toast.success(res.data?.message || 'Armour upgraded', { duration: 10000 });
       refreshUser().catch(() => {});
       fetchData().catch(() => {});

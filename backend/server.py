@@ -425,6 +425,7 @@ class UserResponse(BaseModel):
     respect_points: int = 0  # second currency; earn from activities, spend in store at 5x; not sendable/tradeable
     loot_box_pieces: int = 0
     profile_autoplay_video: bool = True  # when viewing someone's profile, autoplay their YouTube video (can turn off in profile settings)
+    admin_online_color: Optional[str] = None  # global setting for styling "Admin" rank (so profile API can omit it when viewing others)
 
 class NotificationCreate(BaseModel):
     title: str
@@ -830,6 +831,9 @@ async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict):
     acquired = doc["below_capo_acquired_at"]
     if isinstance(acquired, str):
         acquired = datetime.fromisoformat(acquired.replace("Z", "+00:00"))
+    # Stored values may be naive (e.g. from MongoDB or different server TZ). Treat as UTC so 3h check is consistent globally.
+    if acquired.tzinfo is None:
+        acquired = acquired.replace(tzinfo=timezone.utc)
     if (datetime.now(timezone.utc) - acquired).total_seconds() >= 3 * 3600:
         await coll.update_one(
             filter_dict,

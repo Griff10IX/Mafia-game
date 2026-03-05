@@ -164,10 +164,12 @@ export default function ForumTopic() {
     if (!text) { toast.error('Enter a comment'); return; }
     setPosting(true);
     try {
-      await api.post(`/forum/topics/${topicId}/comments`, { content: text });
+      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: text });
       setCommentText('');
+      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
+      if (newComment) setComments((prev) => [...prev, newComment]);
       toast.success('Posted');
-      fetchTopic();
+      fetchTopic().catch(() => {});
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
@@ -180,9 +182,11 @@ export default function ForumTopic() {
     setPosting(true);
     setShowGifPicker(false);
     try {
-      await api.post(`/forum/topics/${topicId}/comments`, { content: '', gif_url: gifUrl });
+      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: '', gif_url: gifUrl });
+      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
+      if (newComment) setComments((prev) => [...prev, newComment]);
       toast.success('GIF posted');
-      fetchTopic();
+      fetchTopic().catch(() => {});
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {

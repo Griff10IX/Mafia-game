@@ -76,8 +76,9 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
   );
 };
 
-const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney, onOpenSettings }) => {
+const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney, onOpenSettings, adminOnlineColor }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
+  const adminColor = profile.admin_online_color ?? adminOnlineColor ?? '#a78bfa';
   const allRows = [
     { 
       label: 'Username', 
@@ -146,13 +147,13 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
         </h2>
         <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
           <div
-            className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${profile.rank_name === 'Admin' && profile.admin_online_color ? '' : 'border-primary/50'}`}
-            style={profile.rank_name === 'Admin' && profile.admin_online_color ? { borderColor: `${profile.admin_online_color}80`, backgroundColor: `${profile.admin_online_color}20` } : undefined}
+            className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${profile.rank_name === 'Admin' && adminColor ? '' : 'border-primary/50'}`}
+            style={profile.rank_name === 'Admin' && adminColor ? { borderColor: `${adminColor}80`, backgroundColor: `${adminColor}20` } : undefined}
           >
-            <Shield size={12} className={profile.rank_name !== 'Admin' || !profile.admin_online_color ? 'text-primary' : ''} style={profile.rank_name === 'Admin' && profile.admin_online_color ? { color: profile.admin_online_color } : undefined} />
+            <Shield size={12} className={profile.rank_name !== 'Admin' || !adminColor ? 'text-primary' : ''} style={profile.rank_name === 'Admin' && adminColor ? { color: adminColor } : undefined} />
             <span
-              className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${profile.rank_name === 'Admin' && profile.admin_online_color ? '' : 'text-primary'}`}
-              style={profile.rank_name === 'Admin' && profile.admin_online_color ? { color: profile.admin_online_color } : undefined}
+              className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${profile.rank_name === 'Admin' && adminColor ? '' : 'text-primary'}`}
+              style={profile.rank_name === 'Admin' && adminColor ? { color: adminColor } : undefined}
             >
               {profile.rank_name || '—'}
             </span>
@@ -250,7 +251,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
                 ) : (
                   <span
                     className={row.valueClass}
-                    style={row.label === 'Rank' && profile.rank_name === 'Admin' && profile.admin_online_color ? { color: profile.admin_online_color } : undefined}
+                    style={row.label === 'Rank' && profile.rank_name === 'Admin' && adminColor ? { color: adminColor } : undefined}
                   >
                     {row.value}
                   </span>
@@ -988,6 +989,7 @@ export default function Profile() {
           onSendMessage={profile.id ? () => navigate(`/inbox/chat/${profile.id}`) : undefined}
           onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
           onOpenSettings={isMe && !isPublicView ? openSettings : undefined}
+          adminOnlineColor={me?.admin_online_color}
         />
 
         {isMe && !isPublicView && (
