@@ -1016,66 +1016,66 @@ def register(router):
                 {"telegram_chat_id": chat_id_str},
                 {"_id": 0, "id": 1, "username": 1, "auto_rank_purchased": 1, "auto_rank_enabled": 1, **_PREFERENCE_FIELDS, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_stats_since": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "activity_detail": 1},
             )
-        if not user:
-            reply = "Link your Telegram first: set your Chat ID in Profile → Telegram (Auto Rank). Get your Chat ID from @userinfobot. Then message this bot again."
-            await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
-            return {"ok": True}
-        has_autorank = user.get("auto_rank_purchased") or user.get("auto_rank_enabled")
-        if not has_autorank:
-            reply = "Auto Rank is not active on your account. Enable it in game (Store / Auto Rank) first."
-            await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
-            return {"ok": True}
+            if not user:
+                reply = "Link your Telegram first: set your Chat ID in Profile → Telegram (Auto Rank). Get your Chat ID from @userinfobot. Then message this bot again."
+                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
+                return {"ok": True}
+            has_autorank = user.get("auto_rank_purchased") or user.get("auto_rank_enabled")
+            if not has_autorank:
+                reply = "Auto Rank is not active on your account. Enable it in game (Store / Auto Rank) first."
+                await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
+                return {"ok": True}
 
-        reply = None
-        if text in ("/autorank", "/summary", "autorank", "summary"):
-            stats = await _get_auto_rank_stats_impl(db, user)
-            lines = [
-                f"Auto Rank — {user.get('username', '?')}",
-                "",
-                "On" if user.get("auto_rank_enabled") else "Off",
-                f"Crimes: {'on' if user.get('auto_rank_crimes') else 'off'} · GTA: {'on' if user.get('auto_rank_gta') else 'off'}",
-                f"Bust 5s: {'on' if user.get('auto_rank_bust_every_5_sec') else 'off'} · OC: {'on' if user.get('auto_rank_oc') else 'off'} · Booze: {'on' if user.get('auto_rank_booze') else 'off'}",
-                "",
-                f"Total: {stats.get('total_crimes', 0)} crimes, {stats.get('total_gtas', 0)} GTAs, {stats.get('total_busts', 0)} busts",
-                f"Cash: ${stats.get('total_cash', 0):,} · Booze: {stats.get('total_booze_runs', 0)} runs (${stats.get('total_booze_profit', 0):,})",
-                f"Running: {stats.get('running_seconds', 0) // 60} min",
-            ]
-            if stats.get("in_jail"):
-                lines.append("In jail — cycles paused.")
-            elif stats.get("activity_detail"):
-                lines.append(stats["activity_detail"])
-            reply = "\n".join(lines)
-        else:
-            parts = text.split()
-            cmd = (parts[0] or "").lstrip("/")
-            target = (parts[1] or "").strip() if len(parts) > 1 else ""
-            key_map = {"all": "auto_rank_enabled", "crimes": "auto_rank_crimes", "gta": "auto_rank_gta", "bust": "auto_rank_bust_every_5_sec", "oc": "auto_rank_oc", "booze": "auto_rank_booze"}
-            field = key_map.get(target) if target else None
-            if cmd == "enable" and field:
-                updates = {field: True}
-                if field == "auto_rank_enabled":
-                    pass
-                else:
-                    updates["auto_rank_enabled"] = True
-                await db.users.update_one({"id": user["id"]}, {"$set": updates})
-                name = target if target != "all" else "Auto Rank"
-                reply = f"{name} enabled."
-            elif cmd == "disable" and field:
-                updates = {field: False}
-                if field == "auto_rank_enabled":
-                    updates["auto_rank_crimes"] = False
-                    updates["auto_rank_gta"] = False
-                    updates["auto_rank_bust_every_5_sec"] = False
-                    updates["auto_rank_oc"] = False
-                    updates["auto_rank_booze"] = False
-                op = {"$set": updates}
-                if field == "auto_rank_enabled":
-                    op["$unset"] = {"auto_rank_stats_since": ""}
-                await db.users.update_one({"id": user["id"]}, op)
-                name = target if target != "all" else "Auto Rank"
-                reply = f"{name} disabled."
+            reply = None
+            if text in ("/autorank", "/summary", "autorank", "summary"):
+                stats = await _get_auto_rank_stats_impl(db, user)
+                lines = [
+                    f"Auto Rank — {user.get('username', '?')}",
+                    "",
+                    "On" if user.get("auto_rank_enabled") else "Off",
+                    f"Crimes: {'on' if user.get('auto_rank_crimes') else 'off'} · GTA: {'on' if user.get('auto_rank_gta') else 'off'}",
+                    f"Bust 5s: {'on' if user.get('auto_rank_bust_every_5_sec') else 'off'} · OC: {'on' if user.get('auto_rank_oc') else 'off'} · Booze: {'on' if user.get('auto_rank_booze') else 'off'}",
+                    "",
+                    f"Total: {stats.get('total_crimes', 0)} crimes, {stats.get('total_gtas', 0)} GTAs, {stats.get('total_busts', 0)} busts",
+                    f"Cash: ${stats.get('total_cash', 0):,} · Booze: {stats.get('total_booze_runs', 0)} runs (${stats.get('total_booze_profit', 0):,})",
+                    f"Running: {stats.get('running_seconds', 0) // 60} min",
+                ]
+                if stats.get("in_jail"):
+                    lines.append("In jail — cycles paused.")
+                elif stats.get("activity_detail"):
+                    lines.append(stats["activity_detail"])
+                reply = "\n".join(lines)
             else:
-                reply = "Commands: /autorank or /summary — stats. /enable or /disable plus: all, crimes, gta, bust, oc, booze. Example: /disable bust"
+                parts = text.split()
+                cmd = (parts[0] or "").lstrip("/")
+                target = (parts[1] or "").strip() if len(parts) > 1 else ""
+                key_map = {"all": "auto_rank_enabled", "crimes": "auto_rank_crimes", "gta": "auto_rank_gta", "bust": "auto_rank_bust_every_5_sec", "oc": "auto_rank_oc", "booze": "auto_rank_booze"}
+                field = key_map.get(target) if target else None
+                if cmd == "enable" and field:
+                    updates = {field: True}
+                    if field == "auto_rank_enabled":
+                        pass
+                    else:
+                        updates["auto_rank_enabled"] = True
+                    await db.users.update_one({"id": user["id"]}, {"$set": updates})
+                    name = target if target != "all" else "Auto Rank"
+                    reply = f"{name} enabled."
+                elif cmd == "disable" and field:
+                    updates = {field: False}
+                    if field == "auto_rank_enabled":
+                        updates["auto_rank_crimes"] = False
+                        updates["auto_rank_gta"] = False
+                        updates["auto_rank_bust_every_5_sec"] = False
+                        updates["auto_rank_oc"] = False
+                        updates["auto_rank_booze"] = False
+                    op = {"$set": updates}
+                    if field == "auto_rank_enabled":
+                        op["$unset"] = {"auto_rank_stats_since": ""}
+                    await db.users.update_one({"id": user["id"]}, op)
+                    name = target if target != "all" else "Auto Rank"
+                    reply = f"{name} disabled."
+                else:
+                    reply = "Commands: /autorank or /summary — stats. /enable or /disable plus: all, crimes, gta, bust, oc, booze. Example: /disable bust"
 
             if reply:
                 await send_telegram_to_chat(chat_id_str, reply, game_bot_token or None)
