@@ -1239,9 +1239,9 @@ export default function Layout({ children }) {
         />
       )}
 
-      {/* Top bar */}
-      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-3 md:px-3 gap-2 md:gap-2 py-2 md:py-0`}>
-        <div className="flex items-center gap-2 md:gap-2 flex-1 min-w-0 shrink-0 overflow-hidden md:justify-end">
+      {/* Top bar — on mobile use tighter padding so chips + scroll fit */}
+      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1.5 md:px-3 md:py-0 gap-1.5 md:gap-2`}>
+        <div className="flex items-center gap-1.5 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
         {mobileNavStyle !== 'bottom' && (
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -1373,8 +1373,8 @@ export default function Layout({ children }) {
             paddingRight: Math.round(8 * chipWidthScale),
           };
           const topBarChipMinHeight = isMobileViewport ? Math.max(24, Math.round(40 * chipHeightScale)) : undefined;
-          const rankBarWidthPx = Math.max(20, Math.round((isMobileViewport ? 28 : 44) * chipWidthScale));
-          const rankColMinWidthPx = Math.max(36, Math.round(52 * chipWidthScale));
+          const rankBarWidthPx = Math.max(isMobileViewport ? 16 : 20, Math.round((isMobileViewport ? 24 : 44) * chipWidthScale));
+          const rankColMinWidthPx = Math.max(isMobileViewport ? 28 : 36, Math.round((isMobileViewport ? 44 : 52) * chipWidthScale));
           const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
           const renderStat = (statId) => {
             const chipClass = `flex items-center gap-1 bg-noir-surface/90 border border-primary/20 rounded-sm shrink-0 cursor-grab active:cursor-grabbing touch-manipulation`;
@@ -1499,10 +1499,11 @@ export default function Layout({ children }) {
           };
           return (
             <>
-            {/* On mobile: show when "Top bar" is selected; on desktop always show */}
-            <div className={`${isMobileViewport && mobileStatsDisplay === 'touch_ball' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} shrink-0 py-1 md:py-0 md:mx-0 md:px-0`}>
-              {/* Search + rank + stats cluster aligned right */}
-              <div className="flex items-center shrink-0 gap-1 md:gap-1.5">
+            {/* On mobile: one scrollable row for all chips so everything fits by scrolling */}
+            <div className={`${isMobileViewport && mobileStatsDisplay === 'touch_ball' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-1 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}>
+              {/* Single row: search + all stats in order (mobile scrolls; desktop same) */}
+              {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && (
+              <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
                 <div className="relative shrink-0 z-10" ref={userSearchRef}>
                   {!userSearchExpanded ? (
                     <button
@@ -1578,20 +1579,7 @@ export default function Layout({ children }) {
                     </div>
                   )}
                 </div>
-                {statOrder.includes('rank') && (() => {
-                  const content = renderStat('rank');
-                  if (!content) return null;
-                  return (
-                    <div key="rank" draggable={!isMobileViewport} onDragStart={(e) => handleDragStart(e, 'rank')} onDragOver={handleDragOver} onDrop={(e) => handleDrop(e, 'rank')} onDragEnd={handleDragEnd} className={`shrink-0 transition-all duration-150 ease-out ${isMobileViewport ? '' : 'cursor-grab active:cursor-grabbing'} ${draggingStatId === 'rank' ? 'opacity-50 scale-95' : ''}`}>
-                      {content}
-                    </div>
-                  );
-                })()}
-              </div>
-              {/* Scrollable right: other stats — on mobile hidden when "Touch ball" is selected */}
-              {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && (
-              <div className={`flex items-center ${topBarGapClass} flex-1 min-w-0 justify-end overflow-x-auto overflow-y-hidden scrollbar-thin scroll-smooth touch-pan-x snap-x snap-mandatory [scrollbar-width:thin]`}>
-                {statOrder.filter((statId) => statId !== 'rank' && statId !== 'notifications').map((statId) => {
+                {statOrder.filter((statId) => statId !== 'notifications').map((statId) => {
                   const content = renderStat(statId);
                   if (!content) return null;
                   return (

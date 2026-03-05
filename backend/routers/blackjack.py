@@ -500,8 +500,6 @@ def register(router):
     @router.post("/casino/blackjack/start")
     async def casino_blackjack_start(request: BlackjackStartRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
-        if current_user.get("in_jail"):
-            raise HTTPException(status_code=400, detail="You are in jail!")
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
         if not city:

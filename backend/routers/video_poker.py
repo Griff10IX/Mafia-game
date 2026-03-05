@@ -353,8 +353,6 @@ def register(router):
     @router.post("/casino/videopoker/deal")
     async def casino_videopoker_deal(request: VideoPokerDealRequest, current_user: dict = Depends(get_current_user_verified)):
         _invalidate_ownership_cache(current_user["id"])
-        if current_user.get("in_jail"):
-            raise HTTPException(status_code=400, detail="You are in jail!")
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "")
         if not city:
