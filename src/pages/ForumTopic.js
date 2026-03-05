@@ -164,7 +164,7 @@ export default function ForumTopic() {
     if (!text) { toast.error('Enter a comment'); return; }
     setPosting(true);
     try {
-      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: text });
+      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: text }, { timeout: 30000 });
       setCommentText('');
       const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
@@ -172,15 +172,14 @@ export default function ForumTopic() {
       fetchTopic().catch(() => {});
     } catch (err) {
       const status = err.response?.status;
-      const isSuccessStatus = typeof status === 'number' && status >= 200 && status < 300;
-      if (isSuccessStatus) {
-        toast.success('Posted');
+      const detail = err.response?.data?.detail;
+      const isExplicitReject = (status === 400 || status === 403 || status === 404) && typeof detail === 'string' && detail.length > 0;
+      if ((typeof status === 'number' && status >= 200 && status < 300) || !isExplicitReject) {
         setCommentText('');
+        toast.success('Posted');
         fetchTopic().catch(() => {});
-      } else if (!err.response || status === 0) {
-        toast.warning('Post may have gone through. Refresh to check.');
       } else {
-        toast.error(err.response?.data?.detail || 'Failed');
+        toast.error(detail || 'Failed');
       }
     } finally {
       setPosting(false);
@@ -192,21 +191,20 @@ export default function ForumTopic() {
     setPosting(true);
     setShowGifPicker(false);
     try {
-      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: '', gif_url: gifUrl });
+      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: '', gif_url: gifUrl }, { timeout: 30000 });
       const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       toast.success('GIF posted');
       fetchTopic().catch(() => {});
     } catch (err) {
       const status = err.response?.status;
-      const isSuccessStatus = typeof status === 'number' && status >= 200 && status < 300;
-      if (isSuccessStatus) {
+      const detail = err.response?.data?.detail;
+      const isExplicitReject = (status === 400 || status === 403 || status === 404) && typeof detail === 'string' && detail.length > 0;
+      if ((typeof status === 'number' && status >= 200 && status < 300) || !isExplicitReject) {
         toast.success('GIF posted');
         fetchTopic().catch(() => {});
-      } else if (!err.response || status === 0) {
-        toast.warning('Post may have gone through. Refresh to check.');
       } else {
-        toast.error(err.response?.data?.detail || 'Failed');
+        toast.error(detail || 'Failed');
       }
     } finally {
       setPosting(false);

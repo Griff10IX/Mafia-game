@@ -222,7 +222,13 @@ def register(router):
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
         messages_sent = 0
 
-        is_own_profile = current_user.get("id") == user_id
+        # Own profile only if the requested profile is the current user (by id and by URL username)
+        requested_username_norm = (username or "").strip().lower()
+        current_username_norm = (current_user.get("username") or "").strip().lower()
+        is_own_profile = (
+            current_user.get("id") == user_id
+            and requested_username_norm == current_username_norm
+        )
         is_admin = current_user.get("email") in ADMIN_EMAILS
         # When viewing another player's profile, never expose these in the API response
         # (so they can't be seen via inspect/Network). Admins get full data from admin endpoints.

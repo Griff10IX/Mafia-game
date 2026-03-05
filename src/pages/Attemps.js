@@ -13,7 +13,7 @@ const ATTEMPTS_STYLES = `
   @keyframes atmp-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .atmp-glow { animation: atmp-glow 4s ease-in-out infinite; }
   .atmp-corner::before, .atmp-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
+    content: ''; position: absolute; width: 12px; height: 12px; border-color: var(--noir-primary, #c9a84c); pointer-events: none;
   }
   .atmp-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
   .atmp-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
