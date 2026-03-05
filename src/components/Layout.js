@@ -114,7 +114,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
 }
 
 const TOPBAR_STAT_ORDER_KEY = 'topbar_stat_order';
-const DEFAULT_STAT_ORDER = ['rank', 'health', 'bullets', 'kills', 'money', 'points', 'respect_points', 'property', 'notifications'];
+const DEFAULT_STAT_ORDER = ['rank', 'health', 'bullets', 'kills', 'money', 'points', 'respect_points', 'notifications'];
 const TOPBAR_STAT_LABELS = { rank: 'Rank', health: 'Health', bullets: 'Bullets', kills: 'Kills', money: 'Cash', points: 'Points', respect_points: 'Respect', property: 'Casino & Property', notifications: 'Notifications' };
 const TOPBAR_GAP_KEY = 'topbar_gap';
 const TOPBAR_SIZE_KEY = 'topbar_size';
@@ -1359,7 +1359,7 @@ export default function Layout({ children }) {
           };
           const casinoProfit = user.casino_profit ?? 0;
           const propertyProfit = user.property_profit ?? 0;
-          const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-3 md:gap-4' : 'gap-2 md:gap-2';
+          const topBarGapClass = topBarGap === 'compact' ? 'gap-0.5 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-0.5 md:gap-2';
           const topBarIconSize = topBarSize === 'small' ? 12 : topBarSize === 'large' ? 20 : 16;
           const chipWidthScale = topBarChipWidthScale / 100;
           const chipHeightScale = topBarChipHeightScale / 100;
@@ -1367,10 +1367,10 @@ export default function Layout({ children }) {
           const topBarIconSizeEffective = Math.max(8, Math.min(20, Math.round(topBarIconSize * chipScaleAvg)));
           const topBarIconSizeEffectiveMobile = isMobileViewport ? Math.min(14, topBarIconSizeEffective) : topBarIconSizeEffective;
           const topBarChipStyle = {
-            paddingTop: Math.round(6 * chipHeightScale),
-            paddingBottom: Math.round(6 * chipHeightScale),
-            paddingLeft: Math.round(8 * chipWidthScale),
-            paddingRight: Math.round(8 * chipWidthScale),
+            paddingTop: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
+            paddingBottom: isMobileViewport ? Math.round(4 * chipHeightScale) : Math.round(6 * chipHeightScale),
+            paddingLeft: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
+            paddingRight: isMobileViewport ? Math.round(5 * chipWidthScale) : Math.round(8 * chipWidthScale),
           };
           const topBarChipMinHeight = isMobileViewport ? Math.max(20, Math.round(34 * chipHeightScale)) : undefined;
           const rankBarWidthPx = Math.max(isMobileViewport ? 16 : 20, Math.round((isMobileViewport ? 24 : 44) * chipWidthScale));
@@ -1410,7 +1410,7 @@ export default function Layout({ children }) {
               const healthNum = parseInt(healthStr, 10) || 100;
               const healthColor = healthNum > 50 ? 'text-emerald-400' : healthNum > 25 ? 'text-amber-400' : 'text-red-400';
               return (
-                <div className={`${chipClass} hidden md:flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Health: ${healthStr}%`}>
+                <div className={`${chipClass} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Health: ${healthStr}%`}>
                   <Heart size={topBarIconSizeEffectiveMobile} className={`${healthColor} shrink-0`} aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[4rem]`} data-testid="topbar-health">{healthStr}%</span>
                 </div>
@@ -1419,7 +1419,7 @@ export default function Layout({ children }) {
             if (statId === 'bullets') {
               const bulletsStr = formatInt(user.bullets);
               return (
-                <div className={`${chipClass} hidden md:flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Bullets: ${bulletsStr}`}>
+                <div className={`${chipClass} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Bullets: ${bulletsStr}`}>
                   <Crosshair size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums truncate max-w-[6rem]`} data-testid="topbar-bullets">{bulletsStr}</span>
                 </div>
@@ -1428,7 +1428,7 @@ export default function Layout({ children }) {
             if (statId === 'kills') {
               const killsStr = formatInt(user.total_kills);
               return (
-                <div className={`${chipClass} hidden md:flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Kills: ${killsStr}`}>
+                <div className={`${chipClass} flex min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Kills: ${killsStr}`}>
                   <Skull size={topBarIconSizeEffectiveMobile} className="text-red-400 shrink-0" aria-hidden />
                   <span className={`font-heading ${topBarTextClass} text-foreground tabular-nums min-w-[1.5rem] text-right`} data-testid="topbar-kills">{killsStr}</span>
                 </div>
@@ -1504,7 +1504,7 @@ export default function Layout({ children }) {
             <div className={`${isMobileViewport && mobileStatsDisplay === 'touch_ball' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0.5 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}>
               {/* Single row: search + all stats in order (mobile scrolls; desktop same) */}
               {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && (
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
                 <div className="relative shrink-0 z-10" ref={userSearchRef}>
                   {!userSearchExpanded ? (
                     <button
@@ -1580,7 +1580,7 @@ export default function Layout({ children }) {
                     </div>
                   )}
                 </div>
-                {statOrder.filter((statId) => statId !== 'notifications').map((statId) => {
+                {statOrder.filter((statId) => statId !== 'notifications' && statId !== 'property').map((statId) => {
                   const content = renderStat(statId);
                   if (!content) return null;
                   return (
