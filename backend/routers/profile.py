@@ -230,9 +230,7 @@ def register(router):
             and requested_username_norm == current_username_norm
         )
         is_admin = current_user.get("email") in ADMIN_EMAILS
-        # When viewing another player's profile, never expose these in the API response
-        # (so they can't be seen via inspect/Network). Admins get full data from admin endpoints.
-        # Wealth tier/range and crew (family) are shown for all profiles.
+        # When viewing another player's profile, expose only minimal public info (no stats, wealth, honours, etc.)
         if not is_own_profile:
             last_seen = None
             created_at = None
@@ -272,6 +270,22 @@ def register(router):
             "show_cars_on_profile": user.get("profile_show_cars", False),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
         }
+        if not is_own_profile:
+            for key in (
+                "prestige_level", "prestige_name", "wealth_rank", "wealth_rank_name", "wealth_rank_range",
+                "kills", "jail_busts", "created_at", "last_seen", "honours", "owned_casinos", "property",
+                "messages_sent", "messages_received", "top_cars", "show_cars_on_profile", "youtube_url",
+            ):
+                if key == "honours":
+                    out[key] = []
+                elif key in ("owned_casinos", "top_cars"):
+                    out[key] = []
+                elif key in ("prestige_level", "kills", "jail_busts", "messages_sent", "messages_received"):
+                    out[key] = 0
+                elif key == "prestige_name":
+                    out[key] = ""
+                else:
+                    out[key] = None
         # Only include admin_stats when viewing your own profile (never for other users, so it never appears in Network)
         if is_admin and is_own_profile:
             today_utc = datetime.now(timezone.utc).date().isoformat()
