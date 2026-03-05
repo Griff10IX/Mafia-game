@@ -143,10 +143,12 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                     </div>
                   </div>
                   
+                  {preview.created_at && (
                   <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
                     <Clock size={9} />
                     Joined {formatDateTime(preview.created_at)}
                   </div>
+                  )}
                   
                   {preview.admin_stats && (
                     <div className="pt-2 border-t border-border space-y-1">

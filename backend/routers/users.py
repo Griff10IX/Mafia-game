@@ -89,10 +89,10 @@ def register(router):
             # Robot bodyguards only appear when search matches their full name
             if is_bg and q_lower != username.lower():
                 continue
+            # Don't expose is_bodyguard so players can't enumerate bodyguards
             result.append({
                 "username": username,
                 "is_dead": bool(u.get("is_dead")),
                 "in_jail": bool(u.get("in_jail")),
-                "is_bodyguard": is_bg,
             })
         return {"users": result}

@@ -1080,12 +1080,8 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(200)
     for d in docs:
         d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
-        if d.get("is_bodyguard_kill") and not d.get("bodyguard_owner_username"):
-            target_user = await db.users.find_one({"id": d.get("target_id")}, {"_id": 0, "is_bodyguard": 1, "bodyguard_owner_id": 1})
-            if target_user and target_user.get("bodyguard_owner_id"):
-                owner = await db.users.find_one({"id": target_user["bodyguard_owner_id"]}, {"_id": 0, "username": 1})
-                if owner:
-                    d["bodyguard_owner_username"] = owner.get("username")
+        # Don't expose bodyguard_owner_username so players can't enumerate who has bodyguards
+        d.pop("bodyguard_owner_username", None)
     return {"attempts": docs}
 
 

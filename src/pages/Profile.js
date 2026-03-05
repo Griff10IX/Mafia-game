@@ -1012,6 +1012,7 @@ export default function Profile() {
 
         <TopCarsCard topCars={profile.top_cars} showCars={profile.show_cars_on_profile} />
 
+        {(isMe || profile.created_at) && (
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-fade-in`} style={{ animationDelay: '0.1s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 md:px-4 bg-primary/8 border-b border-primary/20 text-center">
@@ -1024,6 +1025,7 @@ export default function Profile() {
           </div>
           <div className="prof-art-line text-primary mx-4" />
         </div>
+        )}
 
         {isMe && hasAdminEmail && (
           <>

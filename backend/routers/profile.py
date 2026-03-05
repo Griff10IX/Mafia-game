@@ -222,6 +222,18 @@ def register(router):
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
         messages_sent = 0
 
+        is_own_profile = current_user.get("id") == user_id
+        is_admin = current_user.get("email") in ADMIN_EMAILS
+        # When viewing another player's profile, don't expose sensitive/exploitable data
+        if not is_own_profile and not is_admin:
+            last_seen = None
+            created_at = None
+            owned_casinos = []
+            is_bodyguard_visible = False
+        else:
+            created_at = user.get("created_at")
+            is_bodyguard_visible = bool(user.get("is_bodyguard"))
+
         out = {
             "id": user_id,
             "username": user["username"],
@@ -234,11 +246,11 @@ def register(router):
             "wealth_rank_range": wealth_range,
             "kills": user.get("total_kills", 0),
             "jail_busts": user.get("jail_busts", 0),
-            "created_at": user.get("created_at"),
+            "created_at": created_at,
             "avatar_url": user.get("avatar_url"),
             "is_dead": is_dead,
             "is_npc": bool(user.get("is_npc")),
-            "is_bodyguard": bool(user.get("is_bodyguard")),
+            "is_bodyguard": is_bodyguard_visible,
             "online": online,
             "last_seen": last_seen,
             "family_name": family_name,
@@ -252,7 +264,7 @@ def register(router):
             "show_cars_on_profile": user.get("profile_show_cars", False),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
         }
-        if current_user.get("email") in ADMIN_EMAILS:
+        if is_admin:
             today_utc = datetime.now(timezone.utc).date().isoformat()
             booze_today = user.get("booze_profit_today", 0) if user.get("booze_profit_today_date") == today_utc else 0
             out["admin_stats"] = {
