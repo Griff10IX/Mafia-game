@@ -1240,13 +1240,13 @@ export default function Layout({ children }) {
       )}
 
       {/* Top bar — on mobile use tighter padding so chips + scroll fit */}
-      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[48px] md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1.5 md:px-3 md:py-0 gap-1.5 md:gap-2`}>
-        <div className="flex items-center gap-1.5 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
+      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[40px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-1.5 py-1 md:px-3 md:py-0 gap-1 md:gap-2`}>
+        <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
         {mobileNavStyle !== 'bottom' && (
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             data-testid="mobile-menu-toggle"
-            className="md:hidden shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center -m-2"
+            className="md:hidden shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center -m-1.5"
             style={{ color: 'var(--noir-primary)' }}
             aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
           >
@@ -1372,7 +1372,7 @@ export default function Layout({ children }) {
             paddingLeft: Math.round(8 * chipWidthScale),
             paddingRight: Math.round(8 * chipWidthScale),
           };
-          const topBarChipMinHeight = isMobileViewport ? Math.max(24, Math.round(40 * chipHeightScale)) : undefined;
+          const topBarChipMinHeight = isMobileViewport ? Math.max(20, Math.round(34 * chipHeightScale)) : undefined;
           const rankBarWidthPx = Math.max(isMobileViewport ? 16 : 20, Math.round((isMobileViewport ? 24 : 44) * chipWidthScale));
           const rankColMinWidthPx = Math.max(isMobileViewport ? 28 : 36, Math.round((isMobileViewport ? 44 : 52) * chipWidthScale));
           const topBarTextClass = topBarSize === 'small' ? 'text-xs md:text-[10px]' : topBarSize === 'large' ? 'text-sm' : 'text-xs';
@@ -1394,7 +1394,7 @@ export default function Layout({ children }) {
               return (
                 <div className={`${chipClass} gap-1 sm:gap-1.5 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
                   <TrendingUp size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
-                  <div className="flex flex-col flex-1 sm:flex-initial shrink-0 min-w-0" style={{ minWidth: rankColMinWidthPx }}>
+                  <div className="hidden md:flex flex-col flex-1 sm:flex-initial shrink-0 min-w-0" style={{ minWidth: rankColMinWidthPx }}>
                     <span className="hidden sm:inline text-[10px] text-mutedForeground leading-none font-heading truncate">{rankName}</span>
                     <div className="shrink-0" style={{ width: rankBarWidthPx, position: 'relative', height: Math.max(4, Math.round(6 * chipHeightScale)), backgroundColor: '#333333', borderRadius: 9999, overflow: 'hidden', marginTop: 2 }}>
                       <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: `${progress}%`, minWidth: progress > 0 ? 2 : 0, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))', borderRadius: 9999, transition: 'width 0.3s ease' }} role="progressbar" aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100} />
@@ -1436,10 +1436,11 @@ export default function Layout({ children }) {
             }
             if (statId === 'money') {
               const moneyFull = formatMoney(user.money);
+              const moneyLabel = Math.trunc(Number(user.money ?? 0)).toLocaleString();
               return (
                 <div className={`${chipClass} min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={`Cash: ${moneyFull}`}>
                   <DollarSign size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
-                  <span className={`font-heading ${topBarTextClass} text-primary tabular-nums truncate max-w-[12rem]`} data-testid="topbar-money">{moneyFull}</span>
+                  <span className={`font-heading ${topBarTextClass} text-primary tabular-nums truncate max-w-[12rem]`} data-testid="topbar-money">{moneyLabel}</span>
                 </div>
               );
             }
@@ -1500,10 +1501,10 @@ export default function Layout({ children }) {
           return (
             <>
             {/* On mobile: one scrollable row for all chips so everything fits by scrolling */}
-            <div className={`${isMobileViewport && mobileStatsDisplay === 'touch_ball' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-1 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}>
+            <div className={`${isMobileViewport && mobileStatsDisplay === 'touch_ball' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0.5 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}>
               {/* Single row: search + all stats in order (mobile scrolls; desktop same) */}
               {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && (
-              <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
+              <div className="flex items-center gap-1 shrink-0">
                 <div className="relative shrink-0 z-10" ref={userSearchRef}>
                   {!userSearchExpanded ? (
                     <button
