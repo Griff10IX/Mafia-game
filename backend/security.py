@@ -195,6 +195,29 @@ async def set_telegram_webhook(webhook_url: str, secret_token: Optional[str] = N
         return False
 
 
+async def get_telegram_webhook_info(bot_token: Optional[str] = None) -> Optional[dict]:
+    """Get current webhook URL and pending update count from Telegram (getWebhookInfo). Returns None on failure."""
+    token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN
+    if not token or not HTTPX_AVAILABLE:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get("https://api.telegram.org/bot{}/getWebhookInfo".format(token))
+        if r.status_code != 200:
+            return {"error": r.text, "status_code": r.status_code}
+        data = r.json()
+        if not data.get("ok"):
+            return {"error": data.get("description", "unknown"), "ok": False}
+        return {
+            "url": data.get("result", {}).get("url") or "",
+            "pending_update_count": data.get("result", {}).get("pending_update_count", 0),
+            "has_custom_certificate": data.get("result", {}).get("has_custom_certificate", False),
+        }
+    except Exception as e:
+        logger.exception("Failed to get Telegram webhook info: %s", e)
+        return None
+
+
 async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
     """Register bot command menu with Telegram (setMyCommands) so /commands appear in the app menu. Uses TELEGRAM_BOT_TOKEN if bot_token not provided."""
     token = (bot_token or "").strip() or TELEGRAM_BOT_TOKEN

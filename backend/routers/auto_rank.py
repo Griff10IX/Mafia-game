@@ -980,7 +980,7 @@ def register(router):
         """Telegram bot webhook: receive commands from users who have Telegram set for Auto Rank. Commands: /start, /autorank, /summary, /enable, /disable."""
         if telegram_webhook_secret:
             secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
-            if (secret or "").strip() != telegram_webhook_secret:
+            if secret and (secret.strip() != telegram_webhook_secret):
                 raise HTTPException(status_code=403, detail="Invalid webhook secret")
         try:
             body = await request.json()
@@ -1083,6 +1083,36 @@ def register(router):
         except Exception as e:
             logger.exception("Telegram webhook handler: %s", e)
             return {"ok": True}
+
+    @router.get("/admin/auto-rank/telegram-webhook-status")
+    async def admin_telegram_webhook_status(current_user: dict = Depends(get_current_user)):
+        """Admin: get current Telegram webhook URL and pending update count. Use to verify bot receives commands."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        info = await security_module.get_telegram_webhook_info()
+        base_from_env = (os.environ.get("TELEGRAM_WEBHOOK_BASE_URL") or os.environ.get("BASE_URL") or "").strip().rstrip("/")
+        expected_url = (base_from_env + "/api/auto-rank/telegram-webhook") if base_from_env else ""
+        return {
+            "webhook_info": info,
+            "expected_url_if_base_set": expected_url or None,
+            "TELEGRAM_WEBHOOK_BASE_URL_or_BASE_URL_set": bool(base_from_env),
+            "hint": "If url is empty, set TELEGRAM_WEBHOOK_BASE_URL or BASE_URL and restart (or call POST /admin/auto-rank/telegram-webhook-register). Message the SAME bot (game bot) that has this webhook; set your Chat ID in Profile → Telegram.",
+        }
+
+    @router.post("/admin/auto-rank/telegram-webhook-register")
+    async def admin_telegram_webhook_register(current_user: dict = Depends(get_current_user)):
+        """Admin: register webhook with Telegram now (no restart). Uses TELEGRAM_WEBHOOK_BASE_URL or BASE_URL from env."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        base = (os.environ.get("TELEGRAM_WEBHOOK_BASE_URL") or os.environ.get("BASE_URL") or "").strip().rstrip("/")
+        if not base:
+            raise HTTPException(status_code=400, detail="Set TELEGRAM_WEBHOOK_BASE_URL or BASE_URL in .env first")
+        url = base + "/api/auto-rank/telegram-webhook"
+        ok = await security_module.set_telegram_webhook(url, secret_token=os.environ.get("TELEGRAM_WEBHOOK_SECRET") or None)
+        if not ok:
+            raise HTTPException(status_code=502, detail="setWebhook failed; check server logs and TELEGRAM_BOT_TOKEN")
+        await security_module.set_telegram_bot_commands()
+        return {"message": "Webhook and command menu registered.", "url": url}
 
     class IntervalBody(BaseModel):
         interval_seconds: Optional[int] = None

@@ -38,10 +38,10 @@ DAILY_TRIBUTE_AMOUNT = int(os.environ.get("DAILY_TRIBUTE_AMOUNT", "500"))
 TRIBUTE_DEPOSIT_CONFIG_ID = "tribute_deposit"
 
 
-def _next_tribute_deposit_utc():
-    """Next occurrence of TRIBUTE_DEPOSIT_UTC_HOUR (UTC). Returns (next_iso, daily_time_label e.g. '5:00 PM UTC')."""
+def _next_tribute_deposit_utc(deposit_utc_hour: Optional[int] = None):
+    """Next occurrence of deposit hour (UTC). Returns (next_iso, daily_time_label e.g. '5:00 PM UTC'). Uses deposit_utc_hour if provided, else TRIBUTE_DEPOSIT_UTC_HOUR env."""
     now = datetime.now(timezone.utc)
-    h = TRIBUTE_DEPOSIT_UTC_HOUR % 24
+    h = (int(deposit_utc_hour) if deposit_utc_hour is not None else TRIBUTE_DEPOSIT_UTC_HOUR) % 24
     today_at = now.replace(hour=h, minute=0, second=0, microsecond=0)
     if now >= today_at:
         next_at = today_at + timedelta(days=1)
@@ -587,7 +587,9 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     tribute_bank = int(current_user.get("tribute_bank") or 0)
     tribute_bullets = int(current_user.get("tribute_bullets") or 0)
     tribute_loot_box_pieces = int(current_user.get("tribute_loot_box_pieces") or 0)
-    next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc()
+    tribute_doc = await db.game_config.find_one({"id": TRIBUTE_DEPOSIT_CONFIG_ID}, {"_id": 0, "deposit_utc_hour": 1})
+    deposit_hour = int(tribute_doc.get("deposit_utc_hour") or TRIBUTE_DEPOSIT_UTC_HOUR) % 24 if tribute_doc else TRIBUTE_DEPOSIT_UTC_HOUR
+    next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc(deposit_hour)
     has_mission_1 = FIRST_MISSION_ID in completed_ids
     has_mission_2 = SECOND_MISSION_ID in completed_ids
     has_mission_3 = THIRD_MISSION_ID in completed_ids
@@ -845,18 +847,26 @@ MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_P
 
 async def run_daily_tribute_deposit():
     """
-    Credit DAILY_TRIBUTE_AMOUNT to every user's tribute_bank once per day at TRIBUTE_DEPOSIT_UTC_HOUR (UTC).
+    Credit DAILY_TRIBUTE_AMOUNT to every user's tribute_bank once per day at deposit_utc_hour (UTC).
+    Deposit time and "already ran today" are stored in game_config (id=tribute_deposit): deposit_utc_hour, last_run_utc_date.
+    We atomically claim the run for today (set last_run_utc_date only when not already today) so a restart or multiple workers cannot double-pay.
     For each mission, users who completed it get that mission's reward_tribute_daily, reward_respect_daily,
-    and reward_tribute_bullets_daily (all go to tribute_bank / respect_points / tribute_bullets).
-    Mission 2 also gets extra loot_box_pieces. Idempotent: uses game_config last_run_utc_date.
+    and reward_tribute_bullets_daily. Mission 2 also gets extra loot_box_pieces.
     """
     now = datetime.now(timezone.utc)
-    if now.hour != TRIBUTE_DEPOSIT_UTC_HOUR:
-        return
     today = now.date().isoformat()
-    doc = await db.game_config.find_one({"id": TRIBUTE_DEPOSIT_CONFIG_ID}, {"_id": 0, "last_run_utc_date": 1})
-    if doc and doc.get("last_run_utc_date") == today:
+    doc = await db.game_config.find_one({"id": TRIBUTE_DEPOSIT_CONFIG_ID}, {"_id": 0, "deposit_utc_hour": 1, "last_run_utc_date": 1})
+    deposit_hour = int(doc.get("deposit_utc_hour") or TRIBUTE_DEPOSIT_UTC_HOUR) % 24 if doc else TRIBUTE_DEPOSIT_UTC_HOUR
+    if now.hour != deposit_hour:
         return
+    # Atomic claim: only update last_run_utc_date if it is not already today (prevents double-pay on restart or multiple workers)
+    claim_filter = {
+        "id": TRIBUTE_DEPOSIT_CONFIG_ID,
+        "$or": [{"last_run_utc_date": {"$ne": today}}, {"last_run_utc_date": {"$exists": False}}],
+    }
+    claim_result = await db.game_config.update_one(claim_filter, {"$set": {"last_run_utc_date": today}}, upsert=True)
+    if claim_result.modified_count == 0 and claim_result.upserted_id is None:
+        return  # already ran today
     result = await db.users.update_many(
         {},
         {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT, "loot_box_pieces": DAILY_TRIBUTE_LOOT_BOX_PIECES}},
@@ -883,11 +893,6 @@ async def run_daily_tribute_deposit():
             {"$inc": inc},
         )
         counts[mid] = r.modified_count
-    await db.game_config.update_one(
-        {"id": TRIBUTE_DEPOSIT_CONFIG_ID},
-        {"$set": {"last_run_utc_date": today}},
-        upsert=True,
-    )
     logging.getLogger(__name__).info(
         "Daily tribute deposit: %s cash + %s loot to %d users; per-mission bonuses %s at %s UTC",
         DAILY_TRIBUTE_AMOUNT,
