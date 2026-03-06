@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box, PanelLeft, LayoutDashboard, Smartphone } from 'lucide-react';
+import { Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2, Type, Square, Sparkles, AlignLeft, Box, PanelLeft, PanelRight, LayoutDashboard, Smartphone } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS, THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES, THEME_SIDEBAR_SPACING, THEME_WRITING_COLOURS, THEME_TEXT_STYLES, THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, getThemeColour } from '../constants/themes';
 import styles from '../styles/noir.module.css';
@@ -895,8 +895,8 @@ export default function ThemePicker({ open, onClose }) {
                     </div>
                   </div>
                   <div>
-                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Stats on mobile</p>
-                    <p className="text-[9px] text-mutedForeground mb-1.5">Show health, cash, rank, etc. in the top bar or in a floating touch ball (tap to open).</p>
+                    <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Stats display</p>
+                    <p className="text-[9px] text-mutedForeground mb-1.5">Show health, cash, rank, etc. in the top bar, a floating touch ball (tap to open), or a right sidebar.</p>
                     <div className="flex flex-wrap gap-1.5 mt-1.5">
                       <button
                         type="button"
@@ -917,6 +917,16 @@ export default function ThemePicker({ open, onClose }) {
                       >
                         <LayoutGrid className="w-3.5 h-3.5" />
                         Touch ball
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMobileStatsDisplay('right_sidebar')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border-2 text-[10px] font-heading uppercase tracking-wider transition-colors ${
+                          mobileStatsDisplay === 'right_sidebar' ? 'bg-primary/30 text-primary border-primary' : 'border-zinc-600 bg-zinc-800 text-mutedForeground hover:border-primary/50 hover:text-foreground'
+                        }`}
+                      >
+                        <PanelRight className="w-3.5 h-3.5" />
+                        Right sidebar
                       </button>
                     </div>
                   </div>

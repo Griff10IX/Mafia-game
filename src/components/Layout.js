@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -166,7 +166,7 @@ function loadBottomNavShowDividers() {
 function loadMobileStatsDisplay() {
   try {
     const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY);
-    if (v === 'top_bar' || v === 'touch_ball') return v;
+    if (v === 'top_bar' || v === 'touch_ball' || v === 'right_sidebar') return v;
   } catch (_) {}
   return 'top_bar';
 }
@@ -280,6 +280,7 @@ export default function Layout({ children }) {
   const notificationDragRef = useRef({ isDragging: false, startX: 0, startY: 0, ballX: 0, ballY: 0 });
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [topBarCustomizeOpen, setTopBarCustomizeOpen] = useState(false);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState([]);
@@ -1579,9 +1580,9 @@ export default function Layout({ children }) {
           return (
             <>
             {/* On mobile: one scrollable row for all chips so everything fits by scrolling */}
-            <div className={`${isMobileViewport && mobileStatsDisplay === 'touch_ball' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0.5 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}>
+            <div className={`${(isMobileViewport && mobileStatsDisplay === 'touch_ball') || mobileStatsDisplay === 'right_sidebar' ? 'hidden' : 'flex'} md:flex items-center ${topBarGapClass} flex-1 min-w-0 py-0.5 md:py-0 md:mx-0 md:px-0 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth touch-pan-x min-h-0`}>
               {/* Single row: search + all stats in order (mobile scrolls; desktop same) */}
-              {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && (
+              {(!isMobileViewport || mobileStatsDisplay === 'top_bar') && mobileStatsDisplay !== 'right_sidebar' && (
               <div className="flex items-center gap-0.5 md:gap-1 shrink-0">
                 <div className="relative shrink-0 z-10" ref={userSearchRef}>
                   {!userSearchExpanded ? (
@@ -1771,7 +1772,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* Main content */}
-      <main className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''}`}>
+      <main className={`md:ml-48 mt-12 min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-24 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? 'md:mr-52' : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
@@ -1783,6 +1784,146 @@ export default function Layout({ children }) {
         )}
         {children}
       </main>
+
+      {/* Right sidebar (stats, links, logout) – when theme set to "Right sidebar" */}
+      {user && mobileStatsDisplay === 'right_sidebar' && (
+        <>
+          {isMobileViewport && rightSidebarOpen && (
+            <div className="fixed inset-0 bg-black/50 z-40 md:hidden" aria-hidden onClick={() => setRightSidebarOpen(false)} />
+          )}
+          {isMobileViewport && (
+            <button
+              type="button"
+              onClick={() => setRightSidebarOpen(true)}
+              className="fixed right-0 top-1/2 -translate-y-1/2 z-50 w-8 h-14 flex items-center justify-center rounded-l-lg border border-l-0 shadow-lg md:hidden"
+              style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-primary)' }}
+              aria-label="Open stats sidebar"
+            >
+              <PanelRight size={18} style={{ color: 'var(--noir-primary)' }} />
+            </button>
+          )}
+          <div
+            className={`fixed top-0 right-0 h-full w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${
+              isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'
+            }`}
+            style={sidebarBgStyle}
+          >
+            <div className={`px-2.5 py-2 border-b ${styles.borderGoldLight} shrink-0 flex items-center justify-between`}>
+              <span className="text-[10px] font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--noir-primary)' }}>Stats</span>
+              {isMobileViewport && (
+                <button type="button" onClick={() => setRightSidebarOpen(false)} className="p-1 rounded" style={{ color: 'var(--noir-primary)' }} aria-label="Close">
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <div className="flex-1 overflow-y-auto px-2 py-2 space-y-3 min-h-0">
+              {/* Stats */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Money</span>
+                  <span style={{ color: 'var(--noir-foreground)' }}>{formatMoney(user.money)}</span>
+                </div>
+                <Link to="/bank" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5">
+                  <span style={{ color: 'var(--noir-muted)' }}>Bank</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Points</span>
+                  <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.points)}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Bullets</span>
+                  <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.bullets)}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Gun</span>
+                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.gun_name || 'None'}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Armour</span>
+                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.armour_name || 'None'}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Location</span>
+                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.location || '—'}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Health</span>
+                  <span style={{ color: 'var(--noir-foreground)' }}>{Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%'}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Gang</span>
+                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.gang_name || 'None'}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Rank</span>
+                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.rank_name || rankProgress?.current_rank_name || '—'}</span>
+                </div>
+                {rankProgress && (
+                  <div className="pt-1">
+                    <p className="text-[9px] font-heading uppercase tracking-wider mb-0.5" style={{ color: 'var(--noir-muted)' }}>Rank progress</p>
+                    <div className="h-1 w-full rounded-full overflow-hidden" style={{ backgroundColor: 'var(--noir-surface)' }}>
+                      <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
+                    </div>
+                    <p className="text-[9px] font-heading mt-0.5" style={{ color: 'var(--noir-primary)' }}>{(Number(rankProgress.rank_points_progress) || 0).toFixed(0)}%</p>
+                  </div>
+                )}
+                <button type="button" onClick={() => { setThemePickerOpen(true); isMobileViewport && setRightSidebarOpen(false); }} className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-0.5 mt-1" style={{ color: 'var(--noir-primary)' }}>
+                  <span>Styling</span>
+                  <span>Change</span>
+                </button>
+              </div>
+              <div className="h-px shrink-0" style={dividerStyle} />
+              {/* Achievements & Feed */}
+              <div className="space-y-1">
+                <Link to="/objectives" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5" style={{ color: 'var(--noir-primary)' }}>
+                  <Trophy size={12} /> Achievements
+                </Link>
+                <Link to="/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex items-center justify-between gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span className="flex items-center gap-1.5">
+                    <Newspaper size={12} style={{ color: 'var(--noir-primary)' }} /> Latest Feed
+                    {unreadCount > 0 && <span className="text-[9px] font-bold" style={{ color: 'var(--noir-primary)' }}>({unreadCount} new)</span>}
+                  </span>
+                </Link>
+              </div>
+              <div className="h-px shrink-0" style={dividerStyle} />
+              {/* Quick links */}
+              <div className="space-y-1">
+                <Link to="/referrals" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Referrals</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <Link to="/garage" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>My Cars</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <Link to="/gta" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>GTA</span>
+                  <span className="text-emerald-500 text-[9px]">Available</span>
+                </Link>
+                <Link to="/organised-crime" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>OC</span>
+                  <span className="text-emerald-500 text-[9px]">Available</span>
+                </Link>
+                <Link to="/travel" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Drive</span>
+                  <span className="text-emerald-500 text-[9px]">Available</span>
+                </Link>
+              </div>
+            </div>
+            <div className={`px-2 py-2 border-t ${styles.borderGoldLight} shrink-0`}>
+              <button
+                onClick={handleLogout}
+                data-testid="logout-button-right-sidebar"
+                className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold"
+              >
+                <LogOut size={12} />
+                Logout
+              </button>
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Mobile bottom nav (only when theme set to "Bottom bar" and on small screens) */}
       {mobileNavStyle === 'bottom' && (

@@ -218,6 +218,9 @@ export default function MPBlackjackGamePage() {
               const hand = p.hand || [];
               const isMe = p.user_id === myUserId;
               const isCurrent = idx === currentTurnIndex;
+              const roundOver = status === 'completed';
+              const opponentRevealed = roundOver || p.status === 'stood' || p.status === 'bust';
+              const showOpponentCards = isMe || opponentRevealed;
               return (
                 <div
                   key={p.user_id}
@@ -229,11 +232,11 @@ export default function MPBlackjackGamePage() {
                     {p.username} {isMe && '(You)'}
                   </p>
                   <p className="text-[9px] text-mutedForeground font-heading">
-                    {p.status === 'bust' ? 'Bust' : p.status === 'stood' ? 'Stand' : hand.length ? `Total: ${handTotal(hand)}` : '—'}
+                    {p.status === 'bust' ? 'Bust' : p.status === 'stood' ? 'Stand' : hand.length && showOpponentCards ? `Total: ${handTotal(hand)}` : hand.length && !showOpponentCards ? `${hand.length} card${hand.length !== 1 ? 's' : ''}` : '—'}
                   </p>
                   <div className="flex flex-wrap gap-0.5 mt-1">
                     {hand.map((card, i) => (
-                      <PlayingCard key={i} card={card} hidden={false} index={i} total={hand.length} />
+                      <PlayingCard key={i} card={card} hidden={!showOpponentCards} index={i} total={hand.length} />
                     ))}
                   </div>
                 </div>
