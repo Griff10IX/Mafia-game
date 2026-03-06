@@ -7,6 +7,28 @@ import styles from '../styles/noir.module.css';
 
 const MAX_TRAVELS_PER_HOUR = 15;
 
+/** Slug for location image path: "New York" -> "new-york". Images go in public/travel/{slug}.png */
+function locationImageSlug(location) {
+  if (!location || typeof location !== 'string') return null;
+  return location.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || null;
+}
+
+function locationImageSrc(location) {
+  const slug = locationImageSlug(location);
+  return slug ? `/travel/${slug}.png` : null;
+}
+
+/** Small location image for destination cards; hides on load error */
+function DestinationLocationImage({ src }) {
+  const [hidden, setHidden] = useState(false);
+  if (hidden) return null;
+  return (
+    <div className="w-8 h-8 rounded overflow-hidden border border-primary/20 bg-primary/10 shrink-0">
+      <img src={src} alt="" className="w-full h-full object-cover" onError={() => setHidden(true)} />
+    </div>
+  );
+}
+
 const TRAVEL_STYLES = `
   @keyframes trv-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .trv-fade-in { animation: trv-fade-in 0.4s ease-out both; }
@@ -42,46 +64,62 @@ const TravelingScreen = ({ destination, timeLeft }) => (
   </div>
 );
 
-const CurrentLocationCard = ({ location, travelsUsed, maxTravels, userPoints }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in`}>
-    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-        Current Location
-      </h2>
-    </div>
-    <div className="p-2">
-      <div className="flex items-center gap-2 mb-2">
-        <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-          <MapPin className="text-primary" size={16} />
+function CurrentLocationCard({ location, travelsUsed, maxTravels, userPoints }) {
+  const imgSrc = locationImageSrc(location);
+  const [imgError, setImgError] = useState(false);
+  const showImage = imgSrc && !imgError;
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+          Current Location
+        </h2>
+      </div>
+      <div className="p-2">
+        <div className="flex items-center gap-2 mb-2">
+          {showImage ? (
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-md overflow-hidden border border-primary/30 bg-primary/10 shrink-0">
+              <img
+                src={imgSrc}
+                alt=""
+                className="w-full h-full object-cover"
+                onError={() => setImgError(true)}
+              />
+            </div>
+          ) : (
+            <div className="p-1.5 rounded bg-primary/20 border border-primary/30 shrink-0">
+              <MapPin className="text-primary" size={16} />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-[9px] text-mutedForeground uppercase tracking-wider mb-0.5">
+              You are in
+            </p>
+            <h3 className="text-base font-heading font-bold text-primary">
+              {location}
+            </h3>
+          </div>
         </div>
-        <div>
-          <p className="text-[9px] text-mutedForeground uppercase tracking-wider mb-0.5">
-            You are in
-          </p>
-          <h3 className="text-base font-heading font-bold text-primary">
-            {location}
-          </h3>
+        <div className="flex flex-wrap gap-3 text-[10px] font-heading">
+          <div className="flex items-center gap-1">
+            <Clock size={10} className="text-mutedForeground" />
+            <span className="text-mutedForeground">
+              Airport: <span className="font-bold text-foreground">{travelsUsed}/{maxTravels}</span> this hour
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Zap size={10} className="text-primary" />
+            <span className="text-mutedForeground">
+              Points: <span className="font-bold text-primary">{Number(userPoints ?? 0).toLocaleString()}</span>
+            </span>
+          </div>
         </div>
       </div>
-      <div className="flex flex-wrap gap-3 text-[10px] font-heading">
-        <div className="flex items-center gap-1">
-          <Clock size={10} className="text-mutedForeground" />
-          <span className="text-mutedForeground">
-            Airport: <span className="font-bold text-foreground">{travelsUsed}/{maxTravels}</span> this hour
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Zap size={10} className="text-primary" />
-          <span className="text-mutedForeground">
-            Points: <span className="font-bold text-primary">{Number(userPoints ?? 0).toLocaleString()}</span>
-          </span>
-        </div>
-      </div>
+      <div className="trv-art-line text-primary mx-2.5" />
     </div>
-    <div className="trv-art-line text-primary mx-2.5" />
-  </div>
-);
+  );
+}
 
 const DestinationCard = ({ 
   destination, 
@@ -94,11 +132,15 @@ const DestinationCard = ({
   const hasAirports = !!airport;
   const canUse = !travelDisabled && !travelInfo.carrying_booze && travelInfo.user_points >= (airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10));
 
+  const destImgSrc = locationImageSrc(destination);
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in ${travelDisabled ? 'opacity-70' : ''}`} data-testid={`dest-${destination}`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+        {destImgSrc && (
+          <DestinationLocationImage src={destImgSrc} />
+        )}
+        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex-1 text-center">
           {destination}
         </h3>
       </div>
