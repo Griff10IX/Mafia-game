@@ -231,6 +231,8 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const [weaponsList, setWeaponsList] = useState([]);
   const [buyingArmourLevel, setBuyingArmourLevel] = useState(null);
   const [buyingWeaponId, setBuyingWeaponId] = useState(null);
+  const [equippingWeaponId, setEquippingWeaponId] = useState(null);
+  const [equippingArmourLevel, setEquippingArmourLevel] = useState(null);
 
   useEffect(() => {
     if (meProp?.money != null) {
@@ -330,6 +332,66 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
       toast.error(Array.isArray(detail) ? detail[0]?.msg || 'Failed to buy weapon' : detail || 'Failed to buy weapon');
     } finally {
       setBuyingWeaponId(null);
+    }
+  };
+
+  const equipWeapon = async (weaponId) => {
+    setEquippingWeaponId(weaponId);
+    try {
+      await api.post('/weapons/equip', { weapon_id: weaponId });
+      toast.success('Weapon equipped');
+      refreshUser();
+      const weaponsRes = await api.get('/weapons', { params: effectiveState ? { state: effectiveState } : {} });
+      if (Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to equip weapon');
+    } finally {
+      setEquippingWeaponId(null);
+    }
+  };
+
+  const unequipWeapon = async () => {
+    setEquippingWeaponId('');
+    try {
+      await api.post('/weapons/unequip');
+      toast.success('Weapon unequipped');
+      refreshUser();
+      const weaponsRes = await api.get('/weapons', { params: effectiveState ? { state: effectiveState } : {} });
+      if (Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to unequip weapon');
+    } finally {
+      setEquippingWeaponId(null);
+    }
+  };
+
+  const equipArmour = async (level) => {
+    setEquippingArmourLevel(level);
+    try {
+      await api.post('/armour/equip', { level, state: data?.state || effectiveState });
+      toast.success('Armour equipped');
+      refreshUser();
+      const optsRes = await api.get('/armour/options', { params: effectiveState ? { state: effectiveState } : {} });
+      if (optsRes.data?.options) setArmourOptions(optsRes.data.options);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to equip armour');
+    } finally {
+      setEquippingArmourLevel(null);
+    }
+  };
+
+  const unequipArmour = async () => {
+    setEquippingArmourLevel(0);
+    try {
+      await api.post('/armour/unequip');
+      toast.success('Armour unequipped');
+      refreshUser();
+      const optsRes = await api.get('/armour/options', { params: effectiveState ? { state: effectiveState } : {} });
+      if (optsRes.data?.options) setArmourOptions(optsRes.data.options);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to unequip armour');
+    } finally {
+      setEquippingArmourLevel(null);
     }
   };
 
@@ -626,28 +688,46 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                     <Shield size={10} className="sm:w-[11px] sm:h-[11px]" />
                     Buy Armour ({armourOptions.filter(o => o.armoury_stock > 0).length} in stock)
                   </div>
-                  <div className="flex flex-wrap gap-1 sm:gap-1.5">
+                  <div className="flex flex-wrap gap-1 sm:gap-1.5 items-center">
                     {armourOptions.length
                       ? armourOptions.map((opt) => {
-                          const cost = opt.effective_cost_money != null ? opt.effective_cost_money : opt.effective_cost_points;
-                          const isPoints = opt.effective_cost_points != null;
+                          const costMoney = opt.effective_cost_money;
+                          const costPoints = opt.effective_cost_points;
+                          const cost = costMoney != null ? costMoney : costPoints;
+                          const isPoints = costPoints != null && costMoney == null;
                           const canAffordArmour = opt.affordable && !opt.owned;
                           const inStock = opt.armoury_stock > 0;
+                          const equipping = equippingArmourLevel === opt.level || (equippingArmourLevel === 0 && opt.equipped);
                           return (
-                            <button
-                              key={opt.level}
-                              type="button"
-                              disabled={opt.owned || buyingArmourLevel != null || !canAffordArmour}
-                              onClick={() => buyArmour(opt.level)}
-                              className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded text-[9px] sm:text-[10px] font-heading font-bold border transition-all ${
-                                inStock 
-                                  ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-95'
-                                  : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                            >
-                              {opt.owned ? `Lv.${opt.level} ✓` : `Lv.${opt.level} ${isPoints ? `${Number(cost).toLocaleString()}p` : formatMoney(cost)}`}
-                              {inStock && !opt.owned && <span className="ml-1 text-[7px] text-emerald-400">({opt.armoury_stock})</span>}
-                            </button>
+                            <div key={opt.level} className="flex items-center gap-0.5">
+                              {opt.owned ? (
+                                <>
+                                  <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground">
+                                    Lv.{opt.level}{opt.equipped ? ' ✓' : ''}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={equipping}
+                                    onClick={() => opt.equipped ? unequipArmour() : equipArmour(opt.level)}
+                                    className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                                  >
+                                    {equipping ? '...' : opt.equipped ? 'Unequip' : 'Equip'}
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={buyingArmourLevel != null || !canAffordArmour}
+                                  onClick={() => buyArmour(opt.level)}
+                                  className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded text-[9px] sm:text-[10px] font-heading font-bold border transition-all ${
+                                    inStock ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-95' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
+                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                >
+                                  Lv.{opt.level} {isPoints ? `${Number(cost).toLocaleString()}p` : formatMoney(cost)}
+                                  {inStock && <span className="ml-1 text-[7px] text-emerald-400">({opt.armoury_stock})</span>}
+                                </button>
+                              )}
+                            </div>
                           );
                         })
                       : <span className="text-[9px] sm:text-[10px] text-zinc-500">Loading...</span>}
@@ -660,32 +740,65 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                     <Swords size={10} className="sm:w-[11px] sm:h-[11px]" />
                     Buy Weapons ({weaponsList.filter(w => w.armoury_stock > 0).length} in stock)
                   </div>
-                  <div className="flex flex-wrap gap-1 sm:gap-1.5">
+                  <div className="flex flex-wrap gap-1 sm:gap-1.5 items-center">
                     {weaponsList.length
-                      ? weaponsList.slice(0, 8).map((w) => {
+                      ? weaponsList.map((w) => {
                           const priceMoney = w.effective_price_money ?? w.price_money;
                           const pricePoints = w.effective_price_points ?? w.price_points;
                           const canAffordMoney = priceMoney != null && (me?.money ?? 0) >= priceMoney;
                           const canAffordPoints = pricePoints != null && (me?.points ?? 0) >= pricePoints;
                           const canBuyW = !w.owned && !w.locked && (canAffordMoney || canAffordPoints);
-                          const usePoints = canBuyW && pricePoints != null && (canAffordPoints || !canAffordMoney);
                           const inStock = w.armoury_stock > 0;
+                          const nameShort = (w.name?.replace(/\s*\(.*\)/, '') || w.id).trim();
+                          const equipping = equippingWeaponId === w.id || (equippingWeaponId === '' && w.equipped);
                           return (
-                            <button
-                              key={w.id}
-                              type="button"
-                              disabled={w.owned || w.locked || buyingWeaponId != null || !canBuyW}
-                              onClick={() => buyWeapon(w.id, usePoints ? 'points' : 'money')}
-                              className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded text-[9px] sm:text-[10px] font-heading border transition-all truncate max-w-[120px] sm:max-w-[130px] ${
-                                inStock
-                                  ? 'bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 active:scale-95'
-                                  : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
-                              } disabled:opacity-50 disabled:cursor-not-allowed`}
-                              title={w.name}
-                            >
-                              {w.owned ? `${w.name?.replace(/\s*\(.*\)/, '')} ✓` : (w.name?.replace(/\s*\(.*\)/, '') || w.id) + (pricePoints != null ? ` ${Number(pricePoints).toLocaleString()}p` : ` ${formatMoney(priceMoney)}`)}
-                              {inStock && !w.owned && <span className="ml-1 text-[7px] text-emerald-400">({w.armoury_stock})</span>}
-                            </button>
+                            <div key={w.id} className="flex items-center gap-0.5 flex-wrap">
+                              {w.owned ? (
+                                <>
+                                  <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[100px] sm:max-w-[110px]" title={w.name}>
+                                    {nameShort}{w.equipped ? ' ✓' : ''}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    disabled={equipping}
+                                    onClick={() => w.equipped ? unequipWeapon() : equipWeapon(w.id)}
+                                    className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
+                                  >
+                                    {equipping ? '...' : w.equipped ? 'Unequip' : 'Equip'}
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {priceMoney != null && (
+                                    <button
+                                      type="button"
+                                      disabled={w.locked || buyingWeaponId != null || !canAffordMoney}
+                                      onClick={() => buyWeapon(w.id, 'money')}
+                                      className={`px-1.5 sm:px-2 py-1 rounded text-[8px] sm:text-[9px] font-heading border transition-all truncate max-w-[100px] sm:max-w-[110px] ${
+                                        inStock ? 'bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
+                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                      title={w.name}
+                                    >
+                                      {nameShort} {formatMoney(priceMoney)}
+                                    </button>
+                                  )}
+                                  {pricePoints != null && (
+                                    <button
+                                      type="button"
+                                      disabled={w.locked || buyingWeaponId != null || !canAffordPoints}
+                                      onClick={() => buyWeapon(w.id, 'points')}
+                                      className={`px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading border transition-all shrink-0 ${
+                                        inStock ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
+                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                      title={`${w.name} — ${Number(pricePoints).toLocaleString()} points`}
+                                    >
+                                      {priceMoney != null ? `${Number(pricePoints).toLocaleString()}p` : `${nameShort} ${Number(pricePoints).toLocaleString()}p`}
+                                    </button>
+                                  )}
+                                  {inStock && !w.owned && <span className="text-[7px] text-emerald-400">({w.armoury_stock})</span>}
+                                </>
+                              )}
+                            </div>
                           );
                         })
                       : <span className="text-[9px] sm:text-[10px] text-zinc-500">Loading...</span>}

@@ -168,7 +168,7 @@ function loadMobileStatsDisplay() {
     const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY);
     if (v === 'top_bar' || v === 'touch_ball' || v === 'right_sidebar') return v;
   } catch (_) {}
-  return 'top_bar';
+  return 'right_sidebar';
 }
 
 function loadNotificationBallPosition() {

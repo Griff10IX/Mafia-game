@@ -145,7 +145,7 @@ export default function ThemePicker({ open, onClose }) {
     try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {}
     window.dispatchEvent(new Event('topbar-prefs-changed'));
   };
-  const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'top_bar';
+  const mobileStatsDisplay = (typeof window !== 'undefined' && localStorage.getItem(MOBILE_STATS_DISPLAY_KEY)) || 'right_sidebar';
   const sidebarShowDividers = (typeof window !== 'undefined' && localStorage.getItem(SIDEBAR_SHOW_DIVIDERS_KEY)) === 'true';
   const bottomNavShowDividers = (typeof window !== 'undefined' && localStorage.getItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY)) === 'true';
   const SIDEBAR_DIVIDER_STYLE_KEY = 'sidebar_divider_style';
