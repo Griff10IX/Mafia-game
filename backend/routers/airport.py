@@ -33,7 +33,7 @@ MAX_EXTRA_AIRMILES = 50
 
 # Per-user cache for GET /travel/info
 _travel_info_cache: dict = {}
-_TRAVEL_INFO_TTL_SEC = 10
+_TRAVEL_INFO_TTL_SEC = 5
 _TRAVEL_INFO_MAX_ENTRIES = 5000
 
 # Short TTL cache for GET /airports (all states)

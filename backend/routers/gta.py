@@ -86,6 +86,7 @@ from server import (
     CustomCarImageUpdate,
 )
 from routers.objectives import update_objectives_progress
+from routers.airport import _invalidate_travel_info_cache
 
 
 # 75% harder to earn respect from GTAs (award 25% of base/milestone)
@@ -378,6 +379,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict) -> GTAAttemptRes
                 "damage_percent": damage_percent,
             }
         )
+        _invalidate_travel_info_cache(current_user["id"])
         rp_before = int(current_user.get("rank_points") or 0)
         gta_inc = {"money": car["value"], "rank_points": rank_points, "total_gta": 1}
         if (car.get("rarity") or "").strip().lower() == "uncommon":
@@ -848,6 +850,7 @@ async def buy_car(
         "damage_percent": 0,
     }
     await db.user_cars.insert_one(doc)
+    _invalidate_travel_info_cache(current_user["id"])
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": -price}},

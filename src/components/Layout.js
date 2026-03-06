@@ -521,20 +521,42 @@ export default function Layout({ children }) {
 
   // Depend on user?.id (not user) so we don't re-run when user object reference changes (e.g. after fetchCasinoProperty) and cause a request loop
   const userId = user?.id;
+  // Casino/property: only fetch once on load (for nav/header) and when opening My Properties (profit updates when they view it after gambling)
+  const casinoPropertyFetchedRef = useRef(false);
+  if (!userId) casinoPropertyFetchedRef.current = false;
+  useEffect(() => {
+    if (!userId) return;
+    if (!casinoPropertyFetchedRef.current) {
+      casinoPropertyFetchedRef.current = true;
+      const t = setTimeout(() => fetchCasinoProperty(), 80);
+      return () => clearTimeout(t);
+    }
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (location.pathname === '/my-properties') fetchCasinoProperty();
+  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Live casino profit when owner is viewing it (My Properties or right sidebar with stats)
+  const showCasinoProfitLive = hasCasinoOrProperty && (
+    location.pathname === '/my-properties' ||
+    (mobileStatsDisplay === 'right_sidebar' && (!isMobileViewport || rightSidebarOpen))
+  );
+  useEffect(() => {
+    if (!showCasinoProfitLive || !userId) return;
+    const intervalId = setInterval(fetchCasinoProperty, 10000);
+    return () => clearInterval(intervalId);
+  }, [showCasinoProfitLive, userId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Shell: auth/me + rank-progress only (objectives deferred to avoid burst)
     fetchData();
-    // Stagger secondary fetches so we don't hit the network with 10+ requests at once (notifications/war/help-desk run in their own effects)
     const path = location.pathname;
     const needRanking = ['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (userId && mobileStatsDisplay === 'right_sidebar');
-    const t1 = setTimeout(() => { fetchCasinoProperty(); }, 80);
     const t2 = setTimeout(() => {
       if (needRanking) fetchRankingCounts();
       if (userId && mobileStatsDisplay === 'right_sidebar') {
         api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       }
     }, 200);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    return () => { clearTimeout(t2); };
   }, [location.pathname, userId, mobileStatsDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
