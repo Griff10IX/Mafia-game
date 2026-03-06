@@ -589,8 +589,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
     target_health = float(target.get("health", DEFAULT_HEALTH))
     if not request.bullets_to_use or request.bullets_to_use < 1:
         raise HTTPException(status_code=400, detail="You must enter how many bullets to use (at least 1).")
-    bullets_used = min(request.bullets_to_use, attacker_bullets, bullets_required)
-    health_dealt_pct = (bullets_used / bullets_required) * 100.0
+    bullets_used = min(request.bullets_to_use, attacker_bullets)
+    health_dealt_pct = min(100.0, (bullets_used / bullets_required) * 100.0)
     killed = health_dealt_pct >= target_health
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"bullets": -bullets_used}})
     attempt_base = {

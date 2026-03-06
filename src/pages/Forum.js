@@ -10,11 +10,6 @@ import styles from '../styles/noir.module.css';
 const FORUM_STYLES = `
   @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .f-fade-in { animation: f-fade-in 0.4s ease-out both; }
-  .f-corner::before, .f-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .f-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .f-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .f-card { transition: all 0.3s ease; }
   .f-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .f-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }

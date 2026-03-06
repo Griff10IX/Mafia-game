@@ -12,11 +12,6 @@ const ATTEMPTS_STYLES = `
   .atmp-scale-in { animation: atmp-scale-in 0.35s ease-out both; }
   @keyframes atmp-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .atmp-glow { animation: atmp-glow 4s ease-in-out infinite; }
-  .atmp-corner::before, .atmp-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: var(--noir-primary, #c9a84c); pointer-events: none;
-  }
-  .atmp-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .atmp-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .atmp-card { transition: all 0.3s ease; }
   .atmp-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .atmp-row { transition: all 0.2s ease; }
@@ -149,7 +144,7 @@ const AttemptRow = ({ attempt }) => {
 };
 
 const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage, delay = 0 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atmp-card atmp-corner atmp-fade-in`} style={{ animationDelay: `${delay}s` }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atmp-card atmp-fade-in`} style={{ animationDelay: `${delay}s` }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atmp-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">

@@ -30,11 +30,6 @@ const DASH_STYLES = `
   .dash-scale-in { animation: dash-scale-in 0.35s ease-out both; }
   @keyframes dash-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .dash-glow { animation: dash-glow 4s ease-in-out infinite; }
-  .dash-corner::before, .dash-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .dash-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .dash-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .dash-card { transition: all 0.3s ease; }
   .dash-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .dash-stat-card { transition: all 0.3s ease; }
@@ -61,7 +56,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
   const progressLabel = hasPremiumBar ? progressPct.toFixed(2) : progressPct.toFixed(0);
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-corner dash-scale-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-scale-in`}>
       <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none dash-glow" />
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
@@ -145,7 +140,7 @@ const StatCard = ({ stat, delay = 0 }) => {
 
   return (
     <div
-      className={`relative ${styles.surface} rounded-md overflow-hidden p-2 border border-primary/20 dash-stat-card dash-corner dash-scale-in`}
+      className={`relative ${styles.surface} rounded-md overflow-hidden p-2 border border-primary/20 dash-stat-card dash-scale-in`}
       style={{ animationDelay: `${delay}s` }}
       data-testid={stat.testId}
     >

@@ -13,11 +13,6 @@ const BANK_STYLES = `
   .bank-scale-in { animation: bank-scale-in 0.35s ease-out both; }
   @keyframes bank-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .bank-glow { animation: bank-glow 4s ease-in-out infinite; }
-  .bank-corner::before, .bank-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .bank-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .bank-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .bank-card { transition: all 0.3s ease; }
   .bank-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .bank-row { transition: all 0.2s ease; }
@@ -88,7 +83,7 @@ const InterestBankCard = ({
   onDeposit,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in`}>
     {!hideHeader && (
       <>
         <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
@@ -178,7 +173,7 @@ const SwissBankCard = ({
   onWithdraw,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`} style={{ animationDelay: '0.05s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in`} style={{ animationDelay: '0.05s' }}>
     {!hideHeader && (
       <>
         <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bank-glow" />
@@ -298,7 +293,7 @@ const SendMoneyCard = ({
   onSend,
   hideHeader = false
 }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-corner bank-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in`}>
     {!hideHeader && (
       <>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -544,7 +539,7 @@ export default function Bank() {
       <p className="text-[9px] text-zinc-500 font-heading italic">Interest deposits, Swiss account, and transfers.</p>
 
       <div className="space-y-2">
-        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-corner bank-fade-in">
+        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-fade-in">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
@@ -574,7 +569,7 @@ export default function Bank() {
           )}
         </div>
 
-        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-corner bank-fade-in" style={{ animationDelay: '0.05s' }}>
+        <div className="relative rounded-md overflow-hidden border border-primary/20 bank-fade-in" style={{ animationDelay: '0.05s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"

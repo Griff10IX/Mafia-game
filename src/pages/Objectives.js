@@ -11,11 +11,6 @@ const OBJ_STYLES = `
   .obj-scale-in { animation: obj-scale-in 0.35s ease-out both; }
   @keyframes obj-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .obj-glow { animation: obj-glow 4s ease-in-out infinite; }
-  .obj-corner::before, .obj-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .obj-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .obj-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .obj-card { transition: all 0.3s ease; }
   .obj-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .obj-row { transition: all 0.2s ease; }
@@ -146,7 +141,7 @@ export default function Objectives() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 min-w-0">
         {/* Today */}
-        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-corner obj-fade-in`} style={{ animationDelay: '0s' }}>
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-fade-in`} style={{ animationDelay: '0s' }}>
           <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none obj-glow" />
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0 min-w-0">
@@ -189,7 +184,7 @@ export default function Objectives() {
         </section>
 
         {/* This week */}
-        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-corner obj-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 obj-card obj-fade-in`} style={{ animationDelay: '0.05s' }}>
           <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none obj-glow" />
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0 min-w-0">
@@ -232,7 +227,7 @@ export default function Objectives() {
         </section>
 
         {/* This month - full width below Today & Week */}
-        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 md:col-span-2 obj-card obj-corner obj-fade-in`} style={{ animationDelay: '0.1s' }}>
+        <section className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 flex flex-col min-w-0 md:col-span-2 obj-card obj-fade-in`} style={{ animationDelay: '0.1s' }}>
           <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none obj-glow" />
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 shrink-0 min-w-0">

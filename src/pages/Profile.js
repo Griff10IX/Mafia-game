@@ -16,11 +16,6 @@ const PROFILE_STYLES = `
   .prof-scale-in { animation: prof-scale-in 0.35s ease-out both; }
   @keyframes prof-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .prof-glow { animation: prof-glow 4s ease-in-out infinite; }
-  .prof-corner::before, .prof-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .prof-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .prof-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .prof-card { transition: all 0.3s ease; }
   .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .prof-row { transition: all 0.2s ease; }
@@ -138,7 +133,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
   const avatarSrc = isRobotBodyguard ? null : profile.avatar_url;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
       <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none prof-glow" />
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
@@ -275,8 +270,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
 };
 
 const HonoursCard = ({ honours }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
-    <div className="absolute top-0 left-0 w-16 h-16 bg-primary/5 rounded-full blur-2xl pointer-events-none prof-glow" />
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.05s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center justify-center gap-1">
@@ -350,7 +344,7 @@ const YouTubeCard = ({ youtubeUrl, autoplay = true }) => {
   if (!videoId) return null;
   const embedSrc = `https://www.youtube.com/embed/${videoId}${autoplay ? '?autoplay=1&mute=1' : ''}`;
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
         <Youtube size={12} className="md:w-3.5 md:h-3.5 text-primary" />
@@ -375,7 +369,7 @@ const YouTubeCard = ({ youtubeUrl, autoplay = true }) => {
 const TopCarsCard = ({ topCars, showCars }) => {
   if (showCars === false || !topCars?.length) return null;
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.06s' }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.06s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
         <Car size={12} className="md:w-3.5 md:h-3.5 text-primary" />
@@ -410,8 +404,7 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
   const isEmpty = !hasCasinos && !hasProperty;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
-      <div className="absolute top-0 left-0 w-16 h-16 bg-primary/5 rounded-full blur-2xl pointer-events-none prof-glow" />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
         <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center justify-center gap-1">
@@ -506,7 +499,7 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
 };
 
 const AdminStatsCard = ({ adminStats }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border-2 border-primary/30 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.1s' }}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border-2 border-primary/30 prof-card prof-fade-in`} style={{ animationDelay: '0.1s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
@@ -569,7 +562,7 @@ const AvatarCard = ({
   };
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-corner prof-fade-in`} style={{ animationDelay: '0.05s' }}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
         <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
@@ -936,7 +929,7 @@ export default function Profile() {
           <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Dossier</p>
           <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Profile</h1>
         </div>
-        <div className={`relative ${styles.panel} rounded-lg border border-primary/20 prof-corner prof-fade-in py-16 text-center overflow-hidden`} style={{ animationDelay: '0.05s' }}>
+        <div className={`relative ${styles.panel} rounded-lg border border-primary/20 prof-fade-in py-16 text-center overflow-hidden`} style={{ animationDelay: '0.05s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <UserIcon size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">

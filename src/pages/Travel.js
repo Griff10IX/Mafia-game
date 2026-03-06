@@ -12,11 +12,6 @@ const TRAVEL_STYLES = `
   .trv-fade-in { animation: trv-fade-in 0.4s ease-out both; }
   @keyframes trv-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
   .trv-glow { animation: trv-glow 4s ease-in-out infinite; }
-  .trv-corner::before, .trv-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .trv-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .trv-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .trv-card { transition: all 0.3s ease; }
   .trv-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .trv-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
@@ -235,6 +230,7 @@ const DestinationCard = ({
 
 const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-corner trv-fade-in`} style={{ animationDelay: '0.1s' }}>
+    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none trv-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">

@@ -10,11 +10,6 @@ import styles from '../styles/noir.module.css';
 const UO_STYLES = `
   @keyframes uo-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .uo-fade-in { animation: uo-fade-in 0.4s ease-out both; }
-  .uo-corner::before, .uo-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .uo-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .uo-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .uo-card { transition: all 0.3s ease; }
   .uo-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .uo-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
@@ -43,7 +38,7 @@ const LoadingSpinner = () => (
 );
 
 const OnlineCountCard = ({ totalOnline }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-corner uo-fade-in`}>
+  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
