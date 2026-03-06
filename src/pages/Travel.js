@@ -285,8 +285,8 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
         <div className="space-y-0.5 text-[10px] font-heading">
           {[
             { name: 'Exclusive', time: '7s', color: 'text-purple-400' },
-            { name: 'Custom', time: '20s', color: 'text-primary' },
-            { name: 'Legendary', time: '12s', color: 'text-orange-400' },
+            { name: 'Custom', time: '12s', color: 'text-primary' },
+            { name: 'Legendary', time: '15s', color: 'text-orange-400' },
             { name: 'Ultra Rare', time: '18s', color: 'text-pink-400' },
             { name: 'Rare', time: '25s', color: 'text-blue-400' },
             { name: 'Uncommon', time: '35s', color: 'text-green-400' },
@@ -308,7 +308,7 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
         <div className="space-y-0.5 text-[10px] font-heading mb-2">
           <div className="flex items-center justify-between">
             <span className="text-mutedForeground">Custom Car (Store)</span>
-            <span className="text-foreground font-bold">20s</span>
+            <span className="text-foreground font-bold">12s</span>
           </div>
           <div className="flex items-center justify-between">
             <span className="text-mutedForeground">Airport</span>

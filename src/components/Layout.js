@@ -546,7 +546,7 @@ export default function Layout({ children }) {
     let intervalId;
     const deferred = setTimeout(() => {
       fetchWarStatus();
-      intervalId = setInterval(fetchWarStatus, 15000);
+      intervalId = setInterval(fetchWarStatus, 45000);
     }, 0);
     return () => {
       clearTimeout(deferred);
@@ -571,7 +571,7 @@ export default function Layout({ children }) {
     let intervalId;
     const deferred = setTimeout(() => {
       pollNotifications();
-      intervalId = setInterval(pollNotifications, 15000);
+      intervalId = setInterval(pollNotifications, 30000);
     }, 0);
     return () => {
       clearTimeout(deferred);
@@ -583,7 +583,7 @@ export default function Layout({ children }) {
     let intervalId;
     const deferred = setTimeout(() => {
       fetchHelpDeskOpenCount();
-      intervalId = setInterval(fetchHelpDeskOpenCount, 30000);
+      intervalId = setInterval(fetchHelpDeskOpenCount, 60000);
     }, 0);
     return () => {
       clearTimeout(deferred);

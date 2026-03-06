@@ -333,12 +333,12 @@ POINT_PACKAGES = {
 TRAVEL_TIMES = {
     "loot_exclusive": 5,
     "exclusive": 7,
-    "legendary": 12,
+    "legendary": 15,
     "ultra_rare": 18,
     "rare": 25,
     "uncommon": 35,
     "common": 45,
-    "custom": 20,  # Custom car from points
+    "custom": 12,  # Custom car from points
     "airport": 0   # Airport (instant)
 }
 

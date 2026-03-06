@@ -128,6 +128,8 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     user_cars = await db.user_cars.find({"user_id": uid}).to_list(50)
     cars_with_travel_times = []
     for uc in user_cars:
+        if uc.get("car_id") == "car_custom":
+            continue  # Custom car is returned separately as custom_car; don't duplicate in cars list
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
         if car_info:
             travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
@@ -135,11 +137,6 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             name = car_info["name"]
             image = car_info.get("image", "")
             damage_percent = min(100, max(0, float(uc.get("damage_percent", 0))))
-            if uc.get("car_id") == "car_custom":
-                if uc.get("custom_name"):
-                    name = uc["custom_name"]
-                if uc.get("custom_image_url"):
-                    image = uc["custom_image_url"]
             cars_with_travel_times.append({
                 "user_car_id": user_car_id,
                 "car_id": car_info["id"],
@@ -151,7 +148,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
                 "can_travel": damage_percent < 100,
             })
 
-    # Sort by travel time ascending (fastest first) so exclusive/ultra_rare/legendary show first
+    # Sort by travel time ascending (fastest first) so best cars show first in destination cards
     cars_with_travel_times.sort(key=lambda c: (c["travel_time"], c.get("name", "")))
 
     custom_car = None
