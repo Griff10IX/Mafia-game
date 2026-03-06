@@ -522,24 +522,19 @@ export default function Layout({ children }) {
   // Depend on user?.id (not user) so we don't re-run when user object reference changes (e.g. after fetchCasinoProperty) and cause a request loop
   const userId = user?.id;
   useEffect(() => {
-    // Shell ready: only auth/me + rank-progress so user and rank appear ASAP
+    // Shell: auth/me + rank-progress only (objectives deferred to avoid burst)
     fetchData();
-    // Defer badge/notification and casino-property fetches to after first paint so they don't block shell
-    const deferred = setTimeout(() => {
-      fetchUnreadCount();
-      fetchHelpDeskOpenCount();
-      fetchWarStatus();
-      // Fetch crimes/gta/jail when on those pages, or when right sidebar is shown (for quick-link labels)
-      const path = location.pathname;
-      if (['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (userId && mobileStatsDisplay === 'right_sidebar')) {
-        fetchRankingCounts();
-      }
+    // Stagger secondary fetches so we don't hit the network with 10+ requests at once (notifications/war/help-desk run in their own effects)
+    const path = location.pathname;
+    const needRanking = ['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (userId && mobileStatsDisplay === 'right_sidebar');
+    const t1 = setTimeout(() => { fetchCasinoProperty(); }, 80);
+    const t2 = setTimeout(() => {
+      if (needRanking) fetchRankingCounts();
       if (userId && mobileStatsDisplay === 'right_sidebar') {
         api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       }
-      fetchCasinoProperty();
-    }, 0);
-    return () => clearTimeout(deferred);
+    }, 200);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [location.pathname, userId, mobileStatsDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -547,7 +542,7 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       fetchWarStatus();
       intervalId = setInterval(fetchWarStatus, 45000);
-    }, 0);
+    }, 150);
     return () => {
       clearTimeout(deferred);
       if (intervalId) clearInterval(intervalId);
@@ -572,7 +567,7 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       pollNotifications();
       intervalId = setInterval(pollNotifications, 30000);
-    }, 0);
+    }, 50);
     return () => {
       clearTimeout(deferred);
       if (intervalId) clearInterval(intervalId);
@@ -584,7 +579,7 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       fetchHelpDeskOpenCount();
       intervalId = setInterval(fetchHelpDeskOpenCount, 60000);
-    }, 0);
+    }, 300);
     return () => {
       clearTimeout(deferred);
       if (intervalId) clearInterval(intervalId);
@@ -599,6 +594,12 @@ export default function Layout({ children }) {
       setFlashNews([]);
     }
   };
+
+  // Objectives: run once after a delay so backend can auto-reset daily/weekly/monthly without adding to initial request burst
+  useEffect(() => {
+    const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 500);
+    return () => clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     fetchFlashNews();
@@ -631,8 +632,6 @@ export default function Layout({ children }) {
         has_casino_or_property: prev?.has_casino_or_property ?? userRes.data.has_casino_or_property,
       }));
       setRankProgress(progressRes.data);
-      // Trigger objectives endpoint so backend can auto-reset daily/weekly/monthly without user opening Objectives page
-      api.get('/objectives').catch(() => {});
     } catch (error) {
       const msg = getApiErrorMessage(error);
       toast.error(msg || 'Failed to load profile. Please log in again.');
