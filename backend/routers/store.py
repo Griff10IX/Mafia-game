@@ -35,6 +35,7 @@ from routers.booze_run import (
     BOOZE_CAPACITY_UPGRADE_AMOUNT,
     BOOZE_CAPACITY_BONUS_MAX,
 )
+from routers.airport import _invalidate_travel_info_cache
 
 # Store-only constants
 SILENCER_COST_POINTS = 150
@@ -238,6 +239,7 @@ async def buy_custom_car(
         "custom_image_url": None,
         "acquired_at": datetime.now(timezone.utc).isoformat(),
     })
+    _invalidate_travel_info_cache(current_user["id"])
     await send_notification(
         current_user["id"],
         "🚗 Custom Car Purchased",
