@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PlusCircle, Spade, XCircle } from 'lucide-react';
+import { PlusCircle, Spade, XCircle, Swords } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -25,6 +25,7 @@ export default function MPBlackjackPage() {
   const [createAnonymous, setCreateAnonymous] = useState(false);
   const [createCardLimit, setCreateCardLimit] = useState('no_limit');
   const [createTwentyOneOnly, setCreateTwentyOneOnly] = useState(false);
+  const [createEliminationRounds, setCreateEliminationRounds] = useState(false);
   const [creating, setCreating] = useState(false);
   const [myUserId, setMyUserId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -102,6 +103,7 @@ export default function MPBlackjackPage() {
         anonymous: createAnonymous,
         card_limit: cardLimit,
         twenty_one_only: createTwentyOneOnly,
+        elimination_rounds: createEliminationRounds,
       });
       await refreshUser();
       toast.success('Game created');
@@ -112,6 +114,7 @@ export default function MPBlackjackPage() {
       setCreateAnonymous(false);
       setCreateCardLimit('no_limit');
       setCreateTwentyOneOnly(false);
+      setCreateEliminationRounds(false);
       fetchGames();
       if (res.data?.game_id) navigate(`/casino/mp-blackjack/game/${res.data.game_id}`);
     } catch (e) {
@@ -119,6 +122,12 @@ export default function MPBlackjackPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const inputStyle = {
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(212,175,55,0.2)',
+    color: 'inherit',
   };
 
   return (
@@ -167,9 +176,7 @@ export default function MPBlackjackPage() {
         {/* Game list */}
         <div className="divide-y divide-primary/10">
           {loading ? (
-            <p className="text-[10px] text-mutedForeground font-heading py-5 text-center animate-pulse">
-              Scanning the room…
-            </p>
+            <p className="text-[10px] text-mutedForeground font-heading py-5 text-center animate-pulse">Scanning the room…</p>
           ) : games.length === 0 ? (
             <div className="py-8 text-center space-y-1">
               <p className="text-2xl opacity-20">♠</p>
@@ -184,6 +191,7 @@ export default function MPBlackjackPage() {
               const canCancelOpen = isOpen && (isCreator || isAdmin || isModerator);
               const canJoin = isOpen && playerCount < maxPlayers;
               const isPlaying = g.status === 'playing';
+              const isReady = g.phase === 'ready';
               const isCompleted = g.status === 'completed';
               const pips = Array.from({ length: maxPlayers }, (_, i) => i < playerCount);
 
@@ -194,31 +202,32 @@ export default function MPBlackjackPage() {
                   style={{ animationDelay: `${0.06 + idx * 0.03}s` }}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    {/* Left: info */}
                     <div className="min-w-0 flex-1 space-y-1.5">
-                      {/* Row 1: creator + status badge */}
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[10px] font-heading font-bold text-foreground">
-                          {g.creator_username ?? '—'}
-                        </span>
+                        <span className="text-[10px] font-heading font-bold text-foreground">{g.creator_username ?? '—'}</span>
                         <span
                           className="text-[8px] font-heading font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
                           style={
-                            isPlaying
+                            isReady
+                              ? { background: 'rgba(139,92,246,0.15)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }
+                              : isPlaying
                               ? { background: 'rgba(212,175,55,0.15)', color: '#d4af37', border: '1px solid rgba(212,175,55,0.3)' }
                               : isCompleted
                               ? { background: 'rgba(161,161,170,0.12)', color: '#a1a1aa', border: '1px solid rgba(161,161,170,0.2)' }
                               : { background: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }
                           }
                         >
-                          {isPlaying ? 'In Progress' : isCompleted ? 'Finished' : 'Open'}
+                          {isReady ? 'Ready Up' : isPlaying ? `Round ${g.current_round ?? 1}` : isCompleted ? 'Finished' : 'Open'}
                         </span>
-                        {g.anonymous && (
-                          <span className="text-[8px] font-heading text-mutedForeground italic">anon</span>
+                        {g.elimination_rounds && (
+                          <span className="inline-flex items-center gap-0.5 text-[8px] font-heading px-1.5 py-0.5 rounded-full"
+                            style={{ background: 'rgba(251,113,133,0.12)', color: '#fb7185', border: '1px solid rgba(251,113,133,0.25)' }}>
+                            <Swords size={8} /> Elimination
+                          </span>
                         )}
+                        {g.anonymous && <span className="text-[8px] font-heading text-mutedForeground italic">anon</span>}
                       </div>
 
-                      {/* Row 2: financials */}
                       <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-[9px] font-heading text-mutedForeground">
                           Buy-in <span className="text-primary font-bold">{formatMoney(g.buy_in)}</span>
@@ -233,7 +242,6 @@ export default function MPBlackjackPage() {
                         )}
                       </div>
 
-                      {/* Row 3: seat pips */}
                       <div className="flex items-center gap-1">
                         {pips.map((filled, i) => (
                           <div key={i} className="w-2 h-2 rounded-full"
@@ -243,13 +251,10 @@ export default function MPBlackjackPage() {
                             }}
                           />
                         ))}
-                        <span className="text-[8px] font-heading text-mutedForeground ml-1">
-                          {playerCount}/{maxPlayers}
-                        </span>
+                        <span className="text-[8px] font-heading text-mutedForeground ml-1">{playerCount}/{maxPlayers}</span>
                       </div>
                     </div>
 
-                    {/* Right: actions */}
                     <div className="flex items-center gap-1.5 shrink-0">
                       {canCancelOpen && (
                         <button
@@ -314,54 +319,30 @@ export default function MPBlackjackPage() {
           </div>
 
           <div className="p-3 space-y-3">
-            {/* Max players */}
             <div className="flex items-center gap-3">
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Max Players</label>
-              <select
-                value={createMaxPlayers}
-                onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
-              >
-                {[2, 3, 4, 5, 6, 7, 8].map((n) => (
-                  <option key={n} value={n}>{n} players</option>
-                ))}
+              <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
+                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle}>
+                {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} players</option>)}
               </select>
             </div>
 
-            {/* Buy-in */}
             <div className="flex items-center gap-3">
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Buy-in ($)</label>
-              <FormattedNumberInput
-                value={createBuyIn}
-                onChange={setCreateBuyIn}
-                placeholder="100,000"
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
-              />
+              <FormattedNumberInput value={createBuyIn} onChange={setCreateBuyIn} placeholder="100,000"
+                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
             </div>
 
-            {/* Extra prize */}
             <div className="flex items-center gap-3">
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Bonus Prize</label>
-              <FormattedNumberInput
-                value={createExtraPrize}
-                onChange={setCreateExtraPrize}
-                placeholder="0 (optional)"
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
-              />
+              <FormattedNumberInput value={createExtraPrize} onChange={setCreateExtraPrize} placeholder="0 (optional)"
+                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
             </div>
 
-            {/* Card limit */}
             <div className="flex items-center gap-3">
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Card Limit</label>
-              <select
-                value={createCardLimit}
-                onChange={(e) => setCreateCardLimit(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
-              >
+              <select value={createCardLimit} onChange={(e) => setCreateCardLimit(e.target.value)}
+                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle}>
                 <option value="no_limit">No limit</option>
                 <option value="2">2 cards</option>
                 <option value="3">3 cards</option>
@@ -372,55 +353,60 @@ export default function MPBlackjackPage() {
             {/* Toggles */}
             <div className="pt-2 border-t border-primary/15 space-y-2">
               <p className="text-[8px] font-heading text-mutedForeground uppercase tracking-widest">House Rules</p>
+
+              {/* Elimination rounds gets its own highlighted row */}
+              <label className="flex items-start gap-2.5 cursor-pointer group p-2 rounded-lg transition-colors"
+                style={{ background: createEliminationRounds ? 'rgba(251,113,133,0.06)' : 'transparent', border: createEliminationRounds ? '1px solid rgba(251,113,133,0.2)' : '1px solid transparent' }}>
+                <div onClick={() => setCreateEliminationRounds((v) => !v)}
+                  className="relative w-8 h-4 rounded-full transition-all flex-shrink-0 mt-0.5"
+                  style={{
+                    background: createEliminationRounds ? 'linear-gradient(90deg,#fb7185,#e11d48)' : 'rgba(255,255,255,0.1)',
+                    border: createEliminationRounds ? '1px solid #fb7185' : '1px solid rgba(255,255,255,0.15)',
+                    cursor: 'pointer',
+                  }}>
+                  <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
+                    style={{ left: createEliminationRounds ? '17px' : '2px', background: createEliminationRounds ? '#fff' : 'rgba(255,255,255,0.4)' }} />
+                </div>
+                <div>
+                  <span className="text-[9px] font-heading font-bold" style={{ color: createEliminationRounds ? '#fb7185' : 'inherit' }}>
+                    Elimination Rounds
+                  </span>
+                  <p className="text-[8px] font-heading text-mutedForeground mt-0.5">
+                    Each round, player with the lowest hand is knocked out. Last one standing wins the pot.
+                  </p>
+                </div>
+              </label>
+
               {[
                 { label: 'Exclude yourself from play', val: createExcludeYourself, set: setCreateExcludeYourself },
                 { label: 'Anonymous game (hide creator)', val: createAnonymous, set: setCreateAnonymous },
                 { label: 'Twenty-one only (only 21 wins)', val: createTwentyOneOnly, set: setCreateTwentyOneOnly },
               ].map(({ label, val, set }) => (
                 <label key={label} className="flex items-center gap-2.5 cursor-pointer group">
-                  <div
-                    onClick={() => set((v) => !v)}
+                  <div onClick={() => set((v) => !v)}
                     className="relative w-8 h-4 rounded-full transition-all flex-shrink-0"
                     style={{
                       background: val ? 'linear-gradient(90deg,#d4af37,#a08020)' : 'rgba(255,255,255,0.1)',
                       border: val ? '1px solid #c9a84c' : '1px solid rgba(255,255,255,0.15)',
                       cursor: 'pointer',
-                    }}
-                  >
-                    <div
-                      className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-                      style={{ left: val ? '17px' : '2px', background: val ? '#1a1200' : 'rgba(255,255,255,0.4)' }}
-                    />
+                    }}>
+                    <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
+                      style={{ left: val ? '17px' : '2px', background: val ? '#1a1200' : 'rgba(255,255,255,0.4)' }} />
                   </div>
-                  <span className="text-[9px] font-heading text-foreground group-hover:text-primary/80 transition-colors">
-                    {label}
-                  </span>
+                  <span className="text-[9px] font-heading text-foreground group-hover:text-primary/80 transition-colors">{label}</span>
                 </label>
               ))}
             </div>
 
-            {/* Actions */}
             <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                disabled={creating}
-                onClick={handleCreate}
+              <button type="button" disabled={creating} onClick={handleCreate}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                style={{
-                  background: 'linear-gradient(180deg,#d4af37,#a08020)',
-                  borderColor: '#c9a84c',
-                  color: '#1a1200',
-                  boxShadow: '0 3px 10px rgba(212,175,55,0.2)',
-                }}
-              >
+                style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
                 <Spade size={13} />
                 {creating ? 'Dealing…' : 'Deal Cards'}
               </button>
-              <button
-                type="button"
-                onClick={() => setCreateOpen(false)}
-                className="px-3 py-2 rounded-lg border border-primary/20 text-mutedForeground font-heading text-[9px] uppercase hover:bg-primary/8 transition-colors"
-              >
+              <button type="button" onClick={() => setCreateOpen(false)}
+                className="px-3 py-2 rounded-lg border border-primary/20 text-mutedForeground font-heading text-[9px] uppercase hover:bg-primary/8 transition-colors">
                 Cancel
               </button>
             </div>
@@ -439,9 +425,9 @@ export default function MPBlackjackPage() {
           {[
             'All buy-ins go directly into the shared pot',
             'Best hand at the table wins the entire pot',
-            'Blackjack pays first — ties go to the pot',
+            'Everyone must Ready Up before cards are dealt',
             'Bust and you lose your buy-in',
-            'Dealer stands on 17 · Blackjack pays 3:2',
+            'Elimination mode: lowest hand is knocked out each round',
             'Card limits and 21-only rules set per table',
           ].map((rule) => (
             <div key={rule} className="flex items-start gap-1.5 text-[9px] font-heading text-mutedForeground">

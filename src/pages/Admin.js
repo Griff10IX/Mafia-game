@@ -145,6 +145,7 @@ export default function Admin() {
   const [deleteUserId, setDeleteUserId] = useState('');
   const [wipeConfirmText, setWipeConfirmText] = useState('');
   const [freshConfirmText, setFreshConfirmText] = useState('');
+  const [dropAllCasinosConfirmText, setDropAllCasinosConfirmText] = useState('');
   const [dbLoading, setDbLoading] = useState(false);
   const [dbFreshLoading, setDbFreshLoading] = useState(false);
   const [giveAllPoints, setGiveAllPoints] = useState(100);
@@ -972,6 +973,24 @@ export default function Admin() {
     finally { setDbLoading(false); }
   };
 
+  const handleDropAllCasinosProperties = async () => {
+    if (dropAllCasinosConfirmText !== 'DROP ALL CASINOS PROPERTIES') {
+      toast.error('Type "DROP ALL CASINOS PROPERTIES" to confirm');
+      return;
+    }
+    if (!window.confirm('Drop ALL casinos and properties for EVERYONE? Every dice, blackjack, slots, airport, armoury, etc. will become unclaimed.')) return;
+    setDbLoading(true);
+    try {
+      const res = await api.post('/admin/drop-all-casinos-properties', { confirmation_text: 'DROP ALL CASINOS PROPERTIES' });
+      toast.success(res.data?.message || 'All casinos and properties dropped.');
+      setDropAllCasinosConfirmText('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setDbLoading(false);
+    }
+  };
+
   const handleWipeAllUsers = async () => {
     if (wipeConfirmText !== 'WIPE ALL') { toast.error('Type "WIPE ALL" to confirm'); return; }
     if (!window.confirm('FINAL WARNING: Delete ALL users?')) return;
@@ -1588,31 +1607,49 @@ export default function Admin() {
                     <Row label="Lifetime points spent" value={fmtNum(u.lifetime_points_spent)} />
                   </div>
                 </Section>
-                {(userDetailData.casinos_owned?.length > 0) && (
-                  <Section title="Casinos owned">
-                    <ul className="text-foreground space-y-1">
-                      {userDetailData.casinos_owned.map((c, i) => (
-                        <li key={i} className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-[11px]">{c.game_type} · {c.location}</span>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (!window.confirm(`Drop ${c.game_type} (${c.location}) from this user?`)) return;
-                              try {
-                                await api.post('/admin/drop-user-casino', { user_id: userDetailData.user?.id, game_type: c.game_type, location: c.location });
-                                toast.success('Casino dropped');
-                                if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
-                              } catch (e) {
-                                toast.error(e.response?.data?.detail || 'Failed to drop casino');
-                              }
-                            }}
-                            className="px-2 py-0.5 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
-                          >
-                            Drop
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                {(userDetailData.casinos_owned?.length > 0 || userDetailData.user?.id) && (
+                  <Section title="Casinos & properties">
+                    {(userDetailData.casinos_owned?.length > 0) && (
+                      <ul className="text-foreground space-y-1 mb-2">
+                        {userDetailData.casinos_owned.map((c, i) => (
+                          <li key={i} className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-[11px]">{c.game_type} · {c.location}</span>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!window.confirm(`Drop ${c.game_type} (${c.location}) from this user?`)) return;
+                                try {
+                                  await api.post('/admin/drop-user-casino', { user_id: userDetailData.user?.id, game_type: c.game_type, location: c.location });
+                                  toast.success('Casino dropped');
+                                  if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                                } catch (e) {
+                                  toast.error(e.response?.data?.detail || 'Failed to drop casino');
+                                }
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
+                            >
+                              Drop
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm('Drop ALL casinos and properties for this user? They will lose every casino and property (airport/armoury).')) return;
+                        try {
+                          const res = await api.post('/admin/drop-user-casinos-properties', { user_id: userDetailData.user?.id });
+                          toast.success(res.data?.message || 'Dropped all casinos & properties');
+                          if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                        } catch (e) {
+                          toast.error(e.response?.data?.detail || 'Failed');
+                        }
+                      }}
+                      className="px-2 py-1 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
+                    >
+                      Drop all this user's casinos & properties
+                    </button>
                   </Section>
                 )}
               </div>
@@ -2720,6 +2757,24 @@ export default function Admin() {
               <BtnDanger onClick={handleDropAllCars} disabled={dbLoading}>
                 {dbLoading ? '...' : 'Delete all cars'}
               </BtnDanger>
+            </div>
+
+            {/* Drop all casinos and properties */}
+            <div className="space-y-2 p-2 rounded border border-amber-500/50 bg-amber-500/5">
+              <label className="text-[10px] text-amber-400 font-heading uppercase font-bold">Drop all casinos & properties</label>
+              <p className="text-[10px] text-mutedForeground">Unclaim every casino (dice, blackjack, slots, etc.) and every property (airport, armoury) globally.</p>
+              <div className="flex gap-2 flex-wrap items-center">
+                <input
+                  type="text"
+                  placeholder='Type "DROP ALL CASINOS PROPERTIES"'
+                  value={dropAllCasinosConfirmText}
+                  onChange={(e) => setDropAllCasinosConfirmText(e.target.value)}
+                  className="flex-1 min-w-[180px] bg-zinc-900/50 border border-amber-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-amber-500 focus:outline-none"
+                />
+                <BtnDanger onClick={handleDropAllCasinosProperties} disabled={dbLoading || dropAllCasinosConfirmText !== 'DROP ALL CASINOS PROPERTIES'}>
+                  {dbLoading ? '...' : 'Drop all'}
+                </BtnDanger>
+              </div>
             </div>
 
             {/* Wipe All */}

@@ -55,6 +55,14 @@ class DropUserCasinoRequest(BaseModel):
     location: str   # city for most, state for slots
 
 
+class DropUserCasinosPropertiesRequest(BaseModel):
+    user_id: str
+
+
+class DropAllCasinosPropertiesConfirmation(BaseModel):
+    confirmation_text: str  # "DROP ALL CASINOS PROPERTIES"
+
+
 class ForumMuteRequest(BaseModel):
     target_username: str
     duration_hours: Optional[int] = None  # set one of duration_hours, duration_days, or permanent
@@ -1518,6 +1526,56 @@ def register(router):
         if res.matched_count == 0:
             raise HTTPException(status_code=404, detail=f"No {game_type} casino in {location} owned by this user")
         return {"message": f"Dropped {game_type} casino ({location}) from user", "matched": res.matched_count, "modified": res.modified_count}
+
+    _CASINO_PROPERTY_COLLECTIONS = [
+        (db.dice_ownership, "dice_ownership"),
+        (db.roulette_ownership, "roulette_ownership"),
+        (db.blackjack_ownership, "blackjack_ownership"),
+        (db.horseracing_ownership, "horseracing_ownership"),
+        (db.videopoker_ownership, "videopoker_ownership"),
+        (db.slots_ownership, "slots_ownership"),
+        (db.airport_ownership, "airport_ownership"),
+        (db.bullet_factory, "bullet_factory"),
+    ]
+
+    @router.post("/admin/drop-user-casinos-properties")
+    async def admin_drop_user_casinos_properties(body: DropUserCasinosPropertiesRequest, current_user: dict = Depends(get_current_user)):
+        """Drop all casinos and properties for a single user (ownership becomes unclaimed). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator required")
+        user_id = (body.user_id or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        unset = {"$set": {"owner_id": None, "owner_username": None}}
+        result = {}
+        for coll, name in _CASINO_PROPERTY_COLLECTIONS:
+            res = await coll.update_many({"owner_id": user_id}, unset)
+            result[name] = res.modified_count
+        total = sum(result.values())
+        logging.info(f"Admin drop user casinos/properties: user_id={user_id} by {current_user.get('email')}, modified={result}")
+        return {"message": f"Dropped all casinos and properties for user", "user_id": user_id, "details": result, "total_modified": total}
+
+    @router.post("/admin/drop-all-casinos-properties")
+    async def admin_drop_all_casinos_properties(confirm: DropAllCasinosPropertiesConfirmation, current_user: dict = Depends(get_current_user)):
+        """Drop all casinos and properties globally (every ownership becomes unclaimed). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if confirm.confirmation_text != "DROP ALL CASINOS PROPERTIES":
+            raise HTTPException(
+                status_code=400,
+                detail='Confirmation required. Send {"confirmation_text": "DROP ALL CASINOS PROPERTIES"} to confirm.'
+            )
+        unset = {"$set": {"owner_id": None, "owner_username": None}}
+        result = {}
+        for coll, name in _CASINO_PROPERTY_COLLECTIONS:
+            res = await coll.update_many({}, unset)
+            result[name] = res.modified_count
+        total = sum(result.values())
+        logging.warning(f"Drop all casinos/properties by {current_user.get('email')} ({current_user.get('username')}), modified={result}")
+        return {"message": f"Dropped all casinos and properties: {total} ownerships cleared", "details": result, "total_modified": total}
 
     @router.post("/admin/wipe-all-users")
     async def admin_wipe_all_users(confirm: WipeConfirmation, current_user: dict = Depends(get_current_user)):
