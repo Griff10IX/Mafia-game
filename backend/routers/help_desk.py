@@ -158,3 +158,13 @@ def register(router):
             "is_hdo": _is_hdo(current_user),
             "can_approve_mute": _is_admin(current_user) or _is_moderator(current_user),
         }
+
+    @router.get("/help-desk/open-count")
+    async def help_desk_open_count(current_user: dict = Depends(get_current_user)):
+        """Count of open tickets: for staff (admin/mod/hdo) = all open; for others = their open tickets. Used for nav badge."""
+        if _can_manage_tickets(current_user):
+            query = {"status": "open"}
+        else:
+            query = {"user_id": current_user["id"], "status": "open"}
+        count = await db.help_desk_tickets.count_documents(query)
+        return {"open_tickets_count": count}

@@ -268,7 +268,7 @@ export default function UsersOnline() {
     
     setProfileLoading((prev) => ({ ...prev, [username]: true }));
     try {
-      const res = await api.get(`/users/${encodeURIComponent(username)}/profile`);
+      const res = await api.get(`/users/${encodeURIComponent(username)}/profile-preview`);
       setProfileCache((prev) => ({ ...prev, [username]: res.data }));
     } catch (e) {
       setProfileCache((prev) => ({ ...prev, [username]: { error: true } }));

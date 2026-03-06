@@ -246,6 +246,7 @@ export default function Layout({ children }) {
   const [user, setUser] = useState(null);
   const [rankProgress, setRankProgress] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [helpDeskOpenCount, setHelpDeskOpenCount] = useState(0);
   const [statOrder, setStatOrder] = useState(loadStatOrder);
   const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
   const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
@@ -299,16 +300,20 @@ export default function Layout({ children }) {
 
   const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const mobileBottomNavItems = useMemo(() => {
-    const items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator);
     if (hasAdminEmail && !isAdmin) {
-      return items.map((i) =>
+      items = items.map((i) =>
         i.type === 'group' && i.id === 'account'
           ? { ...i, items: [...i.items, { action: 'promoteAdmin', label: 'Use admin powers' }] }
           : i
       );
     }
-    return items;
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty]);
+    return items.map((i) =>
+      i.type === 'group' && i.id === 'misc'
+        ? { ...i, items: i.items.map((sub) => (sub.path === '/help-desk' ? { ...sub, badge: helpDeskOpenCount } : sub)) }
+        : i
+    );
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount]);
 
   useEffect(() => {
     const onTopBarPrefs = () => {
@@ -459,6 +464,7 @@ export default function Layout({ children }) {
       }
       fetchData();
       fetchUnreadCount();
+      fetchHelpDeskOpenCount();
       fetchWarStatus();
       fetchRankingCounts();
       if (notificationPanelOpenRef.current) {
@@ -507,6 +513,7 @@ export default function Layout({ children }) {
     // Defer badge/notification and casino-property fetches to after first paint so they don't block shell
     const deferred = setTimeout(() => {
       fetchUnreadCount();
+      fetchHelpDeskOpenCount();
       fetchWarStatus();
       // Only fetch crimes/gta/jail counts when on a page that shows those badges – avoids /crimes and /gta/options on every route
       const path = location.pathname;
@@ -548,6 +555,18 @@ export default function Layout({ children }) {
     const deferred = setTimeout(() => {
       pollNotifications();
       intervalId = setInterval(pollNotifications, 5000);
+    }, 0);
+    return () => {
+      clearTimeout(deferred);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let intervalId;
+    const deferred = setTimeout(() => {
+      fetchHelpDeskOpenCount();
+      intervalId = setInterval(fetchHelpDeskOpenCount, 30000);
     }, 0);
     return () => {
       clearTimeout(deferred);
@@ -621,6 +640,15 @@ export default function Layout({ children }) {
       setUnreadCount(response.data.unread_count);
     } catch (error) {
       console.error('Failed to fetch notifications');
+    }
+  };
+
+  const fetchHelpDeskOpenCount = async () => {
+    try {
+      const res = await api.get('/help-desk/open-count');
+      setHelpDeskOpenCount(res.data?.open_tickets_count ?? 0);
+    } catch {
+      setHelpDeskOpenCount(0);
     }
   };
 
@@ -799,7 +827,7 @@ export default function Layout({ children }) {
     { path: '/users-online', icon: Users, label: 'Users Online' },
     { path: '/forum', icon: MessageSquare, label: 'Forum' },
     { path: '/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
-    { path: '/help-desk', icon: HelpCircle, label: 'Help Desk' },
+    { path: '/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
     { path: '/ranking', icon: Target, label: 'Ranking' },
     { path: '/garage', icon: Car, label: 'Garage' },
     { path: '/sell-cars', icon: DollarSign, label: 'Sell Cars' },
@@ -1811,12 +1839,17 @@ export default function Layout({ children }) {
                         onMouseEnter={prefetchCrimes}
                         onFocus={prefetchCrimes}
                         role="menuitem"
-                        className={`block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors ${
+                        className={`block w-full px-3 py-2.5 text-left text-xs font-heading uppercase tracking-wider transition-colors flex items-center justify-between gap-2 ${
                           isActive ? 'bg-primary/20' : ''
                         }`}
                         style={isActive ? { color: 'var(--noir-primary)' } : { color: 'var(--noir-foreground)' }}
                       >
-                        {sub.label}
+                        <span>{sub.label}</span>
+                        {sub.badge > 0 && (
+                          <span className="shrink-0 min-w-[18px] h-[18px] rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center px-1">
+                            {sub.badge > 9 ? '9+' : sub.badge}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

@@ -1230,7 +1230,7 @@ def register(router):
 
     @router.get("/admin/find-duplicates")
     async def admin_find_duplicates(username: str = None, current_user: dict = Depends(get_current_user)):
-        if not _admin_or_mod(current_user):
+        if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         if username:
             pattern = re.compile(f".*{re.escape(username)}.*", re.IGNORECASE)

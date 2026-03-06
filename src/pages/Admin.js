@@ -23,7 +23,7 @@ const ADMIN_CATEGORIES = [
   { id: 'admin-moderators', label: 'Moderators', icon: Shield },
   { id: 'admin-hdo', label: 'Help Desk Operators', icon: HelpCircle },
 ];
-const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-database', 'admin-hdo', 'admin-moderators'];
+const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-hdo', 'admin-moderators'];
 
 function scrollToCategory(id) {
   const el = document.getElementById(id);
@@ -2657,7 +2657,8 @@ export default function Admin() {
         </div>
       </section>
 
-      {/* ─── Database ─── */}
+      {/* ─── Database (admin only) ─── */}
+      {isAdmin && (
       <section id="admin-database" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Skull size={12} />
@@ -2760,6 +2761,7 @@ export default function Admin() {
           )}
         </div>
       </section>
+      )}
 
       {/* ─── Moderators (admin only) ─── */}
       {isAdmin && (
@@ -2774,7 +2776,7 @@ export default function Admin() {
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote moderators</span>
           </div>
           <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground font-heading">Only admins can promote or demote moderators. Mods see a limited Admin page (Moderation, Logs, Database only).</p>
+            <p className="text-[10px] text-mutedForeground font-heading">Only admins can promote or demote moderators. Mods see a limited Admin page (Moderation, Logs, HDO, Moderators only).</p>
 
             <details className="rounded border border-primary/20 bg-primary/5 overflow-hidden">
               <summary className="px-2.5 py-2 cursor-pointer text-[10px] font-heading font-bold text-primary uppercase tracking-wider hover:bg-primary/10 list-none flex items-center gap-2">

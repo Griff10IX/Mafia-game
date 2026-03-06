@@ -89,6 +89,23 @@ def register(router):
             result = with_value[:limit]
         return result
 
+    @router.get("/users/{username}/profile-preview")
+    async def get_user_profile_preview(username: str, current_user: dict = Depends(get_current_user)):
+        """Minimal profile data for hover previews (e.g. Users Online). Only returns public-safe fields."""
+        username_pattern = _username_pattern(username)
+        user = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "username": 1, "avatar_url": 1, "total_kills": 1, "jail_busts": 1},
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {
+            "username": user.get("username"),
+            "avatar_url": user.get("avatar_url"),
+            "kills": int(user.get("total_kills") or 0),
+            "jail_busts": int(user.get("jail_busts") or 0),
+        }
+
     @router.get("/users/{username}/profile")
     async def get_user_profile(username: str, current_user: dict = Depends(get_current_user)):
         """View a user's profile (requires auth)."""
