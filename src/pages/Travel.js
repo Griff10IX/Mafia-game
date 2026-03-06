@@ -127,10 +127,11 @@ const DestinationCard = ({
   travelInfo,
   travelDisabled = false,
 }) => {
+  if (!travelInfo) return null;
   const airports = travelInfo.airports || [];
   const airport = airports.length > 0 ? airports[0] : null;
   const hasAirports = !!airport;
-  const canUse = !travelDisabled && !travelInfo.carrying_booze && travelInfo.user_points >= (airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10));
+  const canUse = !travelDisabled && !travelInfo.carrying_booze && (travelInfo.user_points ?? 0) >= (airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10));
 
   const destImgSrc = locationImageSrc(destination);
   return (
@@ -422,6 +423,18 @@ export default function Travel() {
 
   if (traveling) {
     return <TravelingScreen destination={selectedDest} timeLeft={travelTime} />;
+  }
+
+  if (!travelInfo) {
+    return (
+      <div className={`space-y-2 ${styles.pageContent}`} data-testid="travel-page">
+        <style>{TRAVEL_STYLES}</style>
+        <div className="p-4 text-center">
+          <p className="text-sm text-mutedForeground font-heading">Unable to load travel info.</p>
+          <button type="button" onClick={() => fetchTravelInfo()} className="mt-2 px-3 py-1.5 rounded bg-primary/20 text-primary font-heading text-xs uppercase">Retry</button>
+        </div>
+      </div>
+    );
   }
 
   return (
