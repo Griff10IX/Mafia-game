@@ -158,8 +158,8 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
       )}
       <div className={is_boss ? 'pl-2' : ''}>
         <div className="flex items-start justify-between gap-2 mb-1">
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
               {missionIndex != null && missionTotal != null && (
                 <span className="text-[9px] font-heading font-bold text-primary/80 shrink-0">
                   {missionIndex}/{missionTotal}
@@ -170,27 +170,29 @@ function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, 
               {isCurrent && !completed && unlocked && (
                 <span className="shrink-0 px-1 py-0.5 rounded bg-primary/20 border border-primary/40 text-[9px] font-heading font-bold text-primary uppercase">Current</span>
               )}
-              <span className={`text-[11px] font-heading font-bold truncate ${completed ? 'text-green-400' : unlocked ? 'text-foreground' : 'text-mutedForeground'}`}>
+              <span className={`min-w-0 flex-1 text-[11px] font-heading font-bold truncate ${completed ? 'text-green-400' : unlocked ? 'text-foreground' : 'text-mutedForeground'}`}>
                 {title}
               </span>
             </div>
-            <div className="text-[9px] text-mutedForeground mt-0.5 italic">
+            <div className="text-[9px] text-mutedForeground mt-0.5 italic break-words">
               {missionTypeLabel(type)}
               {is_boss && ' · Final Job'}
             </div>
             {!unlocked && previous_mission_title && (
-              <div className="text-[9px] text-amber-200/80 mt-1 flex items-center gap-1">
-                <Lock size={8} /> Complete &quot;{previous_mission_title}&quot; to unlock
+              <div className="text-[9px] text-amber-200/80 mt-1 flex items-center gap-1 break-words">
+                <Lock size={8} className="shrink-0" /> Complete &quot;{previous_mission_title}&quot; to unlock
               </div>
             )}
           </div>
-          <StatusChip completed={completed} requirementsMet={requirements_met} isBoss={is_boss} unlocked={unlocked} />
+          <div className="shrink-0">
+            <StatusChip completed={completed} requirementsMet={requirements_met} isBoss={is_boss} unlocked={unlocked} />
+          </div>
         </div>
 
         {!completed && progress?.target > 0 && unlocked && (
-          <div className="mb-1.5">
+          <div className="mb-1.5 min-w-0">
             <ProgressBar current={progress.current} target={progress.target} />
-            <div className="text-[9px] text-mutedForeground mt-0.5 text-right">{progress.description}</div>
+            <div className="text-[9px] text-mutedForeground mt-0.5 text-right break-words">{progress.description}</div>
           </div>
         )}
         {completed && (
@@ -269,7 +271,7 @@ function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea
           </span>
         )}
       </div>
-      <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
+      <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
         {sorted.map((m, i) => {
           const info = missionIdToIndex?.[m.id] ?? {};
           return (
@@ -881,7 +883,7 @@ export default function Missions() {
               Completed missions ({completedMissions.length})
             </span>
           </div>
-          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5 max-h-[70vh] overflow-y-auto">
+          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 max-h-[70vh] overflow-y-auto">
             {completedMissions.map((m) => (
               <div
                 key={m.id}
@@ -1056,7 +1058,7 @@ export default function Missions() {
             <Skull size={12} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">Final Jobs</span>
           </div>
-          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1.5">
+          <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
             {activeBoss.map((m, i) => {
               const info = missionIdToIndex[m.id] ?? {};
               return (

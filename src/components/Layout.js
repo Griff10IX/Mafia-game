@@ -1325,7 +1325,7 @@ export default function Layout({ children }) {
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
             data-testid="mobile-menu-toggle"
-            className="md:hidden shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center -m-1.5"
+            className="md:hidden shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center -m-1.5 order-last"
             style={{ color: 'var(--noir-primary)' }}
             aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}
           >

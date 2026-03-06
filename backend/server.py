@@ -399,6 +399,9 @@ class UserResponse(BaseModel):
     jail_until: Optional[str]
     premium_rank_bar: bool
     has_silencer: bool = False
+    anti_snitch: bool = False
+    auto_rank_purchased: bool = False
+    auto_rank_enabled: bool = False
     custom_car_name: Optional[str]
     travels_this_hour: int
     extra_airmiles: int

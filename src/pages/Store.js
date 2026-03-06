@@ -29,7 +29,7 @@ const BULLET_PACKS = [
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
-  { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: 200, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_enabled', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
+  { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: 200, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
   { id: 'anti-snitch', title: 'Anti Snitch', Icon: Shield, price: 120, path: '/store/buy-anti-snitch', ownedKey: 'anti_snitch', desc: 'Cannot be snitched on when others are in jail' },
   { id: 'oc-timer', title: 'OC Timer', Icon: Clock, price: 300, path: '/store/buy-oc-timer', ownedKey: 'oc_timer_reduced', desc: 'Heist cooldown 4h instead of 6h' },
@@ -398,8 +398,10 @@ export default function Store() {
 
       {activeTab === 'upgrades' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
-          {UPGRADES.map((u) => {
+          {UPGRADES.filter((u) => {
             const owned = u.ownedKey && user?.[u.ownedKey];
+            return !owned;
+          }).map((u) => {
             const extra = u.extra?.(user, boozeConfig);
             const disabled = (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) || (u.id === 'health' && Number(user?.health ?? 100) >= 100);
             return (
@@ -410,7 +412,7 @@ export default function Store() {
                 desc={u.desc}
                 price={u.price}
                 respectPrice={u.price * 5}
-                owned={owned}
+                owned={false}
                 loading={loading}
                 disabled={disabled}
                 user={user}
@@ -422,48 +424,44 @@ export default function Store() {
               </StoreCard>
             );
           })}
-          {/* Custom Car */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom Car</span>
-              <Car className="text-primary shrink-0" size={14} />
+          {/* Custom Car — only show when not owned */}
+          {!user?.custom_car_name && (
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom Car</span>
+                <Car className="text-primary shrink-0" size={14} />
+              </div>
+              <div className="p-2.5">
+                <p className="text-[10px] text-mutedForeground font-heading mb-1.5">Named car, 20s travel, below Exclusive.</p>
+                <input
+                  type="text"
+                  placeholder="Name (2–30 chars)"
+                  value={customCarName}
+                  onChange={(e) => setCustomCarName(e.target.value)}
+                  maxLength={30}
+                  className="w-full px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
+                />
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!customCarName.trim() || customCarName.trim().length < 2) {
+                        toast.error('Name 2+ characters');
+                        return;
+                      }
+                      apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
+                    }}
+                    disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < 2500) || !customCarName.trim()}
+                    className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+                  >
+                    500 pts or 2500 resp
+                  </button>
+                </div>
+              </div>
+              <div className="store-art-line text-primary mx-3" />
             </div>
-            <div className="p-2.5">
-              <p className="text-[10px] text-mutedForeground font-heading mb-1.5">Named car, 20s travel, below Exclusive.</p>
-              {user?.custom_car_name ? (
-                <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">Owned</div>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    placeholder="Name (2–30 chars)"
-                    value={customCarName}
-                    onChange={(e) => setCustomCarName(e.target.value)}
-                    maxLength={30}
-                    className="w-full px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
-                  />
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!customCarName.trim() || customCarName.trim().length < 2) {
-                          toast.error('Name 2+ characters');
-                          return;
-                        }
-                        apiBuy('/store/buy-custom-car', { car_name: customCarName.trim() }, 'Custom car purchased').then(() => setCustomCarName(''));
-                      }}
-                      disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < 2500) || !customCarName.trim()}
-                      className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
-                    >
-                      500 pts or 2500 resp
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-            <div className="store-art-line text-primary mx-3" />
-          </div>
+          )}
         </div>
       )}
 
