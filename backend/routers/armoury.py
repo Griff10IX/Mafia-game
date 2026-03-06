@@ -1096,6 +1096,10 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
             {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
             upsert=True,
         )
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"equipped_weapon_id": weapon_id}},
+        )
         _invalidate_weapons_cache(current_user["id"])
         return {"message": f"Successfully purchased {weapon['name']} from armoury"}
 
@@ -1107,6 +1111,10 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         {"user_id": current_user["id"], "weapon_id": weapon_id},
         {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
         upsert=True
+    )
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"equipped_weapon_id": weapon_id}},
     )
     _invalidate_weapons_cache(current_user["id"])
     return {"message": f"Successfully purchased {weapon['name']}"}

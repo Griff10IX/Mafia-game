@@ -1318,8 +1318,8 @@ export default function Layout({ children }) {
         />
       )}
 
-      {/* Top bar — on mobile use tighter padding so chips + scroll fit */}
-      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[40px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-1.5 py-1 md:px-3 md:py-0 gap-1 md:gap-2`}>
+      {/* Top bar — on mobile use tighter padding so chips + scroll fit; on desktop when right sidebar shown, keep bar in middle only so middle is inline with left and right */}
+      <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[40px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-1.5 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
         {mobileNavStyle !== 'bottom' && (
           <button
@@ -1803,9 +1803,9 @@ export default function Layout({ children }) {
             </button>
           )}
           <div
-            className={`fixed top-0 right-0 h-full w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${
+            className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${
               isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'
-            }`}
+            } ${isMobileViewport ? 'top-0 h-full' : 'md:top-12 md:h-[calc(100vh-3rem)]'}`}
             style={sidebarBgStyle}
           >
             <div className={`px-2.5 py-2 border-b ${styles.borderGoldLight} shrink-0 flex items-center justify-between`}>
@@ -1832,6 +1832,10 @@ export default function Layout({ children }) {
                   <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.points)}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Respect</span>
+                  <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.respect_points ?? 0)}</span>
+                </div>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
                   <span style={{ color: 'var(--noir-muted)' }}>Bullets</span>
                   <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.bullets)}</span>
                 </div>
@@ -1852,13 +1856,29 @@ export default function Layout({ children }) {
                   <span style={{ color: 'var(--noir-foreground)' }}>{Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Familie</span>
+                  <span style={{ color: 'var(--noir-muted)' }}>Family</span>
                   <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.gang_name || 'None'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
                   <span style={{ color: 'var(--noir-muted)' }}>Rank</span>
                   <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.rank_name || rankProgress?.current_rank_name || '—'}</span>
                 </div>
+                <Link to="/crimes" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span style={{ color: 'var(--noir-muted)' }}>Crimes</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                {hasCasinoOrProperty && (
+                  <>
+                    <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                      <span style={{ color: 'var(--noir-muted)' }}>Casino profit</span>
+                      <span style={{ color: (user.casino_profit ?? 0) >= 0 ? 'var(--emerald-400)' : 'var(--red-400)' }}>{formatMoney(user.casino_profit ?? 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                      <span style={{ color: 'var(--noir-muted)' }}>Property profit</span>
+                      <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.property_profit ?? 0)} pts</span>
+                    </div>
+                  </>
+                )}
                 {rankProgress && (
                   <div className="pt-1">
                     <p className="text-[9px] font-heading uppercase tracking-wider mb-0.5" style={{ color: 'var(--noir-muted)' }}>Rank progress</p>
