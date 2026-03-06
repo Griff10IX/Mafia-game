@@ -7,7 +7,7 @@ import styles from '../styles/noir.module.css';
 
 const MAX_TRAVELS_PER_HOUR = 15;
 
-/** Slug for location image path: "New York" -> "new-york". Images go in public/travel/{slug}.png */
+/** Slug for location image path: "New York" -> "new-york". Images in public/images/travel/ to avoid /travel/ conflicting with SPA route. */
 function locationImageSlug(location) {
   if (!location || typeof location !== 'string') return null;
   return location.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || null;
@@ -15,7 +15,7 @@ function locationImageSlug(location) {
 
 function locationImageSrc(location) {
   const slug = locationImageSlug(location);
-  return slug ? `/travel/${slug}.png` : null;
+  return slug ? `/images/travel/${slug}.png` : null;
 }
 
 /** Small location image for destination cards; hides on load error */
@@ -230,8 +230,8 @@ const DestinationCard = ({
           </button>
         )}
 
-        {/* User Cars (best 2 only, sorted fastest first) */}
-        {travelInfo?.cars?.slice(0, 2).map(car => (
+        {/* User Cars (best 4 shown, sorted fastest first so Rare/Uncommon appear) */}
+        {travelInfo?.cars?.slice(0, 4).map(car => (
           <button
             key={car.user_car_id}
             onClick={() => !travelDisabled && car.can_travel !== false && onTravel(destination, car.user_car_id)}

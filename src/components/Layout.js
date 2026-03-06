@@ -1933,64 +1933,6 @@ export default function Layout({ children }) {
                   </span>
                 </Link>
               </div>
-              <div className="h-px shrink-0" style={dividerStyle} />
-              {/* Quick links: Crimes above GTA; My Cars below Travel; Kill; Casino shortcuts */}
-              <div className="space-y-1">
-                <Link to="/crimes" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Crimes</span>
-                  <span className="text-[9px] tabular-nums" style={{ color: 'var(--noir-primary)' }}>{rankingCounts.crimes} available</span>
-                </Link>
-                <Link to="/gta" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>GTA</span>
-                  <span className={`text-[9px] ${rankingCounts.gta > 0 ? 'text-emerald-500' : 'text-amber-500'}`}>{rankingCounts.gta > 0 ? 'Available' : 'Cooldown'}</span>
-                </Link>
-                <Link to="/organised-crime" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>OC</span>
-                  <span className={`text-[9px] ${ocStatus?.cooldown_until && new Date(ocStatus.cooldown_until) > new Date() ? 'text-amber-500' : 'text-emerald-500'}`}>
-                    {ocStatus?.cooldown_until && new Date(ocStatus.cooldown_until) > new Date() ? 'Cooldown' : 'Available'}
-                  </span>
-                </Link>
-                <Link to="/travel" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Travel</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-                <Link to="/garage" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>My Cars</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-                <Link to="/attack" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Kill</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-                <Link to="/bodyguards" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Bodyguards</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-                {hasCasinoOrProperty && (
-                  <>
-                    <Link to="/my-properties" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                      <span>My Properties</span>
-                      <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                    </Link>
-                    <Link to="/casino" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                      <span>Casino</span>
-                      <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                    </Link>
-                  </>
-                )}
-                <Link to="/casino/dice" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Dice</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-                <Link to="/casino/blackjack" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Blackjack</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-                <Link to="/casino/slots" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Slots</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
-              </div>
             </div>
             {isMobileViewport && (
               <div className={`px-2 py-3 border-t ${styles.borderGoldLight} shrink-0`}>

@@ -32,6 +32,9 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Required for SPA: /travel/, /store/, /profile/xyz, etc. must serve index.html
+    # so the React app can load and handle the route. Without this, direct URLs
+    # or refresh on e.g. https://mafiawars.co.uk/travel/ return 403 Forbidden.
     location / {
         try_files $uri $uri/ /index.html;
     }
