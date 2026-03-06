@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, Spade } from 'lucide-react';
+import { ArrowLeft, Spade, MessageSquare, XCircle } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
+
+const TURN_SECONDS = 60;
 
 const SUITS = {
   H: { sym: '♥', color: '#dc2626' },
@@ -102,6 +104,11 @@ export default function MPBlackjackGamePage() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [myUserId, setMyUserId] = useState(null);
+  const [chatInput, setChatInput] = useState('');
+  const [sendingChat, setSendingChat] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const chatEndRef = useRef(null);
+  const timeoutTriggeredRef = useRef(null);
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
@@ -151,6 +158,46 @@ export default function MPBlackjackGamePage() {
     }
   };
 
+  const cancelGame = async () => {
+    if (!gameId || cancelLoading) return;
+    setCancelLoading(true);
+    try {
+      await api.post(`/casino/mp-blackjack/games/${gameId}/cancel`);
+      await refreshUser();
+      toast.success('Game cancelled; everyone refunded');
+      navigate('/casino/mp-blackjack');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not cancel');
+    } finally {
+      setCancelLoading(false);
+    }
+  };
+
+  const sendChat = async (e) => {
+    e?.preventDefault();
+    const msg = chatInput.trim();
+    if (!gameId || !msg || sendingChat) return;
+    setSendingChat(true);
+    try {
+      const res = await api.post(`/casino/mp-blackjack/games/${gameId}/chat`, { message: msg });
+      setGame(res.data?.game ?? null);
+      setChatInput('');
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Send failed');
+    } finally {
+      setSendingChat(false);
+    }
+  };
+
+  const triggerTimeout = useCallback(async () => {
+    if (!gameId) return;
+    try {
+      const res = await api.post(`/casino/mp-blackjack/games/${gameId}/timeout`);
+      setGame(res.data?.game ?? null);
+    } catch (_) {}
+  }, [gameId]);
+
   if (loading && !game) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
@@ -169,6 +216,17 @@ export default function MPBlackjackGamePage() {
     );
   }
 
+  if (game.status === 'cancelled') {
+    return (
+      <div className={`space-y-4 ${styles.pageContent}`}>
+        <p className="text-[10px] text-mutedForeground font-heading">This game was cancelled. Everyone was refunded.</p>
+        <Link to="/casino/mp-blackjack" className="text-primary font-heading text-sm hover:underline">
+          Back to Multiplayer Blackjack
+        </Link>
+      </div>
+    );
+  }
+
   const status = game.status || 'open';
   const phase = game.phase || 'lobby';
   const players = game.players || [];
@@ -179,6 +237,36 @@ export default function MPBlackjackGamePage() {
   const cardLimit = game.card_limit ?? null;
   const myHandLength = isMyTurn && players[currentTurnIndex] ? (players[currentTurnIndex].hand || []).length : 0;
   const hitDisabled = actionLoading || (cardLimit != null && myHandLength >= cardLimit);
+  const isCreator = game.creator_id === myUserId;
+
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState(null);
+  const turnStartedAt = game.turn_started_at;
+  useEffect(() => {
+    if (status !== 'playing' || phase !== 'playing' || currentTurnIndex < 0 || !turnStartedAt) {
+      setTurnSecondsLeft(null);
+      return;
+    }
+    const compute = () => {
+      const start = new Date(turnStartedAt).getTime();
+      const elapsed = (Date.now() - start) / 1000;
+      const left = Math.max(0, Math.ceil(TURN_SECONDS - elapsed));
+      return left;
+    };
+    setTurnSecondsLeft(compute());
+    const t = setInterval(() => {
+      const left = compute();
+      setTurnSecondsLeft(left);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [status, phase, currentTurnIndex, turnStartedAt]);
+
+  useEffect(() => {
+    if (turnSecondsLeft !== 0 || status !== 'playing' || phase !== 'playing' || currentTurnIndex < 0) return;
+    const key = `${currentTurnIndex}-${turnStartedAt}`;
+    if (timeoutTriggeredRef.current === key) return;
+    timeoutTriggeredRef.current = key;
+    triggerTimeout();
+  }, [turnSecondsLeft, status, phase, currentTurnIndex, turnStartedAt, triggerTimeout]);
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="mp-blackjack-game-page">
@@ -207,6 +295,16 @@ export default function MPBlackjackGamePage() {
               <li key={p.user_id}>{p.username}</li>
             ))}
           </ul>
+          {isCreator && (
+            <button
+              type="button"
+              disabled={cancelLoading}
+              onClick={cancelGame}
+              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-red-500/50 bg-red-500/10 text-red-400 font-heading text-[10px] uppercase hover:bg-red-500/20 disabled:opacity-50"
+            >
+              <XCircle size={12} /> {cancelLoading ? '…' : 'Cancel game'}
+            </button>
+          )}
         </div>
       )}
 
@@ -244,6 +342,21 @@ export default function MPBlackjackGamePage() {
             })}
           </div>
 
+          {/* Turn timer */}
+          {status === 'playing' && phase === 'playing' && currentTurnIndex >= 0 && turnSecondsLeft != null && (
+            <p className="text-center text-[10px] font-heading text-mutedForeground">
+              {isMyTurn ? (
+                <span className={turnSecondsLeft <= 10 ? 'text-amber-400' : ''}>
+                  Your turn — {turnSecondsLeft}s left
+                </span>
+              ) : (
+                <span>
+                  {players[currentTurnIndex]?.username ?? 'Player'}&apos;s turn — {turnSecondsLeft}s left
+                </span>
+              )}
+            </p>
+          )}
+
           {/* Hit / Stand */}
           {status === 'playing' && phase === 'playing' && isMyTurn && (
             <div className="flex items-center justify-center gap-2">
@@ -273,6 +386,44 @@ export default function MPBlackjackGamePage() {
             </p>
           )}
         </>
+      )}
+
+      {/* In-game chat (open, playing, or completed) */}
+      {(status === 'open' || status === 'playing' || status === 'completed') && myIndex >= 0 && (
+        <div className={`${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+          <div className="px-2.5 py-1.5 border-b border-primary/20 flex items-center gap-1.5">
+            <MessageSquare size={12} className="text-primary" />
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Chat</span>
+          </div>
+          <div className="max-h-[140px] overflow-y-auto p-2 space-y-1 bg-secondary/20">
+            {(game.chat || []).map((c, i) => (
+              <div key={i} className="text-[10px] font-heading">
+                <span className="text-primary/90 font-semibold">{c.username}:</span>{' '}
+                <span className="text-foreground break-words">{c.message}</span>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+          {status !== 'completed' && (
+            <form onSubmit={sendChat} className="p-2 border-t border-primary/20 flex gap-1.5">
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                placeholder="Message…"
+                maxLength={500}
+                className="flex-1 min-w-0 px-2 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm placeholder:text-mutedForeground"
+              />
+              <button
+                type="submit"
+                disabled={sendingChat || !chatInput.trim()}
+                className="px-2.5 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary font-heading text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50"
+              >
+                {sendingChat ? '…' : 'Send'}
+              </button>
+            </form>
+          )}
+        </div>
       )}
 
       {status === 'completed' && (

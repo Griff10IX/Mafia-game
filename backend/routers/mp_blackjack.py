@@ -4,6 +4,9 @@ from typing import List, Optional
 import random
 import uuid
 
+MP_BJ_TURN_SECONDS = 60
+MP_BJ_CHAT_MAX = 100
+
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
@@ -162,6 +165,8 @@ def register(router):
             "completed_at": None,
             "winner_ids": [],
             "results": [],
+            "chat": [],
+            "turn_started_at": None,
         }
         await db.mp_blackjack_games.insert_one(doc)
         await db.users.update_one({"id": uid}, {"$inc": {"money": -total_deduct}})
@@ -187,6 +192,8 @@ def register(router):
                 r["username"] = uid_to_label.get(r.get("user_id"), "Anonymous")
                 results[i] = r
             out["results"] = results
+            for c in out.get("chat") or []:
+                c["username"] = uid_to_label.get(c.get("user_id"), "Anonymous")
         return out
 
     async def _run_settle(game_id: str):
@@ -257,6 +264,76 @@ def register(router):
             },
         )
 
+    async def _maybe_auto_stand(game_id: str):
+        """If current turn has exceeded MP_BJ_TURN_SECONDS, auto-stand and advance. Returns updated game or None."""
+        game = await db.mp_blackjack_games.find_one({"id": game_id})
+        if not game or game.get("status") != "playing" or game.get("phase") != "playing":
+            return None
+        players = list(game.get("players") or [])
+        turn_idx = int(game.get("current_turn_index") or 0)
+        if turn_idx < 0 or turn_idx >= len(players):
+            return None
+        started_at = game.get("turn_started_at")
+        if not started_at:
+            return None
+        try:
+            dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        except Exception:
+            return None
+        elapsed = (datetime.now(timezone.utc) - dt).total_seconds()
+        if elapsed < MP_BJ_TURN_SECONDS:
+            return None
+        players[turn_idx]["status"] = "stood"
+        deck = list(game.get("deck") or [])
+        turn_idx += 1
+        while turn_idx < len(players) and players[turn_idx].get("status") != "playing":
+            turn_idx += 1
+        now_iso = datetime.now(timezone.utc).isoformat()
+        if turn_idx >= len(players):
+            await db.mp_blackjack_games.update_one(
+                {"id": game_id},
+                {"$set": {"players": players, "deck": deck, "current_turn_index": -1, "phase": "dealer"}},
+            )
+            await _run_settle(game_id)
+        else:
+            await db.mp_blackjack_games.update_one(
+                {"id": game_id},
+                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
+            )
+        return await db.mp_blackjack_games.find_one({"id": game_id})
+
+    @router.post("/casino/mp-blackjack/games/{game_id}/cancel")
+    async def mp_bj_cancel(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        """Cancel an open game. Creator only. Refund all players from pot."""
+        uid = current_user["id"]
+        game = await db.mp_blackjack_games.find_one({"id": game_id})
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        if game.get("status") != "open":
+            raise HTTPException(status_code=400, detail="Game can only be cancelled while open")
+        if game.get("creator_id") != uid:
+            raise HTTPException(status_code=403, detail="Only the creator can cancel the game")
+        players = list(game.get("players") or [])
+        pot = int(game.get("pot") or 0)
+        num_players = len(players)
+        if num_players == 0:
+            refund_each = 0
+            remainder = 0
+        else:
+            refund_each = pot // num_players
+            remainder = pot - refund_each * num_players
+        for i, p in enumerate(players):
+            uid_p = p.get("user_id")
+            add = refund_each + (remainder if i == 0 else 0)
+            if add > 0:
+                await db.users.update_one({"id": uid_p}, {"$inc": {"money": add}})
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.mp_blackjack_games.update_one(
+            {"id": game_id},
+            {"$set": {"status": "cancelled", "completed_at": now_iso}},
+        )
+        return {"message": "Game cancelled; all players refunded", "game_id": game_id}
+
     @router.post("/casino/mp-blackjack/games/{game_id}/join")
     async def mp_bj_join(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Join an open game. Pay buy_in. If game becomes full, deal and start."""
@@ -303,6 +380,7 @@ def register(router):
                         "deck": deck,
                         "pot": new_pot,
                         "current_turn_index": 0,
+                        "turn_started_at": now_iso,
                         "started_at": now_iso,
                     }
                 },
@@ -320,19 +398,25 @@ def register(router):
 
     @router.get("/casino/mp-blackjack/games/{game_id}")
     async def mp_bj_get_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Get full game state for table view."""
+        """Get full game state for table view. Applies turn timeout (auto-stand) if needed."""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        updated = await _maybe_auto_stand(game_id)
+        if updated is not None:
+            game = updated
         return {"game": _serialize_game(game)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/hit")
     async def mp_bj_hit(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Current player hits. If bust, advance turn. If all done, run dealer and settle."""
+        """Current player hits. If bust, advance turn. If all done, run settle."""
         uid = current_user["id"]
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        updated = await _maybe_auto_stand(game_id)
+        if updated is not None:
+            game = updated
         if game.get("status") != "playing" or game.get("phase") != "playing":
             raise HTTPException(status_code=400, detail="Game is not in playing phase")
         players = list(game.get("players") or [])
@@ -361,6 +445,7 @@ def register(router):
         # Advance to next playing player or dealer phase
         while turn_idx < len(players) and players[turn_idx].get("status") != "playing":
             turn_idx += 1
+        now_iso = datetime.now(timezone.utc).isoformat()
         if turn_idx >= len(players):
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
@@ -370,7 +455,7 @@ def register(router):
         else:
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
-                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx}},
+                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
             )
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
         return {"game": _serialize_game(updated)}
@@ -382,6 +467,9 @@ def register(router):
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        updated = await _maybe_auto_stand(game_id)
+        if updated is not None:
+            game = updated
         if game.get("status") != "playing" or game.get("phase") != "playing":
             raise HTTPException(status_code=400, detail="Game is not in playing phase")
         players = list(game.get("players") or [])
@@ -395,6 +483,7 @@ def register(router):
         turn_idx += 1
         while turn_idx < len(players) and players[turn_idx].get("status") != "playing":
             turn_idx += 1
+        now_iso = datetime.now(timezone.utc).isoformat()
         if turn_idx >= len(players):
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
@@ -404,7 +493,44 @@ def register(router):
         else:
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
-                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx}},
+                {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
             )
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
         return {"game": _serialize_game(updated)}
+
+    class MPChatRequest(BaseModel):
+        message: str
+
+    @router.post("/casino/mp-blackjack/games/{game_id}/chat")
+    async def mp_bj_chat(game_id: str, request: MPChatRequest, current_user: dict = Depends(get_current_user_verified)):
+        """Send a chat message. Must be in the game."""
+        uid = current_user["id"]
+        username = (current_user.get("username") or "?").strip()
+        game = await db.mp_blackjack_games.find_one({"id": game_id})
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        players = game.get("players") or []
+        if not any(p.get("user_id") == uid for p in players):
+            raise HTTPException(status_code=403, detail="You are not in this game")
+        msg = (request.message or "").strip()[: 500]
+        if not msg:
+            raise HTTPException(status_code=400, detail="Message cannot be empty")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        chat = list(game.get("chat") or [])
+        chat.append({"user_id": uid, "username": username, "message": msg, "at": now_iso})
+        if len(chat) > MP_BJ_CHAT_MAX:
+            chat = chat[-MP_BJ_CHAT_MAX:]
+        await db.mp_blackjack_games.update_one({"id": game_id}, {"$set": {"chat": chat}})
+        updated = await db.mp_blackjack_games.find_one({"id": game_id})
+        return {"game": _serialize_game(updated)}
+
+    @router.post("/casino/mp-blackjack/games/{game_id}/timeout")
+    async def mp_bj_timeout(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        """Trigger turn timeout check (auto-stand if current turn exceeded 60s). Returns updated game."""
+        game = await db.mp_blackjack_games.find_one({"id": game_id})
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        updated = await _maybe_auto_stand(game_id)
+        if updated is not None:
+            game = updated
+        return {"game": _serialize_game(game)}

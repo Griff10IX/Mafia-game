@@ -75,6 +75,11 @@ export default function MDGPage() {
   }, [fetchGames]);
 
   const handleJoin = async (gameId) => {
+    const game = games.find((g) => g.id === gameId);
+    if (game && game.created_by === myUserId) {
+      toast.error("You're already in this game (you created it)");
+      return;
+    }
     setJoiningId(gameId);
     try {
       const res = await api.post('/casino/mdg/join', { game_id: gameId });
@@ -177,8 +182,8 @@ export default function MDGPage() {
               {games.map((g, idx) => {
                 const entries = g.entries || [];
                 const playerNames = entries.map((e) => e.username).join(' – ');
-                const isIn = entries.some((e) => e.user_id === myUserId);
                 const isCreator = g.created_by === myUserId;
+                const isIn = entries.some((e) => e.user_id === myUserId) || isCreator;
                 const canRoll = isCreator && entries.length >= 1;
                 return (
                   <li key={g.id} className={`py-3 px-2 mdg-fade-in ${styles.raised}`} style={{ animationDelay: `${0.05 + idx * 0.02}s` }}>

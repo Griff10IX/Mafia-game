@@ -159,11 +159,14 @@ def register(router):
             {"action": "join", "game_id": request.game_id, "fee_points": fee_pts, "fee_money": fee_money, "players_after": len(new_entries)},
         )
 
-        # Update game
-        await db.mdg_games.update_one(
-            {"id": request.game_id, "status": "open"},
+        # Update game only if this user_id is not already in entries (prevents double-join from race/double-click)
+        result = await db.mdg_games.update_one(
+            {"id": request.game_id, "status": "open", "entries.user_id": {"$ne": uid}},
             {"$set": {"entries": new_entries, "pot_points": new_pot_pts, "pot_money": new_pot_money}},
         )
+        if result.matched_count == 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"points": fee_pts, "money": fee_money}})
+            raise HTTPException(status_code=400, detail="You are already in this game")
 
         # Auto-roll if threshold reached
         auto_roll_at = game.get("auto_roll_at")
