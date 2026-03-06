@@ -49,6 +49,12 @@ class AdminSetPasswordRequest(BaseModel):
     new_password: str
 
 
+class DropUserCasinoRequest(BaseModel):
+    user_id: str
+    game_type: str  # dice, roulette, blackjack, horseracing, videopoker, slots
+    location: str   # city for most, state for slots
+
+
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
     {"name": "Baranco", "tag": "BARN", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
@@ -1304,7 +1310,7 @@ def register(router):
 
     @router.get("/admin/user-details/{user_id}")
     async def admin_user_details(user_id: str, current_user: dict = Depends(get_current_user)):
-        """View user document and dice ownership. Admin or moderator."""
+        """View user document and all casino ownerships. Admin or moderator."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         user = await db.users.find_one(
@@ -1313,8 +1319,60 @@ def register(router):
         )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        dice_owned = await db.dice_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(10)
-        return {"user": user, "dice_owned": dice_owned}
+        dice_owned = await db.dice_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(20)
+        roulette_owned = await db.roulette_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(20)
+        blackjack_owned = await db.blackjack_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(20)
+        horseracing_owned = await db.horseracing_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(20)
+        videopoker_owned = await db.videopoker_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(20)
+        slots_owned = await db.slots_ownership.find({"owner_id": user_id}, {"_id": 0}).to_list(20)
+        casinos_owned = []
+        for d in dice_owned:
+            casinos_owned.append({"game_type": "dice", "location": d.get("city") or "?"})
+        for d in roulette_owned:
+            casinos_owned.append({"game_type": "roulette", "location": d.get("city") or "?"})
+        for d in blackjack_owned:
+            casinos_owned.append({"game_type": "blackjack", "location": d.get("city") or "?"})
+        for d in horseracing_owned:
+            casinos_owned.append({"game_type": "horseracing", "location": d.get("city") or "?"})
+        for d in videopoker_owned:
+            casinos_owned.append({"game_type": "videopoker", "location": d.get("city") or "?"})
+        for d in slots_owned:
+            casinos_owned.append({"game_type": "slots", "location": d.get("state") or "?"})
+        return {"user": user, "dice_owned": dice_owned, "casinos_owned": casinos_owned}
+
+    @router.post("/admin/drop-user-casino")
+    async def admin_drop_user_casino(body: DropUserCasinoRequest, current_user: dict = Depends(get_current_user)):
+        """Remove one casino from a user (ownership becomes unowned). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        game_type = (body.game_type or "").strip().lower()
+        location = (body.location or "").strip()
+        if not location:
+            raise HTTPException(status_code=400, detail="location is required")
+        user_id = (body.user_id or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        coll_map = {
+            "dice": (db.dice_ownership, "city"),
+            "roulette": (db.roulette_ownership, "city"),
+            "blackjack": (db.blackjack_ownership, "city"),
+            "horseracing": (db.horseracing_ownership, "city"),
+            "videopoker": (db.videopoker_ownership, "city"),
+            "slots": (db.slots_ownership, "state"),
+        }
+        if game_type not in coll_map:
+            raise HTTPException(status_code=400, detail="Invalid game_type; use dice, roulette, blackjack, horseracing, videopoker, or slots")
+        coll, loc_key = coll_map[game_type]
+        res = await coll.update_one(
+            {"owner_id": user_id, loc_key: location},
+            {"$set": {"owner_id": None, "owner_username": None}},
+        )
+        if res.matched_count == 0:
+            raise HTTPException(status_code=404, detail=f"No {game_type} casino in {location} owned by this user")
+        return {"message": f"Dropped {game_type} casino ({location}) from user", "matched": res.matched_count, "modified": res.modified_count}
 
     @router.post("/admin/wipe-all-users")
     async def admin_wipe_all_users(confirm: WipeConfirmation, current_user: dict = Depends(get_current_user)):

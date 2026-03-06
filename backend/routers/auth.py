@@ -78,6 +78,7 @@ def register(router):
     create_access_token = srv.create_access_token
     get_current_user = srv.get_current_user
     get_rank_info = srv.get_rank_info
+    _is_moderator = srv._is_moderator
     get_wealth_rank = srv.get_wealth_rank
     get_wealth_rank_range = srv.get_wealth_rank_range
     _get_casino_property_profit = srv._get_casino_property_profit
@@ -602,6 +603,8 @@ def register(router):
             rank_id, rank_name = get_rank_info(_safe_int(current_user.get("rank_points"), 0))
             if current_user.get("email") in ADMIN_EMAILS:
                 rank_name = "Admin"
+            elif _is_moderator(current_user):
+                rank_name = "Moderator"
             money_val = _safe_float(current_user.get("money"), 0.0)
             wealth_id, wealth_name = get_wealth_rank(money_val)
             wealth_range = get_wealth_rank_range(money_val)
@@ -612,6 +615,10 @@ def register(router):
             if not isinstance(admin_online_color, str) or not admin_online_color.strip():
                 admin_online_color = "#a78bfa"
             admin_online_color = admin_online_color.strip()
+            mod_online_color = None
+            if _is_moderator(current_user):
+                raw = (current_user.get("mod_online_color") or "").strip() or "#1e3a5f"
+                mod_online_color = raw if raw.startswith("#") and len(raw) <= 9 else "#1e3a5f"
             return UserResponse(
                 id=str(u["id"]),
                 email=str(u.get("email") or ""),
@@ -662,6 +669,7 @@ def register(router):
                 loot_box_pieces=_safe_int(u.get("loot_box_pieces"), 0),
                 profile_autoplay_video=bool(u.get("profile_autoplay_video", True)),
                 admin_online_color=admin_online_color,
+                mod_online_color=mod_online_color,
             )
         except HTTPException:
             raise

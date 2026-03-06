@@ -646,6 +646,8 @@ export default function Profile() {
   const [savingYoutube, setSavingYoutube] = useState(false);
   const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
   const [savingAutoplay, setSavingAutoplay] = useState(false);
+  const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
+  const [savingModColor, setSavingModColor] = useState(false);
   const [settingsTab, setSettingsTab] = useState('notifications');
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
@@ -679,6 +681,12 @@ export default function Profile() {
     };
     run();
   }, []);
+
+  useEffect(() => {
+    if (me?.mod_online_color != null && (me.mod_online_color || '').trim())
+      setModOnlineColor((me.mod_online_color || '').trim());
+    else if (me && !me.mod_online_color) setModOnlineColor('#1e3a5f');
+  }, [me?.mod_online_color]);
 
   useEffect(() => {
     if (!username) return;
@@ -917,6 +925,24 @@ export default function Profile() {
     }
   };
 
+  const saveModOnlineColor = async () => {
+    const hex = (modOnlineColor || '').trim() || '#1e3a5f';
+    if (!/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(hex)) {
+      toast.error('Enter a valid hex colour (e.g. #1e3a5f)');
+      return;
+    }
+    setSavingModColor(true);
+    try {
+      await api.patch('/profile/mod-online-color', { color: hex });
+      toast.success('Users online colour saved');
+      await refetchMe();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setSavingModColor(false);
+    }
+  };
+
   if (loading && !profile) {
     return <LoadingSpinner />;
   }
@@ -1076,6 +1102,7 @@ export default function Profile() {
               </p>
             </div>
             ) : isModerator ? (
+            <>
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
@@ -1094,6 +1121,41 @@ export default function Profile() {
                 View logs, account info, and lock users. No wealth or rank changes.
               </p>
             </div>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20">
+                <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Users online colour</span>
+              </div>
+              <div className="px-2.5 py-2 md:px-3 md:py-2.5 flex flex-wrap items-center gap-2">
+                <input
+                  type="color"
+                  value={modOnlineColor}
+                  onChange={(e) => setModOnlineColor(e.target.value)}
+                  className="h-8 w-12 cursor-pointer rounded border border-primary/30 bg-secondary"
+                  aria-label="Colour picker"
+                />
+                <input
+                  type="text"
+                  value={modOnlineColor}
+                  onChange={(e) => setModOnlineColor(e.target.value)}
+                  className="w-20 px-2 py-1 text-[11px] font-mono bg-secondary border border-primary/20 rounded"
+                  placeholder="#1e3a5f"
+                  aria-label="Hex colour"
+                />
+                <button
+                  type="button"
+                  onClick={saveModOnlineColor}
+                  disabled={savingModColor}
+                  className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50"
+                >
+                  {savingModColor ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+              <p className="px-2.5 py-1.5 md:px-3 text-[9px] md:text-[10px] text-mutedForeground font-heading">
+                Colour for your name on the Users Online page. Default: dark blue.
+              </p>
+            </div>
+            </>
             ) : null}
           </>
         )}

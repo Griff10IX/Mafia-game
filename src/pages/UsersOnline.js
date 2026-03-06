@@ -68,6 +68,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
   const preview = profileCache[user.username];
   const isLoading = !!profileLoading[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
+  const displayColor = user.online_color || (user.is_admin ? adminColor : undefined);
 
   return (
     <div
@@ -79,8 +80,8 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
           <HoverCardTrigger asChild>
             <Link
               to={`/profile/${encodeURIComponent(user.username)}`}
-              className={`relative z-10 text-[11px] font-heading font-bold transition-colors ${user.is_admin ? '' : 'text-foreground hover:text-primary'}`}
-              style={user.is_admin ? { color: adminColor } : undefined}
+              className={`relative z-10 text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`}
+              style={displayColor ? { color: displayColor } : undefined}
               data-testid={`user-profile-link-${user.username}`}
             >
               {user.username}

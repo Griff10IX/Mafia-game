@@ -1542,9 +1542,31 @@ export default function Admin() {
                     <Row label="Lifetime points spent" value={fmtNum(u.lifetime_points_spent)} />
                   </div>
                 </Section>
-                {userDetailData.dice_owned?.length > 0 && (
-                  <Section title="Dice owned">
-                    <ul className="list-disc list-inside text-foreground space-y-0.5">{userDetailData.dice_owned.map((d, i) => <li key={i}>{d.game_type || d.id || JSON.stringify(d)}</li>)}</ul>
+                {(userDetailData.casinos_owned?.length > 0) && (
+                  <Section title="Casinos owned">
+                    <ul className="text-foreground space-y-1">
+                      {userDetailData.casinos_owned.map((c, i) => (
+                        <li key={i} className="flex items-center justify-between gap-2">
+                          <span className="font-mono text-[11px]">{c.game_type} · {c.location}</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (!window.confirm(`Drop ${c.game_type} (${c.location}) from this user?`)) return;
+                              try {
+                                await api.post('/admin/drop-user-casino', { user_id: userDetailData.user?.id, game_type: c.game_type, location: c.location });
+                                toast.success('Casino dropped');
+                                if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                              } catch (e) {
+                                toast.error(e.response?.data?.detail || 'Failed to drop casino');
+                              }
+                            }}
+                            className="px-2 py-0.5 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
+                          >
+                            Drop
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
                   </Section>
                 )}
               </div>

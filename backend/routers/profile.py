@@ -48,9 +48,11 @@ def register(router):
     get_wealth_rank = srv.get_wealth_rank
     get_wealth_rank_range = srv.get_wealth_rank_range
     _user_owns_any_property = srv._user_owns_any_property
+    _is_moderator = srv._is_moderator
     verify_password = srv.verify_password
     get_password_hash = srv.get_password_hash
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     AvatarUpdateRequest = srv.AvatarUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
@@ -430,6 +432,20 @@ def register(router):
             return {"message": "No change", "profile_autoplay_video": bool(current_user.get("profile_autoplay_video", True))}
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"profile_autoplay_video": profile_autoplay_video}})
         return {"message": "Autoplay preference updated", "profile_autoplay_video": profile_autoplay_video}
+
+    @router.patch("/profile/mod-online-color")
+    async def update_mod_online_color(
+        current_user: dict = Depends(get_current_user),
+        color: Optional[str] = Body(None, embed=True),
+    ):
+        """Moderators only: set your colour on the Users Online list. Default dark blue (#1e3a5f)."""
+        if not _is_moderator(current_user):
+            raise HTTPException(status_code=403, detail="Moderators only")
+        raw = (color or "").strip() or MOD_ONLINE_COLOR_DEFAULT
+        if not (raw.startswith("#") and len(raw) in (4, 7) and all(c in "0123456789AaBbCcDdEeFf" for c in raw[1:])):
+            raw = MOD_ONLINE_COLOR_DEFAULT
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"mod_online_color": raw}})
+        return {"message": "Mod online colour updated", "mod_online_color": raw}
 
     @router.get("/profile/cars-preferences")
     async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):

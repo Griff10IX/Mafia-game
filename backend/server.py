@@ -426,6 +426,7 @@ class UserResponse(BaseModel):
     loot_box_pieces: int = 0
     profile_autoplay_video: bool = True  # when viewing someone's profile, autoplay their YouTube video (can turn off in profile settings)
     admin_online_color: Optional[str] = None  # global setting for styling "Admin" rank (so profile API can omit it when viewing others)
+    mod_online_color: Optional[str] = None  # moderator's own colour on Users Online (default dark blue when not set)
 
 class NotificationCreate(BaseModel):
     title: str
