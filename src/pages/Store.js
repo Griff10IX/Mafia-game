@@ -246,9 +246,6 @@ export default function Store() {
                 }`}
               >
                 <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                {pkg.popular && (
-                  <span className="absolute top-0 left-1/2 -translate-x-1/2 z-10 bg-primary/20 text-primary border border-primary/40 px-2 py-0.5 rounded-b text-[9px] font-heading font-bold">Popular</span>
-                )}
                 <div className="p-3 text-center">
                   <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{pkg.name}</p>
                   <p className="text-lg font-heading font-bold text-primary mt-1">{Number(pkg.points ?? 0).toLocaleString()}</p>

@@ -83,6 +83,7 @@ from server import (
     CARS,
     TRAVEL_TIMES,
     DEFAULT_GARAGE_BATCH_LIMIT,
+    CustomCarImageUpdate,
 )
 from routers.objectives import update_objectives_progress
 
@@ -1092,6 +1093,38 @@ async def _is_car_on_owner_profile(db, owner_id: str, user_car_id: str) -> bool:
     return user_car_id in top_ids
 
 
+async def update_custom_car_image(
+    user_car_id: str,
+    request: CustomCarImageUpdate,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    """Update the custom car picture URL for a user's custom car (car_id car_custom)."""
+    user_car = await db.user_cars.find_one(
+        {"user_id": current_user["id"], "id": user_car_id}
+    )
+    if not user_car:
+        try:
+            user_car = await db.user_cars.find_one(
+                {"user_id": current_user["id"], "_id": ObjectId(user_car_id)}
+            )
+        except Exception:
+            user_car = None
+    if not user_car:
+        raise HTTPException(status_code=404, detail="Car not found in your garage")
+    if user_car.get("car_id") != "car_custom":
+        raise HTTPException(status_code=400, detail="Only custom cars can have a custom picture")
+    value = (request.image_url or "").strip() or None
+    if user_car.get("_id") is not None:
+        q = {"_id": user_car["_id"]}
+    else:
+        q = {"user_id": current_user["id"], "id": user_car.get("id")}
+    if value is None:
+        await db.user_cars.update_one(q, {"$unset": {"custom_image_url": ""}})
+    else:
+        await db.user_cars.update_one(q, {"$set": {"custom_image_url": value}})
+    return {"message": "Picture updated"}
+
+
 async def get_view_car(
     id: str = Query(..., alias="id", description="Personal car instance id (user_car_id)"),
     current_user: dict = Depends(get_current_user),
@@ -1198,4 +1231,5 @@ def register(router):
     router.add_api_route("/gta/delist-car", delist_car, methods=["POST"])
     router.add_api_route("/gta/buy-listed-car", buy_listed_car, methods=["POST"])
     router.add_api_route("/gta/repair-car", repair_car, methods=["POST"])
+    router.add_api_route("/gta/custom-car/{user_car_id}", update_custom_car_image, methods=["PATCH"])
     router.add_api_route("/gta/view-car", get_view_car, methods=["GET"])
