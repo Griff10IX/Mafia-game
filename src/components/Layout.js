@@ -459,10 +459,10 @@ export default function Layout({ children }) {
     fetchUnreadCount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const refreshUserDebounceRef = useRef(null);
   useEffect(() => {
-    const handler = async (event) => {
-      const detail = event.detail || {};
-      if (detail.money != null && detail.money !== undefined) {
+    const runRefresh = async (detail) => {
+      if (detail && detail.money != null && detail.money !== undefined) {
         setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
       }
       fetchData();
@@ -480,8 +480,16 @@ export default function Layout({ children }) {
         }
       }
     };
+    const handler = (event) => {
+      const detail = event.detail || {};
+      if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
+      refreshUserDebounceRef.current = setTimeout(() => runRefresh(detail), 150);
+    };
     window.addEventListener('app:refresh-user', handler);
-    return () => window.removeEventListener('app:refresh-user', handler);
+    return () => {
+      window.removeEventListener('app:refresh-user', handler);
+      if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -511,6 +519,8 @@ export default function Layout({ children }) {
     if (user) fetchAutoRankPrefs();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Depend on user?.id (not user) so we don't re-run when user object reference changes (e.g. after fetchCasinoProperty) and cause a request loop
+  const userId = user?.id;
   useEffect(() => {
     // Shell ready: only auth/me + rank-progress so user and rank appear ASAP
     fetchData();
@@ -521,16 +531,16 @@ export default function Layout({ children }) {
       fetchWarStatus();
       // Fetch crimes/gta/jail when on those pages, or when right sidebar is shown (for quick-link labels)
       const path = location.pathname;
-      if (['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (user && mobileStatsDisplay === 'right_sidebar')) {
+      if (['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (userId && mobileStatsDisplay === 'right_sidebar')) {
         fetchRankingCounts();
       }
-      if (user && mobileStatsDisplay === 'right_sidebar') {
+      if (userId && mobileStatsDisplay === 'right_sidebar') {
         api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       }
       fetchCasinoProperty();
     }, 0);
     return () => clearTimeout(deferred);
-  }, [location.pathname, user, mobileStatsDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, userId, mobileStatsDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let intervalId;
@@ -561,7 +571,7 @@ export default function Layout({ children }) {
     let intervalId;
     const deferred = setTimeout(() => {
       pollNotifications();
-      intervalId = setInterval(pollNotifications, 5000);
+      intervalId = setInterval(pollNotifications, 15000);
     }, 0);
     return () => {
       clearTimeout(deferred);
@@ -766,7 +776,7 @@ export default function Layout({ children }) {
       return () => {};
     }
     fetchTravelStatus();
-    const intervalId = setInterval(fetchTravelStatus, 1000);
+    const intervalId = setInterval(fetchTravelStatus, 3000);
     return () => clearInterval(intervalId);
   }, [location.pathname, travelStatus?.traveling, fetchTravelStatus]);
 
