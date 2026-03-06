@@ -1863,10 +1863,10 @@ export default function Layout({ children }) {
                   <span style={{ color: 'var(--noir-muted)' }}>Rank</span>
                   <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.rank_name || rankProgress?.current_rank_name || '—'}</span>
                 </div>
-                <Link to="/crimes" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span style={{ color: 'var(--noir-muted)' }}>Crimes</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
+                <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
+                  <span style={{ color: 'var(--noir-muted)' }}>Bodyguards</span>
+                  <span style={{ color: 'var(--noir-foreground)' }}>{typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—'}</span>
+                </div>
                 {hasCasinoOrProperty && (
                   <>
                     <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
@@ -1907,10 +1907,10 @@ export default function Layout({ children }) {
                 </Link>
               </div>
               <div className="h-px shrink-0" style={dividerStyle} />
-              {/* Quick links */}
+              {/* Quick links: Crimes above GTA; My Cars below Travel; Kill; Casino shortcuts */}
               <div className="space-y-1">
-                <Link to="/garage" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>My Cars</span>
+                <Link to="/crimes" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Crimes</span>
                   <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
                 </Link>
                 <Link to="/gta" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
@@ -1923,7 +1923,43 @@ export default function Layout({ children }) {
                 </Link>
                 <Link to="/travel" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
                   <span>Travel</span>
-                  <span className="text-emerald-500 text-[9px]">Available</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <Link to="/garage" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>My Cars</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <Link to="/attack" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Kill</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <Link to="/bodyguards" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Bodyguards</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                {hasCasinoOrProperty && (
+                  <>
+                    <Link to="/my-properties" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                      <span>My Properties</span>
+                      <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                    </Link>
+                    <Link to="/casino" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                      <span>Casino</span>
+                      <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                    </Link>
+                  </>
+                )}
+                <Link to="/casino/dice" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Dice</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <Link to="/casino/blackjack" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Blackjack</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                </Link>
+                <Link to="/casino/slots" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
+                  <span>Slots</span>
+                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
                 </Link>
               </div>
             </div>

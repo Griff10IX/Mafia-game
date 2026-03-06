@@ -641,6 +641,13 @@ def register(router):
                 fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1})
                 if fam:
                     gang_name = fam.get("name")
+            bodyguard_count = await db.bodyguards.count_documents({
+                "user_id": u["id"],
+                "$or": [
+                    {"bodyguard_user_id": {"$exists": True, "$ne": None}},
+                    {"is_robot": True},
+                ],
+            })
             return UserResponse(
                 id=str(u["id"]),
                 email=str(u.get("email") or ""),
@@ -654,6 +661,7 @@ def register(router):
                 points=_safe_int(u.get("points"), 0),
                 rank_points=_safe_int(u.get("rank_points"), 0),
                 bodyguard_slots=_safe_int(u.get("bodyguard_slots"), 1),
+                bodyguard_count=bodyguard_count,
                 bullets=_safe_int(u.get("bullets"), 0),
                 health=_safe_int(u.get("health"), DEFAULT_HEALTH),
                 armour_level=_safe_int(u.get("armour_level"), 0),

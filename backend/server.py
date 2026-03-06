@@ -389,6 +389,7 @@ class UserResponse(BaseModel):
     points: int
     rank_points: int
     bodyguard_slots: int
+    bodyguard_count: int = 0  # current number of hired bodyguards (filled slots)
     bullets: int
     health: int
     armour_level: int
