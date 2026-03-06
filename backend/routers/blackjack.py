@@ -572,14 +572,14 @@ def register(router):
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay}})
                 buy_back_reward = int((doc or {}).get("buy_back_reward") or 0)
                 if shortfall > 0:
+                    ownership_transferred = True
+                    bj_owner_set = {"owner_id": current_user["id"], "owner_username": current_user.get("username")}
+                    if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                        bj_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": bj_owner_set})
                     if buy_back_reward <= 0:
                         await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$inc": {"profit": -actual_owner_pay}})
                     else:
-                        ownership_transferred = True
-                        bj_owner_set = {"owner_id": current_user["id"], "owner_username": current_user.get("username")}
-                        if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
-                            bj_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
-                        await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": bj_owner_set})
                         expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                         offer_id = str(uuid.uuid4())
                         await db.blackjack_buy_back_offers.insert_one({
@@ -787,14 +787,14 @@ def register(router):
                 stored_city_bj, doc_bj = await _get_blackjack_ownership_doc(bj_city)
                 buy_back_reward = int((doc_bj or {}).get("buy_back_reward") or 0)
                 if shortfall > 0:
+                    ownership_transferred = True
+                    bj_owner_set2 = {"owner_id": current_user["id"], "owner_username": current_user.get("username")}
+                    if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                        bj_owner_set2["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": bj_owner_set2})
                     if buy_back_reward <= 0:
                         await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$inc": {"profit": -actual_owner_pay}})
                     else:
-                        ownership_transferred = True
-                        bj_owner_set2 = {"owner_id": current_user["id"], "owner_username": current_user.get("username")}
-                        if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
-                            bj_owner_set2["below_capo_acquired_at"] = datetime.now(timezone.utc)
-                        await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": bj_owner_set2})
                         expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                         offer_id = str(uuid.uuid4())
                         await db.blackjack_buy_back_offers.insert_one({

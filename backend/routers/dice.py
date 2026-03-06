@@ -249,6 +249,11 @@ def register(router):
         points_offered = int((doc or {}).get("buy_back_reward") or 0)
         edge = int(stake * sides * DICE_HOUSE_EDGE)
         if shortfall > 0:
+            ownership_transferred = True
+            dice_owner_set = {"owner_id": current_user["id"], "owner_username": current_user["username"]}
+            if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                dice_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+            await db.dice_ownership.update_one({"city": db_city}, {"$set": dice_owner_set})
             if points_offered <= 0:
                 if head_family_id:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": stake, "state_head_income.dice": stake}})
@@ -256,11 +261,6 @@ def register(router):
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                     await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
             else:
-                ownership_transferred = True
-                dice_owner_set = {"owner_id": current_user["id"], "owner_username": current_user["username"]}
-                if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
-                    dice_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
-                await db.dice_ownership.update_one({"city": db_city}, {"$set": dice_owner_set})
                 expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
                 offer_id = str(uuid.uuid4())
                 buy_back_doc = {

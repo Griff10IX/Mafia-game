@@ -2706,7 +2706,47 @@ export default function Admin() {
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote moderators</span>
           </div>
           <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground font-heading">Moderators can view logs, account info, and lock users. They cannot give or take wealth, change rank, or use destructive tools. Only admins can promote or demote moderators.</p>
+            <p className="text-[10px] text-mutedForeground font-heading">Only admins can promote or demote moderators. Mods see a limited Admin page (Moderation, Logs, Database only).</p>
+
+            <details className="rounded border border-primary/20 bg-primary/5 overflow-hidden">
+              <summary className="px-2.5 py-2 cursor-pointer text-[10px] font-heading font-bold text-primary uppercase tracking-wider hover:bg-primary/10 list-none flex items-center gap-2">
+                <Info size={12} />
+                View moderator tools (what mods can / cannot do)
+              </summary>
+              <div className="px-2.5 py-2 border-t border-primary/20 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[10px] font-heading">
+                <div>
+                  <div className="text-emerald-400/90 font-bold uppercase tracking-wider mb-1.5">Mods can</div>
+                  <ul className="space-y-0.5 text-mutedForeground">
+                    <li>• Activity log (view)</li>
+                    <li>• Gambling log (view)</li>
+                    <li>• Lock / unlock user</li>
+                    <li>• Locked accounts list & message</li>
+                    <li>• User search (username/email)</li>
+                    <li>• User details & registration info</li>
+                    <li>• User inspect (by email)</li>
+                    <li>• Login issues & clear lockout</li>
+                    <li>• Find duplicates</li>
+                    <li>• Cheat detection (same IP, duplicate suspects)</li>
+                  </ul>
+                </div>
+                <div>
+                  <div className="text-red-400/90 font-bold uppercase tracking-wider mb-1.5">Mods cannot</div>
+                  <ul className="space-y-0.5 text-mutedForeground">
+                    <li>• Change rank / add points or cash</li>
+                    <li>• Add bullets, cars, loot pieces</li>
+                    <li>• Kill or revive player</li>
+                    <li>• Set email, password, log out user</li>
+                    <li>• Clear gambling log (bulk)</li>
+                    <li>• Wipe / delete user / database</li>
+                    <li>• Events, NPCs, game world settings</li>
+                    <li>• Security (IP bans, rate limits)</li>
+                    <li>• Promote or demote moderators</li>
+                    <li>• Ghost mode, act as normal</li>
+                  </ul>
+                </div>
+              </div>
+            </details>
+
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
