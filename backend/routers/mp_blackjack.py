@@ -227,6 +227,11 @@ def register(router):
                             "payout": buy_in,
                         })
 
+                round_entry = {
+                    "round": int(game.get("current_round") or 1),
+                    "winner_username": remaining_active[0].get("username") if remaining_active else None,
+                    "eliminated": None,
+                }
                 await db.mp_blackjack_games.update_one(
                     {"id": game_id},
                     {
@@ -239,7 +244,8 @@ def register(router):
                             "players": players,
                             "pot": pot,
                             "eliminated": existing_eliminated,
-                        }
+                        },
+                        "$push": {"round_history": {"$each": [round_entry], "$slice": -5}},
                     },
                 )
             else:
@@ -254,6 +260,11 @@ def register(router):
                         p["status"] = "waiting_ready"
                         p["ready"] = False
 
+                round_entry = {
+                    "round": int(game.get("current_round") or 1),
+                    "winner_username": None,
+                    "eliminated": [e.get("username") for e in eliminated_this_round],
+                }
                 await db.mp_blackjack_games.update_one(
                     {"id": game_id},
                     {
@@ -267,7 +278,8 @@ def register(router):
                             "current_turn_index": -1,
                             "all_ready_at": None,
                             "round_eliminated": [e["user_id"] for e in eliminated_this_round],
-                        }
+                        },
+                        "$push": {"round_history": {"$each": [round_entry], "$slice": -5}},
                     },
                 )
         else:
@@ -323,6 +335,9 @@ def register(router):
                 else:
                     results.append({"user_id": uid, "username": p.get("username"), "result": "lose", "payout": 0})
 
+            winner_username = players[winner_indices[0]].get("username") if winner_indices else None
+            round_entry = {"round": 1, "winner_username": winner_username, "eliminated": None}
+
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
                 {
@@ -332,7 +347,8 @@ def register(router):
                         "completed_at": now_iso,
                         "winner_ids": winner_ids,
                         "results": results,
-                    }
+                    },
+                    "$push": {"round_history": {"$each": [round_entry], "$slice": -5}},
                 },
             )
 
@@ -410,9 +426,11 @@ def register(router):
             {"_id": 0, "id": 1, "creator_id": 1, "creator_username": 1, "max_players": 1,
              "buy_in": 1, "extra_prize": 1, "pot": 1, "players": 1, "status": 1, "phase": 1,
              "created_at": 1, "anonymous": 1, "card_limit": 1, "exclude_yourself": 1,
-             "twenty_one_only": 1, "elimination_rounds": 1, "current_round": 1},
+             "twenty_one_only": 1, "elimination_rounds": 1, "current_round": 1,
+             "current_turn_index": 1, "turn_started_at": 1},
         ).sort("created_at", -1)
         games = await cursor.to_list(100)
+        uid = current_user.get("id")
         out = []
         for g in games:
             players_list = g.get("players") or []
@@ -421,7 +439,7 @@ def register(router):
             creator_name = g.get("creator_username")
             if g.get("anonymous"):
                 creator_name = "Anonymous"
-            out.append({
+            row = {
                 "id": g["id"],
                 "creator_id": g.get("creator_id"),
                 "creator_username": creator_name,
@@ -440,7 +458,36 @@ def register(router):
                 "twenty_one_only": g.get("twenty_one_only", False),
                 "elimination_rounds": g.get("elimination_rounds", False),
                 "current_round": g.get("current_round", 1),
-            })
+            }
+            # Game activity for playing phase: whose turn, seconds left
+            if g.get("status") == "playing" and g.get("phase") == "playing":
+                turn_idx = int(g.get("current_turn_index") or -1)
+                turn_started_at = g.get("turn_started_at")
+                if turn_idx >= 0 and turn_idx < len(players_list) and turn_started_at:
+                    try:
+                        dt = datetime.fromisoformat(turn_started_at.replace("Z", "+00:00"))
+                        elapsed = (datetime.now(timezone.utc) - dt).total_seconds()
+                        row["turn_seconds_left"] = max(0, int(MP_BJ_TURN_SECONDS - elapsed))
+                    except Exception:
+                        row["turn_seconds_left"] = None
+                    p = players_list[turn_idx]
+                    if g.get("anonymous"):
+                        row["current_turn_username"] = f"Player {turn_idx + 1}"
+                    else:
+                        row["current_turn_username"] = (p.get("username") or "Player").strip() or "Player"
+                    row["current_turn_user_id"] = p.get("user_id")
+                    row["current_turn_is_you"] = p.get("user_id") == uid
+                else:
+                    row["turn_seconds_left"] = None
+                    row["current_turn_username"] = None
+                    row["current_turn_user_id"] = None
+                    row["current_turn_is_you"] = False
+            else:
+                row["turn_seconds_left"] = None
+                row["current_turn_username"] = None
+                row["current_turn_user_id"] = None
+                row["current_turn_is_you"] = False
+            out.append(row)
         return {"games": out}
 
     @router.post("/casino/mp-blackjack/games")
@@ -514,6 +561,7 @@ def register(router):
             "all_ready_at": None,
             "current_round": 1,
             "round_eliminated": [],
+            "round_history": [],
         }
         await db.mp_blackjack_games.insert_one(doc)
         await db.users.update_one({"id": uid}, {"$inc": {"money": -total_deduct}})

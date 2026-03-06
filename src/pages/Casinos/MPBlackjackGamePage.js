@@ -103,7 +103,7 @@ function PlayingCard({ card, hidden, index = 0, total }) {
 }
 
 /* ─── Player Seat ─── */
-function PlayerSeat({ p, isMe, isCurrent, showCards }) {
+function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
   const hand = p.hand || [];
   const total = handTotal(hand);
   const isBust = p.status === 'bust';
@@ -115,7 +115,8 @@ function PlayerSeat({ p, isMe, isCurrent, showCards }) {
   let badgeLabel = '—';
   let badgeStyle = { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' };
 
-  if (isEliminated)   { badgeLabel = 'Out';     badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
+  if (isWinner)       { badgeLabel = '🏆 Win';  badgeStyle = { background: 'rgba(52,211,153,0.25)', color: '#34d399' }; }
+  else if (isEliminated)   { badgeLabel = 'Out';     badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
   else if (isBust)    { badgeLabel = 'Bust';    badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' }; }
   else if (isStood)   { badgeLabel = 'Stand';   badgeStyle = { background: 'rgba(161,161,170,0.2)', color: '#a1a1aa' }; }
   else if (isCurrent) { badgeLabel = 'Playing'; badgeStyle = { background: 'rgba(212,175,55,0.2)', color: '#d4af37' }; }
@@ -127,9 +128,9 @@ function PlayerSeat({ p, isMe, isCurrent, showCards }) {
   return (
     <div className="rounded-xl overflow-hidden border-2 transition-all duration-300"
       style={{
-        borderColor: isEliminated ? 'rgba(239,68,68,0.3)' : isCurrent ? '#c9a84c' : isMe ? 'rgba(212,175,55,0.35)' : 'rgba(90,62,27,0.5)',
-        background: isEliminated ? 'rgba(239,68,68,0.04)' : isCurrent ? 'linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.28)',
-        boxShadow: isCurrent ? '0 0 24px rgba(212,175,55,0.18),inset 0 0 20px rgba(0,0,0,0.2)' : 'none',
+        borderColor: isWinner ? '#34d399' : isEliminated ? 'rgba(239,68,68,0.3)' : isCurrent ? '#c9a84c' : isMe ? 'rgba(212,175,55,0.35)' : 'rgba(90,62,27,0.5)',
+        background: isWinner ? 'linear-gradient(180deg,rgba(52,211,153,0.08),rgba(0,0,0,0.35))' : isEliminated ? 'rgba(239,68,68,0.04)' : isCurrent ? 'linear-gradient(180deg,rgba(212,175,55,0.07),rgba(0,0,0,0.3))' : 'rgba(0,0,0,0.28)',
+        boxShadow: isWinner ? '0 0 28px rgba(52,211,153,0.35), 0 0 14px rgba(52,211,153,0.2), inset 0 0 20px rgba(0,0,0,0.2)' : isCurrent ? '0 0 24px rgba(212,175,55,0.18),inset 0 0 20px rgba(0,0,0,0.2)' : 'none',
         opacity: isEliminated ? 0.5 : 1,
       }}>
       <div className="px-2.5 py-1.5 flex items-center justify-between gap-1"
@@ -405,6 +406,24 @@ export default function MPBlackjackGamePage() {
     const t = setInterval(() => setTurnSecondsLeft(compute()), 1000);
     return () => clearInterval(t);
   }, [status, phase, currentTurnIndex, turnStartedAt]);
+
+  // ── Notify when it's your turn (toast + browser notification if tab in background)
+  const prevIsMyTurnRef = useRef(false);
+  useEffect(() => {
+    if (isMyTurn && !prevIsMyTurnRef.current) {
+      toast.success("Your turn! Hit or stand.", { icon: '🎴' });
+      if (typeof Notification !== 'undefined' && document.hidden) {
+        if (Notification.permission === 'granted') {
+          try {
+            new Notification('Multiplayer Blackjack', { body: "It's your turn — hit or stand!", icon: '/favicon.png' });
+          } catch (_) {}
+        } else if (Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
+    }
+    prevIsMyTurnRef.current = isMyTurn;
+  }, [isMyTurn]);
 
   // ── Start countdown ──
   useEffect(() => {
@@ -682,6 +701,51 @@ export default function MPBlackjackGamePage() {
               </div>
             )}
 
+            {/* Game info: pot, buy-in, rules */}
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 px-2 py-2 rounded-lg text-[9px] font-heading"
+              style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(212,175,55,0.12)' }}>
+              <span className="text-mutedForeground">Pot <span className="text-primary font-bold">{formatMoney(pot)}</span></span>
+              <span className="text-mutedForeground">Buy-in <span className="text-primary">{formatMoney(game?.buy_in ?? 0)}</span></span>
+              {(game?.extra_prize ?? 0) > 0 && (
+                <span className="text-mutedForeground">Bonus <span className="text-emerald-400">{formatMoney(game.extra_prize)}</span></span>
+              )}
+              {eliminationRounds && <span className="text-mutedForeground">Round <span className="font-bold">{currentRound}</span></span>}
+              {cardLimit != null && <span className="text-mutedForeground">Max {cardLimit} cards</span>}
+              {game?.twenty_one_only && <span className="text-amber-400/80">21 only</span>}
+              {(phase === 'settled' || status === 'completed') && (game?.results || []).length > 0 && (() => {
+                const winners = (game.results || []).filter((r) => r.result === 'win').map((r) => r.username);
+                if (winners.length === 0) return null;
+                return (
+                  <span className="flex items-center gap-1">
+                    <span className="text-mutedForeground">Winner{winners.length > 1 ? 's' : ''}:</span>
+                    <span className="font-bold" style={{ color: '#34d399' }}>{winners.join(', ')}</span>
+                  </span>
+                );
+              })()}
+            </div>
+
+            {/* Last 5 rounds / games */}
+            {(game?.round_history?.length > 0) && (
+              <div className="px-2 py-2 rounded-lg text-[9px] font-heading space-y-1"
+                style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(212,175,55,0.1)' }}>
+                <p className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground text-center mb-1.5">Last 5 rounds</p>
+                <div className="flex flex-wrap justify-center gap-x-3 gap-y-1">
+                  {(game.round_history.slice(-5)).reverse().map((entry, i) => (
+                    <div key={i} className="flex items-center gap-1.5">
+                      <span className="text-mutedForeground">R{entry.round}:</span>
+                      {entry.winner_username ? (
+                        <span className="font-bold" style={{ color: '#34d399' }}>{entry.winner_username}</span>
+                      ) : entry.eliminated?.length > 0 ? (
+                        <span className="text-amber-400/90">{entry.eliminated.join(', ')} out</span>
+                      ) : (
+                        <span className="text-mutedForeground">—</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Turn indicator + timer */}
             {status === 'playing' && phase === 'playing' && currentTurnIndex >= 0 && (
               <div className="flex items-center justify-center gap-3">
@@ -705,6 +769,8 @@ export default function MPBlackjackGamePage() {
                 const isCurrent = idx === currentTurnIndex;
                 const roundOver = status === 'completed' || phase === 'settled';
                 const opponentRevealed = roundOver || p.status === 'stood' || p.status === 'bust' || p.eliminated;
+                const winnerIds = game?.winner_ids || [];
+                const isWinner = roundOver && winnerIds.includes(p.user_id);
                 return (
                   <PlayerSeat
                     key={p.user_id}
@@ -712,6 +778,7 @@ export default function MPBlackjackGamePage() {
                     isMe={isMe}
                     isCurrent={isCurrent}
                     showCards={isMe || opponentRevealed}
+                    isWinner={isWinner}
                   />
                 );
               })}

@@ -253,6 +253,18 @@ export default function MPBlackjackPage() {
                         ))}
                         <span className="text-[8px] font-heading text-mutedForeground ml-1">{playerCount}/{maxPlayers}</span>
                       </div>
+
+                      {isPlaying && g.phase === 'playing' && (g.current_turn_username != null || g.turn_seconds_left != null) && (
+                        <div className="text-[9px] font-heading flex items-center gap-1.5 mt-0.5">
+                          <span className="text-mutedForeground">Turn:</span>
+                          <span style={{ color: g.current_turn_is_you ? '#d4af37' : 'inherit', fontWeight: g.current_turn_is_you ? 700 : 400 }}>
+                            {g.current_turn_is_you ? 'You' : (g.current_turn_username ?? '—')}
+                          </span>
+                          {typeof g.turn_seconds_left === 'number' && (
+                            <span className="text-mutedForeground">· {g.turn_seconds_left}s left</span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
