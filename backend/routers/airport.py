@@ -16,9 +16,6 @@ from server import (
     TRAVEL_TIMES,
     get_rank_info,
     CAPO_RANK_ID,
-    maybe_auto_relinquish_below_capo,
-    _user_owns_any_property,
-    _username_pattern,
 )
 from routers.booze_run import _booze_user_carrying_total
 
@@ -424,6 +421,7 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
 
 
 async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(get_current_user)):
+    from server import _user_owns_any_property, maybe_auto_relinquish_below_capo  # lazy import to avoid circular dependency
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     if rank_id < CAPO_RANK_ID:
         raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a property (airport). Reach Capo to hold one.")
@@ -454,6 +452,7 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
 
 
 async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = Depends(get_current_user)):
+    from server import maybe_auto_relinquish_below_capo  # lazy import to avoid circular dependency
     if req.state not in STATES:
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
@@ -473,6 +472,7 @@ async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = De
 
 
 async def airport_transfer(req: AirportTransferRequest, current_user: dict = Depends(get_current_user)):
+    from server import maybe_auto_relinquish_below_capo, _user_owns_any_property, _username_pattern  # lazy import to avoid circular dependency
     if req.state not in STATES:
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
@@ -509,6 +509,7 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
 
 
 async def airport_sell_on_trade(req: AirportSellRequest, current_user: dict = Depends(get_current_user)):
+    from server import maybe_auto_relinquish_below_capo  # lazy import to avoid circular dependency
     if req.state not in STATES:
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
