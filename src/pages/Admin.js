@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../components/FormattedNumberInput';
@@ -21,8 +21,9 @@ const ADMIN_CATEGORIES = [
   { id: 'admin-logs', label: 'Logs', icon: ScrollText },
   { id: 'admin-database', label: 'Database', icon: Skull },
   { id: 'admin-moderators', label: 'Moderators', icon: Shield },
+  { id: 'admin-hdo', label: 'Help Desk Operators', icon: HelpCircle },
 ];
-const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-database'];
+const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-database', 'admin-hdo', 'admin-moderators'];
 
 function scrollToCategory(id) {
   const el = document.getElementById(id);
@@ -215,6 +216,10 @@ export default function Admin() {
   const [moderatorsLoading, setModeratorsLoading] = useState(false);
   const [promoteModUsername, setPromoteModUsername] = useState('');
   const [promoteModLoading, setPromoteModLoading] = useState(false);
+  const [hdosList, setHdosList] = useState([]);
+  const [hdosLoading, setHdosLoading] = useState(false);
+  const [promoteHdoUsername, setPromoteHdoUsername] = useState('');
+  const [promoteHdoLoading, setPromoteHdoLoading] = useState(false);
 
   const toggleSection = (key) => {
     setCollapsed(prev => {
@@ -238,6 +243,9 @@ export default function Admin() {
         fetchBoozeRotation();
         fetchAdminSettings();
         fetchModerators();
+      }
+      if (admin || mod) {
+        fetchHdos();
       }
     } catch {
       setIsAdmin(false);
@@ -279,6 +287,44 @@ export default function Admin() {
       const res = await api.post('/admin/demote-moderator', null, { params: { target_username: username } });
       toast.success(res.data?.message ?? 'Demoted');
       fetchModerators();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    }
+  };
+
+  const fetchHdos = async () => {
+    setHdosLoading(true);
+    try {
+      const res = await api.get('/admin/help-desk-operators');
+      setHdosList(res.data?.help_desk_operators ?? []);
+    } catch {
+      setHdosList([]);
+    } finally {
+      setHdosLoading(false);
+    }
+  };
+
+  const handlePromoteHdo = async () => {
+    const username = (promoteHdoUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setPromoteHdoLoading(true);
+    try {
+      const res = await api.post('/admin/promote-hdo', null, { params: { target_username: username } });
+      toast.success(res.data?.message ?? 'Promoted');
+      setPromoteHdoUsername('');
+      fetchHdos();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    } finally {
+      setPromoteHdoLoading(false);
+    }
+  };
+
+  const handleDemoteHdo = async (username) => {
+    try {
+      const res = await api.post('/admin/demote-hdo', null, { params: { target_username: username } });
+      toast.success(res.data?.message ?? 'Demoted');
+      fetchHdos();
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed');
     }
@@ -2795,6 +2841,57 @@ export default function Admin() {
                       <span className="text-sm font-heading font-medium text-foreground">{m.username ?? '—'}</span>
                       <span className="text-[10px] text-mutedForeground truncate max-w-[180px]">{m.email ?? '—'}</span>
                       <BtnDanger onClick={() => handleDemoteModerator(m.username)} className="shrink-0">Demote</BtnDanger>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <div className="admin-art-line text-primary mx-3" />
+        </div>
+      </section>
+      )}
+
+      {/* ─── Help Desk Operators (admin or mod) ─── */}
+      {(isAdmin || isModerator) && (
+      <section id="admin-hdo" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <HelpCircle size={12} />
+          Help Desk Operators
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote Help Desk Operators</span>
+          </div>
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">HDOs can reply to and close Help Desk tickets. They appear in dark green on Users Online. Admins and mods can promote or demote.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={promoteHdoUsername}
+                onChange={(e) => setPromoteHdoUsername(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handlePromoteHdo()}
+                placeholder="Username to promote"
+                className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <BtnPrimary onClick={handlePromoteHdo} disabled={promoteHdoLoading}>
+                {promoteHdoLoading ? '...' : 'Promote to HDO'}
+              </BtnPrimary>
+            </div>
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1.5">Current Help Desk Operators</div>
+              {hdosLoading ? (
+                <p className="text-[10px] text-mutedForeground">Loading…</p>
+              ) : hdosList.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading">None. Promote a user above.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {hdosList.map((h) => (
+                    <li key={h.id || h.username} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-zinc-800/40 border border-zinc-700/50">
+                      <span className="text-sm font-heading font-medium text-foreground">{h.username ?? '—'}</span>
+                      <span className="text-[10px] text-mutedForeground truncate max-w-[180px]">{h.email ?? '—'}</span>
+                      <BtnDanger onClick={() => handleDemoteHdo(h.username)} className="shrink-0">Demote</BtnDanger>
                     </li>
                   ))}
                 </ul>

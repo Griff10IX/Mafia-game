@@ -973,6 +973,44 @@ def register(router):
         await db.users.update_one({"id": target["id"]}, {"$set": {"is_moderator": False}})
         return {"message": f"Removed moderator role from {target.get('username', target_username)}."}
 
+    @router.get("/admin/help-desk-operators")
+    async def admin_list_hdos(current_user: dict = Depends(get_current_user)):
+        """List Help Desk Operators. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cursor = db.users.find(
+            {"is_help_desk_operator": True},
+            {"_id": 0, "id": 1, "username": 1, "email": 1},
+        )
+        hdos = await cursor.to_list(500)
+        return {"help_desk_operators": hdos}
+
+    @router.post("/admin/promote-hdo")
+    async def admin_promote_hdo(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Promote a user to Help Desk Operator. Admin or moderator. HDOs can reply to and close help desk tickets."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "is_help_desk_operator": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if target.get("is_help_desk_operator"):
+            return {"message": f"{target.get('username', target_username)} is already a Help Desk Operator."}
+        await db.users.update_one({"id": target["id"]}, {"$set": {"is_help_desk_operator": True}})
+        return {"message": f"Promoted {target.get('username', target_username)} to Help Desk Operator."}
+
+    @router.post("/admin/demote-hdo")
+    async def admin_demote_hdo(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Remove Help Desk Operator role. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        await db.users.update_one({"id": target["id"]}, {"$set": {"is_help_desk_operator": False}})
+        return {"message": f"Removed Help Desk Operator role from {target.get('username', target_username)}."}
+
     @router.get("/admin/settings")
     async def admin_get_settings(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

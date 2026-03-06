@@ -670,6 +670,7 @@ def register(router):
                 profile_autoplay_video=bool(u.get("profile_autoplay_video", True)),
                 admin_online_color=admin_online_color,
                 mod_online_color=mod_online_color,
+                is_help_desk_operator=bool(u.get("is_help_desk_operator", False)),
             )
         except HTTPException:
             raise

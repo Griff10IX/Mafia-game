@@ -427,6 +427,7 @@ class UserResponse(BaseModel):
     profile_autoplay_video: bool = True  # when viewing someone's profile, autoplay their YouTube video (can turn off in profile settings)
     admin_online_color: Optional[str] = None  # global setting for styling "Admin" rank (so profile API can omit it when viewing others)
     mod_online_color: Optional[str] = None  # moderator's own colour on Users Online (default dark blue when not set)
+    is_help_desk_operator: bool = False  # can reply/close help desk tickets; shown dark green on Users Online
 
 class NotificationCreate(BaseModel):
     title: str
@@ -967,6 +968,12 @@ def _is_moderator(user: dict) -> bool:
     """True if user has been promoted to moderator (by an admin). Moderators have limited tools: logs, account info, lock user; no wealth/rank changes."""
     return bool(user.get("is_moderator"))
 
+
+def _is_hdo(user: dict) -> bool:
+    """True if user is a Help Desk Operator. HDOs can reply to and close help desk tickets; they appear dark green on Users Online."""
+    return bool(user.get("is_help_desk_operator"))
+
+
 # Admin endpoints -> routers/admin.py
 
 # Username lookup helpers
@@ -1219,8 +1226,10 @@ security_admin.register(api_router)
 sports_betting.register(api_router)
 auth.register(api_router)
 profile.register(api_router)
-admin.register(api_router)
-payments.register(api_router)
+    admin.register(api_router)
+    from routers import help_desk
+    help_desk.register(api_router)
+    payments.register(api_router)
 stats.register(api_router)
 dead_alive.register(api_router)
 users.register(api_router)

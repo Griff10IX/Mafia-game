@@ -103,6 +103,8 @@ def register(router):
             rank_name = "Admin"
         elif _is_moderator(user):
             rank_name = "Moderator"
+        elif user.get("is_help_desk_operator"):
+            rank_name = "Help Desk Operator"
         _prestige_level = int(user.get("prestige_level") or 0)
         _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
         wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))

@@ -101,6 +101,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { path: '/forum', label: 'Forum' },
         { path: '/forum', label: 'Entertainer Forum', state: { category: 'entertainer' } },
         { path: '/inbox', label: 'Inbox' },
+        { path: '/help-desk', label: 'Help Desk' },
         { path: '/booze-run', label: 'Booze Run' },
         { path: '/users-online', label: 'Users Online' },
         { path: '/families', label: 'Families' },

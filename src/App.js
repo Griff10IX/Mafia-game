@@ -68,6 +68,7 @@ const LootBox = lazy(() => import("./pages/LootBox"));
 const QuickTrade = lazy(() => import("./pages/QuickTrade"));
 const LockedPage = lazy(() => import("./pages/LockedPage"));
 const IPRules = lazy(() => import("./pages/IPRules"));
+const HelpDesk = lazy(() => import("./pages/HelpDesk"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
@@ -749,6 +750,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Inbox />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/help-desk"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <HelpDesk />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

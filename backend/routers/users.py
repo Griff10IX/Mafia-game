@@ -17,6 +17,7 @@ def register(router):
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     OnlineUsersResponse = srv.OnlineUsersResponse
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
+    HDO_ONLINE_COLOR = "#166534"  # dark green for Help Desk Operators
 
     @router.get("/users/online", response_model=OnlineUsersResponse)
     async def get_online_users(current_user: dict = Depends(get_current_user)):
@@ -45,10 +46,13 @@ def register(router):
             rank_id, rank_name = get_rank_info(_rp, _prestige_mult)
             is_admin = user.get("email") in ADMIN_EMAILS
             is_mod = bool(user.get("is_moderator"))
+            is_hdo = bool(user.get("is_help_desk_operator"))
             if is_admin:
                 rank_name = "Admin"
             elif is_mod:
                 rank_name = "Moderator"
+            elif is_hdo:
+                rank_name = "Help Desk Operator"
             _prestige_level = int(user.get("prestige_level") or 0)
             online_color = None
             if is_admin:
@@ -56,6 +60,8 @@ def register(router):
             elif is_mod:
                 raw = (user.get("mod_online_color") or "").strip() or MOD_ONLINE_COLOR_DEFAULT
                 online_color = raw if raw.startswith("#") and len(raw) <= 9 else MOD_ONLINE_COLOR_DEFAULT
+            elif is_hdo:
+                online_color = HDO_ONLINE_COLOR
             users_data.append({
                 "username": user["username"],
                 "rank": rank_id,
@@ -65,6 +71,7 @@ def register(router):
                 "in_jail": user.get("in_jail", False),
                 "is_admin": is_admin,
                 "is_moderator": is_mod,
+                "is_help_desk_operator": is_hdo,
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
             })

@@ -72,10 +72,12 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
 const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney, onOpenSettings, adminOnlineColor }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
-  const isStaffProfile = isAdminProfile || isModeratorProfile;
+  const isHdoProfile = profile.rank_name === 'Help Desk Operator';
+  const isStaffProfile = isAdminProfile || isModeratorProfile || isHdoProfile;
   const adminColor = profile.admin_online_color ?? adminOnlineColor ?? '#a78bfa';
   const modColor = profile.mod_online_color ?? '#1e3a5f';
-  const roleColor = isAdminProfile ? adminColor : (isModeratorProfile ? modColor : undefined);
+  const hdoColor = '#166534';
+  const roleColor = isAdminProfile ? adminColor : (isModeratorProfile ? modColor : (isHdoProfile ? hdoColor : undefined));
   const allRows = [
     { 
       label: 'Username', 
