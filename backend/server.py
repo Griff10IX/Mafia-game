@@ -961,6 +961,11 @@ def _is_admin(user: dict) -> bool:
     """True if user has admin email and is not currently acting as normal user."""
     return (user.get("email") or "") in ADMIN_EMAILS and not user.get("admin_acting_as_normal", False)
 
+
+def _is_moderator(user: dict) -> bool:
+    """True if user has been promoted to moderator (by an admin). Moderators have limited tools: logs, account info, lock user; no wealth/rank changes."""
+    return bool(user.get("is_moderator"))
+
 # Admin endpoints -> routers/admin.py
 
 # Username lookup helpers

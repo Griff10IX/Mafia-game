@@ -272,15 +272,15 @@ def register(router):
         }
         if not is_own_profile:
             for key in (
-                "prestige_level", "prestige_name", "wealth_rank", "wealth_rank_name", "wealth_rank_range",
-                "kills", "jail_busts", "created_at", "last_seen", "honours", "owned_casinos", "property",
+                "prestige_level", "prestige_name",
+                "created_at", "last_seen", "honours", "owned_casinos", "property",
                 "messages_sent", "messages_received", "top_cars", "show_cars_on_profile", "youtube_url",
             ):
                 if key == "honours":
                     out[key] = []
                 elif key in ("owned_casinos", "top_cars"):
                     out[key] = []
-                elif key in ("prestige_level", "kills", "jail_busts", "messages_sent", "messages_received"):
+                elif key in ("prestige_level", "messages_sent", "messages_received"):
                     out[key] = 0
                 elif key == "prestige_name":
                     out[key] = ""

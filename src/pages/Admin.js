@@ -20,7 +20,9 @@ const ADMIN_CATEGORIES = [
   { id: 'admin-moderation', label: 'Moderation', icon: AlertTriangle },
   { id: 'admin-logs', label: 'Logs', icon: ScrollText },
   { id: 'admin-database', label: 'Database', icon: Skull },
+  { id: 'admin-moderators', label: 'Moderators', icon: Shield },
 ];
+const MOD_ONLY_CATEGORY_IDS = ['admin-moderation', 'admin-logs', 'admin-database'];
 
 function scrollToCategory(id) {
   const el = document.getElementById(id);
@@ -109,6 +111,7 @@ function BtnSecondary({ children, ...props }) {
 
 export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
   const [loading, setLoading] = useState(true);
   const [npcData, setNpcData] = useState({ npcs: [], npcs_enabled: false, npc_count: 0 });
   const [npcCount, setNpcCount] = useState(10);
@@ -208,6 +211,11 @@ export default function Admin() {
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
 
+  const [moderatorsList, setModeratorsList] = useState([]);
+  const [moderatorsLoading, setModeratorsLoading] = useState(false);
+  const [promoteModUsername, setPromoteModUsername] = useState('');
+  const [promoteModLoading, setPromoteModLoading] = useState(false);
+
   const toggleSection = (key) => {
     setCollapsed(prev => {
       const next = { ...prev, [key]: !prev[key] };
@@ -219,16 +227,61 @@ export default function Admin() {
   const checkAdmin = async () => {
     try {
       const response = await api.get('/admin/check');
-      setIsAdmin(response.data.is_admin);
-      if (response.data.is_admin) {
+      const admin = !!response.data.is_admin;
+      const mod = !!response.data.is_moderator;
+      setIsAdmin(admin);
+      setIsModerator(mod);
+      if (admin) {
         fetchNPCs();
         fetchMeta();
         fetchEventsStatus();
         fetchBoozeRotation();
         fetchAdminSettings();
+        fetchModerators();
       }
-    } catch { setIsAdmin(false); }
+    } catch {
+      setIsAdmin(false);
+      setIsModerator(false);
+    }
     finally { setLoading(false); }
+  };
+
+  const fetchModerators = async () => {
+    setModeratorsLoading(true);
+    try {
+      const res = await api.get('/admin/moderators');
+      setModeratorsList(res.data?.moderators ?? []);
+    } catch {
+      setModeratorsList([]);
+    } finally {
+      setModeratorsLoading(false);
+    }
+  };
+
+  const handlePromoteModerator = async () => {
+    const username = (promoteModUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setPromoteModLoading(true);
+    try {
+      const res = await api.post('/admin/promote-moderator', null, { params: { target_username: username } });
+      toast.success(res.data?.message ?? 'Promoted');
+      setPromoteModUsername('');
+      fetchModerators();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    } finally {
+      setPromoteModLoading(false);
+    }
+  };
+
+  const handleDemoteModerator = async (username) => {
+    try {
+      const res = await api.post('/admin/demote-moderator', null, { params: { target_username: username } });
+      toast.success(res.data?.message ?? 'Demoted');
+      fetchModerators();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    }
   };
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1151,12 +1204,12 @@ export default function Admin() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !isModerator) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <div className="text-center">
           <h2 className="text-xl font-heading font-bold text-red-400 mb-2">Access Denied</h2>
-          <p className="text-xs text-mutedForeground">Admin privileges required</p>
+          <p className="text-xs text-mutedForeground">Admin or moderator privileges required</p>
         </div>
       </div>
     );
@@ -1168,14 +1221,19 @@ export default function Admin() {
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="admin-page">
       <style>{ADMIN_STYLES}</style>
-      <div className="relative admin-fade-in">
+      <div className="relative admin-fade-in flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
+        {isModerator && !isAdmin && (
+          <span className="text-[9px] font-heading font-bold uppercase tracking-wider text-amber-400 border border-amber-500/40 rounded px-2 py-0.5 bg-amber-500/10">
+            Moderator view (limited tools)
+          </span>
+        )}
       </div>
 
       {/* Sticky category navigation */}
       <nav className="sticky top-0 z-20 -mx-2 px-2 py-2 bg-background/95 border-b border-primary/20 rounded-b-md admin-category-nav backdrop-blur supports-[backdrop-filter]:bg-background/80">
         <div className="flex flex-wrap items-center gap-1.5">
-          {ADMIN_CATEGORIES.map(({ id, label, icon: Icon }) => (
+          {(isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => MOD_ONLY_CATEGORY_IDS.includes(c.id))).map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               type="button"
@@ -1264,7 +1322,8 @@ export default function Admin() {
         <div className="admin-art-line text-primary mx-3" />
       </div>
 
-      {/* All registered users */}
+      {/* All registered users (admin only) */}
+      {isAdmin && (
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
@@ -1348,6 +1407,7 @@ export default function Admin() {
         </div>
         <div className="admin-art-line text-primary mx-3" />
       </div>
+      )}
 
       {/* User detail modal */}
       {userDetailData && (() => {
@@ -1493,7 +1553,8 @@ export default function Admin() {
         );
       })()}
 
-      {/* ─── Game World ─── */}
+      {/* ─── Game World (admin only) ─── */}
+      {isAdmin && (
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <LayoutGrid size={12} />
@@ -1672,8 +1733,10 @@ export default function Admin() {
         )}
         </div>
       </section>
+      )}
 
-      {/* ─── Quick & Bulk ─── */}
+      {/* ─── Quick & Bulk (admin only) ─── */}
+      {isAdmin && (
       <section id="admin-quick" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Gift size={12} />
@@ -1718,8 +1781,10 @@ export default function Admin() {
         )}
         </div>
       </section>
+      )}
 
-      {/* ─── Players ─── */}
+      {/* ─── Players (admin only) ─── */}
+      {isAdmin && (
       <section id="admin-players" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <UserCog size={12} />
@@ -1913,8 +1978,10 @@ export default function Admin() {
         )}
         </div>
       </section>
+      )}
 
-      {/* ─── Combat & Tools ─── */}
+      {/* ─── Combat & Tools (admin only) ─── */}
+      {isAdmin && (
       <section id="admin-combat" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Crosshair size={12} />
@@ -2008,6 +2075,7 @@ export default function Admin() {
         )}
         </div>
       </section>
+      )}
 
       {/* ─── Moderation ─── */}
       <section id="admin-moderation" className="admin-category-nav space-y-4">
@@ -2624,6 +2692,57 @@ export default function Admin() {
           )}
         </div>
       </section>
+
+      {/* ─── Moderators (admin only) ─── */}
+      {isAdmin && (
+      <section id="admin-moderators" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Shield size={12} />
+          Moderators
+        </h2>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote moderators</span>
+          </div>
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">Moderators can view logs, account info, and lock users. They cannot give or take wealth, change rank, or use destructive tools. Only admins can promote or demote moderators.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={promoteModUsername}
+                onChange={(e) => setPromoteModUsername(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handlePromoteModerator()}
+                placeholder="Username to promote"
+                className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <BtnPrimary onClick={handlePromoteModerator} disabled={promoteModLoading}>
+                {promoteModLoading ? '...' : 'Promote to moderator'}
+              </BtnPrimary>
+            </div>
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1.5">Current moderators</div>
+              {moderatorsLoading ? (
+                <p className="text-[10px] text-mutedForeground">Loading…</p>
+              ) : moderatorsList.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading">None. Promote a user above.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {moderatorsList.map((m) => (
+                    <li key={m.id || m.username} className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-zinc-800/40 border border-zinc-700/50">
+                      <span className="text-sm font-heading font-medium text-foreground">{m.username ?? '—'}</span>
+                      <span className="text-[10px] text-mutedForeground truncate max-w-[180px]">{m.email ?? '—'}</span>
+                      <BtnDanger onClick={() => handleDemoteModerator(m.username)} className="shrink-0">Demote</BtnDanger>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <div className="admin-art-line text-primary mx-3" />
+        </div>
+      </section>
+      )}
     </div>
   );
 }

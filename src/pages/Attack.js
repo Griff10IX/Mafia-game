@@ -1018,6 +1018,14 @@ export default function Attack() {
         toast.error('You must be in the target\'s location to attack or bodyguard-check. Travel there first.');
         return;
       }
+      // If we're already searching for this target, don't start another search
+      const alreadySearching = attacks.some(
+        (a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'searching'
+      );
+      if (alreadySearching) {
+        toast.error('User not found. A search is already in progress for this target.');
+        return;
+      }
       setLoading(true);
       try {
         const res = await api.post('/attack/search', { target_username: username, note: 'kill' });

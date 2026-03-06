@@ -628,6 +628,7 @@ export default function Profile() {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
@@ -668,6 +669,7 @@ export default function Profile() {
         ]);
         setMe(meRes.data);
         setIsAdmin(!!adminRes.data?.is_admin);
+        setIsModerator(!!adminRes.data?.is_moderator);
         setHasAdminEmail(!!adminRes.data?.has_admin_email);
       } catch (e) {
         toast.error('Failed to load your account');
@@ -893,6 +895,7 @@ export default function Profile() {
     try {
       const r = await api.get('/admin/check');
       setIsAdmin(!!r.data?.is_admin);
+      setIsModerator(!!r.data?.is_moderator);
       setHasAdminEmail(!!r.data?.has_admin_email);
       window.dispatchEvent(new CustomEvent('app:admin-changed'));
     } catch (_) {}
@@ -1019,7 +1022,7 @@ export default function Profile() {
         </div>
         )}
 
-        {isMe && hasAdminEmail && (
+        {isMe && (hasAdminEmail || isModerator) && (
           <>
             {isAdmin && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
@@ -1045,6 +1048,7 @@ export default function Profile() {
                 </p>
               </div>
             )}
+            {(hasAdminEmail && (isAdmin || me?.admin_acting_as_normal != null)) ? (
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
@@ -1071,6 +1075,26 @@ export default function Profile() {
                   : 'Turn off to test the game as a normal user (e.g. with others).'}
               </p>
             </div>
+            ) : isModerator ? (
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1 md:gap-1.5">
+                  <Shield className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary" />
+                  <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Moderation tools</span>
+                </div>
+                <Link
+                  to="/admin"
+                  className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30"
+                >
+                  Open
+                </Link>
+              </div>
+              <p className="px-2.5 py-1.5 md:px-3 text-[9px] md:text-[10px] text-mutedForeground font-heading">
+                View logs, account info, and lock users. No wealth or rank changes.
+              </p>
+            </div>
+            ) : null}
           </>
         )}
 

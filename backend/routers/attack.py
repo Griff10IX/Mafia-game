@@ -309,6 +309,17 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
                 override_minutes = int(default_mins)
             except Exception:
                 override_minutes = None
+    # Only one active search per target: if we're already searching for this target, do not create another
+    existing = await db.attacks.find_one(
+        {"attacker_id": current_user["id"], "target_id": target["id"], "status": "searching"},
+        {"_id": 1}
+    )
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail="User not found. A search is already in progress for this target."
+        )
+
     search_duration = int(override_minutes) if override_minutes and override_minutes > 0 else random.randint(120, 180)
     found_at = now + timedelta(minutes=search_duration)
     expires_at = now + timedelta(hours=24)
