@@ -874,9 +874,9 @@ export default function Layout({ children }) {
         style={sidebarBgStyle}
       >
         <div className="flex flex-col h-full">
-          {/* Logo – compact header */}
-          <div className={`px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0`}>
-            <div className="flex items-center gap-1.5">
+          {/* Logo – compact header (h-12 so top line aligns with center bar and right Stats) */}
+          <div className={`h-12 flex items-center px-2.5 border-b ${styles.borderGoldLight} shrink-0`}>
+            <div className="flex items-center gap-1.5 w-full">
               <div className="w-4 h-px shrink-0" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.5 }} />
               <h1 className={`text-base font-heading font-bold tracking-widest truncate ${styles.sidebarHeaderTitle}`} data-testid="app-logo">MAFIA WARS</h1>
               {autoRankPrefs.auto_rank_enabled && (
@@ -1805,10 +1805,10 @@ export default function Layout({ children }) {
           <div
             className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${
               isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'
-            } ${isMobileViewport ? 'top-0 h-full' : 'md:top-12 md:h-[calc(100vh-3rem)]'}`}
+            } ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`}
             style={sidebarBgStyle}
           >
-            <div className={`px-2.5 py-2 border-b ${styles.borderGoldLight} shrink-0 flex items-center justify-between`}>
+            <div className={`h-12 flex items-center justify-between px-2.5 border-b ${styles.borderGoldLight} shrink-0`}>
               <span className="text-[10px] font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--noir-primary)' }}>Stats</span>
               {isMobileViewport && (
                 <button type="button" onClick={() => setRightSidebarOpen(false)} className="p-1 rounded" style={{ color: 'var(--noir-primary)' }} aria-label="Close">
