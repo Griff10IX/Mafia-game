@@ -567,6 +567,8 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
                 "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
                 **car_info,
             }
+            if car_id == "car_custom" and user_car.get("custom_image_url"):
+                entry["image"] = user_car.get("custom_image_url")
             if user_car.get("listed_for_sale"):
                 entry["listed_for_sale"] = True
                 entry["sale_price"] = user_car.get("sale_price")
@@ -599,6 +601,8 @@ async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
                 "damage_percent": min(100, max(0, float(user_car.get("damage_percent", 0)))),
                 **car_info,
             }
+            if car_id == "car_custom" and user_car.get("custom_image_url"):
+                entry["image"] = user_car.get("custom_image_url")
             car_details.append(entry)
     return {"cars": car_details}
 

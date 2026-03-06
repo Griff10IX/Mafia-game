@@ -1096,8 +1096,7 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     ).sort("created_at", -1).to_list(200)
     for d in docs:
         d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
-        # Don't expose bodyguard_owner_username so players can't enumerate who has bodyguards
-        d.pop("bodyguard_owner_username", None)
+        # bodyguard_owner_username is kept so My Attempts can show "Protecting [owner]"
     return {"attempts": docs}
 
 

@@ -94,7 +94,7 @@ const AttemptRow = ({ attempt }) => {
           {isBodyguardKill && bgOwner && (
             <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1 pl-5">
               <Shield size={9} className="text-primary" />
-              <span>Protecting</span>
+              <span>Bodyguard for</span>
               <Link 
                 to={`/profile/${encodeURIComponent(bgOwner)}`} 
                 className="text-primary hover:text-primary/80 font-bold transition-colors"

@@ -268,6 +268,7 @@ export default function Layout({ children }) {
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
+  const [ocStatus, setOcStatus] = useState(null); // { cooldown_until } for right sidebar
   const [atWar, setAtWar] = useState(false);
   const [autoRankPrefs, setAutoRankPrefs] = useState({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false });
   const [flashNews, setFlashNews] = useState([]);
@@ -469,6 +470,7 @@ export default function Layout({ children }) {
       fetchHelpDeskOpenCount();
       fetchWarStatus();
       fetchRankingCounts();
+      api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       if (notificationPanelOpenRef.current) {
         try {
           const response = await api.get('/notifications');
@@ -517,15 +519,18 @@ export default function Layout({ children }) {
       fetchUnreadCount();
       fetchHelpDeskOpenCount();
       fetchWarStatus();
-      // Only fetch crimes/gta/jail counts when on a page that shows those badges – avoids /crimes and /gta/options on every route
+      // Fetch crimes/gta/jail when on those pages, or when right sidebar is shown (for quick-link labels)
       const path = location.pathname;
-      if (['/ranking', '/crimes', '/gta', '/jail'].includes(path)) {
+      if (['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (user && mobileStatsDisplay === 'right_sidebar')) {
         fetchRankingCounts();
+      }
+      if (user && mobileStatsDisplay === 'right_sidebar') {
+        api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       }
       fetchCasinoProperty();
     }, 0);
     return () => clearTimeout(deferred);
-  }, [location.pathname]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.pathname, user, mobileStatsDisplay]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     let intervalId;
@@ -1789,7 +1794,14 @@ export default function Layout({ children }) {
       {user && mobileStatsDisplay === 'right_sidebar' && (
         <>
           {isMobileViewport && rightSidebarOpen && (
-            <div className="fixed inset-0 bg-black/50 z-40 md:hidden" aria-hidden onClick={() => setRightSidebarOpen(false)} />
+            <div
+              className="fixed inset-0 bg-black/50 z-40 md:hidden cursor-pointer touch-manipulation"
+              aria-label="Close stats"
+              role="button"
+              tabIndex={-1}
+              onClick={() => setRightSidebarOpen(false)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setRightSidebarOpen(false); }}
+            />
           )}
           {isMobileViewport && (
             <button
@@ -1811,8 +1823,14 @@ export default function Layout({ children }) {
             <div className={`h-12 flex items-center justify-between px-2.5 border-b ${styles.borderGoldLight} shrink-0`}>
               <span className="text-[10px] font-heading font-bold uppercase tracking-widest" style={{ color: 'var(--noir-primary)' }}>Stats</span>
               {isMobileViewport && (
-                <button type="button" onClick={() => setRightSidebarOpen(false)} className="p-1 rounded" style={{ color: 'var(--noir-primary)' }} aria-label="Close">
-                  <X size={16} />
+                <button
+                  type="button"
+                  onClick={() => setRightSidebarOpen(false)}
+                  className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded touch-manipulation active:scale-95 transition-transform"
+                  style={{ color: 'var(--noir-primary)' }}
+                  aria-label="Close stats panel"
+                >
+                  <X size={22} />
                 </button>
               )}
             </div>
@@ -1911,15 +1929,17 @@ export default function Layout({ children }) {
               <div className="space-y-1">
                 <Link to="/crimes" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
                   <span>Crimes</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
+                  <span className="text-[9px] tabular-nums" style={{ color: 'var(--noir-primary)' }}>{rankingCounts.crimes} available</span>
                 </Link>
                 <Link to="/gta" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
                   <span>GTA</span>
-                  <span className="text-emerald-500 text-[9px]">Available</span>
+                  <span className={`text-[9px] ${rankingCounts.gta > 0 ? 'text-emerald-500' : 'text-amber-500'}`}>{rankingCounts.gta > 0 ? 'Available' : 'Cooldown'}</span>
                 </Link>
                 <Link to="/organised-crime" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
                   <span>OC</span>
-                  <span className="text-emerald-500 text-[9px]">Available</span>
+                  <span className={`text-[9px] ${ocStatus?.cooldown_until && new Date(ocStatus.cooldown_until) > new Date() ? 'text-amber-500' : 'text-emerald-500'}`}>
+                    {ocStatus?.cooldown_until && new Date(ocStatus.cooldown_until) > new Date() ? 'Cooldown' : 'Available'}
+                  </span>
                 </Link>
                 <Link to="/travel" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
                   <span>Travel</span>
@@ -1963,16 +1983,19 @@ export default function Layout({ children }) {
                 </Link>
               </div>
             </div>
-            <div className={`px-2 py-2 border-t ${styles.borderGoldLight} shrink-0`}>
-              <button
-                onClick={handleLogout}
-                data-testid="logout-button-right-sidebar"
-                className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-gradient-to-r from-red-700 to-red-900 text-white border border-red-600/50 rounded-sm hover:opacity-90 transition-smooth uppercase tracking-widest text-[10px] font-heading font-bold"
-              >
-                <LogOut size={12} />
-                Logout
-              </button>
-            </div>
+            {isMobileViewport && (
+              <div className={`px-2 py-3 border-t ${styles.borderGoldLight} shrink-0`}>
+                <button
+                  type="button"
+                  onClick={() => setRightSidebarOpen(false)}
+                  className="w-full flex items-center justify-center gap-2 min-h-[44px] py-3 px-4 rounded-sm border border-primary/40 bg-primary/10 text-primary font-heading font-bold uppercase tracking-wider text-[11px] hover:bg-primary/20 active:scale-[0.98] transition-all touch-manipulation"
+                  aria-label="Close stats panel"
+                >
+                  <X size={18} />
+                  Close
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
