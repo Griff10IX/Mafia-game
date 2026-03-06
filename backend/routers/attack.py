@@ -27,6 +27,7 @@ from server import (
     DEFAULT_HEALTH,
     KILL_CASH_PERCENT,
     ADMIN_EMAILS,
+    _is_moderator,
     CAPO_RANK_ID,
     get_rank_info,
     get_effective_event,
@@ -282,6 +283,8 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("email") in ADMIN_EMAILS:
+        raise HTTPException(status_code=404, detail="Target user not found")
+    if _is_moderator(target):
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
@@ -559,6 +562,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="Target not found")
     if target.get("is_dead"):
         raise HTTPException(status_code=400, detail="Target is already dead")
+    if target.get("email") in ADMIN_EMAILS or _is_moderator(target):
+        raise HTTPException(status_code=403, detail="Target cannot be attacked")
     target_armour = target.get("armour_level", 0)
     attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     target_rank_id, _ = get_rank_info(target.get("rank_points", 0))

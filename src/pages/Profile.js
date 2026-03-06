@@ -71,7 +71,11 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
 
 const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney, onOpenSettings, adminOnlineColor }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
+  const isModeratorProfile = profile.rank_name === 'Moderator';
+  const isStaffProfile = isAdminProfile || isModeratorProfile;
   const adminColor = profile.admin_online_color ?? adminOnlineColor ?? '#a78bfa';
+  const modColor = profile.mod_online_color ?? '#1e3a5f';
+  const roleColor = isAdminProfile ? adminColor : (isModeratorProfile ? modColor : undefined);
   const allRows = [
     { 
       label: 'Username', 
@@ -123,7 +127,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
       valueClass: 'text-red-400 font-heading font-bold' 
     },
   ];
-  const profileRows = isAdminProfile
+  const profileRows = isStaffProfile
     ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
     : allRows;
 
@@ -139,13 +143,13 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
         </h2>
         <div className="flex items-center gap-1 md:gap-1.5 shrink-0">
           <div
-            className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${profile.rank_name === 'Admin' && adminColor ? '' : 'border-primary/50'}`}
-            style={profile.rank_name === 'Admin' && adminColor ? { borderColor: `${adminColor}80`, backgroundColor: `${adminColor}20` } : undefined}
+            className={`flex items-center gap-1 px-1.5 py-0.5 md:px-2 md:py-1 rounded-md border-2 bg-primary/20 ${roleColor ? '' : 'border-primary/50'}`}
+            style={roleColor ? { borderColor: `${roleColor}80`, backgroundColor: `${roleColor}20` } : undefined}
           >
-            <Shield size={12} className={profile.rank_name !== 'Admin' || !adminColor ? 'text-primary' : ''} style={profile.rank_name === 'Admin' && adminColor ? { color: adminColor } : undefined} />
+            <Shield size={12} className={!roleColor ? 'text-primary' : ''} style={roleColor ? { color: roleColor } : undefined} />
             <span
-              className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${profile.rank_name === 'Admin' && adminColor ? '' : 'text-primary'}`}
-              style={profile.rank_name === 'Admin' && adminColor ? { color: adminColor } : undefined}
+              className={`text-[9px] md:text-[10px] font-heading font-bold uppercase ${roleColor ? '' : 'text-primary'}`}
+              style={roleColor ? { color: roleColor } : undefined}
             >
               {profile.rank_name || '—'}
             </span>
@@ -243,7 +247,7 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
                 ) : (
                   <span
                     className={row.valueClass}
-                    style={row.label === 'Rank' && profile.rank_name === 'Admin' && adminColor ? { color: adminColor } : undefined}
+                    style={row.label === 'Rank' && roleColor ? { color: roleColor } : undefined}
                   >
                     {row.value}
                   </span>

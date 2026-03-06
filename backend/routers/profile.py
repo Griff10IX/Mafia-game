@@ -49,10 +49,10 @@ def register(router):
     get_wealth_rank_range = srv.get_wealth_rank_range
     _user_owns_any_property = srv._user_owns_any_property
     _is_moderator = srv._is_moderator
+    MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     verify_password = srv.verify_password
     get_password_hash = srv.get_password_hash
     ADMIN_EMAILS = srv.ADMIN_EMAILS
-    MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     AvatarUpdateRequest = srv.AvatarUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
@@ -101,6 +101,8 @@ def register(router):
         rank_id, rank_name = get_rank_info(user.get("rank_points", 0), _prestige_mult)
         if user.get("email") in ADMIN_EMAILS:
             rank_name = "Admin"
+        elif _is_moderator(user):
+            rank_name = "Moderator"
         _prestige_level = int(user.get("prestige_level") or 0)
         _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
         wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))
@@ -310,6 +312,10 @@ def register(router):
             if not isinstance(admin_online_color, str) or not admin_online_color.strip():
                 admin_online_color = "#a78bfa"
             out["admin_online_color"] = admin_online_color.strip()
+        # Include mod_online_color when the viewed user is a moderator (for badge styling on profile)
+        if _is_moderator(user):
+            raw = (user.get("mod_online_color") or "").strip() or MOD_ONLINE_COLOR_DEFAULT
+            out["mod_online_color"] = raw if raw.startswith("#") and len(raw) <= 9 else MOD_ONLINE_COLOR_DEFAULT
         return out
 
     @router.post("/profile/avatar")
