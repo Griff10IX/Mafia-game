@@ -19,6 +19,9 @@ const VISIBLE_ROWS = 3;
 const STRIP_COPIES = 6;
 const FULL_STRIP = Array.from({ length: STRIP_COPIES }, () => SYMBOL_IDS).flat();
 
+// Default symbols shown when machine is idle / first loaded
+const DEFAULT_REEL_SYMBOLS = ['cherry', 'lemon', 'seven'];
+
 function getSymbolEmoji(id) {
   if (typeof id === 'string') return SYMBOL_EMOJI[id] || '?';
   return (id && SYMBOL_EMOJI[id.id]) || (id && id.name) || '?';
@@ -47,6 +50,7 @@ function Reel({ spinning, revealed, symbolId, reelIndex, isWin }) {
 
   useEffect(() => {
     if (spinning && !revealed) {
+      // ── SPINNING: animate strip continuously ──
       setSettled(false);
       const el = stripRef.current;
       if (!el) return;
@@ -59,8 +63,8 @@ function Reel({ spinning, revealed, symbolId, reelIndex, isWin }) {
       };
       animRef.current = requestAnimationFrame(tick);
       return () => cancelAnimationFrame(animRef.current);
-    }
-    if (revealed) {
+    } else if (revealed) {
+      // ── REVEALED: snap to target symbol with easing ──
       cancelAnimationFrame(animRef.current);
       const el = stripRef.current;
       if (!el) return;
@@ -75,6 +79,17 @@ function Reel({ spinning, revealed, symbolId, reelIndex, isWin }) {
       };
       el.addEventListener('transitionend', onEnd, { once: true });
       return () => el.removeEventListener('transitionend', onEnd);
+    } else {
+      // ── IDLE / INITIAL LOAD: snap to symbolId (default symbol) instantly, no animation ──
+      cancelAnimationFrame(animRef.current);
+      const el = stripRef.current;
+      if (!el) return;
+      const snapId = symbolId || DEFAULT_REEL_SYMBOLS[reelIndex] || 'cherry';
+      const safeIdx = FULL_STRIP.findIndex((id, i) => id === snapId && i >= 1 && i <= FULL_STRIP.length - 2);
+      const targetIdx = safeIdx >= 1 ? safeIdx : 1;
+      el.style.transition = '';
+      el.style.transform = `translateY(-${targetIdx * CELL_H}px)`;
+      setSettled(true);
     }
   }, [spinning, revealed, symbolId, reelIndex]);
 
@@ -280,9 +295,11 @@ export default function SlotsPage() {
   const [bet, setBet] = useState('1000');
   const [loading, setLoading] = useState(false);
   const [spinning, setSpinning] = useState(false);
-  const [reelRevealed, setReelRevealed] = useState([false, false, false]);
+  // FIX 2: Start with all reels revealed=true so the idle else-branch fires on mount
+  const [reelRevealed, setReelRevealed] = useState([true, true, true]);
   const [result, setResult] = useState(null);
-  const [displayReels, setDisplayReels] = useState(null);
+  // FIX 1: Initialize displayReels with default symbols so reelSymbolIds are never null on load
+  const [displayReels, setDisplayReels] = useState(DEFAULT_REEL_SYMBOLS);
   const [history, setHistory] = useState([]);
   const [showCoins, setShowCoins] = useState(false);
   const [buyBackOffer, setBuyBackOffer] = useState(null);
@@ -332,6 +349,7 @@ export default function SlotsPage() {
     if (!canSpin) return;
     setLoading(true);
     setResult(null);
+    // Reset to spinning state — reelRevealed all false kicks off the spin animation
     setDisplayReels(null);
     setShowCoins(false);
     setReelRevealed([false, false, false]);
@@ -368,7 +386,9 @@ export default function SlotsPage() {
     } catch (e) {
       setLoading(false);
       setSpinning(false);
-      setReelRevealed([false, false, false]);
+      // FIX: on error, restore default symbols so reels aren't blank
+      setDisplayReels(DEFAULT_REEL_SYMBOLS);
+      setReelRevealed([true, true, true]);
       toast.error(getApiErrorMessage(e) || 'Spin failed');
     }
   };
@@ -469,10 +489,10 @@ export default function SlotsPage() {
   };
 
   const symbols = config.symbols || [];
-  const reelsToShow = displayReels && displayReels.length >= 3 ? displayReels : null;
+  const reelsToShow = displayReels && displayReels.length >= 3 ? displayReels : DEFAULT_REEL_SYMBOLS;
   const reelSymbolIds = [0, 1, 2].map((i) => {
-    if (!reelsToShow || !reelsToShow[i]) return null;
     const s = reelsToShow[i];
+    if (!s) return DEFAULT_REEL_SYMBOLS[i];
     return typeof s === 'string' ? s : s?.id;
   });
   const isWin = !!result?.won;
@@ -595,7 +615,7 @@ export default function SlotsPage() {
           </div>
         )}
 
-        {/* Buy-back offer (you won the table but previous owner offers points to get it back) */}
+        {/* Buy-back offer */}
         {buyBackOffer?.offer_id && (
           <div className={`${styles.panel} rounded-lg border border-amber-500/40 overflow-hidden`}>
             <div className="px-3 py-2 bg-amber-500/10 border-b border-amber-500/20 text-[10px] font-heading font-bold text-amber-400 uppercase">

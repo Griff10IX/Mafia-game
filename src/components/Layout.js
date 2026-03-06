@@ -1836,7 +1836,7 @@ export default function Layout({ children }) {
                   <span style={{ color: 'var(--noir-foreground)' }}>{formatInt(user.bullets)}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Gun</span>
+                  <span style={{ color: 'var(--noir-muted)' }}>Weapon</span>
                   <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.gun_name || 'None'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
@@ -1845,14 +1845,14 @@ export default function Layout({ children }) {
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
                   <span style={{ color: 'var(--noir-muted)' }}>Location</span>
-                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.location || '—'}</span>
+                  <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.current_state || user.location || '—'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
                   <span style={{ color: 'var(--noir-muted)' }}>Health</span>
                   <span style={{ color: 'var(--noir-foreground)' }}>{Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
-                  <span style={{ color: 'var(--noir-muted)' }}>Gang</span>
+                  <span style={{ color: 'var(--noir-muted)' }}>Familie</span>
                   <span style={{ color: 'var(--noir-foreground)' }} className="truncate">{user.gang_name || 'None'}</span>
                 </div>
                 <div className="flex justify-between items-center gap-1 text-[10px] font-heading">
@@ -1869,19 +1869,19 @@ export default function Layout({ children }) {
                   </div>
                 )}
                 <button type="button" onClick={() => { setThemePickerOpen(true); isMobileViewport && setRightSidebarOpen(false); }} className="w-full flex justify-between items-center gap-1 text-[10px] font-heading py-0.5 mt-1" style={{ color: 'var(--noir-primary)' }}>
-                  <span>Styling</span>
+                  <span>Theme</span>
                   <span>Change</span>
                 </button>
               </div>
               <div className="h-px shrink-0" style={dividerStyle} />
               {/* Achievements & Feed */}
               <div className="space-y-1">
-                <Link to="/objectives" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5" style={{ color: 'var(--noir-primary)' }}>
-                  <Trophy size={12} /> Achievements
+                <Link to="/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5" style={{ color: 'var(--noir-primary)' }}>
+                  <Trophy size={12} /> Leaderboard
                 </Link>
                 <Link to="/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex items-center justify-between gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
                   <span className="flex items-center gap-1.5">
-                    <Newspaper size={12} style={{ color: 'var(--noir-primary)' }} /> Latest Feed
+                    <Newspaper size={12} style={{ color: 'var(--noir-primary)' }} /> Notifications
                     {unreadCount > 0 && <span className="text-[9px] font-bold" style={{ color: 'var(--noir-primary)' }}>({unreadCount} new)</span>}
                   </span>
                 </Link>
@@ -1889,10 +1889,6 @@ export default function Layout({ children }) {
               <div className="h-px shrink-0" style={dividerStyle} />
               {/* Quick links */}
               <div className="space-y-1">
-                <Link to="/referrals" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Referrals</span>
-                  <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
-                </Link>
                 <Link to="/garage" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
                   <span>My Cars</span>
                   <span style={{ color: 'var(--noir-primary)' }}>Goto</span>
@@ -1906,7 +1902,7 @@ export default function Layout({ children }) {
                   <span className="text-emerald-500 text-[9px]">Available</span>
                 </Link>
                 <Link to="/travel" onClick={() => isMobileViewport && setRightSidebarOpen(false)} className="flex justify-between items-center gap-1 text-[10px] font-heading py-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                  <span>Drive</span>
+                  <span>Travel</span>
                   <span className="text-emerald-500 text-[9px]">Available</span>
                 </Link>
               </div>

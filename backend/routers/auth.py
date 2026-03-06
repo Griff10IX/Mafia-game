@@ -83,6 +83,7 @@ def register(router):
     get_wealth_rank_range = srv.get_wealth_rank_range
     _get_casino_property_profit = srv._get_casino_property_profit
     UserResponse = srv.UserResponse
+    ARMOUR_SETS = getattr(srv, "ARMOUR_SETS", [])
     DEFAULT_HEALTH = srv.DEFAULT_HEALTH
     DEFAULT_GARAGE_BATCH_LIMIT = srv.DEFAULT_GARAGE_BATCH_LIMIT
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
@@ -619,6 +620,27 @@ def register(router):
             if _is_moderator(current_user):
                 raw = (current_user.get("mod_online_color") or "").strip() or "#1e3a5f"
                 mod_online_color = raw if raw.startswith("#") and len(raw) <= 9 else "#1e3a5f"
+            # Resolve gun_name, armour_name, gang_name for sidebar
+            gun_name = None
+            equipped_weapon_id = u.get("equipped_weapon_id")
+            if equipped_weapon_id:
+                weapon_doc = await db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1})
+                if weapon_doc:
+                    gun_name = weapon_doc.get("name") or equipped_weapon_id
+            armour_name = None
+            alvl = _safe_int(u.get("armour_level"), 0)
+            if alvl >= 6:
+                armour_name = "Steel Plate Bulletproof Vest (1922)"
+            elif alvl > 0:
+                armour = next((a for a in ARMOUR_SETS if a.get("level") == alvl), None)
+                armour_name = armour.get("name") if armour else f"Level {alvl}"
+            location = str(u.get("current_state") or "").strip() or None
+            gang_name = None
+            family_id = u.get("family_id")
+            if family_id:
+                fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1})
+                if fam:
+                    gang_name = fam.get("name")
             return UserResponse(
                 id=str(u["id"]),
                 email=str(u.get("email") or ""),
@@ -642,6 +664,10 @@ def register(router):
                 jail_until=u.get("jail_until"),
                 premium_rank_bar=bool(u.get("premium_rank_bar", False)),
                 has_silencer=bool(u.get("has_silencer", False)),
+                gun_name=gun_name,
+                armour_name=armour_name,
+                location=location,
+                gang_name=gang_name,
                 anti_snitch=bool(u.get("anti_snitch", False)),
                 auto_rank_purchased=bool(u.get("auto_rank_purchased", False)),
                 auto_rank_enabled=bool(u.get("auto_rank_enabled", False)),

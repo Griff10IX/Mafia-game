@@ -399,6 +399,10 @@ class UserResponse(BaseModel):
     jail_until: Optional[str]
     premium_rank_bar: bool
     has_silencer: bool = False
+    gun_name: Optional[str] = None  # equipped weapon display name
+    armour_name: Optional[str] = None  # equipped armour display name
+    location: Optional[str] = None  # alias for current_state for sidebar
+    gang_name: Optional[str] = None  # family name for sidebar
     anti_snitch: bool = False
     auto_rank_purchased: bool = False
     auto_rank_enabled: bool = False
