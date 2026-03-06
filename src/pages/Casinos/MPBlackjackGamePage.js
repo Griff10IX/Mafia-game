@@ -107,6 +107,7 @@ export default function MPBlackjackGamePage() {
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [turnSecondsLeft, setTurnSecondsLeft] = useState(null);
   const chatEndRef = useRef(null);
   const timeoutTriggeredRef = useRef(null);
 
@@ -198,6 +199,35 @@ export default function MPBlackjackGamePage() {
     } catch (_) {}
   }, [gameId]);
 
+  const status = game?.status || 'open';
+  const phase = game?.phase || 'lobby';
+  const players = game?.players || [];
+  const currentTurnIndex = game?.current_turn_index ?? -1;
+  const turnStartedAt = game?.turn_started_at;
+
+  useEffect(() => {
+    if (!game || status !== 'playing' || phase !== 'playing' || currentTurnIndex < 0 || !turnStartedAt) {
+      setTurnSecondsLeft(null);
+      return;
+    }
+    const compute = () => {
+      const start = new Date(turnStartedAt).getTime();
+      const elapsed = (Date.now() - start) / 1000;
+      return Math.max(0, Math.ceil(TURN_SECONDS - elapsed));
+    };
+    setTurnSecondsLeft(compute());
+    const t = setInterval(() => setTurnSecondsLeft(compute()), 1000);
+    return () => clearInterval(t);
+  }, [game, status, phase, currentTurnIndex, turnStartedAt]);
+
+  useEffect(() => {
+    if (turnSecondsLeft !== 0 || !game || status !== 'playing' || phase !== 'playing' || currentTurnIndex < 0) return;
+    const key = `${currentTurnIndex}-${turnStartedAt}`;
+    if (timeoutTriggeredRef.current === key) return;
+    timeoutTriggeredRef.current = key;
+    triggerTimeout();
+  }, [turnSecondsLeft, game, status, phase, currentTurnIndex, turnStartedAt, triggerTimeout]);
+
   if (loading && !game) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
@@ -227,10 +257,6 @@ export default function MPBlackjackGamePage() {
     );
   }
 
-  const status = game.status || 'open';
-  const phase = game.phase || 'lobby';
-  const players = game.players || [];
-  const currentTurnIndex = game.current_turn_index ?? -1;
   const pot = game.pot ?? 0;
   const myIndex = players.findIndex((p) => p.user_id === myUserId);
   const isMyTurn = status === 'playing' && phase === 'playing' && currentTurnIndex >= 0 && currentTurnIndex < players.length && players[currentTurnIndex]?.user_id === myUserId;
@@ -238,35 +264,6 @@ export default function MPBlackjackGamePage() {
   const myHandLength = isMyTurn && players[currentTurnIndex] ? (players[currentTurnIndex].hand || []).length : 0;
   const hitDisabled = actionLoading || (cardLimit != null && myHandLength >= cardLimit);
   const isCreator = game.creator_id === myUserId;
-
-  const [turnSecondsLeft, setTurnSecondsLeft] = useState(null);
-  const turnStartedAt = game.turn_started_at;
-  useEffect(() => {
-    if (status !== 'playing' || phase !== 'playing' || currentTurnIndex < 0 || !turnStartedAt) {
-      setTurnSecondsLeft(null);
-      return;
-    }
-    const compute = () => {
-      const start = new Date(turnStartedAt).getTime();
-      const elapsed = (Date.now() - start) / 1000;
-      const left = Math.max(0, Math.ceil(TURN_SECONDS - elapsed));
-      return left;
-    };
-    setTurnSecondsLeft(compute());
-    const t = setInterval(() => {
-      const left = compute();
-      setTurnSecondsLeft(left);
-    }, 1000);
-    return () => clearInterval(t);
-  }, [status, phase, currentTurnIndex, turnStartedAt]);
-
-  useEffect(() => {
-    if (turnSecondsLeft !== 0 || status !== 'playing' || phase !== 'playing' || currentTurnIndex < 0) return;
-    const key = `${currentTurnIndex}-${turnStartedAt}`;
-    if (timeoutTriggeredRef.current === key) return;
-    timeoutTriggeredRef.current = key;
-    triggerTimeout();
-  }, [turnSecondsLeft, status, phase, currentTurnIndex, turnStartedAt, triggerTimeout]);
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="mp-blackjack-game-page">
