@@ -67,6 +67,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/casino/slots', label: 'Slots' },
         { path: '/casino/videopoker', label: 'Video Poker' },
         { path: '/casino/mdg', label: 'MDG' },
+        { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
         { path: '/sports-betting', label: 'Sports Betting' },
       ],
     },
@@ -1029,6 +1030,8 @@ export default function Layout({ children }) {
                     location.pathname === '/casino/slots' ||
                     location.pathname === '/casino/videopoker' ||
                     location.pathname === '/casino/mdg' ||
+                    location.pathname === '/casino/mp-blackjack' ||
+                    location.pathname.startsWith('/casino/mp-blackjack/') ||
                     location.pathname === '/sports-betting';
 
                   return (
@@ -1133,6 +1136,18 @@ export default function Layout({ children }) {
                             data-testid="nav-mdg"
                           >
                             <span className="uppercase tracking-widest font-heading flex-1">MDG</span>
+                          </Link>
+                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
+                          <Link
+                            to="/casino/mp-blackjack"
+                            onClick={() => setSidebarOpen(false)}
+                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
+                              location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? styles.navItemActivePage : styles.sidebarNavLink
+                            }`}
+                            style={location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? sidebarActiveStyle : undefined}
+                            data-testid="nav-mp-blackjack"
+                          >
+                            <span className="uppercase tracking-widest font-heading flex-1">MP Blackjack</span>
                           </Link>
                           {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
                           <Link

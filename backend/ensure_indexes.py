@@ -98,6 +98,9 @@ async def ensure_all_indexes(db):
         await db.blackjack_buy_back_offers.create_index("from_owner_id")
         await db.blackjack_buy_back_offers.create_index([("to_user_id", 1), ("expires_at", 1)])
         await db.blackjack_games.create_index("user_id")
+        await db.mp_blackjack_games.create_index("id", unique=True)
+        await db.mp_blackjack_games.create_index("status")
+        await db.mp_blackjack_games.create_index("created_at")
         await db.videopoker_games.create_index("user_id")
 
         # --- Organised crime ---

@@ -18,6 +18,7 @@ const GAMES = [
   { to: '/casino/slots', label: 'Slots', desc: 'Enter draw · own 3h · max bet & buy-back', Icon: Coins, testId: 'play-slots' },
   { to: '/casino/videopoker', label: 'Video Poker', desc: 'Jacks or Better', Icon: Spade, testId: 'play-video-poker' },
   { to: '/casino/mdg', label: 'MDG', desc: 'Pot game · fee, one winner takes all', Icon: Users, testId: 'play-mdg' },
+  { to: '/casino/mp-blackjack', label: 'Multiplayer Blackjack', desc: 'Pot game · 2–8 players, best hand wins', Icon: Spade, testId: 'play-mp-blackjack' },
   { to: '/sports-betting', label: 'Sports Betting', desc: 'Live games & results', Icon: Target, testId: 'sports-betting' },
 ];
 
@@ -29,7 +30,7 @@ export default function Casino() {
       <div className="relative cas-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The House</p>
         <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Casino</h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Roulette, Blackjack, Dice, Horse Racing, Slots, MDG, Sports.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Roulette, Blackjack, Dice, Horse Racing, Slots, MDG, MP Blackjack, Sports.</p>
       </div>
 
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cas-fade-in`} style={{ animationDelay: '0.03s' }}>
