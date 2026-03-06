@@ -7,7 +7,7 @@ import uuid
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling
+from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling, _is_admin, _is_moderator
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
@@ -198,12 +198,12 @@ def register(router):
 
     @router.post("/casino/mdg/roll")
     async def mdg_roll(request: MDGRollRequest, current_user: dict = Depends(get_current_user_verified)):
-        """Manually roll an open game (creator only). One random winner takes the pot. Creator can roll anytime (e.g. 1 player = get pot back)."""
+        """Manually roll an open game (creator, admin, or moderator). One random winner takes the pot."""
         game = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found or already closed")
-        if game.get("created_by") != current_user["id"]:
-            raise HTTPException(status_code=403, detail="Only the game creator can roll")
+        if game.get("created_by") != current_user["id"] and not _is_admin(current_user) and not _is_moderator(current_user):
+            raise HTTPException(status_code=403, detail="Only the game creator or staff can roll")
         entries = list(game.get("entries") or [])
         if len(entries) < 1:
             raise HTTPException(status_code=400, detail="No players in game")

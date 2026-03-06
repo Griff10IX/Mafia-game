@@ -59,9 +59,18 @@ export default function MDGPage() {
   const [createExtraPotMoney, setCreateExtraPotMoney] = useState('');
   const [creating, setCreating] = useState(false);
   const [myUserId, setMyUserId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
+  }, []);
+
+  useEffect(() => {
+    api.get('/admin/check').then((r) => {
+      setIsAdmin(!!r.data?.is_admin);
+      setIsModerator(!!r.data?.is_moderator);
+    }).catch(() => {});
   }, []);
 
   const fetchGames = useCallback(() => {
@@ -183,8 +192,9 @@ export default function MDGPage() {
                 const entries = g.entries || [];
                 const playerNames = entries.map((e) => e.username).join(' – ');
                 const isCreator = g.created_by === myUserId;
+                const isStaff = isAdmin || isModerator;
                 const isIn = entries.some((e) => e.user_id === myUserId) || isCreator;
-                const canRoll = isCreator && entries.length >= 1;
+                const canRoll = (isCreator || isStaff) && entries.length >= 1;
                 return (
                   <li key={g.id} className={`py-3 px-2 mdg-fade-in ${styles.raised}`} style={{ animationDelay: `${0.05 + idx * 0.02}s` }}>
                     <div className="flex flex-wrap items-start justify-between gap-2">

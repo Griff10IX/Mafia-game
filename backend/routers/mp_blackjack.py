@@ -10,7 +10,7 @@ MP_BJ_CHAT_MAX = 100
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, get_current_user_verified, log_gambling
+from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator
 
 # Reuse card format and logic from blackjack (copy to avoid heavy imports)
 MP_BJ_SUITS = ["H", "D", "C", "S"]
@@ -99,6 +99,7 @@ def register(router):
                 creator_name = "Anonymous"
             out.append({
                 "id": g["id"],
+                "creator_id": g.get("creator_id"),
                 "creator_username": creator_name,
                 "max_players": g.get("max_players", 6),
                 "buy_in": g.get("buy_in", 0),
@@ -304,15 +305,15 @@ def register(router):
 
     @router.post("/casino/mp-blackjack/games/{game_id}/cancel")
     async def mp_bj_cancel(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Cancel an open game. Creator only. Refund all players from pot."""
+        """Cancel an open game. Creator, admin, or moderator. Refund all players from pot."""
         uid = current_user["id"]
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
         if game.get("status") != "open":
             raise HTTPException(status_code=400, detail="Game can only be cancelled while open")
-        if game.get("creator_id") != uid:
-            raise HTTPException(status_code=403, detail="Only the creator can cancel the game")
+        if game.get("creator_id") != uid and not _is_admin(current_user) and not _is_moderator(current_user):
+            raise HTTPException(status_code=403, detail="Only the creator or staff can cancel the game")
         players = list(game.get("players") or [])
         pot = int(game.get("pot") or 0)
         num_players = len(players)

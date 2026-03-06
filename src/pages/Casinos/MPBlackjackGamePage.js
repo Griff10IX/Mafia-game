@@ -182,11 +182,20 @@ export default function MPBlackjackGamePage() {
   const [showWin, setShowWin] = useState(false);
   const [prevStatus, setPrevStatus] = useState(null);
   const [turnSecondsLeft, setTurnSecondsLeft] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
   const chatEndRef = useRef(null);
   const timeoutTriggeredRef = useRef(null);
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
+  }, []);
+
+  useEffect(() => {
+    api.get('/admin/check').then((r) => {
+      setIsAdmin(!!r.data?.is_admin);
+      setIsModerator(!!r.data?.is_moderator);
+    }).catch(() => {});
   }, []);
 
   const fetchGame = useCallback(() => {
@@ -283,6 +292,7 @@ export default function MPBlackjackGamePage() {
   const myHandLength = isMyTurn && players[currentTurnIndex] ? (players[currentTurnIndex].hand || []).length : 0;
   const hitDisabled = actionLoading || (cardLimit != null && myHandLength >= cardLimit);
   const isCreator = game?.creator_id === myUserId;
+  const canCancelGame = isCreator || isAdmin || isModerator;
   const turnStartedAt = game?.turn_started_at;
 
   // Turn timer
@@ -409,7 +419,7 @@ export default function MPBlackjackGamePage() {
                 </span>
               ))}
             </div>
-            {isCreator && (
+            {canCancelGame && (
               <button type="button" disabled={cancelLoading} onClick={cancelGame}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
                 style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
