@@ -64,11 +64,13 @@ const OnlineCountCard = ({ totalOnline }) => (
   </div>
 );
 
-const MOD_COLOR = '#1e3a5f';
-const HDO_COLOR = '#166534';
+const DEFAULT_MOD_COLOR = '#1e3a5f';
+const DEFAULT_HDO_COLOR = '#166534';
 
-const RoleKey = ({ adminOnlineColor }) => {
+const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) => {
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
+  const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
+  const hdoColor = (hdoOnlineColor && hdoOnlineColor.trim()) || DEFAULT_HDO_COLOR;
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -81,11 +83,11 @@ const RoleKey = ({ adminOnlineColor }) => {
           <span className="text-mutedForeground">Admin</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: MOD_COLOR }} aria-hidden />
+          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: modColor }} aria-hidden />
           <span className="text-mutedForeground">Mod</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: HDO_COLOR }} aria-hidden />
+          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: hdoColor }} aria-hidden />
           <span className="text-mutedForeground">Help Desk Operator</span>
         </span>
       </div>
@@ -94,11 +96,12 @@ const RoleKey = ({ adminOnlineColor }) => {
   );
 };
 
-const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor }) => {
+const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor }) => {
   const preview = profileCache[user.username];
   const isLoading = !!profileLoading[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
-  const displayColor = user.online_color || (user.is_admin ? adminColor : undefined);
+  const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
+  const displayColor = user.online_color || (user.is_admin ? adminColor : user.is_moderator ? modColor : undefined);
 
   return (
     <div
@@ -244,6 +247,8 @@ export default function UsersOnline() {
   const [totalOnline, setTotalOnline] = useState(0);
   const [users, setUsers] = useState([]);
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
+  const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState(DEFAULT_MOD_COLOR);
+  const [hdoOnlineColor, setHdoOnlineColor] = useState(DEFAULT_HDO_COLOR);
   const [loading, setLoading] = useState(true);
   const [profileCache, setProfileCache] = useState({});
   const [profileLoading, setProfileLoading] = useState({});
@@ -253,7 +258,9 @@ export default function UsersOnline() {
       const response = await api.get('/users/online');
       setTotalOnline(response.data.total_online);
       setUsers(response.data.users || []);
-      if (response.data.admin_online_color) setAdminOnlineColor(response.data.admin_online_color);
+      if (response.data.admin_online_color != null) setAdminOnlineColor(response.data.admin_online_color);
+      if (response.data.mod_default_online_color != null) setModDefaultOnlineColor(response.data.mod_default_online_color);
+      if (response.data.hdo_online_color != null) setHdoOnlineColor(response.data.hdo_online_color);
     } catch (error) {
       toast.error('Failed to load online users');
       console.error('Error fetching online users:', error);
@@ -341,7 +348,7 @@ export default function UsersOnline() {
 
       <InfoCard />
 
-      <RoleKey adminOnlineColor={adminOnlineColor} />
+      <RoleKey adminOnlineColor={adminOnlineColor} modDefaultOnlineColor={modDefaultOnlineColor} hdoOnlineColor={hdoOnlineColor} />
     </div>
   );
 }

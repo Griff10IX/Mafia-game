@@ -10,7 +10,7 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, _is_admin, log_activity
+from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity
 
 
 FORUM_CATEGORIES = ["general", "entertainer", "crew_oc"]  # crew_oc = family Crew OC ads
@@ -281,21 +281,25 @@ async def update_topic(
     request: TopicUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin: set sticky, important, or locked. Author: edit title, content, gif_url."""
+    """Admin/Mod: sticky, important, locked. HDO: lock/unlock only. Author: edit title, content, gif_url."""
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
     uid = current_user["id"]
     is_author = topic.get("author_id") == uid
     is_admin = _is_admin(current_user)
+    is_mod = _is_moderator(current_user)
+    is_hdo = _is_hdo(current_user)
+    can_sticky_important = is_admin or is_mod
+    can_lock = is_admin or is_mod or is_hdo
     updates = {}
-    if is_admin:
+    if can_sticky_important:
         if request.is_sticky is not None:
             updates["is_sticky"] = request.is_sticky
         if request.is_important is not None:
             updates["is_important"] = request.is_important
-        if request.is_locked is not None:
-            updates["is_locked"] = request.is_locked
+    if can_lock and request.is_locked is not None:
+        updates["is_locked"] = request.is_locked
     if is_author:
         if request.title is not None:
             title = (request.title or "").strip()
@@ -312,7 +316,7 @@ async def update_topic(
                 updates["gif_url"] = gif_url
             else:
                 updates["_unset_gif"] = True  # signal to $unset gif_url
-    if not is_admin and not is_author:
+    if not (is_admin or is_mod or is_hdo or is_author):
         raise HTTPException(status_code=403, detail="Not allowed to edit this topic")
     if not updates:
         return {"message": "No changes", "topic": topic}

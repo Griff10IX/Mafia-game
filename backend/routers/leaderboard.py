@@ -8,11 +8,12 @@ from fastapi import Depends, Query
 
 from server import db, get_current_user, ADMIN_EMAILS
 
-# Exclude admin accounts from leaderboards (same emails as _is_admin)
+# Exclude admin accounts and moderators from leaderboards
 def _leaderboard_user_filter() -> dict:
-    if not ADMIN_EMAILS:
-        return {}
-    return {"email": {"$nin": list(ADMIN_EMAILS)}}
+    q = {"is_moderator": {"$ne": True}}
+    if ADMIN_EMAILS:
+        q["email"] = {"$nin": list(ADMIN_EMAILS)}
+    return q
 
 
 def _week_start(dt: datetime) -> datetime:

@@ -944,8 +944,9 @@ def register(router):
     async def admin_check(current_user: dict = Depends(get_current_user)):
         is_admin = _is_admin(current_user)
         is_moderator = _is_moderator(current_user)
+        is_help_desk_operator = _is_hdo(current_user)
         has_admin_email = (current_user.get("email") or "") in ADMIN_EMAILS
-        return {"is_admin": is_admin, "is_moderator": is_moderator, "has_admin_email": has_admin_email}
+        return {"is_admin": is_admin, "is_moderator": is_moderator, "is_help_desk_operator": is_help_desk_operator, "has_admin_email": has_admin_email}
 
     @router.get("/admin/moderators")
     async def admin_list_moderators(current_user: dict = Depends(get_current_user)):

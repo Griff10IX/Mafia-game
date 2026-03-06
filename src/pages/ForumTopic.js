@@ -57,6 +57,8 @@ export default function ForumTopic() {
   const [posting, setPosting] = useState(false);
   const [likingId, setLikingId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
+  const [isHdo, setIsHdo] = useState(false);
   const [adminBusy, setAdminBusy] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [showEmojis, setShowEmojis] = useState(false);
@@ -96,7 +98,13 @@ export default function ForumTopic() {
   }, [topicId, navigate]);
 
   useEffect(() => { fetchTopic(); }, [fetchTopic]);
-  useEffect(() => { api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false)); }, []);
+  useEffect(() => {
+    api.get('/admin/check').then((r) => {
+      setIsAdmin(!!r.data?.is_admin);
+      setIsModerator(!!r.data?.is_moderator);
+      setIsHdo(!!r.data?.is_help_desk_operator);
+    }).catch(() => { setIsAdmin(false); setIsModerator(false); setIsHdo(false); });
+  }, []);
   useEffect(() => { api.get('/auth/me').then((r) => setUser(r.data)).catch(() => setUser(null)); }, []);
 
   const isAuthor = topic && user && topic.author_id === user.id;
@@ -329,44 +337,52 @@ export default function ForumTopic() {
         </div>
       </div>
 
-      {/* Admin Controls */}
-      {isAdmin && (
+      {/* Staff controls: Admin/Mod = sticky, important, lock; HDO = lock only; Admin only = delete */}
+      {(isAdmin || isModerator || isHdo) && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-amber-400 font-heading uppercase mr-1">Admin:</span>
-          <button
-            onClick={() => updateTopicFlags({ is_sticky: !topic.is_sticky })}
-            disabled={adminBusy}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
-              topic.is_sticky ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
-            }`}
-          >
-            <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
-          </button>
-          <button
-            onClick={() => updateTopicFlags({ is_important: !topic.is_important })}
-            disabled={adminBusy}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
-              topic.is_important ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
-            }`}
-          >
-            <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
-          </button>
-          <button
-            onClick={() => updateTopicFlags({ is_locked: !topic.is_locked })}
-            disabled={adminBusy}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
-              topic.is_locked ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-red-500/50'
-            }`}
-          >
-            <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
-          </button>
-          <button
-            onClick={deleteTopic}
-            disabled={adminBusy}
-            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border border-red-500/50 text-red-400 hover:bg-red-500/20 transition-all"
-          >
-            <Trash2 size={10} /> Delete
-          </button>
+          {(isAdmin || isModerator || isHdo) && <span className="text-[10px] text-amber-400 font-heading uppercase mr-1">Staff:</span>}
+          {(isAdmin || isModerator) && (
+            <>
+              <button
+                onClick={() => updateTopicFlags({ is_sticky: !topic.is_sticky })}
+                disabled={adminBusy}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
+                  topic.is_sticky ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
+                }`}
+              >
+                <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
+              </button>
+              <button
+                onClick={() => updateTopicFlags({ is_important: !topic.is_important })}
+                disabled={adminBusy}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
+                  topic.is_important ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
+                }`}
+              >
+                <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
+              </button>
+            </>
+          )}
+          {(isAdmin || isModerator || isHdo) && (
+            <button
+              onClick={() => updateTopicFlags({ is_locked: !topic.is_locked })}
+              disabled={adminBusy}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
+                topic.is_locked ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-red-500/50'
+              }`}
+            >
+              <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
+            </button>
+          )}
+          {isAdmin && (
+            <button
+              onClick={deleteTopic}
+              disabled={adminBusy}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border border-red-500/50 text-red-400 hover:bg-red-500/20 transition-all"
+            >
+              <Trash2 size={10} /> Delete
+            </button>
+          )}
         </div>
       )}
 

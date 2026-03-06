@@ -86,7 +86,13 @@ def register(router):
             if u.get("is_admin"):
                 u["online_color"] = admin_online_color
 
-        return OnlineUsersResponse(total_online=len(users_data), users=users_data, admin_online_color=admin_online_color)
+        return OnlineUsersResponse(
+            total_online=len(users_data),
+            users=users_data,
+            admin_online_color=admin_online_color,
+            mod_default_online_color=MOD_ONLINE_COLOR_DEFAULT,
+            hdo_online_color=HDO_ONLINE_COLOR,
+        )
 
     @router.get("/users/search")
     async def search_users(

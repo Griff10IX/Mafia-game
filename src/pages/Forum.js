@@ -255,10 +255,11 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   );
 };
 
-// Topic row for desktop with hover preview
-const TopicRowDesktop = ({ topic, isAdmin, onUpdate, updating }) => {
+// Topic row for desktop with hover preview. canStickyImportant = admin/mod (sticky, important, lock). canLock = admin/mod/hdo (lock only for HDO).
+const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updating }) => {
   const [showPreview, setShowPreview] = useState(false);
-  
+  const showFlagControls = canStickyImportant || canLock;
+
   return (
     <div 
       className="hidden sm:block relative"
@@ -266,7 +267,7 @@ const TopicRowDesktop = ({ topic, isAdmin, onUpdate, updating }) => {
       onMouseLeave={() => setShowPreview(false)}
     >
       <div className="grid grid-cols-12 gap-2 px-3 py-2 f-row transition-colors items-center text-xs">
-        <Link to={`/forum/topic/${topic.id}`} className={`flex items-center gap-1.5 min-w-0 ${isAdmin ? 'col-span-6' : 'col-span-7'}`}>
+        <Link to={`/forum/topic/${topic.id}`} className={`flex items-center gap-1.5 min-w-0 ${showFlagControls ? 'col-span-6' : 'col-span-7'}`}>
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
           <span className={`truncate font-heading ${topic.is_important || topic.is_sticky ? 'text-amber-400' : 'text-foreground'}`}>
@@ -277,17 +278,23 @@ const TopicRowDesktop = ({ topic, isAdmin, onUpdate, updating }) => {
         <div className="col-span-2 text-right text-mutedForeground truncate">{topic.author_username}</div>
         <div className="col-span-1 text-right text-foreground tabular-nums">{topic.posts}</div>
         <div className="col-span-2 text-right text-mutedForeground tabular-nums">{topic.views}</div>
-        {isAdmin && (
+        {showFlagControls && (
           <div className="col-span-1 flex items-center justify-end gap-0.5">
-            <button type="button" title={topic.is_sticky ? 'Unsticky' : 'Sticky'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_sticky ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
-              <Pin size={12} />
-            </button>
-            <button type="button" title={topic.is_important ? 'Not important' : 'Important'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_important ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
-              <AlertCircle size={12} />
-            </button>
-            <button type="button" title={topic.is_locked ? 'Unlock' : 'Lock'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_locked ? 'text-red-400' : 'text-mutedForeground hover:text-red-400'}`}>
-              <Lock size={12} />
-            </button>
+            {canStickyImportant && (
+              <>
+                <button type="button" title={topic.is_sticky ? 'Unsticky' : 'Sticky'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_sticky ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
+                  <Pin size={12} />
+                </button>
+                <button type="button" title={topic.is_important ? 'Not important' : 'Important'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_important ? 'text-amber-400' : 'text-mutedForeground hover:text-amber-400'}`}>
+                  <AlertCircle size={12} />
+                </button>
+              </>
+            )}
+            {canLock && (
+              <button type="button" title={topic.is_locked ? 'Unlock' : 'Lock'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_locked ? 'text-red-400' : 'text-mutedForeground hover:text-red-400'}`}>
+                <Lock size={12} />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -307,8 +314,10 @@ const TopicRowDesktop = ({ topic, isAdmin, onUpdate, updating }) => {
   );
 };
 
-// Topic card for mobile
-const TopicRowMobile = ({ topic, isAdmin, onUpdate, updating }) => (
+// Topic card for mobile. canStickyImportant = admin/mod, canLock = admin/mod/hdo.
+const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating }) => {
+  const showFlagControls = canStickyImportant || canLock;
+  return (
   <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">
     <div className="flex items-start justify-between gap-2">
       <div className="flex-1 min-w-0">
@@ -328,23 +337,30 @@ const TopicRowMobile = ({ topic, isAdmin, onUpdate, updating }) => (
       </div>
       <ChevronRight size={16} className="text-mutedForeground shrink-0 mt-1" />
     </div>
-    
-    {/* Admin controls on mobile */}
-    {isAdmin && (
+
+    {/* Staff controls on mobile: mod/admin = sticky, important, lock; HDO = lock only */}
+    {showFlagControls && (
       <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700/30" onClick={(e) => e.preventDefault()}>
-        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
-          <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
-        </button>
-        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_important ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
-          <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
-        </button>
-        <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_locked ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
-          <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
-        </button>
+        {canStickyImportant && (
+          <>
+            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_sticky: !topic.is_sticky }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_sticky ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+              <Pin size={10} /> {topic.is_sticky ? 'Unsticky' : 'Sticky'}
+            </button>
+            <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_important: !topic.is_important }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_important ? 'bg-amber-500/20 text-amber-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+              <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
+            </button>
+          </>
+        )}
+        {canLock && (
+          <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_locked ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
+            <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
+          </button>
+        )}
       </div>
     )}
   </Link>
-);
+  );
+};
 
 const FORUM_TABS = [
   { id: 'general', label: 'General' },
@@ -369,6 +385,8 @@ export default function Forum() {
   const [entertainerConfig, setEntertainerConfig] = useState({ auto_create_enabled: false, last_auto_create_at: null, next_auto_create_at: null });
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
+  const [isHdo, setIsHdo] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
   const [rollingId, setRollingId] = useState(null);
@@ -451,7 +469,13 @@ export default function Forum() {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, []);
-  useEffect(() => { api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false)); }, []);
+  useEffect(() => {
+    api.get('/admin/check').then((r) => {
+      setIsAdmin(!!r.data?.is_admin);
+      setIsModerator(!!r.data?.is_moderator);
+      setIsHdo(!!r.data?.is_help_desk_operator);
+    }).catch(() => { setIsAdmin(false); setIsModerator(false); setIsHdo(false); });
+  }, []);
 
   const handleToggleAutoCreate = async () => {
     if (!isAdmin) return;
@@ -819,8 +843,8 @@ export default function Forum() {
               <>
                 {pinnedTopics.map((t) => (
                   <div key={t.id}>
-                    <TopicRowDesktop topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
-                    <TopicRowMobile topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                    <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                    <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
                   </div>
                 ))}
                 {regularTopics.length > 0 && (
@@ -832,8 +856,8 @@ export default function Forum() {
             {/* Regular topics */}
             {regularTopics.map((t) => (
               <div key={t.id}>
-                <TopicRowDesktop topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
-                <TopicRowMobile topic={t} isAdmin={isAdmin} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                <TopicRowDesktop topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
+                <TopicRowMobile topic={t} canStickyImportant={isAdmin || isModerator} canLock={isAdmin || isModerator || isHdo} onUpdate={updateTopicFlags} updating={updatingId === t.id} />
               </div>
             ))}
           </div>

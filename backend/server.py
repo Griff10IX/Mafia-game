@@ -476,6 +476,8 @@ class OnlineUsersResponse(BaseModel):
     total_online: int
     users: List[Dict]
     admin_online_color: Optional[str] = None
+    mod_default_online_color: Optional[str] = None  # default for Mod in legend (individual mods can override)
+    hdo_online_color: Optional[str] = None  # colour for Help Desk Operator in legend
 
 # Helper functions
 def get_password_hash(password: str) -> str:
