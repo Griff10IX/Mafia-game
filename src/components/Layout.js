@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle } from 'lucide-react';
 import api, { getApiErrorMessage } from '../utils/api';
 import { setCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -10,7 +10,7 @@ import ThemePicker from './ThemePicker';
 import styles from '../styles/noir.module.css';
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
   const goItems = [
     { path: '/travel', label: 'Travel' },
     { path: '/states', label: 'States' },
@@ -90,6 +90,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty) {
         { action: 'logout', label: 'Logout' },
         { path: '/auto-rank', label: 'Auto Rank' },
         ...(isAdmin ? [{ path: '/admin', label: 'Admin Tools' }, { path: '/admin/locked', label: 'Locked accounts' }] : []),
+        ...(isModerator && !isAdmin ? [{ path: '/admin', label: 'Moderator tools' }] : []),
       ],
     },
     {
@@ -262,6 +263,7 @@ export default function Layout({ children }) {
   const [casinoOpen, setCasinoOpen] = useState(false);
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null); // which bottom bar group sub-menu is open
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [atWar, setAtWar] = useState(false);
@@ -297,7 +299,7 @@ export default function Layout({ children }) {
 
   const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const mobileBottomNavItems = useMemo(() => {
-    const items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty);
+    const items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator);
     if (hasAdminEmail && !isAdmin) {
       return items.map((i) =>
         i.type === 'group' && i.id === 'account'
@@ -306,7 +308,7 @@ export default function Layout({ children }) {
       );
     }
     return items;
-  }, [isAdmin, hasAdminEmail, hasCasinoOrProperty]);
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty]);
 
   useEffect(() => {
     const onTopBarPrefs = () => {
@@ -658,9 +660,11 @@ export default function Layout({ children }) {
     try {
       const response = await api.get('/admin/check');
       setIsAdmin(!!response.data.is_admin);
+      setIsModerator(!!response.data.is_moderator);
       setHasAdminEmail(!!response.data.has_admin_email);
     } catch (error) {
       setIsAdmin(false);
+      setIsModerator(false);
       setHasAdminEmail(false);
     }
   };
@@ -795,6 +799,7 @@ export default function Layout({ children }) {
     { path: '/users-online', icon: Users, label: 'Users Online' },
     { path: '/forum', icon: MessageSquare, label: 'Forum' },
     { path: '/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
+    { path: '/help-desk', icon: HelpCircle, label: 'Help Desk' },
     { path: '/ranking', icon: Target, label: 'Ranking' },
     { path: '/garage', icon: Car, label: 'Garage' },
     { path: '/sell-cars', icon: DollarSign, label: 'Sell Cars' },
@@ -815,6 +820,9 @@ export default function Layout({ children }) {
   const adminNavItems = isAdmin ? [
     { path: '/admin', icon: Settings, label: 'Admin Tools' },
     { path: '/admin/locked', icon: Lock, label: 'Locked accounts' },
+  ] : [];
+  const moderatorNavItems = isModerator && !isAdmin ? [
+    { path: '/admin', icon: Shield, label: 'Moderator tools' },
   ] : [];
 
   /* Inline theme styles – same noir variables as other pages */
@@ -1192,6 +1200,32 @@ export default function Layout({ children }) {
                   </Link>
                 );
               })}
+                </>
+              )}
+              {/* Moderator Section (when not admin) */}
+              {moderatorNavItems.length > 0 && (
+                <>
+                  {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
+                  {moderatorNavItems.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${
+                          isActive
+                            ? 'bg-primary/20 border-l-2 border-primary text-primary'
+                            : 'text-primary hover:bg-primary/10'
+                        }`}
+                        onClick={() => setSidebarOpen(false)}
+                      >
+                        <Icon size={14} />
+                        <span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
+                      </Link>
+                    );
+                  })}
                 </>
               )}
               {hasAdminEmail && !isAdmin && (

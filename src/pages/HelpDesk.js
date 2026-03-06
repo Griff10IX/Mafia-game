@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { HelpCircle, Send, MessageSquare, X, ChevronRight } from 'lucide-react';
+import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
@@ -22,6 +22,7 @@ const ROLE_LABELS = { user: 'User', admin: 'Admin', mod: 'Mod', hdo: 'HDO' };
 
 export default function HelpDesk() {
   const [canManage, setCanManage] = useState(false);
+  const [canApproveMute, setCanApproveMute] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState(''); // '', 'open', 'closed'
@@ -35,13 +36,23 @@ export default function HelpDesk() {
   const [replyBody, setReplyBody] = useState('');
   const [replying, setReplying] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [forumMutes, setForumMutes] = useState([]);
+  const [forumMutesLoading, setForumMutesLoading] = useState(false);
+  const [muteUsername, setMuteUsername] = useState('');
+  const [muteHours, setMuteHours] = useState('');
+  const [muteDays, setMuteDays] = useState('');
+  const [mutePermanent, setMutePermanent] = useState(false);
+  const [muteReason, setMuteReason] = useState('');
+  const [muting, setMuting] = useState(false);
 
   const fetchCheck = useCallback(async () => {
     try {
       const r = await api.get('/help-desk/check');
       setCanManage(!!r.data?.can_manage);
+      setCanApproveMute(!!r.data?.can_approve_mute);
     } catch (_) {
       setCanManage(false);
+      setCanApproveMute(false);
     }
   }, []);
 
@@ -59,8 +70,22 @@ export default function HelpDesk() {
     }
   }, [statusFilter]);
 
+  const fetchForumMutes = useCallback(async () => {
+    if (!canManage) return;
+    setForumMutesLoading(true);
+    try {
+      const r = await api.get('/admin/forum-mutes');
+      setForumMutes(r.data?.mutes || []);
+    } catch (_) {
+      setForumMutes([]);
+    } finally {
+      setForumMutesLoading(false);
+    }
+  }, [canManage]);
+
   useEffect(() => { fetchCheck(); }, [fetchCheck]);
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
+  useEffect(() => { fetchForumMutes(); }, [fetchForumMutes]);
 
   const fetchTicketDetail = useCallback(async (id) => {
     if (!id) { setTicketDetail(null); return; }
@@ -134,6 +159,59 @@ export default function HelpDesk() {
       toast.error(e.response?.data?.detail || 'Failed to close ticket');
     } finally {
       setClosing(false);
+    }
+  };
+
+  const handleMute = async (e) => {
+    e.preventDefault();
+    const username = (muteUsername || '').trim();
+    if (!username) { toast.error('Enter username'); return; }
+    const hours = muteHours.trim() ? parseInt(muteHours, 10) : null;
+    const days = muteDays.trim() ? parseInt(muteDays, 10) : null;
+    if (!mutePermanent && (hours == null || hours <= 0) && (days == null || days <= 0)) {
+      toast.error('Set hours, days, or permanent');
+      return;
+    }
+    setMuting(true);
+    try {
+      await api.post('/admin/forum-mute', {
+        target_username: username,
+        duration_hours: hours > 0 ? hours : undefined,
+        duration_days: days > 0 ? days : undefined,
+        permanent: mutePermanent,
+        reason: (muteReason || '').trim() || undefined,
+      });
+      toast.success('User muted from forum');
+      setMuteUsername('');
+      setMuteHours('');
+      setMuteDays('');
+      setMutePermanent(false);
+      setMuteReason('');
+      fetchForumMutes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to mute');
+    } finally {
+      setMuting(false);
+    }
+  };
+
+  const handleUnmute = async (username) => {
+    try {
+      await api.post('/admin/forum-unmute', null, { params: { target_username: username } });
+      toast.success('User unmuted');
+      fetchForumMutes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to unmute');
+    }
+  };
+
+  const handleApproveMute = async (muteId) => {
+    try {
+      await api.post('/admin/forum-mute-approve', null, { params: { mute_id: muteId } });
+      toast.success('Permanent mute approved');
+      fetchForumMutes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to approve');
     }
   };
 
@@ -303,6 +381,91 @@ export default function HelpDesk() {
               )}
             </div>
           ) : null}
+          <div className="hd-art-line text-primary mx-2.5" />
+        </div>
+      )}
+
+      {canManage && (
+        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 hd-fade-in`}>
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
+            <VolumeX size={14} className="text-primary" />
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Forum mutes</span>
+          </div>
+          <p className="px-2.5 py-1.5 text-[9px] text-mutedForeground font-heading">
+            Muted users cannot post on the forum. Hours or days, or permanent (permanent by HDO needs admin/mod review). You can unmute; admin/mod can approve permanent mutes.
+          </p>
+          <form onSubmit={handleMute} className="px-2.5 py-2 space-y-2 border-t border-primary/10">
+            <div className="flex flex-wrap gap-2 items-end">
+              <input
+                type="text"
+                value={muteUsername}
+                onChange={(e) => setMuteUsername(e.target.value)}
+                placeholder="Username"
+                className="w-28 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading"
+              />
+              <input
+                type="number"
+                min="0"
+                value={muteHours}
+                onChange={(e) => setMuteHours(e.target.value)}
+                placeholder="Hours"
+                className="w-16 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading"
+              />
+              <input
+                type="number"
+                min="0"
+                value={muteDays}
+                onChange={(e) => setMuteDays(e.target.value)}
+                placeholder="Days"
+                className="w-16 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading"
+              />
+              <label className="flex items-center gap-1 text-[10px] font-heading">
+                <input type="checkbox" checked={mutePermanent} onChange={(e) => setMutePermanent(e.target.checked)} className="rounded" />
+                Permanent
+              </label>
+              <input
+                type="text"
+                value={muteReason}
+                onChange={(e) => setMuteReason(e.target.value)}
+                placeholder="Reason (optional)"
+                className="flex-1 min-w-[100px] px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading"
+              />
+              <button type="submit" disabled={muting} className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50">
+                {muting ? 'Muting…' : 'Mute'}
+              </button>
+            </div>
+          </form>
+          <div className="px-2.5 py-2 border-t border-primary/10">
+            <div className="text-[9px] font-heading font-bold text-primary uppercase mb-1.5">Active mutes</div>
+            {forumMutesLoading ? (
+              <p className="text-[10px] text-mutedForeground">Loading…</p>
+            ) : forumMutes.length === 0 ? (
+              <p className="text-[10px] text-mutedForeground font-heading">None.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {forumMutes.map((m) => (
+                  <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-1.5 px-2 rounded bg-secondary/50 border border-primary/10 text-[11px] font-heading">
+                    <span className="font-bold text-foreground">{m.username}</span>
+                    <span className="text-mutedForeground">
+                      {m.status === 'pending_review' ? 'Permanent (pending review)' : m.expires_at ? `until ${formatDateTime(m.expires_at)}` : 'Permanent'}
+                    </span>
+                    {m.reason && <span className="text-mutedForeground text-[10px]">· {m.reason}</span>}
+                    <div className="flex gap-1">
+                      {m.status === 'pending_review' && canApproveMute && (
+                        <button type="button" onClick={() => handleApproveMute(m.id)} className="px-2 py-0.5 rounded text-[9px] font-heading uppercase border border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10">
+                          Approve
+                        </button>
+                      )}
+                      <button type="button" onClick={() => handleUnmute(m.username)} className="px-2 py-0.5 rounded text-[9px] font-heading uppercase border border-primary/50 text-primary hover:bg-primary/20">
+                        Unmute
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div className="hd-art-line text-primary mx-2.5" />
         </div>
       )}

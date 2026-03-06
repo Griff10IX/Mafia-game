@@ -23,6 +23,7 @@ def register(router):
     get_current_user = srv.get_current_user
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
+    _is_hdo = srv._is_hdo
 
     def _is_hdo(user: dict) -> bool:
         return bool(user.get("is_help_desk_operator"))
@@ -151,5 +152,9 @@ def register(router):
 
     @router.get("/help-desk/check")
     async def help_desk_check(current_user: dict = Depends(get_current_user)):
-        """Whether current user can manage tickets (admin, mod, or HDO)."""
-        return {"can_manage": _can_manage_tickets(current_user), "is_hdo": _is_hdo(current_user)}
+        """Whether current user can manage tickets (admin, mod, or HDO). can_approve_mute = admin or mod only."""
+        return {
+            "can_manage": _can_manage_tickets(current_user),
+            "is_hdo": _is_hdo(current_user),
+            "can_approve_mute": _is_admin(current_user) or _is_moderator(current_user),
+        }

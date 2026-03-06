@@ -64,6 +64,36 @@ const OnlineCountCard = ({ totalOnline }) => (
   </div>
 );
 
+const MOD_COLOR = '#1e3a5f';
+const HDO_COLOR = '#166534';
+
+const RoleKey = ({ adminOnlineColor }) => {
+  const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Role colours</h3>
+      </div>
+      <div className="px-2.5 py-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[10px] font-heading">
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: adminColor }} aria-hidden />
+          <span className="text-mutedForeground">Admin</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: MOD_COLOR }} aria-hidden />
+          <span className="text-mutedForeground">Mod</span>
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: HDO_COLOR }} aria-hidden />
+          <span className="text-mutedForeground">Help Desk Operator</span>
+        </span>
+      </div>
+      <div className="uo-art-line text-primary mx-2.5" />
+    </div>
+  );
+};
+
 const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor }) => {
   const preview = profileCache[user.username];
   const isLoading = !!profileLoading[user.username];
@@ -310,6 +340,8 @@ export default function UsersOnline() {
       )}
 
       <InfoCard />
+
+      <RoleKey adminOnlineColor={adminOnlineColor} />
     </div>
   );
 }

@@ -55,6 +55,14 @@ class DropUserCasinoRequest(BaseModel):
     location: str   # city for most, state for slots
 
 
+class ForumMuteRequest(BaseModel):
+    target_username: str
+    duration_hours: Optional[int] = None  # set one of duration_hours, duration_days, or permanent
+    duration_days: Optional[int] = None
+    permanent: bool = False
+    reason: Optional[str] = None
+
+
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
     {"name": "Baranco", "tag": "BARN", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
@@ -81,11 +89,17 @@ def register(router):
     get_current_user = srv.get_current_user
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
+    _is_hdo = srv._is_hdo
     ADMIN_EMAILS = srv.ADMIN_EMAILS
 
     def _admin_or_mod(user: dict) -> bool:
         """True if user is admin or moderator (mods have limited tools: logs, account info, lock user; no wealth/rank)."""
         return _is_admin(user) or _is_moderator(user)
+
+    def _can_forum_mute(user: dict) -> bool:
+        """Admin, mod, or HDO can mute/unmute forum users."""
+        return _is_admin(user) or _is_moderator(user) or _is_hdo(user)
+
     _username_pattern = srv._username_pattern
     RANKS = srv.RANKS
     STATES = srv.STATES
@@ -1010,6 +1024,98 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         await db.users.update_one({"id": target["id"]}, {"$set": {"is_help_desk_operator": False}})
         return {"message": f"Removed Help Desk Operator role from {target.get('username', target_username)}."}
+
+    @router.get("/admin/forum-mutes")
+    async def admin_list_forum_mutes(
+        status_filter: Optional[str] = Query(None, description="active, pending_review, or None for all"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List forum mutes. Admin, mod, or HDO."""
+        if not _can_forum_mute(current_user):
+            raise HTTPException(status_code=403, detail="Access required")
+        query = {}
+        if status_filter in ("active", "pending_review"):
+            query["status"] = status_filter
+        cursor = db.forum_mutes.find(query, {"_id": 0}).sort("created_at", -1).limit(200)
+        mutes = await cursor.to_list(200)
+        return {"mutes": mutes}
+
+    @router.post("/admin/forum-mute")
+    async def admin_forum_mute(body: ForumMuteRequest, current_user: dict = Depends(get_current_user)):
+        """Mute a user from the forum (stops them posting). HDO: hours/days or permanent (pending review). Admin/mod: same, permanent is active immediately."""
+        if not _can_forum_mute(current_user):
+            raise HTTPException(status_code=403, detail="Access required")
+        username_pattern = _username_pattern(body.target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if target.get("email") in ADMIN_EMAILS:
+            raise HTTPException(status_code=400, detail="Cannot mute admins")
+        if _is_moderator(target) or _is_hdo(target):
+            raise HTTPException(status_code=400, detail="Cannot mute staff")
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        permanent = bool(body.permanent)
+        hours = body.duration_hours
+        days = body.duration_days
+        if permanent:
+            expires_at = None
+            status = "pending_review" if _is_hdo(current_user) and not _admin_or_mod(current_user) else "active"
+        else:
+            total_hours = 0
+            if hours is not None and hours > 0:
+                total_hours += hours
+            if days is not None and days > 0:
+                total_hours += days * 24
+            if total_hours <= 0:
+                raise HTTPException(status_code=400, detail="Set duration_hours, duration_days, or permanent=True")
+            expires_at = (now + timedelta(hours=total_hours)).isoformat()
+            status = "active"
+        mute_id = str(uuid.uuid4())
+        reason = (body.reason or "").strip() or None
+        doc = {
+            "id": mute_id,
+            "user_id": target["id"],
+            "username": target.get("username") or body.target_username,
+            "muted_by_id": current_user["id"],
+            "muted_by_username": current_user.get("username") or "?",
+            "reason": reason,
+            "expires_at": expires_at,
+            "status": status,
+            "created_at": now_iso,
+        }
+        await db.forum_mutes.insert_one(doc)
+        msg = f"Muted {target.get('username')} from forum"
+        if status == "pending_review":
+            msg += " (permanent — pending admin/mod review)"
+        elif expires_at:
+            msg += f" until {expires_at}"
+        return {"message": msg, "mute": {**doc, "_id": 0}}
+
+    @router.post("/admin/forum-unmute")
+    async def admin_forum_unmute(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Remove forum mute. Admin, mod, or HDO."""
+        if not _can_forum_mute(current_user):
+            raise HTTPException(status_code=403, detail="Access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        res = await db.forum_mutes.delete_many({"user_id": target["id"]})
+        return {"message": f"Unmuted {target.get('username', target_username)} from forum", "deleted": res.deleted_count}
+
+    @router.post("/admin/forum-mute-approve")
+    async def admin_forum_mute_approve(mute_id: str, current_user: dict = Depends(get_current_user)):
+        """Approve a permanent mute (pending_review -> active). Admin or mod only."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator required")
+        mute = await db.forum_mutes.find_one({"id": mute_id}, {"_id": 0})
+        if not mute:
+            raise HTTPException(status_code=404, detail="Mute not found")
+        if mute.get("status") != "pending_review":
+            raise HTTPException(status_code=400, detail="Mute is not pending review")
+        await db.forum_mutes.update_one({"id": mute_id}, {"$set": {"status": "active"}})
+        return {"message": "Permanent mute approved", "mute_id": mute_id}
 
     @router.get("/admin/settings")
     async def admin_get_settings(current_user: dict = Depends(get_current_user)):

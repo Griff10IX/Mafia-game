@@ -108,11 +108,31 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
     }
 
 
+async def _is_forum_muted(user_id: str) -> bool:
+    """True if user has an active or pending_review forum mute (stops them posting)."""
+    now = datetime.now(timezone.utc)
+    mute = await db.forum_mutes.find_one(
+        {
+            "user_id": user_id,
+            "status": {"$in": ["active", "pending_review"]},
+            "$or": [
+                {"expires_at": None},
+                {"expires_at": {"$exists": False}},
+                {"expires_at": {"$gt": now.isoformat()}},
+            ],
+        },
+        {"_id": 1},
+    )
+    return mute is not None
+
+
 async def create_topic(
     request: TopicCreate,
     current_user: dict = Depends(get_current_user),
 ):
     """Create a new forum topic. If crew_oc_family_id is set, category is forced to crew_oc and user must be boss/underboss/capo of that family."""
+    if await _is_forum_muted(current_user["id"]):
+        raise HTTPException(status_code=403, detail="You are muted from the forum and cannot post.")
     title = (request.title or "").strip()
     content = (request.content or "").strip()
     crew_oc_family_id = (request.crew_oc_family_id or "").strip() or None
@@ -196,6 +216,8 @@ async def add_comment(
     current_user: dict = Depends(get_current_user),
 ):
     """Add a comment to a topic. Fails if topic is locked."""
+    if await _is_forum_muted(current_user["id"]):
+        raise HTTPException(status_code=403, detail="You are muted from the forum and cannot post.")
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "is_locked": 1, "title": 1})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
