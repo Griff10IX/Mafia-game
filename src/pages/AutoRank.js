@@ -145,8 +145,6 @@ const StatCard = ({ label, value, valueColor = "text-foreground", icon: Icon }) 
    ═══════════════════════════════════════════════════════ */
 const SetupCard = ({ canEnable, hasTelegram }) => (
   <div className="relative rounded-lg overflow-hidden border border-primary/30 bg-gradient-to-br from-zinc-900 to-zinc-900/90 ar-fade-in">
-    <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none pulse-glow" />
-    
     <div className="relative px-2.5 sm:px-3 py-2 bg-primary/5 border-b border-primary/20">
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
         <Bot size={14} className="sm:w-4 sm:h-4" />

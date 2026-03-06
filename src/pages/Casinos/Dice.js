@@ -30,18 +30,6 @@ function DiceVisual({ isRolling, result, rollingNumber }) {
 
   return (
     <div className="flex flex-col items-center justify-center py-6 sm:py-8 min-h-[240px] relative">
-      {/* Ambient table light */}
-      <div
-        className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 rounded-full blur-3xl pointer-events-none"
-        style={{
-          background: isWin
-            ? 'rgba(52,211,153,0.15)'
-            : isLoss
-              ? 'rgba(248,113,113,0.1)'
-              : 'rgba(212,175,55,0.08)',
-        }}
-      />
-
       {isRolling ? (
         <>
           {/* Rolling state */}

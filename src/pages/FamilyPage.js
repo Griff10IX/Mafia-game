@@ -85,7 +85,7 @@ function AnimatedCounter({ target, prefix = '', duration = 1000 }) {
 // ============================================================================
 
 const StatCard = ({ label, value, highlight, icon, accent: accentColor, delay = 0 }) => (
-  <div className={`relative overflow-hidden rounded-lg p-2 sm:p-3 fam-stat-card art-deco-corner fam-scale-in ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`} style={{ animationDelay: `${delay}s` }}>
+  <div className={`relative overflow-hidden rounded-lg p-2 sm:p-3 fam-stat-card fam-scale-in ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`} style={{ animationDelay: `${delay}s` }}>
     {highlight && <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-emerald-500/10 blur-xl" />}
     {!highlight && <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-12 bg-primary/5 rounded-full blur-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />}
     <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.15em] mb-1 font-heading">
@@ -234,9 +234,8 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
 const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
   <div className="space-y-3">
     {/* Vault display */}
-    <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-4 sm:p-6 text-center border border-primary/25 art-deco-corner`}>
+    <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-4 sm:p-6 text-center border border-primary/25`}>
       <div className="absolute inset-0 fam-vault-bg pointer-events-none" />
-      <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-48 h-24 rounded-full bg-primary/8 blur-3xl pointer-events-none fam-glow" />
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
       <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
       <DollarSign size={24} className="mx-auto text-primary/40 mb-2" />
@@ -1550,8 +1549,6 @@ export default function FamilyPage() {
         .animate-ready-pulse { animation: ready-pulse 2s ease-in-out infinite; }
         @keyframes fam-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .fam-fade-in { animation: fam-fade-in 0.5s ease-out both; }
-        @keyframes fam-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
-        .fam-glow { animation: fam-glow 4s ease-in-out infinite; }
         @keyframes fam-slide-right { from { opacity: 0; transform: translateX(-12px); } to { opacity: 1; transform: translateX(0); } }
         .fam-slide-right { animation: fam-slide-right 0.4s ease-out both; }
         @keyframes fam-scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
@@ -1569,11 +1566,6 @@ export default function FamilyPage() {
           animation: fam-gold-shimmer 3s linear infinite;
         }
         .art-deco-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-        .art-deco-corner::before, .art-deco-corner::after {
-          content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-        }
-        .art-deco-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-        .art-deco-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
         .fam-stat-card { transition: all 0.3s ease; }
         .fam-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
         .fam-racket-card { transition: all 0.3s ease; }
@@ -1593,8 +1585,6 @@ export default function FamilyPage() {
       <div className={`relative rounded-xl overflow-hidden fam-fade-in ${family ? `${styles.panel} border-2 border-primary/20` : ''}`}>
         {family && <>
           <div className="h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-          <div className="absolute top-0 left-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl pointer-events-none fam-glow" />
-          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/3 rounded-full blur-2xl pointer-events-none" />
         </>}
 
         <div className={`${family ? 'px-3 py-3 sm:px-4 sm:py-4' : 'px-2 sm:px-0'}`}>

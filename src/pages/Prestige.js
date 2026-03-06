@@ -97,7 +97,6 @@ export default function Prestige() {
       {/* Header */}
       <div className={`relative ${styles.panel} rounded-xl overflow-hidden prestige-fade`} style={{ borderColor: `${color}30`, borderWidth: 1, borderStyle: 'solid' }}>
         <div className="h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${color}80, transparent)` }} />
-        <div className="absolute top-0 left-0 w-40 h-40 rounded-full blur-3xl pointer-events-none prestige-glow" style={{ backgroundColor: `${color}08` }} />
         <div className="px-5 py-5 flex flex-wrap items-center gap-4">
           <div>
             {level > 0

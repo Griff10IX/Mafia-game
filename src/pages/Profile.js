@@ -14,8 +14,6 @@ const PROFILE_STYLES = `
   .prof-fade-in { animation: prof-fade-in 0.4s ease-out both; }
   @keyframes prof-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
   .prof-scale-in { animation: prof-scale-in 0.35s ease-out both; }
-  @keyframes prof-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
-  .prof-glow { animation: prof-glow 4s ease-in-out infinite; }
   .prof-card { transition: all 0.3s ease; }
   .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .prof-row { transition: all 0.2s ease; }
@@ -134,7 +132,6 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
-      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none prof-glow" />
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
         <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">

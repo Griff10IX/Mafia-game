@@ -260,10 +260,6 @@ export default function FamilyProfilePage() {
           DOSSIER HEADER
       ══════════════════════════════════════════ */}
       <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 fp-scale`}>
-        {/* Ambient glow orbs */}
-        <div className="absolute -top-10 -left-10 w-48 h-48 bg-primary/4 rounded-full blur-3xl pointer-events-none" style={{ animation: 'fp-glow 5s ease-in-out infinite' }} />
-        <div className="absolute -top-6 right-0 w-28 h-28 bg-primary/3 rounded-full blur-2xl pointer-events-none" />
-
         {/* Top accent line */}
         <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 

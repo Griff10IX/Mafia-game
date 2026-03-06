@@ -9,11 +9,6 @@ import styles from '../styles/noir.module.css';
 const MP_STYLES = `
   @keyframes mp-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .mp-fade-in { animation: mp-fade-in 0.4s ease-out both; }
-  .mp-corner::before, .mp-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .mp-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .mp-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .mp-card { transition: all 0.3s ease; }
   .mp-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .mp-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
@@ -275,7 +270,7 @@ export default function MyProperties() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Casino slot */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-corner mp-fade-in`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎰 Casino</span>
@@ -372,7 +367,7 @@ export default function MyProperties() {
         </div>
 
         {/* Property slot */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-corner mp-fade-in`} style={{ animationDelay: '0.05s' }}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in`} style={{ animationDelay: '0.05s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🏭 Property</span>

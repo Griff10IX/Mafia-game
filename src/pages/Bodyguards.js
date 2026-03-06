@@ -8,13 +8,6 @@ import styles from '../styles/noir.module.css';
 const BG_STYLES = `
   @keyframes bg-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .bg-fade-in { animation: bg-fade-in 0.4s ease-out both; }
-  @keyframes bg-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
-  .bg-glow { animation: bg-glow 4s ease-in-out infinite; }
-  .bg-corner::before, .bg-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .bg-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .bg-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .bg-card { transition: all 0.3s ease; }
   .bg-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .bg-row { transition: all 0.2s ease; }
@@ -580,8 +573,7 @@ export default function Bodyguards() {
       )}
 
       {/* Bodyguard Slots */}
-      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-card bg-corner bg-fade-in`} style={{ animationDelay: '0.05s' }}>
-        <div className="absolute top-0 left-0 w-24 h-24 bg-primary/5 rounded-full blur-3xl pointer-events-none bg-glow" />
+      <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-card bg-fade-in`} style={{ animationDelay: '0.05s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">

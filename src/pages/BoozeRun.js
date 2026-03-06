@@ -41,8 +41,6 @@ const BOOZE_STYLES = `
   .bz-fade-in { animation: bz-fade-in 0.4s ease-out both; }
   @keyframes bz-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
   .bz-scale-in { animation: bz-scale-in 0.35s ease-out both; }
-  @keyframes bz-glow { 0%, 100% { opacity: 0.3; } 50% { opacity: 0.7; } }
-  .bz-glow { animation: bz-glow 4s ease-in-out infinite; }
   @keyframes bz-shimmer {
     0% { background-position: -200% center; }
     100% { background-position: 200% center; }
@@ -52,11 +50,6 @@ const BOOZE_STYLES = `
     background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     animation: bz-shimmer 3s linear infinite;
   }
-  .bz-corner::before, .bz-corner::after {
-    content: ''; position: absolute; width: 12px; height: 12px; border-color: rgba(var(--noir-primary-rgb), 0.2); pointer-events: none;
-  }
-  .bz-corner::before { top: 4px; left: 4px; border-top: 1px solid; border-left: 1px solid; }
-  .bz-corner::after { bottom: 4px; right: 4px; border-bottom: 1px solid; border-right: 1px solid; }
   .bz-card { transition: all 0.3s ease; }
   .bz-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
   .bz-row { transition: all 0.2s ease; }
@@ -93,8 +86,7 @@ const StatsCard = ({ config, timer }) => {
   const pctFull = capacity > 0 ? (carryingTotal / capacity) * 100 : 0;
   
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-corner bz-scale-in`}>
-      <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none bz-glow" />
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-scale-in`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="p-2 grid grid-cols-3 md:grid-cols-6 gap-2">
         <div className="space-y-0.5">

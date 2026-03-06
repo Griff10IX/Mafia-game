@@ -43,19 +43,6 @@ const DA_STYLES = `
     background-repeat: repeat;
   }
 
-  /* ── Decorative corner lines ── */
-  .da-corner-tl::before,
-  .da-corner-br::after {
-    content: '';
-    position: absolute;
-    width: 20px; height: 20px;
-    border-color: #ca8a04;
-    border-style: solid;
-    opacity: .3;
-  }
-  .da-corner-tl::before { top: 8px; left: 8px;  border-width: 1px 0 0 1px; }
-  .da-corner-br::after  { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
-
   /* ── Input focus glow ── */
   .da-input:focus {
     outline: none;
@@ -153,7 +140,7 @@ export default function DeadAlive() {
       <div className="grid gap-5 lg:grid-cols-2 max-w-3xl">
 
         {/* ── Transfer Form ── */}
-        <div className={`da-fade-in2 da-paper da-corner-tl da-corner-br relative ${styles.panel} rounded border border-yellow-700/25 shadow-xl shadow-black/40 overflow-hidden`}>
+        <div className={`da-fade-in2 da-paper relative ${styles.panel} rounded border border-yellow-700/25 shadow-xl shadow-black/40 overflow-hidden`}>
           {/* top accent */}
           <div className="h-px bg-gradient-to-r from-transparent via-yellow-600/60 to-transparent" />
 
