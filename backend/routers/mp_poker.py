@@ -794,6 +794,47 @@ def register(router):
         )
         return {"message": "Game cancelled"}
 
+    @router.post("/casino/mp-poker/games/{game_id}/leave")
+    async def leave_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        """Leave an open/ready multiplayer poker game before the hand starts.
+
+        Non-creators can leave while the game is still in the lobby/ready phase.
+        They get their buy-in back and are removed from the seats.
+        """
+        uid = current_user["id"]
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        if not g or g.get("mode") != "vs_players":
+            raise HTTPException(status_code=404, detail="Game not found")
+        # Only allow leaving before the first hand has started
+        if g.get("status") != "open" or g.get("phase") not in ("lobby", "ready"):
+            raise HTTPException(status_code=400, detail="Cannot leave at this stage")
+        players = list(g.get("players") or [])
+        idx = next((i for i, p in enumerate(players) if p.get("user_id") == uid), None)
+        if idx is None:
+            raise HTTPException(status_code=400, detail="You are not in this game")
+        if g.get("creator_id") == uid and not _is_admin(current_user):
+            # Creator should cancel the table instead so everyone is refunded consistently
+            raise HTTPException(status_code=400, detail="Creator must cancel the table instead of leaving")
+        buy_in = int(g.get("buy_in") or 0)
+        # Remove player and refund their buy-in
+        players.pop(idx)
+        if buy_in > 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+        # Re-seat remaining players
+        for i, p in enumerate(players):
+            p["seat_index"] = i
+        # Recompute phase and ready state
+        phase = "ready" if len(players) >= 2 else "lobby"
+        all_ready_at = None
+        if phase == "ready":
+            all_ready = len(players) >= 2 and all(p.get("ready") for p in players)
+            if all_ready:
+                all_ready_at = g.get("all_ready_at") or datetime.now(timezone.utc).isoformat()
+        updates = {"players": players, "phase": phase, "all_ready_at": all_ready_at}
+        await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        return {k: v for k, v in g.items() if k != "_id"}
+
     @router.post("/casino/mp-poker/games/{game_id}/ready")
     async def ready_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Mark yourself ready. When all are ready, all_ready_at is set."""

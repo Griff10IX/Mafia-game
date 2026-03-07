@@ -218,6 +218,7 @@ export default function MPBlackjackGamePage() {
   const [sendingChat, setSendingChat] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [readyLoading, setReadyLoading] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
   const [showWin, setShowWin] = useState(false);
   const [prevStatus, setPrevStatus] = useState(null);
   const [prevPhase, setPrevPhase] = useState(null);
@@ -336,6 +337,18 @@ export default function MPBlackjackGamePage() {
     finally { setCancelLoading(false); }
   };
 
+  const leaveGame = async () => {
+    if (!gameId || leaveLoading) return;
+    setLeaveLoading(true);
+    try {
+      await api.post(`/casino/mp-blackjack/games/${gameId}/leave`);
+      await refreshUser();
+      toast.success('You left the game');
+      navigate('/casino/mp-blackjack');
+    } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not leave'); }
+    finally { setLeaveLoading(false); }
+  };
+
   const triggerStart = useCallback(async () => {
     if (!gameId || startTriggeredRef.current) return;
     startTriggeredRef.current = true;
@@ -385,6 +398,7 @@ export default function MPBlackjackGamePage() {
   const hitDisabled = actionLoading || (cardLimit != null && myHandLength >= cardLimit);
   const isCreator = game?.creator_id === myUserId;
   const canCancelGame = (isCreator || isAdmin || isModerator) && phase !== 'playing' && phase !== 'dealer';
+  const canLeaveGame = amIPlayer && !canCancelGame && phase !== 'playing' && phase !== 'dealer';
   const turnStartedAt = game?.turn_started_at;
   const allReadyAt = game?.all_ready_at;
   const eliminationRounds = game?.elimination_rounds || false;
@@ -569,13 +583,22 @@ export default function MPBlackjackGamePage() {
                 </span>
               ))}
             </div>
-            {canCancelGame && (
-              <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
-                style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
-                <XCircle size={11} />{cancelLoading ? 'Cancelling…' : 'Cancel Game'}
-              </button>
-            )}
+            <div className="flex justify-center gap-2 mt-2">
+              {canCancelGame && (
+                <button type="button" disabled={cancelLoading} onClick={cancelGame}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
+                  style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
+                  <XCircle size={11} />{cancelLoading ? 'Cancelling…' : 'Cancel Game'}
+                </button>
+              )}
+              {canLeaveGame && (
+                <button type="button" disabled={leaveLoading} onClick={leaveGame}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
+                  style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(39,39,42,0.85)', color: '#e4e4e7' }}>
+                  <XCircle size={11} />{leaveLoading ? 'Leaving…' : 'Leave Game'}
+                </button>
+              )}
+            </div>
           </div>
           <div style={goldBar} />
         </div>
@@ -618,7 +641,7 @@ export default function MPBlackjackGamePage() {
               </div>
             ) : (
               amIPlayer && !amIEliminated && (
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-2">
                   {amIReady ? (
                     <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-heading font-bold text-[10px] uppercase tracking-wider"
                       style={{ background: 'rgba(52,211,153,0.1)', border: '2px solid rgba(52,211,153,0.35)', color: '#34d399' }}>
@@ -630,6 +653,13 @@ export default function MPBlackjackGamePage() {
                       style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
                       <CheckCircle2 size={15} />
                       {readyLoading ? 'Readying…' : "I'm Ready"}
+                    </button>
+                  )}
+                  {canLeaveGame && (
+                    <button type="button" disabled={leaveLoading} onClick={leaveGame}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
+                      style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(39,39,42,0.85)', color: '#e4e4e7' }}>
+                      <XCircle size={11} />{leaveLoading ? 'Leaving…' : 'Leave Game'}
                     </button>
                   )}
                 </div>

@@ -304,6 +304,7 @@ export default function MPPokerGamePage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [readyLoading, setReadyLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
+  const [leaveLoading, setLeaveLoading] = useState(false);
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [showWin, setShowWin] = useState(false);
@@ -541,6 +542,18 @@ export default function MPPokerGamePage() {
     finally { setCancelLoading(false); }
   };
 
+  const leaveGame = async () => {
+    if (!gameId || leaveLoading) return;
+    setLeaveLoading(true);
+    try {
+      await api.post(`/casino/mp-poker/games/${gameId}/leave`);
+      await refreshUser();
+      toast.success('You left the table');
+      navigate('/casino/mp-poker');
+    } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not leave'); }
+    finally { setLeaveLoading(false); }
+  };
+
   const sendChat = (e) => {
     e?.preventDefault();
     const msg = chatInput.trim();
@@ -579,6 +592,7 @@ export default function MPPokerGamePage() {
   const allReadyAt = game?.all_ready_at;
   const buttonIndex = game?.button_index ?? 0;
   const isCreator = game?.creator_id === myUserId;
+  const canLeaveGame = amIPlayer && !isCreator && status === 'open';
 
   // Seat positions on oval table
   const maxSeats = game?.max_players || players.length || 6;
@@ -748,13 +762,22 @@ export default function MPPokerGamePage() {
                   </span>
                 ))}
               </div>
-              {isCreator && (
-                <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
-                  style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
-                  <XCircle size={11} />{cancelLoading ? '…' : 'Cancel Table'}
-                </button>
-              )}
+              <div className="flex justify-center gap-2 mt-2">
+                {isCreator && (
+                  <button type="button" disabled={cancelLoading} onClick={cancelGame}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
+                    style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
+                    <XCircle size={11} />{cancelLoading ? '…' : 'Cancel Table'}
+                  </button>
+                )}
+                {canLeaveGame && (
+                  <button type="button" disabled={leaveLoading} onClick={leaveGame}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
+                    style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(39,39,42,0.8)', color: '#e4e4e7' }}>
+                    <XCircle size={11} />{leaveLoading ? 'Leaving…' : 'Leave Table'}
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <div style={goldBar} />
@@ -782,7 +805,7 @@ export default function MPPokerGamePage() {
               </div>
             ) : (
               amIPlayer && (
-                <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-2">
                   {amIReady ? (
                     <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-heading font-bold text-[10px] uppercase"
                       style={{ background: 'rgba(52,211,153,0.1)', border: '2px solid rgba(52,211,153,0.35)', color: '#34d399' }}>
@@ -794,6 +817,13 @@ export default function MPPokerGamePage() {
                       style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
                       <CheckCircle2 size={15} />
                       {readyLoading ? 'Readying…' : "I'm Ready"}
+                    </button>
+                  )}
+                  {canLeaveGame && (
+                    <button type="button" disabled={leaveLoading} onClick={leaveGame}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
+                      style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(39,39,42,0.8)', color: '#e4e4e7' }}>
+                      <XCircle size={11} />{leaveLoading ? 'Leaving…' : 'Leave Table'}
                     </button>
                   )}
                 </div>

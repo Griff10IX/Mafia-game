@@ -626,6 +626,57 @@ def register(router):
         )
         return {"message": "Game cancelled; all players refunded", "game_id": game_id}
 
+    @router.post("/casino/mp-blackjack/games/{game_id}/leave")
+    async def mp_bj_leave(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        """
+        Leave a multiplayer blackjack game before the first hand has started.
+
+        Non-creators can leave while the game is not yet playing a hand; they are refunded their buy-in.
+        """
+        uid = current_user["id"]
+        game = await db.mp_blackjack_games.find_one({"id": game_id})
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        # Only allow leaving when no hand is currently being played (before first start)
+        if game.get("phase") in ("playing", "dealer") or game.get("started_at"):
+            raise HTTPException(status_code=400, detail="Cannot leave at this stage")
+        players = list(game.get("players") or [])
+        idx = next((i for i, p in enumerate(players) if p.get("user_id") == uid), None)
+        if idx is None:
+            raise HTTPException(status_code=400, detail="You are not in this game")
+        if game.get("creator_id") == uid and not (_is_admin(current_user) or _is_moderator(current_user)):
+            # Creator should cancel the game instead so everyone is refunded consistently
+            raise HTTPException(status_code=400, detail="Creator must cancel the game instead of leaving")
+        leaver = players.pop(idx)
+        bet = int(leaver.get("bet") or 0)
+        pot = int(game.get("pot") or 0)
+        new_pot = max(0, pot - bet)
+        if bet > 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": bet}})
+        # Re-seat remaining players
+        for i, p in enumerate(players):
+            p["seat_index"] = i
+        # If table was previously full and is now not, reopen joins
+        status = "open"
+        # Recompute phase and ready state
+        phase = "ready" if len(players) >= 2 else "lobby"
+        all_ready_at = None
+        if phase == "ready":
+            active = [p for p in players if not p.get("eliminated")]
+            all_ready = active and all(p.get("ready") for p in active)
+            if all_ready:
+                all_ready_at = game.get("all_ready_at") or datetime.now(timezone.utc).isoformat()
+        updates = {
+            "players": players,
+            "pot": new_pot,
+            "status": status,
+            "phase": phase,
+            "all_ready_at": all_ready_at,
+        }
+        await db.mp_blackjack_games.update_one({"id": game_id}, {"$set": updates})
+        updated = await db.mp_blackjack_games.find_one({"id": game_id})
+        return {"game": _serialize_game(updated)}
+
     @router.post("/casino/mp-blackjack/games/{game_id}/join")
     async def mp_bj_join(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Join an open game. Pay buy_in. Game moves to ready phase when full."""

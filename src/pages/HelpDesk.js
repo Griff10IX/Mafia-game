@@ -246,7 +246,8 @@ export default function HelpDesk() {
           </div>
         </div>
         <p className="px-2.5 py-1.5 text-[9px] text-mutedForeground font-heading">
-          Report bugs, ask questions, or get support. {canManage && 'You can reply and close tickets.'}
+          Report bugs, ask questions, or get support.
+          {canManage && ' As staff (admin, mod, or HDO) you can reply, close tickets, and handle crew name changes when requested.'}
         </p>
         <div className="hd-art-line text-primary mx-2.5" />
       </div>
