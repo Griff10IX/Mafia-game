@@ -372,6 +372,8 @@ export default function Forum() {
   const location = useLocation();
   const [activeTab, setActiveTab] = useState('general');
   const [topics, setTopics] = useState([]);
+  const [forumPage, setForumPage] = useState(1);
+  const [canViewPage2, setCanViewPage2] = useState(false);
   useEffect(() => {
     if (location.state?.category === 'entertainer') setActiveTab('entertainer');
   }, [location.state?.category]);
@@ -397,15 +399,16 @@ export default function Forum() {
   const fetchTopics = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get('/forum/topics', { params: { category: activeTab } });
+      const res = await api.get('/forum/topics', { params: { category: activeTab, page: forumPage } });
       setTopics(res.data?.topics ?? []);
+      setCanViewPage2(!!res.data?.can_view_page_2);
     } catch {
       toast.error('Failed to load forum');
       setTopics([]);
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, forumPage]);
 
   const fetchEntertainerGames = useCallback(async () => {
     setGamesLoading(true);
@@ -595,7 +598,7 @@ export default function Forum() {
           {FORUM_TABS.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => { setActiveTab(tab.id); setForumPage(1); }}
               className={`shrink-0 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded transition-all ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
             >
               {tab.label}
@@ -824,9 +827,22 @@ export default function Forum() {
         </div>
         
         {/* Mobile Header */}
-        <div className="sm:hidden px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+        <div className="sm:hidden px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">📋 Topics</span>
+          {canViewPage2 && (
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setForumPage(1)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 1 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 1</button>
+              <button type="button" onClick={() => setForumPage(2)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 2 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 2</button>
+            </div>
+          )}
         </div>
+        {/* Desktop: page 2 for mods/admins */}
+        {canViewPage2 && (
+          <div className="hidden sm:flex px-3 py-1.5 bg-zinc-800/30 border-b border-primary/10 items-center justify-end gap-1">
+            <button type="button" onClick={() => setForumPage(1)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 1 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 1</button>
+            <button type="button" onClick={() => setForumPage(2)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold ${forumPage === 2 ? 'bg-primary/30 text-primary' : 'text-mutedForeground hover:text-foreground'}`}>Page 2</button>
+          </div>
+        )}
 
         {loading ? (
           <div className="p-6 flex flex-col items-center justify-center gap-3">

@@ -719,7 +719,7 @@ export default function Profile() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
-  const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
+  const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true });
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [changingPassword, setChangingPassword] = useState(false);
@@ -804,9 +804,9 @@ export default function Profile() {
   const fetchPrefs = async () => {
     try {
       const res = await api.get('/profile/preferences');
-      setPrefs(res.data?.notification_preferences || { ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
+      setPrefs(res.data?.notification_preferences || { ent_games: true, oc_invites: true, attacks: true, system: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true });
     } catch (_) {
-      setPrefs({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
+      setPrefs({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true });
     }
   };
   const fetchTelegram = async () => {
@@ -1160,6 +1160,9 @@ export default function Profile() {
                   { key: 'attacks', label: 'Kills & attack alerts' },
                   { key: 'system', label: 'System (rank ups, rewards)' },
                   { key: 'messages', label: 'Direct messages' },
+                  { key: 'forum_topic_reply', label: 'Forum: replies to your topics' },
+                  { key: 'forum_comment_reply', label: 'Forum: replies to your comments' },
+                  { key: 'forum_mention', label: 'Forum: when someone @mentions you' },
                 ].map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between gap-3 py-1">
                     <span className="text-sm text-foreground">{label}</span>

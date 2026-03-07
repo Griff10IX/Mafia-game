@@ -80,6 +80,7 @@ def register(router):
         return {"tickets": [_ticket_to_response(t) for t in tickets]}
 
     def _ticket_to_response(t: dict) -> dict:
+        replies = t.get("replies") or []
         out = {
             "id": t.get("id"),
             "user_id": t.get("user_id"),
@@ -89,7 +90,7 @@ def register(router):
             "status": t.get("status", "open"),
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
-            "replies": t.get("replies") or [],
+            "replies": list(reversed(replies)),  # newest at top, oldest at bottom
             "closed_at": t.get("closed_at"),
             "closed_by_id": t.get("closed_by_id"),
         }

@@ -1,6 +1,7 @@
 # Forum: topics, comments, views, likes
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+import re
 
 CREW_OC_TOPIC_WINDOW_MINUTES = 10  # Can create Crew OC topic only when OC is available or within this many mins before
 import uuid
@@ -10,10 +11,12 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity
+from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification
 
 
 FORUM_CATEGORIES = ["general", "entertainer", "crew_oc"]  # crew_oc = family Crew OC ads
+FORUM_TOPICS_PER_PAGE = 20
+FORUM_TOPICS_MAX_TOTAL = 40  # page 1 = 20, page 2 = 20; beyond that topics are deleted (mods/admins only see page 2)
 
 class TopicCreate(BaseModel):
     title: str
@@ -26,6 +29,7 @@ class TopicCreate(BaseModel):
 class CommentCreate(BaseModel):
     content: str
     gif_url: Optional[str] = None
+    reply_to_comment_id: Optional[str] = None  # when replying to another comment, notify its author
 
 
 class TopicUpdate(BaseModel):
@@ -38,15 +42,35 @@ class TopicUpdate(BaseModel):
     gif_url: Optional[str] = None
 
 
-async def get_topics(category: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    """List topics, optionally filtered by category (general | entertainer). Sticky/important first, then by updated_at."""
+async def _delete_topic_fully(topic_id: str) -> None:
+    """Delete a topic and all its comments and comment likes."""
+    comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0, "id": 1}).to_list(500)
+    comment_ids = [c["id"] for c in comments]
+    if comment_ids:
+        await db.forum_comment_likes.delete_many({"comment_id": {"$in": comment_ids}})
+    await db.forum_comments.delete_many({"topic_id": topic_id})
+    await db.forum_topics.delete_one({"id": topic_id})
+
+
+async def get_topics(
+    category: Optional[str] = None,
+    page: int = 1,
+    current_user: dict = Depends(get_current_user),
+):
+    """List topics: 20 per page. Page 1 = newest 20; page 2 = next 20 (mods/admins only). Topics beyond 40 are deleted elsewhere."""
+    if page not in (1, 2):
+        page = 1
+    if page == 2 and not _is_admin(current_user) and not _is_moderator(current_user):
+        raise HTTPException(status_code=403, detail="Only moderators and admins can view page 2")
     query = {}
     if category and category in FORUM_CATEGORIES:
         if category == "general":
             query["$or"] = [{"category": "general"}, {"category": {"$exists": False}}]
         else:
             query["category"] = category
-    topics = await db.forum_topics.find(query, {"_id": 0}).sort([("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]).to_list(500)
+    sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
+    skip = (page - 1) * FORUM_TOPICS_PER_PAGE
+    topics = await db.forum_topics.find(query, {"_id": 0}).sort(sort).skip(skip).limit(FORUM_TOPICS_PER_PAGE).to_list(FORUM_TOPICS_PER_PAGE)
     out = []
     for t in topics:
         comment_count = await db.forum_comments.count_documents({"topic_id": t["id"]})
@@ -71,7 +95,8 @@ async def get_topics(category: Optional[str] = None, current_user: dict = Depend
                 item["crew_oc_family_tag"] = fam.get("tag")
                 item["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
         out.append(item)
-    return {"topics": out, "categories": FORUM_CATEGORIES}
+    can_view_page_2 = _is_admin(current_user) or _is_moderator(current_user)
+    return {"topics": out, "categories": FORUM_CATEGORIES, "page": page, "can_view_page_2": can_view_page_2}
 
 
 async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user)):
@@ -207,7 +232,27 @@ async def create_topic(
         "forum_topic",
         {"topic_id": topic_id, "title": title},
     )
+    # Keep only FORUM_TOPICS_MAX_TOTAL topics per category; delete oldest beyond that
+    cleanup_query = {"category": category} if category in FORUM_CATEGORIES else {"$or": [{"category": "general"}, {"category": {"$exists": False}}]}
+    sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
+    all_in_category = await db.forum_topics.find(cleanup_query, {"_id": 0, "id": 1}).sort(sort).to_list(FORUM_TOPICS_MAX_TOTAL + 50)
+    for t in all_in_category[FORUM_TOPICS_MAX_TOTAL:]:
+        await _delete_topic_fully(t["id"])
     return {"id": topic_id, "message": "Topic created", "topic": {**doc, "_id": 0}}
+
+
+def _extract_mention_usernames(text: str) -> List[str]:
+    """Extract @Username mentions from text (alphanumeric + underscore). Returns unique usernames."""
+    if not text:
+        return []
+    seen = set()
+    out = []
+    for m in re.finditer(r"@([A-Za-z0-9_]+)", text):
+        u = (m.group(1) or "").strip()
+        if u and u not in seen:
+            seen.add(u)
+            out.append(u)
+    return out
 
 
 async def add_comment(
@@ -218,7 +263,10 @@ async def add_comment(
     """Add a comment to a topic. Fails if topic is locked."""
     if await _is_forum_muted(current_user["id"]):
         raise HTTPException(status_code=403, detail="You are muted from the forum and cannot post.")
-    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "is_locked": 1, "title": 1})
+    topic = await db.forum_topics.find_one(
+        {"id": topic_id},
+        {"_id": 0, "is_locked": 1, "title": 1, "author_id": 1},
+    )
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
     if topic.get("is_locked"):
@@ -231,17 +279,21 @@ async def add_comment(
         raise HTTPException(status_code=400, detail="Comment cannot be empty")
     comment_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
+    author_username = current_user.get("username") or "?"
     doc = {
         "id": comment_id,
         "topic_id": topic_id,
         "author_id": current_user["id"],
-        "author_username": current_user.get("username") or "?",
+        "author_username": author_username,
         "content": content or "(GIF)",
         "created_at": now,
         "likes": 0,
     }
     if gif_url:
         doc["gif_url"] = gif_url
+    reply_to_comment_id = (request.reply_to_comment_id or "").strip() or None
+    if reply_to_comment_id:
+        doc["reply_to_comment_id"] = reply_to_comment_id
     await db.forum_comments.insert_one(doc)
     await db.forum_topics.update_one(
         {"id": topic_id},
@@ -249,10 +301,65 @@ async def add_comment(
     )
     await log_activity(
         current_user["id"],
-        current_user.get("username") or "?",
+        author_username,
         "forum_comment",
         {"topic_id": topic_id, "topic_title": topic.get("title") if topic else None, "comment_id": comment_id, "has_gif": bool(gif_url)},
     )
+
+    # Notifications: topic author, reply-to author, @mentions (respect prefs via category)
+    topic_title = (topic.get("title") or "your topic")[:80]
+    topic_author_id = topic.get("author_id")
+    reply_to_author_id = None
+    if reply_to_comment_id:
+        reply_comment = await db.forum_comments.find_one(
+            {"id": reply_to_comment_id, "topic_id": topic_id},
+            {"_id": 0, "author_id": 1},
+        )
+        if reply_comment:
+            reply_to_author_id = reply_comment.get("author_id")
+
+    notified_ids = set()
+    if topic_author_id and topic_author_id != current_user["id"]:
+        await send_notification(
+            topic_author_id,
+            "New reply on your topic",
+            f'{author_username} replied to "{topic_title}"',
+            "forum_topic_reply",
+            category="forum_topic_reply",
+            topic_id=topic_id,
+            topic_title=topic.get("title"),
+        )
+        notified_ids.add(topic_author_id)
+    if reply_to_author_id and reply_to_author_id != current_user["id"] and reply_to_author_id not in notified_ids:
+        await send_notification(
+            reply_to_author_id,
+            "Reply to your comment",
+            f'{author_username} replied to your comment in "{topic_title}"',
+            "forum_comment_reply",
+            category="forum_comment_reply",
+            topic_id=topic_id,
+            topic_title=topic.get("title"),
+            comment_id=comment_id,
+        )
+        notified_ids.add(reply_to_author_id)
+    for username in _extract_mention_usernames(content):
+        pattern = re.compile("^" + re.escape(username) + "$", re.IGNORECASE)
+        mentioned = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1})
+        if mentioned:
+            uid = mentioned.get("id")
+            if uid and uid != current_user["id"] and uid not in notified_ids:
+                await send_notification(
+                    uid,
+                    "Mentioned in forum",
+                    f'{author_username} mentioned you in "{topic_title}"',
+                    "forum_mention",
+                    category="forum_mention",
+                    topic_id=topic_id,
+                    topic_title=topic.get("title"),
+                    comment_id=comment_id,
+                )
+                notified_ids.add(uid)
+
     return {"id": comment_id, "message": "Comment posted", "comment": {**doc, "liked": False}}
 
 
@@ -343,11 +450,7 @@ async def delete_topic(
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
-    comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0, "id": 1}).to_list(500)
-    comment_ids = [c["id"] for c in comments]
-    await db.forum_comment_likes.delete_many({"comment_id": {"$in": comment_ids}})
-    await db.forum_comments.delete_many({"topic_id": topic_id})
-    await db.forum_topics.delete_one({"id": topic_id})
+    await _delete_topic_fully(topic_id)
     return {"message": "Topic deleted"}
 
 

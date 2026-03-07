@@ -76,6 +76,7 @@ export default function ForumTopic() {
   const [editGifUrl, setEditGifUrl] = useState('');
   const [editShowGifPicker, setEditShowGifPicker] = useState(false);
   const [editSubmitting, setEditSubmitting] = useState(false);
+  const [replyToComment, setReplyToComment] = useState(null); // { id, author_username }
   const commentTextareaRef = useRef(null);
 
   const fetchTopic = useCallback(async () => {
@@ -172,11 +173,16 @@ export default function ForumTopic() {
     if (!text) { toast.error('Enter a comment'); return; }
     setPosting(true);
     try {
-      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: text }, { timeout: 30000 });
+      const res = await api.post(`/forum/topics/${topicId}/comments`, {
+        content: text,
+        reply_to_comment_id: replyToComment?.id || undefined,
+      }, { timeout: 30000 });
       setCommentText('');
+      setReplyToComment(null);
       const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       toast.success('Posted');
+      setReplyToComment(null);
       fetchTopic().catch(() => {});
     } catch (err) {
       const status = err.response?.status;
@@ -184,6 +190,7 @@ export default function ForumTopic() {
       const isExplicitReject = (status === 400 || status === 403 || status === 404) && typeof detail === 'string' && detail.length > 0;
       if ((typeof status === 'number' && status >= 200 && status < 300) || !isExplicitReject) {
         setCommentText('');
+        setReplyToComment(null);
         toast.success('Posted');
         fetchTopic().catch(() => {});
       } else {
@@ -199,9 +206,14 @@ export default function ForumTopic() {
     setPosting(true);
     setShowGifPicker(false);
     try {
-      const res = await api.post(`/forum/topics/${topicId}/comments`, { content: '', gif_url: gifUrl }, { timeout: 30000 });
+      const res = await api.post(`/forum/topics/${topicId}/comments`, {
+        content: '',
+        gif_url: gifUrl,
+        reply_to_comment_id: replyToComment?.id || undefined,
+      }, { timeout: 30000 });
       const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false } : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
+      setReplyToComment(null);
       toast.success('GIF posted');
       fetchTopic().catch(() => {});
     } catch (err) {
@@ -600,8 +612,8 @@ export default function ForumTopic() {
                   />
                 )}
                 
-                {/* Like button */}
-                <div className="mt-2">
+                {/* Like + Reply */}
+                <div className="mt-2 flex items-center gap-2">
                   <button
                     onClick={() => likeComment(c.id)}
                     disabled={likingId === c.id}
@@ -612,6 +624,16 @@ export default function ForumTopic() {
                     }`}
                   >
                     <ThumbsUp size={10} /> {c.liked ? 'Liked' : 'Like'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReplyToComment({ id: c.id, author_username: c.author_username });
+                      setTimeout(() => commentTextareaRef.current?.focus(), 100);
+                    }}
+                    className="flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded text-mutedForeground hover:text-primary hover:bg-primary/10 transition-all"
+                  >
+                    <MessageCircle size={10} /> Reply
                   </button>
                 </div>
               </div>
@@ -638,12 +660,17 @@ export default function ForumTopic() {
                 <GifPicker onSelect={handleSendGif} onClose={() => setShowGifPicker(false)} />
               </div>
             )}
-            
+            {replyToComment && (
+              <div className="flex items-center justify-between gap-2 py-1.5 px-2 rounded bg-primary/10 border border-primary/30 text-xs text-primary">
+                <span>Replying to <strong>{replyToComment.author_username}</strong></span>
+                <button type="button" onClick={() => setReplyToComment(null)} className="text-mutedForeground hover:text-foreground underline">Cancel</button>
+              </div>
+            )}
             <form onSubmit={postComment} className="space-y-2">
               <textarea
                 ref={commentTextareaRef}
                 id="forum-add-comment"
-                placeholder="Write a comment... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
+                placeholder="Write a comment... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], @Username to mention"
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 rows={3}

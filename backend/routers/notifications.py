@@ -16,7 +16,16 @@ from server import (
 
 # ----- Constants -----
 INBOX_RETENTION_DAYS = 7  # Notifications older than this are deleted when inbox is loaded
-DEFAULT_NOTIFICATION_PREFS = {"ent_games": True, "oc_invites": True, "attacks": True, "system": True, "messages": True}
+DEFAULT_NOTIFICATION_PREFS = {
+    "ent_games": True,
+    "oc_invites": True,
+    "attacks": True,
+    "system": True,
+    "messages": True,
+    "forum_topic_reply": True,
+    "forum_comment_reply": True,
+    "forum_mention": True,
+}
 
 # ----- Models -----
 class NotificationPreferencesRequest(BaseModel):
@@ -26,6 +35,9 @@ class NotificationPreferencesRequest(BaseModel):
     attacks: Optional[bool] = None
     system: Optional[bool] = None
     messages: Optional[bool] = None
+    forum_topic_reply: Optional[bool] = None
+    forum_comment_reply: Optional[bool] = None
+    forum_mention: Optional[bool] = None
 
 
 class SendMessageRequest(BaseModel):
