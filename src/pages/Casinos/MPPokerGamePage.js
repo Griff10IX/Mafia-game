@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, MessageSquare, CheckCircle2, XCircle } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
@@ -265,10 +265,10 @@ function getTablePositions(totalSeats) {
    ══════════════════════════════════════════════════════════ */
 export default function MPPokerGamePage() {
   const { gameId } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
-  const [game, setGame] = useState(() => location.state?.game ?? null);
-  const [loading, setLoading] = useState(!location.state?.game);
+  const [game, setGame] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [myUserId, setMyUserId] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [readyLoading, setReadyLoading] = useState(false);
@@ -279,70 +279,88 @@ export default function MPPokerGamePage() {
   const [raiseAmount, setRaiseAmount] = useState('');
   const [startSecondsLeft, setStartSecondsLeft] = useState(null);
   const [turnSecondsLeft, setTurnSecondsLeft] = useState(null);
-  const [prevStatus, setPrevStatus] = useState(null);
   const [helpPanelOpen, setHelpPanelOpen] = useState(false);
   const startTriggeredRef = useRef(false);
   const timeoutTriggeredRef = useRef(null);
   const chatEndRef = useRef(null);
-  const prevStatusRef = useRef(null);
-  const isVsDealer = game?.mode === 'vs_dealer';
+  const myUserIdRef = useRef(null);
+
+  // Track mode in a ref so fetchGame stays stable
+  const isModeVsDealerRef = useRef(false);
+  // Also track as state for rendering
+  const [isVsDealer, setIsVsDealer] = useState(false);
 
   useEffect(() => {
-    api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => {});
+    api.get('/auth/me').then((r) => {
+      const id = r.data?.id ?? null;
+      setMyUserId(id);
+      myUserIdRef.current = id;
+    }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    prevStatusRef.current = null;
-  }, [gameId]);
-
   const fetchGame = useCallback(() => {
-    if (!gameId) return;
-    const endpoint = isVsDealer
+    // Always start with the generic games endpoint; if vs-dealer use that endpoint
+    const endpoint = isModeVsDealerRef.current
       ? '/casino/mp-poker/vs-dealer/game'
       : `/casino/mp-poker/games/${gameId}`;
     api.get(endpoint)
       .then((r) => {
-        const g = isVsDealer ? (r.data?.game ?? null) : (r.data ?? null);
-        const wasCompleted = prevStatusRef.current === 'completed';
-        prevStatusRef.current = g?.status ?? null;
-        setGame((prev) => (g != null ? g : (prev?.status === 'completed' ? prev : null)));
-        setPrevStatus(g?.status ?? null);
-        if (g?.status === 'completed' && !wasCompleted) {
-          const myResult = (g?.results || []).find((res) => res.user_id === myUserId);
-          if (myResult?.result === 'win') {
-            setShowWin(true);
-            setTimeout(() => setShowWin(false), 4000);
-          }
+        const g = isModeVsDealerRef.current
+          ? (r.data?.game ?? r.data ?? null)
+          : (r.data ?? null);
+        // Detect mode from first response
+        if (g?.mode === 'vs_dealer' && !isModeVsDealerRef.current) {
+          isModeVsDealerRef.current = true;
+          setIsVsDealer(true);
+          // Immediately re-fetch with correct endpoint
+          setTimeout(() => {
+            api.get('/casino/mp-poker/vs-dealer/game').then((r2) => {
+              const g2 = r2.data?.game ?? r2.data ?? null;
+              if (g2) setGame(g2);
+            }).catch(() => {});
+          }, 50);
+          return;
         }
+        setFetchError(false);
+        setGame((prev) => {
+          if (g?.status === 'completed' && prev?.status !== 'completed') {
+            const uid = myUserIdRef.current;
+            const myResult = (g?.results || []).find((res) => res.user_id === uid);
+            if (myResult?.result === 'win') {
+              setShowWin(true);
+              setTimeout(() => setShowWin(false), 4500);
+            }
+          }
+          return g;
+        });
       })
       .catch(() => {
-        setGame((prev) => (prev?.status === 'completed' ? prev : null));
+        setGame((prev) => {
+          if (prev === null) setFetchError(true);
+          return prev;
+        });
       })
       .finally(() => setLoading(false));
-  }, [gameId, isVsDealer, myUserId]);
+  }, [gameId]);
 
-  // Poll faster when all-in (board still being dealt) or bot's turn — aggressive on mobile so result appears without tapping
-  const pollInterval = (() => {
-    if (!game) return 3000;
-    const allInWaiting = (game.players || []).some((p) => p.status === 'all_in') && game.status === 'playing' && game.street !== 'showdown';
-    const botTurn = game.mode === 'vs_dealer' && game.current_turn_index === 1 && game.status === 'playing';
-    if (allInWaiting) return 800;
-    return (botTurn) ? 1500 : 3000;
-  })();
-
+  // Stable poll — only restart when fetchGame itself changes (i.e. gameId/mode changes)
+  // Interval speed is managed via ref to avoid restarting the whole interval
+  const pollSpeedRef = useRef(3000);
   useEffect(() => {
     fetchGame();
-    const t = setInterval(fetchGame, pollInterval);
+    const t = setInterval(() => {
+      fetchGame();
+    }, pollSpeedRef.current);
     return () => clearInterval(t);
-  }, [fetchGame, pollInterval]);
+  }, [fetchGame]);
 
-  // When showing "All In — Running It Out", trigger a fetch soon so backend runs out the board and result appears automatically (no tap needed on mobile)
-  const allInRunningOut = status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown';
+  // Update poll speed based on game state without restarting interval
   useEffect(() => {
-    if (!allInRunningOut || !gameId) return;
-    const t = setTimeout(fetchGame, 500);
-    return () => clearTimeout(t);
-  }, [allInRunningOut, gameId, fetchGame]);
+    if (!game) return;
+    const allInActive = game.status === 'playing' && (game.players || []).some((p) => p.status === 'all_in');
+    const botTurn = isVsDealer && game.current_turn_index === 1 && game.status === 'playing';
+    pollSpeedRef.current = (allInActive || botTurn) ? 1500 : 3000;
+  }, [game, isVsDealer]);
 
   // Start countdown timer
   useEffect(() => {
@@ -391,32 +409,20 @@ export default function MPPokerGamePage() {
 
   // Ready notification
   useEffect(() => {
-    if (game?.phase === 'ready' && game?.all_ready_at && prevStatus !== 'ready') {
+    if (game?.phase === 'ready' && game?.all_ready_at) {
       toast.success('All players ready — game starting!', { duration: 4000 });
     }
-  }, [game?.phase, game?.all_ready_at, prevStatus]);
+  }, [game?.all_ready_at]);
 
   const act = async (action, amount) => {
     if (actionLoading) return;
     setActionLoading(true);
     try {
-      const endpoint = isVsDealer ? '/casino/mp-poker/vs-dealer/act' : `/casino/mp-poker/games/${gameId}/act`;
-      const body = isVsDealer
-        ? { action, amount: amount != null && amount !== '' ? Number(amount) : 0, game_id: gameId || undefined }
-        : { action, amount: amount != null && amount !== '' ? Number(amount) : 0 };
-      const res = await api.post(endpoint, body);
-      const nextGame = res.data?.game ?? res.data ?? null;
-      if (nextGame) setGame(nextGame);
-      else if (isVsDealer && gameId) {
-        const refetch = await api.get('/casino/mp-poker/vs-dealer/game').catch(() => null);
-        if (refetch?.data?.game) setGame(refetch.data.game);
-      }
+      const endpoint = isModeVsDealerRef.current ? '/casino/mp-poker/vs-dealer/act' : `/casino/mp-poker/games/${gameId}/act`;
+      const res = await api.post(endpoint, { action, amount: amount || undefined });
+      const g = isModeVsDealerRef.current ? (res.data?.game ?? res.data ?? null) : (res.data ?? null);
+      setGame(g);
       await refreshUser();
-      if (action === 'check') toast.success('Checked');
-      else if (action === 'call') toast.success('Called');
-      else if (action === 'fold') toast.success('Folded');
-      else if (action === 'raise' || action === 'bet') toast.success('Bet placed');
-      else if (action === 'all_in') toast.success('All-in');
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Action failed'); }
     finally { setActionLoading(false); }
   };
@@ -463,13 +469,13 @@ export default function MPPokerGamePage() {
   const currentTurnIndex = game?.current_turn_index ?? -1;
   const myIndex = players.findIndex((p) => p.user_id === myUserId);
   const myPlayer = players[myIndex];
-  const isMyTurn = !isVsDealer
-    ? (currentTurnIndex >= 0 && currentTurnIndex < players.length && players[currentTurnIndex]?.user_id === myUserId)
-    : (currentTurnIndex === 0);
+  const isMyTurn = currentTurnIndex >= 0 && currentTurnIndex < players.length &&
+    (isVsDealer
+      ? !players[currentTurnIndex]?.is_bot
+      : players[currentTurnIndex]?.user_id === myUserId);
   const toCall = game?.to_call ?? 0;
   const myCurrentBet = myPlayer?.current_bet ?? 0;
-  const maxBetAtTable = players.length ? Math.max(0, ...players.map((p) => Number(p.current_bet) || 0)) : 0;
-  const needToCall = Math.max(0, toCall - myCurrentBet, maxBetAtTable - myCurrentBet);
+  const needToCall = Math.max(0, toCall - myCurrentBet);
   const minRaise = game?.min_raise ?? game?.big_blind ?? 1;
   const myStack = myPlayer?.stack ?? 0;
   const showAllCards = street === 'showdown' || status === 'completed';
@@ -488,15 +494,30 @@ export default function MPPokerGamePage() {
   if (loading && !game) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
-        <p className="text-[10px] text-mutedForeground font-heading animate-pulse">Entering the poker room…</p>
+        <div className="flex items-center gap-2">
+          <Link to="/casino/mp-poker" className="p-1.5 rounded border border-primary/20 text-primary hover:bg-primary/10 transition-colors">
+            <ArrowLeft size={16} />
+          </Link>
+          <p className="text-[10px] text-mutedForeground font-heading animate-pulse">Entering the poker room…</p>
+        </div>
       </div>
     );
   }
-  if (!game) {
+  if (fetchError || (!loading && !game)) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
-        <p className="text-[10px] text-mutedForeground font-heading">Game not found.</p>
-        <Link to="/casino/mp-poker" className="text-primary font-heading text-sm hover:underline">← Back to Poker</Link>
+        <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>
+          <p className="text-sm font-heading font-bold text-red-400 uppercase tracking-wider">Table Not Found</p>
+          <p className="text-[10px] text-mutedForeground font-heading">This game may have ended or the link is invalid.</p>
+          <div className="flex justify-center gap-2">
+            <button onClick={fetchGame} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-primary/40 bg-primary/10 text-primary font-heading text-[10px] uppercase hover:bg-primary/20">
+              ↻ Retry
+            </button>
+            <Link to="/casino/mp-poker" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-primary/40 bg-primary/10 text-primary font-heading text-[10px] uppercase hover:bg-primary/20">
+              ← Back to Poker
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -522,7 +543,7 @@ export default function MPPokerGamePage() {
   };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }} data-testid="mp-poker-game-page">
+    <div className={`space-y-3 ${styles.pageContent}`} data-testid="mp-poker-game-page">
       <style>{`
         @keyframes pkr-deal {
           0%   { transform: translateY(-20px) scale(0.85); opacity: 0; }
@@ -562,8 +583,8 @@ export default function MPPokerGamePage() {
       <div className="flex flex-wrap items-center justify-between gap-2 animate-pkr-fade">
         <div className="flex items-center gap-2">
           <Link to="/casino/mp-poker"
-            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded border border-primary/20 text-primary hover:bg-primary/10 active:scale-95 transition-colors touch-manipulation">
-            <ArrowLeft size={18} />
+            className="p-1.5 rounded border border-primary/20 text-primary hover:bg-primary/10 transition-colors">
+            <ArrowLeft size={16} />
           </Link>
           <div>
             <h1 className="text-base font-heading font-bold text-primary uppercase tracking-wider">
@@ -611,9 +632,9 @@ export default function MPPokerGamePage() {
               </div>
               {isCreator && (
                 <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                  className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg border text-[10px] font-heading font-bold uppercase active:scale-[0.97] transition-all touch-manipulation"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
                   style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
-                  <XCircle size={14} />{cancelLoading ? '…' : 'Cancel Table'}
+                  <XCircle size={11} />{cancelLoading ? '…' : 'Cancel Table'}
                 </button>
               )}
             </div>
@@ -651,9 +672,9 @@ export default function MPPokerGamePage() {
                     </div>
                   ) : (
                     <button type="button" disabled={readyLoading} onClick={markReady}
-                      className="min-h-[48px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-pkr-ready touch-manipulation"
+                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-pkr-ready"
                       style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
-                      <CheckCircle2 size={16} />
+                      <CheckCircle2 size={15} />
                       {readyLoading ? 'Readying…' : "I'm Ready"}
                     </button>
                   )}
@@ -698,9 +719,9 @@ export default function MPPokerGamePage() {
             {(isCreator || status === 'open') && (
               <div className="flex justify-center">
                 <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                  className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg border text-[10px] font-heading font-bold uppercase active:scale-[0.97] transition-all touch-manipulation"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
                   style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
-                  <XCircle size={14} />{cancelLoading ? '…' : 'Cancel Table'}
+                  <XCircle size={11} />{cancelLoading ? '…' : 'Cancel Table'}
                 </button>
               </div>
             )}
@@ -799,67 +820,60 @@ export default function MPPokerGamePage() {
               </span>
             </div>
 
-            {/* Primary actions: Fold, Check, Call always visible; min 44px touch targets for mobile */}
+            {/* Primary actions */}
             <div className="flex items-center gap-2 flex-wrap">
               <button type="button" disabled={actionLoading} onClick={() => act('fold')}
-                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border font-heading font-bold text-[9px] sm:text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
+                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                 style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
                 Fold
               </button>
-              <button type="button" disabled={actionLoading || needToCall > 0} onClick={() => act('check')}
-                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
-                style={{ borderColor: 'rgba(161,161,170,0.4)', background: needToCall > 0 ? 'rgba(161,161,170,0.04)' : 'rgba(161,161,170,0.08)', color: needToCall > 0 ? '#71717a' : '#a1a1aa' }}
-                title={needToCall > 0 ? 'You must call or raise to match the current bet' : 'Pass (no bet to match)'}>
-                Check
-              </button>
-              <button type="button" disabled={actionLoading || needToCall <= 0} onClick={() => act('call')}
-                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
-                style={{ borderColor: '#c9a84c', background: needToCall <= 0 ? 'rgba(212,175,55,0.06)' : 'rgba(212,175,55,0.12)', color: '#d4af37' }}
-                title={needToCall <= 0 ? 'No bet to call' : `Match ${formatMoneyFull(Math.min(needToCall, myStack))}`}>
-                Call {formatMoneyFull(Math.min(needToCall, myStack))}
-              </button>
+              {needToCall <= 0 && (
+                <button type="button" disabled={actionLoading} onClick={() => act('check')}
+                  className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                  style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
+                  Check
+                </button>
+              )}
+              {needToCall > 0 && (
+                <button type="button" disabled={actionLoading} onClick={() => act('call')}
+                  className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                  style={{ borderColor: '#c9a84c', background: 'rgba(212,175,55,0.12)', color: '#d4af37' }}>
+                  Call {formatMoneyFull(Math.min(needToCall, myStack))}
+                </button>
+              )}
               <button type="button" disabled={actionLoading || myStack <= 0} onClick={() => act('all_in')}
-                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
+                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                 style={{ borderColor: 'rgba(251,113,133,0.5)', background: 'rgba(251,113,133,0.1)', color: '#fb7185' }}>
                 All-In {formatMoney(myStack)}
               </button>
             </div>
 
-            {/* Raise row — 16px input font prevents iOS zoom on focus; min 44px touch targets */}
+            {/* Raise row */}
             {myStack > 0 && (
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-2">
                 <input
                   type="number"
                   min={minRaise}
                   max={myStack}
                   value={raiseAmount}
-                  onChange={(e) => setRaiseAmount(e.target.value.replace(/,/g, ''))}
+                  onChange={(e) => setRaiseAmount(e.target.value)}
                   placeholder={`Min ${formatMoneyFull(minRaise)}`}
-                  className="flex-1 min-w-0 min-h-[44px] px-3 py-2 rounded-lg font-heading focus:outline-none touch-manipulation"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit', fontSize: '16px' }}
+                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
                 />
-                <button type="button" disabled={actionLoading}
-                  onClick={() => {
-                    const raw = Number(String(raiseAmount).replace(/,/g, '').trim()) || 0;
-                    const amt = raw > 0 ? Math.max(minRaise, Math.min(myStack, raw)) : minRaise;
-                    if (raw > 0 && raw < minRaise) {
-                      toast.error(`Minimum ${needToCall > 0 ? 'raise' : 'bet'} is ${formatMoneyFull(minRaise)}`);
-                      return;
-                    }
-                    act(needToCall > 0 ? 'raise' : 'bet', amt);
-                    setRaiseAmount('');
-                  }}
-                  className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
+                <button type="button" disabled={actionLoading || !raiseAmount}
+                  onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
+                  className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                   style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
                   {needToCall > 0 ? 'Raise' : 'Bet'}
                 </button>
-                {/* Quick-bet chips — larger tap targets on mobile */}
+                {/* Quick-bet buttons */}
                 {[0.5, 0.75, 1].map((f) => {
                   const amt = Math.min(myStack, Math.max(minRaise, Math.floor(pot * f)));
                   return (
                     <button key={f} type="button"
                       onClick={() => setRaiseAmount(String(amt))}
-                      className="min-h-[44px] px-3 py-2 rounded font-heading text-[9px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 active:scale-95 transition-colors touch-manipulation">
+                      className="px-2 py-1.5 rounded font-heading text-[8px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 transition-colors">
                       {f === 1 ? 'Pot' : `${f * 100}%`}
                     </button>
                   );
@@ -872,7 +886,8 @@ export default function MPPokerGamePage() {
       )}
 
       {/* ══ ALL-IN WAITING STATE ══ */}
-      {status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown' && (
+      {status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown' &&
+        activePlayers.filter(p => p.status !== 'all_in').length === 0 && (
         <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
           <div style={goldBar} />
           <div className="p-4 text-center space-y-3" style={{ background: 'rgba(0,0,0,0.55)' }}>
@@ -891,10 +906,10 @@ export default function MPPokerGamePage() {
                 Dealing remaining streets…
               </p>
             </div>
-            {/* Manual advance fallback — result auto-updates on mobile via polling; button for instant refresh */}
+            {/* Manual advance fallback for vs-dealer all-in */}
             {isVsDealer && (
               <button type="button" onClick={fetchGame}
-                className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-5 py-3 rounded-lg border font-heading font-bold text-[10px] uppercase tracking-wider active:scale-[0.97] transition-all touch-manipulation"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all"
                 style={{ borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)', color: '#d4af37' }}>
                 ↻ Check Result
               </button>
@@ -1006,7 +1021,7 @@ export default function MPPokerGamePage() {
         return (
           <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
             <button type="button" onClick={() => setHelpOpen((o) => !o)}
-              className="min-h-[44px] w-full px-3 py-3 border-b border-primary/20 flex items-center justify-between hover:bg-primary/5 active:scale-[0.99] transition-colors touch-manipulation"
+              className="w-full px-3 py-2.5 border-b border-primary/20 flex items-center justify-between hover:bg-primary/5 transition-colors"
               style={{ background: 'rgba(234,179,8,0.04)' }}>
               <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
                 ♠ How to Play · Hand Rankings
