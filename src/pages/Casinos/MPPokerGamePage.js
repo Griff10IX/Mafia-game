@@ -279,6 +279,7 @@ export default function MPPokerGamePage() {
   const [startSecondsLeft, setStartSecondsLeft] = useState(null);
   const [turnSecondsLeft, setTurnSecondsLeft] = useState(null);
   const [prevStatus, setPrevStatus] = useState(null);
+  const [helpPanelOpen, setHelpPanelOpen] = useState(false);
   const startTriggeredRef = useRef(false);
   const timeoutTriggeredRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -723,7 +724,9 @@ export default function MPPokerGamePage() {
             {/* Player seats positioned around oval */}
             {players.map((p, idx) => {
               const pos = tablePositions[idx] || { x: 50, y: 50 };
-              const showHole = showAllCards || p.user_id === myUserId || p.status === 'folded';
+              // Show face-up: always for your own cards, always for bot in vs-dealer, on showdown/completed, folded
+              const isMyCard = myUserId ? p.user_id === myUserId : !p.is_bot;
+              const showHole = showAllCards || isMyCard || p.status === 'folded' || (isVsDealer && p.is_bot && showAllCards);
               const isDealer = !isVsDealer && idx === buttonIndex;
               const isCurrent = idx === currentTurnIndex;
               return (
@@ -753,7 +756,7 @@ export default function MPPokerGamePage() {
       )}
 
       {/* ══ ACTION BAR ══ */}
-      {status === 'playing' && phase === 'playing' && isMyTurn && myPlayer?.status !== 'folded' && myPlayer?.status !== 'all_in' && (
+      {status === 'playing' && (phase === 'playing' || isVsDealer) && isMyTurn && myPlayer?.status !== 'folded' && myPlayer?.status !== 'all_in' && (
         <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
           <div style={goldBar} />
           <div className="p-3 space-y-3" style={{ background: 'rgba(0,0,0,0.5)' }}>
@@ -955,6 +958,108 @@ export default function MPPokerGamePage() {
               </Link>
             </div>
             <div style={goldBar} />
+          </div>
+        );
+      })()}
+
+      {/* ══ HELP / LEGEND ══ */}
+      {(() => {
+        const [helpOpen, setHelpOpen] = [helpPanelOpen, setHelpPanelOpen];
+        return (
+          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
+            <button type="button" onClick={() => setHelpOpen((o) => !o)}
+              className="w-full px-3 py-2.5 border-b border-primary/20 flex items-center justify-between hover:bg-primary/5 transition-colors"
+              style={{ background: 'rgba(234,179,8,0.04)' }}>
+              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
+                ♠ How to Play · Hand Rankings
+              </span>
+              <span className="text-primary/50 text-[10px]">{helpOpen ? '▲' : '▼'}</span>
+            </button>
+            {helpOpen && (
+              <div className="p-3 space-y-4" style={{ background: 'rgba(0,0,0,0.25)' }}>
+
+                {/* Actions explained */}
+                <div>
+                  <p className="text-[8px] font-heading font-bold uppercase tracking-[0.2em] mb-2" style={{ color: 'rgba(212,175,55,0.6)' }}>Your Actions</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {[
+                      { label: 'Fold', color: '#f87171', desc: 'Surrender your hand. You lose any chips already bet.' },
+                      { label: 'Check', color: '#a1a1aa', desc: 'Pass without betting — only if no one has bet this round.' },
+                      { label: 'Call', color: '#d4af37', desc: 'Match the current bet to stay in the hand.' },
+                      { label: 'Raise / Bet', color: '#d4af37', desc: 'Increase the bet. Others must call your raise or fold.' },
+                      { label: 'All-In', color: '#fb7185', desc: 'Bet everything you have. You play for the pot up to your stack.' },
+                    ].map((a) => (
+                      <div key={a.label} className="flex gap-2 items-start px-2.5 py-2 rounded-lg"
+                        style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <span className="text-[8px] font-heading font-black shrink-0 mt-0.5 w-14" style={{ color: a.color }}>{a.label}</span>
+                        <span className="text-[8px] font-heading leading-relaxed" style={{ color: 'rgba(255,255,255,0.5)' }}>{a.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Streets explained */}
+                <div>
+                  <p className="text-[8px] font-heading font-bold uppercase tracking-[0.2em] mb-2" style={{ color: 'rgba(212,175,55,0.6)' }}>The Streets</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {[
+                      { name: 'Pre-Flop', desc: '2 hole cards dealt. First round of betting.' },
+                      { name: 'Flop', desc: '3 community cards revealed.' },
+                      { name: 'Turn', desc: '4th community card revealed.' },
+                      { name: 'River', desc: '5th and final card. Last betting round.' },
+                    ].map((s) => (
+                      <div key={s.name} className="px-2 py-2 rounded-lg text-center"
+                        style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <p className="text-[8px] font-heading font-bold mb-0.5" style={{ color: '#d4af37' }}>{s.name}</p>
+                        <p className="text-[7px] font-heading leading-snug" style={{ color: 'rgba(255,255,255,0.45)' }}>{s.desc}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Hand rankings */}
+                <div>
+                  <p className="text-[8px] font-heading font-bold uppercase tracking-[0.2em] mb-2" style={{ color: 'rgba(212,175,55,0.6)' }}>Hand Rankings — Best to Worst</p>
+                  <div className="space-y-1">
+                    {[
+                      { rank: '1', name: 'Straight Flush', example: '9♠ 8♠ 7♠ 6♠ 5♠', desc: 'Five consecutive cards, same suit.' },
+                      { rank: '2', name: 'Four of a Kind', example: 'K♠ K♥ K♦ K♣ A', desc: 'Four cards of the same value.' },
+                      { rank: '3', name: 'Full House', example: 'J♠ J♥ J♦ 7♠ 7♥', desc: 'Three of a kind + a pair.' },
+                      { rank: '4', name: 'Flush', example: 'A♦ J♦ 8♦ 5♦ 2♦', desc: 'Any five cards, same suit.' },
+                      { rank: '5', name: 'Straight', example: '8♠ 7♥ 6♦ 5♣ 4♠', desc: 'Five consecutive cards, mixed suits.' },
+                      { rank: '6', name: 'Three of a Kind', example: 'Q♠ Q♥ Q♦ 9 3', desc: 'Three cards of the same value.' },
+                      { rank: '7', name: 'Two Pair', example: 'A♠ A♥ K♦ K♣ J', desc: 'Two different pairs.' },
+                      { rank: '8', name: 'Pair', example: '10♠ 10♥ A K 5', desc: 'Two cards of the same value.' },
+                      { rank: '9', name: 'High Card', example: 'A♠ J♥ 9♦ 4♣ 2', desc: 'No combination — highest card plays.' },
+                    ].map((h) => (
+                      <div key={h.rank} className="flex items-center gap-2 px-2.5 py-1.5 rounded"
+                        style={{ background: 'rgba(255,255,255,0.025)' }}>
+                        <span className="text-[8px] font-heading font-black w-4 shrink-0 text-center"
+                          style={{ color: Number(h.rank) <= 3 ? '#d4af37' : Number(h.rank) <= 6 ? 'rgba(212,175,55,0.6)' : 'rgba(255,255,255,0.3)' }}>
+                          {h.rank}
+                        </span>
+                        <span className="text-[8px] font-heading font-bold w-28 shrink-0"
+                          style={{ color: Number(h.rank) <= 3 ? '#d4af37' : 'rgba(255,255,255,0.7)' }}>
+                          {h.name}
+                        </span>
+                        <span className="text-[7px] font-mono flex-1 hidden sm:block" style={{ color: 'rgba(255,255,255,0.3)' }}>{h.example}</span>
+                        <span className="text-[7px] font-heading flex-1" style={{ color: 'rgba(255,255,255,0.4)' }}>{h.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Blinds explained */}
+                <div className="px-2.5 py-2 rounded-lg" style={{ background: 'rgba(212,175,55,0.05)', border: '1px solid rgba(212,175,55,0.1)' }}>
+                  <p className="text-[8px] font-heading font-bold mb-1" style={{ color: '#d4af37' }}>Blinds</p>
+                  <p className="text-[8px] font-heading leading-relaxed" style={{ color: 'rgba(255,255,255,0.45)' }}>
+                    The Small Blind and Big Blind are forced bets posted before cards are dealt. They rotate each hand to keep action moving. The Big Blind is double the Small Blind.
+                    You must at least call the Big Blind to stay in pre-flop.
+                  </p>
+                </div>
+
+              </div>
+            )}
           </div>
         );
       })()}
