@@ -147,6 +147,23 @@ def _best_hand_seven(hole: List[dict], board: List[dict]) -> Tuple[int, Tuple]:
     return best
 
 
+def _rank_to_name(r: int) -> str:
+    """Convert numeric rank 2-14 to display name."""
+    if r == 14:
+        return "Aces"
+    if r == 13:
+        return "Kings"
+    if r == 12:
+        return "Queens"
+    if r == 11:
+        return "Jacks"
+    if r == 10:
+        return "Tens"
+    if 2 <= r <= 9:
+        return f"{r}s"
+    return "?"
+
+
 def _hand_rank_name(category: int) -> str:
     names = {
         HAND_HIGH_CARD: "High Card",
@@ -160,6 +177,37 @@ def _hand_rank_name(category: int) -> str:
         HAND_STRAIGHT_FLUSH: "Straight Flush",
     }
     return names.get(category, "High Card")
+
+
+def _hand_description(category: int, tie: Tuple) -> str:
+    """Human-readable hand description, e.g. 'Pair of Aces', 'Two Pair, Fives and Twos'."""
+    base = _hand_rank_name(category)
+    if not tie:
+        return base
+    if category == HAND_PAIR and len(tie) >= 1:
+        return f"Pair of {_rank_to_name(tie[0])}"
+    if category == HAND_TWO_PAIR and len(tie) >= 2:
+        return f"Two Pair, {_rank_to_name(tie[0])} and {_rank_to_name(tie[1])}"
+    if category == HAND_THREE_KIND and len(tie) >= 1:
+        return f"Three of a Kind, {_rank_to_name(tie[0])}"
+    if category == HAND_FULL_HOUSE and len(tie) >= 2:
+        return f"Full House, {_rank_to_name(tie[0])} full of {_rank_to_name(tie[1])}"
+    if category == HAND_FOUR_KIND and len(tie) >= 1:
+        return f"Four of a Kind, {_rank_to_name(tie[0])}"
+    if category in (HAND_STRAIGHT, HAND_STRAIGHT_FLUSH) and len(tie) >= 1:
+        high = tie[0]
+        if high == 14:
+            return f"{base} (Ace high)"
+        if high == 13:
+            return f"{base} (King high)"
+        if high == 12:
+            return f"{base} (Queen high)"
+        if high == 5:
+            return f"{base} (5 high)"
+        return f"{base} ({_rank_to_name(high).rstrip('s')} high)"
+    if category == HAND_HIGH_CARD and len(tie) >= 1:
+        return f"High Card, {_rank_to_name(tie[0])}"
+    return base
 
 
 def _enrich_players_current_hand(g: dict) -> None:
@@ -216,17 +264,17 @@ def register(router):
         results = []
         hand_name = None
         if winner and len(active) > 1 and best:
-            hand_name = _hand_rank_name(best[0])
+            hand_name = _hand_description(best[0], best[1])
         if winner and winner.get("user_id") == uid and pot > 0:
             await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
             results.append({"user_id": uid, "result": "win", "payout": pot, "hand": hand_name})
             results.append({"user_id": "dealer", "result": "lose", "payout": 0})
         elif winner and winner.get("user_id") == "dealer":
             results.append({"user_id": uid, "result": "lose", "payout": 0})
-            results.append({"user_id": "dealer", "result": "win", "payout": pot})
+            results.append({"user_id": "dealer", "result": "win", "payout": pot, "hand": hand_name})
         else:
-            results.append({"user_id": uid, "result": "win" if winner and winner.get("user_id") == uid else "lose", "payout": pot if winner and winner.get("user_id") == uid else 0})
-            results.append({"user_id": "dealer", "result": "lose" if winner and winner.get("user_id") == uid else "win", "payout": 0 if winner and winner.get("user_id") == uid else pot})
+            results.append({"user_id": uid, "result": "win" if winner and winner.get("user_id") == uid else "lose", "payout": pot if winner and winner.get("user_id") == uid else 0, "hand": hand_name if winner and winner.get("user_id") == uid else None})
+            results.append({"user_id": "dealer", "result": "lose" if winner and winner.get("user_id") == uid else "win", "payout": 0 if winner and winner.get("user_id") == uid else pot, "hand": hand_name if winner and winner.get("user_id") == "dealer" else None})
         await db.mp_poker_games.update_one(
             {"id": game_id},
             {"$set": {"status": "completed", "phase": "settled", "results": results, "completed_at": now_iso}},
@@ -713,7 +761,8 @@ def register(router):
             "is_bot": False,
         })
         await db.users.update_one({"id": uid}, {"$inc": {"money": -buy_in}})
-        phase = "ready" if len(players) >= g.get("max_players") else "lobby"
+        # 2+ players is enough to enter ready phase; creator can start once all current players are ready
+        phase = "ready" if len(players) >= 2 else "lobby"
         await db.mp_poker_games.update_one(
             {"id": game_id},
             {"$set": {"players": players, "phase": phase}},
@@ -797,7 +846,7 @@ def register(router):
                 if best_rank is None or r > best_rank:
                     best_rank = r
                     winners = [p]
-                    winner_hand_name = _hand_rank_name(r[0]) if r else None
+                    winner_hand_name = _hand_description(r[0], r[1]) if r else None
                 elif r == best_rank:
                     winners.append(p)
             split = pot // len(winners)

@@ -769,10 +769,10 @@ export default function MPPokerGamePage() {
             <div className="text-center space-y-1">
               <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
                 style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                Table Full — Ready Up!
+                {players.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!'}
               </p>
               <p className="text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.4)' }}>
-                All players must ready before blinds are posted
+                {players.length >= 2 ? 'All seated players must ready — then game starts' : 'Need at least 2 players'}
               </p>
             </div>
 

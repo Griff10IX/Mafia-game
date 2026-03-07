@@ -549,8 +549,8 @@ export default function MPBlackjackGamePage() {
         </div>
       </div>
 
-      {/* ══ LOBBY ══ */}
-      {status === 'open' && (
+      {/* ══ LOBBY (waiting for 2+ players) ══ */}
+      {status === 'open' && phase !== 'ready' && (
         <div className="rounded-xl overflow-hidden border-2" style={{ borderColor: '#5a3e1b', ...tableBackground }}>
           <div style={goldBar} />
           <div className="p-6 text-center space-y-4">
@@ -602,10 +602,10 @@ export default function MPBlackjackGamePage() {
                 <>
                   <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
                     style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                    Table Full — Ready Up!
+                    {activePlayers.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!'}
                   </p>
                   <p className="text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.5)' }}>
-                    All players must ready before cards are dealt
+                    {activePlayers.length >= 2 ? 'All seated players must ready — then deal' : 'Need at least 2 players'}
                   </p>
                 </>
               )}
@@ -710,7 +710,11 @@ export default function MPBlackjackGamePage() {
                 <span className="text-mutedForeground">Bonus <span className="text-emerald-400">{formatMoney(game.extra_prize)}</span></span>
               )}
               {eliminationRounds && <span className="text-mutedForeground">Round <span className="font-bold">{currentRound}</span></span>}
-              {cardLimit != null && <span className="text-mutedForeground">Max {cardLimit} cards</span>}
+              {cardLimit != null && (
+                <span className="text-mutedForeground">
+                  {cardLimit === 2 ? 'No hits' : cardLimit === 3 ? '1 hit max' : cardLimit === 4 ? '2 hits max' : `${cardLimit - 2} hits max`}
+                </span>
+              )}
               {game?.twenty_one_only && <span className="text-amber-400/80">21 only</span>}
               {(phase === 'settled' || status === 'completed') && (game?.results || []).length > 0 && (() => {
                 const winners = (game.results || []).filter((r) => r.result === 'win').map((r) => r.username);
@@ -786,18 +790,27 @@ export default function MPBlackjackGamePage() {
 
             {/* Actions */}
             {status === 'playing' && phase === 'playing' && isMyTurn && (
-              <div className="flex items-center justify-center gap-3 pt-1">
-                <button type="button" disabled={hitDisabled} onClick={hit}
-                  title={cardLimit != null && myHandLength >= cardLimit ? `Card limit (${cardLimit}) reached` : ''}
-                  className="w-28 sm:w-32 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.97] transition-all"
-                  style={{ background: 'linear-gradient(180deg,#d4af37,#a08020,#8a6e18)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.25)' }}>
-                  {actionLoading ? '…' : 'Hit'}
-                </button>
-                <button type="button" disabled={actionLoading} onClick={stand}
-                  className="w-28 sm:w-32 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border disabled:opacity-40 active:scale-[0.97] transition-all"
-                  style={{ background: '#27272a', borderColor: '#52525b', color: '#fff' }}>
-                  {actionLoading ? '…' : 'Stand'}
-                </button>
+              <div className="flex flex-col items-center gap-1 pt-1">
+                <div className="flex items-center justify-center gap-3">
+                  <button type="button" disabled={hitDisabled} onClick={hit}
+                    title={cardLimit != null && myHandLength >= cardLimit
+                      ? (cardLimit === 2 ? 'No hits allowed' : `Hit limit reached (${cardLimit - 2} hit${cardLimit - 2 > 1 ? 's' : ''})`)
+                      : ''}
+                    className="w-28 sm:w-32 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.97] transition-all"
+                    style={{ background: 'linear-gradient(180deg,#d4af37,#a08020,#8a6e18)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 12px rgba(212,175,55,0.25)' }}>
+                    {actionLoading ? '…' : 'Hit'}
+                  </button>
+                  <button type="button" disabled={actionLoading} onClick={stand}
+                    className="w-28 sm:w-32 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border disabled:opacity-40 active:scale-[0.97] transition-all"
+                    style={{ background: '#27272a', borderColor: '#52525b', color: '#fff' }}>
+                    {actionLoading ? '…' : 'Stand'}
+                  </button>
+                </div>
+                {hitDisabled && cardLimit != null && myHandLength >= cardLimit && (
+                  <p className="text-[8px] font-heading text-mutedForeground">
+                    {cardLimit === 2 ? 'No hits in this game' : `Hit limit reached (${cardLimit - 2} hit${cardLimit - 2 > 1 ? 's' : ''})`}
+                  </p>
+                )}
               </div>
             )}
 

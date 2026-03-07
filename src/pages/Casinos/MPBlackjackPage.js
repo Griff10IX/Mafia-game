@@ -134,12 +134,14 @@ export default function MPBlackjackPage() {
     border: '1px solid rgba(212,175,55,0.2)',
     color: 'inherit',
   };
+  const selectStyle = { ...inputStyle, background: '#27272a', color: '#e4e4e7', colorScheme: 'dark' };
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="mp-blackjack-page">
       <style>{`
         @keyframes mpbj-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
         .mpbj-fade { animation: mpbj-fade 0.35s ease-out both; }
+        .mp-blackjack-select option { background: #27272a; color: #e4e4e7; }
         @keyframes mpbj-row { from { opacity:0; transform:translateX(-4px); } to { opacity:1; transform:translateX(0); } }
         .mpbj-row { animation: mpbj-row 0.3s ease-out both; }
       `}</style>
@@ -368,7 +370,7 @@ export default function MPBlackjackPage() {
             <div className="flex items-center gap-3">
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Max Players</label>
               <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle}>
+                className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
                 {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} players</option>)}
               </select>
             </div>
@@ -385,15 +387,21 @@ export default function MPBlackjackPage() {
                 className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
             </div>
 
-            <div className="flex items-center gap-3">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Card Limit</label>
-              <select value={createCardLimit} onChange={(e) => setCreateCardLimit(e.target.value)}
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle}>
-                <option value="no_limit">No limit</option>
-                <option value="2">2 cards</option>
-                <option value="3">3 cards</option>
-                <option value="5">5 cards</option>
-              </select>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Hit limit</label>
+                <select value={createCardLimit} onChange={(e) => setCreateCardLimit(e.target.value)}
+                  className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
+                  <option value="no_limit">No limit (hit until bust or stand)</option>
+                  <option value="3">1 hit only (e.g. elimination)</option>
+                  <option value="4">2 hits</option>
+                  <option value="5">3 hits</option>
+                  <option value="2">No hits (2 cards only)</option>
+                </select>
+              </div>
+              <p className="text-[8px] font-heading text-mutedForeground ml-24">
+                In elimination rounds, 1 hit is often used.
+              </p>
             </div>
 
             {/* Toggles */}

@@ -103,6 +103,7 @@ export default function MPPokerPage() {
   };
 
   const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' };
+  const selectStyle = { ...inputStyle, background: '#27272a', color: '#e4e4e7', colorScheme: 'dark' };
 
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="mp-poker-page">
@@ -112,6 +113,7 @@ export default function MPPokerPage() {
         @keyframes pkr-row { from { opacity:0; transform:translateX(-4px); } to { opacity:1; transform:translateX(0); } }
         .pkr-row { animation: pkr-row 0.3s ease-out both; }
         @keyframes chip-spin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        .mp-poker-select option { background: #27272a; color: #e4e4e7; }
       `}</style>
 
       {/* ── Header ── */}
@@ -195,7 +197,7 @@ export default function MPPokerPage() {
                 <div className="flex items-center gap-2">
                   <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Max Players</label>
                   <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
-                    className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle}>
+                    className="mp-poker-select flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
                     {[2,3,4,5,6,7,8,9].map((n) => <option key={n} value={n}>{n} players</option>)}
                   </select>
                 </div>

@@ -573,7 +573,7 @@ export default function HorseRacingPage() {
     : horses.map((h) => ({ horse: h, finishPct: 0, animationDelayMs: 0 }));
 
   return (
-    <div className={`space-y-4 ${styles.pageContent}`} data-testid="horse-racing-page">
+    <div className={`space-y-3 ${styles.pageContent}`} data-testid="horse-racing-page">
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes horse-bounce {
@@ -616,7 +616,7 @@ export default function HorseRacingPage() {
       <WinCelebration active={showWin} />
 
       {/* Page header */}
-      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-4">
+      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
@@ -669,7 +669,7 @@ export default function HorseRacingPage() {
 
       {/* ═══ Game Area ═══ */}
       {!isOwner ? (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {/* Track — scroll target when race starts (mobile) */}
           <div
             ref={trackContainerRef}
@@ -681,7 +681,7 @@ export default function HorseRacingPage() {
           >
             {/* Scoreboard bar */}
             <div
-              className="flex items-center justify-between px-3 py-2"
+              className="flex items-center justify-between px-3 py-1.5"
               style={{
                 background: 'linear-gradient(180deg, #1a1612, #0f0d0a)',
                 borderBottom: '2px solid #5a3e1b',
@@ -721,9 +721,9 @@ export default function HorseRacingPage() {
               }}
             >
               {result ? (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {result.photoFinishPending && !photoFinishRevealed && (
-                    <div className="flex items-center justify-center gap-2 py-2 animate-pulse">
+                    <div className="flex items-center justify-center gap-2 py-1.5 animate-pulse">
                       <span className="text-lg">📷</span>
                       <span className="text-sm font-heading font-bold text-primary">Photo finish! Reviewing...</span>
                     </div>
@@ -748,8 +748,8 @@ export default function HorseRacingPage() {
                       </div>
                       {/* Full finishing order */}
                       {result.finishOrder && result.horses && result.finishPcts && (
-                        <div className="mt-2 pt-2 border-t border-white/10">
-                          <p className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Finishing order</p>
+                        <div className="mt-1.5 pt-1.5 border-t border-white/10">
+                          <p className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-0.5">Finishing order</p>
                           <div className="flex flex-wrap justify-center gap-x-4 gap-y-0.5 text-[10px] font-heading">
                             {(result.finishOrder || []).map((horseId, idx) => {
                               const horse = (result.horses || []).find((h) => h.id === horseId);
@@ -790,11 +790,11 @@ export default function HorseRacingPage() {
             >
               <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, #c9a84c, #8b6914, #c9a84c, #5a3e1b)' }} />
 
-              <div className="p-4 space-y-4">
+              <div className="p-3 space-y-3">
                 {/* Horse selection */}
                 <div>
-                  <p className="text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-2">Select Horse</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                  <p className="text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1">Select Horse</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
                     {horses.map((h, idx) => {
                       const color = HORSE_COLORS[idx % HORSE_COLORS.length];
                       const isSelected = selectedHorseId === h.id;
@@ -802,7 +802,7 @@ export default function HorseRacingPage() {
                         <button
                           key={h.id}
                           onClick={() => setSelectedHorseId(h.id)}
-                          className={`relative flex items-center gap-2 py-2.5 px-2.5 rounded-lg border-2 transition-all text-left ${
+                          className={`relative flex items-center gap-1.5 py-1.5 px-2 rounded-lg border-2 transition-all text-left ${
                             isSelected
                               ? 'border-primary/70 shadow-lg'
                               : 'border-white/10 hover:border-white/20'
@@ -815,7 +815,7 @@ export default function HorseRacingPage() {
                         >
                           {/* Silk color */}
                           <div
-                            className="w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[10px] shadow-inner"
+                            className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[9px] shadow-inner"
                             style={{
                               background: `radial-gradient(circle at 40% 35%, ${color}, ${color}aa)`,
                               border: '1.5px solid rgba(255,255,255,0.2)',
@@ -839,24 +839,24 @@ export default function HorseRacingPage() {
                 </div>
 
                 {/* Bet + Race */}
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="flex-1 min-w-[140px]">
-                    <p className="text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1.5">Stake</p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex-1 min-w-[120px]">
+                    <p className="text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1">Stake</p>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-primary font-bold text-sm z-10">$</span>
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-primary font-bold text-xs z-10">$</span>
                       <FormattedNumberInput
                         value={bet}
                         onChange={(raw) => setBet(raw)}
                         placeholder="1,000"
-                        className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 pl-7 pr-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
+                        className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-9 pl-6 pr-2 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
                       />
                     </div>
-                    <div className="flex gap-1 mt-1.5 flex-wrap">
+                    <div className="flex gap-1 mt-1 flex-wrap">
                       {QUICK_BETS.map((qb) => (
                         <button
                           key={qb.value}
                           onClick={() => setBet(String(qb.value))}
-                          className="w-8 h-8 rounded-full text-[8px] font-bold transition-all hover:scale-105 active:scale-95"
+                          className="w-7 h-7 rounded-full text-[8px] font-bold transition-all hover:scale-105 active:scale-95"
                           style={{
                             background: `radial-gradient(circle at 40% 35%, ${qb.color}, ${qb.color}dd)`,
                             border: `2px dashed ${qb.color}88`,
@@ -870,14 +870,14 @@ export default function HorseRacingPage() {
                     </div>
                   </div>
 
-                  <div className="text-right pb-1">
+                  <div className="text-right pb-0.5">
                     <p className="text-[10px] font-heading text-emerald-200/40 uppercase tracking-wider">Returns</p>
-                    <p className="text-lg font-heading font-bold text-primary">{formatMoney(returnsAmount)}</p>
+                    <p className="text-base font-heading font-bold text-primary">{formatMoney(returnsAmount)}</p>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="checkbox" checked={skipAnimation} onChange={(e) => setSkipAnimation(e.target.checked)} className="w-3.5 h-3.5 rounded accent-primary" />
                     <span className="text-[10px] text-emerald-200/50 font-heading">Skip animation</span>
                   </label>
@@ -886,7 +886,7 @@ export default function HorseRacingPage() {
                 <button
                   onClick={() => placeBet(false)}
                   disabled={!canBet}
-                  className="w-full rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
+                  className="w-full rounded-lg py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] transition-all"
                   style={{
                     background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
                     borderColor: '#c9a84c',
@@ -908,7 +908,7 @@ export default function HorseRacingPage() {
               <button
                 onClick={() => { playAgain(); setTimeout(() => placeBet(true), 0); }}
                 disabled={!canPlaceSameBet}
-                className="flex-1 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
+                className="flex-1 rounded-lg py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
                 style={{
                   background: 'linear-gradient(180deg, #d4af37, #a08020, #8a6e18)',
                   borderColor: '#c9a84c',
@@ -920,7 +920,7 @@ export default function HorseRacingPage() {
               </button>
               <button
                 onClick={playAgain}
-                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-foreground rounded-lg py-3 text-sm font-heading font-bold uppercase border border-zinc-600 transition-all active:scale-[0.98]"
+                className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-foreground rounded-lg py-2.5 text-sm font-heading font-bold uppercase border border-zinc-600 transition-all active:scale-[0.98]"
               >
                 Change Bet
               </button>
@@ -935,12 +935,12 @@ export default function HorseRacingPage() {
 
       {/* History */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+        <div className="px-3 py-1.5 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">History</span>
           <span className="text-[10px] text-mutedForeground">{history.length} races</span>
         </div>
         {history.length === 0 ? (
-          <div className="p-4 text-center text-xs text-mutedForeground">No races yet</div>
+          <div className="p-3 text-center text-xs text-mutedForeground">No races yet</div>
         ) : (
           <div className="p-2 space-y-1 max-h-48 overflow-y-auto">
             {history.map((item, i) => {

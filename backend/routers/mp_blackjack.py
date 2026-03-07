@@ -79,7 +79,8 @@ class MPCreateRequest(BaseModel):
         if v is None or v == "" or (isinstance(v, str) and v.strip().lower() in ("no_limit", "none", "")):
             return None
         n = int(v) if isinstance(v, (int, float)) else int(str(v).strip() or 0)
-        if n not in (2, 3, 5):
+        # 2 = no hits, 3 = 1 hit, 4 = 2 hits, 5 = 3 hits
+        if n not in (2, 3, 4, 5):
             return None
         return n
 
@@ -665,12 +666,12 @@ def register(router):
         now_iso = datetime.now(timezone.utc).isoformat()
 
         if len(players) >= max_players:
-            # Table full — move to ready phase
+            # Table full — move to ready phase, no more joins
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
                 {
                     "$set": {
-                        "status": "playing",  # keep as playing so it shows in list
+                        "status": "playing",
                         "phase": "ready",
                         "players": players,
                         "pot": new_pot,
@@ -682,10 +683,17 @@ def register(router):
             updated = await db.mp_blackjack_games.find_one({"id": game_id})
             return {"message": "Joined — table is full! Ready up to start.", "game": _serialize_game(updated)}
 
-        await db.mp_blackjack_games.update_one(
-            {"id": game_id},
-            {"$set": {"players": players, "pot": new_pot}},
-        )
+        if len(players) >= 2:
+            # 2+ players is enough — creator can start once all current players are ready
+            await db.mp_blackjack_games.update_one(
+                {"id": game_id},
+                {"$set": {"players": players, "pot": new_pot, "phase": "ready"}},
+            )
+        else:
+            await db.mp_blackjack_games.update_one(
+                {"id": game_id},
+                {"$set": {"players": players, "pot": new_pot}},
+            )
         await log_gambling(uid, username, "mp_blackjack", {"action": "join", "game_id": game_id, "buy_in": buy_in})
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
         return {"message": "Joined", "game": _serialize_game(updated)}
