@@ -292,31 +292,31 @@ const ProfileInfoCard = ({
       {/* Compact Honours + Properties (under stats, above notepad) */}
       {showCompactHonoursAndProperties && (
         <div className="border-t border-zinc-700/30">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2.5 py-2 md:px-3 md:py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-2.5 py-1.5 md:px-3 md:py-1.5">
             <div>
-              <div className="flex items-center gap-1 mb-1">
-                <Trophy size={10} className="text-primary shrink-0" />
-                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Honours</span>
+              <div className="flex items-center gap-0.5 mb-0.5">
+                <Trophy size={9} className="text-primary shrink-0" />
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Honours</span>
               </div>
-              <div className="flex flex-wrap gap-1">
+              <div className="flex flex-wrap gap-0.5">
                 {honours.length === 0 ? (
-                  <span className="text-[9px] text-mutedForeground font-heading">—</span>
+                  <span className="text-[8px] text-mutedForeground font-heading">—</span>
                 ) : (
                   honours.map((h, i) => (
-                    <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-primary/20 bg-primary/5 text-[9px] font-heading">
+                    <span key={i} className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-primary/20 bg-primary/5 text-[8px] font-heading leading-tight">
                       <span className="text-primary font-bold">#{h.rank}</span>
-                      <span className="text-foreground truncate max-w-[100px] sm:max-w-[140px]">{h.label}</span>
+                      <span className="text-foreground truncate max-w-[80px] sm:max-w-[110px]">{h.label}</span>
                     </span>
                   ))
                 )}
               </div>
             </div>
             <div>
-              <div className="flex items-center gap-1 mb-1">
-                <Building2 size={10} className="text-primary shrink-0" />
-                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Properties</span>
+              <div className="flex items-center gap-0.5 mb-0.5">
+                <Building2 size={9} className="text-primary shrink-0" />
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Properties</span>
               </div>
-              <div className="text-[9px] font-heading text-mutedForeground">
+              <div className="text-[8px] font-heading text-mutedForeground leading-tight">
                 {!ownedCasinos?.length && !profileProperty && (
                   <span>None</span>
                 )}
@@ -508,13 +508,13 @@ const TopCarsCard = ({ topCars, showCars }) => {
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.06s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
-        <Car size={12} className="md:w-3.5 md:h-3.5 text-primary" />
-        <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-0.5">
+        <Car size={10} className="text-primary" />
+        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
           Cars
         </h3>
       </div>
-      <div className="p-2.5 flex flex-wrap gap-2">
+      <div className="p-1.5 flex flex-wrap gap-1">
         {topCars.map((car) => {
           const label = RARITY_LABELS[car.rarity] || car.rarity;
           const badgeClass = RARITY_BADGE_CLASSES[car.rarity] || RARITY_BADGE_CLASSES.common;
@@ -522,10 +522,10 @@ const TopCarsCard = ({ topCars, showCars }) => {
             <Link
               key={car.id}
               to={`/view-car?id=${encodeURIComponent(car.id)}`}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border-2 bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row ${badgeClass}`}
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[9px] ${badgeClass}`}
             >
-              <span className="text-[10px] font-heading uppercase tracking-wide shrink-0">{label}:</span>
-              <span className="text-[10px] md:text-xs font-heading font-semibold text-white truncate max-w-[140px] md:max-w-[200px]">{car.name}</span>
+              <span className="font-heading uppercase tracking-wide shrink-0">{label}:</span>
+              <span className="font-heading font-semibold text-white truncate max-w-[100px] sm:max-w-[140px]">{car.name}</span>
             </Link>
           );
         })}
