@@ -628,7 +628,7 @@ export default function CrackSafe() {
             </div>
             <div className="p-3 space-y-1.5 text-xs font-heading" style={{ lineHeight: 1.7 }}>
               <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
-              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span> — no free entries, no extra purchases.</p>
+              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span>. As many attempts as you can afford.</p>
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
               <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
               <p className="text-zinc-400">Previous Winner: <span className="text-primary font-semibold">{info?.last_winner_username ?? 'None yet'}</span></p>

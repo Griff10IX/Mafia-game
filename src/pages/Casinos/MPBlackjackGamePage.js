@@ -876,54 +876,61 @@ export default function MPBlackjackGamePage() {
       )}
 
       {/* ══ RESULTS ══ */}
-      {status === 'completed' && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20`}>
-          <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Results</span>
-          </div>
-          <div className="p-2.5 space-y-1.5">
-            {(game.results || []).map((r, i) => {
-              const isWin = r.result === 'win';
-              const isLose = r.result === 'lose' || r.result === 'bust';
-              const isElim = r.result === 'eliminated';
-              const profit = isWin
-                ? (r.payout ?? 0) - (game.buy_in ?? 0)
-                : isLose ? -(game.buy_in ?? 0) : 0;
-              return (
-                <div key={i} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[9px] font-heading animate-result-slide"
-                  style={{ animationDelay: `${i * 0.06}s`, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <span className="text-foreground font-bold">{r.username}</span>
-                  <span style={{ color: isWin ? '#34d399' : isElim ? '#fb7185' : isLose ? '#f87171' : '#a1a1aa' }}>
-                    {isWin ? '🏆 Winner' : isElim ? '💀 Eliminated' : r.result.charAt(0).toUpperCase() + r.result.slice(1)}
-                  </span>
-                  {isWin && (
-                    <span className="tabular-nums font-bold" style={{ color: '#34d399' }}>
-                      +{formatMoney(r.payout ?? 0)}
+      {status === 'completed' && (() => {
+        const results = game.results || [];
+        const noWinner = results.length > 0 && results.every((r) => r.result === 'refund');
+        return (
+          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20`}>
+            <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
+              <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Results</span>
+              {noWinner && (
+                <p className="text-[9px] font-heading text-mutedForeground mt-1">
+                  No winner — refunds issued. Play again?
+                </p>
+              )}
+            </div>
+            <div className="p-2.5 space-y-1.5">
+              {results.map((r, i) => {
+                const isWin = r.result === 'win';
+                const isLose = r.result === 'lose' || r.result === 'bust';
+                const isElim = r.result === 'eliminated';
+                const isRefund = r.result === 'refund';
+                return (
+                  <div key={i} className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[9px] font-heading animate-result-slide"
+                    style={{ animationDelay: `${i * 0.06}s`, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                    <span className="text-foreground font-bold">{r.username}</span>
+                    <span style={{ color: isWin ? '#34d399' : isElim ? '#fb7185' : isLose ? '#f87171' : isRefund ? '#94a3b8' : '#a1a1aa' }}>
+                      {isWin ? '🏆 Winner' : isElim ? '💀 Eliminated' : r.result.charAt(0).toUpperCase() + r.result.slice(1)}
                     </span>
-                  )}
-                  {isElim && (
-                    <span className="tabular-nums" style={{ color: '#fb7185' }}>
-                      −{formatMoney(game.buy_in ?? 0)}
-                    </span>
-                  )}
-                  {(isLose || r.result === 'refund') && !isElim && (
-                    <span className="tabular-nums font-bold" style={{ color: '#f87171' }}>
-                      {r.result === 'refund' ? `Refund ${formatMoney(r.payout)}` : `−${formatMoney(game.buy_in ?? 0)}`}
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                    {isWin && (
+                      <span className="tabular-nums font-bold" style={{ color: '#34d399' }}>
+                        +{formatMoney(r.payout ?? 0)}
+                      </span>
+                    )}
+                    {isElim && (
+                      <span className="tabular-nums" style={{ color: '#fb7185' }}>
+                        −{formatMoney(game.buy_in ?? 0)}
+                      </span>
+                    )}
+                    {(isLose || isRefund) && !isElim && (
+                      <span className="tabular-nums font-bold" style={{ color: isRefund ? '#94a3b8' : '#f87171' }}>
+                        {isRefund ? `Refund ${formatMoney(r.payout)}` : `−${formatMoney(game.buy_in ?? 0)}`}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="px-3 py-2.5 border-t border-primary/20">
+              <Link to="/casino/mp-blackjack"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 text-[9px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all"
+                style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
+                <Spade size={11} /> {noWinner ? 'Play Again' : 'New Game'}
+              </Link>
+            </div>
           </div>
-          <div className="px-3 py-2.5 border-t border-primary/20">
-            <Link to="/casino/mp-blackjack"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 text-[9px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all"
-              style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
-              <Spade size={11} /> New Game
-            </Link>
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

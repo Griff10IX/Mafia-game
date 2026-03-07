@@ -305,8 +305,18 @@ def register(router):
             winner_ids = [players[i].get("user_id") for i in winner_indices]
             payouts = {p.get("user_id"): 0 for p in players}
 
-            # Only the winner gets the pot; everyone else loses their buy-in (no refunds).
-            if winner_indices:
+            if not winner_indices:
+                # No winner (e.g. everyone busts): refund everyone their share of the pot so they can play again.
+                refund_each = pot // num_players if num_players else 0
+                remainder = pot - refund_each * num_players
+                for i, p in enumerate(active):
+                    uid = p.get("user_id")
+                    add = refund_each + (remainder if i == 0 else 0)
+                    payouts[uid] = add
+                    if add > 0:
+                        await db.users.update_one({"id": uid}, {"$inc": {"money": add}})
+            else:
+                # Winner takes full pot; everyone else loses their buy-in.
                 uid = players[winner_indices[0]].get("user_id")
                 payouts[uid] = pot
                 if pot > 0:
@@ -316,7 +326,7 @@ def register(router):
             for p in players:
                 uid = p.get("user_id")
                 if not winner_indices:
-                    results.append({"user_id": uid, "username": p.get("username"), "result": "lose", "payout": 0})
+                    results.append({"user_id": uid, "username": p.get("username"), "result": "refund", "payout": payouts.get(uid, 0)})
                 elif uid in winner_ids:
                     results.append({"user_id": uid, "username": p.get("username"), "result": "win", "payout": payouts.get(uid, 0)})
                 else:

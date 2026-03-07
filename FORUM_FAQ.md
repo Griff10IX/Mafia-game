@@ -371,7 +371,7 @@ Each buy or sell: **2–6%** bust chance → **20s** jail.
 Guess a **5-digit combo** (digits 1–9). Correct = jackpot (90% to winner, rest to next pool).
 
 **Attempts:**  
-**50 free/day** (midnight UTC). **+50** for **$50M** once per day.
+**$1M per attempt.** As many attempts as you can afford — no free attempts, no purchasable bundles.
 
 **Clues:**  
 Unlock as total attempts (all players) rise: even digits (always), sum (after 5), highest digit (after 15), first digit (after 30).
