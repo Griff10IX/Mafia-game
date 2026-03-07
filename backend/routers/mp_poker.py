@@ -321,7 +321,8 @@ def register(router):
         return await db.mp_poker_games.find_one({"id": game_id})
 
     async def _vs_dealer_run_out_all_in(game_id: str) -> Optional[dict]:
-        """When human is all-in, run out flop->turn->river->showdown so the hand completes."""
+        \"""When human is all-in, run out ALL remaining streets to showdown.
+        Includes preflop — an all-in pre-flop still needs flop/turn/river dealt.\"""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("status") != "playing":
             return g
@@ -329,9 +330,13 @@ def register(router):
         human = next((p for p in players if not p.get("is_bot")), None)
         if not human or human.get("status") != "all_in":
             return g
-        while g.get("street") in ("flop", "turn", "river"):
+        # "preflop" added — all-in pre-flop skipped the board deal entirely before this fix
+        while g and g.get("street") in ("preflop", "flop", "turn", "river"):
             g = await _vs_dealer_advance_street(game_id)
+            if not g or g.get("status") != "playing":
+                break
         return await db.mp_poker_games.find_one({"id": game_id})
+
 
     async def _run_vs_dealer_bot_turn(game_id: str) -> Optional[dict]:
         g = await db.mp_poker_games.find_one({"id": game_id})

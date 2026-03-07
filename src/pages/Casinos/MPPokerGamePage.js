@@ -30,19 +30,6 @@ function formatMoneyFull(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
-function formatLastAction(la) {
-  if (!la || !la.action) return null;
-  const a = la.action;
-  const amt = la.amount ?? 0;
-  if (a === 'check') return 'Check';
-  if (a === 'fold') return 'Fold';
-  if (a === 'call') return amt > 0 ? `Call ${formatMoney(amt)}` : 'Call';
-  if (a === 'bet') return `Bet ${formatMoney(amt)}`;
-  if (a === 'raise') return `Raise ${formatMoney(amt)}`;
-  if (a === 'all_in') return `All-in ${formatMoney(amt)}`;
-  return null;
-}
-
 /* ─── Win Particles ─── */
 function WinParticles({ active }) {
   const [particles] = useState(() =>
@@ -198,7 +185,6 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
   const waiting = p.status === 'waiting';
   const stack = p.stack ?? 0;
   const bet = p.current_bet ?? 0;
-  const lastActionText = formatLastAction(p.last_action);
 
   let borderColor = 'rgba(90,62,27,0.6)';
   let glow = 'none';
@@ -251,11 +237,6 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
               {statusBadge.label}
             </div>
           )}
-          {lastActionText && (
-            <div className="text-[7px] font-heading mt-0.5 italic" style={{ color: 'rgba(255,255,255,0.5)' }}>
-              {lastActionText}
-            </div>
-          )}
         </div>
       </div>
 
@@ -263,11 +244,6 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
       {bet > 0 && (
         <div className="mt-0.5">
           <ChipStack amount={bet} small />
-        </div>
-      )}
-      {isMe && p.current_hand_name && (
-        <div className="text-[8px] font-heading font-bold mt-0.5" style={{ color: '#d4af37' }}>
-          {p.current_hand_name}
         </div>
       )}
     </div>
@@ -339,12 +315,11 @@ export default function MPPokerGamePage() {
         const g = isModeVsDealerRef.current
           ? (r.data?.game ?? r.data ?? null)
           : (r.data ?? null);
-        // Detect mode from first response — set game immediately so UI shows, then keep ref in sync
+        // Detect mode from first response
         if (g?.mode === 'vs_dealer' && !isModeVsDealerRef.current) {
           isModeVsDealerRef.current = true;
           setIsVsDealer(true);
-          setFetchError(false);
-          setGame(g);
+          // Immediately re-fetch with correct endpoint
           setTimeout(() => {
             api.get('/casino/mp-poker/vs-dealer/game').then((r2) => {
               const g2 = r2.data?.game ?? r2.data ?? null;
@@ -355,8 +330,6 @@ export default function MPPokerGamePage() {
         }
         setFetchError(false);
         setGame((prev) => {
-          // Never replace a completed hand with a non-completed state (avoids poll overwriting results)
-          if (prev?.status === 'completed' && g?.status !== 'completed') return prev;
           if (g?.status === 'completed' && prev?.status !== 'completed') {
             const uid = myUserIdRef.current;
             const myResult = (g?.results || []).find((res) => res.user_id === uid);
@@ -376,14 +349,6 @@ export default function MPPokerGamePage() {
       })
       .finally(() => setLoading(false));
   }, [gameId]);
-
-  // Keep vs-dealer ref in sync with current game (e.g. from location.state or any fetch)
-  useEffect(() => {
-    if (game?.mode === 'vs_dealer') {
-      isModeVsDealerRef.current = true;
-      setIsVsDealer(true);
-    }
-  }, [game?.mode]);
 
   // Stable poll — only restart when fetchGame itself changes (i.e. gameId/mode changes)
   // Interval speed is managed via ref to avoid restarting the whole interval
@@ -457,6 +422,17 @@ export default function MPPokerGamePage() {
     }
   }, [game?.all_ready_at]);
 
+  // Aggressive poll when player is all-in waiting for board runout
+  // Catches cases where the 800ms base poll misses the completed state
+  useEffect(() => {
+    const myAllIn = players.find(p => !p.is_bot)?.status === 'all_in';
+    const isWaitingForRunout = status === 'playing' && myAllIn && isVsDealer;
+    if (!isWaitingForRunout) return;
+    // Poll every 1.2s specifically for this state
+    const t = setInterval(fetchGame, 1200);
+    return () => clearInterval(t);
+  }, [status, players, isVsDealer, fetchGame]);
+
   const act = async (action, amount) => {
     if (actionLoading) return;
     setActionLoading(true);
@@ -464,47 +440,9 @@ export default function MPPokerGamePage() {
       const endpoint = isModeVsDealerRef.current
         ? '/casino/mp-poker/vs-dealer/act'
         : `/casino/mp-poker/games/${gameId}/act`;
-      const body = isModeVsDealerRef.current
-        ? { action, amount: amount ?? undefined, game_id: gameId || undefined }
-        : { action, amount: amount ?? undefined };
-      const res = await api.post(endpoint, body);
-      // Vs dealer: use response game immediately so check on river → showdown updates UI without getting stuck
-      if (isModeVsDealerRef.current && res?.data?.game) {
-        const g = res.data.game;
-        setGame((prev) => {
-          if (g?.status === 'completed' && prev?.status !== 'completed') {
-            const uid = myUserIdRef.current;
-            const myResult = (g?.results || []).find((r) => r.user_id === uid);
-            if (myResult?.result === 'win') {
-              setShowWin(true);
-              setTimeout(() => setShowWin(false), 4500);
-            }
-          }
-          return g;
-        });
-        await refreshUser();
-        setActionLoading(false);
-        return;
-      }
-      // Multiplayer: use response game immediately so check on river → showdown updates UI without getting stuck
-      if (!isModeVsDealerRef.current && res?.data?.id && Array.isArray(res?.data?.players)) {
-        const g = res.data;
-        setGame((prev) => {
-          if (g?.status === 'completed' && prev?.status !== 'completed') {
-            const uid = myUserIdRef.current;
-            const myResult = (g?.results || []).find((r) => r.user_id === uid);
-            if (myResult?.result === 'win') {
-              setShowWin(true);
-              setTimeout(() => setShowWin(false), 4500);
-            }
-          }
-          return g;
-        });
-        await refreshUser();
-        setActionLoading(false);
-        return;
-      }
+      await api.post(endpoint, { action, amount: amount || undefined });
       // Re-fetch after acting — bot may have responded, street may have advanced
+      // All-in needs longer: dealer must respond AND server runs out remaining streets
       const waitMs = action === 'all_in' ? 900 : 350;
       await new Promise(r => setTimeout(r, waitMs));
       const fetchEndpoint = isModeVsDealerRef.current
@@ -583,31 +521,6 @@ export default function MPPokerGamePage() {
   // Seat positions on oval table
   const maxSeats = game?.max_players || players.length || 6;
   const tablePositions = getTablePositions(Math.min(9, Math.max(2, players.length || maxSeats)));
-
-  // Turn status message for "what's happening" (multiplayer + vs dealer/AI)
-  const currentTurnPlayer = currentTurnIndex >= 0 && currentTurnIndex < players.length ? players[currentTurnIndex] : null;
-  const turnStatusMessage = (() => {
-    if (status !== 'playing' || (phase !== 'playing' && !isVsDealer)) return null;
-    if (street === 'showdown' || status === 'completed') return null;
-    if (currentTurnIndex < 0) return null;
-    const name = currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? 'Someone');
-    if (myPlayer?.status === 'folded') {
-      return isVsDealer && currentTurnPlayer?.is_bot
-        ? 'You folded. Dealer is deciding…'
-        : `You folded. Waiting for ${name} to check, call, raise, or fold.`;
-    }
-    if (myPlayer?.status === 'all_in') {
-      return `You're all-in. Waiting for the hand to finish.`;
-    }
-    if (isMyTurn) {
-      const actions = needToCall > 0 ? 'call, raise, or fold' : 'check, bet, raise, or fold';
-      return `Your turn — ${actions}.`;
-    }
-    if (isVsDealer && currentTurnPlayer?.is_bot) {
-      return 'Dealer is deciding…';
-    }
-    return `Waiting for ${name} to check, call, raise, or fold.`;
-  })();
 
   if (loading && !game) {
     return (
@@ -769,10 +682,10 @@ export default function MPPokerGamePage() {
             <div className="text-center space-y-1">
               <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
                 style={{ background: 'linear-gradient(180deg,#ffd700,#c9a84c)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-                {players.length >= (game?.max_players ?? 6) ? 'Table Full — Ready Up!' : 'Ready Up!'}
+                Table Full — Ready Up!
               </p>
               <p className="text-[9px] font-heading" style={{ color: 'rgba(110,231,183,0.4)' }}>
-                {players.length >= 2 ? 'All seated players must ready — then game starts' : 'Need at least 2 players'}
+                All players must ready before blinds are posted
               </p>
             </div>
 
@@ -877,28 +790,15 @@ export default function MPPokerGamePage() {
                   style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.3)', color: '#d4af37' }}>
                   {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
                 </div>
-                {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && (
-                  <p className="text-[9px] font-heading font-bold" style={{ color: '#d4af37' }}>
-                    Your hand: {myPlayer.current_hand_name}
-                  </p>
-                )}
-                {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
-                  <div className="flex flex-col items-center gap-0.5 mt-1">
-                    <div className="flex items-center gap-2">
-                      {turnSecondsLeft != null && (
-                        <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
-                      )}
-                      <span className="text-[9px] font-heading font-bold animate-pkr-pulse"
-                        style={{ color: isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.5)' }}>
-                        {isMyTurn ? '🎴 Your Turn' : `${currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? '?')}'s turn`}
-                      </span>
-                    </div>
-                    {turnStatusMessage && (
-                      <p className="text-[8px] font-heading text-center max-w-[220px] leading-tight"
-                        style={{ color: 'rgba(255,255,255,0.55)' }}>
-                        {turnStatusMessage}
-                      </p>
+                {status === 'playing' && phase === 'playing' && currentTurnIndex >= 0 && (
+                  <div className="flex items-center gap-2 mt-1">
+                    {turnSecondsLeft != null && (
+                      <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
                     )}
+                    <span className="text-[9px] font-heading font-bold animate-pkr-pulse"
+                      style={{ color: isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.4)' }}>
+                      {isMyTurn ? '🎴 Your Turn' : `${players[currentTurnIndex]?.username ?? '?'}'s turn`}
+                    </span>
                   </div>
                 )}
               </div>
@@ -935,16 +835,6 @@ export default function MPPokerGamePage() {
           </div>
 
           <div style={goldBar} />
-        </div>
-      )}
-
-      {/* ══ TURN STATUS STRIP (when playing, so you always know what's happening) ══ */}
-      {status === 'playing' && (phase === 'playing' || isVsDealer) && turnStatusMessage && street !== 'showdown' && (
-        <div className="rounded-lg px-3 py-2 text-center border border-primary/20"
-          style={{ background: 'rgba(0,0,0,0.35)' }}>
-          <p className="text-[9px] font-heading" style={{ color: 'rgba(212,175,55,0.85)' }}>
-            {turnStatusMessage}
-          </p>
         </div>
       )}
 
@@ -1054,7 +944,7 @@ export default function MPPokerGamePage() {
       )}
 
       {/* ══ ALL-IN WAITING STATE ══ */}
-      {status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown' && street !== 'completed' && (
+      {(status === 'playing' || status === 'completed') && myPlayer?.status === 'all_in' && status !== 'completed' && street !== 'showdown' && (
         <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
           <div style={goldBar} />
           <div className="p-4 text-center space-y-3" style={{ background: 'rgba(0,0,0,0.55)' }}>
@@ -1075,11 +965,16 @@ export default function MPPokerGamePage() {
             </div>
             {/* Manual advance fallback for vs-dealer all-in */}
             {isVsDealer && (
-              <button type="button" onClick={fetchGame}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all"
-                style={{ borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)', color: '#d4af37' }}>
-                ↻ Check Result
-              </button>
+              <div className="flex flex-col items-center gap-2">
+                <button type="button" onClick={fetchGame}
+                  className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg border-2 font-heading font-bold text-[10px] uppercase tracking-wider active:scale-[0.97] transition-all"
+                  style={{ borderColor: '#c9a84c', background: 'rgba(212,175,55,0.12)', color: '#d4af37' }}>
+                  ↻ Reveal Result
+                </button>
+                <p className="text-[8px] font-heading animate-pkr-pulse" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  Auto-checking every second…
+                </p>
+              </div>
             )}
             {myPlayer?.hole_cards?.length > 0 && (
               <div className="flex justify-center items-end gap-1.5 pt-1">
@@ -1095,7 +990,7 @@ export default function MPPokerGamePage() {
       )}
 
       {/* ══ RESULTS ══ */}
-      {((status === 'completed' || phase === 'settled') && (game.results?.length > 0)) && (() => {
+      {status === 'completed' && game.results && (() => {
         const myResult = (game.results || []).find((r) => r.user_id === myUserId);
         const didWin = myResult?.result === 'win';
         const winner = (game.results || []).find((r) => r.result === 'win');
