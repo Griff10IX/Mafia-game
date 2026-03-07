@@ -331,6 +331,8 @@ export default function MPPokerGamePage() {
         }
         setFetchError(false);
         setGame((prev) => {
+          // Never replace a completed hand with a non-completed state (avoids poll overwriting results)
+          if (prev?.status === 'completed' && g?.status !== 'completed') return prev;
           if (g?.status === 'completed' && prev?.status !== 'completed') {
             const uid = myUserIdRef.current;
             const myResult = (g?.results || []).find((res) => res.user_id === uid);
@@ -1064,7 +1066,7 @@ export default function MPPokerGamePage() {
       )}
 
       {/* ══ RESULTS ══ */}
-      {status === 'completed' && game.results && (() => {
+      {((status === 'completed' || phase === 'settled') && (game.results?.length > 0)) && (() => {
         const myResult = (game.results || []).find((r) => r.user_id === myUserId);
         const didWin = myResult?.result === 'win';
         const winner = (game.results || []).find((r) => r.result === 'win');
