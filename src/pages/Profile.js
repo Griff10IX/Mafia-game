@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import PrestigeBadge from '../components/PrestigeBadge';
+import { parseForumContent, insertAtCursor } from '../utils/forumContent';
 import styles from '../styles/noir.module.css';
 
 const PROFILE_STYLES = `
@@ -540,9 +541,8 @@ const AdminStatsCard = ({ adminStats }) => (
   </div>
 );
 
-/** Profile banner: image + text (motto). Display for everyone; edit form when own profile. */
+/** Profile banner: optional image + BBCode notepad. Display for everyone; edit form when own profile. */
 const ProfileBannerCard = ({
-  username,
   bannerImageUrl,
   bannerText,
   isMe,
@@ -554,8 +554,26 @@ const ProfileBannerCard = ({
   onSave,
   saving,
 }) => {
+  const bannerTextareaRef = React.useRef(null);
   const displayImageUrl = (bannerImageUrl || '').trim() || null;
   const displayText = (bannerText || '').trim() || null;
+  const renderedHtml = displayText ? parseForumContent(displayText) : '';
+
+  const insertBannerMarkup = (before, after = '') => {
+    const ta = bannerTextareaRef.current;
+    if (!ta) {
+      onEditTextChange(editText + before + after);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const { value, cursor } = insertAtCursor(editText, before, after, start, end);
+    onEditTextChange(value);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(cursor, cursor);
+    }, 0);
+  };
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.05s' }}>
@@ -565,7 +583,7 @@ const ProfileBannerCard = ({
           Profile
         </h3>
       </div>
-      <div className="relative min-h-[120px] md:min-h-[160px] flex flex-col items-center justify-center py-6 px-4 text-center overflow-hidden">
+      <div className="relative min-h-[100px] md:min-h-[120px] flex flex-col justify-center py-5 px-4 overflow-hidden">
         {displayImageUrl && (
           <div
             className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
@@ -573,14 +591,16 @@ const ProfileBannerCard = ({
           />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/70" />
-        <div className="relative z-10 w-full space-y-2">
-          <h2 className="font-heading font-black text-2xl md:text-3xl lg:text-4xl text-foreground uppercase tracking-wider text-center drop-shadow-lg">
-            {username || '—'}
-          </h2>
-          {displayText && (
-            <p className="font-heading text-sm md:text-base text-primary/90 italic max-w-xl mx-auto drop-shadow">
-              {displayText}
-            </p>
+        <div className="relative z-10 w-full">
+          {renderedHtml ? (
+            <div
+              className="font-heading text-sm md:text-base text-foreground max-w-2xl mx-auto text-left prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 forum-content-media"
+              dangerouslySetInnerHTML={{ __html: renderedHtml }}
+            />
+          ) : (
+            !isMe && (
+              <p className="text-[10px] text-mutedForeground font-heading text-center">No profile text set</p>
+            )
           )}
         </div>
       </div>
@@ -600,16 +620,22 @@ const ProfileBannerCard = ({
           </div>
           <div>
             <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
-              Banner text (motto / quote)
+              Profile text (BBCode notepad)
             </label>
-            <input
-              type="text"
+            <textarea
+              ref={bannerTextareaRef}
               value={editText}
               onChange={(e) => onEditTextChange(e.target.value)}
-              placeholder="e.g. NO TEARS PLEASE, IT'S A TASTE OF GOOD SUFFERING."
-              className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
-              maxLength={500}
+              placeholder="Write your profile text... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
+              rows={8}
+              className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
             />
+            <div className="flex flex-wrap items-center gap-1 mt-1.5">
+              <button type="button" onClick={() => insertBannerMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+              <button type="button" onClick={() => insertBannerMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+              <button type="button" onClick={() => insertBannerMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
+              <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertBannerMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+            </div>
           </div>
           <button
             type="button"
@@ -1020,7 +1046,6 @@ export default function Profile() {
         />
 
         <ProfileBannerCard
-          username={profile.username}
           bannerImageUrl={profile.profile_banner_image_url}
           bannerText={profile.profile_banner_text}
           isMe={isMe && !isPublicView}

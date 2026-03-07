@@ -460,7 +460,7 @@ def register(router):
             updates["profile_banner_image_url"] = raw
         if banner_text is not None:
             raw = (banner_text or "").strip() or None
-            if raw and len(raw) > 500:
+            if raw and len(raw) > 10000:
                 raise HTTPException(status_code=400, detail="Banner text too long.")
             updates["profile_banner_text"] = raw
         if not updates:
