@@ -283,11 +283,16 @@ export default function MPPokerGamePage() {
   const startTriggeredRef = useRef(false);
   const timeoutTriggeredRef = useRef(null);
   const chatEndRef = useRef(null);
+  const prevStatusRef = useRef(null);
   const isVsDealer = game?.mode === 'vs_dealer';
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    prevStatusRef.current = null;
+  }, [gameId]);
 
   const fetchGame = useCallback(() => {
     if (!gameId) return;
@@ -297,23 +302,19 @@ export default function MPPokerGamePage() {
     api.get(endpoint)
       .then((r) => {
         const g = isVsDealer ? (r.data?.game ?? null) : (r.data ?? null);
-        setGame((prev) => {
-          if (g?.status === 'completed' && prev?.status !== 'completed') {
-            const myResult = (g?.results || []).find((res) => res.user_id === myUserId);
-            if (myResult?.result === 'win') {
-              setShowWin(true);
-              setTimeout(() => setShowWin(false), 4000);
-            }
+        const wasCompleted = prevStatusRef.current === 'completed';
+        prevStatusRef.current = g?.status ?? null;
+        setGame((prev) => (g != null ? g : (prev?.status === 'completed' ? prev : null)));
+        setPrevStatus(g?.status ?? null);
+        if (g?.status === 'completed' && !wasCompleted) {
+          const myResult = (g?.results || []).find((res) => res.user_id === myUserId);
+          if (myResult?.result === 'win') {
+            setShowWin(true);
+            setTimeout(() => setShowWin(false), 4000);
           }
-          setPrevStatus(g?.status);
-          // Keep showing completed game if backend returns null (e.g. vs-dealer no active game) to avoid flicker
-          if (g) return g;
-          if (prev?.status === 'completed') return prev;
-          return g;
-        });
+        }
       })
       .catch(() => {
-        // Don't clear completed game on network error so results screen doesn't flicker to "game not found"
         setGame((prev) => (prev?.status === 'completed' ? prev : null));
       })
       .finally(() => setLoading(false));
