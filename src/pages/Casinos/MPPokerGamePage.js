@@ -59,11 +59,18 @@ function WinParticles({ active }) {
 }
 
 /* ─── Playing Card ─── */
-function Card({ card, hidden, index = 0, total = 1, small = false }) {
-  const w = small ? 'w-[32px] h-[46px]' : 'w-[44px] h-[62px] sm:w-[52px] sm:h-[74px]';
+function Card({ card, hidden, index = 0, total = 1, small = false, medium = false }) {
+  const w = small
+    ? 'w-[28px] h-[40px]'
+    : medium
+    ? 'w-[38px] h-[54px]'
+    : 'w-[48px] h-[68px] sm:w-[54px] sm:h-[76px]';
   const fan = total > 1 ? (index - (total - 1) / 2) * 4 : 0;
   const offsetX = total > 1 ? (index - (total - 1) / 2) * 3 : 0;
   const style = { transform: `rotate(${fan}deg) translateX(${offsetX}px)`, animationDelay: `${index * 0.08}s`, boxShadow: '0 3px 12px rgba(0,0,0,0.55)', flexShrink: 0 };
+  const textSz = small ? 'text-[8px]' : medium ? 'text-[10px]' : 'text-[11px]';
+  const symSz = small ? 'text-[7px]' : medium ? 'text-[9px]' : 'text-[10px]';
+  const iconSz = small ? 'text-sm' : medium ? 'text-lg' : 'text-2xl';
 
   if (hidden) {
     return (
@@ -84,15 +91,15 @@ function Card({ card, hidden, index = 0, total = 1, small = false }) {
     <div className={`relative ${w} rounded-md overflow-hidden animate-pkr-deal`} style={style}>
       <div className="absolute inset-0 rounded-md" style={{ background: 'linear-gradient(180deg,#fff,#f4f4f4)', border: `2px solid ${isRed ? '#fca5a5' : '#c4c4c8'}` }}>
         <div className="absolute top-0.5 left-1 leading-none" style={{ color: s.color }}>
-          <div className={`${small ? 'text-[8px]' : 'text-[10px]'} font-black`}>{card?.value}</div>
-          <div className={`${small ? 'text-[7px]' : 'text-[9px]'} -mt-0.5`}>{s.sym}</div>
+          <div className={`${textSz} font-black`}>{card?.value}</div>
+          <div className={`${symSz} -mt-0.5`}>{s.sym}</div>
         </div>
         <div className="absolute inset-0 flex items-center justify-center" style={{ color: s.color }}>
-          <span className={`${small ? 'text-base' : 'text-xl'} opacity-85`}>{s.sym}</span>
+          <span className={`${iconSz} opacity-85`}>{s.sym}</span>
         </div>
         <div className="absolute bottom-0.5 right-1 leading-none rotate-180" style={{ color: s.color }}>
-          <div className={`${small ? 'text-[8px]' : 'text-[10px]'} font-black`}>{card?.value}</div>
-          <div className={`${small ? 'text-[7px]' : 'text-[9px]'} -mt-0.5`}>{s.sym}</div>
+          <div className={`${textSz} font-black`}>{card?.value}</div>
+          <div className={`${symSz} -mt-0.5`}>{s.sym}</div>
         </div>
       </div>
     </div>
@@ -195,11 +202,11 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
   return (
     <div className="flex flex-col items-center gap-1" style={{ opacity: folded ? 0.45 : 1, transition: 'opacity 0.3s' }}>
       {/* Cards above/beside seat */}
-      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: 36 }}>
+      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: 56 }}>
         {hole.length === 0
-          ? <div className="w-[28px] h-[38px] rounded border border-white/5" style={{ background: 'rgba(0,0,0,0.2)' }} />
+          ? <div className="w-[38px] h-[54px] rounded border border-white/5" style={{ background: 'rgba(0,0,0,0.2)' }} />
           : hole.map((c, i) => (
-              <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} small />
+              <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} medium />
             ))
         }
       </div>
@@ -736,7 +743,7 @@ export default function MPPokerGamePage() {
           <div style={goldBar} />
 
           {/* Felt table with oval player layout */}
-          <div className="relative" style={{ ...feltBg, minHeight: players.length <= 2 ? 280 : 400 }}>
+          <div className="relative" style={{ ...feltBg, minHeight: players.length <= 2 ? 320 : 440 }}>
             {/* Table felt oval */}
             <div className="absolute inset-6 rounded-[50%]"
               style={{
@@ -751,7 +758,7 @@ export default function MPPokerGamePage() {
                 {board.length > 0 && (
                   <div className="flex items-center gap-1 flex-wrap justify-center">
                     {board.map((c, i) => (
-                      <Card key={i} card={c} hidden={false} index={i} total={board.length} small={players.length > 4} />
+                      <Card key={i} card={c} hidden={false} index={i} total={board.length} medium={players.length > 4} />
                     ))}
                   </div>
                 )}
@@ -776,9 +783,9 @@ export default function MPPokerGamePage() {
             {/* Player seats positioned around oval */}
             {players.map((p, idx) => {
               const pos = tablePositions[idx] || { x: 50, y: 50 };
-              // Show face-up: always for your own cards, always for bot in vs-dealer, on showdown/completed, folded
-              const isMyCard = myUserId ? p.user_id === myUserId : !p.is_bot;
-              const showHole = showAllCards || isMyCard || p.status === 'folded' || (isVsDealer && p.is_bot && showAllCards);
+              // Cards face-up rule: show your own cards; show all at showdown/completed; bots always hidden until then
+              const isMyOwnSeat = myUserId && p.user_id === myUserId;
+              const showHole = showAllCards || (isMyOwnSeat && !p.is_bot);
               const isDealer = !isVsDealer && idx === buttonIndex;
               const isCurrent = idx === currentTurnIndex;
               return (
@@ -815,70 +822,97 @@ export default function MPPokerGamePage() {
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-heading text-primary/60 uppercase tracking-wider">Your Action</span>
               <span className="text-[9px] font-heading text-mutedForeground">
-                Stack <span className="text-primary font-bold">{formatMoneyFull(myStack)}</span>
-                {needToCall > 0 && <span className="text-yellow-400 ml-2">· Call {formatMoneyFull(needToCall)}</span>}
+                Stack <span className={`font-bold ${myStack === 0 ? 'text-red-400' : 'text-primary'}`}>{formatMoneyFull(myStack)}</span>
+                {needToCall > 0 && myStack > 0 && <span className="text-yellow-400 ml-2">· To call {formatMoneyFull(Math.min(needToCall, myStack))}</span>}
               </span>
             </div>
 
-            {/* Primary actions */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <button type="button" disabled={actionLoading} onClick={() => act('fold')}
-                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
-                Fold
-              </button>
-              {needToCall <= 0 && (
-                <button type="button" disabled={actionLoading} onClick={() => act('check')}
-                  className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                  style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
-                  Check
-                </button>
-              )}
-              {needToCall > 0 && (
-                <button type="button" disabled={actionLoading} onClick={() => act('call')}
-                  className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                  style={{ borderColor: '#c9a84c', background: 'rgba(212,175,55,0.12)', color: '#d4af37' }}>
-                  Call {formatMoneyFull(Math.min(needToCall, myStack))}
-                </button>
-              )}
-              <button type="button" disabled={actionLoading || myStack <= 0} onClick={() => act('all_in')}
-                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                style={{ borderColor: 'rgba(251,113,133,0.5)', background: 'rgba(251,113,133,0.1)', color: '#fb7185' }}>
-                All-In {formatMoney(myStack)}
-              </button>
-            </div>
-
-            {/* Raise row */}
-            {myStack > 0 && (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={minRaise}
-                  max={myStack}
-                  value={raiseAmount}
-                  onChange={(e) => setRaiseAmount(e.target.value)}
-                  placeholder={`Min ${formatMoneyFull(minRaise)}`}
-                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
-                />
-                <button type="button" disabled={actionLoading || !raiseAmount}
-                  onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
-                  className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                  style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
-                  {needToCall > 0 ? 'Raise' : 'Bet'}
-                </button>
-                {/* Quick-bet buttons */}
-                {[0.5, 0.75, 1].map((f) => {
-                  const amt = Math.min(myStack, Math.max(minRaise, Math.floor(pot * f)));
-                  return (
-                    <button key={f} type="button"
-                      onClick={() => setRaiseAmount(String(amt))}
-                      className="px-2 py-1.5 rounded font-heading text-[8px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 transition-colors">
-                      {f === 1 ? 'Pot' : `${f * 100}%`}
+            {/* Stack = 0 special case: only option is fold or go all-in (already committed) */}
+            {myStack === 0 ? (
+              <div className="space-y-2">
+                <p className="text-[9px] font-heading text-yellow-400/70 text-center">
+                  {needToCall > 0 ? 'You have no chips left to call — go all-in or fold.' : 'No chips remaining — check to continue.'}
+                </p>
+                <div className="flex items-center gap-2 justify-center">
+                  <button type="button" disabled={actionLoading} onClick={() => act('fold')}
+                    className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
+                    Fold
+                  </button>
+                  {needToCall > 0 ? (
+                    <button type="button" disabled={actionLoading} onClick={() => act('all_in')}
+                      className="px-5 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                      All-In (committed)
                     </button>
-                  );
-                })}
+                  ) : (
+                    <button type="button" disabled={actionLoading} onClick={() => act('check')}
+                      className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
+                      Check
+                    </button>
+                  )}
+                </div>
               </div>
+            ) : (
+              <>
+                {/* Primary actions */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button type="button" disabled={actionLoading} onClick={() => act('fold')}
+                    className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
+                    Fold
+                  </button>
+                  {needToCall <= 0 ? (
+                    <button type="button" disabled={actionLoading} onClick={() => act('check')}
+                      className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
+                      Check
+                    </button>
+                  ) : (
+                    <button type="button" disabled={actionLoading} onClick={() => act('call')}
+                      className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      style={{ borderColor: '#c9a84c', background: 'rgba(212,175,55,0.12)', color: '#d4af37' }}>
+                      Call {formatMoneyFull(Math.min(needToCall, myStack))}
+                    </button>
+                  )}
+                  <button type="button" disabled={actionLoading} onClick={() => act('all_in')}
+                    className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    style={{ borderColor: 'rgba(251,113,133,0.5)', background: 'rgba(251,113,133,0.1)', color: '#fb7185' }}>
+                    All-In {formatMoney(myStack)}
+                  </button>
+                </div>
+
+                {/* Raise row */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="number"
+                    min={minRaise}
+                    max={myStack}
+                    value={raiseAmount}
+                    onChange={(e) => setRaiseAmount(e.target.value)}
+                    placeholder={`Min ${formatMoneyFull(minRaise)}`}
+                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit', minWidth: 80 }}
+                  />
+                  <button type="button" disabled={actionLoading || !raiseAmount}
+                    onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
+                    className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
+                    {needToCall > 0 ? 'Raise' : 'Bet'}
+                  </button>
+                  {[0.5, 0.75, 1].map((f) => {
+                    const amt = Math.min(myStack, Math.max(minRaise, Math.floor(pot * f)));
+                    return (
+                      <button key={f} type="button"
+                        onClick={() => setRaiseAmount(String(amt))}
+                        className="px-2 py-1.5 rounded font-heading text-[8px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 transition-colors">
+                        {f === 1 ? 'Pot' : `${f * 100}%`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             )}
           </div>
           <div style={goldBar} />
