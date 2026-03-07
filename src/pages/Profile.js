@@ -298,14 +298,14 @@ const ProfileInfoCard = ({
                 <Trophy size={9} className="text-primary shrink-0" />
                 <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Honours</span>
               </div>
-              <div className="flex flex-wrap gap-0.5">
+              <div className="grid grid-cols-2 gap-0.5">
                 {honours.length === 0 ? (
-                  <span className="text-[8px] text-mutedForeground font-heading">—</span>
+                  <span className="text-[8px] text-mutedForeground font-heading col-span-2">—</span>
                 ) : (
                   honours.map((h, i) => (
-                    <span key={i} className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-primary/20 bg-primary/5 text-[8px] font-heading leading-tight">
-                      <span className="text-primary font-bold">#{h.rank}</span>
-                      <span className="text-foreground truncate max-w-[80px] sm:max-w-[110px]">{h.label}</span>
+                    <span key={i} className="flex items-center gap-0.5 px-1 py-0.5 rounded border border-primary/20 bg-primary/5 text-[8px] font-heading leading-tight min-w-0 w-full">
+                      <span className="text-primary font-bold shrink-0">#{h.rank}</span>
+                      <span className="text-foreground truncate min-w-0">{h.label}</span>
                     </span>
                   ))
                 )}
