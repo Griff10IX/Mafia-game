@@ -599,12 +599,16 @@ def register(router):
 
     @router.get("/casino/mp-poker/games/{game_id}")
     async def get_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Get full game state. For vs_dealer, if it's bot's turn, run bot action and return updated game."""
+        """Get full game state. For vs_dealer, if it's bot's turn, run bot action and return updated game.
+        For vs_players in showdown, run showdown so the game settles and clients don't get stuck."""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g:
             raise HTTPException(status_code=404, detail="Game not found")
         if g.get("mode") == "vs_dealer" and g.get("status") == "playing" and g.get("current_turn_index") == 1:
             g = await _run_vs_dealer_bot_turn(game_id)
+        if g.get("mode") == "vs_players" and g.get("status") == "playing" and g.get("street") == "showdown":
+            await _mp_poker_run_showdown(game_id)
+            g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in (g or {}).items() if k != "_id"}
 
     @router.post("/casino/mp-poker/games/{game_id}/join")
@@ -698,34 +702,52 @@ def register(router):
         board = list(g.get("board") or [])
         pot = int(g.get("pot") or 0)
         active = [p for p in players if p.get("status") not in ("folded",)]
+        results = []
         if len(active) == 1:
             winner = active[0]
             uid = winner.get("user_id")
             if uid and uid != "dealer":
                 await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
+            for p in players:
+                results.append({
+                    "user_id": p.get("user_id"),
+                    "result": "win" if p.get("user_id") == uid else "lose",
+                    "payout": pot if p.get("user_id") == uid else 0,
+                    "hand": None,
+                })
         else:
             best_rank = None
             winners = []
+            winner_hand_name = None
             for p in active:
                 hole = p.get("hole_cards") or []
                 r = _best_hand_seven(hole, board)
                 if best_rank is None or r > best_rank:
                     best_rank = r
                     winners = [p]
+                    winner_hand_name = _hand_rank_name(r[0]) if r else None
                 elif r == best_rank:
                     winners.append(p)
             split = pot // len(winners)
             remainder = pot - split * len(winners)
+            winner_payouts = {}
             for i, w in enumerate(winners):
                 uid = w.get("user_id")
-                if uid and uid != "dealer":
-                    add = split + (remainder if i == 0 else 0)
-                    if add > 0:
-                        await db.users.update_one({"id": uid}, {"$inc": {"money": add}})
+                winner_payouts[uid] = split + (remainder if i == 0 else 0)
+                if uid and uid != "dealer" and winner_payouts[uid] > 0:
+                    await db.users.update_one({"id": uid}, {"$inc": {"money": winner_payouts[uid]}})
+            for p in players:
+                uid = p.get("user_id")
+                results.append({
+                    "user_id": uid,
+                    "result": "win" if uid in winner_payouts else "lose",
+                    "payout": winner_payouts.get(uid, 0),
+                    "hand": winner_hand_name if uid in winner_payouts else None,
+                })
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mp_poker_games.update_one(
             {"id": game_id},
-            {"$set": {"status": "completed", "phase": "settled", "completed_at": now_iso}},
+            {"$set": {"status": "completed", "phase": "settled", "results": results, "completed_at": now_iso}},
         )
 
     async def _mp_poker_advance_street(game_id: str) -> bool:
