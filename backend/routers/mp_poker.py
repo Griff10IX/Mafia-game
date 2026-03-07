@@ -288,8 +288,7 @@ def register(router):
         if call_amount < 0:
             call_amount = 0
         if to_call <= 0:
-            bot["current_bet"] = 0
-            bot["total_bet_this_hand"] = int(bot.get("total_bet_this_hand") or 0)
+            # Bot checks — leave current_bet unchanged so human's check can see matching bets and we advance street
             await db.mp_poker_games.update_one(
                 {"id": game_id},
                 {"$set": {"players": players, "current_turn_index": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
@@ -782,8 +781,18 @@ def register(router):
             {"$set": {"status": "completed", "phase": "settled", "results": results, "completed_at": now_iso}},
         )
 
+    def _first_actor_after_advance(players: list, start_idx: int) -> int:
+        """First seat index that can act (not folded, not all_in). If none, return start_idx."""
+        n = len(players)
+        idx = start_idx % n
+        for _ in range(n):
+            if players[idx].get("status") not in ("folded", "all_in"):
+                return idx
+            idx = (idx + 1) % n
+        return start_idx % n
+
     async def _mp_poker_advance_street(game_id: str) -> bool:
-        """Advance to next street or showdown. Returns True if advanced."""
+        """Advance to next street or showdown. Returns True if advanced. Skips folded/all_in for first to act."""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("status") != "playing":
             return False
@@ -799,27 +808,41 @@ def register(router):
             for _ in range(3):
                 if deck:
                     board.append(deck.pop())
-            first = (button + 3) % n
-            await db.mp_poker_games.update_one(
-                {"id": game_id},
-                {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
-            )
+            first = _first_actor_after_advance(players, (button + 3) % n)
+            if players[first].get("status") in ("folded", "all_in"):
+                await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"street": "showdown", "board": board, "players": players}})
+                await _mp_poker_run_showdown(game_id)
+            else:
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                )
         elif street == "flop":
             if deck:
                 board.append(deck.pop())
-            first = (button + 1) % n
-            await db.mp_poker_games.update_one(
-                {"id": game_id},
-                {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
-            )
+            first = _first_actor_after_advance(players, (button + 1) % n)
+            if players[first].get("status") in ("folded", "all_in"):
+                if deck:
+                    board.append(deck.pop())
+                await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"street": "showdown", "board": board, "deck": deck, "players": players}})
+                await _mp_poker_run_showdown(game_id)
+            else:
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                )
         elif street == "turn":
             if deck:
                 board.append(deck.pop())
-            first = (button + 1) % n
-            await db.mp_poker_games.update_one(
-                {"id": game_id},
-                {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
-            )
+            first = _first_actor_after_advance(players, (button + 1) % n)
+            if players[first].get("status") in ("folded", "all_in"):
+                await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"street": "showdown", "board": board, "deck": deck, "players": players}})
+                await _mp_poker_run_showdown(game_id)
+            else:
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                )
         elif street == "river":
             await db.mp_poker_games.update_one(
                 {"id": game_id},
@@ -934,6 +957,8 @@ def register(router):
             pot += amt
         elif action in ("bet", "raise"):
             amt = max(amount, min_raise) if to_call > 0 else amount
+            if action == "bet" and amt < min_raise:
+                raise HTTPException(status_code=400, detail=f"Bet must be at least {min_raise:,}")
             if amt > stack:
                 amt = stack
             if amt <= 0:
@@ -968,11 +993,12 @@ def register(router):
             next_idx = (next_idx + 1) % len(players)
         updates = {"players": players, "pot": pot, "current_turn_index": next_idx, "turn_started_at": datetime.now(timezone.utc).isoformat()}
         if action in ("call", "check"):
-            updates["to_call"] = 0
             if all_in_or_folded or (next_idx == turn_idx):
+                updates["to_call"] = 0
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
                 await _mp_poker_advance_street(game_id)
             else:
+                updates["to_call"] = max_bet
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
         else:
             updates["to_call"] = g.get("to_call", max_bet)
