@@ -71,7 +71,26 @@ const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
   );
 };
 
-const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMoney, onOpenSettings, adminOnlineColor }) => {
+const ProfileInfoCard = ({
+  profile,
+  isMe,
+  onAddToSearch,
+  onSendMessage,
+  onSendMoney,
+  onOpenSettings,
+  adminOnlineColor,
+  bannerImageUrl,
+  bannerText,
+  isBannerEditing,
+  editImageUrl,
+  editText,
+  onEditImageUrlChange,
+  onEditTextChange,
+  onSaveBanner,
+  savingBanner,
+  bannerTextareaRef,
+  onInsertBannerMarkup,
+}) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
   const isHdoProfile = profile.rank_name === 'Help Desk Operator';
@@ -268,6 +287,81 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
           </span>
         </div>
       )}
+
+      {/* Profile banner / notepad: same card, joined below stats */}
+      {(() => {
+        const displayImageUrl = (bannerImageUrl || '').trim() || null;
+        const displayText = (bannerText || '').trim() || null;
+        const renderedHtml = displayText ? parseForumContent(displayText) : '';
+        return (
+          <div className="border-t border-zinc-700/30">
+            <div className="relative min-h-[80px] md:min-h-[100px] flex flex-col justify-center py-4 px-3 md:px-4 overflow-hidden">
+              {displayImageUrl && (
+                <div
+                  className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
+                  style={{ backgroundImage: `url(${displayImageUrl})` }}
+                />
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+              <div className="relative z-10 w-full">
+                {renderedHtml ? (
+                  <div
+                    className="prof-banner-content font-heading text-sm md:text-base text-foreground max-w-2xl mx-auto text-left prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2"
+                    dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  />
+                ) : (
+                  !isMe && (
+                    <p className="text-[10px] text-mutedForeground font-heading text-center py-2">No profile text set</p>
+                  )
+                )}
+              </div>
+            </div>
+            {isMe && isBannerEditing && (
+              <div className="p-3 space-y-3 border-t border-primary/20 bg-primary/5">
+                <div>
+                  <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
+                    Banner image URL
+                  </label>
+                  <input
+                    type="url"
+                    value={editImageUrl ?? ''}
+                    onChange={(e) => onEditImageUrlChange?.(e.target.value)}
+                    placeholder="https://example.com/image.jpg or [img]URL[/img]"
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
+                    Profile text (BBCode notepad)
+                  </label>
+                  <textarea
+                    ref={bannerTextareaRef}
+                    value={editText ?? ''}
+                    onChange={(e) => onEditTextChange?.(e.target.value)}
+                    placeholder="Write your profile text... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
+                    rows={6}
+                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
+                  />
+                  <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                    <button type="button" onClick={() => onInsertBannerMarkup?.('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+                    <button type="button" onClick={() => onInsertBannerMarkup?.('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+                    <button type="button" onClick={() => onInsertBannerMarkup?.('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
+                    <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) onInsertBannerMarkup?.('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onSaveBanner}
+                  disabled={savingBanner}
+                  className="w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingBanner ? 'Saving…' : 'Save banner'}
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })()}
       <div className="prof-art-line text-primary mx-3" />
     </div>
   );
@@ -542,117 +636,6 @@ const AdminStatsCard = ({ adminStats }) => (
   </div>
 );
 
-/** Profile banner: optional image + BBCode notepad. Display for everyone; edit form when own profile. */
-const ProfileBannerCard = ({
-  bannerImageUrl,
-  bannerText,
-  isMe,
-  isEditing,
-  editImageUrl,
-  editText,
-  onEditImageUrlChange,
-  onEditTextChange,
-  onSave,
-  saving,
-}) => {
-  const bannerTextareaRef = React.useRef(null);
-  const displayImageUrl = (bannerImageUrl || '').trim() || null;
-  const displayText = (bannerText || '').trim() || null;
-  const renderedHtml = displayText ? parseForumContent(displayText) : '';
-
-  const insertBannerMarkup = (before, after = '') => {
-    const ta = bannerTextareaRef.current;
-    if (!ta) {
-      onEditTextChange(editText + before + after);
-      return;
-    }
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const { value, cursor } = insertAtCursor(editText, before, after, start, end);
-    onEditTextChange(value);
-    setTimeout(() => {
-      ta.focus();
-      ta.setSelectionRange(cursor, cursor);
-    }, 0);
-  };
-
-  return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.05s' }}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-        <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
-          Profile
-        </h3>
-      </div>
-      <div className="relative min-h-[100px] md:min-h-[120px] flex flex-col justify-center py-5 px-4 overflow-hidden">
-        {displayImageUrl && (
-          <div
-            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
-            style={{ backgroundImage: `url(${displayImageUrl})` }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/70" />
-        <div className="relative z-10 w-full">
-          {renderedHtml ? (
-            <div
-              className="prof-banner-content font-heading text-sm md:text-base text-foreground max-w-2xl mx-auto text-left prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2"
-              dangerouslySetInnerHTML={{ __html: renderedHtml }}
-            />
-          ) : (
-            !isMe && (
-              <p className="text-[10px] text-mutedForeground font-heading text-center">No profile text set</p>
-            )
-          )}
-        </div>
-      </div>
-      {isMe && isEditing && (
-        <div className="p-3 space-y-3 border-t border-primary/20 bg-primary/5">
-          <div>
-            <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
-              Banner image URL
-            </label>
-            <input
-              type="url"
-              value={editImageUrl}
-              onChange={(e) => onEditImageUrlChange(e.target.value)}
-              placeholder="https://example.com/image.jpg or [img]URL[/img]"
-              className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
-              Profile text (BBCode notepad)
-            </label>
-            <textarea
-              ref={bannerTextareaRef}
-              value={editText}
-              onChange={(e) => onEditTextChange(e.target.value)}
-              placeholder="Write your profile text... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
-              rows={8}
-              className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
-            />
-            <div className="flex flex-wrap items-center gap-1 mt-1.5">
-              <button type="button" onClick={() => insertBannerMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
-              <button type="button" onClick={() => insertBannerMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
-              <button type="button" onClick={() => insertBannerMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
-              <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertBannerMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            className="w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? 'Saving…' : 'Save banner'}
-          </button>
-        </div>
-      )}
-      <div className="prof-art-line text-primary mx-3" />
-    </div>
-  );
-};
-
 // Main component
 export default function Profile() {
   const { username: usernameParam } = useParams();
@@ -687,6 +670,7 @@ export default function Profile() {
   const [bannerImageUrlEdit, setBannerImageUrlEdit] = useState('');
   const [bannerTextEdit, setBannerTextEdit] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
+  const bannerTextareaRef = React.useRef(null);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
@@ -909,6 +893,22 @@ export default function Profile() {
     }
   };
 
+  const insertBannerMarkup = (before, after = '') => {
+    const ta = bannerTextareaRef.current;
+    if (!ta) {
+      setBannerTextEdit((c) => c + before + after);
+      return;
+    }
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const { value, cursor } = insertAtCursor(bannerTextEdit, before, after, start, end);
+    setBannerTextEdit(value);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(cursor, cursor);
+    }, 0);
+  };
+
   const addToAttackSearches = async () => {
     if (!profile?.username) return;
     try {
@@ -1044,19 +1044,17 @@ export default function Profile() {
           onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
           onOpenSettings={isMe && !isPublicView ? openSettings : undefined}
           adminOnlineColor={me?.admin_online_color}
-        />
-
-        <ProfileBannerCard
           bannerImageUrl={profile.profile_banner_image_url}
           bannerText={profile.profile_banner_text}
-          isMe={isMe && !isPublicView}
-          isEditing={isMe && !isPublicView}
+          isBannerEditing={isMe && !isPublicView}
           editImageUrl={bannerImageUrlEdit}
           editText={bannerTextEdit}
           onEditImageUrlChange={setBannerImageUrlEdit}
           onEditTextChange={setBannerTextEdit}
-          onSave={saveBanner}
-          saving={savingBanner}
+          onSaveBanner={saveBanner}
+          savingBanner={savingBanner}
+          bannerTextareaRef={bannerTextareaRef}
+          onInsertBannerMarkup={insertBannerMarkup}
         />
 
         {profile.youtube_url && (
