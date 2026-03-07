@@ -11,8 +11,8 @@ const START_COUNTDOWN = 5;
 const SUITS = {
   H: { sym: '♥', color: '#dc2626' },
   D: { sym: '♦', color: '#dc2626' },
-  C: { sym: '♣', color: '#e8e0d0' },
-  S: { sym: '♠', color: '#e8e0d0' },
+  C: { sym: '♣', color: '#1a1a2e' },
+  S: { sym: '♠', color: '#1a1a2e' },
 };
 
 const STREET_LABELS = { preflop: 'Pre-Flop', flop: 'Flop', turn: 'Turn', river: 'River', showdown: 'Showdown' };
@@ -255,14 +255,14 @@ function getTablePositions(totalSeats) {
   // Returns array of {x, y} as percentages for seat container positioning
   // Arranged around an oval: x 10-90%, y 5-85%
   const positions = {
-    2: [{ x: 50, y: 88 }, { x: 50, y: 5 }],
-    3: [{ x: 50, y: 88 }, { x: 10, y: 30 }, { x: 90, y: 30 }],
-    4: [{ x: 50, y: 88 }, { x: 8, y: 45 }, { x: 50, y: 5 }, { x: 92, y: 45 }],
-    5: [{ x: 50, y: 88 }, { x: 8, y: 60 }, { x: 18, y: 12 }, { x: 82, y: 12 }, { x: 92, y: 60 }],
-    6: [{ x: 50, y: 90 }, { x: 8, y: 65 }, { x: 8, y: 20 }, { x: 50, y: 5 }, { x: 92, y: 20 }, { x: 92, y: 65 }],
-    7: [{ x: 50, y: 90 }, { x: 10, y: 70 }, { x: 5, y: 35 }, { x: 25, y: 5 }, { x: 75, y: 5 }, { x: 95, y: 35 }, { x: 90, y: 70 }],
-    8: [{ x: 50, y: 90 }, { x: 12, y: 72 }, { x: 2, y: 48 }, { x: 12, y: 14 }, { x: 50, y: 4 }, { x: 88, y: 14 }, { x: 98, y: 48 }, { x: 88, y: 72 }],
-    9: [{ x: 50, y: 90 }, { x: 14, y: 78 }, { x: 2, y: 52 }, { x: 6, y: 22 }, { x: 30, y: 4 }, { x: 70, y: 4 }, { x: 94, y: 22 }, { x: 98, y: 52 }, { x: 86, y: 78 }],
+    2: [{ x: 50, y: 82 }, { x: 50, y: 8 }],
+    3: [{ x: 50, y: 82 }, { x: 10, y: 30 }, { x: 90, y: 30 }],
+    4: [{ x: 50, y: 82 }, { x: 8, y: 45 }, { x: 50, y: 8 }, { x: 92, y: 45 }],
+    5: [{ x: 50, y: 82 }, { x: 8, y: 60 }, { x: 18, y: 12 }, { x: 82, y: 12 }, { x: 92, y: 60 }],
+    6: [{ x: 50, y: 84 }, { x: 8, y: 65 }, { x: 8, y: 20 }, { x: 50, y: 6 }, { x: 92, y: 20 }, { x: 92, y: 65 }],
+    7: [{ x: 50, y: 84 }, { x: 10, y: 70 }, { x: 5, y: 35 }, { x: 25, y: 6 }, { x: 75, y: 6 }, { x: 95, y: 35 }, { x: 90, y: 70 }],
+    8: [{ x: 50, y: 84 }, { x: 12, y: 72 }, { x: 2, y: 48 }, { x: 12, y: 14 }, { x: 50, y: 5 }, { x: 88, y: 14 }, { x: 98, y: 48 }, { x: 88, y: 72 }],
+    9: [{ x: 50, y: 84 }, { x: 14, y: 78 }, { x: 2, y: 52 }, { x: 6, y: 22 }, { x: 30, y: 5 }, { x: 70, y: 5 }, { x: 94, y: 22 }, { x: 98, y: 52 }, { x: 86, y: 78 }],
   };
   return positions[totalSeats] || positions[6];
 }
@@ -366,7 +366,8 @@ export default function MPPokerGamePage() {
     if (!game) return;
     const allInActive = game.status === 'playing' && (game.players || []).some((p) => p.status === 'all_in');
     const botTurn = isVsDealer && game.current_turn_index === 1 && game.status === 'playing';
-    pollSpeedRef.current = (allInActive || botTurn) ? 1500 : 3000;
+    const myAllIn = (game.players || []).find(p => !p.is_bot)?.status === 'all_in';
+    pollSpeedRef.current = myAllIn ? 800 : (allInActive || botTurn) ? 1200 : 3000;
   }, [game, isVsDealer]);
 
   // Start countdown timer
@@ -425,10 +426,22 @@ export default function MPPokerGamePage() {
     if (actionLoading) return;
     setActionLoading(true);
     try {
-      const endpoint = isModeVsDealerRef.current ? '/casino/mp-poker/vs-dealer/act' : `/casino/mp-poker/games/${gameId}/act`;
-      const res = await api.post(endpoint, { action, amount: amount || undefined });
-      const g = isModeVsDealerRef.current ? (res.data?.game ?? res.data ?? null) : (res.data ?? null);
-      setGame(g);
+      const endpoint = isModeVsDealerRef.current
+        ? '/casino/mp-poker/vs-dealer/act'
+        : `/casino/mp-poker/games/${gameId}/act`;
+      await api.post(endpoint, { action, amount: amount || undefined });
+      // Re-fetch after acting — bot may have responded, street may have advanced
+      // All-in needs longer: dealer must respond AND server runs out remaining streets
+      const waitMs = action === 'all_in' ? 900 : 350;
+      await new Promise(r => setTimeout(r, waitMs));
+      const fetchEndpoint = isModeVsDealerRef.current
+        ? '/casino/mp-poker/vs-dealer/game'
+        : `/casino/mp-poker/games/${gameId}`;
+      const fresh = await api.get(fetchEndpoint);
+      const g = isModeVsDealerRef.current
+        ? (fresh.data?.game ?? fresh.data ?? null)
+        : (fresh.data ?? null);
+      if (g) setGame(g);
       await refreshUser();
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Action failed'); }
     finally { setActionLoading(false); }
@@ -739,11 +752,11 @@ export default function MPPokerGamePage() {
 
       {/* ══ LIVE TABLE (playing + completed) ══ */}
       {(status === 'playing' || status === 'completed') && phase !== 'ready' && (
-        <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
+        <div className="rounded-xl border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b', overflow: 'visible' }}>
           <div style={goldBar} />
 
           {/* Felt table with oval player layout */}
-          <div className="relative" style={{ ...feltBg, minHeight: players.length <= 2 ? 320 : 440 }}>
+          <div className="relative" style={{ ...feltBg, minHeight: players.length <= 2 ? 360 : 480, overflow: 'visible', paddingBottom: 16 }}>
             {/* Table felt oval */}
             <div className="absolute inset-6 rounded-[50%]"
               style={{
@@ -920,8 +933,7 @@ export default function MPPokerGamePage() {
       )}
 
       {/* ══ ALL-IN WAITING STATE ══ */}
-      {status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown' &&
-        activePlayers.filter(p => p.status !== 'all_in').length === 0 && (
+      {status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown' && street !== 'completed' && (
         <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
           <div style={goldBar} />
           <div className="p-4 text-center space-y-3" style={{ background: 'rgba(0,0,0,0.55)' }}>
