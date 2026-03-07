@@ -86,6 +86,11 @@ const ProfileInfoCard = ({
   savingBanner,
   bannerTextareaRef,
   onInsertBannerMarkup,
+  honours = [],
+  ownedCasinos = [],
+  property: profileProperty = null,
+  isPropertyOwner = false,
+  showCompactHonoursAndProperties = false,
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
@@ -281,6 +286,48 @@ const ProfileInfoCard = ({
           <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] md:text-[10px] uppercase tracking-wider font-heading font-bold bg-zinc-800 text-mutedForeground border border-zinc-700/40">
             🤖 NPC
           </span>
+        </div>
+      )}
+
+      {/* Compact Honours + Properties (under stats, above notepad) */}
+      {showCompactHonoursAndProperties && (
+        <div className="border-t border-zinc-700/30">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 px-2.5 py-2 md:px-3 md:py-2">
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <Trophy size={10} className="text-primary shrink-0" />
+                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Honours</span>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {honours.length === 0 ? (
+                  <span className="text-[9px] text-mutedForeground font-heading">—</span>
+                ) : (
+                  honours.map((h, i) => (
+                    <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-primary/20 bg-primary/5 text-[9px] font-heading">
+                      <span className="text-primary font-bold">#{h.rank}</span>
+                      <span className="text-foreground truncate max-w-[100px] sm:max-w-[140px]">{h.label}</span>
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-1 mb-1">
+                <Building2 size={10} className="text-primary shrink-0" />
+                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Properties</span>
+              </div>
+              <div className="text-[9px] font-heading text-mutedForeground">
+                {!ownedCasinos?.length && !profileProperty && (
+                  <span>None</span>
+                )}
+                {ownedCasinos?.length > 0 && (
+                  <span className="block truncate">{ownedCasinos.slice(0, 3).map((c) => `${c.city} ${c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'BJ' : c.type === 'horseracing' ? 'Horse' : c.type || ''}`).join(', ')}{ownedCasinos.length > 3 ? '…' : ''}</span>
+                )}
+                {profileProperty?.type === 'airport' && <span className="block">Airport — {profileProperty.state ?? '—'}</span>}
+                {profileProperty?.type === 'bullet_factory' && <span className="block">Bullet factory — {profileProperty.state ?? '—'}</span>}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1285,16 +1332,16 @@ export default function Profile() {
               savingBanner={false}
               bannerTextareaRef={undefined}
               onInsertBannerMarkup={() => {}}
+              honours={honours}
+              ownedCasinos={ownedCasinos}
+              property={profile.property}
+              isPropertyOwner={isMe}
+              showCompactHonoursAndProperties
             />
 
             {profile.youtube_url && (
               <YouTubeCard youtubeUrl={profile.youtube_url} />
             )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-              <HonoursCard honours={honours} />
-              <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} isOwner={isMe} />
-            </div>
 
             <TopCarsCard topCars={profile.top_cars} showCars={profile.show_cars_on_profile} />
 
