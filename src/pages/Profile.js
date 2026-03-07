@@ -1001,7 +1001,11 @@ export default function Profile() {
     <div className={`space-y-3 ${styles.pageContent}`} data-testid="profile-page">
       <style>{PROFILE_STYLES}</style>
 
-      <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, crew, honours and property.</p>
+      {isMe && !isPublicView ? (
+        <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Edit your profile text and settings.</p>
+      ) : (
+        <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, crew, honours and property.</p>
+      )}
 
       {isMe && (
         <div className="max-w-3xl mx-auto flex justify-center gap-2 mb-2">
@@ -1024,36 +1028,67 @@ export default function Profile() {
       )}
 
       <div className="max-w-3xl mx-auto space-y-3 md:space-y-4">
-        <ProfileInfoCard 
-          profile={profile} 
-          isMe={isMe && !isPublicView} 
-          onAddToSearch={addToAttackSearches}
-          onSendMessage={profile.id ? () => navigate(`/inbox/chat/${profile.id}`) : undefined}
-          onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
-          onOpenSettings={isMe && !isPublicView ? openSettings : undefined}
-          adminOnlineColor={me?.admin_online_color}
-          bannerText={profile.profile_banner_text}
-          isBannerEditing={isMe && !isPublicView}
-          editText={bannerTextEdit}
-          onEditTextChange={setBannerTextEdit}
-          onSaveBanner={saveBanner}
-          savingBanner={savingBanner}
-          bannerTextareaRef={bannerTextareaRef}
-          onInsertBannerMarkup={insertBannerMarkup}
-        />
+        {isMe && !isPublicView ? (
+          /* ─── Edit Profile: notepad + profile settings only ─── */
+          <>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
+                  Profile text
+                </h2>
+              </div>
+              <div className="p-3 space-y-3">
+                <textarea
+                  ref={bannerTextareaRef}
+                  value={bannerTextEdit}
+                  onChange={(e) => setBannerTextEdit(e.target.value)}
+                  placeholder="Write your profile text... [b]bold[/b], [i]italic[/i], [center]centered[/center], [color=red]colour[/color], [img]url[/img], [url]link[/url], :) smileys"
+                  rows={12}
+                  className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
+                />
+                <div className="flex flex-wrap items-center gap-1">
+                  <button type="button" onClick={() => insertBannerMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+                  <button type="button" onClick={() => insertBannerMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+                  <button type="button" onClick={() => insertBannerMarkup('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
+                  <button type="button" onClick={() => insertBannerMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
+                  <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertBannerMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveBanner}
+                  disabled={savingBanner}
+                  className="w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingBanner ? 'Saving…' : 'Save profile text'}
+                </button>
+              </div>
+              <div className="prof-art-line text-primary mx-3" />
+            </div>
 
-        {profile.youtube_url && (
-          <YouTubeCard youtubeUrl={profile.youtube_url} />
-        )}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+                  Profile settings
+                </h2>
+                <button
+                  type="button"
+                  onClick={openSettings}
+                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                  title="Open profile settings"
+                  aria-label="Open profile settings"
+                >
+                  <Settings size={12} className="md:w-3.5 md:h-3.5" />
+                </button>
+              </div>
+              <div className="px-3 py-2.5 text-[11px] md:text-xs text-mutedForeground font-heading">
+                Notifications, profile (cars, video), account (Telegram, password). Click the gear to open.
+              </div>
+              <div className="prof-art-line text-primary mx-3" />
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-          <HonoursCard honours={honours} />
-          <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} isOwner={isMe} />
-        </div>
-
-        <TopCarsCard topCars={profile.top_cars} showCars={profile.show_cars_on_profile} />
-
-        {isMe && (hasAdminEmail || isModerator) && (
+            {isMe && (hasAdminEmail || isModerator) && (
           <>
             {isAdmin && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
@@ -1162,11 +1197,45 @@ export default function Profile() {
             </div>
             </>
             ) : null}
+            </>
+            )}
           </>
-        )}
+        ) : (
+          /* ─── View Profile: full profile (stats, notepad display, honours, etc.) ─── */
+          <>
+            <ProfileInfoCard 
+              profile={profile} 
+              isMe={isMe}
+              onAddToSearch={addToAttackSearches}
+              onSendMessage={profile.id ? () => navigate(`/inbox/chat/${profile.id}`) : undefined}
+              onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
+              onOpenSettings={undefined}
+              adminOnlineColor={me?.admin_online_color}
+              bannerText={profile.profile_banner_text}
+              isBannerEditing={false}
+              editText=""
+              onEditTextChange={() => {}}
+              onSaveBanner={() => {}}
+              savingBanner={false}
+              bannerTextareaRef={undefined}
+              onInsertBannerMarkup={() => {}}
+            />
 
-        {!isMe && profile.admin_stats && (
-          <AdminStatsCard adminStats={profile.admin_stats} />
+            {profile.youtube_url && (
+              <YouTubeCard youtubeUrl={profile.youtube_url} />
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
+              <HonoursCard honours={honours} />
+              <PropertiesCard ownedCasinos={ownedCasinos} property={profile.property} isOwner={isMe} />
+            </div>
+
+            <TopCarsCard topCars={profile.top_cars} showCars={profile.show_cars_on_profile} />
+
+            {!isMe && profile.admin_stats && (
+              <AdminStatsCard adminStats={profile.admin_stats} />
+            )}
+          </>
         )}
       </div>
 
