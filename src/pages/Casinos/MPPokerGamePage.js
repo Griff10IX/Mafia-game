@@ -306,19 +306,26 @@ export default function MPPokerGamePage() {
             }
           }
           setPrevStatus(g?.status);
+          // Keep showing completed game if backend returns null (e.g. vs-dealer no active game) to avoid flicker
+          if (g) return g;
+          if (prev?.status === 'completed') return prev;
           return g;
         });
       })
-      .catch(() => setGame(null))
+      .catch(() => {
+        // Don't clear completed game on network error so results screen doesn't flicker to "game not found"
+        setGame((prev) => (prev?.status === 'completed' ? prev : null));
+      })
       .finally(() => setLoading(false));
   }, [gameId, isVsDealer, myUserId]);
 
-  // Poll faster when all-in (board still being dealt) or bot's turn
+  // Poll faster when all-in (board still being dealt) or bot's turn — aggressive on mobile so result appears without tapping
   const pollInterval = (() => {
     if (!game) return 3000;
-    const allInActive = (game.players || []).some((p) => p.status === 'all_in') && game.status === 'playing';
+    const allInWaiting = (game.players || []).some((p) => p.status === 'all_in') && game.status === 'playing' && game.street !== 'showdown';
     const botTurn = game.mode === 'vs_dealer' && game.current_turn_index === 1 && game.status === 'playing';
-    return (allInActive || botTurn) ? 1500 : 3000;
+    if (allInWaiting) return 800;
+    return (botTurn) ? 1500 : 3000;
   })();
 
   useEffect(() => {
@@ -326,6 +333,14 @@ export default function MPPokerGamePage() {
     const t = setInterval(fetchGame, pollInterval);
     return () => clearInterval(t);
   }, [fetchGame, pollInterval]);
+
+  // When showing "All In — Running It Out", trigger a fetch soon so backend runs out the board and result appears automatically (no tap needed on mobile)
+  const allInRunningOut = status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown';
+  useEffect(() => {
+    if (!allInRunningOut || !gameId) return;
+    const t = setTimeout(fetchGame, 500);
+    return () => clearTimeout(t);
+  }, [allInRunningOut, gameId, fetchGame]);
 
   // Start countdown timer
   useEffect(() => {
@@ -505,7 +520,7 @@ export default function MPPokerGamePage() {
   };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent}`} data-testid="mp-poker-game-page">
+    <div className={`space-y-3 ${styles.pageContent}`} style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom, 0px))' }} data-testid="mp-poker-game-page">
       <style>{`
         @keyframes pkr-deal {
           0%   { transform: translateY(-20px) scale(0.85); opacity: 0; }
@@ -545,8 +560,8 @@ export default function MPPokerGamePage() {
       <div className="flex flex-wrap items-center justify-between gap-2 animate-pkr-fade">
         <div className="flex items-center gap-2">
           <Link to="/casino/mp-poker"
-            className="p-1.5 rounded border border-primary/20 text-primary hover:bg-primary/10 transition-colors">
-            <ArrowLeft size={16} />
+            className="min-h-[44px] min-w-[44px] flex items-center justify-center p-2 rounded border border-primary/20 text-primary hover:bg-primary/10 active:scale-95 transition-colors touch-manipulation">
+            <ArrowLeft size={18} />
           </Link>
           <div>
             <h1 className="text-base font-heading font-bold text-primary uppercase tracking-wider">
@@ -594,9 +609,9 @@ export default function MPPokerGamePage() {
               </div>
               {isCreator && (
                 <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
+                  className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg border text-[10px] font-heading font-bold uppercase active:scale-[0.97] transition-all touch-manipulation"
                   style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
-                  <XCircle size={11} />{cancelLoading ? '…' : 'Cancel Table'}
+                  <XCircle size={14} />{cancelLoading ? '…' : 'Cancel Table'}
                 </button>
               )}
             </div>
@@ -634,9 +649,9 @@ export default function MPPokerGamePage() {
                     </div>
                   ) : (
                     <button type="button" disabled={readyLoading} onClick={markReady}
-                      className="inline-flex items-center gap-2 px-6 py-3 rounded-xl border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-pkr-ready"
+                      className="min-h-[48px] inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl border-2 font-heading font-bold text-[11px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 animate-pkr-ready touch-manipulation"
                       style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 4px 16px rgba(212,175,55,0.3)' }}>
-                      <CheckCircle2 size={15} />
+                      <CheckCircle2 size={16} />
                       {readyLoading ? 'Readying…' : "I'm Ready"}
                     </button>
                   )}
@@ -681,9 +696,9 @@ export default function MPPokerGamePage() {
             {(isCreator || status === 'open') && (
               <div className="flex justify-center">
                 <button type="button" disabled={cancelLoading} onClick={cancelGame}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
+                  className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-lg border text-[10px] font-heading font-bold uppercase active:scale-[0.97] transition-all touch-manipulation"
                   style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>
-                  <XCircle size={11} />{cancelLoading ? '…' : 'Cancel Table'}
+                  <XCircle size={14} />{cancelLoading ? '…' : 'Cancel Table'}
                 </button>
               </div>
             )}
@@ -782,35 +797,35 @@ export default function MPPokerGamePage() {
               </span>
             </div>
 
-            {/* Primary actions: Fold, Check, Call always visible; Check enabled when no bet to call, Call when there is */}
+            {/* Primary actions: Fold, Check, Call always visible; min 44px touch targets for mobile */}
             <div className="flex items-center gap-2 flex-wrap">
               <button type="button" disabled={actionLoading} onClick={() => act('fold')}
-                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border font-heading font-bold text-[9px] sm:text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
                 style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
                 Fold
               </button>
               <button type="button" disabled={actionLoading || needToCall > 0} onClick={() => act('check')}
-                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
                 style={{ borderColor: 'rgba(161,161,170,0.4)', background: needToCall > 0 ? 'rgba(161,161,170,0.04)' : 'rgba(161,161,170,0.08)', color: needToCall > 0 ? '#71717a' : '#a1a1aa' }}
                 title={needToCall > 0 ? 'You must call or raise to match the current bet' : 'Pass (no bet to match)'}>
                 Check
               </button>
               <button type="button" disabled={actionLoading || needToCall <= 0} onClick={() => act('call')}
-                className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
                 style={{ borderColor: '#c9a84c', background: needToCall <= 0 ? 'rgba(212,175,55,0.06)' : 'rgba(212,175,55,0.12)', color: '#d4af37' }}
                 title={needToCall <= 0 ? 'No bet to call' : `Match ${formatMoneyFull(Math.min(needToCall, myStack))}`}>
                 Call {formatMoneyFull(Math.min(needToCall, myStack))}
               </button>
               <button type="button" disabled={actionLoading || myStack <= 0} onClick={() => act('all_in')}
-                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
                 style={{ borderColor: 'rgba(251,113,133,0.5)', background: 'rgba(251,113,133,0.1)', color: '#fb7185' }}>
                 All-In {formatMoney(myStack)}
               </button>
             </div>
 
-            {/* Raise row */}
+            {/* Raise row — 16px input font prevents iOS zoom on focus; min 44px touch targets */}
             {myStack > 0 && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="number"
                   min={minRaise}
@@ -818,8 +833,8 @@ export default function MPPokerGamePage() {
                   value={raiseAmount}
                   onChange={(e) => setRaiseAmount(e.target.value.replace(/,/g, ''))}
                   placeholder={`Min ${formatMoneyFull(minRaise)}`}
-                  className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
+                  className="flex-1 min-w-0 min-h-[44px] px-3 py-2 rounded-lg font-heading focus:outline-none touch-manipulation"
+                  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit', fontSize: '16px' }}
                 />
                 <button type="button" disabled={actionLoading}
                   onClick={() => {
@@ -832,17 +847,17 @@ export default function MPPokerGamePage() {
                     act(needToCall > 0 ? 'raise' : 'bet', amt);
                     setRaiseAmount('');
                   }}
-                  className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                  className="min-h-[44px] px-4 py-2.5 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 touch-manipulation"
                   style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
                   {needToCall > 0 ? 'Raise' : 'Bet'}
                 </button>
-                {/* Quick-bet buttons */}
+                {/* Quick-bet chips — larger tap targets on mobile */}
                 {[0.5, 0.75, 1].map((f) => {
                   const amt = Math.min(myStack, Math.max(minRaise, Math.floor(pot * f)));
                   return (
                     <button key={f} type="button"
                       onClick={() => setRaiseAmount(String(amt))}
-                      className="px-2 py-1.5 rounded font-heading text-[8px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 transition-colors">
+                      className="min-h-[44px] px-3 py-2 rounded font-heading text-[9px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 active:scale-95 transition-colors touch-manipulation">
                       {f === 1 ? 'Pot' : `${f * 100}%`}
                     </button>
                   );
@@ -874,10 +889,10 @@ export default function MPPokerGamePage() {
                 Dealing remaining streets…
               </p>
             </div>
-            {/* Manual advance fallback for vs-dealer all-in */}
+            {/* Manual advance fallback — result auto-updates on mobile via polling; button for instant refresh */}
             {isVsDealer && (
               <button type="button" onClick={fetchGame}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all"
+                className="min-h-[44px] inline-flex items-center justify-center gap-1.5 px-5 py-3 rounded-lg border font-heading font-bold text-[10px] uppercase tracking-wider active:scale-[0.97] transition-all touch-manipulation"
                 style={{ borderColor: 'rgba(212,175,55,0.35)', background: 'rgba(212,175,55,0.08)', color: '#d4af37' }}>
                 ↻ Check Result
               </button>
@@ -989,7 +1004,7 @@ export default function MPPokerGamePage() {
         return (
           <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
             <button type="button" onClick={() => setHelpOpen((o) => !o)}
-              className="w-full px-3 py-2.5 border-b border-primary/20 flex items-center justify-between hover:bg-primary/5 transition-colors"
+              className="min-h-[44px] w-full px-3 py-3 border-b border-primary/20 flex items-center justify-between hover:bg-primary/5 active:scale-[0.99] transition-colors touch-manipulation"
               style={{ background: 'rgba(234,179,8,0.04)' }}>
               <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest flex items-center gap-1.5">
                 ♠ How to Play · Hand Rankings

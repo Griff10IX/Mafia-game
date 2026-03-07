@@ -408,15 +408,22 @@ def register(router):
 
     @router.get("/casino/mp-poker/vs-dealer/game")
     async def vs_dealer_game(current_user: dict = Depends(get_current_user_verified)):
-        """Get current vs-dealer game for user. If it's bot's turn, runs bot action and returns updated game."""
+        """Get current vs-dealer game for user. If it's bot's turn, runs bot action and returns updated game.
+        When no active game, returns the most recent game (including completed) so the results screen doesn't flicker."""
         uid = current_user["id"]
         g = await db.mp_poker_games.find_one(
             {"mode": "vs_dealer", "user_id": uid, "status": "playing"},
             sort=[("created_at", -1)],
         )
         if not g:
+            # Return most recent vs_dealer game (e.g. completed) so client can show results without "game not found" flicker
+            g = await db.mp_poker_games.find_one(
+                {"mode": "vs_dealer", "user_id": uid},
+                sort=[("created_at", -1)],
+            )
+        if not g:
             return {"game": None}
-        if g.get("current_turn_index") == 1:
+        if g.get("status") == "playing" and g.get("current_turn_index") == 1:
             g = await _run_vs_dealer_bot_turn(g["id"])
         out = {k: v for k, v in (g or {}).items() if k != "_id"}
         return {"game": out}
