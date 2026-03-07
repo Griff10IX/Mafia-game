@@ -329,11 +329,9 @@ def register(router):
         human = next((p for p in players if not p.get("is_bot")), None)
         if not human or human.get("status") != "all_in":
             return g
-        while g and g.get("street") in ("preflop", "flop", "turn", "river"):
+        while g.get("street") in ("flop", "turn", "river"):
             g = await _vs_dealer_advance_street(game_id)
-            if not g or g.get("status") != "playing":
-                break
-    
+        return await db.mp_poker_games.find_one({"id": game_id})
 
     async def _run_vs_dealer_bot_turn(game_id: str) -> Optional[dict]:
         g = await db.mp_poker_games.find_one({"id": game_id})
