@@ -523,6 +523,27 @@ export default function MPPokerGamePage() {
   const maxSeats = game?.max_players || players.length || 6;
   const tablePositions = getTablePositions(Math.min(9, Math.max(2, players.length || maxSeats)));
 
+  // Turn status message for "what's happening"
+  const currentTurnPlayer = currentTurnIndex >= 0 && currentTurnIndex < players.length ? players[currentTurnIndex] : null;
+  const turnStatusMessage = (() => {
+    if (status !== 'playing' || (phase !== 'playing' && !isVsDealer)) return null;
+    if (street === 'showdown' || status === 'completed') return null;
+    if (currentTurnIndex < 0) return null;
+    const name = currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? 'Someone');
+    const isTheirTurn = currentTurnPlayer?.user_id === myUserId || (currentTurnPlayer?.is_bot && isVsDealer);
+    if (myPlayer?.status === 'folded') {
+      return `You folded. Waiting for ${name} to check, call, raise, or fold.`;
+    }
+    if (myPlayer?.status === 'all_in') {
+      return `You're all-in. Waiting for the hand to finish.`;
+    }
+    if (isMyTurn) {
+      const actions = needToCall > 0 ? 'call, raise, or fold' : 'check, bet, raise, or fold';
+      return `Your turn — ${actions}.`;
+    }
+    return `Waiting for ${name} to check, call, raise, or fold.`;
+  })();
+
   if (loading && !game) {
     return (
       <div className={`space-y-4 ${styles.pageContent}`}>
@@ -791,15 +812,23 @@ export default function MPPokerGamePage() {
                   style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.3)', color: '#d4af37' }}>
                   {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
                 </div>
-                {status === 'playing' && phase === 'playing' && currentTurnIndex >= 0 && (
-                  <div className="flex items-center gap-2 mt-1">
-                    {turnSecondsLeft != null && (
-                      <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
+                {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
+                  <div className="flex flex-col items-center gap-0.5 mt-1">
+                    <div className="flex items-center gap-2">
+                      {turnSecondsLeft != null && (
+                        <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
+                      )}
+                      <span className="text-[9px] font-heading font-bold animate-pkr-pulse"
+                        style={{ color: isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.5)' }}>
+                        {isMyTurn ? '🎴 Your Turn' : `${currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? '?')}'s turn`}
+                      </span>
+                    </div>
+                    {turnStatusMessage && (
+                      <p className="text-[8px] font-heading text-center max-w-[220px] leading-tight"
+                        style={{ color: 'rgba(255,255,255,0.55)' }}>
+                        {turnStatusMessage}
+                      </p>
                     )}
-                    <span className="text-[9px] font-heading font-bold animate-pkr-pulse"
-                      style={{ color: isMyTurn ? '#d4af37' : 'rgba(255,255,255,0.4)' }}>
-                      {isMyTurn ? '🎴 Your Turn' : `${players[currentTurnIndex]?.username ?? '?'}'s turn`}
-                    </span>
                   </div>
                 )}
               </div>
@@ -836,6 +865,16 @@ export default function MPPokerGamePage() {
           </div>
 
           <div style={goldBar} />
+        </div>
+      )}
+
+      {/* ══ TURN STATUS STRIP (when playing, so you always know what's happening) ══ */}
+      {status === 'playing' && (phase === 'playing' || isVsDealer) && turnStatusMessage && street !== 'showdown' && (
+        <div className="rounded-lg px-3 py-2 text-center border border-primary/20"
+          style={{ background: 'rgba(0,0,0,0.35)' }}>
+          <p className="text-[9px] font-heading" style={{ color: 'rgba(212,175,55,0.85)' }}>
+            {turnStatusMessage}
+          </p>
         </div>
       )}
 

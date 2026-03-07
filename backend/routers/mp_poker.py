@@ -288,11 +288,8 @@ def register(router):
         if call_amount < 0:
             call_amount = 0
         if to_call <= 0:
-            # Bot checks — leave current_bet unchanged so human's check can see matching bets and we advance street
-            await db.mp_poker_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "current_turn_index": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
-            )
+            # Bot checks — betting round is complete; advance street (deal flop/turn/river) then human acts first
+            await _vs_dealer_advance_street(game_id)
             return await db.mp_poker_games.find_one({"id": game_id})
         if cat >= HAND_PAIR and bot_stack >= min_raise and random.random() < 0.6:
             raise_amt = min(min_raise, bot_stack)
@@ -815,7 +812,7 @@ def register(router):
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "flop":
             if deck:
@@ -829,7 +826,7 @@ def register(router):
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "turn":
             if deck:
@@ -841,7 +838,7 @@ def register(router):
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "current_turn_index": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "river":
             await db.mp_poker_games.update_one(
@@ -894,6 +891,7 @@ def register(router):
                 "board": [],
                 "pot": pot,
                 "current_turn_index": first_act,
+                "first_turn_index_this_street": first_act,
                 "turn_started_at": now_iso,
                 "to_call": bb - sb,
                 "min_raise": bb,
@@ -993,7 +991,10 @@ def register(router):
             next_idx = (next_idx + 1) % len(players)
         updates = {"players": players, "pot": pot, "current_turn_index": next_idx, "turn_started_at": datetime.now(timezone.utc).isoformat()}
         if action in ("call", "check"):
-            if all_in_or_folded or (next_idx == turn_idx):
+            first_this_street = int(g.get("first_turn_index_this_street") or 0)
+            # Advance when everyone has matched; if no one bet this street (max_bet==0) require turn to return to first actor
+            betting_round_complete = all_in_or_folded and (max_bet > 0 or next_idx == first_this_street or next_idx == turn_idx)
+            if betting_round_complete:
                 updates["to_call"] = 0
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
                 await _mp_poker_advance_street(game_id)
