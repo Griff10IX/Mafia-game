@@ -20,6 +20,8 @@ const PROFILE_STYLES = `
   .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   .prof-banner-content .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
+  .prof-banner-content .forum-content-ytube { position: relative; width: 100%; max-width: 560px; margin: 0.5em auto; padding-bottom: 56.25%; }
+  .prof-banner-content .forum-content-ytube-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
 `;
 
 function formatDateTime(iso) {
@@ -153,9 +155,15 @@ const ProfileInfoCard = ({
       valueClass: 'text-red-400 font-heading font-bold' 
     },
   ];
-  const profileRows = isStaffProfile
+  let profileRows = isStaffProfile
     ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
     : allRows;
+  // Respect hide_kills_on_profile / hide_jailbusts_on_profile (API sends null when hidden)
+  profileRows = profileRows.filter((r) => {
+    if (r.label === 'Kills' && (profile.kills === undefined || profile.kills === null)) return false;
+    if (r.label === 'Jailbusts' && (profile.jail_busts === undefined || profile.jail_busts === null)) return false;
+    return true;
+  });
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
 
@@ -330,13 +338,9 @@ const ProfileInfoCard = ({
               </div>
             </div>
           </div>
-          {/* Compact Cars row under Honours/Properties */}
+          {/* Compact Cars row under Honours/Properties (no label) */}
           {showCarsOnProfile !== false && topCars?.length > 0 && (
-            <div className="border-t border-zinc-700/30 px-2.5 py-1 md:px-3">
-              <div className="flex items-center gap-0.5 mb-0.5">
-                <Car size={9} className="text-primary shrink-0" />
-                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Cars</span>
-              </div>
+            <div className="border-t border-zinc-700/30 px-2 py-0.5 md:px-3">
               <div className="flex flex-wrap gap-0.5">
                 {topCars.map((car) => {
                   const label = RARITY_LABELS[car.rarity] || car.rarity || '';
@@ -345,10 +349,10 @@ const ProfileInfoCard = ({
                     <Link
                       key={car.id}
                       to={`/view-car?id=${encodeURIComponent(car.id)}`}
-                      className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[8px] font-heading ${badgeClass}`}
+                      className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[7px] font-heading leading-tight ${badgeClass}`}
                     >
                       <span className="shrink-0 uppercase">{label}:</span>
-                      <span className="text-foreground truncate max-w-[70px] sm:max-w-[90px]">{car.name}</span>
+                      <span className="text-foreground truncate max-w-[56px] sm:max-w-[72px]">{car.name}</span>
                     </Link>
                   );
                 })}
@@ -398,6 +402,7 @@ const ProfileInfoCard = ({
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
                     <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) onInsertBannerMarkup?.('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+                    <button type="button" onClick={() => { const u = window.prompt('YouTube URL or video ID:'); if (u && u.trim()) onInsertBannerMarkup?.('[ytube]' + u.trim() + '[/ytube]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="YouTube"><Youtube size={14} /></button>
                   </div>
                 </div>
                 <button
@@ -725,9 +730,10 @@ export default function Profile() {
   const [carsFeaturedId, setCarsFeaturedId] = useState('');
   const [myCarsList, setMyCarsList] = useState([]);
   const [savingCars, setSavingCars] = useState(false);
-  const [youtubeUrl, setYoutubeUrl] = useState('');
-  const [savingYoutube, setSavingYoutube] = useState(false);
   const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
+  const [hideKillsOnProfile, setHideKillsOnProfile] = useState(false);
+  const [hideJailbustsOnProfile, setHideJailbustsOnProfile] = useState(false);
+  const [savingVisibility, setSavingVisibility] = useState(false);
   const [savingAutoplay, setSavingAutoplay] = useState(false);
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
   const [savingModColor, setSavingModColor] = useState(false);
@@ -837,10 +843,11 @@ export default function Profile() {
       fetchTelegram();
       fetchCarsPrefs();
       fetchMyCars();
-      setYoutubeUrl(profile?.youtube_url ?? '');
       setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
+      setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
+      setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
     }
-  }, [isMe, viewPublic, profile, profile?.youtube_url, me?.profile_autoplay_video]);
+  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, me?.profile_autoplay_video]);
 
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
@@ -885,17 +892,20 @@ export default function Profile() {
     }
   };
 
-  const saveYoutube = async () => {
-    setSavingYoutube(true);
+  const saveVisibility = async () => {
+    setSavingVisibility(true);
     try {
-      await api.patch('/profile/youtube', { youtube_url: youtubeUrl.trim() || null });
-      toast.success('Profile video updated');
+      await api.patch('/profile/visibility', {
+        hide_kills_on_profile: hideKillsOnProfile,
+        hide_jailbusts_on_profile: hideJailbustsOnProfile,
+      });
+      toast.success('Profile visibility saved');
       const res = await api.get(`/users/${encodeURIComponent(me?.username)}/profile`);
       setProfile(res.data);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
-      setSavingYoutube(false);
+      setSavingVisibility(false);
     }
   };
 
@@ -1170,6 +1180,23 @@ export default function Profile() {
               </div>
               <div className="p-3 space-y-4">
                 <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Hide stats on profile</h3>
+                  <p className="text-xs text-mutedForeground mb-2">Hide these from everyone viewing your profile (including you).</p>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <span className="text-sm text-foreground">Hide kills</span>
+                    <button type="button" role="switch" aria-checked={hideKillsOnProfile} disabled={savingVisibility} onClick={() => setHideKillsOnProfile((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${hideKillsOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingVisibility ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${hideKillsOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <span className="text-sm text-foreground">Hide jailbusts</span>
+                    <button type="button" role="switch" aria-checked={hideJailbustsOnProfile} disabled={savingVisibility} onClick={() => setHideJailbustsOnProfile((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${hideJailbustsOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingVisibility ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${hideJailbustsOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <button type="button" onClick={saveVisibility} disabled={savingVisibility} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingVisibility ? 'Saving…' : 'Save'}</button>
+                </div>
+                <div>
                   <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Show cars on profile</h3>
                   <div className="flex items-center justify-between gap-3 py-1">
                     <span className="text-sm text-foreground">Show cars on profile</span>
@@ -1193,11 +1220,6 @@ export default function Profile() {
                     </button>
                   </div>
                   <button type="button" onClick={saveVideoAutoplay} disabled={savingAutoplay} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingAutoplay ? 'Saving…' : 'Save'}</button>
-                </div>
-                <div>
-                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Profile video (YouTube)</h3>
-                  <input type="url" placeholder="https://www.youtube.com/watch?v=..." value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
-                  <button type="button" onClick={saveYoutube} disabled={savingYoutube} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingYoutube ? 'Saving…' : 'Save video'}</button>
                 </div>
               </div>
               <div className="prof-art-line text-primary mx-3" />
@@ -1367,10 +1389,6 @@ export default function Profile() {
               topCars={profile.top_cars}
               showCarsOnProfile={profile.show_cars_on_profile}
             />
-
-            {profile.youtube_url && (
-              <YouTubeCard youtubeUrl={profile.youtube_url} />
-            )}
 
             {!isMe && profile.admin_stats && (
               <AdminStatsCard adminStats={profile.admin_stats} />

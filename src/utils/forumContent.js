@@ -1,5 +1,5 @@
 /**
- * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color]/[colour], [url], [img], [gif], and smileys.
+ * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color]/[colour], [url], [img], [gif], [ytube], and smileys.
  * Output is safe HTML (we only emit our own tags). URLs restricted to http/https.
  */
 
@@ -22,6 +22,15 @@ function escapeAttr(s) {
 function safeUrl(url) {
   const u = (url || '').trim();
   return ALLOWED_URL_PREFIX.test(u) ? u : '';
+}
+
+function getYoutubeVideoId(urlOrId) {
+  if (!urlOrId || typeof urlOrId !== 'string') return null;
+  const s = urlOrId.trim();
+  const m = s.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  return null;
 }
 
 // Smiley text → emoji (order matters: longer first)
@@ -60,9 +69,10 @@ export function parseForumContent(content) {
   // 1) Escape HTML so raw tags are safe
   s = escapeHtml(s);
 
-  // 2) Replace [gif]url[/gif] and [img]url[/img] with placeholders (URLs can contain & etc)
+  // 2) Replace [gif], [img], [ytube] with placeholders (URLs can contain & etc)
   const gifPlaceholders = [];
   const imgPlaceholders = [];
+  const ytubePlaceholders = [];
   s = s.replace(/\[gif\](.*?)\[\/gif\]/gi, (_, url) => {
     const idx = gifPlaceholders.length;
     const safe = safeUrl(url);
@@ -74,6 +84,13 @@ export function parseForumContent(content) {
     const safe = safeUrl(url);
     imgPlaceholders.push(safe ? `<img src="${escapeAttr(safe)}" alt="" class="forum-content-media forum-content-img" loading="lazy" />` : '');
     return `\u0001I${idx}\u0001`;
+  });
+  s = s.replace(/\[ytube\](.*?)\[\/ytube\]/gi, (_, url) => {
+    const idx = ytubePlaceholders.length;
+    const videoId = getYoutubeVideoId(url);
+    const embedSrc = videoId ? `https://www.youtube.com/embed/${escapeAttr(videoId)}` : '';
+    ytubePlaceholders.push(embedSrc ? `<div class="forum-content-ytube"><iframe src="${embedSrc}" title="YouTube" class="forum-content-ytube-iframe" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>` : '');
+    return `\u0001Y${idx}\u0001`;
   });
 
   // 3) Normalise British [colour] to [color] so one replacement handles both
@@ -115,6 +132,9 @@ export function parseForumContent(content) {
   });
   imgPlaceholders.forEach((html, i) => {
     s = s.replace(`\u0001I${i}\u0001`, html);
+  });
+  ytubePlaceholders.forEach((html, i) => {
+    s = s.replace(`\u0001Y${i}\u0001`, html);
   });
 
   // 6) Newlines to <br />

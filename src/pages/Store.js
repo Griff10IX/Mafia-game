@@ -397,7 +397,12 @@ export default function Store() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
             const owned = u.ownedKey && user?.[u.ownedKey];
-            return !owned;
+            if (owned) return false;
+            // Hide Garage Batch when already at max (100)
+            if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
+            // Hide Booze Capacity when already at max
+            if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
+            return true;
           }).map((u) => {
             const extra = u.extra?.(user, boozeConfig);
             const disabled = (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) || (u.id === 'health' && Number(user?.health ?? 100) >= 100);
@@ -421,8 +426,8 @@ export default function Store() {
               </StoreCard>
             );
           })}
-          {/* Custom Car — only show when not owned */}
-          {!user?.custom_car_name && (
+          {/* Custom Car — always show (can buy multiple) */}
+          {(
             <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">

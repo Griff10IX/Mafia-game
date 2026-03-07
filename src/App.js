@@ -43,6 +43,8 @@ const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
 const MPBlackjack = lazy(() => import("./pages/Casinos/MPBlackjackPage"));
 const MPBlackjackGame = lazy(() => import("./pages/Casinos/MPBlackjackGamePage"));
+const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
+const MPPokerGame = lazy(() => import("./pages/Casinos/MPPokerGamePage"));
 const SportsBetting = lazy(() => import("./pages/SportsBetting"));
 const StockMarket = lazy(() => import("./pages/StockMarket"));
 const Bank = lazy(() => import("./pages/Bank"));
@@ -606,6 +608,30 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <MPBlackjackGame />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/casino/mp-poker"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MPPoker />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/casino/mp-poker/game/:gameId"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <MPPokerGame />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

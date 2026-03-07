@@ -273,8 +273,10 @@ def register(router):
             "wealth_rank": wealth_id,
             "wealth_rank_name": wealth_name,
             "wealth_rank_range": wealth_range,
-            "kills": user.get("total_kills", 0),
-            "jail_busts": user.get("jail_busts", 0),
+            "hide_kills_on_profile": bool(user.get("hide_kills_on_profile", False)),
+            "hide_jailbusts_on_profile": bool(user.get("hide_jailbusts_on_profile", False)),
+            "kills": None if user.get("hide_kills_on_profile") else user.get("total_kills", 0),
+            "jail_busts": None if user.get("hide_jailbusts_on_profile") else user.get("jail_busts", 0),
             "created_at": created_at,
             "avatar_url": user.get("avatar_url"),
             "is_dead": is_dead,
@@ -300,6 +302,7 @@ def register(router):
                 "prestige_level", "prestige_name",
                 "created_at", "last_seen", "owned_casinos", "property",
                 "messages_sent", "messages_received", "top_cars", "show_cars_on_profile", "youtube_url",
+                "hide_kills_on_profile", "hide_jailbusts_on_profile",
             ):
                 if key in ("owned_casinos", "top_cars"):
                     out[key] = []
@@ -307,6 +310,8 @@ def register(router):
                     out[key] = 0
                 elif key == "prestige_name":
                     out[key] = ""
+                elif key in ("hide_kills_on_profile", "hide_jailbusts_on_profile"):
+                    out[key] = False  # don't expose other users' hide prefs
                 else:
                     out[key] = None
         # Only include admin_stats when viewing your own profile (never for other users, so it never appears in Network)
@@ -491,6 +496,32 @@ def register(router):
             return {"message": "No change", "profile_autoplay_video": bool(current_user.get("profile_autoplay_video", True))}
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"profile_autoplay_video": profile_autoplay_video}})
         return {"message": "Autoplay preference updated", "profile_autoplay_video": profile_autoplay_video}
+
+    @router.patch("/profile/visibility")
+    async def update_profile_visibility(
+        current_user: dict = Depends(get_current_user),
+        hide_kills_on_profile: Optional[bool] = Body(None, embed=True),
+        hide_jailbusts_on_profile: Optional[bool] = Body(None, embed=True),
+    ):
+        """Hide kills and/or jailbusts from your profile (for everyone including yourself)."""
+        updates = {}
+        if hide_kills_on_profile is not None:
+            updates["hide_kills_on_profile"] = hide_kills_on_profile
+        if hide_jailbusts_on_profile is not None:
+            updates["hide_jailbusts_on_profile"] = hide_jailbusts_on_profile
+        if not updates:
+            return {
+                "message": "No visibility changes",
+                "hide_kills_on_profile": bool(current_user.get("hide_kills_on_profile", False)),
+                "hide_jailbusts_on_profile": bool(current_user.get("hide_jailbusts_on_profile", False)),
+            }
+        await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
+        doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "hide_kills_on_profile": 1, "hide_jailbusts_on_profile": 1})
+        return {
+            "message": "Profile visibility updated",
+            "hide_kills_on_profile": bool(doc.get("hide_kills_on_profile", False)),
+            "hide_jailbusts_on_profile": bool(doc.get("hide_jailbusts_on_profile", False)),
+        }
 
     @router.patch("/profile/mod-online-color")
     async def update_mod_online_color(

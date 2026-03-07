@@ -101,6 +101,11 @@ async def ensure_all_indexes(db):
         await db.mp_blackjack_games.create_index("id", unique=True)
         await db.mp_blackjack_games.create_index("status")
         await db.mp_blackjack_games.create_index("created_at")
+        await db.mp_poker_games.create_index("id", unique=True)
+        await db.mp_poker_games.create_index("status")
+        await db.mp_poker_games.create_index("mode")
+        await db.mp_poker_games.create_index("created_at")
+        await db.mp_poker_games.create_index("user_id")
         await db.videopoker_games.create_index("user_id")
 
         # --- Organised crime ---
