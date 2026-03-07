@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -79,12 +79,9 @@ const ProfileInfoCard = ({
   onSendMoney,
   onOpenSettings,
   adminOnlineColor,
-  bannerImageUrl,
   bannerText,
   isBannerEditing,
-  editImageUrl,
   editText,
-  onEditImageUrlChange,
   onEditTextChange,
   onSaveBanner,
   savingBanner,
@@ -288,25 +285,17 @@ const ProfileInfoCard = ({
         </div>
       )}
 
-      {/* Profile banner / notepad: same card, joined below stats */}
+      {/* Profile notepad: same card, joined below stats. Use [img]url[/img] for images. */}
       {(() => {
-        const displayImageUrl = (bannerImageUrl || '').trim() || null;
         const displayText = (bannerText || '').trim() || null;
         const renderedHtml = displayText ? parseForumContent(displayText) : '';
         return (
           <div className="border-t border-zinc-700/30">
-            <div className="relative min-h-[80px] md:min-h-[100px] flex flex-col justify-center py-4 px-3 md:px-4 overflow-hidden">
-              {displayImageUrl && (
-                <div
-                  className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
-                  style={{ backgroundImage: `url(${displayImageUrl})` }}
-                />
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-              <div className="relative z-10 w-full">
+            <div className="relative min-h-[60px] flex flex-col justify-center py-4 px-3 md:px-4">
+              <div className="w-full">
                 {renderedHtml ? (
                   <div
-                    className="prof-banner-content font-heading text-sm md:text-base text-foreground max-w-2xl mx-auto text-left prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2"
+                    className="prof-banner-content font-heading text-sm md:text-base text-foreground max-w-2xl mx-auto prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 prose-div:my-1"
                     dangerouslySetInnerHTML={{ __html: renderedHtml }}
                   />
                 ) : (
@@ -320,31 +309,20 @@ const ProfileInfoCard = ({
               <div className="p-3 space-y-3 border-t border-primary/20 bg-primary/5">
                 <div>
                   <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
-                    Banner image URL
-                  </label>
-                  <input
-                    type="url"
-                    value={editImageUrl ?? ''}
-                    onChange={(e) => onEditImageUrlChange?.(e.target.value)}
-                    placeholder="https://example.com/image.jpg or [img]URL[/img]"
-                    className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
                     Profile text (BBCode notepad)
                   </label>
                   <textarea
                     ref={bannerTextareaRef}
                     value={editText ?? ''}
                     onChange={(e) => onEditTextChange?.(e.target.value)}
-                    placeholder="Write your profile text... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
+                    placeholder="Write your profile text... [b]bold[/b], [i]italic[/i], [center]centered[/center], [color=red]colour[/color], [img]url[/img], [url]link[/url], :) smileys"
                     rows={6}
                     className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
                   />
                   <div className="flex flex-wrap items-center gap-1 mt-1.5">
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+                    <button type="button" onClick={() => onInsertBannerMarkup?.('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
                     <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) onInsertBannerMarkup?.('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
                   </div>
@@ -682,7 +660,6 @@ export default function Profile() {
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
   const [savingModColor, setSavingModColor] = useState(false);
   const [settingsTab, setSettingsTab] = useState('notifications');
-  const [bannerImageUrlEdit, setBannerImageUrlEdit] = useState('');
   const [bannerTextEdit, setBannerTextEdit] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const bannerTextareaRef = React.useRef(null);
@@ -743,10 +720,9 @@ export default function Profile() {
 
   useEffect(() => {
     if (profile) {
-      setBannerImageUrlEdit(profile.profile_banner_image_url ?? '');
       setBannerTextEdit(profile.profile_banner_text ?? '');
     }
-  }, [profile?.profile_banner_image_url, profile?.profile_banner_text]);
+  }, [profile?.profile_banner_text]);
 
   const openSettings = () => setSettingsOpen(true);
   const fetchPrefs = async () => {
@@ -891,18 +867,15 @@ export default function Profile() {
   const saveBanner = async () => {
     setSavingBanner(true);
     try {
-      let imageUrl = (bannerImageUrlEdit || '').trim();
-      const urlMatch = imageUrl.match(/\[img\](.*?)\[\/img\]/i);
-      if (urlMatch) imageUrl = urlMatch[1].trim();
       await api.patch('/profile/banner', {
-        banner_image_url: imageUrl || null,
+        banner_image_url: null,
         banner_text: (bannerTextEdit || '').trim() || null,
       });
-      toast.success('Profile banner updated');
+      toast.success('Profile text updated');
       const res = await api.get(`/users/${encodeURIComponent(profile?.username)}/profile`);
       setProfile(res.data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to save banner');
+      toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
       setSavingBanner(false);
     }
@@ -1059,12 +1032,9 @@ export default function Profile() {
           onSendMoney={() => navigate('/bank', { state: { transferTo: profile.username } })}
           onOpenSettings={isMe && !isPublicView ? openSettings : undefined}
           adminOnlineColor={me?.admin_online_color}
-          bannerImageUrl={profile.profile_banner_image_url}
           bannerText={profile.profile_banner_text}
           isBannerEditing={isMe && !isPublicView}
-          editImageUrl={bannerImageUrlEdit}
           editText={bannerTextEdit}
-          onEditImageUrlChange={setBannerImageUrlEdit}
           onEditTextChange={setBannerTextEdit}
           onSaveBanner={saveBanner}
           savingBanner={savingBanner}

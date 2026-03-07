@@ -1,5 +1,5 @@
 /**
- * Parse forum topic/comment content: [b], [i], [color=...], [img], [gif], and smileys.
+ * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color], [url], [img], [gif], and smileys.
  * Output is safe HTML (we only emit our own tags). URLs restricted to http/https.
  */
 
@@ -50,7 +50,7 @@ const SMILEYS = [
 
 /**
  * Convert plain text + BBCode-style markup to safe HTML.
- * Supported: [b]...[/b], [i]...[/i], [color=#hex or name]...[/color], [img]url[/img], [gif]url[/gif].
+ * Supported: [b], [i], [u], [s], [center], [color], [url], [img], [gif].
  * Also replaces :) :( etc with emoji.
  */
 export function parseForumContent(content) {
@@ -76,13 +76,25 @@ export function parseForumContent(content) {
     return `\u0001I${idx}\u0001`;
   });
 
-  // 3) Bold and italic (non-greedy, no nesting)
-  s = s.replace(/\[\/?(?:b|i|color=[^\]]*)\]/gi, (m) => m); // keep as-is for next step
+  // 3) Block/alignment and inline formatting (non-greedy)
+  s = s.replace(/\[\/?(?:b|i|u|s|center|color=[^\]]*|url=[^\]]*)\]/gi, (m) => m); // keep as-is for next step
+  s = s.replace(/\[center\](.*?)\[\/center\]/gi, '<div style="text-align:center">$1</div>');
   s = s.replace(/\[b\](.*?)\[\/b\]/gi, '<strong>$1</strong>');
   s = s.replace(/\[i\](.*?)\[\/i\]/gi, '<em>$1</em>');
+  s = s.replace(/\[u\](.*?)\[\/u\]/gi, '<span style="text-decoration:underline">$1</span>');
+  s = s.replace(/\[s\](.*?)\[\/s\]/gi, '<span style="text-decoration:line-through">$1</span>');
   s = s.replace(/\[color=(#[a-fA-F0-9]{3,8}|[a-zA-Z]+)\](.*?)\[\/color\]/gi, (_, color, text) => {
     const c = color.startsWith('#') ? color : color;
     return `<span style="color:${escapeAttr(c)}">${text}</span>`;
+  });
+  // [url=...]text[/url] and [url]...[/url]
+  s = s.replace(/\[url=(.*?)\](.*?)\[\/url\]/gi, (_, href, text) => {
+    const safe = safeUrl(href);
+    return safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" class="forum-content-link">${text}</a>` : text;
+  });
+  s = s.replace(/\[url\](.*?)\[\/url\]/gi, (_, url) => {
+    const safe = safeUrl(url);
+    return safe ? `<a href="${escapeAttr(safe)}" target="_blank" rel="noopener noreferrer" class="forum-content-link">${url}</a>` : url;
   });
 
   // 4) Smileys (replace text with emoji)
