@@ -502,6 +502,18 @@ def register(router):
             bot_bet = int(bot.get("current_bet") or 0)
             human_bet = int(human.get("current_bet") or 0)
             if human_bet == bot_bet:
+                street = g.get("street")
+                # Human check/call completed the round. On river, go straight to showdown so the hand doesn't get stuck.
+                if street == "river":
+                    for p in players:
+                        p["current_bet"] = 0
+                    await db.mp_poker_games.update_one(
+                        {"id": g["id"]},
+                        {"$set": {"players": players, "pot": pot, "to_call": 0, "street": "showdown"}},
+                    )
+                    await _vs_dealer_showdown(g["id"])
+                    g = await db.mp_poker_games.find_one({"id": g["id"]})
+                    return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
                 g = await db.mp_poker_games.find_one({"id": g["id"]})
                 await db.mp_poker_games.update_one(
                     {"id": g["id"]},

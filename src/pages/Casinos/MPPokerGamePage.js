@@ -441,9 +441,44 @@ export default function MPPokerGamePage() {
       const body = isModeVsDealerRef.current
         ? { action, amount: amount ?? undefined, game_id: gameId || undefined }
         : { action, amount: amount ?? undefined };
-      await api.post(endpoint, body);
+      const res = await api.post(endpoint, body);
+      // Vs dealer: use response game immediately so check on river → showdown updates UI without getting stuck
+      if (isModeVsDealerRef.current && res?.data?.game) {
+        const g = res.data.game;
+        setGame((prev) => {
+          if (g?.status === 'completed' && prev?.status !== 'completed') {
+            const uid = myUserIdRef.current;
+            const myResult = (g?.results || []).find((r) => r.user_id === uid);
+            if (myResult?.result === 'win') {
+              setShowWin(true);
+              setTimeout(() => setShowWin(false), 4500);
+            }
+          }
+          return g;
+        });
+        await refreshUser();
+        setActionLoading(false);
+        return;
+      }
+      // Multiplayer: use response game immediately so check on river → showdown updates UI without getting stuck
+      if (!isModeVsDealerRef.current && res?.data?.id && Array.isArray(res?.data?.players)) {
+        const g = res.data;
+        setGame((prev) => {
+          if (g?.status === 'completed' && prev?.status !== 'completed') {
+            const uid = myUserIdRef.current;
+            const myResult = (g?.results || []).find((r) => r.user_id === uid);
+            if (myResult?.result === 'win') {
+              setShowWin(true);
+              setTimeout(() => setShowWin(false), 4500);
+            }
+          }
+          return g;
+        });
+        await refreshUser();
+        setActionLoading(false);
+        return;
+      }
       // Re-fetch after acting — bot may have responded, street may have advanced
-      // All-in needs longer: dealer must respond AND server runs out remaining streets
       const waitMs = action === 'all_in' ? 900 : 350;
       await new Promise(r => setTimeout(r, waitMs));
       const fetchEndpoint = isModeVsDealerRef.current
@@ -523,16 +558,17 @@ export default function MPPokerGamePage() {
   const maxSeats = game?.max_players || players.length || 6;
   const tablePositions = getTablePositions(Math.min(9, Math.max(2, players.length || maxSeats)));
 
-  // Turn status message for "what's happening"
+  // Turn status message for "what's happening" (multiplayer + vs dealer/AI)
   const currentTurnPlayer = currentTurnIndex >= 0 && currentTurnIndex < players.length ? players[currentTurnIndex] : null;
   const turnStatusMessage = (() => {
     if (status !== 'playing' || (phase !== 'playing' && !isVsDealer)) return null;
     if (street === 'showdown' || status === 'completed') return null;
     if (currentTurnIndex < 0) return null;
     const name = currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? 'Someone');
-    const isTheirTurn = currentTurnPlayer?.user_id === myUserId || (currentTurnPlayer?.is_bot && isVsDealer);
     if (myPlayer?.status === 'folded') {
-      return `You folded. Waiting for ${name} to check, call, raise, or fold.`;
+      return isVsDealer && currentTurnPlayer?.is_bot
+        ? 'You folded. Dealer is deciding…'
+        : `You folded. Waiting for ${name} to check, call, raise, or fold.`;
     }
     if (myPlayer?.status === 'all_in') {
       return `You're all-in. Waiting for the hand to finish.`;
@@ -540,6 +576,9 @@ export default function MPPokerGamePage() {
     if (isMyTurn) {
       const actions = needToCall > 0 ? 'call, raise, or fold' : 'check, bet, raise, or fold';
       return `Your turn — ${actions}.`;
+    }
+    if (isVsDealer && currentTurnPlayer?.is_bot) {
+      return 'Dealer is deciding…';
     }
     return `Waiting for ${name} to check, call, raise, or fold.`;
   })();
