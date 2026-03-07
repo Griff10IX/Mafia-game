@@ -1,5 +1,5 @@
 /**
- * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color], [url], [img], [gif], and smileys.
+ * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color]/[colour], [url], [img], [gif], and smileys.
  * Output is safe HTML (we only emit our own tags). URLs restricted to http/https.
  */
 
@@ -50,7 +50,7 @@ const SMILEYS = [
 
 /**
  * Convert plain text + BBCode-style markup to safe HTML.
- * Supported: [b], [i], [u], [s], [center], [color], [url], [img], [gif].
+ * Supported: [b], [i], [u], [s], [center], [color=name|hex] or [colour=...], [url], [img], [gif].
  * Also replaces :) :( etc with emoji.
  */
 export function parseForumContent(content) {
@@ -76,15 +76,21 @@ export function parseForumContent(content) {
     return `\u0001I${idx}\u0001`;
   });
 
-  // 3) Block/alignment and inline formatting (non-greedy)
+  // 3) Normalise British [colour] to [color] so one replacement handles both
+  s = s.replace(/\[colour=/gi, '[color=');
+  s = s.replace(/\[\/colour\]/gi, '[/color]');
+
+  // Block/alignment and inline formatting (non-greedy)
   s = s.replace(/\[\/?(?:b|i|u|s|center|color=[^\]]*|url=[^\]]*)\]/gi, (m) => m); // keep as-is for next step
   s = s.replace(/\[center\](.*?)\[\/center\]/gi, '<div style="text-align:center">$1</div>');
   s = s.replace(/\[b\](.*?)\[\/b\]/gi, '<strong>$1</strong>');
   s = s.replace(/\[i\](.*?)\[\/i\]/gi, '<em>$1</em>');
   s = s.replace(/\[u\](.*?)\[\/u\]/gi, '<span style="text-decoration:underline">$1</span>');
   s = s.replace(/\[s\](.*?)\[\/s\]/gi, '<span style="text-decoration:line-through">$1</span>');
-  s = s.replace(/\[color=(#[a-fA-F0-9]{3,8}|[a-zA-Z]+)\](.*?)\[\/color\]/gi, (_, color, text) => {
-    const c = color.startsWith('#') ? color : color;
+  // [color=value] or [colour=value]: value = hex (#rgb/#rrggbb) or any CSS color name (red, re, midnightblue, etc.)
+  s = s.replace(/\[color=([^\]\s;"']+)\](.*?)\[\/color\]/gi, (_, color, text) => {
+    const c = (color || '').trim();
+    if (!c) return text;
     return `<span style="color:${escapeAttr(c)}">${text}</span>`;
   });
   // [url=...]text[/url] and [url]...[/url]

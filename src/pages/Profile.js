@@ -5,7 +5,6 @@ import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import PrestigeBadge from '../components/PrestigeBadge';
 import { parseForumContent, insertAtCursor } from '../utils/forumContent';
 import styles from '../styles/noir.module.css';
@@ -641,7 +640,6 @@ export default function Profile() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, messages: true });
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
@@ -659,7 +657,6 @@ export default function Profile() {
   const [savingAutoplay, setSavingAutoplay] = useState(false);
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
   const [savingModColor, setSavingModColor] = useState(false);
-  const [settingsTab, setSettingsTab] = useState('notifications');
   const [bannerTextEdit, setBannerTextEdit] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const bannerTextareaRef = React.useRef(null);
@@ -724,7 +721,6 @@ export default function Profile() {
     }
   }, [profile?.profile_banner_text]);
 
-  const openSettings = () => setSettingsOpen(true);
   const fetchPrefs = async () => {
     try {
       const res = await api.get('/profile/preferences');
@@ -762,7 +758,7 @@ export default function Profile() {
     }
   };
   useEffect(() => {
-    if (settingsOpen && isMe) {
+    if (isMe && !viewPublic && profile) {
       fetchPrefs();
       fetchTelegram();
       fetchCarsPrefs();
@@ -770,7 +766,7 @@ export default function Profile() {
       setYoutubeUrl(profile?.youtube_url ?? '');
       setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
     }
-  }, [settingsOpen, isMe, profile?.youtube_url, me?.profile_autoplay_video]);
+  }, [isMe, viewPublic, profile, profile?.youtube_url, me?.profile_autoplay_video]);
 
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
@@ -1066,24 +1062,94 @@ export default function Profile() {
               <div className="prof-art-line text-primary mx-3" />
             </div>
 
+            {/* Notifications */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
-                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-                  Profile settings
-                </h2>
-                <button
-                  type="button"
-                  onClick={openSettings}
-                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
-                  title="Open profile settings"
-                  aria-label="Open profile settings"
-                >
-                  <Settings size={12} className="md:w-3.5 md:h-3.5" />
-                </button>
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Notifications</h2>
               </div>
-              <div className="px-3 py-2.5 text-[11px] md:text-xs text-mutedForeground font-heading">
-                Notifications, profile (cars, video), account (Telegram, password). Click the gear to open.
+              <div className="p-3 space-y-2">
+                <p className="text-xs text-mutedForeground mb-2">Choose which inbox notifications you receive.</p>
+                {[
+                  { key: 'ent_games', label: 'E-Games (dice & gbox results, new games)' },
+                  { key: 'oc_invites', label: 'OC Heist invites' },
+                  { key: 'attacks', label: 'Kills & attack alerts' },
+                  { key: 'system', label: 'System (rank ups, rewards)' },
+                  { key: 'messages', label: 'Direct messages' },
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex items-center justify-between gap-3 py-1">
+                    <span className="text-sm text-foreground">{label}</span>
+                    <button type="button" role="switch" aria-checked={!!prefs[key]} disabled={savingPrefs} onClick={() => updatePref(key, !prefs[key])} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs[key] ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingPrefs ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div className="prof-art-line text-primary mx-3" />
+            </div>
+
+            {/* Profile: cars, video, autoplay */}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Profile (cars & video)</h2>
+              </div>
+              <div className="p-3 space-y-4">
+                <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Show cars on profile</h3>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <span className="text-sm text-foreground">Show cars on profile</span>
+                    <button type="button" role="switch" aria-checked={carsShowOnProfile} disabled={savingCars} onClick={() => setCarsShowOnProfile((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${carsShowOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingCars ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${carsShowOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <label className="block text-xs text-mutedForeground mt-2 mb-1">Featured car (optional)</label>
+                  <select value={carsFeaturedId} onChange={(e) => setCarsFeaturedId(e.target.value)} disabled={savingCars} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
+                    <option value="">None</option>
+                    {myCarsList.map((c) => (<option key={c.id} value={c.id}>{c.name} ({c.rarity})</option>))}
+                  </select>
+                  <button type="button" onClick={saveCarsPrefs} disabled={savingCars} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingCars ? 'Saving…' : 'Save cars'}</button>
+                </div>
+                <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Autoplay profile videos</h3>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <span className="text-sm text-foreground">Autoplay when viewing others&apos; profiles</span>
+                    <button type="button" role="switch" aria-checked={profileAutoplayVideo} disabled={savingAutoplay} onClick={() => setProfileAutoplayVideo((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${profileAutoplayVideo ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingAutoplay ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${profileAutoplayVideo ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <button type="button" onClick={saveVideoAutoplay} disabled={savingAutoplay} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingAutoplay ? 'Saving…' : 'Save'}</button>
+                </div>
+                <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Profile video (YouTube)</h3>
+                  <input type="url" placeholder="https://www.youtube.com/watch?v=..." value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
+                  <button type="button" onClick={saveYoutube} disabled={savingYoutube} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingYoutube ? 'Saving…' : 'Save video'}</button>
+                </div>
+              </div>
+              <div className="prof-art-line text-primary mx-3" />
+            </div>
+
+            {/* Account: Telegram, password */}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Account</h2>
+              </div>
+              <div className="p-3 space-y-4">
+                <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Telegram (Auto Rank)</h3>
+                  <p className="text-xs text-mutedForeground mb-2">Chat ID from @userinfobot. Optional: bot token from @BotFather.</p>
+                  <input type="text" placeholder="Telegram chat ID" value={telegramChatId} onChange={(e) => setTelegramChatId(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
+                  <input type="password" placeholder="Bot token (optional)" value={telegramBotToken} onChange={(e) => setTelegramBotToken(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
+                  <button type="button" onClick={saveTelegram} disabled={savingTelegram} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingTelegram ? 'Saving...' : 'Save'}</button>
+                </div>
+                <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Change password</h3>
+                  <input type="password" placeholder="Current password" value={passwordForm.current} onChange={(e) => setPasswordForm((f) => ({ ...f, current: e.target.value }))} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
+                  <input type="password" placeholder="New password (min 6 characters)" value={passwordForm.new} onChange={(e) => setPasswordForm((f) => ({ ...f, new: e.target.value }))} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
+                  <input type="password" placeholder="Confirm new password" value={passwordForm.confirm} onChange={(e) => setPasswordForm((f) => ({ ...f, confirm: e.target.value }))} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
+                  <button type="button" onClick={changePassword} disabled={changingPassword || !passwordForm.current || !passwordForm.new || !passwordForm.confirm} className="w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">{changingPassword ? 'Changing...' : 'Change password'}</button>
+                </div>
               </div>
               <div className="prof-art-line text-primary mx-3" />
             </div>
@@ -1238,159 +1304,6 @@ export default function Profile() {
           </>
         )}
       </div>
-
-      {isMe && (
-        <Dialog open={settingsOpen} onOpenChange={(open) => { setSettingsOpen(open); if (!open) setSettingsTab('notifications'); }}>
-          <DialogContent className={`max-w-md ${styles.panel} border-primary/20`}>
-            <DialogHeader>
-              <DialogTitle className="font-heading text-primary">Profile settings</DialogTitle>
-              <DialogDescription>Use the tabs below to switch sections.</DialogDescription>
-            </DialogHeader>
-            <div className="flex border-b border-border mb-4 gap-0">
-              {[
-                { id: 'notifications', label: 'Notifications' },
-                { id: 'profile', label: 'Edit profile' },
-                { id: 'account', label: 'Account' },
-              ].map(({ id, label }) => (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() => setSettingsTab(id)}
-                  className={`flex-1 py-2 px-2 text-[10px] md:text-xs font-heading font-bold uppercase tracking-wider border-b-2 transition-colors ${
-                    settingsTab === id ? 'border-primary text-primary' : 'border-transparent text-mutedForeground hover:text-foreground'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div className="min-h-[200px]">
-              {settingsTab === 'notifications' && (
-                <div className="space-y-2">
-                  <p className="text-xs text-mutedForeground mb-3">Choose which inbox notifications you receive. Off = no new notifications for that type.</p>
-                  {[
-                    { key: 'ent_games', label: 'E-Games (dice & gbox results, new games)' },
-                    { key: 'oc_invites', label: 'OC Heist invites' },
-                    { key: 'attacks', label: 'Kills & attack alerts' },
-                    { key: 'system', label: 'System (rank ups, rewards)' },
-                    { key: 'messages', label: 'Direct messages' },
-                  ].map(({ key, label }) => (
-                    <div key={key} className="flex items-center justify-between gap-3 py-1">
-                      <span className="text-sm text-foreground">{label}</span>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={!!prefs[key]}
-                        disabled={savingPrefs}
-                        onClick={() => updatePref(key, !prefs[key])}
-                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${prefs[key] ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingPrefs ? 'opacity-60' : ''}`}
-                      >
-                        <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${prefs[key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {settingsTab === 'profile' && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-2">Profile cars</h3>
-                    <p className="text-xs text-mutedForeground mb-2">Show up to 5 cars. Pick one as featured.</p>
-                    <div className="flex items-center justify-between gap-3 py-1">
-                      <span className="text-sm text-foreground">Show cars on profile</span>
-                      <button type="button" role="switch" aria-checked={carsShowOnProfile} disabled={savingCars} onClick={() => setCarsShowOnProfile((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${carsShowOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingCars ? 'opacity-60' : ''}`}>
-                        <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${carsShowOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                      </button>
-                    </div>
-                    <label className="block text-xs text-mutedForeground mt-2 mb-1">Featured car (optional)</label>
-                    <select value={carsFeaturedId} onChange={(e) => setCarsFeaturedId(e.target.value)} disabled={savingCars} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/50">
-                      <option value="">None</option>
-                      {myCarsList.map((c) => (<option key={c.id} value={c.id}>{c.name} ({c.rarity})</option>))}
-                    </select>
-                    <button type="button" onClick={saveCarsPrefs} disabled={savingCars} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingCars ? 'Saving…' : 'Save cars'}</button>
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-2">Autoplay videos</h3>
-                    <p className="text-xs text-mutedForeground mb-2">When you view someone&apos;s profile, their video autoplays (muted) if on.</p>
-                    <div className="flex items-center justify-between gap-3 py-1">
-                      <span className="text-sm text-foreground">Autoplay profile videos</span>
-                      <button type="button" role="switch" aria-checked={profileAutoplayVideo} disabled={savingAutoplay} onClick={() => setProfileAutoplayVideo((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${profileAutoplayVideo ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingAutoplay ? 'opacity-60' : ''}`}>
-                        <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${profileAutoplayVideo ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                      </button>
-                    </div>
-                    <button type="button" onClick={saveVideoAutoplay} disabled={savingAutoplay} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingAutoplay ? 'Saving…' : 'Save'}</button>
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-2">Profile video (YouTube)</h3>
-                    <p className="text-xs text-mutedForeground mb-2">Link shown on your profile. Autoplays for visitors if they have autoplay on.</p>
-                    <input type="url" placeholder="https://www.youtube.com/watch?v=..." value={youtubeUrl} onChange={(e) => setYoutubeUrl(e.target.value)} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
-                    <button type="button" onClick={saveYoutube} disabled={savingYoutube} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingYoutube ? 'Saving…' : 'Save video'}</button>
-                  </div>
-                </div>
-              )}
-              {settingsTab === 'account' && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-2">Telegram (Auto Rank)</h3>
-                    <p className="text-xs text-mutedForeground mb-2">Chat ID from @userinfobot. Optional: use your own bot token from @BotFather so you get notifications (if the shared bot doesn’t work for you).</p>
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        placeholder="Telegram chat ID"
-                        value={telegramChatId}
-                        onChange={(e) => setTelegramChatId(e.target.value)}
-                        className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      <input
-                        type="password"
-                        placeholder="Bot token (optional — from @BotFather)"
-                        value={telegramBotToken}
-                        onChange={(e) => setTelegramBotToken(e.target.value)}
-                        className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      <button type="button" onClick={saveTelegram} disabled={savingTelegram} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingTelegram ? 'Saving...' : 'Save'}</button>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-2">Change password</h3>
-                    <div className="space-y-2">
-                      <input
-                        type="password"
-                        placeholder="Current password"
-                        value={passwordForm.current}
-                        onChange={(e) => setPasswordForm((f) => ({ ...f, current: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      <input
-                        type="password"
-                        placeholder="New password (min 6 characters)"
-                        value={passwordForm.new}
-                        onChange={(e) => setPasswordForm((f) => ({ ...f, new: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      <input
-                        type="password"
-                        placeholder="Confirm new password"
-                        value={passwordForm.confirm}
-                        onChange={(e) => setPasswordForm((f) => ({ ...f, confirm: e.target.value }))}
-                        className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      />
-                      <button
-                        type="button"
-                        onClick={changePassword}
-                        disabled={changingPassword || !passwordForm.current || !passwordForm.new || !passwordForm.confirm}
-                        className="mt-2 w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {changingPassword ? 'Changing...' : 'Change password'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
-      )}
     </div>
   );
 }
