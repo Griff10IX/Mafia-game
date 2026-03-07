@@ -387,6 +387,7 @@ export default function MPPokerGamePage() {
       const res = await api.post(endpoint, { action, amount: amount || undefined });
       setGame(isVsDealer ? (res.data?.game ?? null) : (res.data ?? null));
       await refreshUser();
+      if (action === 'check') toast.success('Checked');
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Action failed'); }
     finally { setActionLoading(false); }
   };
@@ -438,7 +439,8 @@ export default function MPPokerGamePage() {
     : (currentTurnIndex === 0);
   const toCall = game?.to_call ?? 0;
   const myCurrentBet = myPlayer?.current_bet ?? 0;
-  const needToCall = Math.max(0, toCall - myCurrentBet);
+  const maxBetAtTable = players.length ? Math.max(0, ...players.map((p) => Number(p.current_bet) || 0)) : 0;
+  const needToCall = Math.max(0, toCall - myCurrentBet, maxBetAtTable - myCurrentBet);
   const minRaise = game?.min_raise ?? game?.big_blind ?? 1;
   const myStack = myPlayer?.stack ?? 0;
   const showAllCards = street === 'showdown' || status === 'completed';
@@ -804,13 +806,22 @@ export default function MPPokerGamePage() {
                   min={minRaise}
                   max={myStack}
                   value={raiseAmount}
-                  onChange={(e) => setRaiseAmount(e.target.value)}
+                  onChange={(e) => setRaiseAmount(e.target.value.replace(/,/g, ''))}
                   placeholder={`Min ${formatMoneyFull(minRaise)}`}
                   className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
                 />
                 <button type="button" disabled={actionLoading || !raiseAmount}
-                  onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
+                  onClick={() => {
+                    const raw = Number(String(raiseAmount).replace(/,/g, '').trim()) || 0;
+                    const amt = raw > 0 ? Math.max(minRaise, Math.min(myStack, raw)) : minRaise;
+                    if (raw > 0 && raw < minRaise) {
+                      toast.error(`Minimum ${needToCall > 0 ? 'raise' : 'bet'} is ${formatMoneyFull(minRaise)}`);
+                      return;
+                    }
+                    act(needToCall > 0 ? 'raise' : 'bet', amt);
+                    setRaiseAmount('');
+                  }}
                   className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                   style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200' }}>
                   {needToCall > 0 ? 'Raise' : 'Bet'}

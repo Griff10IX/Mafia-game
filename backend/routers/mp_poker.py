@@ -381,7 +381,7 @@ def register(router):
             "current_turn_index": 0,
             "turn_started_at": now_iso,
             "min_raise": blind * 2,
-            "to_call": blind,
+            "to_call": blind * 2,
             "hand_number": 1,
             "created_at": now_iso,
             "results": None,
@@ -449,11 +449,11 @@ def register(router):
         elif action in ("bet", "raise"):
             amt = max(amount, min_raise) if action == "raise" else amount
             if amt < min_raise and to_call > 0:
-                raise HTTPException(status_code=400, detail="Raise must be at least min_raise")
+                raise HTTPException(status_code=400, detail=f"Raise must be at least {min_raise:,}")
             if amt > stack:
                 amt = stack
             if amt <= 0:
-                raise HTTPException(status_code=400, detail="Invalid amount")
+                raise HTTPException(status_code=400, detail=f"Bet/raise must be at least {min_raise:,}")
             human["stack"] -= amt
             human["current_bet"] = current_bet + amt
             human["total_bet_this_hand"] = int(human.get("total_bet_this_hand") or 0) + amt
