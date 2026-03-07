@@ -362,6 +362,21 @@ const ProfileInfoCard = ({
           </div>
         );
       })()}
+
+      {/* Account Created — inside same card, below notepad */}
+      {(isMe || profile.created_at) && (
+        <div className="border-t border-zinc-700/30">
+          <div className="px-3 py-2 md:px-4 bg-primary/8 border-b border-primary/20 text-center">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+              Account Created
+            </span>
+          </div>
+          <div className="px-3 py-2 md:px-4 md:py-2.5 text-foreground font-heading text-[11px] md:text-sm text-center">
+            {formatDateTime(profile.created_at)}
+          </div>
+        </div>
+      )}
+
       <div className="prof-art-line text-primary mx-3" />
     </div>
   );
@@ -1067,21 +1082,6 @@ export default function Profile() {
         </div>
 
         <TopCarsCard topCars={profile.top_cars} showCars={profile.show_cars_on_profile} />
-
-        {(isMe || profile.created_at) && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prof-fade-in`} style={{ animationDelay: '0.1s' }}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2.5 md:px-4 bg-primary/8 border-b border-primary/20 text-center">
-            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
-              Account Created
-            </span>
-          </div>
-          <div className="px-3 py-2 md:px-4 md:py-3 text-foreground font-heading text-[11px] md:text-sm text-center">
-            {formatDateTime(profile.created_at)}
-          </div>
-          <div className="prof-art-line text-primary mx-4" />
-        </div>
-        )}
 
         {isMe && (hasAdminEmail || isModerator) && (
           <>
