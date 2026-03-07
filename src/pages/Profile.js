@@ -91,6 +91,8 @@ const ProfileInfoCard = ({
   property: profileProperty = null,
   isPropertyOwner = false,
   showCompactHonoursAndProperties = false,
+  topCars = [],
+  showCarsOnProfile = true,
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
@@ -328,6 +330,31 @@ const ProfileInfoCard = ({
               </div>
             </div>
           </div>
+          {/* Compact Cars row under Honours/Properties */}
+          {showCarsOnProfile !== false && topCars?.length > 0 && (
+            <div className="border-t border-zinc-700/30 px-2.5 py-1 md:px-3">
+              <div className="flex items-center gap-0.5 mb-0.5">
+                <Car size={9} className="text-primary shrink-0" />
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Cars</span>
+              </div>
+              <div className="flex flex-wrap gap-0.5">
+                {topCars.map((car) => {
+                  const label = RARITY_LABELS[car.rarity] || car.rarity || '';
+                  const badgeClass = RARITY_BADGE_CLASSES[car.rarity] || RARITY_BADGE_CLASSES.common;
+                  return (
+                    <Link
+                      key={car.id}
+                      to={`/view-car?id=${encodeURIComponent(car.id)}`}
+                      className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[8px] font-heading ${badgeClass}`}
+                    >
+                      <span className="shrink-0 uppercase">{label}:</span>
+                      <span className="text-foreground truncate max-w-[70px] sm:max-w-[90px]">{car.name}</span>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1337,13 +1364,13 @@ export default function Profile() {
               property={profile.property}
               isPropertyOwner={isMe}
               showCompactHonoursAndProperties
+              topCars={profile.top_cars}
+              showCarsOnProfile={profile.show_cars_on_profile}
             />
 
             {profile.youtube_url && (
               <YouTubeCard youtubeUrl={profile.youtube_url} />
             )}
-
-            <TopCarsCard topCars={profile.top_cars} showCars={profile.show_cars_on_profile} />
 
             {!isMe && profile.admin_stats && (
               <AdminStatsCard adminStats={profile.admin_stats} />
