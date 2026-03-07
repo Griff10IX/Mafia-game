@@ -1,5 +1,5 @@
-# Crack the Safe: jackpot game. 50 attempts/day free, +50 purchasable. Admins unlimited.
-from datetime import datetime, timezone, timedelta
+# Crack the Safe: jackpot game. Every attempt costs 1M. No free entries, no purchasable extra. Admins unlimited.
+from datetime import datetime, timezone
 import random
 from typing import List
 
@@ -8,15 +8,12 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, _is_admin, log_activity
 
-SAFE_ENTRY_COST = 5_000_000
+SAFE_ENTRY_COST = 1_000_000
 SAFE_JACKPOT_SEED = 5_000_000
 SAFE_JACKPOT_SHARE = 0.90
 SAFE_DIGITS = 5
 SAFE_MIN = 1
 SAFE_MAX = 9
-FREE_DAILY_ATTEMPTS = 50
-BONUS_ATTEMPTS = 50
-BONUS_ATTEMPTS_COST = 50_000_000
 
 
 class SafeGuessRequest(BaseModel):
@@ -31,21 +28,6 @@ class SafeGuessRequest(BaseModel):
             if not (SAFE_MIN <= n <= SAFE_MAX):
                 raise ValueError(f"Each number must be between {SAFE_MIN} and {SAFE_MAX}")
         return v
-
-
-def _today_str() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
-
-
-async def _get_daily(user_id: str) -> dict:
-    """Get or create today's daily tracking doc for a user."""
-    today = _today_str()
-    doc = await db.safe_daily.find_one({"user_id": user_id, "date": today})
-    if not doc:
-        doc = {"user_id": user_id, "date": today, "attempts_used": 0, "bonus_purchased": False}
-        await db.safe_daily.insert_one(doc)
-        doc = await db.safe_daily.find_one({"user_id": user_id, "date": today})
-    return doc
 
 
 async def _get_or_create_safe():
@@ -86,6 +68,9 @@ def register(router):
         clues = _generate_clues(combo, total_attempts)
         is_admin = _is_admin(user)
 
+        user_money = int(user.get("money") or 0)
+        can_guess = is_admin or user_money >= SAFE_ENTRY_COST
+
         if is_admin:
             response = {
                 "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
@@ -96,25 +81,10 @@ def register(router):
                 "next_guess_at": None,
                 "entry_cost": SAFE_ENTRY_COST,
                 "clues": clues,
-                "attempts_used": 0,
-                "attempts_limit": None,
-                "bonus_purchased": False,
                 "is_admin": True,
-                "bonus_cost": BONUS_ATTEMPTS_COST,
                 "admin_combination": combo,
             }
             return response
-
-        daily = await _get_daily(user["id"])
-        attempts_used = daily.get("attempts_used", 0)
-        bonus_purchased = daily.get("bonus_purchased", False)
-        attempts_limit = FREE_DAILY_ATTEMPTS + (BONUS_ATTEMPTS if bonus_purchased else 0)
-        attempts_remaining = max(0, attempts_limit - attempts_used)
-        can_guess = attempts_remaining > 0
-
-        now = datetime.now(timezone.utc)
-        midnight_tomorrow = (now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1))
-        next_guess_at = midnight_tomorrow.isoformat() if not can_guess else None
 
         return {
             "jackpot": safe.get("jackpot", SAFE_JACKPOT_SEED),
@@ -122,14 +92,10 @@ def register(router):
             "last_winner_username": safe.get("last_winner_username"),
             "last_won_at": safe.get("last_won_at").isoformat() if safe.get("last_won_at") else None,
             "can_guess": can_guess,
-            "next_guess_at": next_guess_at,
+            "next_guess_at": None,
             "entry_cost": SAFE_ENTRY_COST,
             "clues": clues,
-            "attempts_used": attempts_used,
-            "attempts_limit": attempts_limit,
-            "bonus_purchased": bonus_purchased,
             "is_admin": False,
-            "bonus_cost": BONUS_ATTEMPTS_COST,
         }
 
     @router.post("/crack-safe/guess")
@@ -139,15 +105,6 @@ def register(router):
         now = datetime.now(timezone.utc)
         is_admin = _is_admin(user)
 
-        if not is_admin:
-            daily = await _get_daily(user["id"])
-            attempts_used = daily.get("attempts_used", 0)
-            bonus_purchased = daily.get("bonus_purchased", False)
-            attempts_limit = FREE_DAILY_ATTEMPTS + (BONUS_ATTEMPTS if bonus_purchased else 0)
-            if attempts_used >= attempts_limit:
-                extra = "" if bonus_purchased else f" You can purchase {BONUS_ATTEMPTS} more for ${BONUS_ATTEMPTS_COST:,}."
-                raise HTTPException(status_code=400, detail=f"You have used all your attempts for today.{extra}")
-
         if user.get("money", 0) < SAFE_ENTRY_COST:
             raise HTTPException(status_code=400, detail=f"You need ${SAFE_ENTRY_COST:,} to attempt to crack the safe.")
 
@@ -155,12 +112,6 @@ def register(router):
 
         jackpot_contribution = int(SAFE_ENTRY_COST * SAFE_JACKPOT_SHARE)
         await db.safe_game.update_one({}, {"$inc": {"jackpot": jackpot_contribution, "total_attempts": 1}})
-
-        if not is_admin:
-            await db.safe_daily.update_one(
-                {"user_id": user["id"], "date": _today_str()},
-                {"$inc": {"attempts_used": 1}},
-            )
 
         cracked = req.numbers == combo
         correct_positions = sum(1 for a, b in zip(req.numbers, combo) if a == b)
@@ -210,16 +161,6 @@ def register(router):
         fresh = await db.safe_game.find_one({})
         clues = _generate_clues(fresh["combination"], fresh.get("total_attempts", 0))
 
-        # Refresh daily to get updated count
-        if not is_admin:
-            daily = await _get_daily(user["id"])
-            attempts_used = daily.get("attempts_used", 0)
-            bonus_purchased = daily.get("bonus_purchased", False)
-            attempts_limit = FREE_DAILY_ATTEMPTS + (BONUS_ATTEMPTS if bonus_purchased else 0)
-            attempts_remaining = max(0, attempts_limit - attempts_used)
-        else:
-            attempts_remaining = None
-
         # Only sometimes reveal how many digits were in the correct position (randomly, not every attempt)
         show_position_hint = random.random() < 0.5
         message = (
@@ -232,34 +173,4 @@ def register(router):
             "correct_positions": correct_positions if show_position_hint else None,
             "clues": clues,
             "message": message,
-            "attempts_remaining": attempts_remaining,
-        }
-
-    @router.post("/crack-safe/buy-attempts")
-    async def crack_safe_buy_attempts(user: dict = Depends(get_current_user_verified)):
-        if _is_admin(user):
-            raise HTTPException(status_code=400, detail="Admins have unlimited attempts.")
-
-        daily = await _get_daily(user["id"])
-        if daily.get("bonus_purchased"):
-            raise HTTPException(status_code=400, detail="You have already purchased extra attempts today.")
-
-        if user.get("money", 0) < BONUS_ATTEMPTS_COST:
-            raise HTTPException(status_code=400, detail=f"You need ${BONUS_ATTEMPTS_COST:,} to purchase extra attempts.")
-
-        await db.users.update_one({"id": user["id"]}, {"$inc": {"money": -BONUS_ATTEMPTS_COST}})
-        await db.safe_daily.update_one(
-            {"user_id": user["id"], "date": _today_str()},
-            {"$set": {"bonus_purchased": True}},
-        )
-        await log_activity(
-            user["id"],
-            user.get("username") or "?",
-            "crack_safe_buy_attempts",
-            {"bonus_attempts": BONUS_ATTEMPTS, "cost": BONUS_ATTEMPTS_COST},
-        )
-        return {
-            "success": True,
-            "message": f"You purchased {BONUS_ATTEMPTS} extra attempts for ${BONUS_ATTEMPTS_COST:,}!",
-            "bonus_attempts": BONUS_ATTEMPTS,
         }

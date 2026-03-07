@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Lock, Trophy, Info, ChevronUp, ChevronDown, Clock, KeyRound, ShoppingCart, Infinity } from 'lucide-react';
+import { Lock, Trophy, Info, ChevronUp, ChevronDown, KeyRound, Infinity } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import styles from '../styles/noir.module.css';
 
@@ -73,16 +73,6 @@ function formatDate(iso) {
   try {
     return new Date(iso).toLocaleDateString(undefined, { dateStyle: 'medium' });
   } catch { return iso; }
-}
-
-function formatCountdown(targetIso) {
-  if (!targetIso) return '';
-  const diff = new Date(targetIso) - new Date();
-  if (diff <= 0) return '00:00:00';
-  const h = Math.floor(diff / 3_600_000);
-  const m = Math.floor((diff % 3_600_000) / 60_000);
-  const s = Math.floor((diff % 60_000) / 1_000);
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
 /* ─── SVG Combination Dial ─── */
@@ -412,8 +402,6 @@ export default function CrackSafe() {
   const [result, setResult] = useState(null);
   const [dialAngle, setDialAngle] = useState(0);
   const [shaking, setShaking] = useState(false);
-  const [countdown, setCountdown] = useState('');
-  const [buying, setBuying] = useState(false);
   const [skipAnim, setSkipAnim] = useState(false);
   const spinRef = useRef(null);
 
@@ -429,14 +417,6 @@ export default function CrackSafe() {
   }, []);
 
   useEffect(() => { fetchInfo(); }, [fetchInfo]);
-
-  useEffect(() => {
-    if (!info?.next_guess_at) { setCountdown(''); return; }
-    const tick = () => setCountdown(formatCountdown(info.next_guess_at));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [info?.next_guess_at]);
 
   const handleNumberChange = (index, value) => {
     const next = [...numbers];
@@ -495,30 +475,9 @@ export default function CrackSafe() {
 
   useEffect(() => () => { if (spinRef.current) clearInterval(spinRef.current); }, []);
 
-  const handleBuyAttempts = async () => {
-    if (buying) return;
-    setBuying(true);
-    try {
-      const res = await api.post('/crack-safe/buy-attempts');
-      toast.success(res.data.message);
-      await refreshUser();
-      await fetchInfo();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to purchase attempts');
-    } finally {
-      setBuying(false);
-    }
-  };
-
   const clues = result?.clues ?? info?.clues ?? [];
   const won = result?.cracked === true;
-  const attemptsUsed = info?.attempts_used ?? 0;
-  const attemptsLimit = info?.attempts_limit ?? 50;
-  const bonusPurchased = info?.bonus_purchased ?? false;
   const isAdmin = info?.is_admin ?? false;
-  const baseLimit = 50;
-  const baseFull = attemptsUsed >= baseLimit && !isAdmin;
-  const allFull = !isAdmin && !info?.can_guess;
 
   if (loading) {
     return (
@@ -542,7 +501,7 @@ export default function CrackSafe() {
           Crack the Safe
         </h1>
         <p className="text-[10px] text-zinc-500 font-heading italic mt-1">
-          Enter 5 numbers between 1 and 9 to crack the safe. 50 attempts per day — purchase 50 more for {formatMoney(info?.bonus_cost ?? 50_000_000)}.
+          Enter 5 numbers between 1 and 9 to crack the safe. Each attempt costs {formatMoney(info?.entry_cost ?? 1_000_000)}.
         </p>
       </div>
 
@@ -610,32 +569,6 @@ export default function CrackSafe() {
               </div>
             )}
 
-            {/* Attempts counter */}
-            {!isAdmin && (
-              <div className="w-full space-y-1.5">
-                <div className="flex items-center justify-between text-[10px] font-heading">
-                  <span className="text-zinc-500">Attempts today</span>
-                  <span className={attemptsUsed >= attemptsLimit ? 'text-red-400 font-bold' : 'text-zinc-400'}>
-                    {attemptsUsed} / {attemptsLimit}
-                    {bonusPurchased && <span className="text-zinc-600 ml-1">(+50 bonus)</span>}
-                  </span>
-                </div>
-                {/* Progress bar */}
-                <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden">
-                  <div style={{
-                    width: `${Math.min(100, (attemptsUsed / attemptsLimit) * 100)}%`,
-                    height: '100%',
-                    borderRadius: '9999px',
-                    background: attemptsUsed >= attemptsLimit
-                      ? 'rgba(239,68,68,0.7)'
-                      : attemptsUsed >= baseLimit
-                        ? 'rgba(234,179,8,0.6)'
-                        : 'rgba(var(--noir-primary-rgb),0.6)',
-                    transition: 'width 0.3s ease',
-                  }} />
-                </div>
-              </div>
-            )}
             {isAdmin && (
               <div className="w-full flex items-center justify-center gap-2 text-[10px] font-heading text-red-400/70">
                 <Infinity size={12} />
@@ -668,35 +601,13 @@ export default function CrackSafe() {
                   cursor: guessing ? 'not-allowed' : 'pointer',
                 }}
               >
-                {guessing ? '🔐 Cracking...' : `Guess (${formatMoney(info?.entry_cost ?? 5_000_000)})`}
+                {guessing ? '🔐 Cracking...' : `Guess (${formatMoney(info?.entry_cost ?? 1_000_000)})`}
               </button>
             )}
 
-            {/* Buy extra attempts (shown when base 50 used, bonus not yet bought) */}
-            {baseFull && !bonusPurchased && !allFull && (
-              <button
-                onClick={handleBuyAttempts}
-                disabled={buying}
-                className="w-full py-2.5 rounded-lg font-heading font-bold text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2"
-                style={{
-                  background: buying ? 'rgba(30,30,30,0.8)' : 'rgba(234,179,8,0.06)',
-                  border: '1px solid rgba(234,179,8,0.25)',
-                  color: buying ? '#555' : '#a16207',
-                  cursor: buying ? 'not-allowed' : 'pointer',
-                }}
-              >
-                <ShoppingCart size={12} />
-                {buying ? 'Purchasing...' : `Buy 50 more attempts (${formatMoney(info?.bonus_cost ?? 50_000_000)})`}
-              </button>
-            )}
-
-            {/* All attempts exhausted */}
-            {allFull && (
-              <div className="w-full py-3 rounded-lg text-center border border-zinc-700/30 bg-zinc-900/30">
-                <div className="flex items-center justify-center gap-2 text-zinc-400 text-xs font-heading">
-                  <Clock size={12} />
-                  <span>Resets in <span className="text-yellow-400 font-bold tabular-nums">{countdown}</span></span>
-                </div>
+            {!info?.can_guess && !isAdmin && (
+              <div className="w-full py-2.5 rounded-lg text-center border border-zinc-700/30 bg-zinc-900/30">
+                <p className="text-xs font-heading text-zinc-400">You need {formatMoney(info?.entry_cost ?? 1_000_000)} to attempt</p>
               </div>
             )}
           </div>
@@ -717,9 +628,7 @@ export default function CrackSafe() {
             </div>
             <div className="p-3 space-y-1.5 text-xs font-heading" style={{ lineHeight: 1.7 }}>
               <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
-              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 5_000_000)}</span></p>
-              <p className="text-zinc-400">You get <span className="text-primary font-semibold">50 free attempts</span> per day</p>
-              <p className="text-zinc-400">Purchase <span className="text-yellow-500 font-semibold">50 extra attempts</span> for <span className="text-yellow-500 font-semibold">{formatMoney(info?.bonus_cost ?? 50_000_000)}</span></p>
+              <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span> — no free entries, no extra purchases.</p>
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
               <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
               <p className="text-zinc-400">Previous Winner: <span className="text-primary font-semibold">{info?.last_winner_username ?? 'None yet'}</span></p>

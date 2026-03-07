@@ -31,6 +31,7 @@ export default function MPBlackjackPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
+  const [recentGames, setRecentGames] = useState([]);
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
@@ -49,6 +50,10 @@ export default function MPBlackjackPage() {
       .then((r) => setGames(r.data?.games || []))
       .catch(() => setGames([]))
       .finally(() => setLoading(false));
+    api
+      .get('/casino/mp-blackjack/recent-games')
+      .then((r) => setRecentGames(r.data?.games || []))
+      .catch(() => setRecentGames([]));
   }, []);
 
   useEffect(() => {
@@ -311,6 +316,35 @@ export default function MPBlackjackPage() {
                 </div>
               );
             })
+          )}
+        </div>
+      </div>
+
+      {/* ── Last 5 games ── */}
+      <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.04s' }}>
+        <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
+          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Last 5 Games</span>
+        </div>
+        <div className="p-2.5 space-y-1.5">
+          {recentGames.length === 0 ? (
+            <p className="text-[9px] font-heading text-mutedForeground px-2.5 py-2">No completed games yet.</p>
+          ) : (
+            recentGames.map((g) => (
+              <div
+                key={g.id}
+                className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg text-[9px] font-heading"
+                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.05)' }}
+              >
+                <div className="flex flex-col gap-0.5 min-w-0">
+                  <span className="text-foreground font-bold truncate">{g.creator_username}</span>
+                  <span className="text-mutedForeground">Buy-in {formatMoney(g.buy_in)} · Pot {formatMoney(g.pot)}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className="font-bold" style={{ color: '#34d399' }}>🏆 {g.winner_username ?? '—'}</span>
+                  <span className="tabular-nums font-bold" style={{ color: '#34d399' }}>+{formatMoney(g.pot)}</span>
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>

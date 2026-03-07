@@ -903,7 +903,7 @@ export default function MPBlackjackGamePage() {
                   )}
                   {isElim && (
                     <span className="tabular-nums" style={{ color: '#fb7185' }}>
-                      Refund {formatMoney(r.payout ?? 0)}
+                      −{formatMoney(game.buy_in ?? 0)}
                     </span>
                   )}
                   {(isLose || r.result === 'refund') && !isElim && (

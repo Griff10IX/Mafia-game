@@ -188,12 +188,7 @@ def register(router):
             existing_eliminated = list(game.get("eliminated") or [])
             existing_eliminated.extend(eliminated_this_round)
 
-            # Refund eliminated players their buy-in from pot (if enough in pot)
-            for uid in to_eliminate_ids:
-                refund = min(buy_in, pot)
-                pot = max(0, pot - refund)
-                if refund > 0:
-                    await db.users.update_one({"id": uid}, {"$inc": {"money": refund}})
+            # Eliminated players do not get refunded — they lose their buy-in; pot stays for the winner.
 
             remaining_active = [p for p in players if not p.get("eliminated")]
 
@@ -217,14 +212,14 @@ def register(router):
                             "user_id": uid,
                             "username": p.get("username"),
                             "result": "eliminated",
-                            "payout": buy_in,  # they got refunded
+                            "payout": 0,
                         })
                     else:
                         results.append({
                             "user_id": uid,
                             "username": p.get("username"),
                             "result": "eliminated",
-                            "payout": buy_in,
+                            "payout": 0,
                         })
 
                 round_entry = {
@@ -310,16 +305,8 @@ def register(router):
             winner_ids = [players[i].get("user_id") for i in winner_indices]
             payouts = {p.get("user_id"): 0 for p in players}
 
-            if not winner_indices:
-                refund_each = pot // num_players if num_players else 0
-                remainder = pot - refund_each * num_players
-                for i, p in enumerate(active):
-                    uid = p.get("user_id")
-                    add = refund_each + (remainder if i == 0 else 0)
-                    payouts[uid] = add
-                    if add > 0:
-                        await db.users.update_one({"id": uid}, {"$inc": {"money": add}})
-            else:
+            # Only the winner gets the pot; everyone else loses their buy-in (no refunds).
+            if winner_indices:
                 uid = players[winner_indices[0]].get("user_id")
                 payouts[uid] = pot
                 if pot > 0:
@@ -329,7 +316,7 @@ def register(router):
             for p in players:
                 uid = p.get("user_id")
                 if not winner_indices:
-                    results.append({"user_id": uid, "username": p.get("username"), "result": "refund", "payout": payouts.get(uid, 0)})
+                    results.append({"user_id": uid, "username": p.get("username"), "result": "lose", "payout": 0})
                 elif uid in winner_ids:
                     results.append({"user_id": uid, "username": p.get("username"), "result": "win", "payout": payouts.get(uid, 0)})
                 else:
@@ -488,6 +475,34 @@ def register(router):
                 row["current_turn_user_id"] = None
                 row["current_turn_is_you"] = False
             out.append(row)
+        return {"games": out}
+
+    @router.get("/casino/mp-blackjack/recent-games")
+    async def mp_bj_recent_games(current_user: dict = Depends(get_current_user_verified)):
+        """Last 5 completed games with winner and prize for the lobby."""
+        cursor = db.mp_blackjack_games.find(
+            {"status": "completed"},
+            {"_id": 0, "id": 1, "creator_username": 1, "buy_in": 1, "pot": 1, "results": 1, "winner_ids": 1, "players": 1, "completed_at": 1, "anonymous": 1, "elimination_rounds": 1},
+        ).sort("completed_at", -1).limit(5)
+        games = await cursor.to_list(5)
+        out = []
+        for g in games:
+            winner_username = None
+            results = g.get("results") or []
+            win_result = next((r for r in results if r.get("result") == "win"), None)
+            if win_result:
+                winner_username = win_result.get("username") or "?"
+            if g.get("anonymous"):
+                winner_username = winner_username if winner_username else "Anonymous"
+            out.append({
+                "id": g.get("id"),
+                "creator_username": "Anonymous" if g.get("anonymous") else (g.get("creator_username") or "—"),
+                "buy_in": g.get("buy_in", 0),
+                "pot": g.get("pot", 0),
+                "winner_username": winner_username,
+                "completed_at": g.get("completed_at").isoformat() if getattr(g.get("completed_at"), "isoformat", None) else g.get("completed_at"),
+                "elimination_rounds": g.get("elimination_rounds", False),
+            })
         return {"games": out}
 
     @router.post("/casino/mp-blackjack/games")
