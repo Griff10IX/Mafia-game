@@ -409,12 +409,17 @@ def register(router):
         current_user: dict = Depends(get_current_user_verified),
         action: Optional[str] = Body(None, embed=True),
         amount: Optional[int] = Body(None, embed=True),
+        game_id: Optional[str] = Body(None, embed=True),
     ):
-        """Act in vs-dealer game: fold, check, call, bet, raise, all_in. amount required for bet/raise."""
+        """Act in vs-dealer game: fold, check, call, bet, raise, all_in. amount required for bet/raise. Optional game_id to target specific game."""
         uid = current_user["id"]
         action = (action or "").strip().lower()
         amount = amount or 0
-        g = await db.mp_poker_games.find_one({"mode": "vs_dealer", "user_id": uid, "status": "playing"})
+        game_id = (game_id or "").strip() or None
+        if game_id:
+            g = await db.mp_poker_games.find_one({"id": game_id, "mode": "vs_dealer", "user_id": uid, "status": "playing"})
+        else:
+            g = await db.mp_poker_games.find_one({"mode": "vs_dealer", "user_id": uid, "status": "playing"}, sort=[("created_at", -1)])
         if not g:
             raise HTTPException(status_code=404, detail="No active vs-dealer game")
         if g.get("current_turn_index") != 0:

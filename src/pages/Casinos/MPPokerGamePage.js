@@ -384,10 +384,22 @@ export default function MPPokerGamePage() {
     setActionLoading(true);
     try {
       const endpoint = isVsDealer ? '/casino/mp-poker/vs-dealer/act' : `/casino/mp-poker/games/${gameId}/act`;
-      const res = await api.post(endpoint, { action, amount: amount || undefined });
-      setGame(isVsDealer ? (res.data?.game ?? null) : (res.data ?? null));
+      const body = isVsDealer
+        ? { action, amount: amount != null && amount !== '' ? Number(amount) : 0, game_id: gameId || undefined }
+        : { action, amount: amount != null && amount !== '' ? Number(amount) : 0 };
+      const res = await api.post(endpoint, body);
+      const nextGame = res.data?.game ?? res.data ?? null;
+      if (nextGame) setGame(nextGame);
+      else if (isVsDealer && gameId) {
+        const refetch = await api.get('/casino/mp-poker/vs-dealer/game').catch(() => null);
+        if (refetch?.data?.game) setGame(refetch.data.game);
+      }
       await refreshUser();
       if (action === 'check') toast.success('Checked');
+      else if (action === 'call') toast.success('Called');
+      else if (action === 'fold') toast.success('Folded');
+      else if (action === 'raise' || action === 'bet') toast.success('Bet placed');
+      else if (action === 'all_in') toast.success('All-in');
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Action failed'); }
     finally { setActionLoading(false); }
   };
@@ -770,27 +782,25 @@ export default function MPPokerGamePage() {
               </span>
             </div>
 
-            {/* Primary actions */}
+            {/* Primary actions: Fold, Check, Call always visible; Check enabled when no bet to call, Call when there is */}
             <div className="flex items-center gap-2 flex-wrap">
               <button type="button" disabled={actionLoading} onClick={() => act('fold')}
                 className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                 style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
                 Fold
               </button>
-              {needToCall <= 0 && (
-                <button type="button" disabled={actionLoading} onClick={() => act('check')}
-                  className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                  style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
-                  Check
-                </button>
-              )}
-              {needToCall > 0 && (
-                <button type="button" disabled={actionLoading} onClick={() => act('call')}
-                  className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                  style={{ borderColor: '#c9a84c', background: 'rgba(212,175,55,0.12)', color: '#d4af37' }}>
-                  Call {formatMoneyFull(Math.min(needToCall, myStack))}
-                </button>
-              )}
+              <button type="button" disabled={actionLoading || needToCall > 0} onClick={() => act('check')}
+                className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                style={{ borderColor: 'rgba(161,161,170,0.4)', background: needToCall > 0 ? 'rgba(161,161,170,0.04)' : 'rgba(161,161,170,0.08)', color: needToCall > 0 ? '#71717a' : '#a1a1aa' }}
+                title={needToCall > 0 ? 'You must call or raise to match the current bet' : 'Pass (no bet to match)'}>
+                Check
+              </button>
+              <button type="button" disabled={actionLoading || needToCall <= 0} onClick={() => act('call')}
+                className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                style={{ borderColor: '#c9a84c', background: needToCall <= 0 ? 'rgba(212,175,55,0.06)' : 'rgba(212,175,55,0.12)', color: '#d4af37' }}
+                title={needToCall <= 0 ? 'No bet to call' : `Match ${formatMoneyFull(Math.min(needToCall, myStack))}`}>
+                Call {formatMoneyFull(Math.min(needToCall, myStack))}
+              </button>
               <button type="button" disabled={actionLoading || myStack <= 0} onClick={() => act('all_in')}
                 className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                 style={{ borderColor: 'rgba(251,113,133,0.5)', background: 'rgba(251,113,133,0.1)', color: '#fb7185' }}>
@@ -811,7 +821,7 @@ export default function MPPokerGamePage() {
                   className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' }}
                 />
-                <button type="button" disabled={actionLoading || !raiseAmount}
+                <button type="button" disabled={actionLoading}
                   onClick={() => {
                     const raw = Number(String(raiseAmount).replace(/,/g, '').trim()) || 0;
                     const amt = raw > 0 ? Math.max(minRaise, Math.min(myStack, raw)) : minRaise;
