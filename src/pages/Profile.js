@@ -20,6 +20,7 @@ const PROFILE_STYLES = `
   .prof-row { transition: all 0.2s ease; }
   .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  .prof-banner-content .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
 `;
 
 function formatDateTime(iso) {
@@ -594,7 +595,7 @@ const ProfileBannerCard = ({
         <div className="relative z-10 w-full">
           {renderedHtml ? (
             <div
-              className="font-heading text-sm md:text-base text-foreground max-w-2xl mx-auto text-left prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 forum-content-media"
+              className="prof-banner-content font-heading text-sm md:text-base text-foreground max-w-2xl mx-auto text-left prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2"
               dangerouslySetInnerHTML={{ __html: renderedHtml }}
             />
           ) : (
