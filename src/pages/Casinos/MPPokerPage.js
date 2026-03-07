@@ -50,7 +50,9 @@ export default function MPPokerPage() {
     try {
       const res = await api.post('/casino/mp-poker/vs-dealer/start', { blind });
       await refreshUser();
-      if (res.data?.game_id) navigate(`/casino/mp-poker/game/${res.data.game_id}`);
+      if (res.data?.game_id) {
+        navigate(`/casino/mp-poker/game/${res.data.game_id}`, { state: { game: res.data.game } });
+      }
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not start'); }
     finally { setVsDealerStarting(false); }
   };
@@ -69,7 +71,9 @@ export default function MPPokerPage() {
       toast.success('Table created');
       setCreateOpen(false);
       fetchGames();
-      if (res.data?.game_id) navigate(`/casino/mp-poker/game/${res.data.game_id}`);
+      if (res.data?.game_id) {
+        navigate(`/casino/mp-poker/game/${res.data.game_id}`, { state: { game: res.data.game } });
+      }
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not create'); }
     finally { setCreating(false); }
   };
@@ -80,7 +84,9 @@ export default function MPPokerPage() {
       const res = await api.post(`/casino/mp-poker/games/${gameId}/join`);
       await refreshUser();
       fetchGames();
-      if (res.data?.id) navigate(`/casino/mp-poker/game/${res.data.id}`);
+      if (res.data?.id) {
+        navigate(`/casino/mp-poker/game/${res.data.id}`, { state: { game: res.data } });
+      }
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not join'); }
     finally { setJoiningId(null); }
   };

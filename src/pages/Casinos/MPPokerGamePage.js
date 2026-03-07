@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, MessageSquare, CheckCircle2, XCircle } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
@@ -265,9 +265,10 @@ function getTablePositions(totalSeats) {
    ══════════════════════════════════════════════════════════ */
 export default function MPPokerGamePage() {
   const { gameId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
-  const [game, setGame] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [game, setGame] = useState(() => location.state?.game ?? null);
+  const [loading, setLoading] = useState(!location.state?.game);
   const [myUserId, setMyUserId] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [readyLoading, setReadyLoading] = useState(false);
