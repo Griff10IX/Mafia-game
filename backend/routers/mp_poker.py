@@ -477,6 +477,8 @@ def register(router):
             pot += amt
         elif action in ("bet", "raise"):
             amt = max(amount, min_raise) if action == "raise" else amount
+            if action == "bet" and amt < min_raise:
+                raise HTTPException(status_code=400, detail=f"Bet must be at least {min_raise:,}")
             if amt < min_raise and to_call > 0:
                 raise HTTPException(status_code=400, detail=f"Raise must be at least {min_raise:,}")
             if amt > stack:
@@ -496,7 +498,7 @@ def register(router):
             human["total_bet_this_hand"] = int(human.get("total_bet_this_hand") or 0) + amt
             human["status"] = "all_in"
             pot += amt
-            new_to_call = human["current_bet"] - int(bot.get("current_bet") or 0)
+            new_to_call = max(0, human["current_bet"] - int(bot.get("current_bet") or 0))
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
         if action in ("call", "check"):

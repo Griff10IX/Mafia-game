@@ -315,11 +315,12 @@ export default function MPPokerGamePage() {
         const g = isModeVsDealerRef.current
           ? (r.data?.game ?? r.data ?? null)
           : (r.data ?? null);
-        // Detect mode from first response
+        // Detect mode from first response — set game immediately so UI shows, then keep ref in sync
         if (g?.mode === 'vs_dealer' && !isModeVsDealerRef.current) {
           isModeVsDealerRef.current = true;
           setIsVsDealer(true);
-          // Immediately re-fetch with correct endpoint
+          setFetchError(false);
+          setGame(g);
           setTimeout(() => {
             api.get('/casino/mp-poker/vs-dealer/game').then((r2) => {
               const g2 = r2.data?.game ?? r2.data ?? null;
@@ -349,6 +350,14 @@ export default function MPPokerGamePage() {
       })
       .finally(() => setLoading(false));
   }, [gameId]);
+
+  // Keep vs-dealer ref in sync with current game (e.g. from location.state or any fetch)
+  useEffect(() => {
+    if (game?.mode === 'vs_dealer') {
+      isModeVsDealerRef.current = true;
+      setIsVsDealer(true);
+    }
+  }, [game?.mode]);
 
   // Stable poll — only restart when fetchGame itself changes (i.e. gameId/mode changes)
   // Interval speed is managed via ref to avoid restarting the whole interval
@@ -429,7 +438,10 @@ export default function MPPokerGamePage() {
       const endpoint = isModeVsDealerRef.current
         ? '/casino/mp-poker/vs-dealer/act'
         : `/casino/mp-poker/games/${gameId}/act`;
-      await api.post(endpoint, { action, amount: amount || undefined });
+      const body = isModeVsDealerRef.current
+        ? { action, amount: amount ?? undefined, game_id: gameId || undefined }
+        : { action, amount: amount ?? undefined };
+      await api.post(endpoint, body);
       // Re-fetch after acting — bot may have responded, street may have advanced
       // All-in needs longer: dealer must respond AND server runs out remaining streets
       const waitMs = action === 'all_in' ? 900 : 350;
