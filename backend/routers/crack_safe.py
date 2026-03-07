@@ -10,7 +10,7 @@ from server import db, get_current_user, get_current_user_verified, _is_admin, l
 
 SAFE_ENTRY_COST = 1_000_000
 SAFE_JACKPOT_SEED = 5_000_000
-SAFE_JACKPOT_SHARE = 0.90
+SAFE_JACKPOT_PER_ATTEMPT = 1_000_000  # Jackpot increases by exactly 1M per attempt
 SAFE_DIGITS = 5
 SAFE_MIN = 1
 SAFE_MAX = 9
@@ -110,8 +110,7 @@ def register(router):
 
         await db.users.update_one({"id": user["id"]}, {"$inc": {"money": -SAFE_ENTRY_COST}})
 
-        jackpot_contribution = int(SAFE_ENTRY_COST * SAFE_JACKPOT_SHARE)
-        await db.safe_game.update_one({}, {"$inc": {"jackpot": jackpot_contribution, "total_attempts": 1}})
+        await db.safe_game.update_one({}, {"$inc": {"jackpot": SAFE_JACKPOT_PER_ATTEMPT, "total_attempts": 1}})
 
         cracked = req.numbers == combo
         correct_positions = sum(1 for a, b in zip(req.numbers, combo) if a == b)

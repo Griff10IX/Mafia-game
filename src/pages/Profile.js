@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Upload, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -134,7 +134,6 @@ const ProfileInfoCard = ({ profile, isMe, onAddToSearch, onSendMessage, onSendMo
     : allRows;
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
-  const avatarSrc = isRobotBodyguard ? null : profile.avatar_url;
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`}>
@@ -541,82 +540,87 @@ const AdminStatsCard = ({ adminStats }) => (
   </div>
 );
 
-const AvatarCard = ({ 
-  avatarSrc, 
-  isMe, 
-  preview, 
-  uploading, 
-  onPickFile, 
-  onUpload 
+/** Profile banner: image + text (motto). Display for everyone; edit form when own profile. */
+const ProfileBannerCard = ({
+  username,
+  bannerImageUrl,
+  bannerText,
+  isMe,
+  isEditing,
+  editImageUrl,
+  editText,
+  onEditImageUrlChange,
+  onEditTextChange,
+  onSave,
+  saving,
 }) => {
-  const [imageUrl, setImageUrl] = React.useState('');
-  const [localPreview, setLocalPreview] = React.useState(avatarSrc || '');
-
-  const handleUpdateImage = () => {
-    if (!imageUrl.trim()) return;
-    
-    // Extract URL from [img]URL[/img] format if present
-    const urlMatch = imageUrl.match(/\[img\](.*?)\[\/img\]/i);
-    const finalUrl = urlMatch ? urlMatch[1] : imageUrl;
-    
-    setLocalPreview(finalUrl);
-    // Here you would call your API to save the image URL
-    // For now we just update the preview
-  };
+  const displayImageUrl = (bannerImageUrl || '').trim() || null;
+  const displayText = (bannerText || '').trim() || null;
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in`} style={{ animationDelay: '0.05s' }}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
         <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
-          📸 Profile Picture
+          Profile
         </h3>
       </div>
-      <div className="p-2.5 md:p-3 space-y-2">
-        {/* Image Preview with square aspect ratio */}
-        <div className="aspect-square max-h-64 w-full max-w-sm mx-auto rounded-md overflow-hidden border-2 border-primary/20 bg-secondary/20 flex items-center justify-center">
-          {localPreview ? (
-            <img src={localPreview} alt="Profile" className="w-full h-full object-cover" />
-          ) : (
-            <div className="flex flex-col items-center gap-1.5 text-mutedForeground">
-              <svg className="w-10 h-10 md:w-12 md:h-12 text-primary/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
-              <span className="text-[10px] md:text-xs font-heading">No picture uploaded</span>
-            </div>
+      <div className="relative min-h-[120px] md:min-h-[160px] flex flex-col items-center justify-center py-6 px-4 text-center overflow-hidden">
+        {displayImageUrl && (
+          <div
+            className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-40"
+            style={{ backgroundImage: `url(${displayImageUrl})` }}
+          />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/70" />
+        <div className="relative z-10 w-full space-y-2">
+          <h2 className="font-heading font-black text-2xl md:text-3xl lg:text-4xl text-foreground uppercase tracking-wider text-center drop-shadow-lg">
+            {username || '—'}
+          </h2>
+          {displayText && (
+            <p className="font-heading text-sm md:text-base text-primary/90 italic max-w-xl mx-auto drop-shadow">
+              {displayText}
+            </p>
           )}
         </div>
-        
-        {isMe && (
-          <div className="space-y-2">
-            <div className="text-[10px] md:text-xs text-mutedForeground font-heading mb-1.5">
-              Enter image URL or use <code className="text-primary bg-primary/10 px-1 rounded">[img]URL[/img]</code>
-            </div>
-            
-            {/* Image URL Input */}
-            <textarea
-              value={imageUrl}
-              onChange={(e) => setImageUrl(e.target.value)}
-              placeholder="https://example.com/image.jpg or [img]https://example.com/image.jpg[/img]"
-              className="w-full px-3 py-2.5 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono resize-none"
-              rows={2}
-            />
-            
-            {/* Update Button */}
-            <button
-              onClick={handleUpdateImage}
-              disabled={!imageUrl.trim()}
-              className="w-full bg-primary/20 text-primary rounded-md font-heading font-bold uppercase tracking-wide px-4 py-2 text-[10px] md:text-xs border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1.5 touch-manipulation"
-            >
-              📤 Update Profile Picture
-            </button>
-            
-            <p className="text-[9px] md:text-[10px] text-mutedForeground font-heading italic text-center">
-              💡 Square images work best for profile pictures
-            </p>
-          </div>
-        )}
       </div>
+      {isMe && isEditing && (
+        <div className="p-3 space-y-3 border-t border-primary/20 bg-primary/5">
+          <div>
+            <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
+              Banner image URL
+            </label>
+            <input
+              type="url"
+              value={editImageUrl}
+              onChange={(e) => onEditImageUrlChange(e.target.value)}
+              placeholder="https://example.com/image.jpg or [img]URL[/img]"
+              className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-1">
+              Banner text (motto / quote)
+            </label>
+            <input
+              type="text"
+              value={editText}
+              onChange={(e) => onEditTextChange(e.target.value)}
+              placeholder="e.g. NO TEARS PLEASE, IT'S A TASTE OF GOOD SUFFERING."
+              className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50"
+              maxLength={500}
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving…' : 'Save banner'}
+          </button>
+        </div>
+      )}
       <div className="prof-art-line text-primary mx-3" />
     </div>
   );
@@ -631,8 +635,6 @@ export default function Profile() {
   const [me, setMe] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
@@ -655,6 +657,9 @@ export default function Profile() {
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
   const [savingModColor, setSavingModColor] = useState(false);
   const [settingsTab, setSettingsTab] = useState('notifications');
+  const [bannerImageUrlEdit, setBannerImageUrlEdit] = useState('');
+  const [bannerTextEdit, setBannerTextEdit] = useState('');
+  const [savingBanner, setSavingBanner] = useState(false);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
@@ -701,7 +706,6 @@ export default function Profile() {
       try {
         const res = await api.get(`/users/${encodeURIComponent(username)}/profile`);
         setProfile(res.data);
-        setPreview(null);
       } catch (e) {
         toast.error(e.response?.data?.detail || 'Failed to load profile');
       } finally {
@@ -710,6 +714,13 @@ export default function Profile() {
     };
     run();
   }, [username]);
+
+  useEffect(() => {
+    if (profile) {
+      setBannerImageUrlEdit(profile.profile_banner_image_url ?? '');
+      setBannerTextEdit(profile.profile_banner_text ?? '');
+    }
+  }, [profile?.profile_banner_image_url, profile?.profile_banner_text]);
 
   const openSettings = () => setSettingsOpen(true);
   const fetchPrefs = async () => {
@@ -851,31 +862,23 @@ export default function Profile() {
     }
   };
 
-  const onPickFile = (file) => {
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result);
-    reader.onerror = () => toast.error('Failed to read image');
-    reader.readAsDataURL(file);
-  };
-
-  const onUpload = async () => {
-    if (!preview) return;
-    setUploading(true);
+  const saveBanner = async () => {
+    setSavingBanner(true);
     try {
-      const res = await api.post('/profile/avatar', { avatar_data: preview });
-      toast.success(res.data.message || 'Avatar updated');
-      const p = await api.get(`/users/${encodeURIComponent(me.username)}/profile`);
-      setProfile(p.data);
-      setPreview(null);
+      let imageUrl = (bannerImageUrlEdit || '').trim();
+      const urlMatch = imageUrl.match(/\[img\](.*?)\[\/img\]/i);
+      if (urlMatch) imageUrl = urlMatch[1].trim();
+      await api.patch('/profile/banner', {
+        banner_image_url: imageUrl || null,
+        banner_text: (bannerTextEdit || '').trim() || null,
+      });
+      toast.success('Profile banner updated');
+      const res = await api.get(`/users/${encodeURIComponent(profile?.username)}/profile`);
+      setProfile(res.data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to upload avatar');
+      toast.error(e.response?.data?.detail || 'Failed to save banner');
     } finally {
-      setUploading(false);
+      setSavingBanner(false);
     }
   };
 
@@ -959,7 +962,7 @@ export default function Profile() {
         <style>{PROFILE_STYLES}</style>
         <div className="relative prof-fade-in">
           <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Dossier</p>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Profile</h1>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Edit Profile</h1>
         </div>
         <div className={`relative ${styles.panel} rounded-lg border border-primary/20 prof-fade-in py-16 text-center overflow-hidden`} style={{ animationDelay: '0.05s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -976,7 +979,6 @@ export default function Profile() {
   }
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
-  const avatarSrc = isRobotBodyguard ? null : (preview || profile.avatar_url || null);
   const honours = profile.honours || [];
   const ownedCasinos = profile.owned_casinos || [];
 
@@ -1017,16 +1019,19 @@ export default function Profile() {
           adminOnlineColor={me?.admin_online_color}
         />
 
-        {isMe && !isPublicView && (
-          <AvatarCard
-            avatarSrc={avatarSrc}
-            isMe={isMe}
-            preview={preview}
-            uploading={uploading}
-            onPickFile={onPickFile}
-            onUpload={onUpload}
-          />
-        )}
+        <ProfileBannerCard
+          username={profile.username}
+          bannerImageUrl={profile.profile_banner_image_url}
+          bannerText={profile.profile_banner_text}
+          isMe={isMe && !isPublicView}
+          isEditing={isMe && !isPublicView}
+          editImageUrl={bannerImageUrlEdit}
+          editText={bannerTextEdit}
+          onEditImageUrlChange={setBannerImageUrlEdit}
+          onEditTextChange={setBannerTextEdit}
+          onSave={saveBanner}
+          saving={savingBanner}
+        />
 
         {profile.youtube_url && (
           <YouTubeCard youtubeUrl={profile.youtube_url} />
@@ -1181,7 +1186,7 @@ export default function Profile() {
             <div className="flex border-b border-border mb-4 gap-0">
               {[
                 { id: 'notifications', label: 'Notifications' },
-                { id: 'profile', label: 'Profile' },
+                { id: 'profile', label: 'Edit profile' },
                 { id: 'account', label: 'Account' },
               ].map(({ id, label }) => (
                 <button

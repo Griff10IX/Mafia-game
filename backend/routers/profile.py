@@ -292,6 +292,8 @@ def register(router):
             "top_cars": top_cars or [],
             "show_cars_on_profile": user.get("profile_show_cars", False),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
+            "profile_banner_image_url": (user.get("profile_banner_image_url") or "").strip() or None,
+            "profile_banner_text": (user.get("profile_banner_text") or "").strip() or None,
         }
         if not is_own_profile:
             for key in (
@@ -441,6 +443,40 @@ def register(router):
         val = (youtube_url or "").strip() or None
         await db.users.update_one({"id": uid}, {"$set": {"profile_youtube_url": val}})
         return {"message": "YouTube URL updated", "youtube_url": val}
+
+    @router.patch("/profile/banner")
+    async def update_profile_banner(
+        current_user: dict = Depends(get_current_user),
+        banner_image_url: Optional[str] = Body(None, embed=True),
+        banner_text: Optional[str] = Body(None, embed=True),
+    ):
+        """Set or clear profile banner image URL and/or banner text (motto) shown on your profile."""
+        uid = current_user["id"]
+        updates = {}
+        if banner_image_url is not None:
+            raw = (banner_image_url or "").strip() or None
+            if raw and len(raw) > 2000:
+                raise HTTPException(status_code=400, detail="Banner image URL too long.")
+            updates["profile_banner_image_url"] = raw
+        if banner_text is not None:
+            raw = (banner_text or "").strip() or None
+            if raw and len(raw) > 500:
+                raise HTTPException(status_code=400, detail="Banner text too long.")
+            updates["profile_banner_text"] = raw
+        if not updates:
+            doc = await db.users.find_one({"id": uid}, {"_id": 0, "profile_banner_image_url": 1, "profile_banner_text": 1})
+            return {
+                "message": "No banner changes",
+                "profile_banner_image_url": (doc.get("profile_banner_image_url") or "").strip() or None,
+                "profile_banner_text": (doc.get("profile_banner_text") or "").strip() or None,
+            }
+        await db.users.update_one({"id": uid}, {"$set": updates})
+        doc = await db.users.find_one({"id": uid}, {"_id": 0, "profile_banner_image_url": 1, "profile_banner_text": 1})
+        return {
+            "message": "Profile banner updated",
+            "profile_banner_image_url": (doc.get("profile_banner_image_url") or "").strip() or None,
+            "profile_banner_text": (doc.get("profile_banner_text") or "").strip() or None,
+        }
 
     @router.get("/profile/video-autoplay")
     async def get_profile_video_autoplay(current_user: dict = Depends(get_current_user)):
