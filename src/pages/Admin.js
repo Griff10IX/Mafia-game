@@ -212,6 +212,10 @@ export default function Admin() {
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
+  const [pageLocks, setPageLocks] = useState({});
+  const [pageLockPath, setPageLockPath] = useState('');
+  const [pageLockMessage, setPageLockMessage] = useState('Down for maintenance');
+  const [pageLockSaving, setPageLockSaving] = useState(false);
 
   const [moderatorsList, setModeratorsList] = useState([]);
   const [moderatorsLoading, setModeratorsLoading] = useState(false);
@@ -244,6 +248,7 @@ export default function Admin() {
         fetchBoozeRotation();
         fetchAdminSettings();
         fetchModerators();
+        fetchPageLocks();
       }
       if (admin || mod) {
         fetchHdos();
@@ -367,6 +372,28 @@ export default function Admin() {
       setAdminOnlineColor('#a78bfa');
       setRequireEmailVerification(false);
       setStockMarketMaxPoints(3000);
+    }
+  };
+
+  const fetchPageLocks = async () => {
+    try {
+      const res = await api.get('/admin/page-locks');
+      setPageLocks(res.data?.paths ?? {});
+    } catch {
+      setPageLocks({});
+    }
+  };
+
+  const handlePageLockToggle = async (path, locked, message) => {
+    setPageLockSaving(true);
+    try {
+      await api.patch('/admin/page-locks', { path, message: message || 'Down for maintenance', locked });
+      await fetchPageLocks();
+      toast.success(locked ? `Locked ${path}` : `Unlocked ${path}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    } finally {
+      setPageLockSaving(false);
     }
   };
 
@@ -1771,6 +1798,50 @@ export default function Admin() {
               <BtnPrimary onClick={handleSlotsDraw1Min}>Set next draw in 1 min</BtnPrimary>
               <BtnSecondary onClick={handleSlotsDrawReset}>Reset to default (3h)</BtnSecondary>
               <BtnSecondary onClick={handleSlotsClearCooldowns}>Clear slots cooldowns</BtnSecondary>
+            </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Lock}
+          title="Lock page"
+          badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
+          isCollapsed={collapsed.pageLocks}
+          onToggle={() => toggleSection('pageLocks')}
+        />
+        {!collapsed.pageLocks && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground">When a page is locked, users see &quot;Down for maintenance&quot; (or your message) and cannot access it. Admins can still access.</p>
+            <div className="space-y-2">
+              {['/dashboard', '/bank', '/casino', '/casino/dice', '/casino/mp-poker', '/forum', '/store', '/crimes', '/attack', '/jail', '/organised-crime', '/profile', '/loot-box'].map((path) => {
+                const isLocked = !!pageLocks[path];
+                const msg = pageLocks[path] || '';
+                return (
+                  <div key={path} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 border border-transparent hover:border-primary/20">
+                    <span className="text-[11px] font-heading font-mono min-w-[140px]">{path}</span>
+                    {isLocked && <span className="text-[10px] text-mutedForeground truncate max-w-[200px]" title={msg}>{msg || 'Down for maintenance'}</span>}
+                    <div className="flex gap-1 ml-auto">
+                      {isLocked ? (
+                        <BtnSecondary onClick={() => handlePageLockToggle(path, false)} disabled={pageLockSaving}>Unlock</BtnSecondary>
+                      ) : (
+                        <BtnPrimary onClick={() => handlePageLockToggle(path, true, pageLockMessage)} disabled={pageLockSaving}>Lock</BtnPrimary>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="pt-2 border-t border-white/10">
+              <p className="text-[10px] font-heading font-bold text-primary mb-2">Custom path</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="text" value={pageLockPath} onChange={(e) => setPageLockPath(e.target.value)} placeholder="/any/path" className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
+                <input type="text" value={pageLockMessage} onChange={(e) => setPageLockMessage(e.target.value)} placeholder="Down for maintenance" className="w-48 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs" />
+                <BtnPrimary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', true, pageLockMessage)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Lock</BtnPrimary>
+                <BtnSecondary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', false)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Unlock</BtnSecondary>
+              </div>
             </div>
           </div>
         )}

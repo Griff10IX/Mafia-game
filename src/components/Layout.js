@@ -289,6 +289,7 @@ export default function Layout({ children }) {
   const [userSearchOpen, setUserSearchOpen] = useState(false);
   const [userSearchExpanded, setUserSearchExpanded] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
+  const [pageLocks, setPageLocks] = useState({});
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
   const userSearchDebounceRef = useRef(null);
@@ -735,6 +736,13 @@ export default function Layout({ children }) {
       setHasAdminEmail(false);
     }
   };
+
+  useEffect(() => {
+    api.get('/page-locks').then((r) => {
+      const paths = r.data?.paths;
+      setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
+    }).catch(() => setPageLocks({}));
+  }, []);
 
   const promoteToAdmin = async () => {
     try {
@@ -1833,7 +1841,22 @@ export default function Layout({ children }) {
             <Link to="/verify-email" className="text-sm font-heading font-bold uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-primary)' }}>Verify email</Link>
           </div>
         )}
-        {children}
+        {(() => {
+          const pathNorm = (location.pathname || '').replace(/\/$/, '') || '/';
+          const lockedMessage = pageLocks[pathNorm];
+          if (lockedMessage && !isAdmin) {
+            return (
+              <div className="flex flex-col items-center justify-center min-h-[50vh] px-4 text-center">
+                <div className="rounded-xl border-2 p-8 max-w-md w-full" style={{ borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.08)' }}>
+                  <p className="text-lg font-heading font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--noir-primary)' }}>Down for maintenance</p>
+                  <p className="text-sm font-heading text-muted-foreground mb-6">{lockedMessage}</p>
+                  <Link to="/dashboard" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
+                </div>
+              </div>
+            );
+          }
+          return children;
+        })()}
       </main>
 
       {/* Right sidebar (stats, links, logout) – when theme set to "Right sidebar" */}

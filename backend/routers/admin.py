@@ -71,6 +71,12 @@ class ForumMuteRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class PageLockUpdate(BaseModel):
+    path: str
+    message: Optional[str] = None
+    locked: bool
+
+
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
     {"name": "Baranco", "tag": "BARN", "members": ["boss", "underboss", "consigliere", "capo", "soldier"]},
@@ -1186,6 +1192,48 @@ def register(router):
             "require_email_verification": require_email_verification,
             "stock_market_max_points": stock_market_max_points,
         }
+
+    PAGE_LOCKS_KEY = "page_locks"
+
+    @router.get("/page-locks")
+    async def get_page_locks_public():
+        """Public: return which paths are locked and their message. Used by frontend to show 'Down for maintenance'."""
+        doc = await db.game_settings.find_one({"key": PAGE_LOCKS_KEY}, {"_id": 0, "value": 1})
+        paths = (doc.get("value") or {}).get("paths") if doc else {}
+        if not isinstance(paths, dict):
+            paths = {}
+        return {"paths": paths}
+
+    @router.get("/admin/page-locks")
+    async def admin_get_page_locks(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        doc = await db.game_settings.find_one({"key": PAGE_LOCKS_KEY}, {"_id": 0, "value": 1})
+        paths = (doc.get("value") or {}).get("paths") if doc else {}
+        if not isinstance(paths, dict):
+            paths = {}
+        return {"paths": paths}
+
+    @router.patch("/admin/page-locks")
+    async def admin_patch_page_locks(body: PageLockUpdate, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        path = (body.path or "").strip().rstrip("/") or "/"
+        if not path.startswith("/"):
+            path = "/" + path
+        doc = await db.game_settings.find_one({"key": PAGE_LOCKS_KEY}, {"_id": 0, "value": 1})
+        value = (doc.get("value") or {}) if doc else {}
+        paths = dict(value.get("paths") or {}) if isinstance(value.get("paths"), dict) else {}
+        if body.locked:
+            paths[path] = (body.message or "").strip() or "Down for maintenance"
+        else:
+            paths.pop(path, None)
+        await db.game_settings.update_one(
+            {"key": PAGE_LOCKS_KEY},
+            {"$set": {"value": {"paths": paths}}},
+            upsert=True,
+        )
+        return {"paths": paths}
 
     @router.get("/admin/activity-log")
     async def admin_activity_log(

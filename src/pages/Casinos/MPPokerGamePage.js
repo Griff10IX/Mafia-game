@@ -30,6 +30,19 @@ function formatMoneyFull(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatLastAction(la) {
+  if (!la || !la.action) return null;
+  const a = la.action;
+  const amt = la.amount ?? 0;
+  if (a === 'check') return 'Check';
+  if (a === 'fold') return 'Fold';
+  if (a === 'call') return amt > 0 ? `Call ${formatMoney(amt)}` : 'Call';
+  if (a === 'bet') return `Bet ${formatMoney(amt)}`;
+  if (a === 'raise') return `Raise ${formatMoney(amt)}`;
+  if (a === 'all_in') return `All-in ${formatMoney(amt)}`;
+  return null;
+}
+
 /* ─── Win Particles ─── */
 function WinParticles({ active }) {
   const [particles] = useState(() =>
@@ -185,6 +198,7 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
   const waiting = p.status === 'waiting';
   const stack = p.stack ?? 0;
   const bet = p.current_bet ?? 0;
+  const lastActionText = formatLastAction(p.last_action);
 
   let borderColor = 'rgba(90,62,27,0.6)';
   let glow = 'none';
@@ -237,6 +251,11 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
               {statusBadge.label}
             </div>
           )}
+          {lastActionText && (
+            <div className="text-[7px] font-heading mt-0.5 italic" style={{ color: 'rgba(255,255,255,0.5)' }}>
+              {lastActionText}
+            </div>
+          )}
         </div>
       </div>
 
@@ -244,6 +263,11 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
       {bet > 0 && (
         <div className="mt-0.5">
           <ChipStack amount={bet} small />
+        </div>
+      )}
+      {isMe && p.current_hand_name && (
+        <div className="text-[8px] font-heading font-bold mt-0.5" style={{ color: '#d4af37' }}>
+          {p.current_hand_name}
         </div>
       )}
     </div>
@@ -853,6 +877,11 @@ export default function MPPokerGamePage() {
                   style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.3)', color: '#d4af37' }}>
                   {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
                 </div>
+                {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && (
+                  <p className="text-[9px] font-heading font-bold" style={{ color: '#d4af37' }}>
+                    Your hand: {myPlayer.current_hand_name}
+                  </p>
+                )}
                 {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
                   <div className="flex flex-col items-center gap-0.5 mt-1">
                     <div className="flex items-center gap-2">
