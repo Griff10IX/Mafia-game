@@ -594,8 +594,8 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
             {hasCasinos && (
               <div className="space-y-2">
                 {ownedCasinos.map((c, i) => {
-                  const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type || 'Casino';
-                  const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : '🎰';
+                  const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type === 'videopoker' ? 'Video Poker' : c.type === 'slots' ? 'Slots' : c.type || 'Casino';
+                  const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : c.type === 'videopoker' ? '🃏' : c.type === 'slots' ? '🎰' : '🎰';
                   return (
                     <div key={`${c.type}-${c.city}-${i}`} className="prof-row rounded-md border border-primary/20 px-2.5 py-1.5 bg-zinc-800/30 flex items-start gap-2">
                       <span className="text-lg md:text-xl shrink-0 mt-0.5" aria-hidden>{typeEmoji}</span>

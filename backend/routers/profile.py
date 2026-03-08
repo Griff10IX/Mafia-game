@@ -256,10 +256,10 @@ def register(router):
         )
         is_admin = current_user.get("email") in ADMIN_EMAILS
         # When viewing another player's profile, expose only minimal public info (no stats, wealth, honours, etc.)
+        # owned_casinos and property are always shown for the profile subject (public who owns what)
         if not is_own_profile:
             last_seen = None
             created_at = None
-            owned_casinos = []
             is_bodyguard_visible = False
         else:
             created_at = user.get("created_at")
@@ -302,11 +302,11 @@ def register(router):
         if not is_own_profile:
             for key in (
                 "prestige_level", "prestige_name",
-                "created_at", "last_seen", "owned_casinos", "property",
+                "created_at", "last_seen",
                 "messages_sent", "messages_received", "top_cars", "show_cars_on_profile", "youtube_url",
                 "hide_kills_on_profile", "hide_jailbusts_on_profile",
             ):
-                if key in ("owned_casinos", "top_cars"):
+                if key in ("top_cars",):
                     out[key] = []
                 elif key in ("prestige_level", "messages_sent", "messages_received"):
                     out[key] = 0
