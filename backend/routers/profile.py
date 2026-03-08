@@ -208,6 +208,7 @@ def register(router):
             blackjack_casinos,
             horseracing_casinos,
             slots_casinos,
+            videopoker_casinos,
             property_,
             messages_received,
             top_cars,
@@ -224,6 +225,7 @@ def register(router):
             _casinos_for_type("blackjack", db.blackjack_ownership),
             _casinos_for_type("horseracing", db.horseracing_ownership),
             _casinos_for_type("slots", db.slots_ownership, "state"),
+            _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
             db.notifications.count_documents({"user_id": user_id}),
             _top_cars_for_profile(user_id, 5, user.get("profile_show_cars", False), user.get("profile_featured_car_id")),
@@ -239,7 +241,7 @@ def register(router):
             {"rank": jail_rank, "label": "Most Jail Busts"},
             {"rank": points_spent_rank, "label": "Most Points Spent"},
         ]
-        owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos
+        owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos + videopoker_casinos
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}

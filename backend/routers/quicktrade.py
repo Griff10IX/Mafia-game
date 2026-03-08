@@ -341,7 +341,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     if prop.get("owner_id") == buyer_id:
         raise HTTPException(status_code=400, detail="Cannot buy your own property")
     prop_type = prop.get("type") or ""
-    if prop_type.startswith("casino_") or prop_type == "airport":
+    if prop_type.startswith("casino_") or prop_type == "airport" or prop_type == "bullet_factory":
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
         if rank_id < CAPO_RANK_ID:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to buy a casino or property. Reach Capo to hold one.")
@@ -352,6 +352,10 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     if buyer.get("points", 0) < sale_price:
         raise HTTPException(status_code=400, detail="Insufficient points")
     if prop.get("type") == "airport":
+        owned = await _user_owns_any_property(buyer_id)
+        if owned:
+            raise HTTPException(status_code=400, detail="You may only own one property. Relinquish it first.")
+    if prop.get("type") == "bullet_factory":
         owned = await _user_owns_any_property(buyer_id)
         if owned:
             raise HTTPException(status_code=400, detail="You may only own one property. Relinquish it first.")
@@ -406,6 +410,14 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             await db.airport_ownership.update_one(
                 {"state": state, "slot": slot},
                 {"$set": {"owner_id": buyer_id, "owner_username": buyer_username, "total_earnings": 0}},
+                upsert=True
+            )
+    elif prop_type == "bullet_factory":
+        state = prop.get("state")
+        if state is not None:
+            await db.bullet_factory.update_one(
+                {"state": state},
+                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
     await db.properties.delete_one({"_id": ObjectId(property_id)})

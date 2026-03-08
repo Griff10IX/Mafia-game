@@ -1045,12 +1045,20 @@ def register(router):
         status_filter: Optional[str] = Query(None, description="active, pending_review, or None for all"),
         current_user: dict = Depends(get_current_user),
     ):
-        """List forum mutes. Admin, mod, or HDO."""
+        """List forum mutes. Admin, mod, or HDO. Auto-expires mutes whose expires_at has passed so they disappear from active list."""
         if not _can_forum_mute(current_user):
             raise HTTPException(status_code=403, detail="Access required")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        # Auto-expire: mark mutes that have passed their expiry so they disappear and user can post again
+        await db.forum_mutes.update_many(
+            {"status": "active", "expires_at": {"$ne": None, "$lt": now_iso}},
+            {"$set": {"status": "expired", "expired_at": now_iso}},
+        )
         query = {}
         if status_filter in ("active", "pending_review"):
             query["status"] = status_filter
+        else:
+            query["status"] = {"$in": ["active", "pending_review"]}
         cursor = db.forum_mutes.find(query, {"_id": 0}).sort("created_at", -1).limit(200)
         mutes = await cursor.to_list(200)
         return {"mutes": mutes}
@@ -1109,15 +1117,19 @@ def register(router):
 
     @router.post("/admin/forum-unmute")
     async def admin_forum_unmute(target_username: str, current_user: dict = Depends(get_current_user)):
-        """Remove forum mute. Admin, mod, or HDO."""
+        """Remove forum mute. Admin, mod, or HDO. Keeps record in mute log (status=unmuted)."""
         if not _can_forum_mute(current_user):
             raise HTTPException(status_code=403, detail="Access required")
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        res = await db.forum_mutes.delete_many({"user_id": target["id"]})
-        return {"message": f"Unmuted {target.get('username', target_username)} from forum", "deleted": res.deleted_count}
+        now_iso = datetime.now(timezone.utc).isoformat()
+        res = await db.forum_mutes.update_many(
+            {"user_id": target["id"], "status": {"$in": ["active", "pending_review"]}},
+            {"$set": {"status": "unmuted", "unmuted_at": now_iso}},
+        )
+        return {"message": f"Unmuted {target.get('username', target_username)} from forum", "updated": res.modified_count}
 
     @router.post("/admin/forum-mute-approve")
     async def admin_forum_mute_approve(mute_id: str, current_user: dict = Depends(get_current_user)):
@@ -1131,6 +1143,18 @@ def register(router):
             raise HTTPException(status_code=400, detail="Mute is not pending review")
         await db.forum_mutes.update_one({"id": mute_id}, {"$set": {"status": "active"}})
         return {"message": "Permanent mute approved", "mute_id": mute_id}
+
+    @router.get("/admin/forum-mutes-log")
+    async def admin_forum_mutes_log(current_user: dict = Depends(get_current_user)):
+        """Past forum mutes (expired or unmuted) with reason. Admin, mod, or HDO."""
+        if not _can_forum_mute(current_user):
+            raise HTTPException(status_code=403, detail="Access required")
+        cursor = db.forum_mutes.find(
+            {"status": {"$in": ["expired", "unmuted"]}},
+            {"_id": 0, "id": 1, "username": 1, "user_id": 1, "reason": 1, "muted_by_username": 1, "created_at": 1, "expires_at": 1, "expired_at": 1, "unmuted_at": 1, "status": 1},
+        ).sort("created_at", -1).limit(500)
+        entries = await cursor.to_list(500)
+        return {"log": entries}
 
     @router.get("/admin/settings")
     async def admin_get_settings(current_user: dict = Depends(get_current_user)):

@@ -36,6 +36,7 @@ export default function MyProperties() {
   const [airportSellPoints, setAirportSellPoints] = useState('');
   const [bulletPrice, setBulletPrice] = useState('');
   const [armouryDetail, setArmouryDetail] = useState(null);
+  const [armourySellPoints, setArmourySellPoints] = useState('');
 
   const fetchMyProperties = useCallback(async () => {
     try {
@@ -237,6 +238,41 @@ export default function MyProperties() {
     try {
       const res = await api.post('/bullet-factory/collect', { state: data.property.state });
       toast.success(res.data?.message || 'Refreshed');
+      fetchMyProperties();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleArmouryRelinquish = async () => {
+    if (!data.property || data.property.type !== 'bullet_factory' || saving) return;
+    if (!window.confirm('Relinquish the armoury? It will become unclaimed.')) return;
+    setSaving(true);
+    try {
+      await api.post('/bullet-factory/relinquish', { state: data.property.state });
+      toast.success('Armoury relinquished');
+      fetchMyProperties();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleArmourySell = async () => {
+    const p = data.property;
+    if (!p || p.type !== 'bullet_factory' || saving) return;
+    const pts = parseInt(String(armourySellPoints).replace(/\D/g, ''), 10);
+    if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
+    setSaving(true);
+    try {
+      await api.post('/bullet-factory/sell-on-trade', { state: p.state, points: pts });
+      toast.success('Armoury listed on Quick Trade');
+      setArmourySellPoints('');
       fetchMyProperties();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (e) {
@@ -479,6 +515,25 @@ export default function MyProperties() {
                   </button>
                   <button type="button" onClick={handleBulletCollect} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
                     {saving ? '...' : 'Collect'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Sell (pts)</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={armourySellPoints}
+                    onChange={(e) => setArmourySellPoints(e.target.value)}
+                    placeholder="Points"
+                    className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                  />
+                  <button type="button" onClick={handleArmourySell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                    {saving ? '...' : 'List'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <button type="button" onClick={handleArmouryRelinquish} disabled={saving} className="px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-heading hover:bg-red-500/30 disabled:opacity-50">
+                    Relinquish
                   </button>
                 </div>
                 <Link to="/armour-weapons" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">

@@ -11,8 +11,9 @@ from typing import Optional, List
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel
+from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -42,6 +43,11 @@ class StateOptionalRequest(BaseModel):
 
 class SetPriceRequest(BaseModel):
     price_per_bullet: int
+    state: Optional[str] = None
+
+
+class SellOnTradeRequest(BaseModel):
+    points: int
     state: Optional[str] = None
 
 
@@ -612,6 +618,58 @@ async def set_price(
         {"$set": {"price_per_bullet": price}},
     )
     return {"message": f"Price set to ${price:,} per bullet", "price_per_bullet": price, "state": state}
+
+
+async def relinquish_bullet_factory(
+    body: StateOptionalRequest = Body(default=StateOptionalRequest()),
+    current_user: dict = Depends(get_current_user),
+):
+    """Relinquish ownership of the armoury in this state. It becomes unclaimed."""
+    state = _normalize_state(body.state or current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    if factory.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    await db.bullet_factory.update_one(
+        {"state": state},
+        {"$set": {"owner_id": None, "owner_username": None}},
+    )
+    return {"message": f"Armoury in {state} relinquished. It is now unclaimed.", "state": state}
+
+
+async def bullet_factory_sell_on_trade(
+    request: SellOnTradeRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """List the armoury on Quick Trade for points. Relinquishes ownership when listed (buyer gets it)."""
+    if request.points < 0:
+        raise HTTPException(status_code=400, detail="Points must be non-negative")
+    state = _normalize_state(request.state or current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    if factory.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    # Check no existing listing for this state
+    existing = await db.properties.find_one({"type": "bullet_factory", "state": state, "for_sale": True})
+    if existing:
+        raise HTTPException(status_code=400, detail="This armoury is already listed on Quick Trade. Cancel the listing first.")
+    listing = {
+        "_id": ObjectId(),
+        "type": "bullet_factory",
+        "state": state,
+        "location": state,
+        "name": f"Armoury ({state})",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": request.points,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.properties.insert_one(listing)
+    try:
+        from routers.quicktrade import _invalidate_trade_caches
+        _invalidate_trade_caches()
+    except Exception:
+        pass
+    return {"message": f"Armoury ({state}) listed for {request.points:,} points on Quick Trade", "state": state}
 
 
 async def buy_bullets(
@@ -1186,6 +1244,8 @@ def register(router):
     router.add_api_route("/bullet-factory/list", get_bullet_factory_list, methods=["GET"])
     router.add_api_route("/bullet-factory/claim", claim_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
+    router.add_api_route("/bullet-factory/relinquish", relinquish_bullet_factory, methods=["POST"])
+    router.add_api_route("/bullet-factory/sell-on-trade", bullet_factory_sell_on_trade, methods=["POST"])
     router.add_api_route("/bullet-factory/collect", collect_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/buy", buy_bullets, methods=["POST"])
     router.add_api_route("/bullet-factory/start-armour-production", start_armour_production, methods=["POST"])

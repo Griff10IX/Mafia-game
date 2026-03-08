@@ -44,6 +44,9 @@ export default function HelpDesk() {
   const [mutePermanent, setMutePermanent] = useState(false);
   const [muteReason, setMuteReason] = useState('');
   const [muting, setMuting] = useState(false);
+  const [muteLogOpen, setMuteLogOpen] = useState(false);
+  const [muteLog, setMuteLog] = useState([]);
+  const [muteLogLoading, setMuteLogLoading] = useState(false);
 
   const fetchCheck = useCallback(async () => {
     try {
@@ -213,6 +216,23 @@ export default function HelpDesk() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to approve');
     }
+  };
+
+  const fetchMuteLog = useCallback(async () => {
+    setMuteLogLoading(true);
+    try {
+      const r = await api.get('/admin/forum-mutes-log');
+      setMuteLog(r.data?.log || []);
+    } catch (_) {
+      setMuteLog([]);
+    } finally {
+      setMuteLogLoading(false);
+    }
+  }, []);
+
+  const openMuteLog = () => {
+    setMuteLogOpen(true);
+    fetchMuteLog();
   };
 
   return (
@@ -392,6 +412,13 @@ export default function HelpDesk() {
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
             <VolumeX size={14} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Forum mutes</span>
+            <button
+              type="button"
+              onClick={openMuteLog}
+              className="ml-auto px-2 py-0.5 rounded text-[9px] font-heading uppercase border border-primary/50 text-primary hover:bg-primary/20"
+            >
+              Past mutes (log)
+            </button>
           </div>
           <p className="px-2.5 py-1.5 text-[9px] text-mutedForeground font-heading">
             Muted users cannot post on the forum. Hours or days, or permanent (permanent by HDO needs admin/mod review). You can unmute; admin/mod can approve permanent mutes.
@@ -467,6 +494,36 @@ export default function HelpDesk() {
               </ul>
             )}
           </div>
+          {muteLogOpen && (
+            <div className="px-2.5 py-2 border-t border-primary/10">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[9px] font-heading font-bold text-primary uppercase">Past mutes (reason &amp; end)</span>
+                <button type="button" onClick={() => setMuteLogOpen(false)} className="p-0.5 rounded hover:bg-primary/20 text-primary text-[10px] font-heading">Close</button>
+              </div>
+              {muteLogLoading ? (
+                <p className="text-[10px] text-mutedForeground">Loading…</p>
+              ) : muteLog.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading">No past mutes.</p>
+              ) : (
+                <ul className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {muteLog.map((m) => (
+                    <li key={m.id} className="py-1.5 px-2 rounded bg-secondary/50 border border-primary/10 text-[10px] font-heading">
+                      <span className="font-bold text-foreground">{m.username}</span>
+                      {' · '}
+                      <span className="text-mutedForeground">by {m.muted_by_username}</span>
+                      {' · '}
+                      <span className="text-mutedForeground">{formatDateTime(m.created_at)}</span>
+                      {m.reason && <span className="block mt-0.5 text-mutedForeground">Reason: {m.reason}</span>}
+                      <span className="block text-mutedForeground">
+                        {m.status === 'expired' ? `Expired ${formatDateTime(m.expired_at)}` : m.status === 'unmuted' ? `Unmuted ${formatDateTime(m.unmuted_at)}` : m.status}
+                        {m.expires_at && ` · was until ${formatDateTime(m.expires_at)}`}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
           <div className="hd-art-line text-primary mx-2.5" />
         </div>
       )}
