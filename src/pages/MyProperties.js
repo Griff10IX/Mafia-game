@@ -483,17 +483,19 @@ export default function MyProperties() {
                 {armouryDetail && (
                   <div className="rounded border border-zinc-700/50 bg-zinc-900/40 px-2.5 py-2 mb-2 space-y-1.5">
                     <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Profit &amp; stock</div>
-                    {(Number(armouryDetail.owner_pending_profit ?? 0) > 0 || Number(armouryDetail.owner_pending_profit_points ?? 0) > 0) && (
-                      <div className="text-[11px] text-foreground">
-                        <span className="text-mutedForeground">Profit to collect: </span>
-                        <span className="text-primary font-bold">
-                          {Number(armouryDetail.owner_pending_profit ?? 0) > 0 && formatMoney(armouryDetail.owner_pending_profit)}
-                          {Number(armouryDetail.owner_pending_profit ?? 0) > 0 && Number(armouryDetail.owner_pending_profit_points ?? 0) > 0 && ', '}
-                          {Number(armouryDetail.owner_pending_profit_points ?? 0) > 0 && `${Number(armouryDetail.owner_pending_profit_points).toLocaleString()} pts`}
-                        </span>
+                    <div className="text-[11px] text-foreground">
+                      <span className="text-mutedForeground">Profit to collect: </span>
+                      <span className="text-primary font-bold">
+                        {formatMoney(armouryDetail.owner_pending_profit ?? 0)}
+                        {(Number(armouryDetail.owner_pending_profit ?? 0) > 0 || Number(armouryDetail.owner_pending_profit_points ?? 0) > 0) && ', '}
+                        {Number(armouryDetail.owner_pending_profit_points ?? 0) > 0 ? `${Number(armouryDetail.owner_pending_profit_points).toLocaleString()} pts` : '0 pts'}
+                      </span>
+                      {(Number(armouryDetail.owner_pending_profit ?? 0) > 0 || Number(armouryDetail.owner_pending_profit_points ?? 0) > 0) ? (
                         <span className="text-mutedForeground"> — press Collect to add to your cash/points.</span>
-                      </div>
-                    )}
+                      ) : (
+                        <span className="text-mutedForeground"> — Collect when you have profit from sales.</span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-foreground">
                       <span className="text-mutedForeground">Stock value (bullets at your price): </span>
                       <span className="text-primary font-bold">

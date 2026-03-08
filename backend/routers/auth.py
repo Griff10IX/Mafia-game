@@ -592,13 +592,21 @@ def register(router):
             return default
 
     @router.get("/auth/me")
-    async def get_me(current_user: dict = Depends(get_current_user)):
+    async def get_me(request: Request, current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id") or "unknown"
         username = current_user.get("username") or user_id
         try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            path = (request.headers.get("x-current-path") or "").strip() or None
+            client_ip = _client_ip(request) or None
+            update = {"last_seen": now_iso}
+            if path is not None:
+                update["last_path"] = path[:500]
+            if client_ip:
+                update["last_request_ip"] = client_ip
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$set": {"last_seen": datetime.now(timezone.utc).isoformat()}}
+                {"$set": update}
             )
 
             rank_id, rank_name = get_rank_info(_safe_int(current_user.get("rank_points"), 0))

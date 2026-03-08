@@ -895,9 +895,11 @@ export default function Layout({ children }) {
   const adminNavItems = isAdmin ? [
     { path: '/admin', icon: Settings, label: 'Admin Tools' },
     { path: '/admin/locked', icon: Lock, label: 'Locked accounts' },
+    { path: '/admin/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin ? [
     { path: '/admin', icon: Shield, label: 'Moderator tools' },
+    { path: '/admin/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
 
   /* Inline theme styles – same noir variables as other pages */

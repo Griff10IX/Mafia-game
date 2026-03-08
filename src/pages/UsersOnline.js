@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User } from 'lucide-react';
+import { Users, User, Target } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
@@ -13,6 +13,8 @@ const UO_STYLES = `
   .uo-card { transition: all 0.3s ease; }
   .uo-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .uo-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .uo-hitlist { box-shadow: 0 0 12px rgba(220, 38, 38, 0.45), inset 0 0 0 1px rgba(220, 38, 38, 0.25); }
+  .uo-hitlist:hover { box-shadow: 0 0 16px rgba(220, 38, 38, 0.5), 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(220, 38, 38, 0.3); }
   .uo-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
@@ -90,6 +92,10 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
           <span className="w-3 h-3 rounded-sm shrink-0 border border-white/20" style={{ backgroundColor: hdoColor }} aria-hidden />
           <span className="text-mutedForeground">Help Desk Operator</span>
         </span>
+        <span className="flex items-center gap-1.5">
+          <Target size={12} className="text-red-400 shrink-0" aria-hidden />
+          <span className="text-mutedForeground">On hitlist</span>
+        </span>
       </div>
       <div className="uo-art-line text-primary mx-2.5" />
     </div>
@@ -105,7 +111,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
 
   return (
     <div
-      className={`relative z-10 ${styles.panel} rounded-md border border-primary/20 uo-row uo-card uo-fade-in px-2 py-1 min-h-[28px] flex items-center`}
+      className={`relative z-10 ${styles.panel} rounded-md border px-2 py-1 min-h-[28px] flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : 'border-primary/20'}`}
       data-testid="user-card"
     >
       <div className="flex items-center gap-1 min-h-[20px] w-full">
@@ -189,6 +195,11 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
         {user.in_jail && (
           <span className="shrink-0 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
             Jail
+          </span>
+        )}
+        {user.on_hitlist && (
+          <span className="shrink-0 inline-flex items-center text-red-400" title="On the hitlist">
+            <Target size={12} className="drop-shadow-[0_0_6px_rgba(220,38,38,0.8)]" aria-hidden />
           </span>
         )}
       </div>

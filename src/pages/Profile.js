@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
@@ -22,6 +22,7 @@ const PROFILE_STYLES = `
   .prof-banner-content .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
   .prof-banner-content .forum-content-ytube { position: relative; width: 100%; max-width: 560px; margin: 0.5em auto; padding-bottom: 56.25%; }
   .prof-banner-content .forum-content-ytube-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
+  details.prof-staff-details[open] .prof-staff-chevron { transform: rotate(180deg); }
 `;
 
 function formatDateTime(iso) {
@@ -740,6 +741,9 @@ export default function Profile() {
   const [bannerTextEdit, setBannerTextEdit] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const bannerTextareaRef = React.useRef(null);
+  const [staffStats, setStaffStats] = useState(null);
+  const [staffStatsLoading, setStaffStatsLoading] = useState(false);
+  const [staffStatsError, setStaffStatsError] = useState(null);
   const username = useMemo(() => usernameParam || me?.username, [usernameParam, me?.username]);
   const isMe = !!(me && profile && me.username === profile.username);
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
@@ -800,6 +804,13 @@ export default function Profile() {
       setBannerTextEdit(profile.profile_banner_text ?? '');
     }
   }, [profile?.profile_banner_text]);
+
+  useEffect(() => {
+    if (username && !(me && profile && me.username === profile.username)) {
+      setStaffStats(null);
+      setStaffStatsError(null);
+    }
+  }, [username, me?.username, profile?.username]);
 
   const fetchPrefs = async () => {
     try {
@@ -1000,6 +1011,20 @@ export default function Profile() {
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to toggle ghost mode');
+    }
+  };
+
+  const fetchStaffStats = async () => {
+    if (!profile?.username || staffStats != null || staffStatsLoading) return;
+    setStaffStatsLoading(true);
+    setStaffStatsError(null);
+    try {
+      const res = await api.get(`/users/${encodeURIComponent(profile.username)}/staff-stats`);
+      setStaffStats(res.data);
+    } catch (e) {
+      setStaffStatsError(e.response?.data?.detail || 'Failed to load');
+    } finally {
+      setStaffStatsLoading(false);
     }
   };
 
@@ -1255,13 +1280,13 @@ export default function Profile() {
 
             {isMe && (hasAdminEmail || isModerator) && (
           <>
-            {isAdmin && (
+            {(isAdmin || isModerator) && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                 <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
                   <div className="flex items-center gap-1 md:gap-1.5">
                     <Ghost className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary" />
-                    <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Admin ghost mode</span>
+                    <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Ghost mode</span>
                   </div>
                   <button
                     type="button"
@@ -1368,6 +1393,33 @@ export default function Profile() {
         ) : (
           /* ─── View Profile: full profile (stats, notepad display, honours, etc.) ─── */
           <>
+            {profile.hitlist_on && (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border-2 border-red-500/50 bg-red-950/30 prof-fade-in`}>
+                <div className="h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+                <div className="px-3 py-2 flex items-center gap-2">
+                  <Target size={18} className="text-red-400 shrink-0" aria-hidden />
+                  <div>
+                    <p className="text-xs font-heading font-bold text-red-400 uppercase tracking-wider">
+                      On the hitlist
+                    </p>
+                    <p className="text-[11px] font-heading text-red-200/90 mt-0.5">
+                      {profile.hitlist_total_cash > 0 && profile.hitlist_total_points > 0 && (
+                        <>${Number(profile.hitlist_total_cash).toLocaleString()} cash and {Number(profile.hitlist_total_points).toLocaleString()} points in bounties</>
+                      )}
+                      {profile.hitlist_total_cash > 0 && profile.hitlist_total_points === 0 && (
+                        <>${Number(profile.hitlist_total_cash).toLocaleString()} in bounties</>
+                      )}
+                      {profile.hitlist_total_cash === 0 && profile.hitlist_total_points > 0 && (
+                        <>{Number(profile.hitlist_total_points).toLocaleString()} points in bounties</>
+                      )}
+                      {profile.hitlist_count > 0 && (
+                        <span className="text-red-300/70"> · {profile.hitlist_count} contract{profile.hitlist_count !== 1 ? 's' : ''}</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <ProfileInfoCard 
               profile={profile} 
               isMe={isMe}
@@ -1395,6 +1447,57 @@ export default function Profile() {
 
             {!isMe && profile.admin_stats && (
               <AdminStatsCard adminStats={profile.admin_stats} />
+            )}
+
+            {(isAdmin || isModerator) && !isMe && profile?.username && (
+              <details
+                className={`prof-staff-details relative ${styles.panel} rounded-md overflow-hidden border border-amber-500/30 prof-fade-in`}
+                onToggle={(e) => { if (e.target.open) fetchStaffStats(); }}
+              >
+                <summary className="list-none cursor-pointer">
+                  <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between gap-2 hover:bg-amber-500/15 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-500" />
+                      <span className="text-[9px] md:text-[10px] font-heading font-bold text-amber-500 uppercase tracking-[0.12em]">User info (staff)</span>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-amber-500/80 prof-staff-chevron transition-transform" aria-hidden />
+                  </div>
+                </summary>
+                <div className="p-3 border-t border-amber-500/20">
+                  {staffStatsLoading && (
+                    <p className="text-xs text-mutedForeground font-heading">Loading…</p>
+                  )}
+                  {staffStatsError && (
+                    <p className="text-xs text-red-400 font-heading">{staffStatsError}</p>
+                  )}
+                  {staffStats && !staffStatsLoading && (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-[10px] md:text-xs font-heading">
+                      <div><span className="text-mutedForeground">User ID</span><br /><span className="text-foreground font-mono">{staffStats.id ?? '—'}</span></div>
+                      <div><span className="text-mutedForeground">Email</span><br /><span className="text-foreground break-all">{staffStats.email ?? '—'}</span></div>
+                      <div><span className="text-mutedForeground">Created</span><br /><span className="text-foreground">{staffStats.created_at ? formatDateTime(staffStats.created_at) : '—'}</span></div>
+                      <div><span className="text-mutedForeground">Last seen</span><br /><span className="text-foreground">{staffStats.last_seen ? formatDateTime(staffStats.last_seen) : '—'}</span></div>
+                      <div><span className="text-mutedForeground">Rank</span><br /><span className="text-foreground">{staffStats.rank_name ?? '—'} (P{staffStats.prestige_level ?? 0})</span></div>
+                      <div><span className="text-mutedForeground">Crew</span><br /><span className="text-foreground">{staffStats.family_name ?? '—'}</span></div>
+                      <div><span className="text-mutedForeground">Money</span><br /><span className="text-foreground">${Number(staffStats.money ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">Points</span><br /><span className="text-foreground">{Number(staffStats.points ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">Rank points</span><br /><span className="text-foreground">{Number(staffStats.rank_points ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">Bullets</span><br /><span className="text-foreground">{Number(staffStats.bullets ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">Armour</span><br /><span className="text-foreground">{staffStats.armour_level ?? 0}</span></div>
+                      <div><span className="text-mutedForeground">State</span><br /><span className="text-foreground">{staffStats.current_state ?? '—'}</span></div>
+                      <div><span className="text-mutedForeground">Kills</span><br /><span className="text-foreground">{Number(staffStats.total_kills ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">Deaths</span><br /><span className="text-foreground">{Number(staffStats.total_deaths ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">Crimes</span><br /><span className="text-foreground">{Number(staffStats.total_crimes ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">GTA</span><br /><span className="text-foreground">{Number(staffStats.total_gta ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">Jail busts</span><br /><span className="text-foreground">{Number(staffStats.jail_busts ?? 0).toLocaleString()}</span></div>
+                      <div><span className="text-mutedForeground">In jail</span><br /><span className={staffStats.in_jail ? 'text-amber-400' : 'text-foreground'}>{staffStats.in_jail ? 'Yes' : 'No'}</span></div>
+                      <div><span className="text-mutedForeground">Dead</span><br /><span className={staffStats.is_dead ? 'text-red-400' : 'text-foreground'}>{staffStats.is_dead ? 'Yes' : 'No'}</span></div>
+                      <div><span className="text-mutedForeground">Account locked</span><br /><span className={staffStats.account_locked ? 'text-amber-400' : 'text-foreground'}>{staffStats.account_locked ? 'Yes' : 'No'}</span>{staffStats.account_locked_at && <><br /><span className="text-mutedForeground text-[9px]">{formatDateTime(staffStats.account_locked_at)}</span></>}</div>
+                      <div className="col-span-2 md:col-span-3"><span className="text-mutedForeground">Registration IP</span><br /><span className="text-foreground font-mono text-[9px]">{staffStats.registration_ip ?? '—'}</span></div>
+                      <div className="col-span-2 md:col-span-3"><span className="text-mutedForeground">Last login IP</span><br /><span className="text-foreground font-mono text-[9px]">{staffStats.last_login_ip ?? '—'}</span></div>
+                    </div>
+                  )}
+                </div>
+              </details>
             )}
           </>
         )}

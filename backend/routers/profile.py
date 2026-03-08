@@ -49,6 +49,7 @@ def register(router):
     get_wealth_rank_range = srv.get_wealth_rank_range
     _user_owns_any_property = srv._user_owns_any_property
     _is_moderator = srv._is_moderator
+    _is_admin = srv._is_admin
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     verify_password = srv.verify_password
     get_password_hash = srv.get_password_hash
@@ -149,7 +150,7 @@ def register(router):
         # When Auto Rank is enabled, count as online; when disabled, normal rules (last 5 min / forced) already applied above
         if (not is_dead) and (not online) and user.get("auto_rank_enabled"):
             online = True
-        if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
+        if (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
             online = False
         wealth_range = get_wealth_rank_range(user.get("money", 0))
         user_id = user["id"]
@@ -342,7 +343,83 @@ def register(router):
         if _is_moderator(user):
             raw = (user.get("mod_online_color") or "").strip() or MOD_ONLINE_COLOR_DEFAULT
             out["mod_online_color"] = raw if raw.startswith("#") and len(raw) <= 9 else MOD_ONLINE_COLOR_DEFAULT
+        # Hitlist banner: is this user on the hitlist? (public info: totals only)
+        hitlist_entries = await db.hitlist.find(
+            {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}},
+            {"_id": 0, "reward_type": 1, "reward_amount": 1},
+        ).to_list(100)
+        hitlist_cash = sum(int(e.get("reward_amount") or 0) for e in hitlist_entries if e.get("reward_type") == "cash")
+        hitlist_points = sum(int(e.get("reward_amount") or 0) for e in hitlist_entries if e.get("reward_type") == "points")
+        out["hitlist_on"] = len(hitlist_entries) > 0
+        out["hitlist_total_cash"] = hitlist_cash
+        out["hitlist_total_points"] = hitlist_points
+        out["hitlist_count"] = len(hitlist_entries)
         return out
+
+    @router.get("/users/{username}/staff-stats")
+    async def get_user_staff_stats(username: str, current_user: dict = Depends(get_current_user)):
+        """Extended stats for a user. Admin or moderator only. Used in profile page 'User info' dropdown."""
+        if not _is_admin(current_user) and not _is_moderator(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        username_pattern = _username_pattern(username)
+        user = await db.users.find_one(
+            {"username": username_pattern},
+            {
+                "_id": 0, "password_hash": 0,
+                "id": 1, "username": 1, "email": 1, "created_at": 1, "last_seen": 1,
+                "money": 1, "points": 1, "rank_points": 1, "bullets": 1, "armour_level": 1,
+                "total_kills": 1, "total_deaths": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1,
+                "current_state": 1, "in_jail": 1, "is_dead": 1, "family_id": 1,
+                "prestige_level": 1, "prestige_rank_multiplier": 1,
+                "account_locked": 1, "account_locked_at": 1,
+                "registration_ip": 1, "last_login_ip": 1,
+            },
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        rank_id, rank_name = get_rank_info(
+            int(user.get("rank_points") or 0),
+            float(user.get("prestige_rank_multiplier") or 1.0),
+        )
+        if user.get("email") in ADMIN_EMAILS:
+            rank_name = "Admin"
+        elif user.get("is_moderator"):
+            rank_name = "Moderator"
+        elif user.get("is_help_desk_operator"):
+            rank_name = "Help Desk Operator"
+        family_name = None
+        if user.get("family_id"):
+            fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1})
+            if fam:
+                family_name = fam.get("name")
+        return {
+            "id": user.get("id"),
+            "username": user.get("username"),
+            "email": user.get("email"),
+            "created_at": user.get("created_at"),
+            "last_seen": user.get("last_seen"),
+            "money": int(user.get("money") or 0),
+            "points": int(user.get("points") or 0),
+            "rank_points": int(user.get("rank_points") or 0),
+            "rank_id": rank_id,
+            "rank_name": rank_name,
+            "bullets": int(user.get("bullets") or 0),
+            "armour_level": int(user.get("armour_level") or 0),
+            "total_kills": int(user.get("total_kills") or 0),
+            "total_deaths": int(user.get("total_deaths") or 0),
+            "total_crimes": int(user.get("total_crimes") or 0),
+            "total_gta": int(user.get("total_gta") or 0),
+            "jail_busts": int(user.get("jail_busts") or 0),
+            "current_state": user.get("current_state") or "—",
+            "in_jail": bool(user.get("in_jail")),
+            "is_dead": bool(user.get("is_dead")),
+            "family_name": family_name,
+            "prestige_level": int(user.get("prestige_level") or 0),
+            "account_locked": bool(user.get("account_locked")),
+            "account_locked_at": user.get("account_locked_at"),
+            "registration_ip": user.get("registration_ip"),
+            "last_login_ip": user.get("last_login_ip"),
+        }
 
     @router.post("/profile/avatar")
     async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depends(get_current_user)):

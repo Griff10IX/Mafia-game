@@ -16,6 +16,9 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  if (typeof window !== 'undefined' && window.location?.pathname && config.url?.includes('/auth/me')) {
+    config.headers['X-Current-Path'] = window.location.pathname || '/';
+  }
   return config;
 });
 

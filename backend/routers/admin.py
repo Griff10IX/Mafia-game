@@ -133,8 +133,9 @@ def register(router):
 
     @router.post("/admin/ghost-mode")
     async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+        """Toggle ghost mode (appear offline). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         new_value = not current_user.get("admin_ghost_mode", False)
         await db.users.update_one(
             {"id": current_user["id"]},
@@ -629,7 +630,49 @@ def register(router):
         users = await cursor.to_list(100)
         return {"locked": users}
 
-    @router.post("/admin/test-lock-self")
+    @router.get("/admin/users-online-live")
+    async def admin_users_online_live(current_user: dict = Depends(get_current_user)):
+        """List everyone actually online (last 5 min), with last click, last page, IP, and same-IP count. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        now = datetime.now(timezone.utc)
+        five_min_ago = now - timedelta(minutes=5)
+        cursor = db.users.find(
+            {
+                "is_dead": {"$ne": True},
+                "is_bodyguard": {"$ne": True},
+                "$or": [
+                    {"last_seen": {"$gte": five_min_ago.isoformat()}},
+                    {"forced_online_until": {"$gt": now.isoformat()}},
+                    {"auto_rank_enabled": True},
+                ],
+            },
+            {"_id": 0, "id": 1, "username": 1, "last_seen": 1, "last_path": 1, "last_request_ip": 1, "last_login_ip": 1, "email": 1, "is_moderator": 1, "admin_ghost_mode": 1},
+        )
+        raw = await cursor.to_list(200)
+        users = []
+        for u in raw:
+            if (u.get("email") in ADMIN_EMAILS or u.get("is_moderator")) and u.get("admin_ghost_mode"):
+                continue
+            ip = (u.get("last_request_ip") or u.get("last_login_ip") or "").strip() or None
+            users.append({
+                "id": u.get("id"),
+                "username": u.get("username"),
+                "last_seen": u.get("last_seen"),
+                "last_path": u.get("last_path"),
+                "ip": ip,
+            })
+        ip_counts = {}
+        for u in users:
+            ip = u.get("ip")
+            if ip:
+                ip_counts[ip] = ip_counts.get(ip, 0) + 1
+        for u in users:
+            ip = u.get("ip")
+            same = (ip_counts.get(ip, 0) - 1) if ip else 0
+            u["same_ip_online_count"] = max(0, same)
+        users.sort(key=lambda x: (x.get("last_seen") or ""), reverse=True)
+        return {"users": users}
     async def admin_test_lock_self(current_user: dict = Depends(get_current_user)):
         """Lock the current admin for 60 seconds (test the locked page flow). Admin only."""
         if not _is_admin(current_user):

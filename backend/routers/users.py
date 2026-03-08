@@ -39,7 +39,7 @@ def register(router):
 
         users_data = []
         for user in users:
-            if user.get("email") in ADMIN_EMAILS and user.get("admin_ghost_mode"):
+            if (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
                 continue
             _rp = int(user.get("rank_points") or 0)
             _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
@@ -64,6 +64,7 @@ def register(router):
                 online_color = HDO_ONLINE_COLOR
             users_data.append({
                 "username": user["username"],
+                "id": user["id"],
                 "rank": rank_id,
                 "rank_name": rank_name,
                 "rank_points": _rp,
@@ -75,6 +76,27 @@ def register(router):
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
             })
+        # Hitlist totals for online users (bounties on user or their bodyguards)
+        if users_data:
+            user_ids = [u["id"] for u in users_data]
+            hitlist_entries = await db.hitlist.find(
+                {"target_id": {"$in": user_ids}, "target_type": {"$in": ["user", "bodyguards"]}},
+                {"_id": 0, "target_id": 1, "reward_type": 1, "reward_amount": 1},
+            ).to_list(1000)
+            hitlist_totals = {}
+            for e in hitlist_entries:
+                tid = e.get("target_id")
+                if tid not in hitlist_totals:
+                    hitlist_totals[tid] = [0, 0]
+                if e.get("reward_type") == "cash":
+                    hitlist_totals[tid][0] += int(e.get("reward_amount") or 0)
+                elif e.get("reward_type") == "points":
+                    hitlist_totals[tid][1] += int(e.get("reward_amount") or 0)
+            for u in users_data:
+                tc, tp = hitlist_totals.get(u["id"], (0, 0))
+                u["on_hitlist"] = tc > 0 or tp > 0
+                u["hitlist_total_cash"] = tc
+                u["hitlist_total_points"] = tp
         # Staff first (admins, then mods only); everyone else (including HDOs) by rank_points desc
         def _sort_key(u):
             if u.get("is_admin"):

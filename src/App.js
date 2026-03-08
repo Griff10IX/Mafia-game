@@ -54,6 +54,7 @@ const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Store = lazy(() => import("./pages/Store"));
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLocked = lazy(() => import("./pages/AdminLocked"));
+const AdminUsersOnline = lazy(() => import("./pages/AdminUsersOnline"));
 const AutoRank = lazy(() => import("./pages/AutoRank"));
 const Travel = lazy(() => import("./pages/Travel"));
 const States = lazy(() => import("./pages/States"));
@@ -374,6 +375,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <AdminLocked />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/admin/users-online"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <AdminUsersOnline />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
