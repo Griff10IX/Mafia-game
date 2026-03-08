@@ -101,6 +101,7 @@ def register(router):
 
     db = srv.db
     get_current_user = srv.get_current_user
+    send_notification = srv.send_notification
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
     _is_hdo = srv._is_hdo
@@ -1094,6 +1095,13 @@ def register(router):
                 raise HTTPException(status_code=400, detail="Set duration_hours, duration_days, or permanent=True")
             expires_at = (now + timedelta(hours=total_hours)).isoformat()
             status = "active"
+            # Human-readable duration for the notification
+            if days and days > 0 and (hours or 0) == 0:
+                duration_text = f"{int(days)} day(s)" if days else ""
+            elif hours and hours > 0 and (days or 0) == 0:
+                duration_text = f"{int(hours)} hour(s)" if hours else ""
+            else:
+                duration_text = f"{total_hours:.0f} hours"
         mute_id = str(uuid.uuid4())
         reason = (body.reason or "").strip() or None
         doc = {
@@ -1108,6 +1116,28 @@ def register(router):
             "created_at": now_iso,
         }
         await db.forum_mutes.insert_one(doc)
+        # Notify muted user in inbox: reason, duration, and when they will be auto-unmuted (if applicable)
+        title = "Forum mute"
+        parts = []
+        if reason:
+            parts.append(f"Reason: {reason}")
+        if permanent:
+            if status == "pending_review":
+                parts.append("Duration: Permanent (pending staff approval). You cannot post on the forum until a staff member unmutes you.")
+            else:
+                parts.append("Duration: Permanent. You cannot post on the forum until a staff member unmutes you.")
+        else:
+            try:
+                exp_dt = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+                exp_str = exp_dt.strftime("%b %d, %Y at %I:%M %p UTC")
+            except Exception:
+                exp_str = expires_at
+            parts.append(f"Duration: {duration_text}. You will be auto-unmuted on {exp_str}. You cannot post on the forum until then.")
+        message = "\n\n".join(parts)
+        try:
+            await send_notification(target["id"], title, message, "system", category="system")
+        except Exception as e:
+            logging.exception("Forum mute inbox notification: %s", e)
         msg = f"Muted {target.get('username')} from forum"
         if status == "pending_review":
             msg += " (permanent — pending admin/mod review)"
@@ -1142,6 +1172,16 @@ def register(router):
         if mute.get("status") != "pending_review":
             raise HTTPException(status_code=400, detail="Mute is not pending review")
         await db.forum_mutes.update_one({"id": mute_id}, {"$set": {"status": "active"}})
+        try:
+            await send_notification(
+                mute["user_id"],
+                "Forum mute (permanent approved)",
+                "Your permanent forum mute has been approved. You cannot post on the forum until a staff member unmutes you.",
+                "system",
+                category="system",
+            )
+        except Exception as e:
+            logging.exception("Forum mute approval inbox notification: %s", e)
         return {"message": "Permanent mute approved", "mute_id": mute_id}
 
     @router.get("/admin/forum-mutes-log")

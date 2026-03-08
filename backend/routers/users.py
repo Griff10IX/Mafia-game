@@ -75,7 +75,14 @@ def register(router):
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
             })
-        users_data.sort(key=lambda u: u["rank_points"], reverse=True)
+        # Staff first (admins, then mods only); everyone else (including HDOs) by rank_points desc
+        def _sort_key(u):
+            if u.get("is_admin"):
+                return (0, -u.get("rank_points", 0))
+            if u.get("is_moderator"):
+                return (1, -u.get("rank_points", 0))
+            return (2, -u.get("rank_points", 0))
+        users_data.sort(key=_sort_key)
 
         admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
