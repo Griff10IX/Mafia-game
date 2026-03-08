@@ -372,6 +372,10 @@ def register(router):
                 {"id": game_id},
                 {"$set": {"players": players, "pot": new_pot, "to_call": new_to_call, "min_raise": new_min_raise, "current_turn_index": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
             )
+            # Human is all-in so cannot respond to the raise — run out the board
+            if human.get("status") == "all_in":
+                await _vs_dealer_run_out_all_in(game_id)
+            return await db.mp_poker_games.find_one({"id": game_id})
         elif call_amount <= bot_stack and (call_amount <= int(g.get("big_blind") or 0) * 2 or cat >= HAND_PAIR or random.random() < 0.5):
             bot["stack"] -= call_amount
             bot["current_bet"] = int(bot.get("current_bet") or 0) + call_amount
@@ -383,13 +387,14 @@ def register(router):
                 {"$set": {"players": players, "pot": new_pot, "to_call": 0, "current_turn_index": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
             )
             g = await db.mp_poker_games.find_one({"id": game_id})
-            human_bet = next((p.get("current_bet") for p in g.get("players") or [] if not p.get("is_bot")), 0)
-            bot_bet = next((p.get("current_bet") for p in g.get("players") or [] if p.get("is_bot")), 0)
-            if human_bet == bot_bet:
-                human = next((p for p in (g.get("players") or []) if not p.get("is_bot")), None)
-                if human and human.get("status") == "all_in":
-                    await _vs_dealer_run_out_all_in(game_id)
-                else:
+            human = next((p for p in (g.get("players") or []) if not p.get("is_bot")), None)
+            # If human is all-in, run out the board regardless of bet sizes (avoids stuck state; showdown handles main/side pot)
+            if human and human.get("status") == "all_in":
+                await _vs_dealer_run_out_all_in(game_id)
+            else:
+                human_bet = next((p.get("current_bet") for p in g.get("players") or [] if not p.get("is_bot")), 0)
+                bot_bet = next((p.get("current_bet") for p in g.get("players") or [] if p.get("is_bot")), 0)
+                if human_bet == bot_bet:
                     await _vs_dealer_advance_street(game_id)
         else:
             bot["status"] = "folded"
@@ -1150,7 +1155,7 @@ def register(router):
 
     @router.post("/casino/mp-poker/games/{game_id}/timeout")
     async def game_timeout(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Auto-fold on turn timeout."""
+        """Auto-fold on turn timeout. For vs_dealer, if current player is all-in, run out the board instead of folding."""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("status") != "playing":
             raise HTTPException(status_code=404, detail="Game not found")
@@ -1158,6 +1163,13 @@ def register(router):
         players = list(g.get("players") or [])
         if turn_idx < 0 or turn_idx >= len(players) or players[turn_idx].get("user_id") != current_user["id"]:
             return {k: v for k, v in g.items() if k != "_id"}
+        # Vs dealer: if human is all-in, run out the board instead of folding (fixes stuck all-in hand)
+        if g.get("mode") == "vs_dealer" and players[turn_idx].get("status") == "all_in":
+            human = next((p for p in players if not p.get("is_bot")), None)
+            if human and human.get("status") == "all_in" and g.get("street") in ("preflop", "flop", "turn", "river"):
+                g = await _vs_dealer_run_out_all_in(game_id)
+                _enrich_players_current_hand(g)
+                return {k: v for k, v in (g or {}).items() if k != "_id"}
         players[turn_idx]["status"] = "folded"
         next_idx = (turn_idx + 1) % len(players)
         while next_idx != turn_idx and (players[next_idx].get("status") in ("folded", "all_in")):

@@ -440,12 +440,14 @@ export default function MPPokerGamePage() {
     return () => clearInterval(t);
   }, [game?.turn_started_at, game?.status]);
 
-  // Auto-timeout
+  // Auto-timeout (do not timeout when player is all-in — they can't act; hand should run out instead)
   useEffect(() => {
     if (turnSecondsLeft !== 0 || game?.status !== 'playing') return;
+    const players = game?.players || [];
+    const currentP = players[game?.current_turn_index];
+    if (currentP?.status === 'all_in') return; // all-in: no timeout, wait for run-out
     const key = `${game?.current_turn_index}-${game?.turn_started_at}`;
     if (timeoutTriggeredRef.current === key) return;
-    const players = game?.players || [];
     if (players[game?.current_turn_index]?.user_id !== myUserId) return;
     timeoutTriggeredRef.current = key;
     api.post(`/casino/mp-poker/games/${gameId}/timeout`).then((r) => setGame(r.data ?? null)).catch(() => {});
@@ -915,7 +917,7 @@ export default function MPPokerGamePage() {
                 {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
                   <div className="flex flex-col items-center gap-0.5 mt-1">
                     <div className="flex items-center gap-2">
-                      {turnSecondsLeft != null && (
+                      {turnSecondsLeft != null && currentTurnPlayer?.status !== 'all_in' && (
                         <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
                       )}
                       <span className="text-[9px] font-heading font-bold animate-pkr-pulse"
