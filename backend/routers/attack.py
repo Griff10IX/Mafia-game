@@ -908,8 +908,10 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         if not victim_as_bodyguard and target.get("is_bodyguard") and target.get("bodyguard_owner_id"):
             victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
         bodyguard_owner_username = None
+        bodyguard_owner_id = None
         for bg in victim_as_bodyguard:
             owner_id = bg["user_id"]
+            bodyguard_owner_id = owner_id
             owner_doc = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "family_id": 1})
             if owner_doc:
                 bodyguard_owner_username = owner_doc.get("username")
@@ -997,6 +999,17 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         killer_family_id = await resolve_family_id(killer_id) or current_user.get("family_id")
         killer_family_id = str(killer_family_id).strip() if killer_family_id else None
         victim_family_id = target.get("family_id")
+        # When killer (boss/underboss/consigliere) kills another family's bodyguard, start family war with that family
+        if is_victim_bodyguard and bodyguard_owner_id and killer_family_id:
+            try:
+                owner_family_id = await resolve_family_id(bodyguard_owner_id)
+                owner_family_id = str(owner_family_id).strip() if owner_family_id else None
+                if owner_family_id and owner_family_id != killer_family_id:
+                    killer_role = (current_user.get("family_role") or "").strip().lower()
+                    if killer_role in ("boss", "underboss", "consigliere"):
+                        await _family_war_start(killer_family_id, owner_family_id)
+            except Exception as e:
+                logging.exception("Family war start on bodyguard kill: %s", e)
         if victim_family_id:
             try:
                 if killer_family_id:

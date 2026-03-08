@@ -155,6 +155,125 @@ export default function MPBlackjackPage() {
         </p>
       </div>
 
+      {/* ── Deal New Game options (above Open Tables when opened) ── */}
+      {createOpen && (
+        <div
+          className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 mpbj-fade`}
+          style={{ borderColor: '#5a3e1b', animationDelay: '0.02s' }}
+        >
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+
+          <div className="px-3 py-2.5 border-b border-primary/20" style={{ background: 'rgba(212,175,55,0.06)' }}>
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Deal New Game</h2>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+              You pay the buy-in and become the first player. Optional bonus prize added to the pot.
+            </p>
+          </div>
+
+          <div className="p-3 space-y-3">
+            <div className="flex items-center gap-3">
+              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Max Players</label>
+              <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
+                className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
+                {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} players</option>)}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Buy-in ($)</label>
+              <FormattedNumberInput value={createBuyIn} onChange={setCreateBuyIn} placeholder="100,000"
+                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Bonus Prize</label>
+              <FormattedNumberInput value={createExtraPrize} onChange={setCreateExtraPrize} placeholder="0 (optional)"
+                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Hit limit</label>
+                <select value={createCardLimit} onChange={(e) => setCreateCardLimit(e.target.value)}
+                  className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
+                  <option value="no_limit">No limit (hit until bust or stand)</option>
+                  <option value="3">1 hit only (e.g. elimination)</option>
+                  <option value="4">2 hits</option>
+                  <option value="5">3 hits</option>
+                  <option value="2">No hits (2 cards only)</option>
+                </select>
+              </div>
+              <p className="text-[8px] font-heading text-mutedForeground ml-24">
+                In elimination rounds, 1 hit is often used.
+              </p>
+            </div>
+
+            {/* Toggles */}
+            <div className="pt-2 border-t border-primary/15 space-y-2">
+              <p className="text-[8px] font-heading text-mutedForeground uppercase tracking-widest">House Rules</p>
+
+              {/* Elimination rounds gets its own highlighted row */}
+              <label className="flex items-start gap-2.5 cursor-pointer group p-2 rounded-lg transition-colors"
+                style={{ background: createEliminationRounds ? 'rgba(251,113,133,0.06)' : 'transparent', border: createEliminationRounds ? '1px solid rgba(251,113,133,0.2)' : '1px solid transparent' }}>
+                <div onClick={() => setCreateEliminationRounds((v) => !v)}
+                  className="relative w-8 h-4 rounded-full transition-all flex-shrink-0 mt-0.5"
+                  style={{
+                    background: createEliminationRounds ? 'linear-gradient(90deg,#fb7185,#e11d48)' : 'rgba(255,255,255,0.1)',
+                    border: createEliminationRounds ? '1px solid #fb7185' : '1px solid rgba(255,255,255,0.15)',
+                    cursor: 'pointer',
+                  }}>
+                  <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
+                    style={{ left: createEliminationRounds ? '17px' : '2px', background: createEliminationRounds ? '#fff' : 'rgba(255,255,255,0.4)' }} />
+                </div>
+                <div>
+                  <span className="text-[9px] font-heading font-bold" style={{ color: createEliminationRounds ? '#fb7185' : 'inherit' }}>
+                    Elimination Rounds
+                  </span>
+                  <p className="text-[8px] font-heading text-mutedForeground mt-0.5">
+                    Each round, player with the lowest hand is knocked out. Last one standing wins the pot.
+                  </p>
+                </div>
+              </label>
+
+              {[
+                { label: 'Exclude yourself from play', val: createExcludeYourself, set: setCreateExcludeYourself },
+                { label: 'Anonymous game (hide creator)', val: createAnonymous, set: setCreateAnonymous },
+                { label: 'Twenty-one only (only 21 wins)', val: createTwentyOneOnly, set: setCreateTwentyOneOnly },
+              ].map(({ label, val, set }) => (
+                <label key={label} className="flex items-center gap-2.5 cursor-pointer group">
+                  <div onClick={() => set((v) => !v)}
+                    className="relative w-8 h-4 rounded-full transition-all flex-shrink-0"
+                    style={{
+                      background: val ? 'linear-gradient(90deg,#d4af37,#a08020)' : 'rgba(255,255,255,0.1)',
+                      border: val ? '1px solid #c9a84c' : '1px solid rgba(255,255,255,0.15)',
+                      cursor: 'pointer',
+                    }}>
+                    <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
+                      style={{ left: val ? '17px' : '2px', background: val ? '#1a1200' : 'rgba(255,255,255,0.4)' }} />
+                  </div>
+                  <span className="text-[9px] font-heading text-foreground group-hover:text-primary/80 transition-colors">{label}</span>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button type="button" disabled={creating} onClick={handleCreate}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
+                <Spade size={13} />
+                {creating ? 'Dealing…' : 'Deal Cards'}
+              </button>
+              <button type="button" onClick={() => setCreateOpen(false)}
+                className="px-3 py-2 rounded-lg border border-primary/20 text-mutedForeground font-heading text-[9px] uppercase hover:bg-primary/8 transition-colors">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
+        </div>
+      )}
+
       {/* ── Open games panel ── */}
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.05s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -350,125 +469,6 @@ export default function MPBlackjackPage() {
           )}
         </div>
       </div>
-
-      {/* ── Create game panel ── */}
-      {createOpen && (
-        <div
-          className={`relative ${styles.panel} rounded-xl overflow-hidden border-2 mpbj-fade`}
-          style={{ borderColor: '#5a3e1b', animationDelay: '0.02s' }}
-        >
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
-
-          <div className="px-3 py-2.5 border-b border-primary/20" style={{ background: 'rgba(212,175,55,0.06)' }}>
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Deal New Game</h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
-              You pay the buy-in and become the first player. Optional bonus prize added to the pot.
-            </p>
-          </div>
-
-          <div className="p-3 space-y-3">
-            <div className="flex items-center gap-3">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Max Players</label>
-              <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
-                className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
-                {[2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n} players</option>)}
-              </select>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Buy-in ($)</label>
-              <FormattedNumberInput value={createBuyIn} onChange={setCreateBuyIn} placeholder="100,000"
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
-            </div>
-
-            <div className="flex items-center gap-3">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Bonus Prize</label>
-              <FormattedNumberInput value={createExtraPrize} onChange={setCreateExtraPrize} placeholder="0 (optional)"
-                className="flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-3">
-                <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-24 shrink-0">Hit limit</label>
-                <select value={createCardLimit} onChange={(e) => setCreateCardLimit(e.target.value)}
-                  className="mp-blackjack-select flex-1 px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
-                  <option value="no_limit">No limit (hit until bust or stand)</option>
-                  <option value="3">1 hit only (e.g. elimination)</option>
-                  <option value="4">2 hits</option>
-                  <option value="5">3 hits</option>
-                  <option value="2">No hits (2 cards only)</option>
-                </select>
-              </div>
-              <p className="text-[8px] font-heading text-mutedForeground ml-24">
-                In elimination rounds, 1 hit is often used.
-              </p>
-            </div>
-
-            {/* Toggles */}
-            <div className="pt-2 border-t border-primary/15 space-y-2">
-              <p className="text-[8px] font-heading text-mutedForeground uppercase tracking-widest">House Rules</p>
-
-              {/* Elimination rounds gets its own highlighted row */}
-              <label className="flex items-start gap-2.5 cursor-pointer group p-2 rounded-lg transition-colors"
-                style={{ background: createEliminationRounds ? 'rgba(251,113,133,0.06)' : 'transparent', border: createEliminationRounds ? '1px solid rgba(251,113,133,0.2)' : '1px solid transparent' }}>
-                <div onClick={() => setCreateEliminationRounds((v) => !v)}
-                  className="relative w-8 h-4 rounded-full transition-all flex-shrink-0 mt-0.5"
-                  style={{
-                    background: createEliminationRounds ? 'linear-gradient(90deg,#fb7185,#e11d48)' : 'rgba(255,255,255,0.1)',
-                    border: createEliminationRounds ? '1px solid #fb7185' : '1px solid rgba(255,255,255,0.15)',
-                    cursor: 'pointer',
-                  }}>
-                  <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-                    style={{ left: createEliminationRounds ? '17px' : '2px', background: createEliminationRounds ? '#fff' : 'rgba(255,255,255,0.4)' }} />
-                </div>
-                <div>
-                  <span className="text-[9px] font-heading font-bold" style={{ color: createEliminationRounds ? '#fb7185' : 'inherit' }}>
-                    Elimination Rounds
-                  </span>
-                  <p className="text-[8px] font-heading text-mutedForeground mt-0.5">
-                    Each round, player with the lowest hand is knocked out. Last one standing wins the pot.
-                  </p>
-                </div>
-              </label>
-
-              {[
-                { label: 'Exclude yourself from play', val: createExcludeYourself, set: setCreateExcludeYourself },
-                { label: 'Anonymous game (hide creator)', val: createAnonymous, set: setCreateAnonymous },
-                { label: 'Twenty-one only (only 21 wins)', val: createTwentyOneOnly, set: setCreateTwentyOneOnly },
-              ].map(({ label, val, set }) => (
-                <label key={label} className="flex items-center gap-2.5 cursor-pointer group">
-                  <div onClick={() => set((v) => !v)}
-                    className="relative w-8 h-4 rounded-full transition-all flex-shrink-0"
-                    style={{
-                      background: val ? 'linear-gradient(90deg,#d4af37,#a08020)' : 'rgba(255,255,255,0.1)',
-                      border: val ? '1px solid #c9a84c' : '1px solid rgba(255,255,255,0.15)',
-                      cursor: 'pointer',
-                    }}>
-                    <div className="absolute top-0.5 w-3 h-3 rounded-full transition-all"
-                      style={{ left: val ? '17px' : '2px', background: val ? '#1a1200' : 'rgba(255,255,255,0.4)' }} />
-                  </div>
-                  <span className="text-[9px] font-heading text-foreground group-hover:text-primary/80 transition-colors">{label}</span>
-                </label>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-2 pt-1">
-              <button type="button" disabled={creating} onClick={handleCreate}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
-                style={{ background: 'linear-gradient(180deg,#d4af37,#a08020)', borderColor: '#c9a84c', color: '#1a1200', boxShadow: '0 3px 10px rgba(212,175,55,0.2)' }}>
-                <Spade size={13} />
-                {creating ? 'Dealing…' : 'Deal Cards'}
-              </button>
-              <button type="button" onClick={() => setCreateOpen(false)}
-                className="px-3 py-2 rounded-lg border border-primary/20 text-mutedForeground font-heading text-[9px] uppercase hover:bg-primary/8 transition-colors">
-                Cancel
-              </button>
-            </div>
-          </div>
-
-          <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,#c9a84c,#8b6914,#c9a84c,#5a3e1b)' }} />
-        </div>
-      )}
 
       {/* ── Rules ── */}
       <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.1s' }}>

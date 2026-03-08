@@ -300,6 +300,8 @@ async def get_bullet_factory(
     }
     # Armoury (owner only): multi-production hours + produce-all costs
     if owner_id:
+        out["owner_pending_profit"] = int(factory.get("owner_pending_profit") or 0)
+        out["owner_pending_profit_points"] = int(factory.get("owner_pending_profit_points") or 0)
         armour_hrs = factory.get("armour_production_hours") or {}
         weapon_hrs = factory.get("weapon_production_hours") or {}
         out["armour_production_hours"] = armour_hrs
@@ -400,14 +402,33 @@ async def collect_bullet_factory(
     body: StateOptionalRequest = Body(default=StateOptionalRequest()),
     current_user: dict = Depends(get_current_user),
 ):
-    """No-op for armoury: bullet and armour/weapon sales are paid to the owner when players buy. Returns success for UI compatibility."""
+    """Collect accumulated profit from bullet/armour/weapon sales into your cash and points."""
     state = _normalize_state(body.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    pending_money = int(factory.get("owner_pending_profit") or 0)
+    pending_points = int(factory.get("owner_pending_profit_points") or 0)
+    if pending_money <= 0 and pending_points <= 0:
+        return {
+            "message": "No profit to collect. Sales are added here when players buy bullets, armour, or weapons from your armoury.",
+            "state": state,
+            "collected_money": 0,
+            "collected_points": 0,
+        }
+    await db.bullet_factory.update_one(
+        {"state": state},
+        {"$set": {"owner_pending_profit": 0, "owner_pending_profit_points": 0}},
+    )
+    if pending_money > 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": pending_money}})
+    if pending_points > 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": pending_points}})
     return {
-        "message": "Sales are paid to you when players buy. No separate collection.",
+        "message": f"Collected ${pending_money:,} and {pending_points:,} points from armoury sales.",
         "state": state,
+        "collected_money": pending_money,
+        "collected_points": pending_points,
     }
 
 
@@ -745,9 +766,9 @@ async def buy_bullets(
         {"$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
     )
     if owner_id:
-        await db.users.update_one(
-            {"id": owner_id},
-            {"$inc": {"money": total_cost}},
+        await db.bullet_factory.update_one(
+            {"state": state},
+            {"$inc": {"owner_pending_profit": total_cost}},
         )
     return {
         "message": f"Bought {amount:,} bullets for ${total_cost:,}",
@@ -877,10 +898,10 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
         if owner_id and owner_id != current_user["id"]:
             if armour.get("cost_money") is not None:
                 await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": price}})
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
             else:
                 await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"points": price}})
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
         else:
             await db.users.update_one(
                 {"id": current_user["id"]},
@@ -1145,10 +1166,10 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         if owner_id and owner_id != current_user["id"]:
             if currency == "money":
                 await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -price}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": price}})
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
             else:
                 await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": -price}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"points": price}})
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
         await db.user_weapons.update_one(
             {"user_id": current_user["id"], "weapon_id": weapon_id},
             {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},

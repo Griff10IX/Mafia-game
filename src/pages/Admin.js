@@ -2259,6 +2259,92 @@ export default function Admin() {
           <AlertTriangle size={12} />
           Moderation
         </h2>
+        {/* Lock player (investigation) – visible to admin and mod */}
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Lock}
+            title="Lock player (investigation)"
+            badge={lockedAccounts.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{lockedAccounts.length} locked</span> : null}
+            isCollapsed={collapsed.lockPlayerMod}
+            onToggle={() => toggleSection('lockPlayerMod')}
+          />
+          {!collapsed.lockPlayerMod && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={User} label="Target username" description="User to lock or unlock">
+                <input
+                  type="text"
+                  value={formData.targetUsername}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
+                  placeholder="Username"
+                  className="flex-1 min-w-0 max-w-[180px] px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+              </ActionRow>
+              <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
+                <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
+              </ActionRow>
+              <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
+                <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
+              </ActionRow>
+              {isAdmin && (
+                <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
+                  <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
+                    Test lock
+                  </button>
+                </ActionRow>
+              )}
+              <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
+                <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
+                  {lockedAccountsLoading ? '...' : 'Refresh'}
+                </button>
+              </ActionRow>
+              {lockedAccounts.length > 0 && (
+                <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
+                  {lockedAccounts.map((u) => (
+                    <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-bold text-amber-400">{u.username}</span>
+                        <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
+                      </div>
+                      {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
+                      {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
+                      {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
+                      {u.account_locked_admin_message && (
+                        <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                          <span className="text-primary font-bold">Staff message:</span>
+                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
+                          {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_admin_message_at).toLocaleString()}</div>}
+                        </div>
+                      )}
+                      {u.account_locked_user_reply && (
+                        <div className="mt-1">
+                          <span className="text-emerald-400 font-bold">Their reply:</span>
+                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
+                          {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_user_reply_at).toLocaleString()}</div>}
+                        </div>
+                      )}
+                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                        <textarea
+                          value={lockedMessageByUser[u.username] ?? ''}
+                          onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
+                          placeholder="Leave message for user (they can reply once)"
+                          rows={2}
+                          className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
+                          maxLength={2000}
+                          disabled={sendingMessageTo === u.username}
+                        />
+                        <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                          {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30`}>
         <SectionHeader
           icon={AlertTriangle}

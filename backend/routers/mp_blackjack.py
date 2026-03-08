@@ -168,9 +168,39 @@ def register(router):
             # Find the lowest score (those to eliminate)
             min_score = min(s[1] for s in scored)
 
-            # If all scores tied, no elimination this round (extremely rare edge case)
+            # If all active players tied at the same (best) score — no elimination, play another round
             to_eliminate_ids = [s[0] for s in scored if s[1] == min_score]
             surviving_ids = [s[0] for s in scored if s[1] != min_score]
+            if len(to_eliminate_ids) == len(active):
+                # Everyone tied (e.g. both have 21) — play another round, no elimination
+                new_deck = _mp_bj_make_deck()
+                random.shuffle(new_deck)
+                for p in players:
+                    if not p.get("eliminated"):
+                        p["hand"] = []
+                        p["status"] = "waiting_ready"
+                        p["ready"] = False
+                round_entry = {
+                    "round": int(game.get("current_round") or 1),
+                    "winner_username": None,
+                    "eliminated": None,
+                    "tie_play_again": True,
+                }
+                await db.mp_blackjack_games.update_one(
+                    {"id": game_id},
+                    {
+                        "$set": {
+                            "phase": "ready",
+                            "players": players,
+                            "deck": new_deck,
+                            "pot": pot,
+                            "current_turn_index": -1,
+                            "all_ready_at": None,
+                        },
+                        "$push": {"round_history": {"$each": [round_entry], "$slice": -5}},
+                    },
+                )
+                return
 
             # Mark eliminated players
             eliminated_this_round = []
@@ -299,41 +329,57 @@ def register(router):
                         winner_indices.append(i)
 
             num_players = len(active)
+            tie_or_no_winner = len(winner_indices) > 1 or len(winner_indices) == 0
 
-            if winner_indices:
-                winner_indices = [winner_indices[0]]
-
-            winner_ids = [players[i].get("user_id") for i in winner_indices]
-            payouts = {p.get("user_id"): 0 for p in players}
-
-            if not winner_indices:
-                # No winner (e.g. everyone busts): refund everyone their share of the pot so they can play again.
-                refund_each = pot // num_players if num_players else 0
-                remainder = pot - refund_each * num_players
-                for i, p in enumerate(active):
-                    uid = p.get("user_id")
-                    add = refund_each + (remainder if i == 0 else 0)
-                    payouts[uid] = add
-                    if add > 0:
-                        await db.users.update_one({"id": uid}, {"$inc": {"money": add}})
+            if tie_or_no_winner:
+                # Tie (e.g. both 21) or everyone bust — play another round: no refunds, back to ready
+                new_deck = _mp_bj_make_deck()
+                random.shuffle(new_deck)
+                for p in players:
+                    if not p.get("eliminated"):
+                        p["hand"] = []
+                        p["status"] = "waiting_ready"
+                        p["ready"] = False
+                round_entry = {
+                    "round": 1,
+                    "winner_username": None,
+                    "eliminated": None,
+                    "tie_play_again": True,
+                }
+                await db.mp_blackjack_games.update_one(
+                    {"id": game_id},
+                    {
+                        "$set": {
+                            "phase": "ready",
+                            "players": players,
+                            "deck": new_deck,
+                            "pot": pot,
+                            "current_turn_index": -1,
+                            "all_ready_at": None,
+                        },
+                        "$push": {"round_history": {"$each": [round_entry], "$slice": -5}},
+                    },
+                )
+                return
             else:
-                # Winner takes full pot; everyone else loses their buy-in.
-                uid = players[winner_indices[0]].get("user_id")
-                payouts[uid] = pot
-                if pot > 0:
-                    await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
+                winner_ids = [players[winner_indices[0]].get("user_id")]
+
+            payouts = {p.get("user_id"): 0 for p in players}
+            # Single winner takes pot
+            uid = players[winner_indices[0]].get("user_id")
+            payouts[uid] = pot
+            if pot > 0:
+                await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
 
             results = []
             for p in players:
                 uid = p.get("user_id")
-                if not winner_indices:
-                    results.append({"user_id": uid, "username": p.get("username"), "result": "refund", "payout": payouts.get(uid, 0)})
-                elif uid in winner_ids:
+                if uid in winner_ids:
                     results.append({"user_id": uid, "username": p.get("username"), "result": "win", "payout": payouts.get(uid, 0)})
                 else:
                     results.append({"user_id": uid, "username": p.get("username"), "result": "lose", "payout": 0})
 
-            winner_username = players[winner_indices[0]].get("username") if winner_indices else None
+            winner_username = players[winner_indices[0]].get("username")
             round_entry = {"round": 1, "winner_username": winner_username, "eliminated": None}
 
             await db.mp_blackjack_games.update_one(

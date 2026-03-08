@@ -319,7 +319,7 @@ async def hitlist_me(current_user: dict = Depends(get_current_user)):
     who = []
     if revealed:
         who = [
-            {"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
+            {"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")}
             for e in entries
         ]
     return {
@@ -455,14 +455,14 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
     if current_user.get("hitlist_revealed") is True:
         entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
-        who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+        who = [{"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
         return {"message": "Already revealed.", "who": who}
     cost = HITLIST_REVEAL_COST_POINTS
     if (current_user.get("points") or 0) < cost:
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
     await db.users.update_one({"id": user_id}, {"$set": {"hitlist_revealed": True}, "$inc": {"points": -cost}})
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
-    who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
+    who = [{"placer_username": "Anonymous" if e.get("hidden") else (e.get("placer_username") or "Unknown"), "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount"), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
