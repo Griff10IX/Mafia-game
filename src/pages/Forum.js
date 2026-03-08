@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette } from 'lucide-react';
 import api from '../utils/api';
 import { toast } from 'sonner';
@@ -370,13 +370,14 @@ const FORUM_TABS = [
 
 export default function Forum() {
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState('general');
   const [topics, setTopics] = useState([]);
   const [forumPage, setForumPage] = useState(1);
   const [canViewPage2, setCanViewPage2] = useState(false);
   useEffect(() => {
-    if (location.state?.category === 'entertainer') setActiveTab('entertainer');
-  }, [location.state?.category]);
+    if (searchParams.get('tab') === 'entertainer' || location.state?.category === 'entertainer') setActiveTab('entertainer');
+  }, [searchParams, location.state?.category]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [gameModalOpen, setGameModalOpen] = useState(false);

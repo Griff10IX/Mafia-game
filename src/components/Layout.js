@@ -102,7 +102,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       label: 'Misc',
       items: [
         { path: '/forum', label: 'Forum' },
-        { path: '/forum', label: 'Entertainer Forum', state: { category: 'entertainer' } },
+        { path: '/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
         { path: '/inbox', label: 'Inbox' },
         { path: '/help-desk', label: 'Help Desk' },
         { path: '/booze-run', label: 'Booze Run' },
@@ -2068,12 +2068,14 @@ export default function Layout({ children }) {
                         </button>
                       );
                     }
-                    const to = sub.state ? { pathname: sub.path, state: sub.state } : sub.path;
-                    const isActive = sub.state
-                      ? location.pathname === sub.path && location.state?.category === sub.state?.category
-                      : sub.path === '/forum'
-                        ? location.pathname === '/forum' && !location.state?.category
-                        : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
+                    const to = sub.search ? { pathname: sub.path, search: sub.search } : sub.state ? { pathname: sub.path, state: sub.state } : sub.path;
+                    const isActive = sub.search
+                      ? location.pathname === sub.path && location.search === sub.search
+                      : sub.state
+                        ? location.pathname === sub.path && location.state?.category === sub.state?.category
+                        : sub.path === '/forum'
+                          ? location.pathname === '/forum' && !location.search?.includes('tab=entertainer')
+                          : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
                     const prefetchCrimes = sub.path === '/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
                     return (
                       <Link
@@ -2165,6 +2167,7 @@ export default function Layout({ children }) {
               {item.type === 'group' && (() => {
                 const isOpen = mobileBottomMenuOpen === item.id;
                 const isActive = item.items.some((sub) => {
+                  if (sub.search) return location.pathname === sub.path && location.search === sub.search;
                   if (sub.state) return location.pathname === sub.path && location.state?.category === sub.state?.category;
                   return location.pathname === sub.path || (sub.path !== '/casino' && sub.path !== '/forum' && location.pathname.startsWith(sub.path + '/'));
                 });

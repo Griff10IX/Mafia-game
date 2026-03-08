@@ -245,7 +245,7 @@ export default function ForumTopic() {
         topic_id: topicId || undefined,
       });
       toast.success(createGameManualRoll ? 'Game created — roll it when ready from the Entertainer Forum.' : 'Game created');
-      navigate('/forum', { state: { category: 'entertainer' } });
+      navigate('/forum?tab=entertainer');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to create game');
     } finally {

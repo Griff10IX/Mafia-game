@@ -1015,14 +1015,18 @@ export default function Profile() {
   };
 
   const fetchStaffStats = async () => {
-    if (!profile?.username || staffStats != null || staffStatsLoading) return;
+    const targetUsername = username || profile?.username;
+    if (!targetUsername || staffStatsLoading) return;
+    if (staffStats != null && !staffStatsError) return;
     setStaffStatsLoading(true);
     setStaffStatsError(null);
     try {
-      const res = await api.get(`/users/${encodeURIComponent(profile.username)}/staff-stats`);
+      const res = await api.get(`/users/${encodeURIComponent(targetUsername)}/staff-stats`);
       setStaffStats(res.data);
     } catch (e) {
-      setStaffStatsError(e.response?.data?.detail || 'Failed to load');
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : (e.response?.status === 403 ? 'Admin or moderator access required' : e.response?.status === 404 ? 'User not found' : 'Failed to load');
+      setStaffStatsError(msg);
     } finally {
       setStaffStatsLoading(false);
     }
@@ -1468,7 +1472,10 @@ export default function Profile() {
                     <p className="text-xs text-mutedForeground font-heading">Loading…</p>
                   )}
                   {staffStatsError && (
-                    <p className="text-xs text-red-400 font-heading">{staffStatsError}</p>
+                    <p className="text-xs text-red-400 font-heading flex items-center gap-2 flex-wrap">
+                      <span>{staffStatsError}</span>
+                      <button type="button" onClick={() => { setStaffStatsError(null); fetchStaffStats(); }} className="text-amber-400 hover:text-amber-300 font-heading underline">Retry</button>
+                    </p>
                   )}
                   {staffStats && !staffStatsLoading && (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2 text-[10px] md:text-xs font-heading">
