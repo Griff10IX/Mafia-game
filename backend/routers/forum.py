@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification
 
 
-FORUM_CATEGORIES = ["general", "entertainer", "crew_oc"]  # crew_oc = family Crew OC ads
+FORUM_CATEGORIES = ["general", "entertainer", "crew_oc", "designer"]  # crew_oc = family Crew OC ads; designer = picture designers
 FORUM_TOPICS_PER_PAGE = 20
 FORUM_TOPICS_MAX_TOTAL = 40  # page 1 = 20, page 2 = 20; beyond that topics are deleted (mods/admins only see page 2)
 

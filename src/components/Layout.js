@@ -103,6 +103,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       items: [
         { path: '/forum', label: 'Forum' },
         { path: '/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
+        { path: '/forum', label: 'Designer Forum', search: '?tab=designer' },
         { path: '/inbox', label: 'Inbox' },
         { path: '/help-desk', label: 'Help Desk' },
         { path: '/booze-run', label: 'Booze Run' },
@@ -2074,7 +2075,7 @@ export default function Layout({ children }) {
                       : sub.state
                         ? location.pathname === sub.path && location.state?.category === sub.state?.category
                         : sub.path === '/forum'
-                          ? location.pathname === '/forum' && !location.search?.includes('tab=entertainer')
+                          ? location.pathname === '/forum' && !location.search?.includes('tab=entertainer') && !location.search?.includes('tab=designer')
                           : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
                     const prefetchCrimes = sub.path === '/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
                     return (

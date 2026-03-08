@@ -25,6 +25,7 @@ DEFAULT_NOTIFICATION_PREFS = {
     "forum_topic_reply": True,
     "forum_comment_reply": True,
     "forum_mention": True,
+    "designer_comp": True,
 }
 
 # ----- Models -----
@@ -38,6 +39,7 @@ class NotificationPreferencesRequest(BaseModel):
     forum_topic_reply: Optional[bool] = None
     forum_comment_reply: Optional[bool] = None
     forum_mention: Optional[bool] = None
+    designer_comp: Optional[bool] = None
 
 
 class SendMessageRequest(BaseModel):

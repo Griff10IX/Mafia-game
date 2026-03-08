@@ -1201,6 +1201,8 @@ organised_crime.register(api_router)
 oc.register(api_router)
 forum.register(api_router)
 entertainer.register(api_router)
+from routers import designer_competitions
+designer_competitions.register(api_router)
 armoury.register(api_router)
 objectives.register(api_router)
 from routers import missions

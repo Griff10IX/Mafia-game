@@ -956,7 +956,7 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "crew_oc_cooldown_until": 1})
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "crew_oc_cooldown_until": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     now = datetime.now(timezone.utc)
@@ -993,8 +993,9 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
             logging.exception("Rank-up notification (Crew OC)")
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": CREW_OC_TREASURY_LUMP}, "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()}})
     await db.family_crew_oc_applications.delete_many({"family_id": family_id})
+    fam_name = (fam.get("name") or fam.get("tag") or "Crew").strip() or "Crew"
     for uid in living_ids:
-        await send_notification(uid, "Crew OC committed", f"Your crew committed Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{CREW_OC_REWARD_POINTS} points, +{CREW_OC_REWARD_BOOZE} booze. Treasury +${CREW_OC_TREASURY_LUMP:,}.", "reward", category="crew_oc")
+        await send_notification(uid, "Crew OC committed", f"{fam_name} committed Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{CREW_OC_REWARD_POINTS} points, +{CREW_OC_REWARD_BOOZE} booze. Treasury +${CREW_OC_TREASURY_LUMP:,}.", "reward", category="crew_oc")
     _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC committed. All crew rewarded.", "crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours}
 

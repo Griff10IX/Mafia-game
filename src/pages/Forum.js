@@ -110,7 +110,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general' }) 
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
-            {category === 'entertainer' ? '🎭 Entertainer: New Topic' : '📝 Create New Topic'}
+            {category === 'entertainer' ? '🎭 Entertainer: New Topic' : category === 'designer' ? '🎨 Designer Forum: New Topic' : '📝 Create New Topic'}
           </h2>
         </div>
         <form onSubmit={handleSubmit} className="p-3 space-y-3">
@@ -365,6 +365,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
 const FORUM_TABS = [
   { id: 'general', label: 'General' },
   { id: 'entertainer', label: 'Entertainer Forum' },
+  { id: 'designer', label: 'Designer Forum' },
   { id: 'crew_oc', label: 'Crew OC' },
 ];
 
@@ -377,6 +378,7 @@ export default function Forum() {
   const [canViewPage2, setCanViewPage2] = useState(false);
   useEffect(() => {
     if (searchParams.get('tab') === 'entertainer' || location.state?.category === 'entertainer') setActiveTab('entertainer');
+    else if (searchParams.get('tab') === 'designer') setActiveTab('designer');
   }, [searchParams, location.state?.category]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -396,6 +398,19 @@ export default function Forum() {
   const [configSaving, setConfigSaving] = useState(false);
   const [creatingGames, setCreatingGames] = useState(false);
   const [, setTick] = useState(0);
+  const [activeDesignerComp, setActiveDesignerComp] = useState(null);
+  const [myVoteEntryId, setMyVoteEntryId] = useState(null);
+  const [designerEntries, setDesignerEntries] = useState([]);
+  const [designerEntriesLoading, setDesignerEntriesLoading] = useState(false);
+  const [designerVotingId, setDesignerVotingId] = useState(null);
+  const [designerCompManageOpen, setDesignerCompManageOpen] = useState(false);
+  const [designerCompsList, setDesignerCompsList] = useState([]);
+  const [designerCompForm, setDesignerCompForm] = useState({ title: '', description: '', start_at: '', end_at: '', reward_money: 0, reward_points: 0 });
+  const [designerCompSubmitting, setDesignerCompSubmitting] = useState(false);
+  const [designerCompEndingId, setDesignerCompEndingId] = useState(null);
+  const [designerCompStartingId, setDesignerCompStartingId] = useState(null);
+  const [designerSubmitTopicId, setDesignerSubmitTopicId] = useState('');
+  const [designerSubmittingEntry, setDesignerSubmittingEntry] = useState(false);
 
   const fetchTopics = useCallback(async () => {
     setLoading(true);
@@ -469,6 +484,47 @@ export default function Forum() {
       return () => clearInterval(id);
     }
   }, [activeTab, fetchEntertainerGames, fetchEntertainerConfig]);
+
+  const fetchActiveDesignerComp = useCallback(async () => {
+    try {
+      const res = await api.get('/forum/designer/competitions/active');
+      setActiveDesignerComp(res.data?.competition ?? null);
+      setMyVoteEntryId(res.data?.my_vote_entry_id ?? null);
+    } catch {
+      setActiveDesignerComp(null);
+      setMyVoteEntryId(null);
+    }
+  }, []);
+
+  const fetchDesignerEntries = useCallback(async (compId) => {
+    if (!compId) return;
+    setDesignerEntriesLoading(true);
+    try {
+      const res = await api.get(`/forum/designer/competitions/${compId}/entries`);
+      setDesignerEntries(res.data?.entries ?? []);
+      setMyVoteEntryId(res.data?.my_vote_entry_id ?? null);
+    } catch {
+      setDesignerEntries([]);
+    } finally {
+      setDesignerEntriesLoading(false);
+    }
+  }, []);
+
+  const fetchDesignerCompsList = useCallback(async () => {
+    try {
+      const res = await api.get('/forum/designer/competitions');
+      setDesignerCompsList(res.data?.competitions ?? []);
+    } catch {
+      setDesignerCompsList([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'designer') {
+      fetchActiveDesignerComp();
+      api.get('/auth/me').then((r) => setUser(r.data)).catch(() => setUser(null));
+    }
+  }, [activeTab, fetchActiveDesignerComp]);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 1000);
     return () => clearInterval(id);
@@ -543,7 +599,7 @@ export default function Forum() {
   const pinnedTopics = topics.filter(t => t.is_sticky || t.is_important);
   const regularTopics = topics.filter(t => !t.is_sticky && !t.is_important);
 
-  const currentCategory = activeTab === 'entertainer' ? 'entertainer' : activeTab === 'crew_oc' ? 'crew_oc' : 'general';
+  const currentCategory = activeTab === 'entertainer' ? 'entertainer' : activeTab === 'crew_oc' ? 'crew_oc' : activeTab === 'designer' ? 'designer' : 'general';
   const openGames = (entertainerGames || []).filter((g) => g.status === 'open');
   const handleJoinGame = async (gameId) => {
     setJoiningId(gameId);
@@ -560,6 +616,88 @@ export default function Forum() {
     }
   };
 
+  const handleDesignerVote = async (compId, entryId) => {
+    setDesignerVotingId(entryId);
+    try {
+      await api.post(`/forum/designer/competitions/${compId}/vote`, { entry_id: entryId });
+      toast.success('Vote recorded! +100 points');
+      setMyVoteEntryId(entryId);
+      fetchDesignerEntries(compId);
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to vote');
+    } finally {
+      setDesignerVotingId(null);
+    }
+  };
+
+  const handleCreateDesignerComp = async (e) => {
+    e.preventDefault();
+    if (!designerCompForm.title.trim()) { toast.error('Title required'); return; }
+    setDesignerCompSubmitting(true);
+    try {
+      await api.post('/forum/designer/competitions', {
+        title: designerCompForm.title.trim(),
+        description: designerCompForm.description.trim() || undefined,
+        start_at: designerCompForm.start_at || new Date().toISOString().slice(0, 19),
+        end_at: designerCompForm.end_at || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 19),
+        reward_money: parseInt(designerCompForm.reward_money, 10) || 0,
+        reward_points: parseInt(designerCompForm.reward_points, 10) || 0,
+      });
+      toast.success('Competition created (draft)');
+      setDesignerCompForm({ title: '', description: '', start_at: '', end_at: '', reward_money: 0, reward_points: 0 });
+      fetchDesignerCompsList();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setDesignerCompSubmitting(false);
+    }
+  };
+
+  const handleStartDesignerComp = async (compId) => {
+    setDesignerCompStartingId(compId);
+    try {
+      await api.post(`/forum/designer/competitions/${compId}/start`);
+      toast.success('Competition started; all users notified');
+      fetchDesignerCompsList();
+      fetchActiveDesignerComp();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setDesignerCompStartingId(null);
+    }
+  };
+
+  const handleEndDesignerComp = async (compId) => {
+    setDesignerCompEndingId(compId);
+    try {
+      await api.post(`/forum/designer/competitions/${compId}/end`);
+      toast.success('Competition ended; winner paid');
+      fetchDesignerCompsList();
+      fetchActiveDesignerComp();
+      setDesignerEntries([]);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setDesignerCompEndingId(null);
+    }
+  };
+
+  const handleSubmitDesignerEntry = async (compId, topicId) => {
+    if (!topicId.trim()) return;
+    setDesignerSubmittingEntry(true);
+    try {
+      await api.post(`/forum/designer/competitions/${compId}/entries`, { topic_id: topicId.trim() });
+      toast.success('Entry submitted');
+      setDesignerSubmitTopicId('');
+      fetchDesignerEntries(compId);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setDesignerSubmittingEntry(false);
+    }
+  };
+
   return (
     <div className={`space-y-4 ${styles.pageContent}`} data-testid="forum-page">
       <style>{FORUM_STYLES}</style>
@@ -570,6 +708,7 @@ export default function Forum() {
           <p className="text-[10px] text-zinc-500 font-heading italic">
             {activeTab === 'general' && 'Discuss OC, crews, trades & more'}
             {activeTab === 'entertainer' && 'Dice games, gbox — auto payout when full'}
+            {activeTab === 'designer' && 'Designers: advertise your pictures. Users: request work or discuss.'}
             {activeTab === 'crew_oc' && 'Family Crew OC ads — apply from topic or family profile'}
           </p>
         </div>
@@ -607,6 +746,113 @@ export default function Forum() {
           ))}
         </div>
       </div>
+
+      {/* Designer: competition block + entries */}
+      {activeTab === 'designer' && (
+        <>
+          {(isAdmin || isModerator) && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setDesignerCompManageOpen(true); fetchDesignerCompsList(); }}
+                className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-xs font-heading font-bold uppercase rounded hover:bg-amber-500/30"
+              >
+                Manage competitions
+              </button>
+            </div>
+          )}
+          {activeDesignerComp ? (
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎨 Designer competition</span>
+              </div>
+              <div className="p-3 space-y-2">
+                <h3 className="font-heading font-bold text-foreground">{activeDesignerComp.title}</h3>
+                {activeDesignerComp.description && <p className="text-xs text-mutedForeground">{activeDesignerComp.description}</p>}
+                <p className="text-[10px] text-mutedForeground">
+                  Ends: {activeDesignerComp.end_at ? new Date(activeDesignerComp.end_at).toLocaleString() : '—'}
+                  {' · '}
+                  Winner: ${(activeDesignerComp.reward_money || 0).toLocaleString()} + {(activeDesignerComp.reward_points || 0).toLocaleString()} pts
+                  {activeDesignerComp.reward_bullets ? ` + ${activeDesignerComp.reward_bullets} bullets` : ''}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Your topic ID (from topic URL)"
+                    value={designerSubmitTopicId}
+                    onChange={(e) => setDesignerSubmitTopicId(e.target.value)}
+                    className="flex-1 min-w-[120px] px-2 py-1 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-[10px]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSubmitDesignerEntry(activeDesignerComp.id, designerSubmitTopicId)}
+                    disabled={designerSubmittingEntry || !designerSubmitTopicId.trim()}
+                    className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 disabled:opacity-50"
+                  >
+                    {designerSubmittingEntry ? '...' : 'Submit entry'}
+                  </button>
+                </div>
+                <p className="text-[9px] text-mutedForeground">Create a Designer topic with your picture above, then paste its ID here (from the topic URL) to enter.</p>
+                <button
+                  type="button"
+                  onClick={() => fetchDesignerEntries(activeDesignerComp.id)}
+                  className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30"
+                >
+                  View entries & vote (voters get 100 pts)
+                </button>
+              </div>
+              {designerEntries.length > 0 && (
+                <div className="border-t border-primary/20 p-3">
+                  <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider mb-2">Entries</p>
+                  {designerEntriesLoading ? (
+                    <p className="text-xs text-mutedForeground">Loading…</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {designerEntries.map((entry) => (
+                        <div key={entry.id} className="rounded border border-primary/20 bg-zinc-800/30 p-2">
+                          {entry.gif_url && (
+                            <a href={entry.gif_url} target="_blank" rel="noopener noreferrer" className="block mb-1.5 rounded overflow-hidden bg-zinc-900">
+                              <img src={entry.gif_url} alt="" className="w-full h-24 object-contain" />
+                            </a>
+                          )}
+                          <p className="text-[10px] font-heading font-bold truncate" title={entry.title}>{entry.title}</p>
+                          <p className="text-[10px] text-mutedForeground">by {entry.author_username}</p>
+                          <p className="text-[10px] text-mutedForeground">{entry.vote_count} vote(s)</p>
+                          <div className="flex gap-1 mt-1.5">
+                            <Link to={`/forum/topic/${entry.topic_id}`} className="text-[10px] text-primary hover:underline">View topic</Link>
+                            {activeDesignerComp && (
+                              myVoteEntryId === entry.id ? (
+                                <span className="text-[10px] text-emerald-400 font-heading font-bold">Voted</span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={!!myVoteEntryId || designerVotingId === entry.id}
+                                  onClick={() => handleDesignerVote(activeDesignerComp.id, entry.id)}
+                                  className="text-[10px] font-heading font-bold text-primary hover:underline disabled:opacity-50"
+                                >
+                                  {designerVotingId === entry.id ? '...' : 'Vote (+100 pts)'}
+                                </button>
+                              )
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="f-art-line text-primary mx-3" />
+            </div>
+          ) : (
+            <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in`}>
+              <div className="p-4 text-center text-xs text-mutedForeground">
+                No active designer competition. Create a topic with your picture above; when a competition is running, you can submit it and vote (voters get 100 points).
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Entertainer: Auto games (dice / gbox) */}
       {activeTab === 'entertainer' && (
@@ -901,6 +1147,56 @@ export default function Forum() {
 
       <CreateTopicModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onCreated={fetchTopics} category={currentCategory} />
       <CreateGameModal isOpen={gameModalOpen} onClose={() => setGameModalOpen(false)} onCreated={() => { fetchEntertainerGames(); window.dispatchEvent(new CustomEvent('app:refresh-user')); }} me={user} />
+
+      {/* Manage designer competitions modal (admin/mod) */}
+      {designerCompManageOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className={`${styles.panel} w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg border border-amber-500/30 shadow-2xl`}>
+            <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between">
+              <span className="text-[10px] font-heading font-bold text-amber-500 uppercase tracking-[0.15em]">Manage designer competitions</span>
+              <button type="button" onClick={() => setDesignerCompManageOpen(false)} className="text-amber-500 hover:text-amber-400 text-lg leading-none">×</button>
+            </div>
+            <div className="p-3 space-y-4">
+              <form onSubmit={handleCreateDesignerComp} className="space-y-2 border-b border-primary/20 pb-3">
+                <h4 className="text-xs font-heading font-bold text-foreground">Create new (draft)</h4>
+                <input type="text" placeholder="Title" value={designerCompForm.title} onChange={(e) => setDesignerCompForm((f) => ({ ...f, title: e.target.value }))} className="w-full px-2 py-1.5 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-xs" />
+                <input type="text" placeholder="Description (optional)" value={designerCompForm.description} onChange={(e) => setDesignerCompForm((f) => ({ ...f, description: e.target.value }))} className="w-full px-2 py-1.5 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-xs" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="datetime-local" placeholder="Start" value={designerCompForm.start_at} onChange={(e) => setDesignerCompForm((f) => ({ ...f, start_at: e.target.value }))} className="px-2 py-1.5 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-xs" />
+                  <input type="datetime-local" placeholder="End" value={designerCompForm.end_at} onChange={(e) => setDesignerCompForm((f) => ({ ...f, end_at: e.target.value }))} className="px-2 py-1.5 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-xs" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" min="0" placeholder="Reward $" value={designerCompForm.reward_money || ''} onChange={(e) => setDesignerCompForm((f) => ({ ...f, reward_money: e.target.value }))} className="px-2 py-1.5 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-xs" />
+                  <input type="number" min="0" placeholder="Reward points" value={designerCompForm.reward_points || ''} onChange={(e) => setDesignerCompForm((f) => ({ ...f, reward_points: e.target.value }))} className="px-2 py-1.5 rounded border border-primary/30 bg-zinc-800/50 text-foreground text-xs" />
+                </div>
+                <button type="submit" disabled={designerCompSubmitting} className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30 disabled:opacity-50">{designerCompSubmitting ? '...' : 'Create draft'}</button>
+              </form>
+              <div>
+                <h4 className="text-xs font-heading font-bold text-foreground mb-2">Competitions</h4>
+                {designerCompsList.length === 0 ? (
+                  <p className="text-xs text-mutedForeground">None yet.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {designerCompsList.map((c) => (
+                      <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-primary/20 p-2 text-xs">
+                        <span className="font-heading font-bold">{c.title}</span>
+                        <span className={`px-1.5 py-0.5 rounded font-heading ${c.status === 'draft' ? 'bg-zinc-600' : c.status === 'active' ? 'bg-emerald-600/30 text-emerald-400' : 'bg-zinc-700 text-mutedForeground'}`}>{c.status}</span>
+                        <span className="text-mutedForeground">{c.entry_count} entries, {c.vote_count} votes</span>
+                        {c.status === 'draft' && (
+                          <button type="button" onClick={() => handleStartDesignerComp(c.id)} disabled={!!designerCompStartingId} className="px-2 py-1 bg-emerald-600/20 border border-emerald-500/50 text-emerald-400 text-[10px] font-heading font-bold rounded hover:bg-emerald-600/30 disabled:opacity-50">{designerCompStartingId === c.id ? '...' : 'Start (notify all)'}</button>
+                        )}
+                        {c.status === 'active' && (
+                          <button type="button" onClick={() => handleEndDesignerComp(c.id)} disabled={!!designerCompEndingId} className="px-2 py-1 bg-red-600/20 border border-red-500/50 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-600/30 disabled:opacity-50">{designerCompEndingId === c.id ? '...' : 'End & pay winner'}</button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
