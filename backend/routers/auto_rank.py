@@ -1153,7 +1153,7 @@ def register(router):
                 lines.extend([
                     "",
                     f"Running: {stats.get('running_seconds', 0) // 60} min",
-                ]
+                ])
                 if stats.get("in_jail"):
                     lines.append("In jail — cycles paused.")
                 elif stats.get("activity_detail"):

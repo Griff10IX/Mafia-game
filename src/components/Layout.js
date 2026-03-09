@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
+import ErrorBoundary from './ErrorBoundary';
 import styles from '../styles/noir.module.css';
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
@@ -1388,7 +1389,11 @@ export default function Layout({ children }) {
               </div>
             );
           }
-          return children;
+          return (
+            <ErrorBoundary>
+              {children}
+            </ErrorBoundary>
+          );
         })()}
       </main>
 
