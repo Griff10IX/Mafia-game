@@ -9,7 +9,7 @@ import { useTheme } from '../context/ThemeContext';
 import {
   THEME_COLOURS, THEME_TEXTURES, THEME_PRESETS, THEME_FONTS,
   THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES,
-  THEME_SIDEBAR_SPACING, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
+  THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
   THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS,
   DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID,
   DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID,
@@ -236,6 +236,7 @@ export default function ThemePicker({ open, onClose }) {
     bottomDividers: 'bottom_nav_show_dividers',
     dividerStyle: 'sidebar_divider_style',
     sidebarSpacing: 'sidebar_spacing',
+    sidebarLayout: 'sidebar_layout',
   };
   const CHIP_MIN = 20, CHIP_MAX = 100;
   const ls = (k, fb = '') => (typeof window !== 'undefined' && localStorage.getItem(k)) || fb;
@@ -266,6 +267,7 @@ export default function ThemePicker({ open, onClose }) {
   const setSidebarDividers = v => lsSet(KEYS.sidebarDividers,v?'true':'false','sidebar-dividers-changed');
   const setDividerStyle = v => lsSet(KEYS.dividerStyle,v,'sidebar-layout-changed');
   const setSidebarSpacing = v => lsSet(KEYS.sidebarSpacing,v,'sidebar-layout-changed');
+  const setSidebarLayout = v => lsSet(KEYS.sidebarLayout,v,'sidebar-layout-changed');
   const setBottomDividers = v => lsSet(KEYS.bottomDividers,v?'true':'false','bottom-nav-dividers-changed');
 
   /* ── data ── */
@@ -802,6 +804,13 @@ export default function ThemePicker({ open, onClose }) {
                 <Pills
                   options={THEME_SIDEBAR_SPACING.map(s => ({ id: s.id, label: s.name }))}
                   value={sidebarSpacing} onChange={setSidebarSpacing}
+                />
+              </TabSection>
+
+              <TabSection title="Sidebar layout" sub="Flat list or categorized with headers (INFORMATION, RANKING, etc.)">
+                <Pills
+                  options={THEME_SIDEBAR_LAYOUT.map(s => ({ id: s.id, label: s.name }))}
+                  value={sidebarLayout} onChange={setSidebarLayout}
                 />
               </TabSection>
             </div>

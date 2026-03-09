@@ -131,6 +131,7 @@ const MOBILE_STATS_DISPLAY_KEY = 'mobile_stats_display';
 const SIDEBAR_SHOW_DIVIDERS_KEY = 'sidebar_show_dividers';
 const SIDEBAR_DIVIDER_STYLE_KEY = 'sidebar_divider_style';
 const SIDEBAR_SPACING_KEY = 'sidebar_spacing';
+const SIDEBAR_LAYOUT_KEY = 'sidebar_layout';
 const BOTTOM_NAV_SHOW_DIVIDERS_KEY = 'bottom_nav_show_dividers';
 
 function loadSidebarShowDividers() {
@@ -155,6 +156,14 @@ function loadSidebarSpacing() {
     if (v === 'compact' || v === 'normal' || v === 'relaxed') return v;
   } catch (_) {}
   return 'normal';
+}
+
+function loadSidebarLayout() {
+  try {
+    const v = localStorage.getItem(SIDEBAR_LAYOUT_KEY);
+    if (v === 'categorized' || v === 'default') return v;
+  } catch (_) {}
+  return 'default';
 }
 
 function loadBottomNavShowDividers() {
@@ -260,6 +269,7 @@ export default function Layout({ children }) {
   const [showSidebarDividers, setShowSidebarDividers] = useState(loadSidebarShowDividers);
   const [sidebarDividerStyle, setSidebarDividerStyle] = useState(loadSidebarDividerStyle);
   const [sidebarSpacing, setSidebarSpacing] = useState(loadSidebarSpacing);
+  const [sidebarLayout, setSidebarLayout] = useState(loadSidebarLayout);
   const [showBottomNavDividers, setShowBottomNavDividers] = useState(loadBottomNavShowDividers);
   const [draggingStatId, setDraggingStatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -334,6 +344,7 @@ export default function Layout({ children }) {
     const onSidebarLayout = () => {
       setSidebarDividerStyle(loadSidebarDividerStyle());
       setSidebarSpacing(loadSidebarSpacing());
+      setSidebarLayout(loadSidebarLayout());
     };
     const onBottomNavDividers = () => setShowBottomNavDividers(loadBottomNavShowDividers());
     window.addEventListener('topbar-prefs-changed', onTopBarPrefs);
@@ -852,6 +863,23 @@ export default function Layout({ children }) {
   };
 
   const needsEmailVerification = user && user.email_verified === false;
+  /** Path → category for categorized sidebar layout */
+  const PATH_TO_CATEGORY = {
+    '/dashboard': 'information', '/verify-email': 'information', '/objectives': 'information', '/missions': 'information',
+    '/loot-box': 'information', '/profile': 'information', '/ip-rules': 'information', '/stats': 'information',
+    '/users-online': 'information', '/properties': 'information', '/help-desk': 'information',
+    '/ranking': 'ranking', '/prestige': 'ranking',
+    '/attack': 'combat', '/attempts': 'combat', '/hitlist': 'combat', '/bodyguards': 'combat', '/armour-weapons': 'combat',
+    '/travel': 'travel', '/states': 'travel', '/my-properties': 'travel', '/booze-run': 'travel',
+    '/forum': 'messaging', '/inbox': 'messaging',
+    '/bank': 'money', '/stock-market': 'money', '/quick-trade': 'money', '/store': 'money', '/daily-rewards': 'money',
+    '/garage': 'money', '/sell-cars': 'money', '/buy-cars': 'money', '/crack-safe': 'money', '/casino': 'money', '/leaderboard': 'money',
+    '/families': 'other', '/dead-alive': 'other', '/auto-rank': 'other',
+  };
+  const SIDEBAR_CATEGORIES = [
+    { id: 'information', label: 'INFORMATION' }, { id: 'ranking', label: 'RANKING' }, { id: 'combat', label: 'COMBAT' },
+    { id: 'travel', label: 'TRAVEL' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'other', label: 'OTHER' },
+  ];
   // Order: Home → Verify email (if unverified) → You → Money → Combat → … My Properties only if user has casino or property.
   const navItems = [
     { path: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -912,6 +940,115 @@ export default function Layout({ children }) {
     ? { height: '1px', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.35)' }
     : { height: 0, borderTop: `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)` };
 
+  const categoryHeaderStyle = { backgroundColor: 'rgba(var(--noir-primary-rgb), 0.12)', color: 'var(--noir-primary)' };
+  const navDividerEl = (key) => showSidebarDividers ? <div key={key} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" /> : null;
+
+  /* Reusable nav blocks to avoid duplication between default and categorized layout */
+  const rankingNavBlock = (
+    <div className="space-y-0.5">
+      <button
+        type="button"
+        data-testid="nav-ranking-group"
+        onClick={() => setRankingOpen((v) => !v)}
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
+          (location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige')
+            ? styles.navItemActive : styles.sidebarNavLink
+        }`}
+        style={(location.pathname === '/ranking' || location.pathname === '/crimes' || location.pathname === '/gta' || location.pathname === '/jail' || location.pathname === '/organised-crime' || location.pathname === '/prestige') ? sidebarActiveGroupStyle : undefined}
+      >
+        <Target size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
+        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Ranking</span>
+        {rankingOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+      </button>
+      {rankingOpen && (
+        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+          <Link to="/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
+            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+            style={location.pathname === '/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
+            <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
+            {rankingCounts.crimes > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30" data-testid="badge-crimes-available" title="Crimes available">{rankingCounts.crimes}</span>}
+          </Link>
+          {showSidebarDividers && navDividerEl('rd1')}
+          <Link to="/gta" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/gta' ? sidebarActiveStyle : undefined} data-testid="nav-gta">
+            <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
+            {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30" data-testid="badge-gta-available" title="GTA options available">{rankingCounts.gta}</span>}
+          </Link>
+          {showSidebarDividers && navDividerEl('rd2')}
+          <Link to="/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
+            <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
+            {rankingCounts.jail > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30" data-testid="badge-jail-count" title="Players in jail">{rankingCounts.jail}</span>}
+          </Link>
+          {showSidebarDividers && navDividerEl('rd3')}
+          <Link to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
+            <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
+          </Link>
+        </div>
+      )}
+    </div>
+  );
+
+  const casinoNavBlock = (
+    <div className="space-y-0.5">
+      <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => !v)}
+        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${(location.pathname === '/casino' || location.pathname === '/casino/dice' || location.pathname === '/casino/rlt' || location.pathname === '/casino/blackjack' || location.pathname === '/casino/horseracing' || location.pathname === '/casino/slots' || location.pathname === '/casino/videopoker' || location.pathname === '/casino/mdg' || location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') || location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') || location.pathname === '/sports-betting') ? styles.navItemActive : styles.sidebarNavLink}`}
+        style={(location.pathname === '/casino' || location.pathname === '/casino/dice' || location.pathname === '/casino/rlt' || location.pathname === '/casino/blackjack' || location.pathname === '/casino/horseracing' || location.pathname === '/casino/slots' || location.pathname === '/casino/videopoker' || location.pathname === '/casino/mdg' || location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') || location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') || location.pathname === '/sports-betting') ? sidebarActiveGroupStyle : undefined}>
+        <Dice5 size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
+        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">Casino</span>
+        {casinoOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
+      </button>
+      {casinoOpen && (
+        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
+          <Link to="/casino/dice" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/dice' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/dice' ? sidebarActiveStyle : undefined} data-testid="nav-dice"><span className="uppercase tracking-widest font-heading flex-1">Dice</span></Link>
+          {showSidebarDividers && navDividerEl('cd1')}
+          <Link to="/casino/rlt" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/rlt' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/rlt' ? sidebarActiveStyle : undefined} data-testid="nav-roulette"><span className="uppercase tracking-widest font-heading flex-1">Roulette</span></Link>
+          {showSidebarDividers && navDividerEl('cd2')}
+          <Link to="/casino/blackjack" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/blackjack' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/blackjack' ? sidebarActiveStyle : undefined} data-testid="nav-blackjack"><span className="uppercase tracking-widest font-heading flex-1">Blackjack</span></Link>
+          {showSidebarDividers && navDividerEl('cd3')}
+          <Link to="/casino/horseracing" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/horseracing' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/horseracing' ? sidebarActiveStyle : undefined} data-testid="nav-horseracing"><span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span></Link>
+          {showSidebarDividers && navDividerEl('cd4')}
+          <Link to="/casino/slots" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/slots' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/slots' ? sidebarActiveStyle : undefined} data-testid="nav-slots"><span className="uppercase tracking-widest font-heading flex-1">Slots</span></Link>
+          {showSidebarDividers && navDividerEl('cd5')}
+          <Link to="/casino/videopoker" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/videopoker' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/videopoker' ? sidebarActiveStyle : undefined} data-testid="nav-videopoker"><span className="uppercase tracking-widest font-heading flex-1">Video Poker</span></Link>
+          {showSidebarDividers && navDividerEl('cd6')}
+          <Link to="/casino/mdg" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/mdg' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/mdg' ? sidebarActiveStyle : undefined} data-testid="nav-mdg"><span className="uppercase tracking-widest font-heading flex-1">MDG</span></Link>
+          {showSidebarDividers && navDividerEl('cd7')}
+          <Link to="/casino/mp-blackjack" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? sidebarActiveStyle : undefined} data-testid="nav-mp-blackjack"><span className="uppercase tracking-widest font-heading flex-1">MP Blackjack</span></Link>
+          {showSidebarDividers && navDividerEl('cd8')}
+          <Link to="/casino/mp-poker" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') ? sidebarActiveStyle : undefined} data-testid="nav-mp-poker"><span className="uppercase tracking-widest font-heading flex-1">Poker</span></Link>
+          {showSidebarDividers && navDividerEl('cd9')}
+          <Link to="/sports-betting" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/sports-betting' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/sports-betting' ? sidebarActiveStyle : undefined} data-testid="nav-sports-betting"><span className="uppercase tracking-widest font-heading flex-1">Sports Betting</span></Link>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderNavItem = (item, showDivider) => {
+    const navDivider = showDivider ? navDividerEl(`div-${item.path}`) : null;
+    if (item.path === '/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
+    if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
+    const Icon = item.icon;
+    const isActive = location.pathname === item.path;
+    const isFamiliesAtWar = item.path === '/families' && atWar;
+    return (
+      <Fragment key={item.path}>
+        {navDivider}
+        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase()}`} data-at-war={atWar && item.path === '/families' ? 'true' : undefined}
+          className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
+            isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10')
+              : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)
+          }`}
+          style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
+          onClick={() => setSidebarOpen(false)}
+        >
+          <Icon size={13} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
+          <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
+          {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
+          {item.badge > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{item.badge > 9 ? '9+' : item.badge}</span>}
+        </Link>
+      </Fragment>
+    );
+  };
+
   return (
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern}`}>
       {/* Sidebar: hidden on mobile when bottom bar is selected; otherwise slide-out on mobile, always on md */}
@@ -948,330 +1085,49 @@ export default function Layout({ children }) {
           {/* Navigation – compact list */}
           <nav className={`flex-1 overflow-y-auto px-2 py-1 ${styles.sidebarNav} min-h-0`}>
             <div className="space-y-0">
-              {navItems.map((item, index) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                const navDivider = showSidebarDividers && index > 0 ? (
-                  <div key={`div-${item.path}`} className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />
-                ) : null;
-
-                // Ranking dropdown group
-                if (item.path === '/ranking') {
-                  const isAnyRankingActive =
-                    location.pathname === '/ranking' ||
-                    location.pathname === '/crimes' ||
-                    location.pathname === '/gta' ||
-                    location.pathname === '/jail' ||
-                    location.pathname === '/organised-crime' ||
-                    location.pathname === '/prestige';
-
-                  return (
-                    <Fragment key="nav-ranking-group">
-                      {navDivider}
-                      <div className="space-y-0.5">
-                      <button
-                        type="button"
-                        data-testid="nav-ranking-group"
-                        onClick={() => setRankingOpen((v) => !v)}
-                        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
-                          isAnyRankingActive ? styles.navItemActive : styles.sidebarNavLink
-                        }`}
-                        style={isAnyRankingActive ? sidebarActiveGroupStyle : undefined}
-                      >
-                        <Icon size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
-                        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
-                        {rankingOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
-                      </button>
-
-                      {rankingOpen && (
-                        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
-                          <Link
-                            to="/crimes"
-                            onClick={() => setSidebarOpen(false)}
-                            onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
-                            onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/crimes' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/crimes' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-crimes"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
-                            {rankingCounts.crimes > 0 && (
-                              <span
-                                className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30"
-                                data-testid="badge-crimes-available"
-                                title="Crimes available"
-                              >
-                                {rankingCounts.crimes}
-                              </span>
-                            )}
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/gta"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/gta' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/gta' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-gta"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
-                            {rankingCounts.gta > 0 && (
-                              <span
-                                className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30"
-                                data-testid="badge-gta-available"
-                                title="GTA options available"
-                              >
-                                {rankingCounts.gta}
-                              </span>
-                            )}
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/jail"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/jail' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/jail' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-jail"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
-                            {rankingCounts.jail > 0 && (
-                              <span
-                                className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30"
-                                data-testid="badge-jail-count"
-                                title="Players in jail"
-                              >
-                                {rankingCounts.jail}
-                              </span>
-                            )}
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/organised-crime"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-organised-crime"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
-                          </Link>
+              {sidebarLayout === 'categorized' ? (
+                <>
+                  {SIDEBAR_CATEGORIES.map((cat) => {
+                    const items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id);
+                    if (!items.length) return null;
+                    return (
+                      <Fragment key={cat.id}>
+                        <div className="px-2 py-1.5 mt-1 first:mt-0 rounded-sm flex items-center justify-center" style={categoryHeaderStyle}>
+                          <span className="text-[9px] font-heading font-bold uppercase tracking-widest">{cat.label}</span>
                         </div>
-                      )}
-                      </div>
-                    </Fragment>
-                  );
-                }
-
-                // Casino dropdown group
-                if (item.path === '/casino') {
-                  const isAnyCasinoActive =
-                    location.pathname === '/casino' ||
-                    location.pathname === '/casino/dice' ||
-                    location.pathname === '/casino/rlt' ||
-                    location.pathname === '/casino/blackjack' ||
-                    location.pathname === '/casino/horseracing' ||
-                    location.pathname === '/casino/slots' ||
-                    location.pathname === '/casino/videopoker' ||
-                    location.pathname === '/casino/mdg' ||
-                    location.pathname === '/casino/mp-blackjack' ||
-                    location.pathname.startsWith('/casino/mp-blackjack/') ||
-                    location.pathname === '/casino/mp-poker' ||
-                    location.pathname.startsWith('/casino/mp-poker/') ||
-                    location.pathname === '/sports-betting';
-
-                  return (
-                    <Fragment key="nav-casino-group">
-                      {navDivider}
-                      <div className="space-y-0.5">
-                      <button
-                        type="button"
-                        data-testid="nav-casino-group"
-                        onClick={() => setCasinoOpen((v) => !v)}
-                        className={`w-full flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
-                          isAnyCasinoActive ? styles.navItemActive : styles.sidebarNavLink
-                        }`}
-                        style={isAnyCasinoActive ? sidebarActiveGroupStyle : undefined}
-                      >
-                        <Icon size={13} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
-                        <span className="uppercase tracking-widest text-[10px] font-heading flex-1 text-left truncate">{item.label}</span>
-                        {casinoOpen ? <ChevronDown size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" /> : <ChevronRight size={11} style={{ color: 'var(--noir-primary)', opacity: 0.7 }} className="shrink-0" />}
-                      </button>
-
-                      {casinoOpen && (
-                        <div className={`ml-2.5 pl-1.5 space-y-0 ${styles.sidebarSubmenuBorder}`}>
-                          <Link
-                            to="/casino/dice"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/dice' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/dice' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-dice"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Dice</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/rlt"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/rlt' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/rlt' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-roulette"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Roulette</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/blackjack"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/blackjack' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/blackjack' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-blackjack"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Blackjack</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/horseracing"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/horseracing' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/horseracing' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-horseracing"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Horse Racing</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/slots"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/slots' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/slots' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-slots"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Slots</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/videopoker"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/videopoker' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/videopoker' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-videopoker"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Video Poker</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/mdg"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/mdg' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/mdg' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-mdg"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">MDG</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/mp-blackjack"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/mp-blackjack' || location.pathname.startsWith('/casino/mp-blackjack/') ? sidebarActiveStyle : undefined}
-                            data-testid="nav-mp-blackjack"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">MP Blackjack</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/casino/mp-poker"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/casino/mp-poker' || location.pathname.startsWith('/casino/mp-poker/') ? sidebarActiveStyle : undefined}
-                            data-testid="nav-mp-poker"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Poker</span>
-                          </Link>
-                          {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
-                          <Link
-                            to="/sports-betting"
-                            onClick={() => setSidebarOpen(false)}
-                            className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${
-                              location.pathname === '/sports-betting' ? styles.navItemActivePage : styles.sidebarNavLink
-                            }`}
-                            style={location.pathname === '/sports-betting' ? sidebarActiveStyle : undefined}
-                            data-testid="nav-sports-betting"
-                          >
-                            <span className="uppercase tracking-widest font-heading flex-1">Sports Betting</span>
-                          </Link>
-                        </div>
-                      )}
-                      </div>
-                    </Fragment>
-                  );
-                }
-
-                const isFamiliesAtWar = item.path === '/families' && atWar;
-                return (
-                  <Fragment key={item.path}>
-                    {navDivider}
-                  <Link
-                    to={item.path}
-                    data-testid={`nav-${item.label.toLowerCase()}`}
-                    data-at-war={atWar && item.path === '/families' ? 'true' : undefined}
-                    className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
-                      isFamiliesAtWar
-                        ? isActive
-                          ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500'
-                          : 'text-red-400 hover:bg-red-500/10'
-                        : isActive
-                          ? styles.navItemActivePage
-                          : styles.sidebarNavLink
-                    }`}
-                    style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <Icon size={13} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
-                    <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
-                    {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
-                    {item.badge > 0 && (
-                      <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">
-                        {item.badge > 9 ? '9+' : item.badge}
-                      </span>
-                    )}
-                  </Link>
-                  </Fragment>
-                );
-              })}
+                        {items.map((item, idx) => renderNavItem(item, idx > 0))}
+                        {cat.id === 'ranking' && (
+                          <>
+                            {navDividerEl('prestige-div')}
+                            <Link
+                              to="/prestige"
+                              data-testid="nav-prestige"
+                              className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
+                              style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
+                              onClick={() => setSidebarOpen(false)}
+                            >
+                              <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                              <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">Prestige</span>
+                              {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />
+                              )}
+                            </Link>
+                          </>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  {navItems.map((item, index) => renderNavItem(item, index > 0))}
 
               {/* Prestige — always visible */}
-              {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
+              {navDividerEl('prestige-div')}
               <Link
                 to="/prestige"
                 data-testid="nav-prestige"
-                className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${
-                  location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink
-                }`}
+                className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${location.pathname === '/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
                 style={location.pathname === '/prestige' ? sidebarActiveStyle : undefined}
                 onClick={() => setSidebarOpen(false)}
               >
@@ -1281,31 +1137,33 @@ export default function Layout({ children }) {
                   <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />
                 )}
               </Link>
+                </>
+              )}
 
               {/* Admin Section */}
               {adminNavItems.length > 0 && (
                 <>
                   {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
                   {adminNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${
-                      isActive
-                        ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
-                        : 'text-red-400 hover:bg-red-500/10'
-                    }`}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <Icon size={14} />
-                    <span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
-                  </Link>
-                );
-              })}
+                    const Icon = item.icon;
+                    const isActive = location.pathname === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={item.path}
+                        data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${
+                          isActive
+                            ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
+                            : 'text-red-400 hover:bg-red-500/10'
+                        }`}
+                        onClick={() => setSidebarOpen(false)}
+                      >
+                        <Icon size={14} />
+                        <span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
+                      </Link>
+                    );
+                  })}
                 </>
               )}
               {/* Moderator Section (when not admin) */}
@@ -1337,8 +1195,8 @@ export default function Layout({ children }) {
               {hasAdminEmail && !isAdmin && (
                 <button
                   type="button"
-                onClick={() => { promoteToAdmin(); setSidebarOpen(false); }}
-                className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]"
+                  onClick={() => { promoteToAdmin(); setSidebarOpen(false); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]"
                 >
                   <Shield size={14} />
                   <span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
@@ -1380,7 +1238,7 @@ export default function Layout({ children }) {
         />
       )}
 
-      {/* Top bar — on mobile use tighter padding so chips + scroll fit; on desktop when right sidebar shown, keep bar in middle only so middle is inline with left and right */}
+      {/* Top bar — on mobile use tighter padding so chips + scroll fit; on desktop when right sidebar shown, keep bar in middle only */}
       <div className={`fixed top-0 right-0 left-0 md:left-48 min-h-[40px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-1.5 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
         {mobileNavStyle !== 'bottom' && (

@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -943,6 +943,10 @@ async def unequip_armour(current_user: dict = Depends(get_current_user)):
 async def sell_armour(current_user: dict = Depends(get_current_user)):
     """Sell your highest owned armour tier for 50% of what you paid (sell price)."""
     owned_max = int(current_user.get("armour_owned_level_max", 0) or 0)
+    if owned_max == 6:  # loot-exclusive Steel Plate Vest
+        family_id = current_user.get("family_id")
+        if family_id and await _family_in_active_war(family_id):
+            raise HTTPException(status_code=403, detail="Loot-exclusive items cannot be sold during a family war")
     if owned_max < 1:
         raise HTTPException(status_code=400, detail="You have no armour to sell")
     armour = next((a for a in ARMOUR_SETS if a["level"] == owned_max), None)

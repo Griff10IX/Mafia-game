@@ -84,9 +84,11 @@ from server import (
     TRAVEL_TIMES,
     DEFAULT_GARAGE_BATCH_LIMIT,
     CustomCarImageUpdate,
+    _family_in_active_war,
 )
 from routers.objectives import update_objectives_progress
 from routers.airport import _invalidate_travel_info_cache
+from routers.families import resolve_family_id
 
 
 # 75% harder to earn respect from GTAs (award 25% of base/milestone)
@@ -627,6 +629,8 @@ async def melt_cars(
     if not request.car_ids:
         raise HTTPException(status_code=400, detail="No cars selected")
     now = datetime.now(timezone.utc)
+    family_id = current_user.get("family_id")
+    in_war = family_id and await _family_in_active_war(family_id)
 
     if request.action == "bullets":
         # Bullets: up to garage_batch_limit cars per request; then 45s cooldown per car melted
@@ -675,6 +679,8 @@ async def melt_cars(
                 continue  # cannot melt/scrap a listed car; must delist first
             model_id = user_car["car_id"]
             car_info = next((c for c in CARS if c["id"] == model_id), None)
+            if in_war and car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+                continue  # cannot scrap exclusive cars during family war
             if car_info:
                 if car_info.get("rarity") == "uncommon":
                     uncommon_count += 1
@@ -920,6 +926,11 @@ async def list_car(
         raise HTTPException(status_code=404, detail="Car not found in your garage")
     if user_car.get("listed_for_sale"):
         raise HTTPException(status_code=400, detail="Car is already listed")
+    family_id = current_user.get("family_id")
+    if family_id and await _family_in_active_war(family_id):
+        car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
+        if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+            raise HTTPException(status_code=403, detail="Exclusive and loot-exclusive cars cannot be sold during a family war")
     now = datetime.now(timezone.utc).isoformat()
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
@@ -981,13 +992,17 @@ async def buy_listed_car(
     seller_id = user_car.get("user_id")
     if seller_id == buyer_id:
         raise HTTPException(status_code=400, detail="Cannot buy your own listing")
+    car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
+    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+        seller_family_id = await resolve_family_id(seller_id)
+        if seller_family_id and await _family_in_active_war(seller_family_id):
+            raise HTTPException(status_code=403, detail="Cannot buy — seller's family is at war; exclusive cars cannot be sold during war")
     price = int(user_car.get("sale_price") or 0)
     if price <= 0:
         raise HTTPException(status_code=400, detail="Invalid listing")
     buyer = await db.users.find_one({"id": buyer_id})
     if not buyer or buyer.get("money", 0) < price:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
-    car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
     car_name = (car_info or {}).get("name") or user_car.get("car_name") or "Car"
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}

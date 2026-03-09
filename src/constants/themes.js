@@ -322,6 +322,12 @@ export const THEME_SIDEBAR_SPACING = [
   { id: 'relaxed', name: 'Relaxed' },
 ];
 
+/** Sidebar layout: flat list vs categorized with headers. */
+export const THEME_SIDEBAR_LAYOUT = [
+  { id: 'default', name: 'Default' },
+  { id: 'categorized', name: 'Categorized' },
+];
+
 /** Writing (text) colour: main body and muted text. { id, name, foreground, muted } hex. */
 export const THEME_WRITING_COLOURS = [
   /* Default & light */

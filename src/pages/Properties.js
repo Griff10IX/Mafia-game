@@ -118,7 +118,7 @@ export default function Properties() {
     if (collected > 0) {
       refreshUser();
       fetchProperties();
-      toast.success(total > 0 ? `Collected $${total.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} from ${collected} propert${collected === 1 ? 'y' : 'ies'}` : `Collected from ${collected} propert${collected === 1 ? 'y' : 'ies'}`);
+      toast.success(total > 0 ? `Collected $${Math.trunc(total).toLocaleString()} from ${collected} propert${collected === 1 ? 'y' : 'ies'}` : `Collected from ${collected} propert${collected === 1 ? 'y' : 'ies'}`);
     }
     setCollectAllLoading(false);
   };
