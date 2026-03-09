@@ -185,7 +185,7 @@ During war, **raid** enemy rackets. Success chance by racket level. Success = sh
 - **Commit:** living members + accepted applicants get rewards (RP, cash, bullets, points, booze); treasury gets lump sum. Then **8h cooldown** (6h with timer reduction). Applications clear after each commit.
 
 **Wars (Vendetta):**  
-Track kills, deaths, bodyguard kills. Truce: offer/accept. **Wiped** family (all dead) → winner can get rackets and treasury. Kill feed and stats.
+**Any** family member killing another family's member or bodyguard starts a war — loyalty and trust matter. Track kills, deaths, bodyguard kills. Truce: offer/accept. **Wiped** family (all dead) → winner can get rackets and treasury. Kill feed and stats.
 </div>
 </details>
 

@@ -135,7 +135,7 @@ const RoleBadge = ({ role, size = 'sm' }) => {
 // RACKET CARD — business front with progress & glow
 // ============================================================================
 
-const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlock }) => {
+const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect, onUpgrade, onUnlock }) => {
   const timeLeft = formatTimeLeft(racket.next_collect_at);
   const onCooldown = timeLeft && timeLeft !== 'Ready';
   const isReady = racket.level > 0 && !onCooldown;
@@ -192,15 +192,15 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
           {racket.level > 0 && (
             <button
               type="button"
-              onClick={() => onCollect(racket.id)}
-              disabled={onCooldown}
+              onClick={() => canCollect && onCollect(racket.id)}
+              disabled={onCooldown || !canCollect}
               className={`flex-1 px-3 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider border transition-all touch-manipulation ${
-                isReady
+                isReady && canCollect
                   ? 'bg-gradient-to-b from-emerald-600/30 to-emerald-800/20 border-emerald-500/40 text-emerald-400 hover:from-emerald-600/50 hover:shadow-md hover:shadow-emerald-900/30'
                   : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
               } disabled:opacity-40`}
             >
-              {onCooldown ? `${timeLeft}` : 'Collect'}
+              {onCooldown ? `${timeLeft}` : !canCollect ? 'Locked' : 'Collect'}
             </button>
           )}
           {canUpgrade && locked && racket.can_unlock && (
@@ -231,8 +231,13 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, onCollect, onUpgrade, onUnlo
 // TREASURY TAB — vault with quick amounts
 // ============================================================================
 
-const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
+const TreasuryTab = ({ treasury, canWithdraw, vaultAndRacketsLocked, depositAmount, setDepositAmount, withdrawAmount, setWithdrawAmount, onDeposit, onWithdraw }) => (
   <div className="space-y-3">
+    {vaultAndRacketsLocked && (
+      <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-200/90 font-heading">
+        Vault and rackets are locked until the family war is over.
+      </div>
+    )}
     {/* Vault display */}
     <div className={`relative ${styles.surface} rounded-lg overflow-hidden p-4 sm:p-6 text-center border border-primary/25`}>
       <div className="absolute inset-0 fam-vault-bg pointer-events-none" />
@@ -247,7 +252,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
     </div>
 
     {/* Deposit */}
-    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in" style={{ animationDelay: '0.1s' }}>
+    <div className={`bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in ${vaultAndRacketsLocked ? 'opacity-60 pointer-events-none' : ''}`} style={{ animationDelay: '0.1s' }}>
       <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
         <DollarSign size={10} /> Deposit to Vault
       </p>
@@ -273,7 +278,7 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
     </div>
 
     {/* Withdraw */}
-    {canWithdraw && (
+    {canWithdraw && !vaultAndRacketsLocked && (
       <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in" style={{ animationDelay: '0.15s' }}>
         <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
           <LogOut size={10} /> Withdraw from Vault
@@ -306,11 +311,18 @@ const TreasuryTab = ({ treasury, canWithdraw, depositAmount, setDepositAmount, w
 // RACKETS TAB
 // ============================================================================
 
-const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onCollectAll, collectAllLoading, readyCount, onUpgrade, onUnlock, event, eventsEnabled }) => {
+const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onCollect, onCollectAll, collectAllLoading, readyCount, onUpgrade, onUnlock, event, eventsEnabled }) => {
   const maxLevel = config?.racket_max_level ?? 5;
 
+  const effectiveCanUpgrade = canUpgrade && !vaultAndRacketsLocked;
+  const effectiveCanCollect = !vaultAndRacketsLocked;
   return (
     <div className="space-y-2">
+      {vaultAndRacketsLocked && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-200/90 font-heading">
+          Vault and rackets are locked until the family war is over.
+        </div>
+      )}
       {/* Event Banner + Collect all */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
@@ -319,7 +331,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onCollectAll, coll
             <span className="text-zinc-400">{event.message}</span>
           </div>
         )}
-        {readyCount > 0 && (
+        {readyCount > 0 && effectiveCanCollect && (
           <button
             type="button"
             onClick={onCollectAll}
@@ -335,7 +347,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, onCollect, onCollectAll, coll
       {/* Racket Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {rackets.map((r) => (
-          <RacketCard key={r.id} racket={r} maxLevel={maxLevel} canUpgrade={canUpgrade} onCollect={onCollect} onUpgrade={onUpgrade} onUnlock={onUnlock} />
+          <RacketCard key={r.id} racket={r} maxLevel={maxLevel} canUpgrade={effectiveCanUpgrade} canCollect={effectiveCanCollect} onCollect={onCollect} onUpgrade={onUpgrade} onUnlock={onUnlock} />
         ))}
       </div>
 
@@ -1425,6 +1437,7 @@ export default function FamilyPage() {
   const canManage = ['boss', 'underboss'].includes(myRole);
   const canWithdraw = ['boss', 'underboss', 'consigliere'].includes(myRole);
   const canUpgradeRacket = ['boss', 'underboss', 'consigliere'].includes(myRole);
+  const vaultAndRacketsLocked = !!myFamily?.vault_and_rackets_locked;
   const canManageCrewOC = ['boss', 'underboss', 'capo'].includes(myRole);
   const activeWars = warStats?.wars ?? [];
 
@@ -1682,7 +1695,7 @@ export default function FamilyPage() {
 
             {/* Tab content */}
             <div className="p-3 sm:p-4">
-              {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} onCollect={collectRacket} onCollectAll={collectAllRackets} collectAllLoading={collectAllRacketsLoading} readyCount={readyRackets} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
+              {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} vaultAndRacketsLocked={vaultAndRacketsLocked} onCollect={collectRacket} onCollectAll={collectAllRackets} collectAllLoading={collectAllRacketsLoading} readyCount={readyRackets} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
               {activeTab === 'crewoc' && (
                 <CrewOCTab
                   family={family} myRole={myRole} crewOCCooldownUntil={family?.crew_oc_cooldown_until}
@@ -1699,7 +1712,7 @@ export default function FamilyPage() {
                   raidCooldown={raidCooldownUntil > 0 && Date.now() < raidCooldownUntil}
                   onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />
               )}
-              {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
+              {activeTab === 'treasury' && <TreasuryTab treasury={family.treasury} canWithdraw={canWithdraw} vaultAndRacketsLocked={vaultAndRacketsLocked} depositAmount={depositAmount} setDepositAmount={setDepositAmount} withdrawAmount={withdrawAmount} setWithdrawAmount={setWithdrawAmount} onDeposit={handleDeposit} onWithdraw={handleWithdraw} />}
               {activeTab === 'statehead' && family?.head_of_state && (
                 <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} />
               )}

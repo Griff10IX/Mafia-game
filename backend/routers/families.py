@@ -34,6 +34,7 @@ from server import (
     set_state_head,
     _get_active_war_between,
     _get_active_war_for_family,
+    _family_in_active_war,
     _family_war_start,
     _record_war_stats_bodyguard_kill,  # kept for potential direct use
 )
@@ -545,6 +546,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         app_cursor = db.family_crew_oc_applications.find({"family_id": family_id}, {"_id": 0}).sort("created_at", -1)
         crew_oc_applications = await app_cursor.to_list(50)
     qualifies_for_state_head = await family_qualifies_for_state_head(family_id)
+    vault_and_rackets_locked = await _family_in_active_war(family_id)
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -556,6 +558,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "state_head_income": fam.get("state_head_income") or {},
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
+        "vault_and_rackets_locked": vault_and_rackets_locked,
         "qualifies_for_state_head": qualifies_for_state_head,
         "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
         "crew_oc_applications": crew_oc_applications,
@@ -772,6 +775,8 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid amount")
@@ -790,6 +795,8 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Invalid amount")
@@ -1044,6 +1051,8 @@ async def families_racket_unlock(racket_id: str, current_user: dict = Depends(ge
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Rackets are locked until the family war is over")
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
@@ -1075,6 +1084,8 @@ async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(g
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Rackets are locked until the family war is over")
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")

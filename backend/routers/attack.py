@@ -924,6 +924,17 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 await db.bodyguards.delete_one(delete_criteria)
             await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
+            # Start war BEFORE recording the kill — if this BG kill triggers the war, it won't exist yet otherwise
+            killer_fid = current_user.get("family_id") or None
+            owner_fid = (owner_doc or {}).get("family_id") or None
+            if not owner_fid:
+                om = await db.family_members.find_one({"user_id": owner_id}, {"_id": 0, "family_id": 1})
+                owner_fid = (om or {}).get("family_id")
+            if killer_fid and owner_fid and killer_fid != owner_fid:
+                try:
+                    await _family_war_start(killer_fid, owner_fid)
+                except Exception as e:
+                    logging.exception("Family war start on bodyguard kill: %s", e)
             await _record_vendetta_bg_kill(
                 killer_id, current_user.get("family_id"), owner_id, owner_doc,
                 bg_username=target_name, bullets_used=bullets_used, bg_hire_cost=bg_hire_cost,
@@ -999,17 +1010,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         killer_family_id = await resolve_family_id(killer_id) or current_user.get("family_id")
         killer_family_id = str(killer_family_id).strip() if killer_family_id else None
         victim_family_id = target.get("family_id")
-        # When killer (boss/underboss/consigliere) kills another family's bodyguard, start family war with that family
-        if is_victim_bodyguard and bodyguard_owner_id and killer_family_id:
-            try:
-                owner_family_id = await resolve_family_id(bodyguard_owner_id)
-                owner_family_id = str(owner_family_id).strip() if owner_family_id else None
-                if owner_family_id and owner_family_id != killer_family_id:
-                    killer_role = (current_user.get("family_role") or "").strip().lower()
-                    if killer_role in ("boss", "underboss", "consigliere"):
-                        await _family_war_start(killer_family_id, owner_family_id)
-            except Exception as e:
-                logging.exception("Family war start on bodyguard kill: %s", e)
+        # Bodyguard war start is done earlier in the bodyguard loop (before recording) so the triggering kill is counted
         if victim_family_id:
             try:
                 if killer_family_id:
@@ -1050,10 +1051,8 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                     f"{target_name} was killed by {current_user['username']}.",
                     "attack",
                 )
-                target_role = (target.get("family_role") or "").lower()
-                if target_role in ("boss", "underboss", "consigliere"):
-                    if killer_family_id:
-                        await _family_war_start(killer_family_id, victim_family_id)
+                if killer_family_id:
+                    await _family_war_start(killer_family_id, victim_family_id)
                 await _family_war_check_wipe_and_award(victim_family_id)
             except Exception as e:
                 logging.exception("Family notify/war on kill: %s", e)
