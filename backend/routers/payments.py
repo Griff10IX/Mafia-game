@@ -30,6 +30,26 @@ def register(router):
 
     @router.post("/payments/checkout")
     async def create_checkout(request: CheckoutRequest, current_user: dict = Depends(get_current_user)):
+        # Enforce /store/points lock (buying points disabled)
+        doc = await db.game_settings.find_one({"key": "page_locks"}, {"_id": 0, "value": 1})
+        raw = (doc.get("value") or {}).get("paths") if doc else {}
+        entry = raw.get("/store/points") if isinstance(raw, dict) else None
+        if entry:
+            msg = entry.get("message", "Points purchase is temporarily unavailable") if isinstance(entry, dict) else "Points purchase is temporarily unavailable"
+            uat = entry.get("unlock_at") if isinstance(entry, dict) else None
+            is_locked = True
+            if uat:
+                try:
+                    until = datetime.fromisoformat(str(uat).replace("Z", "+00:00"))
+                    if until.tzinfo is None:
+                        until = until.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) >= until:
+                        is_locked = False  # unlock_at passed
+                except Exception:
+                    pass
+            if is_locked:
+                raise HTTPException(status_code=503, detail=msg)
+
         api_key = _get_stripe_key()
         if not api_key:
             raise HTTPException(status_code=503, detail="Payments not configured (set STRIPE_SECRET_KEY)")

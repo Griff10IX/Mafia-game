@@ -268,7 +268,7 @@ export default function Store() {
         <Tab
           active={activeTab === 'points'}
           onClick={() => setActiveTab('points')}
-          disabled={pointsTabLocked && !isAdmin}
+          disabled={pointsTabLocked}
         >Points</Tab>
         <Tab active={activeTab === 'sendpts'} onClick={() => setActiveTab('sendpts')}>Send pts</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => setActiveTab('upgrades')}>Upgrades</Tab>
@@ -277,7 +277,7 @@ export default function Store() {
 
       {activeTab === 'points' && (
         <div className="space-y-3">
-          {pointsTabLocked && !isAdmin ? (
+          {pointsTabLocked ? (
             <div className={`${styles.panel} rounded-lg border border-primary/20 p-6 text-center`}>
               <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">{pointsTabLockMessage}</p>
               <p className="text-[9px] text-mutedForeground mt-1">Points purchase is temporarily unavailable. Upgrades, bullets, and send pts remain available.</p>
