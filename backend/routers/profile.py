@@ -397,7 +397,7 @@ def register(router):
             user = await db.users.find_one(
                 {"username": username_pattern},
                 {
-                    "_id": 0, "password_hash": 0,
+                    "_id": 0,
                     "id": 1, "username": 1, "email": 1, "created_at": 1, "last_seen": 1,
                     "money": 1, "points": 1, "rank_points": 1, "bullets": 1, "armour_level": 1,
                     "total_kills": 1, "total_deaths": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1,
@@ -405,6 +405,7 @@ def register(router):
                     "prestige_level": 1, "prestige_rank_multiplier": 1,
                     "account_locked": 1, "account_locked_at": 1,
                     "registration_ip": 1, "last_login_ip": 1, "login_ips": 1,
+                    "is_moderator": 1, "is_help_desk_operator": 1,
                 },
             )
         except Exception as e:

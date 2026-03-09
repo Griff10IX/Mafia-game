@@ -115,7 +115,7 @@ export default function MyInventory() {
   return (
     <div className={`${styles.pageContent} p-3 sm:p-4`}>
       <style>{INV_STYLES}</style>
-      <div className="max-w-2xl mx-auto space-y-4">
+      <div className="max-w-4xl mx-auto space-y-4">
         <h1 className="text-lg sm:text-xl font-heading font-bold text-primary flex items-center gap-2 inv-fade-in">
           <Package size={22} />
           My Inventory
@@ -124,8 +124,10 @@ export default function MyInventory() {
           Equip your armour and weapons. View your loot-exclusive items.
         </p>
 
-        {/* Weapons */}
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in`} style={{ animationDelay: '0.1s' }}>
+        {/* Weapons & Armour side by side */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 inv-fade-in" style={{ animationDelay: '0.1s' }}>
+          {/* Weapons */}
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0`}>
           <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
             <Swords size={14} className="text-primary" />
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weapons</h2>
@@ -158,7 +160,7 @@ export default function MyInventory() {
         </div>
 
         {/* Armour */}
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in`} style={{ animationDelay: '0.15s' }}>
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0`}>
           <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
             <Shield size={14} className="text-primary" />
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Armour</h2>
@@ -188,6 +190,7 @@ export default function MyInventory() {
               ))
             )}
           </div>
+        </div>
         </div>
 
         {/* Loot Exclusives */}
