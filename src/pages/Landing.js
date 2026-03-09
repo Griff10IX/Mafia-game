@@ -25,6 +25,11 @@ export default function Landing({ setIsAuthenticated }) {
   const [loading, setLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
+  const [bannerEnabled, setBannerEnabled] = useState(false);
+
+  useEffect(() => {
+    api.get('/landing-banner').then((r) => setBannerEnabled(!!r.data?.enabled)).catch(() => setBannerEnabled(false));
+  }, []);
 
   useEffect(() => {
     if (resendCooldownSeconds <= 0) return;
@@ -148,6 +153,12 @@ export default function Landing({ setIsAuthenticated }) {
       <div className="absolute inset-0 bg-black/60 pointer-events-none" aria-hidden />
       <div className="relative min-h-screen flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-md">
+          {/* Beta testing banner – shown when enabled in Admin */}
+          {bannerEnabled && (
+            <div className="text-center mb-4 px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider text-sm" style={{ backgroundColor: 'var(--noir-primary)', color: 'var(--noir-background)', opacity: 0.95 }}>
+              Beta Testing Round:
+            </div>
+          )}
           {/* Logo – same style as sidebar header */}
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-3 mb-2">

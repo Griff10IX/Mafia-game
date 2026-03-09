@@ -210,6 +210,7 @@ export default function Admin() {
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
+  const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
@@ -367,6 +368,7 @@ export default function Admin() {
       const hex = res.data?.admin_online_color || '#a78bfa';
       setAdminOnlineColor(hex.startsWith('#') ? hex : '#' + hex);
       setRequireEmailVerification(!!res.data?.require_email_verification);
+      setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
     } catch {
       setAdminOnlineColor('#a78bfa');
@@ -403,10 +405,12 @@ export default function Admin() {
       const res = await api.patch('/admin/settings', {
         admin_online_color: adminOnlineColor,
         require_email_verification: requireEmailVerification,
+        landing_banner_enabled: landingBannerEnabled,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
       });
       setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
       setRequireEmailVerification(!!res.data?.require_email_verification);
+      setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
       toast.success('Settings saved');
     } catch (e) {
@@ -1889,6 +1893,17 @@ export default function Admin() {
                   className="rounded border-input"
                 />
                 <span>Require email verification for new signups</span>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={landingBannerEnabled}
+                  onChange={(e) => setLandingBannerEnabled(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Show &quot;Beta Testing Round&quot; banner on login page</span>
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
